@@ -201,37 +201,69 @@ export default function FacultyAssessmentsClient() {
       return;
     }
     setBusy(true);
-    const payload = {
-      title: assessmentForm.title,
-      description: assessmentForm.description,
-      difficulty: assessmentForm.difficulty,
-      category: assessmentForm.category,
-      time_limit_seconds: assessmentForm.time_limit_minutes
-        ? Number(assessmentForm.time_limit_minutes) * 60
-        : null,
-    };
-    const res = editingAssessment
-      ? await fetch(`/api/faculty/assessments/${editingAssessment.id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify(payload),
-        })
-      : await fetch("/api/faculty/assessments", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify(payload),
-        });
-    setBusy(false);
-    if (!res.ok) {
-      const j = (await res.json()) as { error?: string };
-      flash(j.error ?? "Failed to save assessment");
+
+    if (editingAssessment) {
+      const payload = {
+        title: assessmentForm.title,
+        description: assessmentForm.description,
+        difficulty: assessmentForm.difficulty,
+        category: assessmentForm.category,
+        time_limit_seconds: assessmentForm.time_limit_minutes
+          ? Number(assessmentForm.time_limit_minutes) * 60
+          : null,
+      };
+      const res = await fetch(`/api/faculty/assessments/${editingAssessment.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(payload),
+      });
+      setBusy(false);
+      if (!res.ok) {
+        const j = (await res.json()) as { error?: string };
+        flash(j.error ?? "Failed to save assessment");
+        return;
+      }
+      setShowAssessmentModal(false);
+      flash("Assessment updated");
+      loadAssessments();
       return;
     }
-    setShowAssessmentModal(false);
-    flash(editingAssessment ? "Assessment updated" : "Assessment created");
-    loadAssessments();
+
+    try {
+      const res = await fetch("/api/faculty/assessments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          title: assessmentForm.title.trim(),
+          description: assessmentForm.description,
+          category: assessmentForm.category,
+          difficulty: assessmentForm.difficulty,
+          time_limit_seconds: assessmentForm.time_limit_minutes
+            ? Number(assessmentForm.time_limit_minutes) * 60
+            : null,
+        }),
+      });
+
+      setBusy(false);
+
+      if (!res.ok) {
+        const j = (await res.json()) as { error?: string };
+        flash(j.error ?? "Failed to create assessment");
+        return;
+      }
+
+      const json = (await res.json()) as { assessment: Assessment };
+      setAssessments((prev) => [json.assessment, ...prev]);
+      setShowAssessmentModal(false);
+      setAssessmentForm(emptyAssessmentForm);
+      flash("Assessment created");
+    } catch (err) {
+      setBusy(false);
+      console.error("Failed to create assessment", err);
+      flash("Failed to create assessment");
+    }
   };
 
   const togglePublish = async (a: Assessment) => {
