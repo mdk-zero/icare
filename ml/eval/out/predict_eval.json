@@ -1,0 +1,40 @@
+{
+  "dataset": "/home/mdk0/Projects/icare/ml/data/oulad_holdout.csv",
+  "samples": 6471,
+  "at_risk_rate": 0.5251,
+  "threshold": 0.5,
+  "results": [
+    {
+      "model": "logistic_regression v0.1.0-oulad",
+      "trained_on": "oulad",
+      "n": 6471,
+      "accuracy": 0.9221,
+      "precision": 0.9602,
+      "recall": 0.8885,
+      "f1": 0.923,
+      "roc_auc": 0.9741,
+      "confusion": {
+        "tn": 2948,
+        "fp": 125,
+        "fn": 379,
+        "tp": 3019
+      }
+    },
+    {
+      "model": "random_forest v0.1.0-oulad",
+      "trained_on": "oulad",
+      "n": 6471,
+      "accuracy": 0.9308,
+      "precision": 0.9789,
+      "recall": 0.8873,
+      "f1": 0.9308,
+      "roc_auc": 0.9794,
+      "confusion": {
+        "tn": 3008,
+        "fp": 65,
+        "fn": 383,
+        "tp": 3015
+      }
+    }
+  ]
+}
