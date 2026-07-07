@@ -1,47 +1,30 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { fetchFacultyAnalytics, FacultyAnalytics } from "../../lib/api";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
-  SkeletonStatCard,
-  SkeletonChartArea,
-  SkeletonCompetencyGrid,
-  SkeletonInsightCard,
-} from "../../components/skeletons";
+  faChartBar,
+  faUsers,
+  faClipboardCheck,
+  faHeartbeat,
+  faExclamationTriangle,
+  faNotesMedical,
+} from "@fortawesome/free-solid-svg-icons";
+import { fetchAnalyticsSummary, AnalyticsSummary } from "../../lib/api";
+import { SkeletonStatCard, SkeletonChartArea, SkeletonCompetencyGrid } from "../../components/skeletons";
 import PageHeader from "../../components/PageHeader";
 
 export default function FacultyAnalyticsClient() {
-  const [analytics, setAnalytics] = useState<FacultyAnalytics | null>(null);
+  const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadAnalytics();
+    (async () => {
+      setLoading(true);
+      setSummary(await fetchAnalyticsSummary());
+      setLoading(false);
+    })();
   }, []);
-
-  const loadAnalytics = async () => {
-    setLoading(true);
-    const data = await fetchFacultyAnalytics();
-    setAnalytics(data);
-    setLoading(false);
-  };
-
-  const getInsightColor = (priority: string) => {
-    switch (priority) {
-      case 'high': return 'bg-red-50 border-red-200 text-red-700';
-      case 'medium': return 'bg-amber-50 border-amber-200 text-amber-700';
-      case 'low': return 'bg-emerald-50 border-emerald-200 text-emerald-700';
-      default: return 'bg-gray-50 border-gray-200 text-gray-700';
-    }
-  };
-
-  const getInsightIcon = (type: string) => {
-    switch (type) {
-      case 'risk': return 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z';
-      case 'recommendation': return 'M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z';
-      case 'success': return 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z';
-      default: return 'M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z';
-    }
-  };
 
   if (loading) {
     return (
@@ -63,17 +46,43 @@ export default function FacultyAnalyticsClient() {
           <SkeletonChartArea />
         </div>
         <SkeletonCompetencyGrid />
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 animate-pulse">
-          <div className="h-5 w-24 bg-gray-200 rounded mb-4" />
-          <div className="space-y-3">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <SkeletonInsightCard key={i} />
-            ))}
-          </div>
-        </div>
       </div>
     );
   }
+
+  const atRisk = summary?.risk_distribution?.at_risk ?? 0;
+  const safe = summary?.risk_distribution?.safe ?? 0;
+  const predicted = atRisk + safe;
+  const trend = summary?.weekly_trend ?? [];
+  const maxAttempts = Math.max(1, ...trend.map((w) => w.attempts));
+  const activity = summary?.clinical_activity;
+
+  const statCards = [
+    {
+      icon: faChartBar,
+      value: summary?.cohort.average_score != null ? `${summary.cohort.average_score}%` : "—",
+      label: "Cohort Average Score",
+      tint: "bg-blue-50 text-blue-600",
+    },
+    {
+      icon: faClipboardCheck,
+      value: `${summary?.cohort.submitted_attempts ?? 0}`,
+      label: "Submitted Quiz Attempts",
+      tint: "bg-green-50 text-green-600",
+    },
+    {
+      icon: faUsers,
+      value: `${summary?.cohort.active_students_30d ?? 0}/${summary?.cohort.total_students ?? 0}`,
+      label: "Active Students (30 days)",
+      tint: "bg-purple-50 text-purple-600",
+    },
+    {
+      icon: faExclamationTriangle,
+      value: `${atRisk}`,
+      label: "At-Risk Students",
+      tint: "bg-amber-50 text-amber-600",
+    },
+  ];
 
   return (
     <div className="max-w-7xl mx-auto">
@@ -81,174 +90,149 @@ export default function FacultyAnalyticsClient() {
         badge={{
           icon: (
             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
             </svg>
           ),
-          label: "ML Insights",
+          label: "Warehouse Analytics",
         }}
-        title="ML-Powered Analytics"
-        subtitle="Machine learning-driven performance predictions and insights"
+        title="Cohort Analytics"
+        subtitle="Performance and clinical training data from the iCARE++ warehouse"
       />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-          <div className="flex items-center justify-between mb-4">
-            <div className="p-3 bg-blue-50 rounded-xl">
-              <svg className="w-6 h-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-              </svg>
+        {statCards.map((card) => (
+          <div key={card.label} className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+            <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-4 ${card.tint}`}>
+              <FontAwesomeIcon icon={card.icon} className="w-5 h-5" />
             </div>
+            <p className="text-3xl font-bold text-gray-900">{card.value}</p>
+            <p className="text-gray-500 text-sm mt-1">{card.label}</p>
           </div>
-          <p className="text-3xl font-bold text-gray-900">{analytics?.cohort_performance.average_score ?? 0}%</p>
-          <p className="text-gray-500 text-sm mt-1">Cohort Average</p>
-          <div className="mt-3">
-            <span className="text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full">
-              {analytics?.cohort_performance.improvement_trend}
-            </span>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-          <div className="flex items-center justify-between mb-4">
-            <div className="p-3 bg-green-50 rounded-xl">
-              <svg className="w-6 h-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-              </svg>
-            </div>
-          </div>
-          <p className="text-3xl font-bold text-gray-900">{analytics?.cohort_performance.total_quizzes ?? 0}</p>
-          <p className="text-gray-500 text-sm mt-1">Total Quizzes</p>
-        </div>
-
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-          <div className="flex items-center justify-between mb-4">
-            <div className="p-3 bg-purple-50 rounded-xl">
-              <svg className="w-6 h-6 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-              </svg>
-            </div>
-          </div>
-          <p className="text-3xl font-bold text-gray-900">{analytics?.cohort_performance.completion_rate ?? 0}%</p>
-          <p className="text-gray-500 text-sm mt-1">Completion Rate</p>
-        </div>
-
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-          <div className="flex items-center justify-between mb-4">
-            <div className="p-3 bg-amber-50 rounded-xl">
-              <svg className="w-6 h-6 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
-            </div>
-          </div>
-          <p className="text-3xl font-bold text-gray-900">{(analytics?.risk_distribution.high ?? 0) + (analytics?.risk_distribution.medium ?? 0)}</p>
-          <p className="text-gray-500 text-sm mt-1">At-Risk Students</p>
-        </div>
+        ))}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Risk Distribution</h3>
-          <div className="flex items-center justify-center">
-            <div className="relative w-48 h-48">
-              <svg className="w-48 h-48 transform -rotate-90">
-                <circle cx="96" cy="96" r="70" fill="none" stroke="#f3f4f6" strokeWidth="20" />
-                {analytics && (
-                  <>
-                    <circle cx="96" cy="96" r="70" fill="none" stroke="#10b981" strokeWidth="20" 
-                      strokeDasharray={`${(analytics.risk_distribution.low / (analytics.risk_distribution.low + analytics.risk_distribution.medium + analytics.risk_distribution.high)) * 440} 440`} 
-                      strokeLinecap="round" />
-                    <circle cx="96" cy="96" r="70" fill="none" stroke="#f59e0b" strokeWidth="20" 
-                      strokeDasharray={`${(analytics.risk_distribution.medium / (analytics.risk_distribution.low + analytics.risk_distribution.medium + analytics.risk_distribution.high)) * 440} 440`} 
-                      strokeDashoffset={`-${(analytics.risk_distribution.low / (analytics.risk_distribution.low + analytics.risk_distribution.medium + analytics.risk_distribution.high)) * 440}`}
-                      strokeLinecap="round" />
-                    <circle cx="96" cy="96" r="70" fill="none" stroke="#ef4444" strokeWidth="20" 
-                      strokeDasharray={`${(analytics.risk_distribution.high / (analytics.risk_distribution.low + analytics.risk_distribution.medium + analytics.risk_distribution.high)) * 440} 440`} 
-                      strokeDashoffset={`-${((analytics.risk_distribution.low + analytics.risk_distribution.medium) / (analytics.risk_distribution.low + analytics.risk_distribution.medium + analytics.risk_distribution.high)) * 440}`}
-                      strokeLinecap="round" />
-                  </>
-                )}
-              </svg>
-              <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <p className="text-3xl font-bold text-gray-800">{analytics ? analytics.risk_distribution.low + analytics.risk_distribution.medium + analytics.risk_distribution.high : 0}</p>
-                <p className="text-sm text-gray-500">Students</p>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Weekly Score Trend</h3>
+          {trend.length === 0 ? (
+            <p className="text-gray-400 text-sm py-12 text-center">
+              No submitted attempts in the last 8 weeks.
+            </p>
+          ) : (
+            <>
+              <div className="h-40 flex items-end justify-between gap-2 px-2">
+                {trend.map((week) => (
+                  <div key={week.week_start} className="flex-1 flex flex-col items-center gap-2 group">
+                    <div className="w-full relative">
+                      <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-[#1B6B7B] text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
+                        {week.average_score}% · {week.attempts} attempt{week.attempts === 1 ? "" : "s"}
+                      </div>
+                      <div
+                        className="w-full bg-gradient-to-t from-[#1B6B7B] to-[#2a8a98] rounded-t transition-all duration-300 hover:opacity-80"
+                        style={{ height: `${Math.max(week.average_score, 4) * 1.4}px` }}
+                      />
+                    </div>
+                  </div>
+                ))}
               </div>
-            </div>
-          </div>
-          <div className="flex justify-center gap-6 mt-4">
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-emerald-500 rounded-full" />
-              <span className="text-sm text-gray-600">Low ({analytics?.risk_distribution.low ?? 0})</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-amber-500 rounded-full" />
-              <span className="text-sm text-gray-600">Medium ({analytics?.risk_distribution.medium ?? 0})</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-red-500 rounded-full" />
-              <span className="text-sm text-gray-600">High ({analytics?.risk_distribution.high ?? 0})</span>
-            </div>
-          </div>
+              <div className="flex justify-between mt-3 px-2">
+                {trend.map((week) => (
+                  <span key={week.week_start} className="text-[10px] text-gray-400">
+                    {new Date(week.week_start).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                  </span>
+                ))}
+              </div>
+            </>
+          )}
         </div>
 
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Performance Trend</h3>
-          <div className="h-40 flex items-end justify-between gap-2 px-2">
-            {analytics?.performance_trend.map((item, idx) => (
-              <div key={idx} className="flex-1 flex flex-col items-center gap-2 group">
-                <div 
-                  className="w-full bg-gradient-to-t from-[#1B6B7B] to-[#2a8a98] rounded-t transition-all duration-300 hover:opacity-80"
-                  style={{ height: `${item.average}%` }}
-                />
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">At-Risk Prediction Snapshot</h3>
+          {predicted === 0 ? (
+            <div className="py-10 text-center">
+              <FontAwesomeIcon icon={faExclamationTriangle} className="w-8 h-8 text-gray-300 mb-3" />
+              <p className="text-gray-500 text-sm">
+                No predictions yet — the ML prediction service (Random Forest / Logistic
+                Regression) populates this once deployed.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4 py-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">Safe</span>
+                <span className="font-bold text-emerald-600">{safe}</span>
               </div>
-            ))}
-          </div>
-          <div className="flex justify-between mt-3 px-2">
-            {analytics?.performance_trend.map((item, idx) => (
-              <span key={idx} className="text-xs text-gray-400">{item.week}</span>
-            ))}
-          </div>
+              <div className="h-3 bg-gray-100 rounded-full overflow-hidden flex">
+                <div className="bg-emerald-500 h-full" style={{ width: `${(safe / predicted) * 100}%` }} />
+                <div className="bg-rose-500 h-full" style={{ width: `${(atRisk / predicted) * 100}%` }} />
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">At risk</span>
+                <span className="font-bold text-rose-600">{atRisk}</span>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
       <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 mb-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Competency Breakdown</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-          {analytics && Object.entries(analytics.competency_breakdown).map(([key, value]) => (
-            <div key={key} className="text-center">
-              <div className="relative w-20 h-20 mx-auto">
-                <svg className="w-20 h-20 transform -rotate-90">
-                  <circle cx="40" cy="40" r="16" fill="none" stroke="#f3f4f6" strokeWidth="4" />
-                  <circle cx="40" cy="40" r="16" fill="none" stroke="#1B6B7B" strokeWidth="4"
-                    strokeDasharray={`${(value / 100) * 100} 100`}
-                    strokeLinecap="round" />
-                </svg>
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <span className="text-sm font-semibold text-gray-800">{value}%</span>
+        {Object.keys(summary?.competency_breakdown ?? {}).length === 0 ? (
+          <p className="text-gray-400 text-sm">
+            No validated competency scores yet — record them from each student&apos;s profile.
+          </p>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+            {Object.entries(summary!.competency_breakdown).map(([name, value]) => (
+              <div key={name} className="text-center">
+                <div className="relative w-20 h-20 mx-auto">
+                  <svg className="w-20 h-20 transform -rotate-90" viewBox="0 0 80 80">
+                    <circle cx="40" cy="40" r="32" fill="none" stroke="#f3f4f6" strokeWidth="8" />
+                    <circle
+                      cx="40"
+                      cy="40"
+                      r="32"
+                      fill="none"
+                      stroke="#1B6B7B"
+                      strokeWidth="8"
+                      strokeDasharray={`${(value / 100) * 201} 201`}
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span className="text-sm font-semibold text-gray-800">{value}%</span>
+                  </div>
                 </div>
+                <p className="text-xs text-gray-500 mt-2">{name}</p>
               </div>
-              <p className="text-sm text-gray-500 mt-2 capitalize">{key.replace('_', ' ')}</p>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">ML Insights</h3>
-        <div className="space-y-3">
-          {analytics?.ml_insights.map((insight, idx) => (
-            <div key={idx} className={`flex items-start gap-4 p-4 rounded-xl border ${getInsightColor(insight.priority)}`}>
-              <div className="w-8 h-8 rounded-full bg-white/50 flex items-center justify-center shrink-0">
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={getInsightIcon(insight.type)} />
-                </svg>
-              </div>
-              <div>
-                <p className="font-medium">{insight.message}</p>
-                <p className="text-xs opacity-75 mt-1 capitalize">Priority: {insight.priority}</p>
-              </div>
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Clinical Training Activity</h3>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+          {[
+            { icon: faHeartbeat, label: "Vital Readings", value: activity?.vital_readings ?? 0 },
+            { icon: faExclamationTriangle, label: "Anomalies Flagged", value: activity?.anomalies ?? 0 },
+            { icon: faNotesMedical, label: "TPR Entries", value: activity?.tpr_entries ?? 0 },
+            { icon: faNotesMedical, label: "IVF Records", value: activity?.ivf_records ?? 0 },
+            { icon: faNotesMedical, label: "Progress Notes", value: activity?.progress_notes ?? 0 },
+            { icon: faClipboardCheck, label: "Notes Reviewed", value: activity?.notes_reviewed ?? 0 },
+          ].map((item) => (
+            <div key={item.label} className="p-4 bg-gray-50 rounded-xl text-center">
+              <FontAwesomeIcon icon={item.icon} className="w-4 h-4 text-[#1B6B7B] mb-2" />
+              <p className="text-2xl font-bold text-gray-800">{item.value}</p>
+              <p className="text-xs text-gray-500 mt-1">{item.label}</p>
             </div>
           ))}
         </div>
+        {summary?.etl?.last_run_at && (
+          <p className="text-xs text-gray-400 mt-4">
+            Warehouse last refreshed {new Date(summary.etl.last_run_at).toLocaleString()}
+          </p>
+        )}
       </div>
     </div>
   );

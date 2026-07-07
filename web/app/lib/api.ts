@@ -1076,21 +1076,68 @@ export interface AuditLogInsert {
   metadata?: Record<string, unknown> | null;
 }
 
-export interface FacultyAnalytics {
-  cohort_performance: {
-    average_score: number;
-    total_quizzes: number;
-    completion_rate: number;
-    improvement_trend: string;
+// Warehouse-backed analytics (public.dw_analytics_summary via /api/analytics/summary)
+export interface AnalyticsSummary {
+  etl: { last_run_at: string | null; rows_loaded: Record<string, number> } | null;
+  cohort: {
+    total_students: number;
+    submitted_attempts: number;
+    average_score: number | null;
+    active_students_30d: number;
   };
-  risk_distribution: {
-    low: number;
-    medium: number;
-    high: number;
-  };
+  weekly_trend: { week_start: string; average_score: number; attempts: number }[];
   competency_breakdown: Record<string, number>;
-  performance_trend: { week: string; average: number }[];
-  ml_insights: { type: string; message: string; priority: string }[];
+  competency_detail: {
+    name: string;
+    ratings: number;
+    students: number;
+    average_score: number;
+    pass_rate_pct: number;
+  }[];
+  room_utilization: {
+    name: string;
+    room_number: string;
+    status: string;
+    capacity: number;
+    assigned: number;
+    utilization_pct: number;
+  }[];
+  clinical_activity: {
+    vital_readings: number;
+    anomalies: number;
+    tpr_entries: number;
+    ivf_records: number;
+    progress_notes: number;
+    notes_reviewed: number;
+  };
+  risk_distribution: Record<string, number>; // keys: 'safe' | 'at_risk'
+}
+
+export async function fetchAnalyticsSummary(): Promise<AnalyticsSummary | null> {
+  try {
+    const res = await fetch('/api/analytics/summary', { credentials: 'include' });
+    if (!res.ok) {
+      console.error('fetchAnalyticsSummary() failed', res.status);
+      return null;
+    }
+    const json = (await res.json()) as { summary: AnalyticsSummary };
+    return json.summary ?? null;
+  } catch (err) {
+    console.error('fetchAnalyticsSummary() failed', err);
+    return null;
+  }
+}
+
+export async function runWarehouseEtl(): Promise<{ rows_loaded?: Record<string, number>; error?: string }> {
+  try {
+    const res = await fetch('/api/admin/etl', { method: 'POST', credentials: 'include' });
+    const json = (await res.json()) as { rows_loaded?: Record<string, number>; error?: string };
+    if (!res.ok) return { error: json.error || 'ETL run failed' };
+    return { rows_loaded: json.rows_loaded };
+  } catch (err) {
+    console.error('runWarehouseEtl() failed', err);
+    return { error: 'ETL run failed. Please try again.' };
+  }
 }
 
 // Mock Faculty Data
@@ -1728,41 +1775,6 @@ export function getCurrentFacultyUser(): { id: string; name: string } | null {
   } catch {
     return null;
   }
-}
-
-export async function fetchFacultyAnalytics(): Promise<FacultyAnalytics | null> {
-  await new Promise(resolve => setTimeout(resolve, 300));
-  
-  return {
-    cohort_performance: {
-      average_score: 82,
-      total_quizzes: 240,
-      completion_rate: 85,
-      improvement_trend: 'up',
-    },
-    risk_distribution: {
-      low: 35,
-      medium: 8,
-      high: 5,
-    },
-    competency_breakdown: {
-      'Cardiac Assessment': 82,
-      'Vital Signs': 85,
-      'Patient Communication': 80,
-      'Diabetes Care': 72,
-      'Emergency Response': 78,
-    },
-    performance_trend: [
-      { week: 'Week 1', average: 78 },
-      { week: 'Week 2', average: 80 },
-      { week: 'Week 3', average: 82 },
-      { week: 'Week 4', average: 85 },
-    ],
-    ml_insights: [
-      { type: 'risk', message: 'Juan Reyes shows declining performance', priority: 'high' },
-      { type: 'opportunity', message: 'Carlos Diaz ready for advanced scenarios', priority: 'medium' },
-    ],
-  };
 }
 
 export async function predictStudentRisk(studentId: string): Promise<any | null> {
