@@ -1,0 +1,36 @@
+{
+  "dataset": "OULAD (Open University Learning Analytics Dataset, CC-BY 4.0)",
+  "samples": 32593,
+  "at_risk_rate": 0.528,
+  "features": [
+    "avg_score",
+    "score_trend",
+    "attempts_count",
+    "completion_rate",
+    "lateness_rate",
+    "engagement_index",
+    "days_since_last_activity"
+  ],
+  "split": "GroupShuffleSplit by id_student, 80/20, seed 42",
+  "trained_at": "2026-07-07T12:15:05.769506+00:00",
+  "models": {
+    "random_forest": {
+      "accuracy": 0.9308,
+      "precision": 0.9789,
+      "recall": 0.8873,
+      "f1": 0.9308,
+      "roc_auc": 0.9794,
+      "holdout_size": 6471,
+      "holdout_at_risk_rate": 0.5251
+    },
+    "logistic_regression": {
+      "accuracy": 0.9221,
+      "precision": 0.9602,
+      "recall": 0.8885,
+      "f1": 0.923,
+      "roc_auc": 0.9741,
+      "holdout_size": 6471,
+      "holdout_at_risk_rate": 0.5251
+    }
+  }
+}
