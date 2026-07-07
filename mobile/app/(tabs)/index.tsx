@@ -192,7 +192,7 @@ export default function DashboardScreen() {
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <View>
-            <Text style={styles.sectionTitle}>Today's Tasks</Text>
+            <Text style={styles.sectionTitle}>Today&apos;s Tasks</Text>
             <Text style={styles.sectionSubtitle}>{mockTasks.filter(t => t.status !== 'completed').length} pending</Text>
           </View>
           <TouchableOpacity style={styles.seeAllButton} onPress={() => router.push('/tasks')}>

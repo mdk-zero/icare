@@ -47,182 +47,51 @@ export interface Patient {
   created_at: string;
 }
 
-export interface Quiz {
+export interface StudentAssessment {
   id: string;
   title: string;
   description: string;
   difficulty: 'beginner' | 'intermediate' | 'advanced';
   category: string;
-  created_at: string;
+  time_limit_seconds: number | null;
+  question_count: number;
+  assignment: {
+    id: string;
+    status: 'pending' | 'in_progress' | 'completed' | 'overdue';
+    deadline: string | null;
+    required: boolean;
+  } | null;
+  best_score: number | null;
+  attempt_count: number;
+  last_submitted_at: string | null;
 }
 
-export interface Question {
+export interface AttemptQuestion {
   id: string;
-  quiz_id: string;
+  position: number;
   content: string;
   options: string[];
-  correct_answer: number;
-  explanation: string;
-  competencies: string[];
 }
 
-export interface PerformanceLog {
-  id: string;
-  user_id: string;
-  quiz_id: string;
+export interface StartedAttempt {
+  attempt: { id: string; started_at: string };
+  assessment: { id: string; title: string; time_limit_seconds: number | null };
+  questions: AttemptQuestion[];
+}
+
+export interface AttemptResult {
   score: number;
-  time_taken: number;
-  answers: { question_id: string; answer: number; correct: boolean }[];
-  created_at: string;
+  correct: number;
+  total: number;
+  time_taken_seconds: number;
+  results: {
+    question_id: string;
+    selected_index: number | null;
+    correct_index: number;
+    is_correct: boolean;
+    explanation: string;
+  }[];
 }
-
-// Mock Data Generators
-const generateMockQuizzes = (): Quiz[] => [
-  {
-    id: 'quiz-001',
-    title: 'Cardiac Assessment Basics',
-    description: 'Learn the fundamentals of cardiac patient assessment',
-    difficulty: 'beginner',
-    category: 'Cardiac Care',
-    created_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
-  },
-  {
-    id: 'quiz-002',
-    title: 'Diabetes Management',
-    description: 'Assessment of diabetes care protocols',
-    difficulty: 'intermediate',
-    category: 'Endocrinology',
-    created_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-  },
-  {
-    id: 'quiz-003',
-    title: 'Hypertension Crisis Response',
-    description: 'Advanced management of hypertensive emergencies',
-    difficulty: 'advanced',
-    category: 'Emergency Care',
-    created_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-  },
-  {
-    id: 'quiz-004',
-    title: 'Patient Communication Skills',
-    description: 'Effective communication with patients and families',
-    difficulty: 'beginner',
-    category: 'Soft Skills',
-    created_at: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
-  },
-];
-
-const generateMockQuestions = (quizId: string): Question[] => {
-  const questionMap: Record<string, Question[]> = {
-    'quiz-001': [
-      {
-        id: 'q-001-1',
-        quiz_id: 'quiz-001',
-        content: 'What is the normal resting heart rate for adults?',
-        options: ['40-60 bpm', '60-100 bpm', '100-120 bpm', '120-150 bpm'],
-        correct_answer: 1,
-        explanation: 'The normal resting heart rate for adults is typically between 60-100 beats per minute.',
-        competencies: ['Vital Signs', 'Cardiac Assessment'],
-      },
-      {
-        id: 'q-001-2',
-        quiz_id: 'quiz-001',
-        content: 'Which of the following indicates an abnormal heart rhythm?',
-        options: ['Regular pulse at 75 bpm', 'Irregular pulse with variations', 'Pulse at 90 bpm', 'All are normal'],
-        correct_answer: 1,
-        explanation: 'An irregular pulse with variations may indicate arrhythmia and requires further investigation.',
-        competencies: ['Cardiac Assessment', 'Clinical Judgment'],
-      },
-    ],
-    'quiz-002': [
-      {
-        id: 'q-002-1',
-        quiz_id: 'quiz-002',
-        content: 'What is the primary goal of diabetes management?',
-        options: [
-          'Eliminate insulin usage',
-          'Maintain blood glucose within target range',
-          'Increase dietary sugar intake',
-          'Reduce all medications',
-        ],
-        correct_answer: 1,
-        explanation: 'The primary goal is to maintain blood glucose levels within the target range to prevent complications.',
-        competencies: ['Diabetes Care', 'Patient Education'],
-      },
-    ],
-    'quiz-003': [
-      {
-        id: 'q-003-1',
-        quiz_id: 'quiz-003',
-        content: 'What is considered a hypertensive emergency?',
-        options: [
-          'BP > 140/90 mmHg',
-          'BP > 180/120 mmHg with end-organ damage',
-          'Any BP reading above baseline',
-          'BP that increases during stress',
-        ],
-        correct_answer: 1,
-        explanation: 'A hypertensive emergency is defined as BP > 180/120 mmHg accompanied by signs of end-organ damage.',
-        competencies: ['Emergency Response', 'Critical Thinking'],
-      },
-    ],
-    'quiz-004': [
-      {
-        id: 'q-004-1',
-        quiz_id: 'quiz-004',
-        content: 'How should you introduce yourself to a new patient?',
-        options: [
-          'State only your name',
-          'State your name, role, and purpose of your visit',
-          'Ask them questions immediately',
-          'Wait for them to speak first',
-        ],
-        correct_answer: 1,
-        explanation: 'Building rapport requires introducing yourself with your role to establish professional communication.',
-        competencies: ['Communication', 'Patient Relations'],
-      },
-    ],
-  };
-
-  return questionMap[quizId] || [];
-};
-
-const generateMockPerformanceLogs = (userId: string): PerformanceLog[] => [
-  {
-    id: 'perf-001',
-    user_id: userId,
-    quiz_id: 'quiz-001',
-    score: 85,
-    time_taken: 1200,
-    answers: [
-      { question_id: 'q-001-1', answer: 1, correct: true },
-      { question_id: 'q-001-2', answer: 1, correct: true },
-    ],
-    created_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-  },
-  {
-    id: 'perf-002',
-    user_id: userId,
-    quiz_id: 'quiz-002',
-    score: 72,
-    time_taken: 1500,
-    answers: [
-      { question_id: 'q-002-1', answer: 1, correct: true },
-    ],
-    created_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-  },
-  {
-    id: 'perf-003',
-    user_id: userId,
-    quiz_id: 'quiz-004',
-    score: 90,
-    time_taken: 900,
-    answers: [
-      { question_id: 'q-004-1', answer: 1, correct: true },
-    ],
-    created_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-  },
-];
 
 // Authentication Functions
 export async function login(email: string, password: string): Promise<{ user: User; sessionToken: string } | null> {
@@ -532,31 +401,60 @@ export async function fetchPatients(search?: string, abnormalOnly?: boolean): Pr
   }
 }
 
-export async function fetchQuizzes(): Promise<Quiz[]> {
-  await new Promise(resolve => setTimeout(resolve, 200));
-  return generateMockQuizzes();
+export async function fetchStudentAssessments(): Promise<StudentAssessment[]> {
+  try {
+    const res = await fetch('/api/student/assessments', { credentials: 'include' });
+    if (!res.ok) {
+      console.error('fetchStudentAssessments() failed', res.status);
+      return [];
+    }
+    const json = (await res.json()) as { assessments: StudentAssessment[] };
+    return json.assessments ?? [];
+  } catch (err) {
+    console.error('fetchStudentAssessments() failed', err);
+    return [];
+  }
 }
 
-export async function fetchQuizQuestions(quizId: string): Promise<Question[]> {
-  await new Promise(resolve => setTimeout(resolve, 150));
-  return generateMockQuestions(quizId);
+export async function startAssessmentAttempt(
+  assessmentId: string,
+): Promise<StartedAttempt | null> {
+  try {
+    const res = await fetch(`/api/student/assessments/${assessmentId}/attempts`, {
+      method: 'POST',
+      credentials: 'include',
+    });
+    if (!res.ok) {
+      console.error('startAssessmentAttempt() failed', res.status);
+      return null;
+    }
+    return (await res.json()) as StartedAttempt;
+  } catch (err) {
+    console.error('startAssessmentAttempt() failed', err);
+    return null;
+  }
 }
 
-export async function submitPerformance(
-  userId: string,
-  quizId: string,
-  score: number,
-  timeTaken: number,
-  answers: { question_id: string; answer: number; correct: boolean }[]
-): Promise<boolean> {
-  await new Promise(resolve => setTimeout(resolve, 300));
-  // In a real app, this would save to a database
-  return true;
-}
-
-export async function fetchStudentPerformance(studentId: string): Promise<PerformanceLog[]> {
-  await new Promise(resolve => setTimeout(resolve, 200));
-  return generateMockPerformanceLogs(studentId);
+export async function submitAssessmentAttempt(
+  attemptId: string,
+  answers: { question_id: string; selected_index: number | null; time_spent_seconds?: number }[],
+): Promise<AttemptResult | null> {
+  try {
+    const res = await fetch(`/api/student/attempts/${attemptId}/submit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ answers }),
+    });
+    if (!res.ok) {
+      console.error('submitAssessmentAttempt() failed', res.status);
+      return null;
+    }
+    return (await res.json()) as AttemptResult;
+  } catch (err) {
+    console.error('submitAssessmentAttempt() failed', err);
+    return null;
+  }
 }
 
 // Faculty API Types

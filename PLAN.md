@@ -2,15 +2,15 @@
 
 **System:** iCARE++ — A Scalable Machine Learning-Driven Clinical Competency Assessment and Adaptive Learning System for Nursing Students
 **Institution:** College of Health Sciences, Batangas State University – TNEU ARASOF Nasugbu
-**Reference:** `icare-docs/FULL MANUSCRIPT.pdf` (Chapters I–III)
-**Repos:** `icare-web/` (Next.js 16 + Supabase), `icare-mobile/` (Expo 54 / React Native 0.81)
+**Reference:** `docs/FULL MANUSCRIPT.pdf` (Chapters I–III)
+**Repos:** `web/` (Next.js 16 + Supabase), `mobile/` (Expo 54 / React Native 0.81)
 **Plan date:** 2026-07-06
 
 ---
 
 ## 1. Where the project stands today
 
-### 1.1 icare-web (further along)
+### 1.1 web (further along)
 
 **Working now:**
 - Custom auth: email/password (bcrypt) + Google OAuth, JWT sessions via `jose`, OTP-based forgot-password over email (`app/lib/auth/*`, `app/api/auth/*`)
@@ -29,7 +29,7 @@
 - Role enum is `student|faculty|admin` — no distinct Dean/super-admin tier and RLS policies are thin (most access decided in API routes with the service key)
 - Not a git repository (blocks ultraplan/cloud tooling, CI, and safe collaboration)
 
-### 1.2 icare-mobile (UI shell only)
+### 1.2 mobile (UI shell only)
 
 - Expo Router screens exist for every manuscript-required student feature: dashboard, vitals (+ per-patient detail), tasks, quizzes (+ take-quiz), EHR (+ TPR/IVF sheets), progress, recommendations, notifications, profile, login
 - **Everything is mock data** — `lib/api.ts` is typed interfaces + in-memory fixtures; zero network calls, no auth, no persistence, no offline sync, no push notifications
@@ -65,7 +65,7 @@ From Objectives (pp. 15–17), Scope (pp. 20–23), Architecture/DFD/ERD (pp. 74
 
 ```
 ┌────────────────────┐     ┌─────────────────────┐
-│ icare-web (Next.js)│     │ icare-mobile (Expo) │
+│ web (Next.js)│     │ mobile (Expo) │
 │ PWA, offline-first │     │ Android / iOS       │
 │ Dean+Faculty+Student│    │ Student core flows  │
 └─────────┬──────────┘     └──────────┬──────────┘
@@ -82,7 +82,7 @@ From Objectives (pp. 15–17), Scope (pp. 20–23), Architecture/DFD/ERD (pp. 74
           │ internal HTTP
           ▼
 ┌─────────────────────────────────────────────────┐
-│ icare-ml (NEW: Python FastAPI service)          │
+│ ml (NEW: Python FastAPI service)          │
 │  ├─ Random Forest + Logistic Regression         │
 │  ├─ Training pipeline + model registry table    │
 │  ├─ Content-based quiz recommender              │
@@ -92,7 +92,7 @@ From Objectives (pp. 15–17), Scope (pp. 20–23), Architecture/DFD/ERD (pp. 74
 ```
 
 Key decisions (recommended, all reversible):
-- **Keep two app repos + add one `icare-ml` repo** (manuscript mandates Python for ML; keep it out of the Next.js deploy). Alternatively fold all three into a single monorepo — decide at Phase 0.
+- **Keep two app repos + add one `ml` repo** (manuscript mandates Python for ML; keep it out of the Next.js deploy). Alternatively fold all three into a single monorepo — decide at Phase 0.
 - **Mobile consumes the same Next.js API routes** the web uses (session token via `Authorization: Bearer`), so there is exactly one backend to test with Postman.
 - **Warehouse lives in the same Postgres** as a `dw` schema populated by a scheduled ETL (Supabase cron / pg_cron). "Multi-campus ready" = every fact/dim row carries `campus_id`; no second database needed for the capstone.
 - **Rule-based vitals anomaly detection runs in TypeScript** on the API layer (it's threshold logic, keeping it out of the ML service preserves offline evaluation on mobile later).
@@ -107,15 +107,15 @@ Phases are ordered so each unblocks the next; within a phase, items are roughly 
 
 | # | Task | Effort |
 |---|------|--------|
-| 0.1 | `git init` in `icare-web`, `icare-mobile` (and new `icare-ml`); add `.gitignore` (node_modules, .env*, data/*.gz, tsconfig.tsbuildinfo); initial commits; push to GitHub org | S |
+| 0.1 | ~~`git init`~~ **Done 2026-07-06** — monorepo at `github.com/mdk-zero/icare` with `web/`, `mobile/`, `docs/`; `.idea/` untracked; per-project `.gitignore`s verified | S |
 | 0.2 | Environment hygiene: `.env.example` per repo documenting every var (Supabase URL/keys, JWT secret, Google OAuth, SMTP, OpenRouter, FCM); verify no secrets are committed | S |
 | 0.3 | CI (GitHub Actions): lint + `tsc --noEmit` + build on both repos; migration dry-run job for web | M |
 | 0.4 | Consolidate migrations: current `schema.sql` + 6 numbered migrations drift; adopt Supabase CLI migration workflow as single source of truth | M |
-| 0.5 | Decide monorepo vs multi-repo; if staying multi-repo, extract a shared `types` package or a codegen step so web/mobile/ML agree on API types | M |
+| 0.5 | ~~Decide monorepo vs multi-repo~~ **Decided: monorepo.** The future ML service lives at `ml/`; a shared `types` package (or codegen) can be added when mobile wiring starts | M |
 
 ### Phase 1 — Complete the data model (DFD/ERD parity)
 
-New migrations in `icare-web/supabase/migrations/` (all tables: RLS enabled, `campus_id` where relevant):
+New migrations in `web/supabase/migrations/` (all tables: RLS enabled, `campus_id` where relevant):
 
 | # | Task | Detail | Effort |
 |---|------|--------|--------|
@@ -147,7 +147,7 @@ New migrations in `icare-web/supabase/migrations/` (all tables: RLS enabled, `ca
 | 2.10 | Real analytics | Admin + faculty dashboards read from warehouse views (Phase 4) instead of hard-coded arrays | L |
 | 2.11 | PDF competency reports | Server-side generation (e.g. `@react-pdf/renderer` or Puppeteer route): per-student competency report, cohort at-risk report; stored in Supabase Storage, linked from Reports page | L |
 
-### Phase 3 — icare-ml: prediction + recommendation service (NEW repo)
+### Phase 3 — ml: prediction + recommendation service (NEW repo)
 
 | # | Task | Detail | Effort |
 |---|------|--------|--------|
@@ -173,7 +173,7 @@ New migrations in `icare-web/supabase/migrations/` (all tables: RLS enabled, `ca
 
 | # | Task | Detail | Effort |
 |---|------|--------|--------|
-| 5.1 | API client + auth | Replace mock `lib/api.ts` with fetch client against icare-web API; login screen → real session; secure token storage (`expo-secure-store`); session refresh | L |
+| 5.1 | API client + auth | Replace mock `lib/api.ts` with fetch client against web API; login screen → real session; secure token storage (`expo-secure-store`); session refresh | L |
 | 5.2 | Wire existing screens | Vitals (list/detail/encode), Tasks, Quizzes (list/take), EHR (TPR/IVF/notes), Progress, Recommendations, Notifications, Profile — screens exist, swap data source screen-by-screen | L (per-screen M) |
 | 5.3 | Offline support | Cache reads (AsyncStorage/SQLite); outbox queue for vitals encodings, quiz answers, task logs with sync + conflict policy (server wins, client re-tags); required by scope's "local storage / low-connectivity" commitment | L |
 | 5.4 | Push notifications | FCM via `expo-notifications`; register `device_tokens`; deep-link to relevant screen | M |

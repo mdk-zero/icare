@@ -46,6 +46,8 @@ create index if not exists idx_faculty_students_student_id on public.faculty_stu
 
 alter table public.faculty_students enable row level security;
 
+drop policy if exists "faculty can read own roster" on public.faculty_students;
+
 create policy "faculty can read own roster" on public.faculty_students
   for select using (
     exists (
@@ -78,6 +80,8 @@ create index if not exists idx_scenarios_category on public.scenarios(category);
 
 alter table public.scenarios enable row level security;
 
+drop policy if exists "authenticated users can read scenarios" on public.scenarios;
+
 create policy "authenticated users can read scenarios" on public.scenarios
   for select using (
     exists (
@@ -86,6 +90,8 @@ create policy "authenticated users can read scenarios" on public.scenarios
         and public.users.role in ('student', 'faculty', 'admin')
     )
   );
+
+drop policy if exists "faculty and admin can manage own scenarios" on public.scenarios;
 
 create policy "faculty and admin can manage own scenarios" on public.scenarios
   for all using (
@@ -121,10 +127,14 @@ create index if not exists idx_scenario_assignments_status on public.scenario_as
 
 alter table public.scenario_assignments enable row level security;
 
+drop policy if exists "students can read own assignments" on public.scenario_assignments;
+
 create policy "students can read own assignments" on public.scenario_assignments
   for select using (
     auth.uid() = student_id
   );
+
+drop policy if exists "faculty and admin can read assignments" on public.scenario_assignments;
 
 create policy "faculty and admin can read assignments" on public.scenario_assignments
   for select using (
@@ -134,6 +144,8 @@ create policy "faculty and admin can read assignments" on public.scenario_assign
         and public.users.role in ('faculty', 'admin')
     )
   );
+
+drop policy if exists "faculty and admin can manage assignments" on public.scenario_assignments;
 
 create policy "faculty and admin can manage assignments" on public.scenario_assignments
   for all using (

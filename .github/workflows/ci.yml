@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  web:
+    name: web (typecheck, lint, build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - name: Typecheck
+        run: npx tsc --noEmit
+      # TODO(phase-2): make lint blocking once the legacy mock pages
+      # (app/quizzes, app/performance, admin analytics) are replaced.
+      - name: Lint (advisory)
+        run: npm run lint
+        continue-on-error: true
+      - name: Build
+        run: npm run build
+        env:
+          SUPABASE_URL: https://example.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ci-dummy
+          SUPABASE_ANON_KEY: ci-dummy
+          SESSION_SECRET: ci-dummy-session-secret-not-real
+          NEXT_PUBLIC_GOOGLE_CLIENT_ID: ci-dummy
+          GOOGLE_CLIENT_ID: ci-dummy
+
+  mobile:
+    name: mobile (typecheck, lint)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - run: npm ci
+      - name: Typecheck
+        run: npx tsc --noEmit
+      - name: Lint (advisory)
+        run: npm run lint
+        continue-on-error: true

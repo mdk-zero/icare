@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ScrollView, View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { ScrollView, View, Text, StyleSheet, TouchableOpacity, Alert, type StyleProp, type ViewStyle, type TextStyle } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Card, PrimaryButton, Badge } from '@/components/ui';
 import { mockQuestions } from '@/lib/api';
@@ -72,8 +72,8 @@ export default function QuizInterfaceScreen() {
           const isCorrect = index === currentQuestion.correctIndex;
           const isSelected = index === selectedIndex;
           
-          let optionStyle = styles.option;
-          let textStyle = styles.optionText;
+          let optionStyle: StyleProp<ViewStyle> = styles.option;
+          let textStyle: StyleProp<TextStyle> = styles.optionText;
           
           if (showAnswer) {
             if (isCorrect) {

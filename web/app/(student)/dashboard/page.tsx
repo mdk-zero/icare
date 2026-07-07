@@ -6,6 +6,8 @@ import {
   getCurrentUser,
   User,
   fetchStudentScenarioAssignments,
+  fetchStudentAssessments,
+  StudentAssessment,
 } from "../../lib/api";
 
 interface ScenarioAssignment {
@@ -35,13 +37,6 @@ interface Patient {
   };
 }
 
-interface Quiz {
-  id: string;
-  title: string;
-  description: string;
-  difficulty: string;
-  category: string;
-}
 
 const mockPatients: Patient[] = [
   {
@@ -121,36 +116,12 @@ const mockPatients: Patient[] = [
   },
 ];
 
-const mockQuizzes: Quiz[] = [
-  {
-    id: "1",
-    title: "Vital Signs Assessment",
-    description: "Test your knowledge on monitoring vital signs",
-    difficulty: "beginner",
-    category: "Nursing Foundations",
-  },
-  {
-    id: "2",
-    title: "Patient Documentation",
-    description: "Learn proper clinical documentation",
-    difficulty: "intermediate",
-    category: "Clinical Skills",
-  },
-  {
-    id: "3",
-    title: "Clinical Decision Making",
-    description: "Case-based clinical reasoning",
-    difficulty: "advanced",
-    category: "Critical Thinking",
-  },
-];
-
 export default function StudentDashboard() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [user, setUser] = useState<User | null>(getCurrentUser);
   const [patients] = useState<Patient[]>(mockPatients);
-  const [quizzes] = useState<Quiz[]>(mockQuizzes);
+  const [quizzes, setQuizzes] = useState<StudentAssessment[]>([]);
   const [scenarioAssignments, setScenarioAssignments] = useState<
     ScenarioAssignment[]
   >([]);
@@ -171,6 +142,7 @@ export default function StudentDashboard() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setUser(currentUser);
     loadScenarioAssignments(currentUser.id);
+    fetchStudentAssessments().then(setQuizzes);
   }, [router, loadScenarioAssignments]);
 
   const getVitalStatus = (
@@ -479,20 +451,44 @@ export default function StudentDashboard() {
 
       {activeTab === "quizzes" && (
         <div className="space-y-4">
+          {quizzes.length === 0 && (
+            <div className="bg-white p-10 rounded-2xl shadow-sm border border-gray-100 text-center text-gray-500">
+              No quizzes are available yet. Assigned quizzes will appear here.
+            </div>
+          )}
           {quizzes.map((quiz) => (
             <div
               key={quiz.id}
               className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100"
             >
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-4">
                 <div>
-                  <h3 className="font-semibold text-gray-800 mb-1">
-                    {quiz.title}
-                  </h3>
+                  <div className="flex items-center gap-2 mb-1">
+                    <h3 className="font-semibold text-gray-800">
+                      {quiz.title}
+                    </h3>
+                    {quiz.assignment && (
+                      <span
+                        className={`px-2 py-0.5 text-xs rounded-full ${
+                          quiz.assignment.status === "completed"
+                            ? "bg-green-100 text-green-700"
+                            : quiz.assignment.status === "overdue"
+                            ? "bg-red-100 text-red-700"
+                            : "bg-blue-100 text-blue-700"
+                        }`}
+                      >
+                        {quiz.assignment.status === "completed"
+                          ? "Completed"
+                          : quiz.assignment.status === "overdue"
+                          ? "Overdue"
+                          : "Assigned"}
+                      </span>
+                    )}
+                  </div>
                   <p className="text-sm text-gray-500 mb-2">
                     {quiz.description}
                   </p>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 flex-wrap">
                     <span className="px-2 py-1 bg-gray-100 text-gray-600 text-sm rounded">
                       {quiz.category}
                     </span>
@@ -507,10 +503,26 @@ export default function StudentDashboard() {
                     >
                       {quiz.difficulty}
                     </span>
+                    <span className="text-sm text-gray-400">
+                      {quiz.question_count} question{quiz.question_count === 1 ? "" : "s"}
+                    </span>
+                    {quiz.assignment?.deadline && (
+                      <span className="text-sm text-gray-400">
+                        Due {new Date(quiz.assignment.deadline).toLocaleDateString()}
+                      </span>
+                    )}
+                    {quiz.best_score !== null && (
+                      <span className="text-sm font-medium text-[#1B6B7B]">
+                        Best: {quiz.best_score}%
+                      </span>
+                    )}
                   </div>
                 </div>
-                <button className="px-6 py-2 bg-[#1B6B7B] text-white rounded-lg hover:bg-[#155663] transition-colors">
-                  Start Quiz
+                <button
+                  onClick={() => router.push(`/quizzes/${quiz.id}`)}
+                  className="px-6 py-2 bg-[#1B6B7B] text-white rounded-lg hover:bg-[#155663] transition-colors shrink-0"
+                >
+                  {quiz.attempt_count > 0 ? "Retake Quiz" : "Start Quiz"}
                 </button>
               </div>
             </div>

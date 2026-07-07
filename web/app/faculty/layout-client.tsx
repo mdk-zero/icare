@@ -9,6 +9,7 @@ import {
   faFileLines,
   faHospitalUser,
   faHouse,
+  faListCheck,
   faNotesMedical,
   faUsers,
 } from "@fortawesome/free-solid-svg-icons";
@@ -31,6 +32,7 @@ const navItems: NavItem[] = [
   { id: "overview", label: "Overview", href: "/faculty", icon: faHouse },
   { id: "students", label: "My Students", href: "/faculty/students", icon: faUsers },
   { id: "scenarios", label: "Scenarios", href: "/faculty/scenarios", icon: faNotesMedical },
+  { id: "assessments", label: "Question Bank", href: "/faculty/assessments", icon: faListCheck },
   { id: "patients", label: "Patients", href: "/faculty/patients", icon: faHospitalUser },
   { id: "analytics", label: "Analytics", href: "/faculty/analytics", icon: faChartBar },
   { id: "reports", label: "Reports", href: "/faculty/reports", icon: faFileLines },

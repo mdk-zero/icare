@@ -38,6 +38,7 @@ alter table public.patients enable row level security;
 
 -- Admins/faculty can read patient rows; students can read as well.
 drop policy if exists "faculty and students can read patients" on public.patients;
+drop policy if exists "faculty and students can read patients" on public.patients;
 create policy "faculty and students can read patients" on public.patients
   for select using (
     exists (
