@@ -7,6 +7,9 @@ import {
   User,
   fetchStudentScenarioAssignments,
   fetchStudentAssessments,
+  fetchMyRecommendations,
+  dismissRecommendation,
+  LearningRecommendation,
   StudentAssessment,
 } from "../../lib/api";
 
@@ -122,6 +125,7 @@ export default function StudentDashboard() {
   const [user, setUser] = useState<User | null>(getCurrentUser);
   const [patients] = useState<Patient[]>(mockPatients);
   const [quizzes, setQuizzes] = useState<StudentAssessment[]>([]);
+  const [recommendations, setRecommendations] = useState<LearningRecommendation[]>([]);
   const [scenarioAssignments, setScenarioAssignments] = useState<
     ScenarioAssignment[]
   >([]);
@@ -143,7 +147,13 @@ export default function StudentDashboard() {
     setUser(currentUser);
     loadScenarioAssignments(currentUser.id);
     fetchStudentAssessments().then(setQuizzes);
+    fetchMyRecommendations().then(setRecommendations);
   }, [router, loadScenarioAssignments]);
+
+  const handleDismissRecommendation = async (id: string) => {
+    setRecommendations((prev) => prev.filter((rec) => rec.id !== id));
+    await dismissRecommendation(id);
+  };
 
   const getVitalStatus = (
     vital: number | null,
@@ -304,32 +314,60 @@ export default function StudentDashboard() {
 
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
               <h3 className="font-semibold text-gray-800 mb-4">
-                Recommended Quizzes
+                Recommended for You
               </h3>
-              <div className="space-y-3">
-                {quizzes.map((quiz) => (
-                  <div
-                    key={quiz.id}
-                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
-                  >
-                    <div>
-                      <p className="font-medium text-gray-800">{quiz.title}</p>
-                      <p className="text-sm text-gray-500">{quiz.category}</p>
-                    </div>
-                    <span
-                      className={`px-3 py-1 text-sm rounded-full ${
-                        quiz.difficulty === "beginner"
-                          ? "bg-green-100 text-green-700"
-                          : quiz.difficulty === "intermediate"
-                          ? "bg-yellow-100 text-yellow-700"
-                          : "bg-red-100 text-red-700"
-                      }`}
+              {recommendations.length === 0 ? (
+                <p className="text-sm text-gray-500 py-6 text-center">
+                  No recommendations yet — take a quiz so the recommender can
+                  learn your strengths. New picks arrive nightly.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {recommendations.slice(0, 5).map((rec) => (
+                    <div
+                      key={rec.id}
+                      className="flex items-center justify-between gap-3 p-3 bg-gray-50 rounded-lg"
                     >
-                      {quiz.difficulty}
-                    </span>
-                  </div>
-                ))}
-              </div>
+                      <div className="min-w-0">
+                        <p className="font-medium text-gray-800 truncate">
+                          {rec.assessments?.title ?? "Quiz"}
+                        </p>
+                        <p className="text-xs text-gray-500">{rec.reason}</p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {rec.assessments && (
+                          <span
+                            className={`px-2 py-0.5 text-xs rounded-full ${
+                              rec.assessments.difficulty === "beginner"
+                                ? "bg-green-100 text-green-700"
+                                : rec.assessments.difficulty === "intermediate"
+                                ? "bg-yellow-100 text-yellow-700"
+                                : "bg-red-100 text-red-700"
+                            }`}
+                          >
+                            {rec.assessments.difficulty}
+                          </span>
+                        )}
+                        <button
+                          onClick={() => router.push(`/quizzes/${rec.assessment_id}`)}
+                          className="px-3 py-1.5 bg-[#1B6B7B] text-white text-sm rounded-lg hover:bg-[#155663] transition-colors"
+                        >
+                          Start
+                        </button>
+                        <button
+                          onClick={() => handleDismissRecommendation(rec.id)}
+                          className="p-1.5 text-gray-400 hover:text-gray-600 transition-colors"
+                          title="Dismiss recommendation"
+                        >
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </>

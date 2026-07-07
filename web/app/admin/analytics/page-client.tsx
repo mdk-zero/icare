@@ -9,16 +9,19 @@ import {
   faExclamationTriangle,
   faSpinner,
   faRotate,
+  faBrain,
   faHeartbeat,
   faNotesMedical,
   faClipboardCheck,
 } from "@fortawesome/free-solid-svg-icons";
-import { fetchAnalyticsSummary, runWarehouseEtl, AnalyticsSummary } from "../../lib/api";
+import { fetchAnalyticsSummary, runWarehouseEtl, runMlJob, AnalyticsSummary } from "../../lib/api";
 
 export default function AdminAnalyticsClient() {
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [runningMl, setRunningMl] = useState(false);
+  const [mlStatus, setMlStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -42,6 +45,32 @@ export default function AdminAnalyticsClient() {
     setRefreshing(false);
   };
 
+  const handleRunMl = async () => {
+    setError(null);
+    setMlStatus(null);
+    setRunningMl(true);
+    const predictions = await runMlJob("predict");
+    if (predictions.error) {
+      setError(predictions.error);
+      setRunningMl(false);
+      return;
+    }
+    const recommendations = await runMlJob("recommend");
+    if (recommendations.error) {
+      setError(recommendations.error);
+      setRunningMl(false);
+      return;
+    }
+    const scored = predictions.result?.scored ?? 0;
+    const atRiskNow = predictions.result?.at_risk ?? 0;
+    const recs = recommendations.result?.recommendations ?? 0;
+    setMlStatus(
+      `Scored ${scored} students (${atRiskNow} at risk) and wrote ${recs} recommendations. ` +
+        "Run Refresh Warehouse to fold new predictions into these charts.",
+    );
+    setRunningMl(false);
+  };
+
   const atRisk = summary?.risk_distribution?.at_risk ?? 0;
   const activeRooms = (summary?.room_utilization ?? []).filter((r) => r.status === "active").length;
   const trend = summary?.weekly_trend ?? [];
@@ -63,18 +92,33 @@ export default function AdminAnalyticsClient() {
                 ` · last refreshed ${new Date(summary.etl.last_run_at).toLocaleString()}`}
             </p>
           </div>
-          <button
-            onClick={handleRefresh}
-            disabled={refreshing}
-            className="px-4 py-2 bg-[#1B6B7B] text-white font-medium rounded-xl hover:bg-[#145a63] transition-all duration-300 flex items-center gap-2 shadow-lg shadow-[#1B6B7B]/20 disabled:opacity-50 shrink-0"
-          >
-            <FontAwesomeIcon icon={refreshing ? faSpinner : faRotate} spin={refreshing} className="w-4 h-4" />
-            {refreshing ? "Refreshing…" : "Refresh Warehouse"}
-          </button>
+          <div className="flex items-center gap-3 shrink-0">
+            <button
+              onClick={handleRunMl}
+              disabled={runningMl}
+              className="px-4 py-2 bg-white text-[#1B6B7B] font-medium rounded-xl border border-[#1B6B7B]/30 hover:bg-[#1B6B7B]/5 transition-all duration-300 flex items-center gap-2 disabled:opacity-50"
+            >
+              <FontAwesomeIcon icon={runningMl ? faSpinner : faBrain} spin={runningMl} className="w-4 h-4" />
+              {runningMl ? "Running…" : "Run ML Jobs"}
+            </button>
+            <button
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className="px-4 py-2 bg-[#1B6B7B] text-white font-medium rounded-xl hover:bg-[#145a63] transition-all duration-300 flex items-center gap-2 shadow-lg shadow-[#1B6B7B]/20 disabled:opacity-50"
+            >
+              <FontAwesomeIcon icon={refreshing ? faSpinner : faRotate} spin={refreshing} className="w-4 h-4" />
+              {refreshing ? "Refreshing…" : "Refresh Warehouse"}
+            </button>
+          </div>
         </div>
         {error && (
           <div className="mt-4 p-3 bg-rose-50 border border-rose-200 rounded-xl text-sm text-rose-700">
             {error}
+          </div>
+        )}
+        {mlStatus && (
+          <div className="mt-4 p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-sm text-emerald-700">
+            {mlStatus}
           </div>
         )}
       </div>

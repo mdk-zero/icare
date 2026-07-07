@@ -1140,6 +1140,126 @@ export async function runWarehouseEtl(): Promise<{ rows_loaded?: Record<string, 
   }
 }
 
+// ---------------------------------------------------------------
+// ML predictions + recommendations (Phase 3.8)
+// ---------------------------------------------------------------
+
+export interface PredictionExplanation {
+  feature: string;
+  value: number;
+  cohort_mean: number;
+  direction: 'increases_risk' | 'decreases_risk';
+  weight: number;
+}
+
+export interface RiskPrediction {
+  id: string;
+  student_id: string;
+  risk: 'safe' | 'at_risk';
+  probability: number | null;
+  features: Record<string, number>;
+  explanations: PredictionExplanation[];
+  predicted_at: string;
+  ml_models: { kind: string; version: string; is_baseline: boolean } | null;
+}
+
+export async function fetchLatestPrediction(studentId: string): Promise<RiskPrediction | null> {
+  try {
+    const res = await fetch(`/api/faculty/predictions?student_id=${encodeURIComponent(studentId)}`, {
+      credentials: 'include',
+    });
+    if (!res.ok) {
+      console.error('fetchLatestPrediction() failed', res.status);
+      return null;
+    }
+    const json = (await res.json()) as { prediction: RiskPrediction | null };
+    return json.prediction ?? null;
+  } catch (err) {
+    console.error('fetchLatestPrediction() failed', err);
+    return null;
+  }
+}
+
+export async function fetchAllPredictions(): Promise<RiskPrediction[]> {
+  try {
+    const res = await fetch('/api/faculty/predictions', { credentials: 'include' });
+    if (!res.ok) {
+      console.error('fetchAllPredictions() failed', res.status);
+      return [];
+    }
+    const json = (await res.json()) as { predictions: RiskPrediction[] };
+    return json.predictions ?? [];
+  } catch (err) {
+    console.error('fetchAllPredictions() failed', err);
+    return [];
+  }
+}
+
+export interface LearningRecommendation {
+  id: string;
+  assessment_id: string;
+  rank: number;
+  reason: string;
+  created_at: string;
+  assessments: {
+    id: string;
+    title: string;
+    description: string;
+    difficulty: 'beginner' | 'intermediate' | 'advanced';
+    category: string;
+  } | null;
+  competency_areas: { name: string } | null;
+}
+
+export async function fetchMyRecommendations(): Promise<LearningRecommendation[]> {
+  try {
+    const res = await fetch('/api/student/recommendations', { credentials: 'include' });
+    if (!res.ok) {
+      console.error('fetchMyRecommendations() failed', res.status);
+      return [];
+    }
+    const json = (await res.json()) as { recommendations: LearningRecommendation[] };
+    return json.recommendations ?? [];
+  } catch (err) {
+    console.error('fetchMyRecommendations() failed', err);
+    return [];
+  }
+}
+
+export async function dismissRecommendation(id: string): Promise<boolean> {
+  try {
+    const res = await fetch('/api/student/recommendations', {
+      method: 'PATCH',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id }),
+    });
+    return res.ok;
+  } catch (err) {
+    console.error('dismissRecommendation() failed', err);
+    return false;
+  }
+}
+
+export async function runMlJob(
+  action: 'predict' | 'recommend',
+): Promise<{ result?: Record<string, unknown>; error?: string }> {
+  try {
+    const res = await fetch('/api/admin/ml', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action }),
+    });
+    const json = (await res.json()) as { result?: Record<string, unknown>; error?: string };
+    if (!res.ok) return { error: json.error || 'ML run failed' };
+    return { result: json.result };
+  } catch (err) {
+    console.error('runMlJob() failed', err);
+    return { error: 'ML run failed. Please try again.' };
+  }
+}
+
 // Mock Faculty Data
 const generateMockFacultyStudents = (): FacultyStudent[] => [
   {
@@ -1775,18 +1895,6 @@ export function getCurrentFacultyUser(): { id: string; name: string } | null {
   } catch {
     return null;
   }
-}
-
-export async function predictStudentRisk(studentId: string): Promise<any | null> {
-  await new Promise(resolve => setTimeout(resolve, 400));
-  
-  return {
-    student_id: studentId,
-    risk_score: 0.65,
-    risk_level: 'medium',
-    factors: ['Lower average scores', 'Decreased engagement', 'Inconsistent performance'],
-    recommendations: ['Schedule tutoring session', 'Offer peer mentoring', 'Provide additional resources'],
-  };
 }
 
 export async function getClinicalDecisionSupport(patientCase: any): Promise<any | null> {

@@ -4,7 +4,8 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import {
   fetchFacultyStudentDetail,
-  predictStudentRisk,
+  fetchLatestPrediction,
+  RiskPrediction,
   logAuditAction,
   getCurrentFacultyUser,
   FacultyStudent,
@@ -49,7 +50,7 @@ export default function StudentDetailClient() {
   const [validateForm, setValidateForm] = useState({ competency_id: "", score: "", remarks: "" });
   const [validateError, setValidateError] = useState<string | null>(null);
   const [validating, setValidating] = useState(false);
-  const [riskPrediction, setRiskPrediction] = useState<any>(null);
+  const [riskPrediction, setRiskPrediction] = useState<RiskPrediction | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("performance");
   const loggedRef = useRef(false);
@@ -95,13 +96,14 @@ export default function StudentDetailClient() {
 
   const loadStudentData = async () => {
     setLoading(true);
-    const data = await fetchFacultyStudentDetail(studentId);
+    const [data, prediction] = await Promise.all([
+      fetchFacultyStudentDetail(studentId),
+      fetchLatestPrediction(studentId),
+    ]);
+    setRiskPrediction(prediction);
     if (data) {
       setStudent(data.student);
       setPerformanceHistory(data.performance_history);
-
-      const prediction = await predictStudentRisk(studentId);
-      setRiskPrediction(prediction);
     }
 
     const scenarios = await fetchStudentScenarioHistory(studentId);
@@ -138,14 +140,14 @@ export default function StudentDetailClient() {
     await loadCompetencyData();
   };
 
-  const getRiskColor = (risk?: string) => {
-    switch (risk) {
-      case 'high': return 'bg-red-100 text-red-700 border-red-200';
-      case 'medium': return 'bg-amber-100 text-amber-700 border-amber-200';
-      case 'low': return 'bg-emerald-100 text-emerald-700 border-emerald-200';
-      default: return 'bg-gray-100 text-gray-700 border-gray-200';
-    }
-  };
+  const riskChipClass = riskPrediction
+    ? riskPrediction.risk === 'at_risk'
+      ? 'bg-red-100 text-red-700 border-red-200'
+      : 'bg-emerald-100 text-emerald-700 border-emerald-200'
+    : 'bg-gray-100 text-gray-700 border-gray-200';
+
+  const featureLabel = (feature: string) =>
+    feature.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
   const getScoreColor = (score: number) => {
     if (score >= 80) return 'text-emerald-600';
@@ -243,65 +245,83 @@ export default function StudentDetailClient() {
                 <p className="text-sm text-gray-500">Last Active</p>
               </div>
               <div className="text-center p-4 bg-gray-50 rounded-xl">
-                <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${getRiskColor(student.risk_level)}`}>
-                  {student.risk_level
-                    ? student.risk_level.charAt(0).toUpperCase() + student.risk_level.slice(1)
-                    : 'Unknown'} Risk
+                <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${riskChipClass}`}>
+                  {riskPrediction
+                    ? riskPrediction.risk === 'at_risk' ? 'At Risk' : 'Safe'
+                    : 'Not Scored'}
                 </span>
               </div>
             </div>
           </div>
         </div>
 
-        {riskPrediction && (
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="p-2 bg-purple-100 rounded-lg">
-                <svg className="w-5 h-5 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-              </div>
-              <h3 className="font-semibold text-gray-900">ML Risk Prediction</h3>
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="p-2 bg-purple-100 rounded-lg">
+              <svg className="w-5 h-5 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
             </div>
-            
+            <h3 className="font-semibold text-gray-900">At-Risk Prediction</h3>
+          </div>
+
+          {!riskPrediction ? (
+            <p className="text-sm text-gray-500 py-4">
+              No prediction yet — the ML service scores the cohort nightly
+              (or run it from Admin &gt; Analytics).
+            </p>
+          ) : (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-500">Risk Level</span>
-                <span className={`font-medium ${riskPrediction.risk_level === 'high' ? 'text-red-600' : riskPrediction.risk_level === 'medium' ? 'text-amber-600' : 'text-emerald-600'}`}>
-                  {riskPrediction.risk_level.toUpperCase()}
+                <span className="text-sm text-gray-500">Classification</span>
+                <span className={`font-medium ${riskPrediction.risk === 'at_risk' ? 'text-red-600' : 'text-emerald-600'}`}>
+                  {riskPrediction.risk === 'at_risk' ? 'AT RISK' : 'SAFE'}
                 </span>
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-500">Confidence</span>
-                <span className="font-medium text-gray-900">{riskPrediction.confidence}%</span>
-              </div>
-              <div className="border-t border-gray-100 pt-3">
-                <p className="text-sm text-gray-500 mb-2">Risk Factors</p>
-                <div className="space-y-1">
-                  {riskPrediction.factors && typeof riskPrediction.factors === 'object' && Object.keys(riskPrediction.factors).filter(k => riskPrediction.factors[k]).map((key) => (
-                    <div key={key} className="flex items-center gap-2 text-xs">
-                      <div className="w-2 h-2 bg-red-500 rounded-full" />
-                      <span className="text-gray-600 capitalize">{key.replace('_', ' ')}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              {riskPrediction.recommendations && (
-                <div className="border-t border-gray-100 pt-3">
-                  <p className="text-sm text-gray-500 mb-2">Recommendations</p>
-                  <ul className="space-y-1">
-                    {riskPrediction.recommendations.map((rec: string, idx: number) => (
-                      <li key={idx} className="text-xs text-gray-600 flex items-start gap-2">
-                        <span className="text-[#1B6B7B]">•</span>
-                        {rec}
-                      </li>
-                    ))}
-                  </ul>
+              {riskPrediction.probability != null && (
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-sm text-gray-500">Risk Probability</span>
+                    <span className="font-medium text-gray-900">
+                      {Math.round(riskPrediction.probability * 100)}%
+                    </span>
+                  </div>
+                  <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full ${riskPrediction.risk === 'at_risk' ? 'bg-red-500' : 'bg-emerald-500'}`}
+                      style={{ width: `${Math.round(riskPrediction.probability * 100)}%` }}
+                    />
+                  </div>
                 </div>
               )}
+              {riskPrediction.explanations.length > 0 && (
+                <div className="border-t border-gray-100 pt-3">
+                  <p className="text-sm text-gray-500 mb-2">Top Contributing Factors</p>
+                  <div className="space-y-2">
+                    {riskPrediction.explanations.map((exp) => (
+                      <div key={exp.feature} className="flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-2 h-2 rounded-full ${exp.direction === 'increases_risk' ? 'bg-red-500' : 'bg-emerald-500'}`} />
+                          <span className="text-gray-600">{featureLabel(exp.feature)}</span>
+                        </div>
+                        <span className="text-gray-500">
+                          {exp.value} <span className="text-gray-400">(avg {exp.cohort_mean})</span>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <p className="text-xs text-gray-400 border-t border-gray-100 pt-3">
+                {riskPrediction.ml_models
+                  ? `${riskPrediction.ml_models.kind.replace(/_/g, ' ')} v${riskPrediction.ml_models.version}${riskPrediction.ml_models.is_baseline ? ' (pre-trained baseline)' : ''}`
+                  : 'model unknown'}
+                {' · '}
+                {new Date(riskPrediction.predicted_at).toLocaleString()}
+              </p>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
