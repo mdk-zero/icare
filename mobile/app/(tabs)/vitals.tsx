@@ -1,45 +1,83 @@
-import React from 'react';
-import { ScrollView, View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { ScrollView, View, Text, StyleSheet, TouchableOpacity, RefreshControl, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/theme';
-import { Card, Avatar } from '@/components/ui';
-import { mockPatients, mockVitalSigns } from '@/lib/api';
+import { fetchPatients, fetchMyVitals, Patient, VitalReading } from '@/lib/api';
 
 const primaryColor = Colors.light.primary;
 
 export default function VitalsScreen() {
   const router = useRouter();
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [latestByPatient, setLatestByPatient] = useState<Record<string, VitalReading>>({});
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [fromCache, setFromCache] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const getLatestVitals = (patientId: string) => {
-    const vitals = mockVitalSigns.filter((v) => v.patientId === patientId);
-    return vitals.length > 0 ? vitals[vitals.length - 1] : null;
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'Stable': return '#16a34a';
-      case 'Guarded': return '#d97706';
-      case 'Critical': return '#dc2626';
-      default: return '#6b7280';
+  const load = useCallback(async () => {
+    try {
+      setError(null);
+      const [patientsResult, vitalsResult] = await Promise.all([fetchPatients(), fetchMyVitals()]);
+      setPatients(patientsResult.data);
+      setFromCache(patientsResult.fromCache || vitalsResult.fromCache);
+      // readings come newest-first; keep the first per patient
+      const latest: Record<string, VitalReading> = {};
+      for (const reading of vitalsResult.data) {
+        if (!latest[reading.patient_id]) latest[reading.patient_id] = reading;
+      }
+      setLatestByPatient(latest);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to load patients');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const getStatus = (reading: VitalReading | undefined) => {
+    if (!reading) return { label: 'No data', color: '#6b7280' };
+    if (reading.is_anomaly) return { label: 'Flagged', color: '#dc2626' };
+    return { label: 'Stable', color: '#16a34a' };
   };
+
+  if (loading) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={primaryColor} />
+      </View>
+    );
+  }
 
   return (
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={() => {
+            setRefreshing(true);
+            load();
+          }}
+        />
+      }
     >
       <View style={styles.header}>
         <View style={styles.headerTop}>
           <View>
             <View style={styles.headerBadge}>
               <Ionicons name="pulse" size={12} color="#dc2626" />
-              <Text style={styles.headerBadgeText}>Live Monitoring</Text>
+              <Text style={styles.headerBadgeText}>Vitals Encoding</Text>
             </View>
             <Text style={styles.title}>Patient Vitals</Text>
-            <Text style={styles.subtitle}>{mockPatients.length} patients under observation</Text>
+            <Text style={styles.subtitle}>{patients.length} simulated patients</Text>
           </View>
           <View style={styles.headerIconBox}>
             <Ionicons name="pulse" size={28} color={primaryColor} />
@@ -47,11 +85,30 @@ export default function VitalsScreen() {
         </View>
       </View>
 
-      
+      {fromCache && (
+        <View style={styles.offlineBanner}>
+          <Ionicons name="cloud-offline-outline" size={14} color="#92400e" />
+          <Text style={styles.offlineBannerText}>Offline — showing cached data</Text>
+        </View>
+      )}
 
-      {mockPatients.map((patient) => {
-        const latestVitals = getLatestVitals(patient.id);
-        const hasAnomaly = latestVitals?.isAnomaly;
+      {error && (
+        <View style={styles.errorBanner}>
+          <Text style={styles.errorBannerText}>{error}</Text>
+        </View>
+      )}
+
+      {!error && patients.length === 0 && (
+        <View style={styles.emptyState}>
+          <Ionicons name="people-outline" size={32} color="#cbd5e1" />
+          <Text style={styles.emptyStateText}>No simulated patients available yet.</Text>
+        </View>
+      )}
+
+      {patients.map((patient) => {
+        const latest = latestByPatient[patient.id];
+        const hasAnomaly = latest?.is_anomaly;
+        const status = getStatus(latest);
 
         return (
           <TouchableOpacity
@@ -61,32 +118,33 @@ export default function VitalsScreen() {
             activeOpacity={0.7}
           >
             <View style={styles.patientHeader}>
-              <View style={[styles.avatarContainer, { backgroundColor: getStatusColor(patient.status) + '15' }]}>
-                <Ionicons name="person" size={22} color={getStatusColor(patient.status)} />
+              <View style={[styles.avatarContainer, { backgroundColor: status.color + '15' }]}>
+                <Ionicons name="person" size={22} color={status.color} />
               </View>
               <View style={styles.patientInfo}>
                 <Text style={styles.patientName}>{patient.name}</Text>
                 <View style={styles.patientRoomRow}>
                   <Ionicons name="bed-outline" size={12} color="#64748b" />
-                  <Text style={styles.patientRoom}>{patient.room}</Text>
+                  <Text style={styles.patientRoom}>
+                    {patient.room_number ?? 'Unassigned'}
+                    {patient.diagnosis ? ` · ${patient.diagnosis}` : ''}
+                  </Text>
                 </View>
               </View>
-              <View style={[styles.statusBadge, { backgroundColor: getStatusColor(patient.status) + '15' }]}>
-                <View style={[styles.statusDot, { backgroundColor: getStatusColor(patient.status) }]} />
-                <Text style={[styles.statusBadgeText, { color: getStatusColor(patient.status) }]}>
-                  {patient.status}
-                </Text>
+              <View style={[styles.statusBadge, { backgroundColor: status.color + '15' }]}>
+                <View style={[styles.statusDot, { backgroundColor: status.color }]} />
+                <Text style={[styles.statusBadgeText, { color: status.color }]}>{status.label}</Text>
               </View>
             </View>
 
-            {latestVitals && (
+            {latest && (
               <View style={styles.vitalsGrid}>
                 <View style={styles.vitalItem}>
                   <View style={[styles.vitalIconBox, { backgroundColor: '#fee2e2' }]}>
                     <Ionicons name="heart" size={14} color="#dc2626" />
                   </View>
                   <Text style={[styles.vitalValue, hasAnomaly && styles.vitalAlert]}>
-                    {latestVitals.heartRate}
+                    {latest.heart_rate ?? '—'}
                   </Text>
                   <Text style={styles.vitalUnit}>bpm</Text>
                 </View>
@@ -95,7 +153,9 @@ export default function VitalsScreen() {
                     <Ionicons name="speedometer" size={14} color="#7c3aed" />
                   </View>
                   <Text style={[styles.vitalValue, hasAnomaly && styles.vitalAlert]}>
-                    {latestVitals.bloodPressureSystolic}/{latestVitals.bloodPressureDiastolic}
+                    {latest.bp_systolic != null && latest.bp_diastolic != null
+                      ? `${latest.bp_systolic}/${latest.bp_diastolic}`
+                      : '—'}
                   </Text>
                   <Text style={styles.vitalUnit}>mmHg</Text>
                 </View>
@@ -104,7 +164,7 @@ export default function VitalsScreen() {
                     <Ionicons name="thermometer" size={14} color="#d97706" />
                   </View>
                   <Text style={[styles.vitalValue, hasAnomaly && styles.vitalAlert]}>
-                    {latestVitals.temperature.toFixed(1)}
+                    {latest.temperature_c != null ? Number(latest.temperature_c).toFixed(1) : '—'}
                   </Text>
                   <Text style={styles.vitalUnit}>°C</Text>
                 </View>
@@ -113,7 +173,7 @@ export default function VitalsScreen() {
                     <Ionicons name="water" size={14} color="#0891b2" />
                   </View>
                   <Text style={[styles.vitalValue, hasAnomaly && styles.vitalAlert]}>
-                    {latestVitals.oxygenSaturation}
+                    {latest.oxygen_saturation ?? '—'}
                   </Text>
                   <Text style={styles.vitalUnit}>%</Text>
                 </View>
@@ -123,7 +183,9 @@ export default function VitalsScreen() {
             {hasAnomaly && (
               <View style={styles.anomalyAlert}>
                 <Ionicons name="warning" size={14} color="#dc2626" />
-                <Text style={styles.anomalyText}>Anomaly detected</Text>
+                <Text style={styles.anomalyText}>
+                  {latest.anomaly_reasons?.[0]?.message ?? 'Anomaly detected'}
+                </Text>
               </View>
             )}
 
@@ -131,11 +193,13 @@ export default function VitalsScreen() {
               <View style={styles.timestampRow}>
                 <Ionicons name="time-outline" size={12} color="#94a3b8" />
                 <Text style={styles.timestamp}>
-                  {new Date(latestVitals?.timestamp || '').toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  {latest
+                    ? `Last encoded ${new Date(latest.recorded_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`
+                    : 'No readings encoded yet'}
                 </Text>
               </View>
               <View style={styles.viewMore}>
-                <Text style={styles.viewMoreText}>Details</Text>
+                <Text style={styles.viewMoreText}>Encode</Text>
                 <Ionicons name="chevron-forward" size={14} color={primaryColor} />
               </View>
             </View>

@@ -19,8 +19,6 @@ function AuthStack() {
       <Stack.Screen name="tasks/quizzes/index" options={{ headerShown: true, title: 'Quizzes', headerTintColor: '#1B6B7B', headerStyle: { backgroundColor: '#fff' } }} />
       <Stack.Screen name="tasks/quizzes/[id]" options={{ headerShown: true, title: 'Quiz' }} />
       <Stack.Screen name="ehr/[id]" options={{ headerShown: true, title: 'Patient Record' }} />
-      <Stack.Screen name="ehr/[id]/tpr" options={{ headerShown: true, title: 'TPR Sheet' }} />
-      <Stack.Screen name="ehr/[id]/ivf" options={{ headerShown: true, title: 'IVF Sheet' }} />
       <Stack.Screen name="notifications" options={{ headerShown: true, title: 'Notifications' }} />
       <Stack.Screen name="recommendations" options={{ headerShown: true, title: 'AI Recommendations' }} />
       <Stack.Screen name="progress" options={{ headerShown: true, title: 'Performance' }} />
