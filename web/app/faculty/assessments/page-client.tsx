@@ -342,17 +342,6 @@ export default function FacultyAssessmentsClient() {
 
   // ---------- question CRUD ----------
 
-  const startEditQuestion = (q: AssessmentQuestion) => {
-    setEditingQuestionId(q.id);
-    setQuestionForm({
-      content: q.content,
-      options: q.options.length >= 2 ? [...q.options] : ["", ""],
-      correct_index: q.correct_index,
-      explanation: q.explanation,
-      competency_ids: [...q.competency_ids],
-    });
-  };
-
   const saveQuestion = async () => {
     if (!expandedId) return;
     const filledOptions = questionForm.options.filter((o) => o.trim().length > 0);
