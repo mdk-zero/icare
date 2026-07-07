@@ -23,14 +23,17 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const { content, options, correct_index, explanation, position, competency_ids } = body as {
-    content?: unknown;
-    options?: unknown;
-    correct_index?: unknown;
-    explanation?: unknown;
-    position?: unknown;
-    competency_ids?: unknown;
-  };
+  const { content, options, correct_index, explanation, position, competency_ids, question_type, points } =
+    body as {
+      content?: unknown;
+      options?: unknown;
+      correct_index?: unknown;
+      explanation?: unknown;
+      position?: unknown;
+      competency_ids?: unknown;
+      question_type?: unknown;
+      points?: unknown;
+    };
 
   const updates: Record<string, unknown> = {};
   let sanitizedOptions: string[] | null = null;
@@ -56,6 +59,20 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Invalid correct answer index' }, { status: 400 });
     }
     updates.correct_index = ci;
+  }
+  if (question_type !== undefined) {
+    const validTypes = ['multiple_choice', 'true_false', 'short_answer'];
+    if (typeof question_type !== 'string' || !validTypes.includes(question_type)) {
+      return NextResponse.json({ error: 'Invalid question type' }, { status: 400 });
+    }
+    updates.question_type = question_type;
+  }
+  if (points !== undefined) {
+    const p = Number(points);
+    if (!Number.isInteger(p) || p < 1) {
+      return NextResponse.json({ error: 'Points must be a positive integer' }, { status: 400 });
+    }
+    updates.points = p;
   }
   if (explanation !== undefined) {
     updates.explanation = typeof explanation === 'string' ? explanation.trim() : '';
