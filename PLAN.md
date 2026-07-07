@@ -115,6 +115,8 @@ Phases are ordered so each unblocks the next; within a phase, items are roughly 
 
 ### Phase 1 — Complete the data model (DFD/ERD parity)
 
+**Status 2026-07-07: 1.1–1.10 done** — migrations `007_add_campuses` … `013_add_assistance_and_feedback` written (idempotent, RLS-enabled). 1.11 (RLS hardening) still open: the `using (true)` read policies on `campuses`/`competency_areas`/`question_competencies` should be tightened, and roster-scoped policies are still TODO.
+
 New migrations in `web/supabase/migrations/` (all tables: RLS enabled, `campus_id` where relevant):
 
 | # | Task | Detail | Effort |
@@ -132,6 +134,8 @@ New migrations in `web/supabase/migrations/` (all tables: RLS enabled, `campus_i
 | 1.11 | RLS hardening pass | Write policies per role per table; current policies let any authenticated user read all patients/scenarios — tighten to roster/assignment scoping | L |
 
 ### Phase 2 — Web: retire mocks, wire real features
+
+**Status 2026-07-07:** 2.1 done (legacy `app/quizzes`/`app/performance` deleted). 2.2/2.3 done (faculty question bank + assign, student quiz flow + attempts). 2.4 done (rule engine `app/lib/vitals/rules.ts`, student Log Vitals modal, `/faculty/vitals` monitor, anomaly → roster-faculty notifications). 2.6 done (rooms CRUD + student assignment with capacity checks at `/admin/rooms`). 2.7 done (`/api/faculty/competency-scores` + validation form and history on the faculty student-detail Competencies tab; each validation notifies the student). 2.8 partially done (`app/lib/audit.ts` used by all new mutating routes; admin activity-log UI pending). 2.9 in-app half done (`/api/notifications`, faculty page rewired, student `/notifications` page; FCM push pending). Remaining: 2.5, 2.10, 2.11.
 
 | # | Task | Detail | Effort |
 |---|------|--------|--------|

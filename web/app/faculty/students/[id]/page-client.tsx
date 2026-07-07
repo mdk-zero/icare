@@ -2,7 +2,19 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { fetchFacultyStudentDetail, predictStudentRisk, logAuditAction, getCurrentFacultyUser, FacultyStudent, fetchStudentScenarioHistory } from "../../../lib/api";
+import {
+  fetchFacultyStudentDetail,
+  predictStudentRisk,
+  logAuditAction,
+  getCurrentFacultyUser,
+  FacultyStudent,
+  fetchStudentScenarioHistory,
+  fetchCompetencyAreas,
+  fetchCompetencyScores,
+  recordCompetencyScore,
+  CompetencyArea,
+  CompetencyScore,
+} from "../../../lib/api";
 import { SkeletonProfileHeader, SkeletonRiskPredictionCard, SkeletonTabContent } from "../../../components/skeletons";
 
 interface PerformanceHistory {
@@ -32,6 +44,11 @@ export default function StudentDetailClient() {
   const [performanceHistory, setPerformanceHistory] = useState<PerformanceHistory[]>([]);
   const [scenarioHistory, setScenarioHistory] = useState<ScenarioPerformanceRecord[]>([]);
   const [competencies, setCompetencies] = useState<Record<string, number>>({});
+  const [competencyAreas, setCompetencyAreas] = useState<CompetencyArea[]>([]);
+  const [scoreHistory, setScoreHistory] = useState<CompetencyScore[]>([]);
+  const [validateForm, setValidateForm] = useState({ competency_id: "", score: "", remarks: "" });
+  const [validateError, setValidateError] = useState<string | null>(null);
+  const [validating, setValidating] = useState(false);
   const [riskPrediction, setRiskPrediction] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("performance");
@@ -60,22 +77,65 @@ export default function StudentDetailClient() {
     }
   }, [studentId]);
 
+  const loadCompetencyData = async () => {
+    const [areas, scores] = await Promise.all([
+      fetchCompetencyAreas(),
+      fetchCompetencyScores(studentId),
+    ]);
+    setCompetencyAreas(areas);
+    setScoreHistory(scores);
+    // Scores come newest-first; keep the latest per competency for the bars.
+    const latest: Record<string, number> = {};
+    for (const record of scores) {
+      const name = record.competency_areas?.name ?? record.competency_id;
+      if (!(name in latest)) latest[name] = record.score;
+    }
+    setCompetencies(latest);
+  };
+
   const loadStudentData = async () => {
     setLoading(true);
     const data = await fetchFacultyStudentDetail(studentId);
     if (data) {
       setStudent(data.student);
       setPerformanceHistory(data.performance_history);
-      setCompetencies(data.competencies);
-      
+
       const prediction = await predictStudentRisk(studentId);
       setRiskPrediction(prediction);
     }
-    
+
     const scenarios = await fetchStudentScenarioHistory(studentId);
     setScenarioHistory(scenarios);
-    
+    await loadCompetencyData();
+
     setLoading(false);
+  };
+
+  const handleValidate = async () => {
+    setValidateError(null);
+    const scoreValue = Number(validateForm.score);
+    if (!validateForm.competency_id) {
+      setValidateError("Select a competency area.");
+      return;
+    }
+    if (validateForm.score.trim() === "" || Number.isNaN(scoreValue) || scoreValue < 0 || scoreValue > 100) {
+      setValidateError("Score must be a number between 0 and 100.");
+      return;
+    }
+    setValidating(true);
+    const result = await recordCompetencyScore({
+      student_id: studentId,
+      competency_id: validateForm.competency_id,
+      score: scoreValue,
+      remarks: validateForm.remarks.trim() || null,
+    });
+    setValidating(false);
+    if (result.error) {
+      setValidateError(result.error);
+      return;
+    }
+    setValidateForm({ competency_id: "", score: "", remarks: "" });
+    await loadCompetencyData();
   };
 
   const getRiskColor = (risk?: string) => {
@@ -302,21 +362,104 @@ export default function StudentDetailClient() {
           )}
 
           {activeTab === 'competencies' && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {Object.entries(competencies).map(([key, value]) => (
-                <div key={key} className="p-4 bg-gray-50 rounded-xl">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-medium text-gray-900 capitalize">{key.replace('_', ' ')}</span>
-                    <span className={`font-bold ${getScoreColor(value)}`}>{value}%</span>
+            <div className="space-y-6">
+              {Object.keys(competencies).length === 0 ? (
+                <p className="text-gray-500 text-center py-4">
+                  No validated competency scores yet. Record the first one below.
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {Object.entries(competencies).map(([key, value]) => (
+                    <div key={key} className="p-4 bg-gray-50 rounded-xl">
+                      <div className="flex items-center justify-between mb-2 gap-2">
+                        <span className="font-medium text-gray-900">{key}</span>
+                        <span className={`font-bold ${getScoreColor(value)}`}>{value}%</span>
+                      </div>
+                      <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all ${getCompetencyColor(value)}`}
+                          style={{ width: `${value}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="p-5 bg-[#1B6B7B]/5 border border-[#1B6B7B]/20 rounded-2xl">
+                <h3 className="font-semibold text-gray-900 mb-3">Validate competency</h3>
+                {validateError && (
+                  <div className="mb-3 p-3 bg-rose-50 border border-rose-200 rounded-xl text-sm text-rose-700">
+                    {validateError}
                   </div>
-                  <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                    <div 
-                      className={`h-full rounded-full transition-all ${getCompetencyColor(value)}`}
-                      style={{ width: `${value}%` }}
-                    />
+                )}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <select
+                    value={validateForm.competency_id}
+                    onChange={(e) =>
+                      setValidateForm((f) => ({ ...f, competency_id: e.target.value }))
+                    }
+                    className="px-3 py-2 bg-white border border-gray-300 rounded-xl text-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30 focus:border-[#1B6B7B]"
+                  >
+                    <option value="">Select competency…</option>
+                    {competencyAreas.map((area) => (
+                      <option key={area.id} value={area.id}>
+                        {area.name}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    placeholder="Score (0–100)"
+                    value={validateForm.score}
+                    onChange={(e) => setValidateForm((f) => ({ ...f, score: e.target.value }))}
+                    className="px-3 py-2 bg-white border border-gray-300 rounded-xl text-gray-900 placeholder:text-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30 focus:border-[#1B6B7B]"
+                  />
+                  <button
+                    onClick={handleValidate}
+                    disabled={validating}
+                    className="px-4 py-2 bg-[#1B6B7B] text-white rounded-xl font-medium text-sm hover:bg-[#145a63] transition-all disabled:opacity-50"
+                  >
+                    {validating ? "Saving…" : "Record Score"}
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  placeholder="Remarks (optional)"
+                  value={validateForm.remarks}
+                  onChange={(e) => setValidateForm((f) => ({ ...f, remarks: e.target.value }))}
+                  className="mt-3 w-full px-3 py-2 bg-white border border-gray-300 rounded-xl text-gray-900 placeholder:text-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30 focus:border-[#1B6B7B]"
+                />
+              </div>
+
+              {scoreHistory.length > 0 && (
+                <div>
+                  <h3 className="font-semibold text-gray-900 mb-3">Validation history</h3>
+                  <div className="space-y-2">
+                    {scoreHistory.slice(0, 10).map((record) => (
+                      <div
+                        key={record.id}
+                        className="flex items-center justify-between p-3 bg-gray-50 rounded-xl"
+                      >
+                        <div>
+                          <p className="text-sm font-medium text-gray-800">
+                            {record.competency_areas?.name ?? "Unknown competency"}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {new Date(record.created_at).toLocaleString()}
+                            {record.remarks ? ` · ${record.remarks}` : ""}
+                          </p>
+                        </div>
+                        <span className={`font-bold ${getScoreColor(record.score)}`}>
+                          {record.score}%
+                        </span>
+                      </div>
+                    ))}
                   </div>
                 </div>
-              ))}
+              )}
             </div>
           )}
         </div>
