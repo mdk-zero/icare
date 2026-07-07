@@ -30,11 +30,11 @@ export default function LoginScreen() {
       return;
     }
 
-    const success = await login(email, password);
-    if (success) {
+    const result = await login(email, password);
+    if (result.ok) {
       router.replace('/(tabs)');
     } else {
-      setError('Invalid credentials');
+      setError(result.error ?? 'Invalid credentials');
     }
   };
 
