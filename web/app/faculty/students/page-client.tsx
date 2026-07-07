@@ -18,12 +18,14 @@ import {
   fetchFacultyStudents,
   createFacultyStudent,
   fetchAllStudentUsers,
+  fetchAllPredictions,
   updateStudentUser,
   deleteStudentUser,
   logAuditAction,
   getCurrentFacultyUser,
   FacultyStudent,
   StudentUser,
+  RiskPrediction,
 } from "../../lib/api";
 import PageHeader from "../../components/PageHeader";
 
@@ -35,11 +37,20 @@ export default function FacultyStudentsClient() {
   const [riskFilter, setRiskFilter] = useState("all");
   const [studentUsers, setStudentUsers] = useState<StudentUser[]>([]);
   const [loadingStudentUsers, setLoadingStudentUsers] = useState(true);
+  const [predictions, setPredictions] = useState<Record<string, RiskPrediction>>({});
 
   useEffect(() => {
     loadStudents();
     loadStudentUsers();
   }, [riskFilter, searchQuery]);
+
+  useEffect(() => {
+    fetchAllPredictions().then((rows) => {
+      const map: Record<string, RiskPrediction> = {};
+      for (const row of rows) map[row.student_id] = row;
+      setPredictions(map);
+    });
+  }, []);
 
   const loadStudents = async () => {
     setLoading(true);
@@ -302,12 +313,20 @@ export default function FacultyStudentsClient() {
       student.email.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
-  const filteredStudentUsers = studentUsers.filter(
-    (user) =>
+  const filteredStudentUsers = studentUsers.filter((user) => {
+    const matchesSearch =
       searchQuery === "" ||
       user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchQuery.toLowerCase()),
-  );
+      user.email.toLowerCase().includes(searchQuery.toLowerCase());
+    if (!matchesSearch) return false;
+    if (riskFilter === "all") return true;
+    const prediction = predictions[user.id];
+    if (riskFilter === "none") return !prediction;
+    return prediction?.risk === riskFilter;
+  });
+
+  const atRiskCount = studentUsers.filter((u) => predictions[u.id]?.risk === "at_risk").length;
+  const safeCount = studentUsers.filter((u) => predictions[u.id]?.risk === "safe").length;
 
   return (
     <div className="max-w-7xl mx-auto">
@@ -357,23 +376,19 @@ export default function FacultyStudentsClient() {
               <FontAwesomeIcon icon={faTriangleExclamation} className="w-5 h-5 text-red-600" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-gray-800">
-                {students.filter((s) => s.risk_level === "high").length}
-              </p>
-              <p className="text-xs text-gray-500">High Risk</p>
+              <p className="text-2xl font-bold text-gray-800">{atRiskCount}</p>
+              <p className="text-xs text-gray-500">At Risk (ML)</p>
             </div>
           </div>
         </div>
-        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 hover:shadow-lg hover:border-amber-200 transition-all duration-300">
+        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 hover:shadow-lg hover:border-emerald-200 transition-all duration-300">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center">
-              <FontAwesomeIcon icon={faTriangleExclamation} className="w-5 h-5 text-amber-600" />
+            <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center">
+              <FontAwesomeIcon icon={faUser} className="w-5 h-5 text-emerald-600" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-gray-800">
-                {students.filter((s) => s.risk_level === "medium").length}
-              </p>
-              <p className="text-xs text-gray-500">Medium Risk</p>
+              <p className="text-2xl font-bold text-gray-800">{safeCount}</p>
+              <p className="text-xs text-gray-500">Safe (ML)</p>
             </div>
           </div>
         </div>
@@ -413,9 +428,9 @@ export default function FacultyStudentsClient() {
             className="px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/50 focus:border-[#1B6B7B] transition-all cursor-pointer"
           >
             <option value="all">All Risk Levels</option>
-            <option value="high">High Risk</option>
-            <option value="medium">Medium Risk</option>
-            <option value="low">Low Risk</option>
+            <option value="at_risk">At Risk</option>
+            <option value="safe">Safe</option>
+            <option value="none">Not Scored</option>
           </select>
         </div>
       </div>
@@ -619,6 +634,7 @@ export default function FacultyStudentsClient() {
                     <th className="text-left py-4 px-6 font-semibold text-gray-600">Student</th>
                     <th className="text-left py-4 px-6 font-semibold text-gray-600">Email</th>
                     <th className="text-left py-4 px-6 font-semibold text-gray-600">Role</th>
+                    <th className="text-left py-4 px-6 font-semibold text-gray-600">Risk (ML)</th>
                     <th className="text-left py-4 px-6 font-semibold text-gray-600">Actions</th>
                   </tr>
                 </thead>
@@ -633,6 +649,9 @@ export default function FacultyStudentsClient() {
                       </td>
                       <td className="py-4 px-6">
                         <div className="h-4 w-48 bg-gray-200 rounded animate-pulse" />
+                      </td>
+                      <td className="py-4 px-6">
+                        <div className="h-6 w-16 bg-gray-200 rounded-full animate-pulse" />
                       </td>
                       <td className="py-4 px-6">
                         <div className="h-6 w-16 bg-gray-200 rounded-full animate-pulse" />
@@ -656,6 +675,7 @@ export default function FacultyStudentsClient() {
                     <th className="text-left py-4 px-6 font-semibold text-gray-600">Student</th>
                     <th className="text-left py-4 px-6 font-semibold text-gray-600">Email</th>
                     <th className="text-left py-4 px-6 font-semibold text-gray-600">Role</th>
+                    <th className="text-left py-4 px-6 font-semibold text-gray-600">Risk (ML)</th>
                     <th className="text-left py-4 px-6 font-semibold text-gray-600">Actions</th>
                   </tr>
                 </thead>
@@ -677,6 +697,24 @@ export default function FacultyStudentsClient() {
                         </span>
                       </td>
                       <td className="py-4 px-6">
+                        {predictions[user.id] ? (
+                          <span
+                            className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${
+                              predictions[user.id].risk === "at_risk"
+                                ? "bg-red-100 text-red-700 border-red-200"
+                                : "bg-emerald-100 text-emerald-700 border-emerald-200"
+                            }`}
+                            title={`Prediction from ${new Date(predictions[user.id].predicted_at).toLocaleString()}`}
+                          >
+                            {predictions[user.id].risk === "at_risk" ? "At Risk" : "Safe"}
+                            {predictions[user.id].probability != null &&
+                              ` · ${Math.round((predictions[user.id].probability as number) * 100)}%`}
+                          </span>
+                        ) : (
+                          <span className="text-sm text-gray-400">Not scored</span>
+                        )}
+                      </td>
+                      <td className="py-4 px-6">
                         <div className="flex items-center gap-2">
                           <button
                             onClick={() => openUpdateModal(user)}
@@ -696,7 +734,7 @@ export default function FacultyStudentsClient() {
                   ))}
                   {filteredStudentUsers.length === 0 && (
                     <tr>
-                      <td colSpan={4} className="py-8 text-center text-gray-500">
+                      <td colSpan={5} className="py-8 text-center text-gray-500">
                         No student accounts found
                       </td>
                     </tr>
