@@ -721,6 +721,126 @@ export async function endRoomAssignment(
   }
 }
 
+// Simulated EHR documentation (TPR / IVF / progress notes)
+export type EhrType = 'tpr' | 'ivf' | 'note';
+
+export interface EhrRecord {
+  id: string;
+  patient_id: string;
+  created_at: string;
+  // TPR
+  shift?: string | null;
+  temperature_c?: number | null;
+  pulse?: number | null;
+  respiration?: number | null;
+  // IVF
+  solution?: string;
+  volume_ml?: number | null;
+  rate_ml_hr?: number | null;
+  site?: string | null;
+  status?: 'ongoing' | 'completed' | 'discontinued';
+  started_at?: string;
+  ended_at?: string | null;
+  // Notes
+  content?: string;
+  structured?: Record<string, unknown>;
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
+  remarks?: string | null;
+  patients?: { name: string; room_number: string | null } | null;
+  users?: { name: string; email: string } | null;
+}
+
+export async function fetchMyEhrRecords(type: EhrType, patientId?: string): Promise<EhrRecord[]> {
+  try {
+    const params = new URLSearchParams({ type });
+    if (patientId) params.set('patient_id', patientId);
+    const res = await fetch(`/api/student/ehr?${params}`, { credentials: 'include' });
+    if (!res.ok) return [];
+    const json = (await res.json()) as { records: EhrRecord[] };
+    return json.records ?? [];
+  } catch (err) {
+    console.error('fetchMyEhrRecords() failed', err);
+    return [];
+  }
+}
+
+export async function createEhrRecord(
+  payload: { type: EhrType; patient_id: string } & Record<string, unknown>,
+): Promise<{ record?: EhrRecord; error?: string }> {
+  try {
+    const res = await fetch('/api/student/ehr', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(payload),
+    });
+    const json = (await res.json()) as { record?: EhrRecord; error?: string };
+    if (!res.ok) return { error: json.error || 'Unable to save record' };
+    return { record: json.record };
+  } catch (err) {
+    console.error('createEhrRecord() failed', err);
+    return { error: 'Unable to save record. Please try again.' };
+  }
+}
+
+export async function updateIvfStatus(
+  id: string,
+  status: 'completed' | 'discontinued',
+): Promise<{ record?: EhrRecord; error?: string }> {
+  try {
+    const res = await fetch('/api/student/ehr', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ id, status }),
+    });
+    const json = (await res.json()) as { record?: EhrRecord; error?: string };
+    if (!res.ok) return { error: json.error || 'Unable to update record' };
+    return { record: json.record };
+  } catch (err) {
+    console.error('updateIvfStatus() failed', err);
+    return { error: 'Unable to update record. Please try again.' };
+  }
+}
+
+export async function fetchFacultyEhrRecords(
+  type: EhrType,
+  options?: { patientId?: string; studentId?: string },
+): Promise<EhrRecord[]> {
+  try {
+    const params = new URLSearchParams({ type });
+    if (options?.patientId) params.set('patient_id', options.patientId);
+    if (options?.studentId) params.set('student_id', options.studentId);
+    const res = await fetch(`/api/faculty/ehr?${params}`, { credentials: 'include' });
+    if (!res.ok) return [];
+    const json = (await res.json()) as { records: EhrRecord[] };
+    return json.records ?? [];
+  } catch (err) {
+    console.error('fetchFacultyEhrRecords() failed', err);
+    return [];
+  }
+}
+
+export async function reviewProgressNote(noteId: string): Promise<{ success?: boolean; error?: string }> {
+  try {
+    const res = await fetch('/api/faculty/ehr', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ note_id: noteId }),
+    });
+    if (!res.ok) {
+      const json = (await res.json()) as { error?: string };
+      return { error: json.error || 'Unable to review note' };
+    }
+    return { success: true };
+  } catch (err) {
+    console.error('reviewProgressNote() failed', err);
+    return { error: 'Unable to review note. Please try again.' };
+  }
+}
+
 // Competency validation (faculty records competency_scores — the ML label source)
 export interface CompetencyArea {
   id: string;

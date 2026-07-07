@@ -30,6 +30,7 @@ import {
   VitalReading,
   AnomalyReason,
 } from "../../lib/api";
+import EhrModal from "./ehr-modal";
 
 interface CleanedPatient extends Patient {
   displayGender: string;
@@ -161,6 +162,7 @@ export default function StudentPatientsPage() {
   const [abnormalOnly, setAbnormalOnly] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<CleanedPatient | null>(null);
   const [encodingPatient, setEncodingPatient] = useState<CleanedPatient | null>(null);
+  const [ehrPatient, setEhrPatient] = useState<CleanedPatient | null>(null);
 
   const loadPatients = useCallback(async () => {
     setLoading(true);
@@ -382,6 +384,13 @@ export default function StudentPatientsPage() {
                           <FontAwesomeIcon icon={faPen} className="w-4 h-4" />
                           Log Vitals
                         </button>
+                        <button
+                          onClick={() => setEhrPatient(patient)}
+                          className="flex items-center gap-1.5 text-indigo-700 hover:text-indigo-800 font-medium text-sm hover:bg-indigo-50 px-3 py-1.5 rounded-lg transition-colors"
+                        >
+                          <FontAwesomeIcon icon={faNotesMedical} className="w-4 h-4" />
+                          EHR
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -576,6 +585,15 @@ export default function StudentPatientsPage() {
         <LogVitalsModal
           patient={encodingPatient}
           onClose={() => setEncodingPatient(null)}
+        />
+      )}
+
+      {/* EHR Documentation Modal */}
+      {ehrPatient && (
+        <EhrModal
+          patientId={ehrPatient.id}
+          patientLabel={`${ehrPatient.name} · ${ehrPatient.displayAge}yo ${ehrPatient.displayGender} · ${ehrPatient.room_number || "No room"}`}
+          onClose={() => setEhrPatient(null)}
         />
       )}
     </div>
