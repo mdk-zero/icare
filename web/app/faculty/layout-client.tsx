@@ -36,6 +36,7 @@ const navItems: NavItem[] = [
   { id: "assessments", label: "Question Bank", href: "/faculty/assessments", icon: faListCheck },
   { id: "patients", label: "Patients", href: "/faculty/patients", icon: faHospitalUser },
   { id: "vitals", label: "Vitals Monitor", href: "/faculty/vitals", icon: faHeartbeat },
+  { id: "ehr", label: "EHR Review", href: "/faculty/ehr", icon: faNotesMedical },
   { id: "analytics", label: "Analytics", href: "/faculty/analytics", icon: faChartBar },
   { id: "reports", label: "Reports", href: "/faculty/reports", icon: faFileLines },
   { id: "audit", label: "Audit Trail", href: "/faculty/audit", icon: faClipboardList },
