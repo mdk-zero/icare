@@ -166,6 +166,8 @@ New migrations in `web/supabase/migrations/` (all tables: RLS enabled, `campus_i
 
 ### Phase 4 — Star-schema warehouse + analytics
 
+**Status 2026-07-07: done** (migration `014_add_warehouse.sql`). `dw` schema with dim_date/campus/student/faculty/room/competency/assessment and fact_assessment_attempts/vital_readings/clinical_tasks/competency_scores/predictions. `dw.run_etl()` does full idempotent upserts (chosen over watermark increments at capstone volumes); nightly pg_cron job auto-registers when the extension is enabled, plus `POST /api/admin/etl` for on-demand runs. Analytics served by security-definer RPC `public.dw_analytics_summary()` (one jsonb payload instead of separate materialized views) via `GET /api/analytics/summary`. Benchmark harness at `web/supabase/benchmarks/dw_benchmark.sql` (4.4). Validated end-to-end on a local Postgres 18 cluster: schema + all 14 migrations applied, ETL ran twice idempotently, summary returned correct numbers against seeded data. Remaining: wire the dashboards to `/api/analytics/summary` (that is Phase 2.10).
+
 | # | Task | Detail | Effort |
 |---|------|--------|--------|
 | 4.1 | `dw` schema design | Facts: `fact_assessment_attempts`, `fact_vital_readings`, `fact_clinical_tasks`, `fact_predictions`; Dims: `dim_student`, `dim_faculty`, `dim_campus`, `dim_room`, `dim_competency`, `dim_assessment`, `dim_date` | M |
