@@ -457,6 +457,345 @@ export async function submitAssessmentAttempt(
   }
 }
 
+// Vital signs (rule-based anomaly detection runs server-side)
+export interface AnomalyReason {
+  field: string;
+  value: number;
+  severity: 'warning' | 'critical';
+  message: string;
+}
+
+export interface VitalReadingInput {
+  patient_id: string;
+  heart_rate?: number | null;
+  bp_systolic?: number | null;
+  bp_diastolic?: number | null;
+  temperature_c?: number | null;
+  respiratory_rate?: number | null;
+  oxygen_saturation?: number | null;
+  pain_score?: number | null;
+  notes?: string | null;
+}
+
+export interface VitalReading {
+  id: string;
+  patient_id: string;
+  recorded_by: string;
+  recorded_at: string;
+  heart_rate: number | null;
+  bp_systolic: number | null;
+  bp_diastolic: number | null;
+  temperature_c: number | null;
+  respiratory_rate: number | null;
+  oxygen_saturation: number | null;
+  pain_score: number | null;
+  notes: string | null;
+  is_anomaly: boolean;
+  anomaly_reasons: AnomalyReason[];
+  patients?: { name: string; room_number: string | null } | null;
+  users?: { name: string; email: string } | null;
+}
+
+export async function submitVitalReading(
+  input: VitalReadingInput,
+): Promise<{ reading?: VitalReading; is_anomaly?: boolean; anomaly_reasons?: AnomalyReason[]; error?: string }> {
+  try {
+    const res = await fetch('/api/student/vitals', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(input),
+    });
+    const json = (await res.json()) as {
+      reading?: VitalReading;
+      is_anomaly?: boolean;
+      anomaly_reasons?: AnomalyReason[];
+      error?: string;
+    };
+    if (!res.ok) {
+      return { error: json.error || 'Unable to save reading' };
+    }
+    return json;
+  } catch (err) {
+    console.error('submitVitalReading() failed', err);
+    return { error: 'Unable to save reading. Please try again.' };
+  }
+}
+
+export async function fetchMyVitalReadings(patientId?: string): Promise<VitalReading[]> {
+  try {
+    const query = patientId ? `?patient_id=${encodeURIComponent(patientId)}` : '';
+    const res = await fetch(`/api/student/vitals${query}`, { credentials: 'include' });
+    if (!res.ok) {
+      console.error('fetchMyVitalReadings() failed', res.status);
+      return [];
+    }
+    const json = (await res.json()) as { readings: VitalReading[] };
+    return json.readings ?? [];
+  } catch (err) {
+    console.error('fetchMyVitalReadings() failed', err);
+    return [];
+  }
+}
+
+export async function fetchFacultyVitalReadings(options?: {
+  flaggedOnly?: boolean;
+  patientId?: string;
+  studentId?: string;
+}): Promise<VitalReading[]> {
+  try {
+    const params = new URLSearchParams();
+    if (options?.flaggedOnly) params.set('flagged', 'true');
+    if (options?.patientId) params.set('patient_id', options.patientId);
+    if (options?.studentId) params.set('student_id', options.studentId);
+    const query = params.toString();
+    const res = await fetch(`/api/faculty/vitals${query ? `?${query}` : ''}`, {
+      credentials: 'include',
+    });
+    if (!res.ok) {
+      console.error('fetchFacultyVitalReadings() failed', res.status);
+      return [];
+    }
+    const json = (await res.json()) as { readings: VitalReading[] };
+    return json.readings ?? [];
+  } catch (err) {
+    console.error('fetchFacultyVitalReadings() failed', err);
+    return [];
+  }
+}
+
+// Rooms (admin CRUD + student assignment)
+export interface Room {
+  id: string;
+  campus_id: string | null;
+  name: string;
+  room_number: string;
+  capacity: number;
+  status: 'active' | 'inactive' | 'maintenance';
+  description: string | null;
+  created_at: string;
+  updated_at: string;
+  students_assigned: number;
+}
+
+export interface RoomAssignment {
+  id: string;
+  student_id: string;
+  shift: string | null;
+  starts_at: string;
+  ends_at: string | null;
+  users?: { name: string; email: string } | null;
+}
+
+export async function fetchRooms(): Promise<Room[]> {
+  try {
+    const res = await fetch('/api/admin/rooms', { credentials: 'include' });
+    if (!res.ok) {
+      console.error('fetchRooms() failed', res.status);
+      return [];
+    }
+    const json = (await res.json()) as { rooms: Room[] };
+    return json.rooms ?? [];
+  } catch (err) {
+    console.error('fetchRooms() failed', err);
+    return [];
+  }
+}
+
+export async function fetchRoomDetail(
+  id: string,
+): Promise<{ room: Room; assignments: RoomAssignment[] } | null> {
+  try {
+    const res = await fetch(`/api/admin/rooms/${id}`, { credentials: 'include' });
+    if (!res.ok) {
+      console.error('fetchRoomDetail() failed', res.status);
+      return null;
+    }
+    return (await res.json()) as { room: Room; assignments: RoomAssignment[] };
+  } catch (err) {
+    console.error('fetchRoomDetail() failed', err);
+    return null;
+  }
+}
+
+export async function createRoom(input: {
+  name: string;
+  room_number: string;
+  capacity: number;
+  status?: Room['status'];
+  description?: string | null;
+}): Promise<{ room?: Room; error?: string }> {
+  try {
+    const res = await fetch('/api/admin/rooms', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(input),
+    });
+    const json = (await res.json()) as { room?: Room; error?: string };
+    if (!res.ok) return { error: json.error || 'Unable to create room' };
+    return { room: json.room };
+  } catch (err) {
+    console.error('createRoom() failed', err);
+    return { error: 'Unable to create room. Please try again.' };
+  }
+}
+
+export async function updateRoom(
+  id: string,
+  updates: Partial<Pick<Room, 'name' | 'room_number' | 'capacity' | 'status' | 'description'>>,
+): Promise<{ room?: Room; error?: string }> {
+  try {
+    const res = await fetch(`/api/admin/rooms/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(updates),
+    });
+    const json = (await res.json()) as { room?: Room; error?: string };
+    if (!res.ok) return { error: json.error || 'Unable to update room' };
+    return { room: json.room };
+  } catch (err) {
+    console.error('updateRoom() failed', err);
+    return { error: 'Unable to update room. Please try again.' };
+  }
+}
+
+export async function deleteRoom(id: string): Promise<{ success?: boolean; error?: string }> {
+  try {
+    const res = await fetch(`/api/admin/rooms/${id}`, {
+      method: 'DELETE',
+      credentials: 'include',
+    });
+    if (!res.ok) {
+      const json = (await res.json()) as { error?: string };
+      return { error: json.error || 'Unable to delete room' };
+    }
+    return { success: true };
+  } catch (err) {
+    console.error('deleteRoom() failed', err);
+    return { error: 'Unable to delete room. Please try again.' };
+  }
+}
+
+export async function assignStudentsToRoom(
+  roomId: string,
+  studentIds: string[],
+  shift?: string | null,
+): Promise<{ assignments?: RoomAssignment[]; error?: string }> {
+  try {
+    const res = await fetch(`/api/admin/rooms/${roomId}/assignments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ student_ids: studentIds, shift: shift ?? null }),
+    });
+    const json = (await res.json()) as { assignments?: RoomAssignment[]; error?: string };
+    if (!res.ok) return { error: json.error || 'Unable to assign students' };
+    return { assignments: json.assignments };
+  } catch (err) {
+    console.error('assignStudentsToRoom() failed', err);
+    return { error: 'Unable to assign students. Please try again.' };
+  }
+}
+
+export async function endRoomAssignment(
+  roomId: string,
+  assignmentId: string,
+): Promise<{ success?: boolean; error?: string }> {
+  try {
+    const res = await fetch(`/api/admin/rooms/${roomId}/assignments`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ assignment_id: assignmentId }),
+    });
+    if (!res.ok) {
+      const json = (await res.json()) as { error?: string };
+      return { error: json.error || 'Unable to end assignment' };
+    }
+    return { success: true };
+  } catch (err) {
+    console.error('endRoomAssignment() failed', err);
+    return { error: 'Unable to end assignment. Please try again.' };
+  }
+}
+
+// Competency validation (faculty records competency_scores — the ML label source)
+export interface CompetencyArea {
+  id: string;
+  name: string;
+  description: string | null;
+}
+
+export interface CompetencyScore {
+  id: string;
+  competency_id: string;
+  faculty_id?: string | null;
+  source: string;
+  score: number;
+  attempt_id?: string | null;
+  remarks: string | null;
+  created_at: string;
+  competency_areas?: { name: string } | null;
+}
+
+export async function fetchCompetencyAreas(): Promise<CompetencyArea[]> {
+  try {
+    const res = await fetch('/api/competencies', { credentials: 'include' });
+    if (!res.ok) {
+      console.error('fetchCompetencyAreas() failed', res.status);
+      return [];
+    }
+    const json = (await res.json()) as { competencies: CompetencyArea[] };
+    return json.competencies ?? [];
+  } catch (err) {
+    console.error('fetchCompetencyAreas() failed', err);
+    return [];
+  }
+}
+
+export async function fetchCompetencyScores(studentId: string): Promise<CompetencyScore[]> {
+  try {
+    const res = await fetch(
+      `/api/faculty/competency-scores?student_id=${encodeURIComponent(studentId)}`,
+      { credentials: 'include' },
+    );
+    if (!res.ok) {
+      console.error('fetchCompetencyScores() failed', res.status);
+      return [];
+    }
+    const json = (await res.json()) as { scores: CompetencyScore[] };
+    return json.scores ?? [];
+  } catch (err) {
+    console.error('fetchCompetencyScores() failed', err);
+    return [];
+  }
+}
+
+export async function recordCompetencyScore(input: {
+  student_id: string;
+  competency_id: string;
+  score: number;
+  remarks?: string | null;
+  attempt_id?: string | null;
+}): Promise<{ score?: CompetencyScore; error?: string }> {
+  try {
+    const res = await fetch('/api/faculty/competency-scores', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(input),
+    });
+    const json = (await res.json()) as { score?: CompetencyScore; error?: string };
+    if (!res.ok) return { error: json.error || 'Unable to record score' };
+    return { score: json.score };
+  } catch (err) {
+    console.error('recordCompetencyScore() failed', err);
+    return { error: 'Unable to record score. Please try again.' };
+  }
+}
+
 // Faculty API Types
 export interface FacultyStats {
   total_students: number;
@@ -775,13 +1114,8 @@ export async function fetchFacultyStudentDetail(studentId: string): Promise<{ st
     return {
       student: json.student,
       performance_history: await fetchStudentScenarioHistory(studentId),
-      competencies: {
-        'Cardiac Assessment': 85,
-        'Vital Signs': 90,
-        'Patient Communication': 88,
-        'Diabetes Care': 72,
-        'Emergency Response': 78,
-      },
+      // Real competency data comes from fetchCompetencyScores(); kept for shape compat.
+      competencies: {},
     };
   } catch (err) {
     console.error('fetchFacultyStudentDetail() failed', err);
@@ -1093,49 +1427,83 @@ export async function generateFacultyReport(studentId: string, reportType: strin
   };
 }
 
-export async function fetchFacultyNotifications(): Promise<{ notifications: FacultyNotification[]; total: number; unread: number } | null> {
-  await new Promise(resolve => setTimeout(resolve, 200));
-  
-  const notifications: FacultyNotification[] = [
-    {
-      id: 'notif-001',
-      title: 'Student Quiz Submission',
-      message: 'Maria Cruz completed Cardiac Assessment Basics quiz',
-      type: 'info',
-      is_read: false,
-      created_at: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
-      student_id: 'student-001',
-    },
-    {
-      id: 'notif-002',
-      title: 'At-Risk Alert',
-      message: 'Juan Reyes performance is declining',
-      type: 'warning',
-      is_read: false,
-      created_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-      student_id: 'student-002',
-    },
-    {
-      id: 'notif-003',
-      title: 'Scenario Completion',
-      message: 'Anna Santos completed Diabetic Patient Education scenario',
-      type: 'success',
-      is_read: true,
-      created_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-      student_id: 'student-003',
-    },
-  ];
+interface ServerNotification {
+  id: string;
+  type: string;
+  title: string;
+  body: string;
+  data: Record<string, unknown>;
+  read_at: string | null;
+  created_at: string;
+}
 
-  return {
-    notifications,
-    total: notifications.length,
-    unread: notifications.filter(n => !n.is_read).length,
-  };
+// Server notification_type enum → the UI's display categories.
+const NOTIFICATION_TYPE_MAP: Record<string, FacultyNotification['type']> = {
+  vitals_anomaly: 'alert',
+  at_risk_flag: 'alert',
+  assistance_request: 'alert',
+  deadline_reminder: 'warning',
+  performance_validated: 'success',
+  assignment_created: 'info',
+  system: 'info',
+};
+
+export async function fetchNotifications(): Promise<{ notifications: FacultyNotification[]; total: number; unread: number } | null> {
+  try {
+    const res = await fetch('/api/notifications', { credentials: 'include' });
+    if (!res.ok) {
+      console.error('fetchNotifications() failed', res.status);
+      return null;
+    }
+    const json = (await res.json()) as { notifications: ServerNotification[]; unread: number };
+    const notifications: FacultyNotification[] = (json.notifications ?? []).map((n) => ({
+      id: n.id,
+      title: n.title,
+      message: n.body,
+      type: NOTIFICATION_TYPE_MAP[n.type] ?? 'info',
+      is_read: n.read_at !== null,
+      created_at: n.created_at,
+      student_id: typeof n.data?.student_id === 'string' ? n.data.student_id : undefined,
+    }));
+    return { notifications, total: notifications.length, unread: json.unread ?? 0 };
+  } catch (err) {
+    console.error('fetchNotifications() failed', err);
+    return null;
+  }
+}
+
+export async function fetchFacultyNotifications(): Promise<{ notifications: FacultyNotification[]; total: number; unread: number } | null> {
+  return fetchNotifications();
 }
 
 export async function markNotificationRead(notificationId: string): Promise<boolean> {
-  await new Promise(resolve => setTimeout(resolve, 100));
-  return true;
+  try {
+    const res = await fetch('/api/notifications', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ id: notificationId }),
+    });
+    return res.ok;
+  } catch (err) {
+    console.error('markNotificationRead() failed', err);
+    return false;
+  }
+}
+
+export async function markAllNotificationsRead(): Promise<boolean> {
+  try {
+    const res = await fetch('/api/notifications', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ all: true }),
+    });
+    return res.ok;
+  } catch (err) {
+    console.error('markAllNotificationsRead() failed', err);
+    return false;
+  }
 }
 
 export async function fetchFacultyAlerts(status?: string): Promise<{ alerts: FacultyAlert[]; total: number; pending: number } | null> {

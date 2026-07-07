@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { fetchFacultyNotifications, markNotificationRead, logAuditAction, getCurrentFacultyUser, FacultyNotification } from "../../lib/api";
+import { fetchNotifications, markNotificationRead, markAllNotificationsRead, FacultyNotification } from "../../lib/api";
 import { SkeletonInlineStatCard, SkeletonNotificationItem } from "../../components/skeletons";
 import PageHeader from "../../components/PageHeader";
 
@@ -16,7 +16,7 @@ export default function FacultyNotificationsClient() {
 
   const loadNotifications = async () => {
     setLoading(true);
-    const data = await fetchFacultyNotifications();
+    const data = await fetchNotifications();
     if (data) {
       setNotifications(data.notifications);
       setUnreadCount(data.unread);
@@ -26,40 +26,16 @@ export default function FacultyNotificationsClient() {
 
   const handleMarkAsRead = async (id: string) => {
     await markNotificationRead(id);
-    setNotifications(notifications.map(n => 
+    setNotifications(notifications.map(n =>
       n.id === id ? { ...n, is_read: true } : n
     ));
     setUnreadCount(Math.max(0, unreadCount - 1));
-    const faculty = getCurrentFacultyUser();
-    if (faculty) {
-      logAuditAction({
-        faculty_id: faculty.id,
-        faculty_name: faculty.name,
-        tab: 'notifications',
-        action: 'mark_read',
-        details: 'Marked a notification as read',
-        target_type: 'notification',
-        target_id: id,
-      });
-    }
   };
 
   const handleMarkAllAsRead = async () => {
-    for (const n of notifications.filter(n => !n.is_read)) {
-      await markNotificationRead(n.id);
-    }
+    await markAllNotificationsRead();
     setNotifications(notifications.map(n => ({ ...n, is_read: true })));
     setUnreadCount(0);
-    const faculty = getCurrentFacultyUser();
-    if (faculty) {
-      logAuditAction({
-        faculty_id: faculty.id,
-        faculty_name: faculty.name,
-        tab: 'notifications',
-        action: 'mark_all_read',
-        details: 'Marked all notifications as read',
-      });
-    }
   };
 
   const getNotificationIcon = (type: string) => {
@@ -179,7 +155,9 @@ export default function FacultyNotificationsClient() {
                     )}
                   </div>
                   <p className="text-sm text-gray-600 mb-2">{notification.message}</p>
-                  <p className="text-xs text-gray-400">{notification.created_at}</p>
+                  <p className="text-xs text-gray-400">
+                    {new Date(notification.created_at).toLocaleString()}
+                  </p>
                 </div>
                 {!notification.is_read && (
                   <button

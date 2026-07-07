@@ -2,6 +2,7 @@
 
 import { usePathname, useSearchParams } from "next/navigation";
 import {
+  faBell,
   faChartBar,
   faClipboardCheck,
   faFileLines,
@@ -41,6 +42,12 @@ const navItems: NavItem[] = [
     href: "/dashboard?tab=performance",
     icon: faChartBar,
   },
+  {
+    id: "notifications",
+    label: "Notifications",
+    href: "/notifications",
+    icon: faBell,
+  },
 ];
 
 function isActive(item: NavItem, pathname: string, searchParams: URLSearchParams) {
@@ -48,9 +55,12 @@ function isActive(item: NavItem, pathname: string, searchParams: URLSearchParams
   if (item.id === "dashboard") {
     return pathname === "/dashboard" && activeTab === "dashboard";
   }
-  // Patients now has its own dedicated route; other tabs remain on /dashboard.
+  // Patients and Notifications have dedicated routes; other tabs remain on /dashboard.
   if (item.id === "patients") {
     return pathname === "/patients";
+  }
+  if (item.id === "notifications") {
+    return pathname === "/notifications";
   }
   return pathname === "/dashboard" && activeTab === item.id;
 }

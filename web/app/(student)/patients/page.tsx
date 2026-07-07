@@ -19,8 +19,17 @@ import {
   faVial,
   faTimes,
   faEye,
+  faPen,
+  faHistory,
 } from "@fortawesome/free-solid-svg-icons";
-import { fetchPatients, Patient } from "../../lib/api";
+import {
+  fetchPatients,
+  fetchMyVitalReadings,
+  submitVitalReading,
+  Patient,
+  VitalReading,
+  AnomalyReason,
+} from "../../lib/api";
 
 interface CleanedPatient extends Patient {
   displayGender: string;
@@ -151,6 +160,7 @@ export default function StudentPatientsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [abnormalOnly, setAbnormalOnly] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<CleanedPatient | null>(null);
+  const [encodingPatient, setEncodingPatient] = useState<CleanedPatient | null>(null);
 
   const loadPatients = useCallback(async () => {
     setLoading(true);
@@ -357,13 +367,22 @@ export default function StudentPatientsPage() {
                       </span>
                     </td>
                     <td className="py-4 px-6">
-                      <button
-                        onClick={() => setSelectedPatient(patient)}
-                        className="flex items-center gap-1.5 text-[#1B6B7B] hover:text-[#145a63] font-medium text-sm hover:bg-[#1B6B7B]/5 px-3 py-1.5 rounded-lg transition-colors"
-                      >
-                        <FontAwesomeIcon icon={faEye} className="w-4 h-4" />
-                        Details
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => setSelectedPatient(patient)}
+                          className="flex items-center gap-1.5 text-[#1B6B7B] hover:text-[#145a63] font-medium text-sm hover:bg-[#1B6B7B]/5 px-3 py-1.5 rounded-lg transition-colors"
+                        >
+                          <FontAwesomeIcon icon={faEye} className="w-4 h-4" />
+                          Details
+                        </button>
+                        <button
+                          onClick={() => setEncodingPatient(patient)}
+                          className="flex items-center gap-1.5 text-emerald-700 hover:text-emerald-800 font-medium text-sm hover:bg-emerald-50 px-3 py-1.5 rounded-lg transition-colors"
+                        >
+                          <FontAwesomeIcon icon={faPen} className="w-4 h-4" />
+                          Log Vitals
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -551,6 +570,284 @@ export default function StudentPatientsPage() {
           </div>
         </div>
       )}
+
+      {/* Log Vitals Modal */}
+      {encodingPatient && (
+        <LogVitalsModal
+          patient={encodingPatient}
+          onClose={() => setEncodingPatient(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+const VITAL_FIELDS = [
+  { key: "heart_rate", label: "Heart Rate", unit: "bpm", step: "1", placeholder: "e.g. 80" },
+  { key: "bp_systolic", label: "Systolic BP", unit: "mmHg", step: "1", placeholder: "e.g. 120" },
+  { key: "bp_diastolic", label: "Diastolic BP", unit: "mmHg", step: "1", placeholder: "e.g. 80" },
+  { key: "temperature_c", label: "Temperature", unit: "°C", step: "0.1", placeholder: "e.g. 36.8" },
+  { key: "respiratory_rate", label: "Respiratory Rate", unit: "/min", step: "1", placeholder: "e.g. 16" },
+  { key: "oxygen_saturation", label: "SpO2", unit: "%", step: "1", placeholder: "e.g. 98" },
+  { key: "pain_score", label: "Pain Score", unit: "0–10", step: "1", placeholder: "e.g. 2" },
+] as const;
+
+type VitalFieldKey = (typeof VITAL_FIELDS)[number]["key"];
+
+function LogVitalsModal({
+  patient,
+  onClose,
+}: {
+  patient: CleanedPatient;
+  onClose: () => void;
+}) {
+  const [values, setValues] = useState<Record<VitalFieldKey, string>>({
+    heart_rate: "",
+    bp_systolic: "",
+    bp_diastolic: "",
+    temperature_c: "",
+    respiratory_rate: "",
+    oxygen_saturation: "",
+    pain_score: "",
+  });
+  const [notes, setNotes] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<{
+    isAnomaly: boolean;
+    reasons: AnomalyReason[];
+  } | null>(null);
+  const [recent, setRecent] = useState<VitalReading[]>([]);
+  const [loadingRecent, setLoadingRecent] = useState(true);
+
+  const loadRecent = useCallback(async () => {
+    setLoadingRecent(true);
+    const readings = await fetchMyVitalReadings(patient.id);
+    setRecent(readings.slice(0, 5));
+    setLoadingRecent(false);
+  }, [patient.id]);
+
+  useEffect(() => {
+    loadRecent();
+  }, [loadRecent]);
+
+  const hasAnyValue = Object.values(values).some((v) => v.trim() !== "");
+
+  const handleSubmit = async () => {
+    setError(null);
+    setResult(null);
+    if (!hasAnyValue) {
+      setError("Enter at least one vital sign.");
+      return;
+    }
+    setSubmitting(true);
+    const response = await submitVitalReading({
+      patient_id: patient.id,
+      heart_rate: values.heart_rate.trim() ? Number(values.heart_rate) : null,
+      bp_systolic: values.bp_systolic.trim() ? Number(values.bp_systolic) : null,
+      bp_diastolic: values.bp_diastolic.trim() ? Number(values.bp_diastolic) : null,
+      temperature_c: values.temperature_c.trim() ? Number(values.temperature_c) : null,
+      respiratory_rate: values.respiratory_rate.trim() ? Number(values.respiratory_rate) : null,
+      oxygen_saturation: values.oxygen_saturation.trim() ? Number(values.oxygen_saturation) : null,
+      pain_score: values.pain_score.trim() ? Number(values.pain_score) : null,
+      notes: notes.trim() || null,
+    });
+    setSubmitting(false);
+
+    if (response.error) {
+      setError(response.error);
+      return;
+    }
+
+    setResult({
+      isAnomaly: response.is_anomaly ?? false,
+      reasons: response.anomaly_reasons ?? [],
+    });
+    setValues({
+      heart_rate: "",
+      bp_systolic: "",
+      bp_diastolic: "",
+      temperature_c: "",
+      respiratory_rate: "",
+      oxygen_saturation: "",
+      pain_score: "",
+    });
+    setNotes("");
+    loadRecent();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
+        <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 bg-emerald-50 rounded-full flex items-center justify-center text-emerald-700">
+              <FontAwesomeIcon icon={faHeartbeat} className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-gray-900">Log Vital Signs</h2>
+              <p className="text-sm text-gray-500">
+                {patient.name} · {patient.displayAge}yo {patient.displayGender} ·{" "}
+                {patient.room_number || "No room"}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-gray-100 rounded-xl transition-colors"
+          >
+            <FontAwesomeIcon icon={faTimes} className="w-5 h-5 text-gray-500" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
+          {result && (
+            <div
+              className={`p-4 rounded-xl border ${
+                result.isAnomaly
+                  ? "bg-rose-50 border-rose-200"
+                  : "bg-emerald-50 border-emerald-200"
+              }`}
+            >
+              <p
+                className={`text-sm font-semibold mb-1 flex items-center gap-2 ${
+                  result.isAnomaly ? "text-rose-800" : "text-emerald-800"
+                }`}
+              >
+                <FontAwesomeIcon
+                  icon={result.isAnomaly ? faExclamationTriangle : faCheckCircle}
+                  className="w-4 h-4"
+                />
+                {result.isAnomaly
+                  ? "Reading saved — anomalies detected"
+                  : "Reading saved — all values within normal range"}
+              </p>
+              {result.reasons.length > 0 && (
+                <ul className="text-sm text-rose-700 list-disc pl-5 space-y-0.5">
+                  {result.reasons.map((reason, i) => (
+                    <li key={i}>
+                      {reason.message}
+                      {reason.severity === "critical" && (
+                        <span className="ml-2 px-1.5 py-0.5 text-[10px] font-bold uppercase bg-rose-600 text-white rounded">
+                          Critical
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+
+          {error && (
+            <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl text-sm text-rose-700">
+              {error}
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+            {VITAL_FIELDS.map((field) => (
+              <div key={field.key}>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  {field.label}{" "}
+                  <span className="text-gray-400">({field.unit})</span>
+                </label>
+                <input
+                  type="number"
+                  step={field.step}
+                  placeholder={field.placeholder}
+                  value={values[field.key]}
+                  onChange={(e) =>
+                    setValues((prev) => ({ ...prev, [field.key]: e.target.value }))
+                  }
+                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-xl text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30 focus:border-[#1B6B7B] text-sm"
+                />
+              </div>
+            ))}
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">
+              Notes <span className="text-gray-400">(optional)</span>
+            </label>
+            <textarea
+              rows={2}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Observations, patient condition, context..."
+              className="w-full px-3 py-2 bg-white border border-gray-300 rounded-xl text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30 focus:border-[#1B6B7B] text-sm resize-none"
+            />
+          </div>
+
+          <div>
+            <h3 className="text-sm font-semibold text-gray-900 mb-2 flex items-center gap-2">
+              <FontAwesomeIcon icon={faHistory} className="w-3.5 h-3.5 text-gray-500" />
+              Your recent readings for this patient
+            </h3>
+            {loadingRecent ? (
+              <p className="text-sm text-gray-400">Loading…</p>
+            ) : recent.length === 0 ? (
+              <p className="text-sm text-gray-400">No readings recorded yet.</p>
+            ) : (
+              <div className="space-y-2">
+                {recent.map((reading) => (
+                  <div
+                    key={reading.id}
+                    className={`p-3 rounded-xl border text-sm flex items-start justify-between gap-3 ${
+                      reading.is_anomaly
+                        ? "bg-rose-50 border-rose-200"
+                        : "bg-gray-50 border-gray-200"
+                    }`}
+                  >
+                    <div>
+                      <p className="text-gray-700">
+                        {[
+                          reading.heart_rate !== null && `HR ${reading.heart_rate}`,
+                          reading.bp_systolic !== null &&
+                            `BP ${reading.bp_systolic}/${reading.bp_diastolic ?? "—"}`,
+                          reading.temperature_c !== null && `T ${reading.temperature_c}°C`,
+                          reading.respiratory_rate !== null && `RR ${reading.respiratory_rate}`,
+                          reading.oxygen_saturation !== null &&
+                            `SpO2 ${reading.oxygen_saturation}%`,
+                          reading.pain_score !== null && `Pain ${reading.pain_score}/10`,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </p>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        {new Date(reading.recorded_at).toLocaleString()}
+                      </p>
+                    </div>
+                    {reading.is_anomaly && (
+                      <span className="px-2 py-0.5 text-[10px] font-bold uppercase bg-rose-100 text-rose-700 rounded-full whitespace-nowrap">
+                        {reading.anomaly_reasons.length} flag
+                        {reading.anomaly_reasons.length === 1 ? "" : "s"}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="p-6 border-t border-gray-200 bg-gray-50 flex justify-end gap-3">
+          <button
+            onClick={onClose}
+            className="px-4 py-2.5 border border-gray-200 text-gray-700 rounded-xl font-medium hover:bg-white transition-all"
+          >
+            Close
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={submitting || !hasAnyValue}
+            className="px-4 py-2.5 bg-[#1B6B7B] text-white rounded-xl font-medium hover:bg-[#145a63] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          >
+            {submitting && <FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" />}
+            Save Reading
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
