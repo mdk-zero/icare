@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '@/constants/theme';
+import { Colors, Palette, Radius, Shadow } from '@/constants/theme';
 
 interface StatCardProps {
   title: string;
@@ -69,16 +69,12 @@ export function StatCard({
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
+    backgroundColor: Palette.surface,
+    borderRadius: Radius.lg,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    borderColor: Palette.border,
+    ...Shadow.card,
   },
   header: {
     flexDirection: 'row',

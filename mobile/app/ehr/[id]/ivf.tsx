@@ -4,7 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/theme';
 import { Card, Badge } from '@/components/ui';
-import { mockPatients, getIVFForPatient } from '@/lib/api';
+import { mockPatients, getIVFForPatient } from '@/lib/mocks';
 
 const primaryColor = Colors.light.primary;
 

@@ -1,7 +1,7 @@
 import React from 'react';
 import { ScrollView, View, Text, StyleSheet } from 'react-native';
 import { Card, StatCard } from '@/components/ui';
-import { mockPerformanceLogs, getPerformanceByCategory } from '@/lib/api';
+import { mockPerformanceLogs, getPerformanceByCategory } from '@/lib/mocks';
 
 export default function ProgressScreen() {
   const categoryStats = getPerformanceByCategory();

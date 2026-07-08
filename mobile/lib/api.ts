@@ -27,6 +27,8 @@ export interface User {
   role: 'student' | 'faculty' | 'admin';
   picture_url?: string | null;
   force_password_change?: boolean;
+  cohort?: string;
+  studentId?: string;
 }
 
 export async function login(email: string, password: string): Promise<User> {
