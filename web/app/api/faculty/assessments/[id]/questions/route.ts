@@ -23,13 +23,16 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const { content, options, correct_index, explanation, competency_ids } = body as {
-    content?: unknown;
-    options?: unknown;
-    correct_index?: unknown;
-    explanation?: unknown;
-    competency_ids?: unknown;
-  };
+  const { content, options, correct_index, explanation, competency_ids, question_type, points } =
+    body as {
+      content?: unknown;
+      options?: unknown;
+      correct_index?: unknown;
+      explanation?: unknown;
+      competency_ids?: unknown;
+      question_type?: unknown;
+      points?: unknown;
+    };
 
   if (typeof content !== 'string' || content.trim().length === 0) {
     return NextResponse.json({ error: 'Question content is required' }, { status: 400 });
@@ -77,6 +80,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         content: content.trim(),
         options: sanitizedOptions,
         correct_index: correctIndex,
+        question_type: typeof question_type === 'string' ? question_type : 'multiple_choice',
+        points: typeof points === 'number' ? points : 1,
         explanation: typeof explanation === 'string' ? explanation.trim() : '',
       })
       .select()

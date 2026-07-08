@@ -23,7 +23,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
     const { data: assessment, error } = await supabase
       .from('assessments')
       .select(
-        'id, created_by, title, description, difficulty, category, time_limit_seconds, is_published, is_ai_generated, created_at, updated_at, questions(id, position, content, options, correct_index, explanation, difficulty, question_competencies(competency_id))',
+        'id, created_by, title, description, difficulty, category, time_limit_seconds, is_published, is_ai_generated, created_at, updated_at, questions(id, position, content, options, correct_index, question_type, points, explanation, difficulty, question_competencies(competency_id))',
       )
       .eq('id', id)
       .single();
@@ -39,6 +39,8 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
         content: q.content,
         options: Array.isArray(q.options) ? q.options : [],
         correct_index: q.correct_index,
+        question_type: q.question_type ?? 'multiple_choice',
+        points: q.points ?? 1,
         explanation: q.explanation,
         difficulty: q.difficulty,
         competency_ids: (
