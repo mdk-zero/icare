@@ -2,7 +2,7 @@ import React from 'react';
 import { ScrollView, View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/theme';
-import { mockNotifications } from '@/lib/api';
+import { mockNotifications } from '@/lib/mocks';
 
 const primaryColor = Colors.light.primary;
 

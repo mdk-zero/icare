@@ -3,7 +3,7 @@ import { ScrollView, View, Text, StyleSheet, TouchableOpacity } from 'react-nati
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from '@/components/ui';
-import { mockAIRecommendations } from '@/lib/api';
+import { mockAIRecommendations } from '@/lib/mocks';
 import { Colors } from '@/constants/theme';
 
 const primaryColor = Colors.light.primary;

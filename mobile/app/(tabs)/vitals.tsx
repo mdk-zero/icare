@@ -1,11 +1,34 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ScrollView, View, Text, StyleSheet, TouchableOpacity, RefreshControl, ActivityIndicator } from 'react-native';
+import { ScrollView, View, Text, StyleSheet, Pressable, RefreshControl, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '@/constants/theme';
+import { Accent, Palette, Radius, Shadow, Spacing, Type } from '@/constants/theme';
+import { ScreenHeader, EmptyState } from '@/components/ui';
 import { fetchPatients, fetchMyVitals, Patient, VitalReading } from '@/lib/api';
 
-const primaryColor = Colors.light.primary;
+const VITAL_FIELDS = [
+  { key: 'hr', icon: 'heart' as const, accent: Accent.red, unit: 'bpm' },
+  { key: 'bp', icon: 'speedometer' as const, accent: Accent.violet, unit: 'mmHg' },
+  { key: 'temp', icon: 'thermometer' as const, accent: Accent.amber, unit: '°C' },
+  { key: 'spo2', icon: 'water' as const, accent: Accent.cyan, unit: '%' },
+];
+
+function vitalValue(key: string, reading: VitalReading) {
+  switch (key) {
+    case 'hr':
+      return reading.heart_rate != null ? String(reading.heart_rate) : '—';
+    case 'bp':
+      return reading.bp_systolic != null && reading.bp_diastolic != null
+        ? `${reading.bp_systolic}/${reading.bp_diastolic}`
+        : '—';
+    case 'temp':
+      return reading.temperature_c != null ? Number(reading.temperature_c).toFixed(1) : '—';
+    case 'spo2':
+      return reading.oxygen_saturation != null ? String(reading.oxygen_saturation) : '—';
+    default:
+      return '—';
+  }
+}
 
 export default function VitalsScreen() {
   const router = useRouter();
@@ -41,15 +64,15 @@ export default function VitalsScreen() {
   }, [load]);
 
   const getStatus = (reading: VitalReading | undefined) => {
-    if (!reading) return { label: 'No data', color: '#6b7280' };
-    if (reading.is_anomaly) return { label: 'Flagged', color: '#dc2626' };
-    return { label: 'Stable', color: '#16a34a' };
+    if (!reading) return { label: 'No data', color: Palette.textSecondary, bg: Palette.borderLight };
+    if (reading.is_anomaly) return { label: 'Flagged', color: Accent.red.fg, bg: Accent.red.bg };
+    return { label: 'Stable', color: Accent.green.fg, bg: Accent.green.bg };
   };
 
   if (loading) {
     return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color={primaryColor} />
+      <View style={[styles.container, styles.centered]}>
+        <ActivityIndicator size="large" color={Palette.primary} />
       </View>
     );
   }
@@ -66,43 +89,35 @@ export default function VitalsScreen() {
             setRefreshing(true);
             load();
           }}
+          colors={[Palette.primary]}
+          tintColor={Palette.primary}
         />
       }
     >
-      <View style={styles.header}>
-        <View style={styles.headerTop}>
-          <View>
-            <View style={styles.headerBadge}>
-              <Ionicons name="pulse" size={12} color="#dc2626" />
-              <Text style={styles.headerBadgeText}>Vitals Encoding</Text>
-            </View>
-            <Text style={styles.title}>Patient Vitals</Text>
-            <Text style={styles.subtitle}>{patients.length} simulated patients</Text>
-          </View>
-          <View style={styles.headerIconBox}>
-            <Ionicons name="pulse" size={28} color={primaryColor} />
-          </View>
-        </View>
-      </View>
+      <ScreenHeader
+        eyebrow="Vitals Encoding"
+        title="Patient Vitals"
+        subtitle={`${patients.length} simulated patients`}
+        icon="pulse"
+        accent="red"
+      />
 
       {fromCache && (
         <View style={styles.offlineBanner}>
-          <Ionicons name="cloud-offline-outline" size={14} color="#92400e" />
+          <Ionicons name="cloud-offline-outline" size={14} color={Accent.amber.fg} />
           <Text style={styles.offlineBannerText}>Offline — showing cached data</Text>
         </View>
       )}
 
       {error && (
         <View style={styles.errorBanner}>
+          <Ionicons name="alert-circle-outline" size={14} color={Accent.red.fg} />
           <Text style={styles.errorBannerText}>{error}</Text>
         </View>
       )}
 
       {!error && patients.length === 0 && (
-        <View style={styles.emptyState}>
-          <Ionicons name="people-outline" size={32} color="#cbd5e1" />
-          <Text style={styles.emptyStateText}>No simulated patients available yet.</Text>
-        </View>
+        <EmptyState icon="people-outline" message="No simulated patients available yet." />
       )}
 
       {patients.map((patient) => {
@@ -111,27 +126,30 @@ export default function VitalsScreen() {
         const status = getStatus(latest);
 
         return (
-          <TouchableOpacity
+          <Pressable
             key={patient.id}
-            style={[styles.patientCard, hasAnomaly && styles.patientCardAlert]}
+            style={({ pressed }) => [
+              styles.patientCard,
+              hasAnomaly && styles.patientCardAlert,
+              pressed && styles.pressedCard,
+            ]}
             onPress={() => router.push(`/vitals/${patient.id}`)}
-            activeOpacity={0.7}
           >
             <View style={styles.patientHeader}>
-              <View style={[styles.avatarContainer, { backgroundColor: status.color + '15' }]}>
-                <Ionicons name="person" size={22} color={status.color} />
+              <View style={[styles.avatarContainer, { backgroundColor: status.bg }]}>
+                <Ionicons name="person" size={20} color={status.color} />
               </View>
               <View style={styles.patientInfo}>
                 <Text style={styles.patientName}>{patient.name}</Text>
                 <View style={styles.patientRoomRow}>
-                  <Ionicons name="bed-outline" size={12} color="#64748b" />
-                  <Text style={styles.patientRoom}>
+                  <Ionicons name="bed-outline" size={12} color={Palette.textSecondary} />
+                  <Text style={styles.patientRoom} numberOfLines={1}>
                     {patient.room_number ?? 'Unassigned'}
                     {patient.diagnosis ? ` · ${patient.diagnosis}` : ''}
                   </Text>
                 </View>
               </View>
-              <View style={[styles.statusBadge, { backgroundColor: status.color + '15' }]}>
+              <View style={[styles.statusBadge, { backgroundColor: status.bg }]}>
                 <View style={[styles.statusDot, { backgroundColor: status.color }]} />
                 <Text style={[styles.statusBadgeText, { color: status.color }]}>{status.label}</Text>
               </View>
@@ -139,50 +157,23 @@ export default function VitalsScreen() {
 
             {latest && (
               <View style={styles.vitalsGrid}>
-                <View style={styles.vitalItem}>
-                  <View style={[styles.vitalIconBox, { backgroundColor: '#fee2e2' }]}>
-                    <Ionicons name="heart" size={14} color="#dc2626" />
+                {VITAL_FIELDS.map((field) => (
+                  <View key={field.key} style={styles.vitalItem}>
+                    <View style={[styles.vitalIconBox, { backgroundColor: field.accent.bg }]}>
+                      <Ionicons name={field.icon} size={14} color={field.accent.fg} />
+                    </View>
+                    <Text style={[styles.vitalValue, hasAnomaly && styles.vitalAlert]}>
+                      {vitalValue(field.key, latest)}
+                    </Text>
+                    <Text style={styles.vitalUnit}>{field.unit}</Text>
                   </View>
-                  <Text style={[styles.vitalValue, hasAnomaly && styles.vitalAlert]}>
-                    {latest.heart_rate ?? '—'}
-                  </Text>
-                  <Text style={styles.vitalUnit}>bpm</Text>
-                </View>
-                <View style={styles.vitalItem}>
-                  <View style={[styles.vitalIconBox, { backgroundColor: '#f3e8ff' }]}>
-                    <Ionicons name="speedometer" size={14} color="#7c3aed" />
-                  </View>
-                  <Text style={[styles.vitalValue, hasAnomaly && styles.vitalAlert]}>
-                    {latest.bp_systolic != null && latest.bp_diastolic != null
-                      ? `${latest.bp_systolic}/${latest.bp_diastolic}`
-                      : '—'}
-                  </Text>
-                  <Text style={styles.vitalUnit}>mmHg</Text>
-                </View>
-                <View style={styles.vitalItem}>
-                  <View style={[styles.vitalIconBox, { backgroundColor: '#fef3c7' }]}>
-                    <Ionicons name="thermometer" size={14} color="#d97706" />
-                  </View>
-                  <Text style={[styles.vitalValue, hasAnomaly && styles.vitalAlert]}>
-                    {latest.temperature_c != null ? Number(latest.temperature_c).toFixed(1) : '—'}
-                  </Text>
-                  <Text style={styles.vitalUnit}>°C</Text>
-                </View>
-                <View style={styles.vitalItem}>
-                  <View style={[styles.vitalIconBox, { backgroundColor: '#cffafe' }]}>
-                    <Ionicons name="water" size={14} color="#0891b2" />
-                  </View>
-                  <Text style={[styles.vitalValue, hasAnomaly && styles.vitalAlert]}>
-                    {latest.oxygen_saturation ?? '—'}
-                  </Text>
-                  <Text style={styles.vitalUnit}>%</Text>
-                </View>
+                ))}
               </View>
             )}
 
             {hasAnomaly && (
               <View style={styles.anomalyAlert}>
-                <Ionicons name="warning" size={14} color="#dc2626" />
+                <Ionicons name="warning" size={14} color={Accent.red.fg} />
                 <Text style={styles.anomalyText}>
                   {latest.anomaly_reasons?.[0]?.message ?? 'Anomaly detected'}
                 </Text>
@@ -191,7 +182,7 @@ export default function VitalsScreen() {
 
             <View style={styles.cardFooter}>
               <View style={styles.timestampRow}>
-                <Ionicons name="time-outline" size={12} color="#94a3b8" />
+                <Ionicons name="time-outline" size={12} color={Palette.textMuted} />
                 <Text style={styles.timestamp}>
                   {latest
                     ? `Last encoded ${new Date(latest.recorded_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`
@@ -200,10 +191,10 @@ export default function VitalsScreen() {
               </View>
               <View style={styles.viewMore}>
                 <Text style={styles.viewMoreText}>Encode</Text>
-                <Ionicons name="chevron-forward" size={14} color={primaryColor} />
+                <Ionicons name="chevron-forward" size={14} color={Palette.primary} />
               </View>
             </View>
-          </TouchableOpacity>
+          </Pressable>
         );
       })}
     </ScrollView>
@@ -213,102 +204,86 @@ export default function VitalsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: Palette.background,
+  },
+  centered: {
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   content: {
-    padding: 16,
+    padding: Spacing.lg,
     paddingBottom: 32,
   },
-  header: {
-    backgroundColor: '#fff',
-    borderRadius: 24,
-    padding: 20,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 2,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  headerTop: {
+  offlineBanner: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  headerBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fee2e2',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 20,
-    alignSelf: 'flex-start',
-    marginBottom: 8,
-  },
-  headerBadgeText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#dc2626',
-    marginLeft: 4,
-  },
-  headerIconBox: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
-    backgroundColor: primaryColor + '15',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 6,
+    backgroundColor: Accent.amber.bg,
+    borderRadius: Radius.md,
+    paddingVertical: 10,
+    paddingHorizontal: Spacing.lg,
+    marginBottom: Spacing.md,
   },
-  title: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: '#0f172a',
+  offlineBannerText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Accent.amber.fg,
   },
-  subtitle: {
-    fontSize: 13,
-    color: '#64748b',
-    marginTop: 4,
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: Accent.red.bg,
+    borderRadius: Radius.md,
+    paddingVertical: 10,
+    paddingHorizontal: Spacing.lg,
+    marginBottom: Spacing.md,
   },
-  
+  errorBannerText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Accent.red.fg,
+  },
+  pressedCard: {
+    opacity: 0.85,
+    transform: [{ scale: 0.99 }],
+  },
   patientCard: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 16,
-    marginBottom: 14,
+    backgroundColor: Palette.surface,
+    borderRadius: Radius.lg,
+    padding: Spacing.lg,
+    marginBottom: Spacing.md,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 2,
+    borderColor: Palette.border,
+    ...Shadow.card,
   },
   patientCardAlert: {
-    borderColor: '#fecaca',
-    backgroundColor: '#fef2f2',
+    borderColor: Accent.red.border,
+    backgroundColor: '#FEF7F7',
   },
   patientHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 14,
+    marginBottom: Spacing.md,
   },
   avatarContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
   },
   patientInfo: {
     flex: 1,
-    marginLeft: 12,
+    marginLeft: Spacing.md,
+    marginRight: Spacing.sm,
   },
   patientName: {
+    ...Type.itemTitle,
     fontSize: 16,
     fontWeight: '700',
-    color: '#1e293b',
   },
   patientRoomRow: {
     flexDirection: 'row',
@@ -317,42 +292,43 @@ const styles = StyleSheet.create({
   },
   patientRoom: {
     fontSize: 12,
-    color: '#64748b',
+    color: Palette.textSecondary,
     marginLeft: 4,
+    flex: 1,
   },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: Radius.pill,
   },
   statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 6,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginRight: 5,
   },
   statusBadgeText: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 11,
+    fontWeight: '700',
   },
   vitalsGrid: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    backgroundColor: '#f8fafc',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
+    backgroundColor: Palette.surfaceMuted,
+    borderRadius: Radius.md,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
   },
   vitalItem: {
     alignItems: 'center',
     flex: 1,
   },
   vitalIconBox: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
+    width: 30,
+    height: 30,
+    borderRadius: Radius.sm + 1,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 6,
@@ -360,47 +336,49 @@ const styles = StyleSheet.create({
   vitalValue: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#1e293b',
+    color: '#1E293B',
   },
   vitalAlert: {
-    color: '#dc2626',
+    color: Accent.red.fg,
   },
   vitalUnit: {
+    ...Type.micro,
     fontSize: 10,
-    color: '#94a3b8',
-    marginTop: 2,
+    marginTop: 1,
     fontWeight: '500',
   },
   anomalyAlert: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#fee2e2',
-    borderRadius: 12,
+    gap: 6,
+    backgroundColor: Accent.red.bg,
+    borderRadius: Radius.md,
     padding: 10,
-    marginBottom: 12,
+    marginBottom: Spacing.md,
   },
   anomalyText: {
     fontSize: 12,
-    color: '#dc2626',
+    color: Accent.red.fg,
     fontWeight: '600',
-    marginLeft: 6,
+    flexShrink: 1,
   },
   cardFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: 8,
+    paddingTop: Spacing.sm + 2,
     borderTopWidth: 1,
-    borderTopColor: '#f1f5f9',
+    borderTopColor: Palette.borderLight,
   },
   timestampRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexShrink: 1,
   },
   timestamp: {
     fontSize: 12,
-    color: '#94a3b8',
+    color: Palette.textMuted,
     marginLeft: 4,
   },
   viewMore: {
@@ -410,7 +388,7 @@ const styles = StyleSheet.create({
   viewMoreText: {
     fontSize: 13,
     fontWeight: '600',
-    color: primaryColor,
-    marginRight: 4,
+    color: Palette.primary,
+    marginRight: 2,
   },
 });

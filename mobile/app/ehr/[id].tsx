@@ -3,7 +3,7 @@ import { ScrollView, View, Text, StyleSheet, TouchableOpacity, Image } from 'rea
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Card, Badge } from '@/components/ui';
-import { mockPatients, getEHRForPatient, getTPRForPatient, getIVFForPatient } from '@/lib/api';
+import { mockPatients, getEHRForPatient, getTPRForPatient, getIVFForPatient } from '@/lib/mocks';
 import { Colors } from '@/constants/theme';
 import logoImg from '@/assets/images/logo-no-bg.png';
 

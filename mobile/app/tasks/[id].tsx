@@ -2,7 +2,7 @@ import React from 'react';
 import { ScrollView, View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Card, Badge } from '@/components/ui';
-import { mockTasks } from '@/lib/api';
+import { mockTasks } from '@/lib/mocks';
 
 export default function TaskDetailScreen() {
   const { id } = useLocalSearchParams();

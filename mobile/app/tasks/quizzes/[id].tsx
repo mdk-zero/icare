@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { ScrollView, View, Text, StyleSheet, TouchableOpacity, Alert, type StyleProp, type ViewStyle, type TextStyle } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Card, PrimaryButton, Badge } from '@/components/ui';
-import { mockQuestions } from '@/lib/api';
+import { mockQuestions } from '@/lib/mocks';
 
 export default function QuizInterfaceScreen() {
   const { id } = useLocalSearchParams();
