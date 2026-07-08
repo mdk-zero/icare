@@ -1,7 +1,8 @@
 import React from 'react';
-import { ScrollView, View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { ScrollView, View, Text, StyleSheet, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Card, Badge } from '@/components/ui';
+import { Card, Badge, PrimaryButton } from '@/components/ui';
+import { Accent, Palette, Spacing, Type } from '@/constants/theme';
 import { mockTasks } from '@/lib/mocks';
 
 export default function TaskDetailScreen() {
@@ -28,10 +29,10 @@ export default function TaskDetailScreen() {
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
-      case 'high': return '#dc2626';
-      case 'medium': return '#d97706';
-      case 'low': return '#16a34a';
-      default: return '#6b7280';
+      case 'high': return Accent.red.fg;
+      case 'medium': return Accent.amber.fg;
+      case 'low': return Accent.green.fg;
+      default: return Palette.textSecondary;
     }
   };
 
@@ -63,7 +64,7 @@ export default function TaskDetailScreen() {
           <View style={[styles.priorityDot, { backgroundColor: getPriorityColor(task.priority) }]} />
           <Text style={styles.detailValue}>{task.priority}</Text>
         </View>
-        <View style={styles.detailRow}>
+        <View style={[styles.detailRow, styles.detailRowLast]}>
           <Text style={styles.detailLabel}>Due Date</Text>
           <Text style={styles.detailValue}>
             {new Date(task.dueDate).toLocaleString()}
@@ -72,30 +73,34 @@ export default function TaskDetailScreen() {
       </Card>
 
       {task.status !== 'completed' && (
-        <TouchableOpacity style={styles.completeButton} onPress={handleComplete}>
-          <Text style={styles.completeButtonText}>Mark as Complete</Text>
-        </TouchableOpacity>
+        <PrimaryButton title="Mark as Complete" onPress={handleComplete} size="lg" />
       )}
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f3f4f6' },
-  content: { padding: 16, paddingBottom: 32 },
-  errorContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  errorText: { fontSize: 16, color: '#6b7280' },
-  header: { flexDirection: 'row', marginBottom: 16 },
-  title: { fontSize: 24, fontWeight: '700', color: '#11181c', marginBottom: 8 },
-  patientName: { fontSize: 16, color: '#6b7280', marginBottom: 24 },
-  descriptionCard: { marginBottom: 16 },
-  label: { fontSize: 12, color: '#6b7280', marginBottom: 8 },
-  description: { fontSize: 14, color: '#11181c', lineHeight: 22 },
-  detailsCard: { marginBottom: 24 },
-  detailRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
-  detailLabel: { fontSize: 14, color: '#6b7280' },
-  detailValue: { fontSize: 14, fontWeight: '600', color: '#11181c' },
+  container: { flex: 1, backgroundColor: Palette.background },
+  content: { padding: Spacing.lg, paddingBottom: 32 },
+  errorContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Palette.background },
+  errorText: { fontSize: 16, color: Palette.textSecondary },
+  header: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.lg },
+  title: { ...Type.screenTitle, marginBottom: Spacing.sm },
+  patientName: { fontSize: 15, color: Palette.textSecondary, marginBottom: Spacing.xxl },
+  descriptionCard: { marginBottom: Spacing.lg },
+  label: { ...Type.eyebrow, marginBottom: Spacing.sm },
+  description: { fontSize: 14, color: Palette.text, lineHeight: 22 },
+  detailsCard: { marginBottom: Spacing.xxl },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: Palette.borderLight,
+  },
+  detailRowLast: { borderBottomWidth: 0 },
+  detailLabel: { fontSize: 14, color: Palette.textSecondary },
+  detailValue: { fontSize: 14, fontWeight: '600', color: Palette.ink, textTransform: 'capitalize' },
   priorityDot: { width: 8, height: 8, borderRadius: 4, marginRight: 8 },
-  completeButton: { backgroundColor: '#1B6B7B', borderRadius: 12, padding: 16, alignItems: 'center' },
-  completeButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
 });

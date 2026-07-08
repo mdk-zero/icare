@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { ScrollView, View, Text, StyleSheet, TextInput, TouchableOpacity, Alert } from 'react-native';
+import { ScrollView, View, Text, StyleSheet, TextInput, Pressable, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '@/constants/theme';
-import { Card, Badge } from '@/components/ui';
+import { Accent, Palette, Radius, Shadow, Spacing, Type } from '@/constants/theme';
+import { Card } from '@/components/ui';
 import { mockPatients, getIVFForPatient } from '@/lib/mocks';
 
-const primaryColor = Colors.light.primary;
+const primaryColor = Palette.primary;
 
 export default function IVFSheetScreen() {
   const { id } = useLocalSearchParams();
@@ -178,13 +178,13 @@ export default function IVFSheetScreen() {
           </View>
           <View style={styles.balanceItem}>
             <Text style={styles.balanceLabel}>Total Output</Text>
-            <Text style={[styles.balanceValue, { color: '#dc2626' }]}>{totalOutput} ml</Text>
+            <Text style={[styles.balanceValue, { color: Accent.red.fg }]}>{totalOutput} ml</Text>
           </View>
           <View style={styles.balanceItem}>
             <Text style={styles.balanceLabel}>Balance</Text>
             <Text style={[
               styles.balanceValue,
-              { color: balance >= 0 ? '#16a34a' : '#dc2626' }
+              { color: balance >= 0 ? Accent.green.fg : Accent.red.fg }
             ]}>
               {balance} ml
             </Text>
@@ -312,10 +312,10 @@ export default function IVFSheetScreen() {
         </Card>
       </View>
 
-      <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
+      <Pressable style={({ pressed }) => [styles.saveButton, pressed && { opacity: 0.85 }]} onPress={handleSave}>
         <Ionicons name="save" size={20} color="#fff" />
         <Text style={styles.saveButtonText}>Save IVF Record</Text>
-      </TouchableOpacity>
+      </Pressable>
     </ScrollView>
   );
 }
@@ -323,25 +323,26 @@ export default function IVFSheetScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: Palette.background,
   },
   content: {
-    padding: 16,
+    padding: Spacing.lg,
     paddingBottom: 40,
   },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: Palette.background,
   },
   errorText: {
     fontSize: 16,
-    color: '#6b7280',
+    color: Palette.textSecondary,
   },
   patientHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: Spacing.xl,
   },
   patientAvatar: {
     width: 56,
@@ -357,51 +358,49 @@ const styles = StyleSheet.create({
   patientName: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#0f172a',
+    color: Palette.ink,
   },
   patientMeta: {
     fontSize: 14,
-    color: '#64748b',
+    color: Palette.textSecondary,
     marginTop: 2,
   },
   sheetHeader: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 16,
+    backgroundColor: Palette.surface,
+    borderRadius: Radius.lg,
+    padding: Spacing.xl,
+    marginBottom: Spacing.lg,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: Palette.border,
+    ...Shadow.card,
   },
   sheetTitle: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#0f172a',
+    ...Type.screenTitle,
   },
   sheetSubtitle: {
     fontSize: 14,
-    color: '#64748b',
+    color: Palette.textSecondary,
     marginTop: 4,
   },
   sheetDate: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 12,
-    paddingTop: 12,
+    marginTop: Spacing.md,
+    paddingTop: Spacing.md,
     borderTopWidth: 1,
-    borderTopColor: '#e2e8f0',
+    borderTopColor: Palette.borderLight,
   },
   sheetDateText: {
     fontSize: 14,
-    color: '#64748b',
+    color: Palette.textSecondary,
     marginLeft: 8,
   },
   formCard: {
-    marginBottom: 16,
+    marginBottom: Spacing.lg,
   },
   sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#334155',
+    ...Type.sectionTitle,
+    color: Palette.text,
     marginBottom: 14,
   },
   row: {
@@ -416,21 +415,22 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#475569',
+    color: Palette.text,
     marginBottom: 8,
   },
   input: {
-    backgroundColor: '#f8fafc',
-    borderRadius: 12,
+    backgroundColor: Palette.surfaceMuted,
+    borderRadius: Radius.md,
     padding: 14,
     fontSize: 18,
-    color: '#1e293b',
+    color: '#1E293B',
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: Palette.border,
   },
   notesInput: {
     minHeight: 80,
     textAlignVertical: 'top',
+    fontSize: 15,
   },
   signatureInput: {
     fontSize: 16,
@@ -438,17 +438,17 @@ const styles = StyleSheet.create({
   balanceSection: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    marginTop: 20,
-    paddingTop: 16,
+    marginTop: Spacing.xl,
+    paddingTop: Spacing.lg,
     borderTopWidth: 1,
-    borderTopColor: '#e2e8f0',
+    borderTopColor: Palette.borderLight,
   },
   balanceItem: {
     alignItems: 'center',
   },
   balanceLabel: {
     fontSize: 12,
-    color: '#64748b',
+    color: Palette.textSecondary,
     marginBottom: 4,
   },
   balanceValue: {
@@ -466,23 +466,23 @@ const styles = StyleSheet.create({
   bpSeparator: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#64748b',
+    color: Palette.textSecondary,
     marginHorizontal: 8,
   },
   bpUnit: {
     fontSize: 14,
-    color: '#64748b',
+    color: Palette.textSecondary,
     marginLeft: 8,
   },
   historySection: {
-    marginBottom: 20,
+    marginBottom: Spacing.xl,
   },
   historyItem: {
     paddingVertical: 12,
   },
   historyBorder: {
     borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
+    borderBottomColor: Palette.borderLight,
   },
   historyHeader: {
     marginBottom: 8,
@@ -490,7 +490,7 @@ const styles = StyleSheet.create({
   historyDateTime: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#334155',
+    color: Palette.text,
   },
   historyValues: {
     flexDirection: 'row',
@@ -503,21 +503,22 @@ const styles = StyleSheet.create({
   },
   historyValueText: {
     fontSize: 12,
-    color: '#64748b',
+    color: Palette.textSecondary,
     marginLeft: 4,
   },
   historySignature: {
     fontSize: 11,
-    color: '#94a3b8',
+    color: Palette.textMuted,
   },
   saveButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: primaryColor,
-    borderRadius: 14,
-    paddingVertical: 16,
-    marginTop: 8,
+    borderRadius: Radius.md,
+    paddingVertical: 15,
+    marginTop: Spacing.sm,
+    ...Shadow.raised,
   },
   saveButtonText: {
     fontSize: 16,
