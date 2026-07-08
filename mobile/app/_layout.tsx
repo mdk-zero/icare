@@ -7,21 +7,31 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AuthProvider, useAuth } from '@/hooks/useAuth';
+import { Palette } from '@/constants/theme';
 
 function AuthStack() {
   return (
-    <Stack>
+    <Stack
+      screenOptions={{
+        headerStyle: { backgroundColor: Palette.surface },
+        headerTintColor: Palette.primary,
+        headerTitleStyle: { fontWeight: '700', color: Palette.ink },
+        headerShadowVisible: false,
+        headerBackButtonDisplayMode: 'minimal',
+        contentStyle: { backgroundColor: Palette.background },
+      }}
+    >
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="login" options={{ headerShown: false }} />
       <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-      <Stack.Screen name="vitals/[id]" options={{ headerShown: true, title: 'Vital Signs' }} />
-      <Stack.Screen name="tasks/[id]" options={{ headerShown: true, title: 'Task' }} />
-      <Stack.Screen name="tasks/quizzes/index" options={{ headerShown: true, title: 'Quizzes', headerTintColor: '#1B6B7B', headerStyle: { backgroundColor: '#fff' } }} />
-      <Stack.Screen name="tasks/quizzes/[id]" options={{ headerShown: true, title: 'Quiz' }} />
-      <Stack.Screen name="ehr/[id]" options={{ headerShown: true, title: 'Patient Record' }} />
-      <Stack.Screen name="notifications" options={{ headerShown: true, title: 'Notifications' }} />
-      <Stack.Screen name="recommendations" options={{ headerShown: true, title: 'AI Recommendations' }} />
-      <Stack.Screen name="progress" options={{ headerShown: true, title: 'Performance' }} />
+      <Stack.Screen name="vitals/[id]" options={{ title: 'Vital Signs' }} />
+      <Stack.Screen name="tasks/[id]" options={{ title: 'Task' }} />
+      <Stack.Screen name="tasks/quizzes/index" options={{ title: 'Quizzes' }} />
+      <Stack.Screen name="tasks/quizzes/[id]" options={{ title: 'Quiz' }} />
+      <Stack.Screen name="ehr/[id]" options={{ title: 'Patient Record' }} />
+      <Stack.Screen name="notifications" options={{ title: 'Notifications' }} />
+      <Stack.Screen name="recommendations" options={{ title: 'AI Recommendations' }} />
+      <Stack.Screen name="progress" options={{ title: 'Performance' }} />
     </Stack>
   );
 }

@@ -11,7 +11,7 @@ import {
   TextInput,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Colors } from '@/constants/theme';
+import { Palette } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
 import logoImg from '@/assets/images/logo-pill.png';
 
@@ -38,7 +38,7 @@ export default function LoginScreen() {
     }
   };
 
-  const primaryColor = Colors.light.primary;
+  const primaryColor = Palette.primary;
 
   return (
     <View style={styles.container}>
@@ -52,7 +52,7 @@ export default function LoginScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.headerSection}>
-            <View style={[styles.logoCircle, { borderColor: primaryColor + '30' }]}>
+            <View style={styles.logoCircle}>
               <Image source={logoImg} style={styles.logoImage} />
             </View>
             <Text style={[styles.appName, { color: primaryColor }]}>iCARE++</Text>
@@ -68,7 +68,7 @@ export default function LoginScreen() {
                 styles.inputWrapper,
                 focusedField === 'email' && { borderColor: primaryColor }
               ]}>
-                <Text style={[styles.inputLabel, { color: primaryColor }]}>Email</Text>
+                <Text style={[styles.inputLabel, focusedField === 'email' && { color: primaryColor }]}>Email</Text>
                 <TextInput
                   style={styles.input}
                   placeholder="email@example.com"
@@ -86,7 +86,7 @@ export default function LoginScreen() {
                 styles.inputWrapper,
                 focusedField === 'password' && { borderColor: primaryColor }
               ]}>
-                <Text style={[styles.inputLabel, { color: primaryColor }]}>Password</Text>
+                <Text style={[styles.inputLabel, focusedField === 'password' && { color: primaryColor }]}>Password</Text>
                 <TextInput
                   style={styles.input}
                   placeholder="••••••••"
@@ -151,18 +151,19 @@ const styles = StyleSheet.create({
     marginBottom: 48,
   },
   logoCircle: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
+    width: 88,
+    height: 88,
+    borderRadius: 44,
     backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    shadowColor: '#000',
+    borderWidth: 1,
+    borderColor: Palette.border,
+    shadowColor: '#0F172A',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.08,
     shadowRadius: 12,
-    elevation: 8,
+    elevation: 4,
     marginBottom: 16,
   },
   logoImage: {
@@ -209,6 +210,8 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.5,
     marginBottom: 4,
+    color: Palette.textMuted,
+    textTransform: 'uppercase',
   },
   input: {
     fontSize: 18,

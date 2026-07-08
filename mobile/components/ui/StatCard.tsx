@@ -32,14 +32,6 @@ export function StatCard({
     }
   };
 
-  const getTrendIcon = () => {
-    switch (trend) {
-      case 'up': return 'trending-up';
-      case 'down': return 'trending-down';
-      default: return 'remove';
-    }
-  };
-
   const Container = onPress ? TouchableOpacity : View;
 
   return (

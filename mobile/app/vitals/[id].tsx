@@ -1,28 +1,26 @@
 import React from 'react';
-import { ScrollView, View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { ScrollView, View, Text, StyleSheet, Pressable } from 'react-native';
+import { useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '@/constants/theme';
-import { Card, Badge, Avatar, PrimaryButton } from '@/components/ui';
-import { mockPatients, getVitalSignsForPatient, detectVitalAnomaly } from '@/lib/mocks';
+import { Accent, Palette, Radius, Shadow, Spacing, Type } from '@/constants/theme';
+import { mockPatients, getVitalSignsForPatient } from '@/lib/mocks';
 
-const primaryColor = Colors.light.primary;
+const primaryColor = Palette.primary;
 
 export default function VitalDetailScreen() {
   const { id } = useLocalSearchParams();
-  const router = useRouter();
   const patientId = id as string;
-  
+
   const patient = mockPatients.find((p) => p.id === patientId);
   const vitals = getVitalSignsForPatient(patientId);
   const latestVital = vitals.length > 0 ? vitals[vitals.length - 1] : null;
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'Stable': return '#16a34a';
-      case 'Guarded': return '#d97706';
-      case 'Critical': return '#dc2626';
-      default: return '#6b7280';
+      case 'Stable': return Accent.green.fg;
+      case 'Guarded': return Accent.amber.fg;
+      case 'Critical': return Accent.red.fg;
+      default: return Palette.textSecondary;
     }
   };
 
@@ -204,10 +202,10 @@ export default function VitalDetailScreen() {
       </View>
 
       <View style={styles.section}>
-        <TouchableOpacity style={styles.recordButton}>
+        <Pressable style={({ pressed }) => [styles.recordButton, pressed && { opacity: 0.85 }]}>
           <Ionicons name="add-circle" size={22} color="#fff" />
           <Text style={styles.recordButtonText}>Record New Vitals</Text>
-        </TouchableOpacity>
+        </Pressable>
       </View>
     </ScrollView>
   );
@@ -216,36 +214,33 @@ export default function VitalDetailScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: Palette.background,
   },
   content: {
-    padding: 16,
+    padding: Spacing.lg,
     paddingBottom: 32,
   },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: Palette.background,
   },
   errorText: {
     fontSize: 16,
-    color: '#6b7280',
+    color: Palette.textSecondary,
   },
   patientHeader: {
-    marginBottom: 16,
+    marginBottom: Spacing.lg,
   },
   patientCard: {
-    backgroundColor: '#fff',
-    borderRadius: 24,
-    padding: 20,
+    backgroundColor: Palette.surface,
+    borderRadius: Radius.xl,
+    padding: Spacing.xl,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
-    elevation: 3,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: Palette.border,
+    ...Shadow.card,
   },
   avatarContainer: {
     width: 64,
@@ -258,7 +253,7 @@ const styles = StyleSheet.create({
   patientName: {
     fontSize: 22,
     fontWeight: '800',
-    color: '#0f172a',
+    color: Palette.ink,
     marginBottom: 8,
   },
   patientMeta: {
@@ -273,7 +268,7 @@ const styles = StyleSheet.create({
   },
   metaText: {
     fontSize: 13,
-    color: '#64748b',
+    color: Palette.textSecondary,
     marginLeft: 4,
   },
   statusBadge: {
@@ -281,7 +276,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 12,
     paddingVertical: 4,
-    borderRadius: 16,
+    borderRadius: Radius.pill,
   },
   statusDot: {
     width: 8,
@@ -300,16 +295,16 @@ const styles = StyleSheet.create({
   },
   roomText: {
     fontSize: 12,
-    color: '#94a3b8',
+    color: Palette.textMuted,
     marginLeft: 4,
   },
   alertSection: {
-    backgroundColor: '#fef3c7',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
+    backgroundColor: Accent.amber.bg,
+    borderRadius: Radius.lg,
+    padding: Spacing.lg,
+    marginBottom: Spacing.lg,
     borderWidth: 1,
-    borderColor: '#fde68a',
+    borderColor: Accent.amber.border,
   },
   alertHeader: {
     flexDirection: 'row',
@@ -352,25 +347,19 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   section: {
-    marginBottom: 20,
+    marginBottom: Spacing.xl,
   },
   sectionTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#0f172a',
-    marginBottom: 12,
+    ...Type.sectionTitle,
+    marginBottom: Spacing.md,
   },
   vitalsCard: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 20,
+    backgroundColor: Palette.surface,
+    borderRadius: Radius.lg,
+    padding: Spacing.xl,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 2,
+    borderColor: Palette.border,
+    ...Shadow.card,
   },
   vitalsGrid: {
     flexDirection: 'row',
@@ -392,24 +381,24 @@ const styles = StyleSheet.create({
   },
   vitalLabel: {
     fontSize: 10,
-    color: '#94a3b8',
+    color: Palette.textMuted,
     marginTop: 2,
   },
   vitalValue: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#0f172a',
+    color: Palette.ink,
   },
   vitalAlert: {
-    color: '#dc2626',
+    color: Accent.red.fg,
   },
   anomalyAlert: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fee2e2',
-    borderRadius: 12,
-    padding: 12,
-    marginTop: 8,
+    backgroundColor: Accent.red.bg,
+    borderRadius: Radius.md,
+    padding: Spacing.md,
+    marginTop: Spacing.sm,
   },
   anomalyContent: {
     marginLeft: 10,
@@ -417,11 +406,11 @@ const styles = StyleSheet.create({
   anomalyTitle: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#dc2626',
+    color: Accent.red.fg,
   },
   anomalyDesc: {
     fontSize: 11,
-    color: '#dc2626',
+    color: Accent.red.fg,
     marginTop: 2,
   },
   timestampRow: {
@@ -431,31 +420,27 @@ const styles = StyleSheet.create({
     marginTop: 12,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: '#f1f5f9',
+    borderTopColor: Palette.borderLight,
   },
   timestamp: {
     fontSize: 12,
-    color: '#94a3b8',
+    color: Palette.textMuted,
     marginLeft: 4,
   },
   historyCard: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 16,
+    backgroundColor: Palette.surface,
+    borderRadius: Radius.lg,
+    padding: Spacing.lg,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 2,
+    borderColor: Palette.border,
+    ...Shadow.card,
   },
   historyItem: {
     paddingVertical: 10,
   },
   historyBorder: {
     borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
+    borderBottomColor: Palette.borderLight,
   },
   historyHeader: {
     flexDirection: 'row',
@@ -470,14 +455,14 @@ const styles = StyleSheet.create({
   historyTime: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#64748b',
+    color: Palette.textSecondary,
     marginLeft: 4,
   },
   anomalyDot: {
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#dc2626',
+    backgroundColor: Accent.red.fg,
   },
   historyVitals: {
     flexDirection: 'row',
@@ -488,26 +473,22 @@ const styles = StyleSheet.create({
   },
   historyVitalLabel: {
     fontSize: 10,
-    color: '#94a3b8',
+    color: Palette.textMuted,
     marginBottom: 2,
   },
   historyVitalValue: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#1e293b',
+    color: '#1E293B',
   },
   recordButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: primaryColor,
-    borderRadius: 16,
-    paddingVertical: 16,
-    shadowColor: primaryColor,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    borderRadius: Radius.md,
+    paddingVertical: 15,
+    ...Shadow.raised,
   },
   recordButtonText: {
     fontSize: 16,

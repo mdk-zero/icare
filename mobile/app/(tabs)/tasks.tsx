@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Accent, Palette, Radius, Shadow, Spacing, Type } from '@/constants/theme';
 import { ScreenHeader, SectionHeader, EmptyState } from '@/components/ui';
-import { mockTasks, mockQuizzes } from '@/lib/mocks';
+import { mockTasks } from '@/lib/mocks';
 
 type Task = (typeof mockTasks)[number];
 
