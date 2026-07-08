@@ -16,7 +16,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
-export const API_URL = (process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000').replace(/\/$/, '');
+// Android emulators reach the host machine at 10.0.2.2, not localhost.
+// Physical devices still need EXPO_PUBLIC_API_URL set to the host's LAN IP.
+const DEFAULT_API_URL =
+  Platform.OS === 'android' ? 'http://10.0.2.2:3000' : 'http://localhost:3000';
+
+export const API_URL = (process.env.EXPO_PUBLIC_API_URL ?? DEFAULT_API_URL).replace(/\/$/, '');
 
 const TOKEN_KEY = 'icare_session_token';
 const CACHE_PREFIX = '@icare_cache:';

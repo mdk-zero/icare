@@ -37,18 +37,20 @@ function AuthStack() {
 }
 
 function AuthNavigator() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isBootstrapping } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (!isLoading) {
+    if (!isBootstrapping) {
       if (!isAuthenticated) {
         router.replace('/login');
       }
     }
-  }, [isLoading, isAuthenticated, router]);
+  }, [isBootstrapping, isAuthenticated, router]);
 
-  if (isLoading) {
+  // Only gate on the initial session restore; a login attempt in progress
+  // must not unmount the login screen (it would wipe form and error state).
+  if (isBootstrapping) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#1B6B7B' }}>
         <ActivityIndicator size="large" color="#fff" />
