@@ -7,7 +7,10 @@ const USER_KEY = '@icare_user';
 
 interface AuthContextType {
   user: apiClient.User | null;
+  /** True while a login/logout request is in flight. */
   isLoading: boolean;
+  /** True only during the initial stored-session restore at app launch. */
+  isBootstrapping: boolean;
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
   logout: () => Promise<void>;
@@ -17,7 +20,8 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<apiClient.User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isBootstrapping, setIsBootstrapping] = useState(true);
 
   const checkAuth = useCallback(async () => {
     try {
@@ -48,7 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(null);
       }
     } finally {
-      setIsLoading(false);
+      setIsBootstrapping(false);
     }
   }, []);
 
@@ -87,6 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       value={{
         user,
         isLoading,
+        isBootstrapping,
         isAuthenticated: !!user,
         login,
         logout,
