@@ -91,6 +91,13 @@ interface RequestOptions {
   auth?: boolean;
 }
 
+/**
+ * Hosts that silently drop packets (wrong LAN IP, firewall, device on a
+ * different network) leave fetch hanging forever; abort so callers fail
+ * into their offline/error paths instead of spinning indefinitely.
+ */
+const REQUEST_TIMEOUT_MS = 15_000;
+
 export async function api<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { method = 'GET', body, auth = true } = options;
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -99,16 +106,24 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
     if (token) headers.Authorization = `Bearer ${token}`;
   }
 
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   let response: Response;
   try {
     response = await fetch(`${API_URL}${path}`, {
       method,
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),
+      signal: controller.signal,
     });
   } catch {
     setOnline(false);
-    throw new ApiError('Network unreachable', 0);
+    throw new ApiError(
+      controller.signal.aborted ? 'Request timed out' : 'Network unreachable',
+      0,
+    );
+  } finally {
+    clearTimeout(timer);
   }
   setOnline(true);
 
