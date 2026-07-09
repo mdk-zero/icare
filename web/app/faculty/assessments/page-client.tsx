@@ -350,6 +350,8 @@ export default function FacultyAssessmentsClient() {
       correct_index: q.correct_index,
       explanation: q.explanation,
       competency_ids: [...q.competency_ids],
+      question_type: q.question_type || "multiple_choice",
+      points: q.points || 1,
     });
   };
 
