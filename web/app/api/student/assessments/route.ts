@@ -12,11 +12,20 @@ export async function GET() {
   try {
     const supabase = getSupabaseAdmin();
 
+    // Get the student's section
+    const { data: studentUser } = await supabase
+      .from('users')
+      .select('section')
+      .eq('id', session.uid)
+      .single();
+
+    const studentSection: string | null = studentUser?.section ?? null;
+
     const [{ data: published, error: pubError }, { data: assignments, error: asgError }, { data: attempts, error: attError }] =
       await Promise.all([
         supabase
           .from('assessments')
-          .select('id, title, description, difficulty, category, time_limit_seconds, questions(count)')
+          .select('id, title, description, difficulty, category, time_limit_seconds, target_sections, questions(count)')
           .eq('is_published', true)
           .order('created_at', { ascending: false })
           .limit(200),
@@ -37,6 +46,14 @@ export async function GET() {
       return NextResponse.json({ error: 'Unable to fetch assessments' }, { status: 500 });
     }
 
+    // Filter by section: null/empty target_sections = visible to all
+    const filteredPublished = (published ?? []).filter((a) => {
+      const target = a.target_sections as string[] | null | undefined;
+      if (!target || target.length === 0) return true;
+      if (!studentSection) return false;
+      return target.includes(studentSection);
+    });
+
     const assignmentByAssessment = new Map(
       (assignments ?? []).map((a) => [a.assessment_id, a]),
     );
@@ -55,7 +72,7 @@ export async function GET() {
       }
     }
 
-    const assessments = (published ?? []).map((a) => {
+    const assessments = filteredPublished.map((a) => {
       const assignment = assignmentByAssessment.get(a.id) ?? null;
       const best = bestByAssessment.get(a.id) ?? null;
       return {
