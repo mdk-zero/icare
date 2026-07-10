@@ -43,6 +43,7 @@ interface Assessment {
   category: string;
   time_limit_seconds: number | null;
   is_published: boolean;
+  target_sections: string[] | null;
   question_count: number;
   student_count: number;
   created_at: string;
@@ -60,6 +61,7 @@ const emptyAssessmentForm = {
   difficulty: "beginner" as Difficulty,
   category: "General" as (typeof CATEGORIES)[number],
   time_limit_minutes: "",
+  target_sections: [] as string[],
 };
 
 export default function FacultyAssessmentsClient() {
@@ -123,6 +125,7 @@ export default function FacultyAssessmentsClient() {
         ? a.category
         : "General") as (typeof CATEGORIES)[number],
       time_limit_minutes: a.time_limit_seconds ? String(Math.round(a.time_limit_seconds / 60)) : "",
+      target_sections: a.target_sections ?? [],
     });
     setShowAssessmentModal(true);
   };
@@ -143,6 +146,10 @@ export default function FacultyAssessmentsClient() {
         time_limit_seconds: assessmentForm.time_limit_minutes
           ? Number(assessmentForm.time_limit_minutes) * 60
           : null,
+        target_sections:
+          assessmentForm.target_sections.length > 0
+            ? assessmentForm.target_sections
+            : null,
       };
       const res = await fetch(`/api/faculty/assessments/${editingAssessment.id}`, {
         method: "PATCH",
@@ -175,6 +182,10 @@ export default function FacultyAssessmentsClient() {
           time_limit_seconds: assessmentForm.time_limit_minutes
             ? Number(assessmentForm.time_limit_minutes) * 60
             : null,
+          target_sections:
+            assessmentForm.target_sections.length > 0
+              ? assessmentForm.target_sections
+              : null,
         }),
       });
 
@@ -343,6 +354,11 @@ export default function FacultyAssessmentsClient() {
                       {a.time_limit_seconds && (
                         <span>{Math.round(a.time_limit_seconds / 60)} min limit</span>
                       )}
+                      {a.target_sections && a.target_sections.length > 0 && (
+                        <span className="text-xs text-gray-500">
+                          Sections: {a.target_sections.join(", ")}
+                        </span>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
@@ -480,6 +496,32 @@ export default function FacultyAssessmentsClient() {
                 placeholder="No limit"
                 className={inputClassName}
               />
+            </div>
+            <div>
+              <label className={labelClassName}>Visible to sections</label>
+              <div className="flex gap-4">
+                {["A", "B", "C"].map((s) => (
+                  <label key={s} className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={assessmentForm.target_sections.includes(s)}
+                      onChange={(e) =>
+                        setAssessmentForm((f) => ({
+                          ...f,
+                          target_sections: e.target.checked
+                            ? [...f.target_sections, s]
+                            : f.target_sections.filter((x) => x !== s),
+                        }))
+                      }
+                      className="w-4 h-4 accent-[#1B6B7B]"
+                    />
+                    Section {s}
+                  </label>
+                ))}
+              </div>
+              <p className="text-xs text-gray-400 mt-1">
+                Leave all unchecked to make visible to all sections.
+              </p>
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <button
