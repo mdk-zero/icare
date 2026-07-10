@@ -11,6 +11,8 @@ import {
   faCheck,
   faArrowLeft,
   faPen,
+  faLayerGroup,
+  faChevronDown,
 } from "@fortawesome/free-solid-svg-icons";
 
 const inputClassName =
@@ -49,6 +51,21 @@ type QuestionFormData = {
   competency_ids: string[];
 };
 
+interface AssessmentCriteria {
+  id: string;
+  assessment_id: string;
+  name: string;
+  weight: number;
+  competency_id: string;
+  sort_order: number;
+}
+
+interface CompetencyArea {
+  id: string;
+  name: string;
+  description: string | null;
+}
+
 const emptyQuestionForm: QuestionFormData = {
   content: "",
   options: [""],
@@ -77,6 +94,15 @@ export default function AssessmentQuestionsClient({
     Record<string, boolean>
   >({});
   const [newQuestionOrder, setNewQuestionOrder] = useState(0);
+  const [savingAll, setSavingAll] = useState(false);
+
+  // criteria editor
+  const [criteria, setCriteria] = useState<AssessmentCriteria[]>([]);
+  const [competencyAreas, setCompetencyAreas] = useState<CompetencyArea[]>([]);
+  const [showCriteriaEditor, setShowCriteriaEditor] = useState(false);
+  const [newCriterionName, setNewCriterionName] = useState("");
+  const [newCriterionWeight, setNewCriterionWeight] = useState("");
+  const [newCriterionCompetency, setNewCriterionCompetency] = useState("");
 
   const flash = (text: string) => {
     setMessage(text);
@@ -86,13 +112,14 @@ export default function AssessmentQuestionsClient({
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [assessRes, detailRes] = await Promise.all([
+      const [assessRes, criteriaRes, compRes] = await Promise.all([
         fetch(`/api/faculty/assessments/${assessmentId}`, {
           credentials: "include",
         }),
-        fetch(`/api/faculty/assessments/${assessmentId}`, {
+        fetch(`/api/faculty/assessments/${assessmentId}/criteria`, {
           credentials: "include",
         }),
+        fetch("/api/competencies", { credentials: "include" }),
       ]);
 
       if (assessRes.ok) {
@@ -124,6 +151,16 @@ export default function AssessmentQuestionsClient({
           };
         }
         setQuestionBuilders(builders);
+      }
+
+      if (criteriaRes.ok) {
+        const j = (await criteriaRes.json()) as { criteria: AssessmentCriteria[] };
+        setCriteria(j.criteria ?? []);
+      }
+
+      if (compRes.ok) {
+        const j = (await compRes.json()) as { competencies: CompetencyArea[] };
+        setCompetencyAreas(j.competencies ?? []);
       }
     } catch (err) {
       console.error("Failed to load assessment", err);
@@ -325,6 +362,72 @@ export default function AssessmentQuestionsClient({
     }));
   };
 
+  // ---------- save all ----------
+
+  const handleSaveAll = async () => {
+    const unsaved = questions.filter((q) => q.id.startsWith("new_"));
+    if (unsaved.length === 0) {
+      flash("No unsaved questions");
+      return;
+    }
+    setSavingAll(true);
+    for (const q of unsaved) {
+      await handleSaveQuestion(q.id);
+    }
+    setSavingAll(false);
+    flash("All questions saved");
+  };
+
+  // ---------- criteria CRUD ----------
+
+  const addCriteria = async () => {
+    if (!newCriterionName.trim() || !newCriterionWeight || !newCriterionCompetency) {
+      flash("Fill in all criteria fields");
+      return;
+    }
+    const weight = Number(newCriterionWeight);
+    if (isNaN(weight) || weight <= 0 || weight > 100) {
+      flash("Weight must be between 1 and 100");
+      return;
+    }
+    const res = await fetch(`/api/faculty/assessments/${assessmentId}/criteria`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        name: newCriterionName.trim(),
+        weight,
+        competency_id: newCriterionCompetency,
+        sort_order: criteria.length,
+      }),
+    });
+    if (!res.ok) {
+      const j = (await res.json()) as { error?: string };
+      flash(j.error ?? "Failed to add criteria");
+      return;
+    }
+    const j = (await res.json()) as { criteria: AssessmentCriteria };
+    setCriteria((prev) => [...prev, j.criteria]);
+    setNewCriterionName("");
+    setNewCriterionWeight("");
+    setNewCriterionCompetency("");
+  };
+
+  const deleteCriteria = async (id: string) => {
+    if (!window.confirm("Remove this criteria?")) return;
+    const res = await fetch(`/api/faculty/assessment-criteria/${id}`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+    if (!res.ok) {
+      flash("Failed to delete criteria");
+      return;
+    }
+    setCriteria((prev) => prev.filter((c) => c.id !== id));
+  };
+
+  const totalWeight = criteria.reduce((sum, c) => sum + c.weight, 0);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-24">
@@ -374,6 +477,110 @@ export default function AssessmentQuestionsClient({
         </p>
       )}
 
+      {/* Criteria section */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
+        <button
+          onClick={() => setShowCriteriaEditor(!showCriteriaEditor)}
+          className="w-full flex items-center justify-between p-5 text-left"
+        >
+          <div className="flex items-center gap-2">
+            <FontAwesomeIcon icon={faLayerGroup} className="w-4 h-4 text-[#1B6B7B]" />
+            <span className="font-semibold text-gray-800">
+              Scoring Criteria ({criteria.length})
+            </span>
+          </div>
+          <FontAwesomeIcon
+            icon={faChevronDown}
+            className={`w-4 h-4 text-gray-400 transition-transform ${
+              showCriteriaEditor ? "rotate-180" : ""
+            }`}
+          />
+        </button>
+
+        {showCriteriaEditor && (
+          <div className="px-5 pb-5 space-y-4 border-t border-gray-100 pt-4">
+            {criteria.length > 0 && (
+              <div className="space-y-2">
+                {criteria.map((c, i) => {
+                  const comp = competencyAreas.find((x) => x.id === c.competency_id);
+                  return (
+                    <div
+                      key={c.id}
+                      className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg"
+                    >
+                      <span className="text-sm font-medium text-gray-500 w-6">{i + 1}.</span>
+                      <span className="text-sm text-gray-800 flex-1">{c.name}</span>
+                      <span className="text-xs text-gray-500 w-40 truncate">
+                        {comp?.name ?? c.competency_id.slice(0, 8)}
+                      </span>
+                      <span className="text-sm font-semibold text-[#1B6B7B] w-16 text-right">
+                        {c.weight}%
+                      </span>
+                      <button
+                        onClick={() => deleteCriteria(c.id)}
+                        className="p-1 text-gray-400 hover:text-red-500"
+                      >
+                        <FontAwesomeIcon icon={faTimes} className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  );
+                })}
+                <div className="flex items-center gap-3 p-3 text-sm font-semibold text-gray-700">
+                  <span className="w-6" />
+                  <span className="flex-1">Total</span>
+                  <span className="w-40" />
+                  <span className={`w-16 text-right ${totalWeight === 100 ? "text-green-600" : "text-red-500"}`}>
+                    {totalWeight}%
+                  </span>
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+              <input
+                value={newCriterionName}
+                onChange={(e) => setNewCriterionName(e.target.value)}
+                placeholder="Criteria name"
+                className={inputClassName}
+              />
+              <input
+                type="number"
+                min={1}
+                max={100}
+                value={newCriterionWeight}
+                onChange={(e) => setNewCriterionWeight(e.target.value)}
+                placeholder="Weight %"
+                className={inputClassName}
+              />
+              <select
+                value={newCriterionCompetency}
+                onChange={(e) => setNewCriterionCompetency(e.target.value)}
+                className={inputClassName}
+              >
+                <option value="">Select competency</option>
+                {competencyAreas.map((ca) => (
+                  <option key={ca.id} value={ca.id}>
+                    {ca.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={addCriteria}
+                className="px-4 py-3 bg-[#1B6B7B] text-white rounded-xl text-sm font-medium hover:bg-[#155663] transition-colors"
+              >
+                Add Criteria
+              </button>
+            </div>
+
+            {totalWeight !== 100 && criteria.length > 0 && (
+              <p className="text-xs text-red-500">
+                Weights total {totalWeight}% — they should sum to 100%
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+
       {message && (
         <div className="bg-[#1B6B7B]/10 border border-[#1B6B7B]/30 text-[#155663] px-4 py-3 rounded-xl text-sm">
           {message}
@@ -386,13 +593,6 @@ export default function AssessmentQuestionsClient({
           <h2 className="font-semibold text-gray-800">
             Questions ({questions.length})
           </h2>
-          <button
-            onClick={handleAddQuestion}
-            className="flex items-center gap-2 px-4 py-2 bg-[#1B6B7B] text-white rounded-lg text-sm hover:bg-[#155663] transition-colors font-medium"
-          >
-            <FontAwesomeIcon icon={faPlus} className="w-3.5 h-3.5" />
-            Add Question
-          </button>
         </div>
 
         {questions.length === 0 ? (
@@ -404,8 +604,6 @@ export default function AssessmentQuestionsClient({
             {questions.map((q, i) => {
               const form = questionBuilders[q.id];
               if (!form) return null;
-              const saving = savingQuestions[q.id];
-              const isNew = q.id.startsWith("new_");
               return (
                 <div
                   key={q.id}
@@ -551,7 +749,7 @@ export default function AssessmentQuestionsClient({
                     )}
 
                     {/* Answer key row */}
-                    <div className="flex items-center gap-4 pt-2 border-t border-gray-100">
+                    <div className="flex items-center gap-4 pt-2 border-t border-gray-100 flex-wrap">
                       <div className="flex items-center gap-2">
                         <label className="text-sm text-gray-600 font-medium">
                           Points
@@ -570,33 +768,30 @@ export default function AssessmentQuestionsClient({
                           className="w-20 px-3 py-1.5 border border-gray-300 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30"
                         />
                       </div>
+                      <div className="flex items-center gap-2">
+                        <label className="text-sm text-gray-600 font-medium">
+                          Competency
+                        </label>
+                        <select
+                          value={form.competency_ids[0] ?? ""}
+                          onChange={(e) =>
+                            updateBuilderField(q.id, "competency_ids", e.target.value ? [e.target.value] : [])
+                          }
+                          className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30"
+                        >
+                          <option value="">No competency</option>
+                          {competencyAreas.map((ca) => (
+                            <option key={ca.id} value={ca.id}>
+                              {ca.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                       {form.explanation && (
                         <span className="text-xs text-gray-400">
                           Has answer explanation
                         </span>
                       )}
-                    </div>
-
-                    {/* Save button */}
-                    <div className="flex justify-end">
-                      <button
-                        onClick={() => handleSaveQuestion(q.id)}
-                        disabled={saving}
-                        className="px-6 py-2 bg-[#1B6B7B] text-white rounded-lg text-sm font-medium hover:bg-[#155663] disabled:opacity-60 transition-colors"
-                      >
-                        {saving ? (
-                          <span className="flex items-center gap-2">
-                            <FontAwesomeIcon
-                              icon={faSpinner}
-                              spin
-                              className="w-4 h-4"
-                            />
-                            Saving…
-                          </span>
-                        ) : (
-                          "Save"
-                        )}
-                      </button>
                     </div>
                   </div>
                 </div>
@@ -604,6 +799,29 @@ export default function AssessmentQuestionsClient({
             })}
           </div>
         )}
+
+        <div className="flex items-center justify-center gap-3 pt-2">
+          <button
+            onClick={handleAddQuestion}
+            className="flex items-center gap-2 px-6 py-3 bg-[#1B6B7B] text-white rounded-xl text-sm font-medium hover:bg-[#155663] transition-colors"
+          >
+            <FontAwesomeIcon icon={faPlus} className="w-4 h-4" />
+            Add Question
+          </button>
+          {questions.filter((q) => q.id.startsWith("new_")).length > 0 && (
+            <button
+              onClick={handleSaveAll}
+              disabled={savingAll}
+              className="flex items-center gap-2 px-6 py-3 bg-[#1B6B7B] text-white rounded-xl text-sm font-medium hover:bg-[#155663] disabled:opacity-60 transition-colors"
+            >
+              {savingAll ? (
+                <><FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" /> Saving All…</>
+              ) : (
+                <><FontAwesomeIcon icon={faCheck} className="w-4 h-4" /> Save All</>
+              )}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
