@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import PageHeader from "../../components/PageHeader";
 
@@ -9,21 +9,19 @@ interface StudentPerformance {
   name: string;
   email: string;
   quizzes_completed: number;
-  average_score: number;
+  average_score: number | null;
   at_risk: boolean;
-  last_active: string;
+  last_login_at: string | null;
 }
 
-const mockStudents: StudentPerformance[] = [
-  { id: "1", name: "John Smith", email: "john@icare.edu", quizzes_completed: 8, average_score: 88, at_risk: false, last_active: "Today" },
-  { id: "2", name: "Sarah Johnson", email: "sarah@icare.edu", quizzes_completed: 6, average_score: 75, at_risk: false, last_active: "Yesterday" },
-  { id: "3", name: "Mike Williams", email: "mike@icare.edu", quizzes_completed: 3, average_score: 45, at_risk: true, last_active: "3 days ago" },
-  { id: "4", name: "Emily Brown", email: "emily@icare.edu", quizzes_completed: 9, average_score: 92, at_risk: false, last_active: "Today" },
-  { id: "5", name: "David Lee", email: "david@icare.edu", quizzes_completed: 5, average_score: 62, at_risk: true, last_active: "2 days ago" },
-  { id: "6", name: "Lisa Garcia", email: "lisa@icare.edu", quizzes_completed: 7, average_score: 81, at_risk: false, last_active: "Today" },
-  { id: "7", name: "James Wilson", email: "james@icare.edu", quizzes_completed: 4, average_score: 55, at_risk: true, last_active: "1 week ago" },
-  { id: "8", name: "Anna Martinez", email: "anna@icare.edu", quizzes_completed: 8, average_score: 85, at_risk: false, last_active: "Today" },
-];
+function formatLastActive(value: string | null): string {
+  if (!value) return "Never";
+  const days = Math.floor((Date.now() - new Date(value).getTime()) / 86_400_000);
+  if (days === 0) return "Today";
+  if (days === 1) return "Yesterday";
+  if (days < 7) return `${days} days ago`;
+  return new Date(value).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
 
 const FilterSelect = ({ value, onChange, options }: { value: string; onChange: (v: string) => void; options: { value: string; label: string }[] }) => (
   <select
@@ -35,9 +33,10 @@ const FilterSelect = ({ value, onChange, options }: { value: string; onChange: (
   </select>
 );
 
-const EnrollStudentModal = ({ isOpen, onClose, onEnroll }: { isOpen: boolean; onClose: () => void; onEnroll: (student: StudentPerformance) => void }) => {
+const EnrollStudentModal = ({ isOpen, onClose, onEnroll }: { isOpen: boolean; onClose: () => void; onEnroll: (name: string, email: string) => Promise<string | null> }) => {
   const [formData, setFormData] = useState({ name: "", email: "" });
-  const [errors, setErrors] = useState<{ name?: string; email?: string }>({});
+  const [errors, setErrors] = useState<{ name?: string; email?: string; server?: string }>({});
+  const [submitting, setSubmitting] = useState(false);
 
   const validate = () => {
     const newErrors: { name?: string; email?: string } = {};
@@ -48,18 +47,16 @@ const EnrollStudentModal = ({ isOpen, onClose, onEnroll }: { isOpen: boolean; on
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
-    onEnroll({
-      id: Date.now().toString(),
-      name: formData.name.trim(),
-      email: formData.email.trim(),
-      quizzes_completed: 0,
-      average_score: 0,
-      at_risk: false,
-      last_active: "Today"
-    });
+    setSubmitting(true);
+    const serverError = await onEnroll(formData.name.trim(), formData.email.trim());
+    setSubmitting(false);
+    if (serverError) {
+      setErrors({ server: serverError });
+      return;
+    }
     setFormData({ name: "", email: "" });
     setErrors({});
     onClose();
@@ -101,12 +98,13 @@ const EnrollStudentModal = ({ isOpen, onClose, onEnroll }: { isOpen: boolean; on
             />
             {errors.email && <p className="mt-1 text-sm text-rose-500">{errors.email}</p>}
           </div>
+          {errors.server && <p className="text-sm text-rose-500">{errors.server}</p>}
           <div className="flex items-center gap-3 pt-2">
             <button type="button" onClick={onClose} className="flex-1 px-4 py-2.5 border border-gray-200 text-gray-700 font-medium rounded-xl hover:bg-gray-50 transition-colors">
               Cancel
             </button>
-            <button type="submit" className="flex-1 px-4 py-2.5 bg-[#1B6B7B] text-white font-medium rounded-xl hover:bg-[#145a63] hover:shadow-lg transition-all">
-              Enroll Student
+            <button type="submit" disabled={submitting} className="flex-1 px-4 py-2.5 bg-[#1B6B7B] text-white font-medium rounded-xl hover:bg-[#145a63] hover:shadow-lg disabled:opacity-60 transition-all">
+              {submitting ? "Enrolling…" : "Enroll Student"}
             </button>
           </div>
         </form>
@@ -117,15 +115,56 @@ const EnrollStudentModal = ({ isOpen, onClose, onEnroll }: { isOpen: boolean; on
 
 export default function StudentManagementClient() {
   const router = useRouter();
-  const [students, setStudents] = useState<StudentPerformance[]>(mockStudents);
+  const [students, setStudents] = useState<StudentPerformance[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [sortBy, setSortBy] = useState("name");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [isEnrollModalOpen, setIsEnrollModalOpen] = useState(false);
+  const [tempPassword, setTempPassword] = useState<{ email: string; password: string } | null>(null);
 
-  const handleEnrollStudent = useCallback((newStudent: StudentPerformance) => {
-    setStudents(prev => [...prev, newStudent]);
+  useEffect(() => {
+    fetch("/api/admin/students", { credentials: "include" })
+      .then(async (res) => {
+        if (res.ok) {
+          const json = (await res.json()) as { students: StudentPerformance[] };
+          setStudents(json.students ?? []);
+        }
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  /** Provisions the account via the admin users API; returns an error message or null. */
+  const handleEnrollStudent = useCallback(async (name: string, email: string): Promise<string | null> => {
+    const res = await fetch("/api/admin/users", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ name, email, role: "student" }),
+    });
+    const json = (await res.json()) as {
+      user?: { id: string; name: string; email: string; last_login_at: string | null };
+      password?: string;
+      error?: string;
+    };
+    if (!res.ok || !json.user) {
+      return json.error ?? "Failed to enroll student";
+    }
+    setStudents((prev) => [
+      {
+        id: json.user!.id,
+        name: json.user!.name,
+        email: json.user!.email,
+        quizzes_completed: 0,
+        average_score: null,
+        at_risk: false,
+        last_login_at: null,
+      },
+      ...prev,
+    ]);
+    if (json.password) setTempPassword({ email: json.user.email, password: json.password });
+    return null;
   }, []);
 
   const filteredStudents = students.filter(student => {
@@ -138,8 +177,11 @@ export default function StudentManagementClient() {
   }).sort((a, b) => {
     let comparison = 0;
     if (sortBy === "name") comparison = a.name.localeCompare(b.name);
-    else if (sortBy === "score") comparison = a.average_score - b.average_score;
-    else if (sortBy === "quizzes") comparison = a.quizzes_completed - b.quizzes_completed;
+    else if (sortBy === "average_score") comparison = (a.average_score ?? -1) - (b.average_score ?? -1);
+    else if (sortBy === "quizzes_completed") comparison = a.quizzes_completed - b.quizzes_completed;
+    else if (sortBy === "last_active")
+      comparison =
+        new Date(a.last_login_at ?? 0).getTime() - new Date(b.last_login_at ?? 0).getTime();
     return sortDirection === 'asc' ? comparison : -comparison;
   });
 
@@ -166,6 +208,22 @@ export default function StudentManagementClient() {
           label: "Enroll Student",
         }}
       />
+
+      {tempPassword && (
+        <div className="mb-4 bg-amber-50 border border-amber-300 text-amber-800 px-4 py-3 rounded-xl text-sm flex items-center justify-between gap-4">
+          <span>
+            Temporary password for <strong>{tempPassword.email}</strong>:{" "}
+            <code className="font-mono bg-white px-2 py-0.5 rounded border border-amber-200">{tempPassword.password}</code>{" "}
+            — an invitation email was attempted; keep this as backup.
+          </span>
+          <button
+            onClick={() => setTempPassword(null)}
+            className="text-amber-700 hover:text-amber-900 font-medium shrink-0"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 hover:shadow-lg hover:border-[#1B6B7B]/30 transition-all duration-300">
@@ -302,7 +360,16 @@ export default function StudentManagementClient() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {filteredStudents.map((student) => (
+              {loading ? (
+                <tr>
+                  <td colSpan={5} className="py-12 text-center text-gray-400">Loading students…</td>
+                </tr>
+              ) : filteredStudents.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="py-12 text-center text-gray-400">No students found</td>
+                </tr>
+              ) : (
+              filteredStudents.map((student) => (
                 <tr 
                   key={student.id} 
                   className="hover:bg-gray-50/50 transition-colors group cursor-pointer"
@@ -328,21 +395,25 @@ export default function StudentManagementClient() {
                     </div>
                   </td>
                   <td className="py-4 px-4 sm:px-6">
-                    <div className="flex items-center gap-2">
-                      <div className="w-12 h-2 bg-gray-100 rounded-full overflow-hidden">
-                        <div className={`h-full rounded-full ${student.average_score >= 70 ? 'bg-[#1B6B7B]' : 'bg-rose-500'}`} style={{ width: `${student.average_score}%` }} />
+                    {student.average_score === null ? (
+                      <span className="text-gray-400 text-sm">No attempts</span>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <div className="w-12 h-2 bg-gray-100 rounded-full overflow-hidden">
+                          <div className={`h-full rounded-full ${student.average_score >= 70 ? 'bg-[#1B6B7B]' : 'bg-rose-500'}`} style={{ width: `${student.average_score}%` }} />
+                        </div>
+                        <span className={`font-semibold text-sm ${student.average_score >= 70 ? 'text-[#1B6B7B]' : 'text-rose-600'}`}>{student.average_score}%</span>
                       </div>
-                      <span className={`font-semibold text-sm ${student.average_score >= 70 ? 'text-[#1B6B7B]' : 'text-rose-600'}`}>{student.average_score}%</span>
-                    </div>
+                    )}
                   </td>
                   <td className="py-4 px-4 sm:px-6">
                     <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${student.at_risk ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600'}`}>
                       {student.at_risk ? '⚠ At Risk' : '✓ Safe'}
                     </span>
                   </td>
-                  <td className="py-4 px-4 sm:px-6 text-gray-500 text-sm hidden sm:table-cell">{student.last_active}</td>
+                  <td className="py-4 px-4 sm:px-6 text-gray-500 text-sm hidden sm:table-cell">{formatLastActive(student.last_login_at)}</td>
                 </tr>
-              ))}
+              )))}
             </tbody>
           </table>
         </div>
