@@ -50,3 +50,7 @@ next-env.d.ts
 
 # Supabase CLI local state
 /supabase/.temp
+
+# Firebase Admin SDK service account (secret — never commit)
+firebase-service-account.json
+*firebase-adminsdk*.json
