@@ -1883,19 +1883,6 @@ export async function logAuditAction(payload: AuditLogInsert): Promise<void> {
   }
 }
 
-export async function clearAuditTrail(): Promise<{ success: boolean; error?: string }> {
-  try {
-    const res = await fetch('/api/faculty/audit', { method: 'DELETE' });
-    if (!res.ok) {
-      const data = await res.json();
-      return { success: false, error: data.error ?? 'Failed to clear audit trail' };
-    }
-    return { success: true };
-  } catch {
-    return { success: false, error: 'Network error' };
-  }
-}
-
 export function getCurrentFacultyUser(): { id: string; name: string } | null {
   if (typeof window === 'undefined') return null;
   const userStr = localStorage.getItem('icare_user');
