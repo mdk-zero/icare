@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -13,6 +13,8 @@ import {
   faPen,
   faLayerGroup,
   faChevronDown,
+  faWandMagicSparkles,
+  faFileImport,
 } from "@fortawesome/free-solid-svg-icons";
 
 const inputClassName =
@@ -76,6 +78,51 @@ const emptyQuestionForm: QuestionFormData = {
   competency_ids: [],
 };
 
+/** Minimal CSV parser: quoted fields, "" escapes, \r\n or \n row breaks. */
+function parseCsv(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (text[i + 1] === '"') {
+          field += '"';
+          i++;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        field += ch;
+      }
+    } else if (ch === '"') {
+      inQuotes = true;
+    } else if (ch === ",") {
+      row.push(field);
+      field = "";
+    } else if (ch === "\n" || ch === "\r") {
+      if (ch === "\r" && text[i + 1] === "\n") i++;
+      row.push(field);
+      field = "";
+      if (row.some((c) => c.trim().length > 0)) rows.push(row);
+      row = [];
+    } else {
+      field += ch;
+    }
+  }
+  row.push(field);
+  if (row.some((c) => c.trim().length > 0)) rows.push(row);
+  return rows;
+}
+
+const CSV_TEMPLATE = `content,options,correct,type,points,explanation,competency
+"What is the normal adult resting heart rate range?","40-50 bpm|60-100 bpm|110-130 bpm|140-160 bpm",2,multiple_choice,1,"Normal adult resting heart rate is 60-100 bpm.",Vital Signs Monitoring
+"Hand hygiene is the single most effective way to prevent infection.",,true,true_false,1,"Hand hygiene remains the cornerstone of infection control.",Infection Control
+`;
+
 export default function AssessmentQuestionsClient({
   assessmentId,
 }: {
@@ -95,6 +142,13 @@ export default function AssessmentQuestionsClient({
   >({});
   const [newQuestionOrder, setNewQuestionOrder] = useState(0);
   const [savingAll, setSavingAll] = useState(false);
+
+  // AI generation + CSV import
+  const [showAIPanel, setShowAIPanel] = useState(false);
+  const [aiTopic, setAiTopic] = useState("");
+  const [aiCount, setAiCount] = useState(5);
+  const [aiGenerating, setAiGenerating] = useState(false);
+  const csvInputRef = useRef<HTMLInputElement>(null);
 
   // criteria editor
   const [criteria, setCriteria] = useState<AssessmentCriteria[]>([]);
@@ -360,6 +414,159 @@ export default function AssessmentQuestionsClient({
       ...prev,
       [newId]: { ...emptyQuestionForm, options: ["", ""] },
     }));
+  };
+
+  /** Appends draft questions to the builder as unsaved `new_` entries. */
+  const appendDraftQuestions = (forms: QuestionFormData[]) => {
+    if (forms.length === 0) return;
+    const startIdx = newQuestionOrder;
+    setNewQuestionOrder((prev) => prev + forms.length);
+    setQuestions((prev) => [
+      ...prev,
+      ...forms.map((f, i) => ({
+        id: `new_${startIdx + i}`,
+        position: prev.length + i,
+        ...f,
+        options: [...f.options],
+        competency_ids: [...f.competency_ids],
+      })),
+    ]);
+    setQuestionBuilders((prev) => {
+      const next = { ...prev };
+      forms.forEach((f, i) => {
+        next[`new_${startIdx + i}`] = {
+          ...f,
+          options: [...f.options],
+          competency_ids: [...f.competency_ids],
+        };
+      });
+      return next;
+    });
+  };
+
+  // ---------- AI generation ----------
+
+  const handleGenerateAI = async () => {
+    setAiGenerating(true);
+    try {
+      const res = await fetch(
+        `/api/faculty/assessments/${assessmentId}/questions/generate`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ topic: aiTopic.trim(), count: aiCount }),
+        },
+      );
+      const json = (await res.json()) as {
+        questions?: QuestionFormData[];
+        error?: string;
+      };
+      if (!res.ok || !json.questions) {
+        flash(json.error ?? "Failed to generate questions");
+        return;
+      }
+      appendDraftQuestions(json.questions);
+      setShowAIPanel(false);
+      flash(
+        `Generated ${json.questions.length} draft question${json.questions.length !== 1 ? "s" : ""} — review and save each one`,
+      );
+    } catch {
+      flash("Failed to generate questions");
+    } finally {
+      setAiGenerating(false);
+    }
+  };
+
+  // ---------- CSV import ----------
+
+  const downloadCsvTemplate = () => {
+    const blob = new Blob([CSV_TEMPLATE], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "icare-questions-template.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportCsv = async (file: File) => {
+    const text = await file.text();
+    const rows = parseCsv(text);
+    if (rows.length < 2) {
+      flash("CSV needs a header row and at least one question row");
+      return;
+    }
+
+    const header = rows[0].map((h) => h.trim().toLowerCase());
+    const col = (name: string) => header.indexOf(name);
+    const contentCol = col("content");
+    if (contentCol === -1) {
+      flash('CSV header must include a "content" column — download the template for the format');
+      return;
+    }
+    const cell = (row: string[], idx: number) => (idx >= 0 ? (row[idx] ?? "").trim() : "");
+
+    const drafts: QuestionFormData[] = [];
+    let skipped = 0;
+
+    for (const row of rows.slice(1)) {
+      const content = cell(row, contentCol);
+      const type = cell(row, col("type")).toLowerCase() || "multiple_choice";
+      const correctRaw = cell(row, col("correct")).toLowerCase();
+      const points = Math.max(1, Number(cell(row, col("points"))) || 1);
+      const explanation = cell(row, col("explanation"));
+      const competencyName = cell(row, col("competency")).toLowerCase();
+      const competencyId = competencyAreas.find(
+        (ca) => ca.name.trim().toLowerCase() === competencyName,
+      )?.id;
+
+      if (!content) {
+        skipped++;
+        continue;
+      }
+
+      let options: string[];
+      let correctIndex: number;
+      if (type === "true_false") {
+        options = ["True", "False"];
+        correctIndex = correctRaw === "false" || correctRaw === "2" ? 1 : 0;
+      } else if (type === "multiple_choice") {
+        options = cell(row, col("options"))
+          .split("|")
+          .map((o) => o.trim())
+          .filter((o) => o.length > 0);
+        // "correct" is the 1-based option number, or the option text itself.
+        const asNumber = Number(correctRaw);
+        correctIndex = Number.isInteger(asNumber) && asNumber >= 1 && asNumber <= options.length
+          ? asNumber - 1
+          : options.findIndex((o) => o.toLowerCase() === correctRaw);
+        if (options.length < 2 || correctIndex === -1) {
+          skipped++;
+          continue;
+        }
+      } else {
+        skipped++;
+        continue;
+      }
+
+      drafts.push({
+        content,
+        options,
+        correct_index: correctIndex,
+        question_type: type,
+        points,
+        explanation,
+        competency_ids: competencyId ? [competencyId] : [],
+      });
+    }
+
+    appendDraftQuestions(drafts);
+    flash(
+      drafts.length === 0
+        ? "No valid questions found in the CSV — download the template for the format"
+        : `Imported ${drafts.length} draft question${drafts.length !== 1 ? "s" : ""}${skipped > 0 ? ` (${skipped} row${skipped !== 1 ? "s" : ""} skipped)` : ""} — review and save`,
+    );
   };
 
   // ---------- save all ----------
@@ -800,7 +1007,59 @@ export default function AssessmentQuestionsClient({
           </div>
         )}
 
-        <div className="flex items-center justify-center gap-3 pt-2">
+        {showAIPanel && (
+          <div className="bg-white rounded-xl border border-[#1B6B7B]/30 shadow-sm p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <FontAwesomeIcon icon={faWandMagicSparkles} className="w-4 h-4 text-[#1B6B7B]" />
+                <span className="font-semibold text-gray-800">Generate questions with AI</span>
+              </div>
+              <button
+                onClick={() => setShowAIPanel(false)}
+                className="p-1 text-gray-400 hover:text-gray-600"
+              >
+                <FontAwesomeIcon icon={faTimes} className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] gap-3">
+              <input
+                value={aiTopic}
+                onChange={(e) => setAiTopic(e.target.value)}
+                placeholder={`Optional focus, e.g. "priority nursing interventions" (defaults to ${assessment.category})`}
+                className={inputClassName}
+                disabled={aiGenerating}
+              />
+              <select
+                value={aiCount}
+                onChange={(e) => setAiCount(Number(e.target.value))}
+                className={inputClassName}
+                disabled={aiGenerating}
+              >
+                {[3, 5, 8, 10].map((n) => (
+                  <option key={n} value={n}>
+                    {n} questions
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={handleGenerateAI}
+                disabled={aiGenerating}
+                className="flex items-center justify-center gap-2 px-6 py-3 bg-[#1B6B7B] text-white rounded-xl text-sm font-medium hover:bg-[#155663] disabled:opacity-60 transition-colors"
+              >
+                {aiGenerating ? (
+                  <><FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" /> Generating…</>
+                ) : (
+                  <><FontAwesomeIcon icon={faWandMagicSparkles} className="w-4 h-4" /> Generate</>
+                )}
+              </button>
+            </div>
+            <p className="text-xs text-gray-500">
+              Generated questions are added as unsaved drafts — review, edit, and save each one before it reaches students.
+            </p>
+          </div>
+        )}
+
+        <div className="flex items-center justify-center gap-3 pt-2 flex-wrap">
           <button
             onClick={handleAddQuestion}
             className="flex items-center gap-2 px-6 py-3 bg-[#1B6B7B] text-white rounded-xl text-sm font-medium hover:bg-[#155663] transition-colors"
@@ -808,6 +1067,38 @@ export default function AssessmentQuestionsClient({
             <FontAwesomeIcon icon={faPlus} className="w-4 h-4" />
             Add Question
           </button>
+          <button
+            onClick={() => setShowAIPanel((v) => !v)}
+            className="flex items-center gap-2 px-6 py-3 bg-white border border-[#1B6B7B] text-[#1B6B7B] rounded-xl text-sm font-medium hover:bg-[#1B6B7B]/5 transition-colors"
+          >
+            <FontAwesomeIcon icon={faWandMagicSparkles} className="w-4 h-4" />
+            Generate with AI
+          </button>
+          <button
+            onClick={() => csvInputRef.current?.click()}
+            title='CSV columns: content, options (separated by |), correct (option number or "true"/"false"), type, points, explanation, competency'
+            className="flex items-center gap-2 px-6 py-3 bg-white border border-gray-300 text-gray-700 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors"
+          >
+            <FontAwesomeIcon icon={faFileImport} className="w-4 h-4" />
+            Import CSV
+          </button>
+          <button
+            onClick={downloadCsvTemplate}
+            className="text-sm text-gray-500 hover:text-[#1B6B7B] hover:underline"
+          >
+            CSV template
+          </button>
+          <input
+            ref={csvInputRef}
+            type="file"
+            accept=".csv,text/csv"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handleImportCsv(file);
+              e.target.value = "";
+            }}
+          />
           {questions.filter((q) => q.id.startsWith("new_")).length > 0 && (
             <button
               onClick={handleSaveAll}
