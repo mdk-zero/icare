@@ -1,13 +1,15 @@
+import Link from "next/link";
+
 export const metadata = {
   title: "Reports | iCARE++",
 };
 
 export default function ReportsPage() {
   const reportTypes = [
-    { title: 'Competency Report', desc: 'Generate student competency PDF', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
-    { title: 'At-Risk Students', desc: 'List students needing intervention', icon: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z' },
-    { title: 'Analytics Summary', desc: 'Performance analytics report', icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z' },
-    { title: 'Activity Log', desc: 'System activity audit trail', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
+    { title: 'Competency Report', desc: 'Per-student competency PDF — open a student profile to download', href: '/admin/student-management', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
+    { title: 'At-Risk Students', desc: 'List students needing intervention', href: '/admin/student-management', icon: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z' },
+    { title: 'Analytics Summary', desc: 'Warehouse-backed performance analytics', href: '/admin/analytics', icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z' },
+    { title: 'Activity Log', desc: 'Filterable append-only audit trail of all roles', href: '/admin/audit', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
   ];
 
   return (
@@ -29,7 +31,7 @@ export default function ReportsPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {reportTypes.map((report, idx) => (
-          <button key={idx} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-lg hover:border-[#1B6B7B]/30 transition-all duration-300 text-left group">
+          <Link key={idx} href={report.href} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-lg hover:border-[#1B6B7B]/30 transition-all duration-300 text-left group block">
             <div className="flex items-start gap-4">
               <div className="w-14 h-14 bg-[#1B6B7B]/10 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
                 <svg className="w-7 h-7 text-[#1B6B7B]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -44,7 +46,7 @@ export default function ReportsPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
             </div>
-          </button>
+          </Link>
         ))}
       </div>
 

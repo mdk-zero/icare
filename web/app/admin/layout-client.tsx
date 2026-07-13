@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   faChartBar,
+  faClockRotateLeft,
   faDoorOpen,
   faFileLines,
   faHouse,
@@ -33,6 +34,7 @@ const navItems: NavItem[] = [
   { id: "rooms", label: "Rooms", href: "/admin/rooms", icon: faDoorOpen },
   { id: "faculty", label: "Faculty", href: "/admin/faculty", icon: faUserTie },
   { id: "users", label: "Users", href: "/admin/users", icon: faUsers },
+  { id: "audit", label: "Activity Log", href: "/admin/audit", icon: faClockRotateLeft },
 ];
 
 function isActive(item: NavItem, pathname: string) {
