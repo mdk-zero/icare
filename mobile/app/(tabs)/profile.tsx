@@ -1,18 +1,28 @@
 import React from 'react';
-import { ScrollView, View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { ScrollView, View, Text, StyleSheet, Pressable, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '@/constants/theme';
-import { Card } from '@/components/ui';
+import { Accent, Palette, Radius, Shadow, Spacing, Type } from '@/constants/theme';
+import { SectionHeader } from '@/components/ui';
 import { useAuth } from '@/hooks/useAuth';
-import { mockPerformanceLogs, mockAIRecommendations } from '@/lib/api';
-
-const primaryColor = Colors.light.primary;
+import { mockPerformanceLogs, mockAIRecommendations } from '@/lib/mocks';
 
 function getInitials(name?: string) {
   if (!name) return 'S';
   return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 }
+
+function competencyAccent(score: number) {
+  if (score >= 70) return { ...Accent.green, label: 'Proficient' };
+  if (score >= 50) return { ...Accent.amber, label: 'Developing' };
+  return { ...Accent.red, label: 'Needs Work' };
+}
+
+const REC_ACCENT: Record<string, { fg: string; bg: string; icon: 'document-text' | 'list' | 'book' }> = {
+  quiz: { ...Accent.violet, icon: 'document-text' },
+  task: { ...Accent.amber, icon: 'list' },
+  resource: { ...Accent.blue, icon: 'book' },
+};
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -47,188 +57,162 @@ export default function ProfileScreen() {
     avgScore: Math.round(scores.reduce((a, b) => a + b, 0) / scores.length),
   }));
 
+  const quickLinks = [
+    { label: 'Performance Analytics', icon: 'bar-chart' as const, accent: Accent.blue, onPress: () => router.push('/progress') },
+    { label: 'Notifications', icon: 'notifications' as const, accent: Accent.amber, onPress: () => router.push('/notifications') },
+    { label: 'Clinical Guidelines', icon: 'book' as const, accent: Accent.green, onPress: undefined },
+    { label: 'Help & Support', icon: 'help-circle' as const, accent: Accent.violet, onPress: undefined },
+  ];
+
   return (
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
     >
-      <View style={styles.header}>
-        <View style={styles.headerCard}>
-          <View style={styles.avatarRow}>
-            <View style={[styles.avatarLarge, { backgroundColor: primaryColor }]}>
-              <Text style={styles.avatarText}>{getInitials(user?.name)}</Text>
-            </View>
-            <TouchableOpacity style={styles.editButton}>
-              <Ionicons name="camera" size={16} color={primaryColor} />
-            </TouchableOpacity>
+      <View style={styles.headerCard}>
+        <View style={styles.avatarRow}>
+          <View style={styles.avatarLarge}>
+            <Text style={styles.avatarText}>{getInitials(user?.name)}</Text>
           </View>
-          <Text style={styles.name}>{user?.name || 'Student'}</Text>
-          <Text style={styles.email}>{user?.email || 'student@icare.edu'}</Text>
-          <View style={styles.badges}>
-            <View style={[styles.badge, { backgroundColor: primaryColor + '15' }]}>
-              <Ionicons name="school-outline" size={12} color={primaryColor} />
-              <Text style={[styles.badgeText, { color: primaryColor, marginLeft: 4 }]}>{user?.cohort || 'BSN-2027'}</Text>
-            </View>
-            <View style={[styles.badge, { backgroundColor: '#f1f5f9' }]}>
-              <Ionicons name="id-card-outline" size={12} color="#64748b" />
-              <Text style={styles.badgeTextGray}>{user?.studentId || 'NS-2024-001'}</Text>
-            </View>
+          <Pressable style={({ pressed }) => [styles.editButton, pressed && styles.pressedDim]}>
+            <Ionicons name="camera" size={14} color={Palette.primary} />
+          </Pressable>
+        </View>
+        <Text style={styles.name}>{user?.name || 'Student'}</Text>
+        <Text style={styles.email}>{user?.email || 'student@icare.edu'}</Text>
+        <View style={styles.badges}>
+          <View style={[styles.badge, { backgroundColor: Palette.primaryTint }]}>
+            <Ionicons name="school-outline" size={12} color={Palette.primary} />
+            <Text style={[styles.badgeText, { color: Palette.primary }]}>{user?.cohort || 'BSN-2027'}</Text>
+          </View>
+          <View style={[styles.badge, { backgroundColor: Palette.borderLight }]}>
+            <Ionicons name="id-card-outline" size={12} color={Palette.textSecondary} />
+            <Text style={[styles.badgeText, { color: Palette.textSecondary }]}>
+              {user?.studentId || 'NS-2024-001'}
+            </Text>
           </View>
         </View>
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Performance Overview</Text>
+        <SectionHeader title="Performance Overview" />
         <View style={styles.statsCard}>
-          <View style={styles.perfStats}>
-            <View style={styles.perfStat}>
-              <View style={[styles.perfIconBox, { backgroundColor: primaryColor + '15' }]}>
-                <Ionicons name="trending-up" size={20} color={primaryColor} />
-              </View>
-              <Text style={[styles.perfValue, { color: primaryColor }]}>{avgScore}%</Text>
-              <Text style={styles.perfLabel}>Avg Score</Text>
+          <View style={styles.perfStat}>
+            <View style={[styles.perfIconBox, { backgroundColor: Palette.primaryTint }]}>
+              <Ionicons name="trending-up" size={18} color={Palette.primary} />
             </View>
-            <View style={styles.perfDivider} />
-            <View style={styles.perfStat}>
-              <View style={[styles.perfIconBox, { backgroundColor: '#ede9fe' }]}>
-                <Ionicons name="analytics" size={20} color="#7c3aed" />
-              </View>
-              <Text style={styles.perfValue}>{mockPerformanceLogs.length}</Text>
-              <Text style={styles.perfLabel}>Activities</Text>
+            <Text style={[styles.perfValue, { color: Palette.primary }]}>{avgScore}%</Text>
+            <Text style={styles.perfLabel}>Avg Score</Text>
+          </View>
+          <View style={styles.perfDivider} />
+          <View style={styles.perfStat}>
+            <View style={[styles.perfIconBox, { backgroundColor: Accent.violet.bg }]}>
+              <Ionicons name="analytics" size={18} color={Accent.violet.fg} />
             </View>
-            <View style={styles.perfDivider} />
-            <View style={styles.perfStat}>
-              <View style={[styles.perfIconBox, { backgroundColor: '#dbeafe' }]}>
-                <Ionicons name="ribbon" size={20} color="#2563eb" />
-              </View>
-              <Text style={styles.perfValue}>{competencies.length}</Text>
-              <Text style={styles.perfLabel}>Skills</Text>
+            <Text style={styles.perfValue}>{mockPerformanceLogs.length}</Text>
+            <Text style={styles.perfLabel}>Activities</Text>
+          </View>
+          <View style={styles.perfDivider} />
+          <View style={styles.perfStat}>
+            <View style={[styles.perfIconBox, { backgroundColor: Accent.blue.bg }]}>
+              <Ionicons name="ribbon" size={18} color={Accent.blue.fg} />
             </View>
+            <Text style={styles.perfValue}>{competencies.length}</Text>
+            <Text style={styles.perfLabel}>Skills</Text>
           </View>
         </View>
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Competencies</Text>
-        <View style={styles.competenciesCard}>
-          {competencies.map((comp, index) => (
-            <View
-              key={comp.competency}
-              style={[styles.compItem, index < competencies.length - 1 && styles.compBorder]}
-            >
-              <View style={styles.compLeft}>
-                <Text style={styles.compName}>{comp.competency}</Text>
-                <View style={styles.compScore}>
-                  <View style={styles.progressBar}>
-                    <View
-                      style={[
-                        styles.progressFill,
-                        {
-                          width: `${comp.avgScore}%`,
-                          backgroundColor:
-                            comp.avgScore >= 70
-                              ? '#16a34a'
-                              : comp.avgScore >= 50
-                              ? '#d97706'
-                              : '#dc2626',
-                        },
-                      ]}
-                    />
+        <SectionHeader title="Competencies" />
+        <View style={styles.listCard}>
+          {competencies.map((comp, index) => {
+            const accent = competencyAccent(comp.avgScore);
+            return (
+              <View
+                key={comp.competency}
+                style={[styles.compItem, index > 0 && styles.rowBorder]}
+              >
+                <View style={styles.compLeft}>
+                  <Text style={styles.compName}>{comp.competency}</Text>
+                  <View style={styles.compScore}>
+                    <View style={styles.progressBar}>
+                      <View
+                        style={[
+                          styles.progressFill,
+                          { width: `${comp.avgScore}%`, backgroundColor: accent.fg },
+                        ]}
+                      />
+                    </View>
+                    <Text style={styles.compValue}>{comp.avgScore}%</Text>
                   </View>
-                  <Text style={styles.compValue}>{comp.avgScore}%</Text>
+                </View>
+                <View style={[styles.compBadge, { backgroundColor: accent.bg }]}>
+                  <Text style={[styles.compBadgeText, { color: accent.fg }]}>{accent.label}</Text>
                 </View>
               </View>
-              <View style={[styles.compBadge, { 
-                backgroundColor: comp.avgScore >= 70 ? '#dcfce7' : comp.avgScore >= 50 ? '#fef3c7' : '#fee2e2'
-              }]}>
-                <Text style={[styles.compBadgeText, { 
-                  color: comp.avgScore >= 70 ? '#16a34a' : comp.avgScore >= 50 ? '#d97706' : '#dc2626'
-                }]}>
-                  {comp.avgScore >= 70 ? 'Proficient' : comp.avgScore >= 50 ? 'Developing' : 'Needs Work'}
+            );
+          })}
+        </View>
+      </View>
+
+      <View style={styles.section}>
+        <SectionHeader title="AI Recommendations" actionLabel="See all" onAction={() => router.push('/recommendations')} />
+        <View style={styles.listCard}>
+          {mockAIRecommendations.slice(0, 2).map((rec, index) => {
+            const accent = REC_ACCENT[rec.type] ?? REC_ACCENT.resource;
+            const priority = rec.priority === 'high' ? Accent.red : Accent.amber;
+            return (
+              <Pressable
+                key={rec.id}
+                style={({ pressed }) => [styles.recItem, index > 0 && styles.rowBorder, pressed && styles.pressedDim]}
+                onPress={() => router.push('/recommendations')}
+              >
+                <View style={styles.recHeader}>
+                  <View style={[styles.recIconContainer, { backgroundColor: accent.bg }]}>
+                    <Ionicons name={accent.icon} size={15} color={accent.fg} />
+                  </View>
+                  <View style={[styles.priorityBadge, { backgroundColor: priority.bg }]}>
+                    <Text style={[styles.priorityText, { color: priority.fg }]}>{rec.priority}</Text>
+                  </View>
+                </View>
+                <Text style={styles.recTitle}>{rec.title}</Text>
+                <Text style={styles.recDesc} numberOfLines={2}>
+                  {rec.description}
                 </Text>
-              </View>
-            </View>
-          ))}
+              </Pressable>
+            );
+          })}
         </View>
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>AI Recommendations</Text>
-        <View style={styles.recommendationsCard}>
-          {mockAIRecommendations.slice(0, 2).map((rec, index) => (
-            <TouchableOpacity
-              key={rec.id}
-              style={[styles.recItem, index < 1 && styles.recBorder]}
-              activeOpacity={0.7}
+        <SectionHeader title="Quick Links" />
+        <View style={styles.listCard}>
+          {quickLinks.map((link, index) => (
+            <Pressable
+              key={link.label}
+              style={({ pressed }) => [styles.linkItem, index > 0 && styles.rowBorder, pressed && styles.pressedDim]}
+              onPress={link.onPress}
             >
-              <View style={styles.recHeader}>
-                <View style={[styles.recIconContainer, { 
-                  backgroundColor: rec.type === 'quiz' ? '#ede9fe' : rec.type === 'task' ? '#fef3c7' : '#dbeafe'
-                }]}>
-                  <Ionicons 
-                    name={rec.type === 'quiz' ? 'document-text' : rec.type === 'task' ? 'list' : 'book'} 
-                    size={16} 
-                    color={rec.type === 'quiz' ? '#7c3aed' : rec.type === 'task' ? '#d97706' : '#2563eb'} 
-                  />
-                </View>
-                <View style={[styles.priorityBadge, { 
-                  backgroundColor: rec.priority === 'high' ? '#fee2e2' : '#fef3c7'
-                }]}>
-                  <Text style={[styles.priorityText, { 
-                    color: rec.priority === 'high' ? '#dc2626' : '#d97706'
-                  }]}>
-                    {rec.priority}
-                  </Text>
-                </View>
+              <View style={[styles.linkIconContainer, { backgroundColor: link.accent.bg }]}>
+                <Ionicons name={link.icon} size={17} color={link.accent.fg} />
               </View>
-              <Text style={styles.recTitle}>{rec.title}</Text>
-              <Text style={styles.recDesc} numberOfLines={2}>
-                {rec.description}
-              </Text>
-            </TouchableOpacity>
+              <Text style={styles.linkText}>{link.label}</Text>
+              <Ionicons name="chevron-forward" size={17} color={Palette.textFaint} />
+            </Pressable>
           ))}
         </View>
       </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Quick Links</Text>
-        <View style={styles.quickLinksCard}>
-          <TouchableOpacity style={styles.linkItem} onPress={() => router.push('/progress')}>
-            <View style={[styles.linkIconContainer, { backgroundColor: '#dbeafe' }]}>
-              <Ionicons name="bar-chart" size={18} color="#2563eb" />
-            </View>
-            <Text style={styles.linkText}>Performance Analytics</Text>
-            <Ionicons name="chevron-forward" size={18} color="#cbd5e1" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.linkItem} onPress={() => router.push('/notifications')}>
-            <View style={[styles.linkIconContainer, { backgroundColor: '#fef3c7' }]}>
-              <Ionicons name="notifications" size={18} color="#d97706" />
-            </View>
-            <Text style={styles.linkText}>Notifications</Text>
-            <Ionicons name="chevron-forward" size={18} color="#cbd5e1" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.linkItem}>
-            <View style={[styles.linkIconContainer, { backgroundColor: '#dcfce7' }]}>
-              <Ionicons name="book" size={18} color="#16a34a" />
-            </View>
-            <Text style={styles.linkText}>Clinical Guidelines</Text>
-            <Ionicons name="chevron-forward" size={18} color="#cbd5e1" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.linkItem}>
-            <View style={[styles.linkIconContainer, { backgroundColor: '#f3e8ff' }]}>
-              <Ionicons name="help-circle" size={18} color="#9333ea" />
-            </View>
-            <Text style={styles.linkText}>Help & Support</Text>
-            <Ionicons name="chevron-forward" size={18} color="#cbd5e1" />
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-        <Ionicons name="log-out" size={20} color="#dc2626" />
+      <Pressable
+        style={({ pressed }) => [styles.logoutButton, pressed && styles.pressedDim]}
+        onPress={handleLogout}
+      >
+        <Ionicons name="log-out-outline" size={19} color={Accent.red.fg} />
         <Text style={styles.logoutText}>Logout</Text>
-      </TouchableOpacity>
+      </Pressable>
 
       <Text style={styles.footer}>
         iCARE++ v1.0 • Protected by Philippine Data Privacy Act of 2012
@@ -240,178 +224,145 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: Palette.background,
   },
   content: {
-    padding: 16,
+    padding: Spacing.lg,
     paddingBottom: 32,
   },
-  header: {
-    marginBottom: 20,
+  pressedDim: {
+    opacity: 0.7,
   },
   headerCard: {
-    backgroundColor: '#fff',
-    borderRadius: 24,
-    padding: 24,
+    backgroundColor: Palette.surface,
+    borderRadius: Radius.xl,
+    padding: Spacing.xxl,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
-    elevation: 3,
+    marginBottom: Spacing.xxl,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: Palette.border,
+    ...Shadow.card,
   },
   avatarRow: {
     position: 'relative',
-    marginBottom: 16,
+    marginBottom: Spacing.lg,
   },
   avatarLarge: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: Palette.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 4,
-    borderColor: '#fff',
-    shadowColor: primaryColor,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
   },
   avatarText: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: '700',
     color: '#fff',
   },
   editButton: {
     position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#fff',
+    bottom: -2,
+    right: -2,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: Palette.surface,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: Palette.border,
   },
   name: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#0f172a',
+    ...Type.screenTitle,
+    fontSize: 22,
   },
   email: {
     fontSize: 13,
-    color: '#64748b',
-    marginTop: 4,
+    color: Palette.textSecondary,
+    marginTop: 2,
   },
   badges: {
     flexDirection: 'row',
-    marginTop: 16,
-    gap: 8,
+    marginTop: Spacing.lg,
+    gap: Spacing.sm,
   },
   badge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
+    gap: 4,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 5,
+    borderRadius: Radius.pill,
   },
   badgeText: {
     fontSize: 12,
     fontWeight: '600',
   },
-  badgeTextGray: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#64748b',
-    marginLeft: 4,
-  },
   section: {
-    marginBottom: 20,
-  },
-  sectionTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#0f172a',
-    marginBottom: 12,
+    marginBottom: Spacing.xxl,
   },
   statsCard: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 2,
-  },
-  perfStats: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    backgroundColor: Palette.surface,
+    borderRadius: Radius.lg,
+    padding: Spacing.xl,
+    borderWidth: 1,
+    borderColor: Palette.border,
+    ...Shadow.card,
   },
   perfStat: {
     alignItems: 'center',
     flex: 1,
   },
   perfIconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
+    width: 40,
+    height: 40,
+    borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 10,
+    marginBottom: Spacing.sm,
   },
   perfDivider: {
     width: 1,
-    backgroundColor: '#e2e8f0',
+    backgroundColor: Palette.borderLight,
   },
   perfValue: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '800',
-    color: '#0f172a',
+    color: Palette.ink,
   },
   perfLabel: {
-    fontSize: 11,
-    color: '#64748b',
+    ...Type.micro,
     fontWeight: '500',
-    marginTop: 4,
+    marginTop: 2,
   },
-  competenciesCard: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 16,
+  listCard: {
+    backgroundColor: Palette.surface,
+    borderRadius: Radius.lg,
+    paddingHorizontal: Spacing.lg,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 2,
+    borderColor: Palette.border,
+    ...Shadow.card,
+  },
+  rowBorder: {
+    borderTopWidth: 1,
+    borderTopColor: Palette.borderLight,
   },
   compItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 10,
-  },
-  compBorder: {
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
+    paddingVertical: Spacing.md,
   },
   compLeft: {
     flex: 1,
-    marginRight: 12,
+    marginRight: Spacing.md,
   },
   compName: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#1e293b',
+    color: '#1E293B',
     marginBottom: 6,
   },
   compScore: {
@@ -419,11 +370,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   progressBar: {
-    width: 80,
+    width: 88,
     height: 6,
-    backgroundColor: '#e2e8f0',
+    backgroundColor: Palette.border,
     borderRadius: 3,
-    marginRight: 8,
+    marginRight: Spacing.sm,
     overflow: 'hidden',
   },
   progressFill: {
@@ -433,123 +384,90 @@ const styles = StyleSheet.create({
   compValue: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#64748b',
+    color: Palette.textSecondary,
   },
   compBadge: {
-    paddingHorizontal: 8,
+    paddingHorizontal: Spacing.sm,
     paddingVertical: 4,
-    borderRadius: 8,
+    borderRadius: Radius.pill,
   },
   compBadgeText: {
     fontSize: 10,
-    fontWeight: '600',
-  },
-  recommendationsCard: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 2,
+    fontWeight: '700',
   },
   recItem: {
-    paddingVertical: 10,
-  },
-  recBorder: {
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
+    paddingVertical: Spacing.md,
   },
   recHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    justifyContent: 'space-between',
+    marginBottom: Spacing.sm,
   },
   recIconContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
+    width: 30,
+    height: 30,
+    borderRadius: Radius.sm + 1,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 10,
   },
   priorityBadge: {
-    paddingHorizontal: 8,
+    paddingHorizontal: Spacing.sm,
     paddingVertical: 3,
-    borderRadius: 8,
+    borderRadius: Radius.pill,
   },
   priorityText: {
     fontSize: 10,
-    fontWeight: '600',
+    fontWeight: '700',
     textTransform: 'capitalize',
   },
   recTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1e293b',
-    marginBottom: 4,
+    color: '#1E293B',
+    marginBottom: 3,
   },
   recDesc: {
     fontSize: 12,
-    color: '#64748b',
+    color: Palette.textSecondary,
     lineHeight: 18,
-  },
-  quickLinksCard: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 2,
   },
   linkItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
+    paddingVertical: Spacing.md + 2,
   },
   linkIconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+    width: 34,
+    height: 34,
+    borderRadius: Radius.sm + 2,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    marginRight: Spacing.md,
   },
   linkText: {
     flex: 1,
     fontSize: 14,
     fontWeight: '500',
-    color: '#1e293b',
+    color: '#1E293B',
   },
   logoutButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#fef2f2',
-    borderRadius: 14,
-    paddingVertical: 16,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: '#fecaca',
+    gap: Spacing.sm,
+    backgroundColor: Accent.red.bg,
+    borderRadius: Radius.md,
+    paddingVertical: 15,
+    marginBottom: Spacing.xl,
   },
   logoutText: {
     fontSize: 15,
-    fontWeight: '600',
-    color: '#dc2626',
-    marginLeft: 8,
+    fontWeight: '700',
+    color: Accent.red.fg,
   },
   footer: {
-    fontSize: 12,
-    color: '#94a3b8',
+    ...Type.micro,
     textAlign: 'center',
   },
 });

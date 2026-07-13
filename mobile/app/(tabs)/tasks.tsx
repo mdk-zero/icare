@@ -1,12 +1,72 @@
 import React from 'react';
-import { ScrollView, View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { ScrollView, View, Text, StyleSheet, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '@/constants/theme';
-import { Card } from '@/components/ui';
-import { mockTasks, mockQuizzes } from '@/lib/api';
+import { Accent, Palette, Radius, Shadow, Spacing, Type } from '@/constants/theme';
+import { ScreenHeader, SectionHeader, EmptyState } from '@/components/ui';
+import { mockTasks } from '@/lib/mocks';
 
-const primaryColor = Colors.light.primary;
+type Task = (typeof mockTasks)[number];
+
+const PRIORITY_ACCENT: Record<string, { fg: string; bg: string }> = {
+  high: Accent.red,
+  medium: Accent.amber,
+  low: Accent.green,
+};
+
+function TaskCard({ task, onPress }: { task: Task; onPress: () => void }) {
+  const completed = task.status === 'completed';
+  const statusAccent =
+    task.status === 'completed' ? Accent.green : task.status === 'in_progress' ? Accent.amber : Accent.slate;
+  const statusIcon =
+    task.status === 'completed' ? 'checkmark' : task.status === 'in_progress' ? 'ellipse' : 'ellipse-outline';
+  const priority = PRIORITY_ACCENT[task.priority] ?? Accent.slate;
+
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.taskCard, completed && styles.taskCardCompleted, pressed && styles.pressedCard]}
+      onPress={onPress}
+    >
+      <View style={styles.taskHeader}>
+        <View style={styles.taskHeaderLeft}>
+          <View style={[styles.taskIconBox, { backgroundColor: statusAccent.bg }]}>
+            <Ionicons name={statusIcon} size={14} color={statusAccent.fg} />
+          </View>
+          <View style={styles.taskHeaderText}>
+            <Text style={[styles.taskTitle, completed && styles.taskTitleCompleted]} numberOfLines={1}>
+              {task.title}
+            </Text>
+            <View style={styles.taskPatientRow}>
+              <Ionicons name="person-outline" size={12} color={Palette.textSecondary} />
+              <Text style={styles.taskPatient}>{task.patientName}</Text>
+            </View>
+          </View>
+        </View>
+        <Ionicons name="chevron-forward" size={17} color={Palette.textFaint} />
+      </View>
+
+      {!completed && (
+        <>
+          <Text style={styles.taskDescription} numberOfLines={2}>
+            {task.description}
+          </Text>
+          <View style={styles.taskFooter}>
+            <View style={[styles.priorityPill, { backgroundColor: priority.bg }]}>
+              <View style={[styles.priorityDot, { backgroundColor: priority.fg }]} />
+              <Text style={[styles.priorityText, { color: priority.fg }]}>{task.priority}</Text>
+            </View>
+            <View style={styles.dueRow}>
+              <Ionicons name="time-outline" size={12} color={Palette.textMuted} />
+              <Text style={styles.taskDue}>
+                {new Date(task.dueDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </Text>
+            </View>
+          </View>
+        </>
+      )}
+    </Pressable>
+  );
+}
 
 export default function TasksScreen() {
   const router = useRouter();
@@ -14,15 +74,13 @@ export default function TasksScreen() {
   const pendingTasks = mockTasks.filter((t) => t.status === 'pending');
   const inProgressTasks = mockTasks.filter((t) => t.status === 'in_progress');
   const completedTasks = mockTasks.filter((t) => t.status === 'completed');
+  const remaining = pendingTasks.length + inProgressTasks.length;
 
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'high': return '#dc2626';
-      case 'medium': return '#d97706';
-      case 'low': return '#16a34a';
-      default: return '#6b7280';
-    }
-  };
+  const quickLinks = [
+    { label: 'Quizzes', icon: 'document-text' as const, accent: Accent.violet, href: '/tasks/quizzes' },
+    { label: 'AI Tips', icon: 'bulb' as const, accent: Accent.blue, href: '/recommendations' },
+    { label: 'Alerts', icon: 'notifications' as const, accent: Accent.amber, href: '/notifications' },
+  ];
 
   return (
     <ScrollView
@@ -30,211 +88,61 @@ export default function TasksScreen() {
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
     >
-      <View style={styles.header}>
-        <View style={styles.headerTop}>
-          <View>
-            <View style={styles.headerBadge}>
-              <Ionicons name="clipboard" size={12} color={primaryColor} />
-              <Text style={styles.headerBadgeText}>Tasks</Text>
-            </View>
-            <Text style={styles.title}>Clinical Tasks</Text>
-            <Text style={styles.subtitle}>
-              {mockTasks.filter(t => t.status !== 'completed').length} tasks remaining
-            </Text>
-          </View>
-          <View style={styles.headerIconBox}>
-            <Ionicons name="clipboard-outline" size={24} color={primaryColor} />
-          </View>
-        </View>
-      </View>
+      <ScreenHeader
+        eyebrow="Clinical Duty"
+        title="Clinical Tasks"
+        subtitle={`${remaining} ${remaining === 1 ? 'task' : 'tasks'} remaining`}
+        icon="clipboard-outline"
+      />
 
       <View style={styles.quickLinks}>
-        <TouchableOpacity style={styles.quickLink} onPress={() => router.push('/tasks/quizzes')}>
-          <View style={[styles.quickLinkIcon, { backgroundColor: '#ede9fe' }]}>
-            <Ionicons name="document-text" size={20} color="#7c3aed" />
-          </View>
-          <Text style={styles.quickLinkText}>Quizzes</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.quickLink} onPress={() => router.push('/recommendations')}>
-          <View style={[styles.quickLinkIcon, { backgroundColor: '#dbeafe' }]}>
-            <Ionicons name="bulb" size={20} color="#2563eb" />
-          </View>
-          <Text style={styles.quickLinkText}>AI Tips</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.quickLink} onPress={() => router.push('/notifications')}>
-          <View style={[styles.quickLinkIcon, { backgroundColor: '#fef3c7' }]}>
-            <Ionicons name="notifications" size={20} color="#d97706" />
-          </View>
-          <Text style={styles.quickLinkText}>Alerts</Text>
-        </TouchableOpacity>
+        {quickLinks.map((link) => (
+          <Pressable
+            key={link.label}
+            style={({ pressed }) => [styles.quickLink, pressed && styles.pressedCard]}
+            onPress={() => router.push(link.href as any)}
+          >
+            <View style={[styles.quickLinkIcon, { backgroundColor: link.accent.bg }]}>
+              <Ionicons name={link.icon} size={19} color={link.accent.fg} />
+            </View>
+            <Text style={styles.quickLinkText}>{link.label}</Text>
+          </Pressable>
+        ))}
       </View>
 
       <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <View style={styles.sectionTitleRow}>
-            <View style={[styles.sectionDot, { backgroundColor: '#f59e0b' }]} />
-            <Text style={styles.sectionTitle}>In Progress</Text>
-            <View style={[styles.sectionBadge, { backgroundColor: '#fef3c7' }]}>
-              <Text style={[styles.sectionBadgeText, { color: '#d97706' }]}>{inProgressTasks.length}</Text>
-            </View>
-          </View>
-        </View>
-        <View style={styles.taskList}>
-          {inProgressTasks.length > 0 ? (
-            inProgressTasks.map((task) => (
-              <TouchableOpacity
-                key={task.id}
-                style={styles.taskCard}
-                onPress={() => router.push(`/tasks/${task.id}`)}
-                activeOpacity={0.7}
-              >
-                <View style={styles.taskHeader}>
-                  <View style={styles.taskHeaderLeft}>
-                    <View style={[styles.taskIconBox, { backgroundColor: '#fef3c7' }]}>
-                      <Ionicons name="ellipse" size={14} color="#d97706" />
-                    </View>
-                    <View>
-                      <Text style={styles.taskTitle}>{task.title}</Text>
-                      <View style={styles.taskPatientRow}>
-                        <Ionicons name="person-outline" size={12} color="#64748b" />
-                        <Text style={styles.taskPatient}>{task.patientName}</Text>
-                      </View>
-                    </View>
-                  </View>
-                  <Ionicons name="chevron-forward" size={18} color="#cbd5e1" />
-                </View>
-                <Text style={styles.taskDescription} numberOfLines={2}>
-                  {task.description}
-                </Text>
-                <View style={styles.taskFooter}>
-                  <View style={[styles.priorityPill, { backgroundColor: getPriorityColor(task.priority) + '15' }]}>
-                    <View style={[styles.priorityDot, { backgroundColor: getPriorityColor(task.priority) }]} />
-                    <Text style={[styles.priorityText, { color: getPriorityColor(task.priority) }]}>
-                      {task.priority}
-                    </Text>
-                  </View>
-                  <View style={styles.dueRow}>
-                    <Ionicons name="time-outline" size={12} color="#94a3b8" />
-                    <Text style={styles.taskDue}>
-                      {new Date(task.dueDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </Text>
-                  </View>
-                </View>
-              </TouchableOpacity>
-            ))
-          ) : (
-            <View style={styles.emptyState}>
-              <Ionicons name="checkmark-circle" size={36} color="#cbd5e1" />
-              <Text style={styles.emptyText}>No tasks in progress</Text>
-            </View>
-          )}
-        </View>
+        <SectionHeader title="In Progress" count={inProgressTasks.length} />
+        {inProgressTasks.length > 0 ? (
+          inProgressTasks.map((task) => (
+            <TaskCard key={task.id} task={task} onPress={() => router.push(`/tasks/${task.id}`)} />
+          ))
+        ) : (
+          <EmptyState icon="checkmark-circle-outline" message="No tasks in progress" />
+        )}
       </View>
 
       <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <View style={styles.sectionTitleRow}>
-            <View style={[styles.sectionDot, { backgroundColor: '#64748b' }]} />
-            <Text style={styles.sectionTitle}>Pending</Text>
-            <View style={[styles.sectionBadge, { backgroundColor: '#f1f5f9' }]}>
-              <Text style={[styles.sectionBadgeText, { color: '#64748b' }]}>{pendingTasks.length}</Text>
-            </View>
-          </View>
-        </View>
-        <View style={styles.taskList}>
-          {pendingTasks.length > 0 ? (
-            pendingTasks.map((task) => (
-              <TouchableOpacity
-                key={task.id}
-                style={styles.taskCard}
-                onPress={() => router.push(`/tasks/${task.id}`)}
-                activeOpacity={0.7}
-              >
-                <View style={styles.taskHeader}>
-                  <View style={styles.taskHeaderLeft}>
-                    <View style={[styles.taskIconBox, { backgroundColor: '#f1f5f9' }]}>
-                      <Ionicons name="ellipse-outline" size={14} color="#64748b" />
-                    </View>
-                    <View>
-                      <Text style={styles.taskTitle}>{task.title}</Text>
-                      <View style={styles.taskPatientRow}>
-                        <Ionicons name="person-outline" size={12} color="#64748b" />
-                        <Text style={styles.taskPatient}>{task.patientName}</Text>
-                      </View>
-                    </View>
-                  </View>
-                  <Ionicons name="chevron-forward" size={18} color="#cbd5e1" />
-                </View>
-                <Text style={styles.taskDescription} numberOfLines={2}>
-                  {task.description}
-                </Text>
-                <View style={styles.taskFooter}>
-                  <View style={[styles.priorityPill, { backgroundColor: getPriorityColor(task.priority) + '15' }]}>
-                    <View style={[styles.priorityDot, { backgroundColor: getPriorityColor(task.priority) }]} />
-                    <Text style={[styles.priorityText, { color: getPriorityColor(task.priority) }]}>
-                      {task.priority}
-                    </Text>
-                  </View>
-                  <View style={styles.dueRow}>
-                    <Ionicons name="time-outline" size={12} color="#94a3b8" />
-                    <Text style={styles.taskDue}>
-                      {new Date(task.dueDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </Text>
-                  </View>
-                </View>
-              </TouchableOpacity>
-            ))
-          ) : (
-            <View style={styles.emptyState}>
-              <Ionicons name="checkmark-done-circle" size={36} color="#16a34a" />
-              <Text style={styles.emptyTextSuccess}>All tasks completed!</Text>
-            </View>
-          )}
-        </View>
+        <SectionHeader title="Pending" count={pendingTasks.length} />
+        {pendingTasks.length > 0 ? (
+          pendingTasks.map((task) => (
+            <TaskCard key={task.id} task={task} onPress={() => router.push(`/tasks/${task.id}`)} />
+          ))
+        ) : (
+          <EmptyState icon="checkmark-done-circle-outline" message="All tasks completed!" tone="success" />
+        )}
       </View>
 
       <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <View style={styles.sectionTitleRow}>
-            <View style={[styles.sectionDot, { backgroundColor: '#16a34a' }]} />
-            <Text style={styles.sectionTitle}>Completed</Text>
-            <View style={[styles.sectionBadge, { backgroundColor: '#dcfce7' }]}>
-              <Text style={[styles.sectionBadgeText, { color: '#16a34a' }]}>{completedTasks.length}</Text>
-            </View>
-          </View>
-        </View>
-        <View style={styles.taskList}>
-          {completedTasks.length > 0 ? (
-            completedTasks.slice(0, 2).map((task) => (
-              <TouchableOpacity
-                key={task.id}
-                style={[styles.taskCard, styles.taskCardCompleted]}
-                onPress={() => router.push(`/tasks/${task.id}`)}
-                activeOpacity={0.7}
-              >
-                <View style={styles.taskHeader}>
-                  <View style={styles.taskHeaderLeft}>
-                    <View style={[styles.taskIconBox, { backgroundColor: '#dcfce7' }]}>
-                      <Ionicons name="checkmark" size={14} color="#16a34a" />
-                    </View>
-                    <View>
-                      <Text style={[styles.taskTitle, styles.taskTitleCompleted]}>{task.title}</Text>
-                      <View style={styles.taskPatientRow}>
-                        <Ionicons name="person-outline" size={12} color="#94a3b8" />
-                        <Text style={[styles.taskPatient, styles.taskPatientCompleted]}>{task.patientName}</Text>
-                      </View>
-                    </View>
-                  </View>
-                  <Ionicons name="chevron-forward" size={18} color="#cbd5e1" />
-                </View>
-              </TouchableOpacity>
+        <SectionHeader title="Completed" count={completedTasks.length} />
+        {completedTasks.length > 0 ? (
+          completedTasks
+            .slice(0, 2)
+            .map((task) => (
+              <TaskCard key={task.id} task={task} onPress={() => router.push(`/tasks/${task.id}`)} />
             ))
-          ) : (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyText}>No completed tasks yet</Text>
-            </View>
-          )}
-        </View>
+        ) : (
+          <EmptyState message="No completed tasks yet" />
+        )}
       </View>
     </ScrollView>
   );
@@ -243,172 +151,85 @@ export default function TasksScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: Palette.background,
   },
   content: {
-    padding: 16,
+    padding: Spacing.lg,
     paddingBottom: 32,
   },
-  header: {
-    backgroundColor: '#fff',
-    borderRadius: 24,
-    padding: 20,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 2,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  headerTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  headerBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: primaryColor + '15',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 20,
-    alignSelf: 'flex-start',
-    marginBottom: 8,
-  },
-  headerBadgeText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: primaryColor,
-    marginLeft: 4,
-  },
-  headerIconBox: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: primaryColor + '15',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  title: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: '#0f172a',
-  },
-  subtitle: {
-    fontSize: 13,
-    color: '#64748b',
-    marginTop: 4,
+  pressedCard: {
+    opacity: 0.85,
+    transform: [{ scale: 0.99 }],
   },
   quickLinks: {
     flexDirection: 'row',
-    marginBottom: 20,
-    gap: 10,
+    marginBottom: Spacing.xxl,
+    gap: Spacing.md,
   },
   quickLink: {
     flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 14,
+    backgroundColor: Palette.surface,
+    borderRadius: Radius.lg,
+    paddingVertical: Spacing.md,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: Palette.border,
+    ...Shadow.card,
   },
   quickLinkIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+    width: 38,
+    height: 38,
+    borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   quickLinkText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#334155',
+    color: Palette.text,
   },
   section: {
-    marginBottom: 20,
-  },
-  sectionHeader: {
-    marginBottom: 10,
-  },
-  sectionTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  sectionDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    marginRight: 8,
-  },
-  sectionTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#0f172a',
-    marginRight: 8,
-  },
-  sectionBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  sectionBadgeText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  taskList: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 2,
+    marginBottom: Spacing.xxl,
   },
   taskCard: {
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 10,
+    backgroundColor: Palette.surface,
+    borderRadius: Radius.lg,
+    padding: Spacing.lg,
+    marginBottom: Spacing.sm + 2,
     borderWidth: 1,
-    borderColor: '#f1f5f9',
+    borderColor: Palette.border,
+    ...Shadow.card,
   },
   taskCardCompleted: {
-    opacity: 0.7,
+    opacity: 0.65,
   },
   taskHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
   },
   taskHeaderLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
+    marginRight: Spacing.sm,
+  },
+  taskHeaderText: {
+    flex: 1,
   },
   taskIconBox: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
+    width: 34,
+    height: 34,
+    borderRadius: Radius.sm + 2,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    marginRight: Spacing.md,
   },
-  taskTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#1e293b',
-  },
+  taskTitle: Type.itemTitle,
   taskTitleCompleted: {
     textDecorationLine: 'line-through',
-    color: '#94a3b8',
+    color: Palette.textMuted,
   },
   taskPatientRow: {
     flexDirection: 'row',
@@ -417,17 +238,15 @@ const styles = StyleSheet.create({
   },
   taskPatient: {
     fontSize: 12,
-    color: '#64748b',
+    color: Palette.textSecondary,
     marginLeft: 4,
-  },
-  taskPatientCompleted: {
-    color: '#94a3b8',
   },
   taskDescription: {
     fontSize: 13,
-    color: '#64748b',
-    marginBottom: 10,
-    lineHeight: 18,
+    color: Palette.textSecondary,
+    lineHeight: 19,
+    marginTop: Spacing.sm,
+    marginBottom: Spacing.md,
   },
   taskFooter: {
     flexDirection: 'row',
@@ -439,13 +258,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 12,
+    borderRadius: Radius.pill,
   },
   priorityDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    marginRight: 6,
+    marginRight: 5,
   },
   priorityText: {
     fontSize: 11,
@@ -458,22 +277,7 @@ const styles = StyleSheet.create({
   },
   taskDue: {
     fontSize: 12,
-    color: '#94a3b8',
+    color: Palette.textMuted,
     marginLeft: 4,
-  },
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: 20,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: '#94a3b8',
-    marginTop: 8,
-  },
-  emptyTextSuccess: {
-    fontSize: 14,
-    color: '#16a34a',
-    marginTop: 8,
-    fontWeight: '600',
   },
 });

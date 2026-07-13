@@ -1,5 +1,5 @@
 import { SignJWT, jwtVerify } from 'jose';
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import type { UserRole } from '../supabase/server';
 
 export const SESSION_COOKIE = 'icare_session';
@@ -78,8 +78,16 @@ export async function clearSessionCookie(): Promise<void> {
 export async function readSession(): Promise<SessionPayload | null> {
   const store = await cookies();
   const token = store.get(SESSION_COOKIE)?.value;
-  if (!token) return null;
-  return verifySession(token);
+  if (token) return verifySession(token);
+
+  // Mobile clients (Expo app) send the same JWT the login route returns
+  // as `sessionToken`, in an Authorization bearer header instead of a cookie.
+  const headerStore = await headers();
+  const authorization = headerStore.get('authorization');
+  if (authorization?.startsWith('Bearer ')) {
+    return verifySession(authorization.slice('Bearer '.length));
+  }
+  return null;
 }
 
 export interface GoogleOnboardingPayload {
