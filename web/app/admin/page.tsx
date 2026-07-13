@@ -336,7 +336,7 @@ export default async function AdminDashboard() {
         <div className="bg-white rounded-2xl p-4 md:p-6 shadow-sm border border-gray-100 hover:shadow-lg hover:border-[#1B6B7B]/30 transition-all duration-300">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-gray-900">Recent Activity</h3>
-            <Link href="/admin/reports" className="text-xs text-[#1B6B7B] hover:underline">Audit trail</Link>
+            <Link href="/admin/audit" className="text-xs text-[#1B6B7B] hover:underline">Audit trail</Link>
           </div>
           {activity.length === 0 ? (
             <p className="text-sm text-gray-400 py-6 text-center">No recorded activity yet</p>
