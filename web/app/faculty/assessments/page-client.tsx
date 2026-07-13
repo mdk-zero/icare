@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faPlus,
@@ -12,8 +13,6 @@ import {
   faPen,
   faGlobe,
   faEyeSlash,
-  faChevronDown,
-  faCheck,
 } from "@fortawesome/free-solid-svg-icons";
 import PageHeader from "../../components/PageHeader";
 
@@ -44,26 +43,10 @@ interface Assessment {
   category: string;
   time_limit_seconds: number | null;
   is_published: boolean;
+  target_sections: string[] | null;
   question_count: number;
   student_count: number;
   created_at: string;
-}
-
-interface AssessmentQuestion {
-  id: string;
-  position: number;
-  content: string;
-  options: string[];
-  correct_index: number;
-  question_type: string;
-  points: number;
-  explanation: string;
-  competency_ids: string[];
-}
-
-interface Competency {
-  id: string;
-  name: string;
 }
 
 interface Student {
@@ -78,31 +61,12 @@ const emptyAssessmentForm = {
   difficulty: "beginner" as Difficulty,
   category: "General" as (typeof CATEGORIES)[number],
   time_limit_minutes: "",
-};
-
-type QuestionFormData = {
-  content: string;
-  options: string[];
-  correct_index: number;
-  question_type: string;
-  points: number;
-  explanation: string;
-  competency_ids: string[];
-};
-
-const emptyQuestionForm: QuestionFormData = {
-  content: "",
-  options: [""],
-  correct_index: 0,
-  question_type: "multiple_choice",
-  points: 1,
-  explanation: "",
-  competency_ids: [] as string[],
+  target_sections: [] as string[],
 };
 
 export default function FacultyAssessmentsClient() {
+  const router = useRouter();
   const [assessments, setAssessments] = useState<Assessment[]>([]);
-  const [competencies, setCompetencies] = useState<Competency[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -112,18 +76,6 @@ export default function FacultyAssessmentsClient() {
   const [showAssessmentModal, setShowAssessmentModal] = useState(false);
   const [editingAssessment, setEditingAssessment] = useState<Assessment | null>(null);
   const [assessmentForm, setAssessmentForm] = useState(emptyAssessmentForm);
-
-  // expanded question editor
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [questions, setQuestions] = useState<AssessmentQuestion[]>([]);
-  const [questionsLoading, setQuestionsLoading] = useState(false);
-  const [questionForm, setQuestionForm] = useState(emptyQuestionForm);
-  const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null);
-
-  // Google Forms-like question builder state
-  const [questionBuilders, setQuestionBuilders] = useState<Record<string, QuestionFormData>>({});
-  const [savingQuestions, setSavingQuestions] = useState<Record<string, boolean>>({});
-  const [newQuestionOrder, setNewQuestionOrder] = useState<number>(0);
 
   // assign modal
   const [assignTarget, setAssignTarget] = useState<Assessment | null>(null);
@@ -144,71 +96,16 @@ export default function FacultyAssessmentsClient() {
   }, []);
 
   useEffect(() => {
-    const initialize = async () => {
-      try {
-        const [, compRes, studRes] = await Promise.all([
-          loadAssessments(),
-          fetch("/api/competencies", { credentials: "include" }),
-          fetch("/api/faculty/students", { credentials: "include" }),
-        ]);
-        if (compRes.ok) {
-          const j = (await compRes.json()) as { competencies: Competency[] };
-          setCompetencies(j.competencies ?? []);
-        }
-        if (studRes.ok) {
-          const j = (await studRes.json()) as { students: Student[] };
+    Promise.all([
+      loadAssessments(),
+      fetch("/api/faculty/students", { credentials: "include" }).then(async (r) => {
+        if (r.ok) {
+          const j = (await r.json()) as { students: Student[] };
           setStudents(j.students ?? []);
         }
-      } finally {
-        setLoading(false);
-      }
-    };
-    void initialize();
+      }),
+    ]).finally(() => setLoading(false));
   }, [loadAssessments]);
-
-  const loadQuestions = useCallback(async (assessmentId: string) => {
-    setQuestionsLoading(true);
-    const res = await fetch(`/api/faculty/assessments/${assessmentId}`, {
-      credentials: "include",
-    });
-    if (res.ok) {
-      const json = (await res.json()) as {
-        assessment: { questions: AssessmentQuestion[] };
-      };
-      const loaded = json.assessment.questions ?? [];
-      setQuestions(loaded);
-      const builders: Record<string, QuestionFormData> = {};
-      for (const q of loaded) {
-        builders[q.id] = {
-          content: q.content,
-          options: q.options.length >= 2 ? [...q.options] : ["", ""],
-          correct_index: q.correct_index,
-          question_type: q.question_type || "multiple_choice",
-          points: q.points || 1,
-          explanation: q.explanation,
-          competency_ids: [...q.competency_ids],
-        };
-      }
-      setQuestionBuilders(builders);
-      setQuestionForm(emptyQuestionForm);
-      setEditingQuestionId(null);
-    }
-    setQuestionsLoading(false);
-  }, []);
-
-  const toggleExpand = (assessment: Assessment) => {
-    if (expandedId === assessment.id) {
-      setExpandedId(null);
-      return;
-    }
-    setExpandedId(assessment.id);
-    setQuestions([]);
-    setQuestionForm(emptyQuestionForm);
-    setEditingQuestionId(null);
-    setQuestionBuilders({});
-    setNewQuestionOrder(0);
-    loadQuestions(assessment.id);
-  };
 
   // ---------- assessment CRUD ----------
 
@@ -228,6 +125,7 @@ export default function FacultyAssessmentsClient() {
         ? a.category
         : "General") as (typeof CATEGORIES)[number],
       time_limit_minutes: a.time_limit_seconds ? String(Math.round(a.time_limit_seconds / 60)) : "",
+      target_sections: a.target_sections ?? [],
     });
     setShowAssessmentModal(true);
   };
@@ -248,6 +146,10 @@ export default function FacultyAssessmentsClient() {
         time_limit_seconds: assessmentForm.time_limit_minutes
           ? Number(assessmentForm.time_limit_minutes) * 60
           : null,
+        target_sections:
+          assessmentForm.target_sections.length > 0
+            ? assessmentForm.target_sections
+            : null,
       };
       const res = await fetch(`/api/faculty/assessments/${editingAssessment.id}`, {
         method: "PATCH",
@@ -280,6 +182,10 @@ export default function FacultyAssessmentsClient() {
           time_limit_seconds: assessmentForm.time_limit_minutes
             ? Number(assessmentForm.time_limit_minutes) * 60
             : null,
+          target_sections:
+            assessmentForm.target_sections.length > 0
+              ? assessmentForm.target_sections
+              : null,
         }),
       });
 
@@ -335,275 +241,8 @@ export default function FacultyAssessmentsClient() {
       flash("Failed to delete assessment");
       return;
     }
-    if (expandedId === a.id) setExpandedId(null);
     flash("Assessment deleted");
     loadAssessments();
-  };
-
-  // ---------- question CRUD ----------
-
-  const startEditQuestion = (q: AssessmentQuestion) => {
-    setEditingQuestionId(q.id);
-    setQuestionForm({
-      content: q.content,
-      options: q.options.length >= 2 ? [...q.options] : ["", ""],
-      correct_index: q.correct_index,
-      explanation: q.explanation,
-      competency_ids: [...q.competency_ids],
-      question_type: q.question_type || "multiple_choice",
-      points: q.points || 1,
-    });
-  };
-
-  const saveQuestion = async () => {
-    if (!expandedId) return;
-    const filledOptions = questionForm.options.filter((o) => o.trim().length > 0);
-    if (!questionForm.content.trim() || filledOptions.length < 2) {
-      flash("A question needs content and at least two options");
-      return;
-    }
-    if (questionForm.correct_index >= filledOptions.length) {
-      flash("Mark one of the filled options as correct");
-      return;
-    }
-    setBusy(true);
-    const payload = {
-      content: questionForm.content,
-      options: filledOptions,
-      correct_index: questionForm.correct_index,
-      explanation: questionForm.explanation,
-      competency_ids: questionForm.competency_ids,
-    };
-    const res = editingQuestionId
-      ? await fetch(`/api/faculty/questions/${editingQuestionId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify(payload),
-        })
-      : await fetch(`/api/faculty/assessments/${expandedId}/questions`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify(payload),
-        });
-    setBusy(false);
-    if (!res.ok) {
-      const j = (await res.json()) as { error?: string };
-      flash(j.error ?? "Failed to save question");
-      return;
-    }
-    setQuestionForm(emptyQuestionForm);
-    setEditingQuestionId(null);
-    flash(editingQuestionId ? "Question updated" : "Question added");
-    loadQuestions(expandedId);
-    loadAssessments();
-  };
-
-  const deleteQuestion = async (q: AssessmentQuestion) => {
-    if (!expandedId) return;
-    if (!window.confirm("Delete this question?")) return;
-    setBusy(true);
-    const res = await fetch(`/api/faculty/questions/${q.id}`, {
-      method: "DELETE",
-      credentials: "include",
-    });
-    setBusy(false);
-    if (!res.ok) {
-      flash("Failed to delete question");
-      return;
-    }
-    if (editingQuestionId === q.id) {
-      setEditingQuestionId(null);
-      setQuestionForm(emptyQuestionForm);
-    }
-    loadQuestions(expandedId);
-    loadAssessments();
-  };
-
-  // ---------- Google Forms-like question builder ----------
-
-  const updateBuilderField = (qId: string, field: keyof QuestionFormData, value: unknown) => {
-    setQuestionBuilders((prev) => ({
-      ...prev,
-      [qId]: { ...prev[qId], [field]: value },
-    }));
-  };
-
-  const updateBuilderOption = (qId: string, index: number, value: string) => {
-    setQuestionBuilders((prev) => {
-      const form = prev[qId];
-      if (!form) return prev;
-      const options = [...form.options];
-      options[index] = value;
-      return { ...prev, [qId]: { ...form, options } };
-    });
-  };
-
-  const addBuilderOption = (qId: string) => {
-    setQuestionBuilders((prev) => {
-      const form = prev[qId];
-      if (!form) return prev;
-      return { ...prev, [qId]: { ...form, options: [...form.options, ""] } };
-    });
-  };
-
-  const removeBuilderOption = (qId: string, index: number) => {
-    setQuestionBuilders((prev) => {
-      const form = prev[qId];
-      if (!form) return prev;
-      const options = form.options.filter((_, i) => i !== index);
-      const correct_index = Math.min(form.correct_index, options.length - 1);
-      return { ...prev, [qId]: { ...form, options, correct_index } };
-    });
-  };
-
-  const setBuilderCorrect = (qId: string, index: number) => {
-    setQuestionBuilders((prev) => ({
-      ...prev,
-      [qId]: { ...prev[qId], correct_index: index },
-    }));
-  };
-
-  const handleSaveQuestion = async (qId: string) => {
-    const form = questionBuilders[qId];
-    if (!form) return;
-
-    const filledOptions = form.options.filter((o) => o.trim().length > 0);
-    if (!form.content.trim() || filledOptions.length < 2) {
-      flash("Question needs content and at least two options");
-      return;
-    }
-    if (form.correct_index >= filledOptions.length) {
-      flash("Mark one of the filled options as correct");
-      return;
-    }
-
-    setSavingQuestions((prev) => ({ ...prev, [qId]: true }));
-
-    const payload = {
-      content: form.content,
-      options: filledOptions,
-      correct_index: form.correct_index,
-      question_type: form.question_type,
-      points: form.points,
-      explanation: form.explanation,
-      competency_ids: form.competency_ids,
-    };
-
-    const isNew = qId.startsWith("new_");
-    const res = isNew
-      ? await fetch(`/api/faculty/assessments/${expandedId}/questions`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify(payload),
-        })
-      : await fetch(`/api/faculty/questions/${qId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify(payload),
-        });
-
-    setSavingQuestions((prev) => ({ ...prev, [qId]: false }));
-
-    if (!res.ok) {
-      const j = (await res.json()) as { error?: string };
-      flash(j.error ?? "Failed to save question");
-      return;
-    }
-
-    if (isNew) {
-      const json = (await res.json()) as { question: AssessmentQuestion };
-      setQuestions((prev) =>
-        prev.map((q) => (q.id === qId ? { ...json.question, competency_ids: form.competency_ids } : q)),
-      );
-      setQuestionBuilders((prev) => {
-        const { [qId]: data, ...rest } = prev;
-        return { ...rest, [json.question.id]: data };
-      });
-    }
-
-    flash(isNew ? "Question added" : "Question updated");
-    if (!isNew) loadQuestions(expandedId!);
-  };
-
-  const handleDeleteQuestion = async (qId: string) => {
-    if (qId.startsWith("new_")) {
-      setQuestions((prev) => prev.filter((q) => q.id !== qId));
-      setQuestionBuilders((prev) => {
-        const { [qId]: _, ...rest } = prev;
-        return rest;
-      });
-      return;
-    }
-    if (!window.confirm("Delete this question?")) return;
-    setSavingQuestions((prev) => ({ ...prev, [qId]: true }));
-    const res = await fetch(`/api/faculty/questions/${qId}`, {
-      method: "DELETE",
-      credentials: "include",
-    });
-    setSavingQuestions((prev) => ({ ...prev, [qId]: false }));
-    if (!res.ok) {
-      flash("Failed to delete question");
-      return;
-    }
-    setQuestions((prev) => prev.filter((q) => q.id !== qId));
-    setQuestionBuilders((prev) => {
-      const { [qId]: _, ...rest } = prev;
-      return rest;
-    });
-    flash("Question deleted");
-  };
-
-  const handleDuplicateQuestion = (qId: string) => {
-    const form = questionBuilders[qId];
-    if (!form) return;
-    const newId = `new_${newQuestionOrder}`;
-    setNewQuestionOrder((prev) => prev + 1);
-    setQuestions((prev) => {
-      const idx = prev.findIndex((q) => q.id === qId);
-      const newQ: AssessmentQuestion = {
-        id: newId,
-        position: prev.length,
-        content: form.content,
-        options: [...form.options],
-        correct_index: form.correct_index,
-        question_type: form.question_type,
-        points: form.points,
-        explanation: form.explanation,
-        competency_ids: [...form.competency_ids],
-      };
-      const copy = [...prev];
-      copy.splice(idx + 1, 0, newQ);
-      return copy;
-    });
-    setQuestionBuilders((prev) => ({
-      ...prev,
-      [newId]: { ...form },
-    }));
-  };
-
-  const handleAddQuestion = () => {
-    const newId = `new_${newQuestionOrder}`;
-    setNewQuestionOrder((prev) => prev + 1);
-    const newQ: AssessmentQuestion = {
-      id: newId,
-      position: questions.length,
-      content: "",
-      options: ["", ""],
-      correct_index: 0,
-      question_type: "multiple_choice",
-      points: 1,
-      explanation: "",
-      competency_ids: [],
-    };
-    setQuestions((prev) => [...prev, newQ]);
-    setQuestionBuilders((prev) => ({
-      ...prev,
-      [newId]: { ...emptyQuestionForm, options: ["", ""] },
-    }));
   };
 
   // ---------- assign ----------
@@ -715,6 +354,11 @@ export default function FacultyAssessmentsClient() {
                       {a.time_limit_seconds && (
                         <span>{Math.round(a.time_limit_seconds / 60)} min limit</span>
                       )}
+                      {a.target_sections && a.target_sections.length > 0 && (
+                        <span className="text-xs text-gray-500">
+                          Sections: {a.target_sections.join(", ")}
+                        </span>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
@@ -752,244 +396,16 @@ export default function FacultyAssessmentsClient() {
                       <FontAwesomeIcon icon={faTrash} className="w-4 h-4" />
                     </button>
                     <button
-                      onClick={() => toggleExpand(a)}
+                      onClick={() => router.push(`/faculty/assessments/${a.id}`)}
                       title="Manage questions"
                       className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-[#1B6B7B]/10 text-[#155663] hover:bg-[#1B6B7B]/20 text-sm font-medium"
                     >
                       <FontAwesomeIcon icon={faListCheck} className="w-4 h-4" />
                       Questions
-                      <FontAwesomeIcon
-                        icon={faChevronDown}
-                        className={`w-3 h-3 transition-transform ${
-                          expandedId === a.id ? "rotate-180" : ""
-                        }`}
-                      />
                     </button>
                   </div>
                 </div>
               </div>
-
-              {expandedId === a.id && (
-                <div className="border-t border-gray-100 p-6 space-y-6 bg-gray-50/50 rounded-b-2xl">
-                  {questionsLoading ? (
-                    <div className="flex justify-center py-6">
-                      <FontAwesomeIcon icon={faSpinner} spin className="w-5 h-5 text-[#1B6B7B]" />
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <h4 className="font-semibold text-gray-800">
-                          Questions ({questions.length})
-                        </h4>
-                        <button
-                          onClick={handleAddQuestion}
-                          className="flex items-center gap-2 px-4 py-2 bg-[#1B6B7B] text-white rounded-lg text-sm hover:bg-[#155663] transition-colors font-medium"
-                        >
-                          <FontAwesomeIcon icon={faPlus} className="w-3.5 h-3.5" />
-                          Add Question
-                        </button>
-                      </div>
-
-                      {questions.length === 0 ? (
-                        <div className="bg-white p-8 rounded-xl border border-dashed border-gray-300 text-center text-gray-400 text-sm">
-                          No questions yet. Click "Add Question" to start building.
-                        </div>
-                      ) : (
-                        <div className="space-y-4">
-                          {questions.map((q, i) => {
-                            const form = questionBuilders[q.id];
-                            if (!form) return null;
-                            const saving = savingQuestions[q.id];
-                            const isNew = q.id.startsWith("new_");
-                            return (
-                              <div
-                                key={q.id}
-                                className="bg-white rounded-xl border border-gray-200 shadow-sm"
-                              >
-                                <div className="p-5 space-y-4">
-                                  {/* Question header */}
-                                  <div className="flex items-center justify-between gap-3">
-                                    <div className="flex items-center gap-3">
-                                      <span className="text-sm font-bold text-gray-500 bg-gray-100 w-7 h-7 rounded-full flex items-center justify-center">
-                                        {i + 1}
-                                      </span>
-                                      <select
-                                        value={form.question_type}
-                                        onChange={(e) =>
-                                          updateBuilderField(q.id, "question_type", e.target.value)
-                                        }
-                                        className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30"
-                                      >
-                                        <option value="multiple_choice">Multiple choice</option>
-                                        <option value="true_false">True / False</option>
-                                        <option value="short_answer">Short answer</option>
-                                      </select>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                      <button
-                                        onClick={() => handleDuplicateQuestion(q.id)}
-                                        title="Duplicate"
-                                        className="px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 text-xs font-medium"
-                                      >
-                                        Duplicate
-                                      </button>
-                                      <button
-                                        onClick={() => handleDeleteQuestion(q.id)}
-                                        title="Delete"
-                                        className="p-2 rounded-lg border border-red-200 text-red-500 hover:bg-red-50"
-                                      >
-                                        <FontAwesomeIcon icon={faTrash} className="w-3.5 h-3.5" />
-                                      </button>
-                                    </div>
-                                  </div>
-
-                                  {/* Question text */}
-                                  <textarea
-                                    value={form.content}
-                                    onChange={(e) =>
-                                      updateBuilderField(q.id, "content", e.target.value)
-                                    }
-                                    placeholder="Question text"
-                                    rows={2}
-                                    className={inputClassName}
-                                  />
-
-                                  {/* Options */}
-                                  {form.question_type === "multiple_choice" && (
-                                    <div className="space-y-2">
-                                      {form.options.map((opt, idx) => (
-                                        <div key={idx} className="flex items-center gap-3">
-                                          <button
-                                            onClick={() => setBuilderCorrect(q.id, idx)}
-                                            title={
-                                              idx === form.correct_index
-                                                ? "Correct answer"
-                                                : "Mark as correct"
-                                            }
-                                            className="shrink-0"
-                                          >
-                                            {idx === form.correct_index ? (
-                                              <FontAwesomeIcon
-                                                icon={faCheck}
-                                                className="w-5 h-5 text-green-600"
-                                              />
-                                            ) : (
-                                              <div className="w-5 h-5 rounded-full border-2 border-gray-300" />
-                                            )}
-                                          </button>
-                                          <input
-                                            value={opt}
-                                            onChange={(e) =>
-                                              updateBuilderOption(q.id, idx, e.target.value)
-                                            }
-                                            placeholder={`Option ${idx + 1}`}
-                                            className={inputClassName}
-                                          />
-                                          {form.options.length > 2 && (
-                                            <button
-                                              onClick={() => removeBuilderOption(q.id, idx)}
-                                              className="text-gray-400 hover:text-red-500 shrink-0"
-                                            >
-                                              <FontAwesomeIcon icon={faTimes} className="w-4 h-4" />
-                                            </button>
-                                          )}
-                                        </div>
-                                      ))}
-                                      <button
-                                        onClick={() => addBuilderOption(q.id)}
-                                        className="text-sm text-[#1B6B7B] font-medium hover:underline"
-                                      >
-                                        + Add option
-                                      </button>
-                                    </div>
-                                  )}
-
-                                  {/* True/False */}
-                                  {form.question_type === "true_false" && (
-                                    <div className="space-y-2">
-                                      {["True", "False"].map((label, idx) => (
-                                        <div key={idx} className="flex items-center gap-3">
-                                          <button
-                                            onClick={() => setBuilderCorrect(q.id, idx)}
-                                            className="shrink-0"
-                                          >
-                                            {idx === form.correct_index ? (
-                                              <FontAwesomeIcon
-                                                icon={faCheck}
-                                                className="w-5 h-5 text-green-600"
-                                              />
-                                            ) : (
-                                              <div className="w-5 h-5 rounded-full border-2 border-gray-300" />
-                                            )}
-                                          </button>
-                                          <span className="text-sm text-gray-700">{label}</span>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  )}
-
-                                  {/* Short answer */}
-                                  {form.question_type === "short_answer" && (
-                                    <p className="text-sm text-gray-400 italic">
-                                      Students will type a free-text response. Correct answer
-                                      matching is configured in the answer key.
-                                    </p>
-                                  )}
-
-                                  {/* Answer key row */}
-                                  <div className="flex items-center gap-4 pt-2 border-t border-gray-100">
-                                    <div className="flex items-center gap-2">
-                                      <label className="text-sm text-gray-600 font-medium">
-                                        Points
-                                      </label>
-                                      <input
-                                        type="number"
-                                        min={1}
-                                        value={form.points}
-                                        onChange={(e) =>
-                                          updateBuilderField(
-                                            q.id,
-                                            "points",
-                                            Math.max(1, Number(e.target.value)),
-                                          )
-                                        }
-                                        className="w-20 px-3 py-1.5 border border-gray-300 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30"
-                                      />
-                                    </div>
-                                    {form.explanation && (
-                                      <span className="text-xs text-gray-400">
-                                        Has answer explanation
-                                      </span>
-                                    )}
-                                  </div>
-
-                                  {/* Save button */}
-                                  <div className="flex justify-end">
-                                    <button
-                                      onClick={() => handleSaveQuestion(q.id)}
-                                      disabled={saving}
-                                      className="px-6 py-2 bg-[#1B6B7B] text-white rounded-lg text-sm font-medium hover:bg-[#155663] disabled:opacity-60 transition-colors"
-                                    >
-                                      {saving ? (
-                                        <span className="flex items-center gap-2">
-                                          <FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" />
-                                          Saving…
-                                        </span>
-                                      ) : (
-                                        "Save"
-                                      )}
-                                    </button>
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
           ))}
         </div>
@@ -1080,6 +496,32 @@ export default function FacultyAssessmentsClient() {
                 placeholder="No limit"
                 className={inputClassName}
               />
+            </div>
+            <div>
+              <label className={labelClassName}>Visible to sections</label>
+              <div className="flex gap-4">
+                {["A", "B", "C"].map((s) => (
+                  <label key={s} className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={assessmentForm.target_sections.includes(s)}
+                      onChange={(e) =>
+                        setAssessmentForm((f) => ({
+                          ...f,
+                          target_sections: e.target.checked
+                            ? [...f.target_sections, s]
+                            : f.target_sections.filter((x) => x !== s),
+                        }))
+                      }
+                      className="w-4 h-4 accent-[#1B6B7B]"
+                    />
+                    Section {s}
+                  </label>
+                ))}
+              </div>
+              <p className="text-xs text-gray-400 mt-1">
+                Leave all unchecked to make visible to all sections.
+              </p>
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <button

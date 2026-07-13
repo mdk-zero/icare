@@ -35,7 +35,8 @@ insert into public.competency_areas (name, description) values
   ('Research', 'Applies evidence-based practice and research findings'),
   ('Records Management', 'Documents care accurately and maintains patient records'),
   ('Communication', 'Communicates effectively with patients, families, and the health team'),
-  ('Collaboration and Teamwork', 'Works effectively within inter- and intra-professional teams')
+  ('Collaboration and Teamwork', 'Works effectively within inter- and intra-professional teams'),
+  ('Pharmacology', 'Knowledge of drug actions, interactions, dosages, and safe medication administration')
 on conflict (name) do nothing;
 
 -- -----------------------------------------------------------------

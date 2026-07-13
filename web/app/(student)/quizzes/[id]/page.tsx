@@ -127,6 +127,32 @@ export default function TakeQuizPage() {
           </p>
         </div>
 
+        {result.criteria_breakdown && result.criteria_breakdown.length > 0 && (
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+            <h3 className="font-semibold text-gray-800 mb-4">Competency Breakdown</h3>
+            <div className="space-y-3">
+              {result.criteria_breakdown.map((cb) => (
+                <div key={cb.criteria_id}>
+                  <div className="flex items-center justify-between text-sm mb-1">
+                    <span className="text-gray-700">{cb.criteria_name}</span>
+                    <span className="font-medium text-gray-800">
+                      {cb.score}% ({cb.correct}/{cb.total}) · {cb.weight}% weight
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-100 rounded-full h-2.5">
+                    <div
+                      className={`h-2.5 rounded-full transition-all ${
+                        cb.score >= 75 ? "bg-emerald-500" : cb.score >= 50 ? "bg-amber-500" : "bg-red-500"
+                      }`}
+                      style={{ width: `${cb.score}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="space-y-4">
           {result.results.map((r, i) => {
             const q = questionById.get(r.question_id);

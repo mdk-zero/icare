@@ -23,7 +23,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
     const { data: assessment, error } = await supabase
       .from('assessments')
       .select(
-        'id, created_by, title, description, difficulty, category, time_limit_seconds, is_published, is_ai_generated, created_at, updated_at, questions(id, position, content, options, correct_index, question_type, points, explanation, difficulty, question_competencies(competency_id))',
+        'id, created_by, title, description, difficulty, category, time_limit_seconds, is_published, is_ai_generated, target_sections, created_at, updated_at, questions(id, position, content, options, correct_index, question_type, points, explanation, difficulty, question_competencies(competency_id))',
       )
       .eq('id', id)
       .single();
@@ -75,7 +75,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const { title, description, difficulty, category, time_limit_seconds, is_published } =
+  const { title, description, difficulty, category, time_limit_seconds, is_published, target_sections } =
     body as {
       title?: unknown;
       description?: unknown;
@@ -83,6 +83,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       category?: unknown;
       time_limit_seconds?: unknown;
       is_published?: unknown;
+      target_sections?: unknown;
     };
 
   const updates: Record<string, unknown> = {};
@@ -114,6 +115,12 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Invalid is_published' }, { status: 400 });
     }
     updates.is_published = is_published;
+  }
+  if (target_sections !== undefined) {
+    if (!Array.isArray(target_sections)) {
+      return NextResponse.json({ error: 'Invalid target_sections' }, { status: 400 });
+    }
+    updates.target_sections = target_sections.length > 0 ? target_sections : null;
   }
 
   if (Object.keys(updates).length === 0) {

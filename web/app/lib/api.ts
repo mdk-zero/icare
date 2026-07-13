@@ -79,11 +79,22 @@ export interface StartedAttempt {
   questions: AttemptQuestion[];
 }
 
+export interface CriteriaBreakdown {
+  criteria_id: string;
+  criteria_name: string;
+  weight: number;
+  correct: number;
+  total: number;
+  score: number;
+  weighted_score: number;
+}
+
 export interface AttemptResult {
   score: number;
   correct: number;
   total: number;
   time_taken_seconds: number;
+  criteria_breakdown?: CriteriaBreakdown[];
   results: {
     question_id: string;
     selected_index: number | null;
