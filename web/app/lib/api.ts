@@ -1077,8 +1077,10 @@ export interface AuditLog {
 }
 
 export interface AuditLogInsert {
-  faculty_id: string;
-  faculty_name: string;
+  /** Ignored by the server — the actor is derived from the session. */
+  faculty_id?: string;
+  /** Ignored by the server — the actor is derived from the session. */
+  faculty_name?: string;
   tab: string;
   action: string;
   details: string;

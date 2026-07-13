@@ -1,9 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { logAudit } from '@/app/lib/audit';
 
-// The audit trail is append-only (manuscript F7: unalterable activity
-// logging) — reads and inserts only, no update or delete surface.
+// Backed by the canonical append-only audit_logs table (manuscript F7) —
+// reads and inserts only, no update or delete surface. Faculty see their
+// own activity; admins see the full trail.
+
+interface AuditLogRow {
+  id: string;
+  actor_id: string | null;
+  action: string;
+  entity_type: string | null;
+  entity_id: string | null;
+  details: Record<string, unknown>;
+  created_at: string;
+  actor: { name: string } | null;
+}
+
+/** Human-readable summary for the page's Details column. */
+function detailsText(details: Record<string, unknown>): string {
+  if (typeof details.message === 'string') return details.message;
+  const parts = Object.entries(details)
+    .filter(([key, value]) => key !== 'migrated_from' && key !== 'actor_name' && value != null)
+    .map(([key, value]) => `${key}: ${typeof value === 'object' ? JSON.stringify(value) : String(value)}`);
+  return parts.join(', ');
+}
 
 export async function GET(request: NextRequest) {
   const session = await readSession();
@@ -18,21 +40,37 @@ export async function GET(request: NextRequest) {
     const action = searchParams.get('action');
 
     let query = supabase
-      .from('faculty_audit_logs')
-      .select('*')
+      .from('audit_logs')
+      .select('id, actor_id, action, entity_type, entity_id, details, created_at, actor:users(name)')
       .order('created_at', { ascending: false })
       .limit(200);
 
+    if (session.role === 'faculty') {
+      query = query.eq('actor_id', session.uid);
+    }
     if (action && action !== 'all') {
       query = query.ilike('action', `%${action}%`);
     }
 
-    const { data: logs, error } = await query;
+    const { data, error } = await query;
 
     if (error) {
       console.error('Failed to fetch audit logs', error);
       return NextResponse.json({ error: 'Unable to fetch audit logs' }, { status: 500 });
     }
+
+    const logs = ((data ?? []) as unknown as AuditLogRow[]).map((row) => ({
+      id: row.id,
+      faculty_id: row.actor_id ?? '',
+      faculty_name:
+        row.actor?.name ??
+        (typeof row.details.actor_name === 'string' ? row.details.actor_name : 'System'),
+      tab: row.entity_type ?? 'general',
+      action: row.action,
+      details: detailsText(row.details),
+      target_id: row.entity_id,
+      created_at: row.created_at,
+    }));
 
     return NextResponse.json({ logs });
   } catch (err) {
@@ -55,57 +93,37 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const { faculty_id, faculty_name, tab, action, details, target_type, target_id, metadata } =
-    body as {
-      faculty_id?: unknown;
-      faculty_name?: unknown;
-      tab?: unknown;
-      action?: unknown;
-      details?: unknown;
-      target_type?: unknown;
-      target_id?: unknown;
-      metadata?: unknown;
-    };
+  // The actor comes from the session — client-supplied identity is ignored.
+  const { tab, action, details, target_type, target_id, metadata } = body as {
+    tab?: unknown;
+    action?: unknown;
+    details?: unknown;
+    target_type?: unknown;
+    target_id?: unknown;
+    metadata?: unknown;
+  };
 
-  if (
-    typeof faculty_id !== 'string' ||
-    typeof faculty_name !== 'string' ||
-    typeof tab !== 'string' ||
-    typeof action !== 'string' ||
-    typeof details !== 'string'
-  ) {
+  if (typeof tab !== 'string' || typeof action !== 'string' || typeof details !== 'string') {
     return NextResponse.json(
-      { error: 'faculty_id, faculty_name, tab, action, and details are required' },
+      { error: 'tab, action, and details are required' },
       { status: 400 },
     );
   }
 
-  try {
-    const supabase = getSupabaseAdmin();
+  await logAudit(
+    session,
+    {
+      action,
+      entityType: tab,
+      entityId: typeof target_id === 'string' ? target_id : undefined,
+      details: {
+        message: details,
+        ...(typeof target_type === 'string' ? { target_type } : {}),
+        ...(metadata && typeof metadata === 'object' ? (metadata as Record<string, unknown>) : {}),
+      },
+    },
+    request,
+  );
 
-    const { data: log, error } = await supabase
-      .from('faculty_audit_logs')
-      .insert({
-        faculty_id,
-        faculty_name,
-        tab,
-        action,
-        details,
-        target_type: target_type ?? null,
-        target_id: target_id ?? null,
-        metadata: metadata ?? {},
-      })
-      .select('*')
-      .single();
-
-    if (error) {
-      console.error('Failed to insert audit log', error);
-      return NextResponse.json({ error: 'Unable to create audit log' }, { status: 500 });
-    }
-
-    return NextResponse.json({ log }, { status: 201 });
-  } catch (err) {
-    console.error('Create audit log failed', err);
-    return NextResponse.json({ error: 'Unable to create audit log' }, { status: 500 });
-  }
+  return NextResponse.json({ success: true }, { status: 201 });
 }
