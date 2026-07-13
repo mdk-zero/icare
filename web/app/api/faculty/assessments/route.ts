@@ -29,7 +29,7 @@ export async function GET() {
     const { data, error } = await supabase
       .from('assessments')
       .select(
-        'id, created_by, title, description, difficulty, category, time_limit_seconds, is_published, is_ai_generated, created_at, updated_at, questions(count), assessment_assignments(count)',
+        'id, created_by, title, description, difficulty, category, time_limit_seconds, is_published, is_ai_generated, target_sections, created_at, updated_at, questions(count), assessment_assignments(count)',
       )
       .order('created_at', { ascending: false })
       .limit(500);
@@ -49,6 +49,7 @@ export async function GET() {
       time_limit_seconds: a.time_limit_seconds,
       is_published: a.is_published,
       is_ai_generated: a.is_ai_generated,
+      target_sections: a.target_sections,
       created_at: a.created_at,
       updated_at: a.updated_at,
       question_count: Number(
@@ -81,12 +82,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const { title, description, difficulty, category, time_limit_seconds } = body as {
+  const { title, description, difficulty, category, time_limit_seconds, target_sections } = body as {
     title?: unknown;
     description?: unknown;
     difficulty?: unknown;
     category?: unknown;
     time_limit_seconds?: unknown;
+    target_sections?: unknown;
   };
 
   if (typeof title !== 'string' || title.trim().length === 0) {
@@ -117,6 +119,7 @@ export async function POST(request: NextRequest) {
         difficulty: difficulty as (typeof validDifficulties)[number],
         category: category as (typeof validCategories)[number],
         time_limit_seconds: timeLimit,
+        target_sections: Array.isArray(target_sections) ? target_sections : null,
       })
       .select()
       .single();

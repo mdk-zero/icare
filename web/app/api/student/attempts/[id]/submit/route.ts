@@ -95,6 +95,77 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     const correctCount = graded.filter((g) => g.is_correct).length;
     const score = Math.round((correctCount / questions.length) * 10000) / 100;
+
+    // ---------- weighted criteria scoring ----------
+    let criteriaBreakdown: {
+      criteria_id: string;
+      criteria_name: string;
+      weight: number;
+      correct: number;
+      total: number;
+      score: number;
+      weighted_score: number;
+    }[] = [];
+
+    const [criteriaResult, qCompResult] = await Promise.all([
+      supabase
+        .from('assessment_criteria')
+        .select('id, name, weight, competency_id')
+        .eq('assessment_id', attempt.assessment_id)
+        .order('sort_order', { ascending: true }),
+      supabase
+        .from('question_competencies')
+        .select('question_id, competency_id'),
+    ]);
+
+    const assessmentCriteria = criteriaResult.data ?? [];
+    const questionCompetencies = qCompResult.data ?? [];
+
+    if (assessmentCriteria.length > 0) {
+      const compByQuestion = new Map<string, string[]>();
+      for (const qc of questionCompetencies) {
+        const existing = compByQuestion.get(qc.question_id) ?? [];
+        existing.push(qc.competency_id);
+        compByQuestion.set(qc.question_id, existing);
+      }
+
+      criteriaBreakdown = assessmentCriteria.map((c) => {
+        const qIds = questions
+          .filter((q) => (compByQuestion.get(q.id) ?? []).includes(c.competency_id))
+          .map((q) => q.id);
+
+        const total = qIds.length;
+        const correct = graded.filter((g) => qIds.includes(g.question_id) && g.is_correct).length;
+        const pct = total > 0 ? Math.round((correct / total) * 10000) / 100 : 0;
+
+        return {
+          criteria_id: c.id,
+          criteria_name: c.name,
+          weight: c.weight,
+          correct,
+          total,
+          score: pct,
+          weighted_score: Math.round(pct * (c.weight / 100) * 100) / 100,
+        };
+      });
+
+      // Store criteria scores
+      if (criteriaBreakdown.length > 0) {
+        await supabase.from('attempt_criteria_scores').insert(
+          criteriaBreakdown.map((cb) => ({
+            attempt_id: attemptId,
+            criteria_id: cb.criteria_id,
+            competency_id: assessmentCriteria.find((c) => c.id === cb.criteria_id)?.competency_id ?? '',
+            criteria_name: cb.criteria_name,
+            weight: cb.weight,
+            correct: cb.correct,
+            total: cb.total,
+            score: cb.score,
+            weighted_score: cb.weighted_score,
+          })),
+        );
+      }
+    }
     const timeTaken = Math.max(
       0,
       Math.round((Date.now() - new Date(attempt.started_at).getTime()) / 1000),
@@ -157,6 +228,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       correct: correctCount,
       total: questions.length,
       time_taken_seconds: timeTaken,
+      criteria_breakdown: criteriaBreakdown,
       results: graded
         .sort((a, b) => a.position - b.position)
         .map((g) => ({
