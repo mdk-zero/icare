@@ -1,51 +1,37 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import {
   faClipboard,
   faTriangleExclamation,
   faFlask,
-  faTrashCan,
   faFileLines,
   faClipboardCheck,
   faCircleInfo,
-  faSpinner,
   faRightToBracket,
   faRightFromBracket,
 } from "@fortawesome/free-solid-svg-icons";
-import { fetchAuditTrail, clearAuditTrail, AuditLog } from "../../lib/api";
+import { fetchAuditTrail, AuditLog } from "../../lib/api";
 import PageHeader from "../../components/PageHeader";
 
 export default function FacultyAuditClient() {
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionFilter, setActionFilter] = useState("all");
-  const [showClearConfirm, setShowClearConfirm] = useState(false);
-  const [clearing, setClearing] = useState(false);
 
-  useEffect(() => {
-    loadAuditTrail();
-  }, [actionFilter]);
-
-  const handleClearAll = async () => {
-    setClearing(true);
-    const { success } = await clearAuditTrail();
-    if (success) {
-      setAuditLogs([]);
-    }
-    setClearing(false);
-    setShowClearConfirm(false);
-  };
-
-  const loadAuditTrail = async () => {
+  const loadAuditTrail = useCallback(async () => {
     setLoading(true);
     const action = actionFilter !== "all" ? actionFilter : undefined;
     const data = await fetchAuditTrail(action);
     setAuditLogs(data);
     setLoading(false);
-  };
+  }, [actionFilter]);
+
+  useEffect(() => {
+    loadAuditTrail();
+  }, [loadAuditTrail]);
 
   const formatTimestamp = (ts: string) => {
     const d = new Date(ts);
@@ -108,15 +94,6 @@ export default function FacultyAuditClient() {
         }}
         title="Audit Trail"
         subtitle="Complete history of all faculty activities and interactions"
-        action={{
-          icon: (
-            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l-1-1H5l-1 1M3 5h14M7 5V3a1 1 0 011-1h2a1 1 0 011 1v2m0 0h4M9 9v6m6-6v6M5 5v12a2 2 0 002 2h6a2 2 0 002-2V5" />
-            </svg>
-          ),
-          onClick: () => setShowClearConfirm(true),
-          label: "Clear All",
-        }}
       />
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
@@ -169,55 +146,10 @@ export default function FacultyAuditClient() {
           <option value="login">Logins</option>
           <option value="logout">Logouts</option>
         </select>
-        <button
-          onClick={() => setShowClearConfirm(true)}
-          className="px-4 py-2.5 bg-red-50 text-red-600 font-medium rounded-xl hover:bg-red-100 transition-all flex items-center gap-2"
-        >
-          <FontAwesomeIcon icon={faTrashCan} className="w-4 h-4" />
-          Clear All Trails
-        </button>
+        <p className="text-xs text-gray-400">
+          The audit trail is append-only and cannot be edited or deleted.
+        </p>
       </div>
-
-      {showClearConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md border border-gray-100 overflow-hidden">
-            <div className="p-7">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center">
-                  <FontAwesomeIcon icon={faTriangleExclamation} className="w-5 h-5 text-red-600" />
-                </div>
-                <h3 className="text-lg font-semibold text-gray-900">Clear All Audit Trails?</h3>
-              </div>
-              <p className="text-gray-600 text-sm">
-                This will permanently delete all audit log entries. This action cannot be undone.
-              </p>
-            </div>
-            <div className="flex items-center justify-end gap-3 px-7 py-5 border-t border-gray-100 bg-gray-50">
-              <button
-                onClick={() => setShowClearConfirm(false)}
-                disabled={clearing}
-                className="px-4 py-2.5 text-sm font-medium text-gray-600 hover:text-gray-800 bg-white hover:bg-gray-50 rounded-xl transition-all border border-gray-200"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleClearAll}
-                disabled={clearing}
-                className="px-6 py-2.5 bg-red-600 text-white font-medium rounded-xl hover:bg-red-700 transition-all disabled:opacity-60 flex items-center gap-2"
-              >
-                {clearing ? (
-                  <>
-                    <FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" />
-                    Clearing...
-                  </>
-                ) : (
-                  'Yes, Clear All'
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="overflow-x-auto">

@@ -1,7 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 
+// The audit trail is append-only (manuscript F7: unalterable activity
+// logging) — reads and inserts only, no update or delete surface.
+
 export async function GET(request: NextRequest) {
+  const session = await readSession();
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!['faculty', 'admin'].includes(session.role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+
   try {
     const supabase = getSupabaseAdmin();
     const { searchParams } = new URL(request.url);
@@ -31,28 +41,13 @@ export async function GET(request: NextRequest) {
   }
 }
 
-export async function DELETE() {
-  try {
-    const supabase = getSupabaseAdmin();
-
-    const { error } = await supabase
-      .from('faculty_audit_logs')
-      .delete()
-      .neq('id', '00000000-0000-0000-0000-000000000000');
-
-    if (error) {
-      console.error('Failed to clear audit logs', error);
-      return NextResponse.json({ error: 'Unable to clear audit logs' }, { status: 500 });
-    }
-
-    return NextResponse.json({ success: true });
-  } catch (err) {
-    console.error('Clear audit logs failed', err);
-    return NextResponse.json({ error: 'Unable to clear audit logs' }, { status: 500 });
-  }
-}
-
 export async function POST(request: NextRequest) {
+  const session = await readSession();
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!['faculty', 'admin'].includes(session.role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+
   let body: unknown;
   try {
     body = await request.json();
