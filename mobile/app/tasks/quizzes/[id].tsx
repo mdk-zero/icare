@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { ScrollView, View, Text, StyleSheet, TouchableOpacity, Alert, type StyleProp, type ViewStyle, type TextStyle } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Card, PrimaryButton, Badge } from '@/components/ui';
-import { mockQuestions } from '@/lib/api';
+import { Card, PrimaryButton } from '@/components/ui';
+import { Accent, Palette, Radius, Spacing, Type } from '@/constants/theme';
+import { mockQuestions } from '@/lib/mocks';
 
 export default function QuizInterfaceScreen() {
   const { id } = useLocalSearchParams();
@@ -121,29 +122,39 @@ export default function QuizInterfaceScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f3f4f6' },
-  content: { padding: 16, paddingBottom: 32 },
-  errorContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  errorText: { fontSize: 16, color: '#6b7280' },
-  progressBar: { flexDirection: 'row', alignItems: 'center', marginBottom: 24 },
-  progressTrack: { flex: 1, height: 8, backgroundColor: '#e5e7eb', borderRadius: 4, marginRight: 12 },
-  progressFill: { height: '100%', backgroundColor: '#1B6B7B', borderRadius: 4 },
-  progressText: { fontSize: 14, fontWeight: '600', color: '#6b7280' },
-  questionCard: { marginBottom: 24 },
-  questionNumber: { fontSize: 12, color: '#1B6B7B', fontWeight: '600', marginBottom: 8 },
-  questionText: { fontSize: 18, fontWeight: '600', color: '#11181c', lineHeight: 28 },
-  options: { marginBottom: 24 },
-  option: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12, borderWidth: 2, borderColor: '#e5e7eb' },
-  optionSelected: { borderColor: '#1B6B7B', backgroundColor: '#f0fdfa' },
-  optionCorrect: { borderColor: '#16a34a', backgroundColor: '#dcfce7' },
-  optionWrong: { borderColor: '#dc2626', backgroundColor: '#fee2e2' },
-  optionText: { fontSize: 14, color: '#11181c', flex: 1 },
-  optionTextCorrect: { color: '#16a34a', fontWeight: '600' },
-  optionTextWrong: { color: '#dc2626', fontWeight: '600' },
-  checkIcon: { fontSize: 18, color: '#16a34a', fontWeight: '700' },
-  crossIcon: { fontSize: 18, color: '#dc2626', fontWeight: '700' },
-  explanationCard: { backgroundColor: '#f0f9ff', borderColor: '#bae6fd', marginBottom: 24 },
-  explanationTitle: { fontSize: 14, fontWeight: '700', color: '#0369a1', marginBottom: 8 },
-  explanationText: { fontSize: 14, color: '#0369a1', lineHeight: 22 },
-  actions: { marginTop: 8 },
+  container: { flex: 1, backgroundColor: Palette.background },
+  content: { padding: Spacing.lg, paddingBottom: 32 },
+  errorContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Palette.background },
+  errorText: { fontSize: 16, color: Palette.textSecondary },
+  progressBar: { flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.xxl },
+  progressTrack: { flex: 1, height: 8, backgroundColor: Palette.border, borderRadius: 4, marginRight: Spacing.md, overflow: 'hidden' },
+  progressFill: { height: '100%', backgroundColor: Palette.primary, borderRadius: 4 },
+  progressText: { fontSize: 14, fontWeight: '600', color: Palette.textSecondary },
+  questionCard: { marginBottom: Spacing.xxl },
+  questionNumber: { ...Type.eyebrow, color: Palette.primary, marginBottom: Spacing.sm },
+  questionText: { fontSize: 18, fontWeight: '600', color: Palette.ink, lineHeight: 27 },
+  options: { marginBottom: Spacing.xxl },
+  option: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: Palette.surface,
+    borderRadius: Radius.md,
+    padding: Spacing.lg,
+    marginBottom: Spacing.md,
+    borderWidth: 1.5,
+    borderColor: Palette.border,
+  },
+  optionSelected: { borderColor: Palette.primary, backgroundColor: Palette.primaryTint },
+  optionCorrect: { borderColor: Accent.green.fg, backgroundColor: Accent.green.bg },
+  optionWrong: { borderColor: Accent.red.fg, backgroundColor: Accent.red.bg },
+  optionText: { fontSize: 14, color: Palette.ink, flex: 1, lineHeight: 20 },
+  optionTextCorrect: { color: Accent.green.fg, fontWeight: '600' },
+  optionTextWrong: { color: Accent.red.fg, fontWeight: '600' },
+  checkIcon: { fontSize: 18, color: Accent.green.fg, fontWeight: '700' },
+  crossIcon: { fontSize: 18, color: Accent.red.fg, fontWeight: '700' },
+  explanationCard: { backgroundColor: Accent.blue.bg, borderColor: Accent.blue.border, marginBottom: Spacing.xxl },
+  explanationTitle: { fontSize: 14, fontWeight: '700', color: Accent.blue.fg, marginBottom: Spacing.sm },
+  explanationText: { fontSize: 14, color: '#1E40AF', lineHeight: 22 },
+  actions: { marginTop: Spacing.sm },
 });

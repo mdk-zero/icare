@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { ScrollView, View, Text, StyleSheet, TextInput, TouchableOpacity, Alert } from 'react-native';
+import { ScrollView, View, Text, StyleSheet, TextInput, Pressable, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '@/constants/theme';
-import { Card, Badge, PrimaryButton } from '@/components/ui';
-import { mockPatients, getTPRForPatient } from '@/lib/api';
+import { Palette, Radius, Shadow, Spacing, Type } from '@/constants/theme';
+import { Card, Badge } from '@/components/ui';
+import { mockPatients, getTPRForPatient } from '@/lib/mocks';
 
-const primaryColor = Colors.light.primary;
+const primaryColor = Palette.primary;
 
 export default function TPRSheetScreen() {
   const { id } = useLocalSearchParams();
@@ -214,10 +214,10 @@ export default function TPRSheetScreen() {
         </Card>
       </View>
 
-      <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
+      <Pressable style={({ pressed }) => [styles.saveButton, pressed && { opacity: 0.85 }]} onPress={handleSave}>
         <Ionicons name="save" size={20} color="#fff" />
         <Text style={styles.saveButtonText}>Save TPR Record</Text>
-      </TouchableOpacity>
+      </Pressable>
     </ScrollView>
   );
 }
@@ -225,20 +225,21 @@ export default function TPRSheetScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: Palette.background,
   },
   content: {
-    padding: 16,
+    padding: Spacing.lg,
     paddingBottom: 40,
   },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: Palette.background,
   },
   errorText: {
     fontSize: 16,
-    color: '#6b7280',
+    color: Palette.textSecondary,
   },
   patientHeader: {
     flexDirection: 'row',
@@ -259,42 +260,41 @@ const styles = StyleSheet.create({
   patientName: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#0f172a',
+    color: Palette.ink,
   },
   patientMeta: {
     fontSize: 14,
-    color: '#64748b',
+    color: Palette.textSecondary,
     marginTop: 2,
   },
   sheetHeader: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 16,
+    backgroundColor: Palette.surface,
+    borderRadius: Radius.lg,
+    padding: Spacing.xl,
+    marginBottom: Spacing.lg,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: Palette.border,
+    ...Shadow.card,
   },
   sheetTitle: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#0f172a',
+    ...Type.screenTitle,
   },
   sheetSubtitle: {
     fontSize: 14,
-    color: '#64748b',
+    color: Palette.textSecondary,
     marginTop: 4,
   },
   sheetDate: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 12,
-    paddingTop: 12,
+    marginTop: Spacing.md,
+    paddingTop: Spacing.md,
     borderTopWidth: 1,
-    borderTopColor: '#e2e8f0',
+    borderTopColor: Palette.borderLight,
   },
   sheetDateText: {
     fontSize: 14,
-    color: '#64748b',
+    color: Palette.textSecondary,
     marginLeft: 8,
   },
   formCard: {
@@ -306,17 +306,17 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#334155',
+    color: Palette.text,
     marginBottom: 8,
   },
   input: {
-    backgroundColor: '#f8fafc',
-    borderRadius: 12,
+    backgroundColor: Palette.surfaceMuted,
+    borderRadius: Radius.md,
     padding: 14,
     fontSize: 18,
-    color: '#1e293b',
+    color: '#1E293B',
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: Palette.border,
   },
   signatureInput: {
     fontSize: 16,
@@ -325,48 +325,43 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   referenceTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#64748b',
-    marginBottom: 12,
+    ...Type.eyebrow,
+    marginBottom: Spacing.md,
   },
   referenceGrid: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    gap: Spacing.sm,
   },
   referenceItem: {
     flex: 1,
     alignItems: 'center',
     padding: 14,
-    borderRadius: 14,
-    marginHorizontal: 4,
+    borderRadius: Radius.md,
   },
   referenceLabel: {
     fontSize: 11,
-    color: '#64748b',
+    color: Palette.textSecondary,
     marginTop: 6,
   },
   referenceValue: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#334155',
+    color: Palette.text,
     marginTop: 4,
   },
   historySection: {
     marginBottom: 20,
   },
   sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#0f172a',
-    marginBottom: 12,
+    ...Type.sectionTitle,
+    marginBottom: Spacing.md,
   },
   historyItem: {
     paddingVertical: 12,
   },
   historyBorder: {
     borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
+    borderBottomColor: Palette.borderLight,
   },
   historyHeader: {
     flexDirection: 'row',
@@ -377,7 +372,7 @@ const styles = StyleSheet.create({
   historyDateTime: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#334155',
+    color: Palette.text,
   },
   historyValues: {
     flexDirection: 'row',
@@ -389,12 +384,12 @@ const styles = StyleSheet.create({
   },
   historyValueText: {
     fontSize: 13,
-    color: '#64748b',
+    color: Palette.textSecondary,
     marginLeft: 4,
   },
   historySignature: {
     fontSize: 11,
-    color: '#94a3b8',
+    color: Palette.textMuted,
     marginTop: 6,
   },
   saveButton: {
@@ -402,9 +397,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: primaryColor,
-    borderRadius: 14,
-    paddingVertical: 16,
-    marginTop: 8,
+    borderRadius: Radius.md,
+    paddingVertical: 15,
+    marginTop: Spacing.sm,
+    ...Shadow.raised,
   },
   saveButtonText: {
     fontSize: 16,

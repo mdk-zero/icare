@@ -37,7 +37,6 @@ export function IconContainer({ icon, size = 'md', variant = 'default' }: IconCo
 
   const dimension = getSize();
   const bgColor = variant === 'primary' ? `${Colors.light.primary}15` : '#f3f4f6';
-  const iconColor = variant === 'primary' ? Colors.light.primary : Colors.light.icon;
 
   return (
     <View

@@ -6,3 +6,6 @@ export { Avatar } from './Avatar';
 export { IconContainer } from './IconContainer';
 export { FormInput } from './FormInput';
 export { StatCard } from './StatCard';
+export { ScreenHeader } from './ScreenHeader';
+export { SectionHeader } from './SectionHeader';
+export { EmptyState } from './EmptyState';
