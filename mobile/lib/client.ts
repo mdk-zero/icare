@@ -21,7 +21,9 @@ import { Platform } from 'react-native';
 const DEFAULT_API_URL =
   Platform.OS === 'android' ? 'http://10.0.2.2:3000' : 'http://localhost:3000';
 
-export const API_URL = (process.env.EXPO_PUBLIC_API_URL ?? DEFAULT_API_URL).replace(/\/$/, '');
+// `||` not `??`: an EXPO_PUBLIC_API_URL left empty in .env would otherwise
+// override the platform default with "" and every request would fail.
+export const API_URL = (process.env.EXPO_PUBLIC_API_URL || DEFAULT_API_URL).replace(/\/$/, '');
 
 const TOKEN_KEY = 'icare_session_token';
 const CACHE_PREFIX = '@icare_cache:';
