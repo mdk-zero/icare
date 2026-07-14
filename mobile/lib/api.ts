@@ -238,6 +238,34 @@ export async function fetchScenarioAssignments(): Promise<CachedResult<ScenarioA
   return { ...result, data: result.data.assignments ?? [] };
 }
 
+export interface Scenario {
+  id: string;
+  title: string;
+  description: string;
+  difficulty: 'beginner' | 'intermediate' | 'advanced';
+  category: string;
+  patient_case: Record<string, unknown>;
+  learning_objectives: string[];
+  created_at: string;
+}
+
+export async function fetchScenario(id: string): Promise<CachedResult<Scenario>> {
+  const result = await cachedGet<{ scenario: Scenario }>(`/api/scenarios/${id}`);
+  return { ...result, data: result.data.scenario };
+}
+
+export async function completeScenarioAssignment(
+  assignmentId: string,
+  score: number,
+  timeTakenSeconds: number,
+): Promise<ScenarioAssignment> {
+  const result = await api<{ assignment: ScenarioAssignment }>(
+    `/api/student/scenarios/${assignmentId}/complete`,
+    { method: 'POST', body: { score, time_taken: timeTakenSeconds } },
+  );
+  return result.assignment;
+}
+
 // ---------------------------------------------------------------
 // EHR (5.2 + 5.3 outbox)
 // ---------------------------------------------------------------

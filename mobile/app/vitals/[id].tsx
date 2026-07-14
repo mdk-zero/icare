@@ -1,62 +1,196 @@
-import React from 'react';
-import { ScrollView, View, Text, StyleSheet, Pressable } from 'react-native';
+import React, { useState } from 'react';
+import { ScrollView, View, Text, StyleSheet, Pressable, TextInput, Alert } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Accent, Palette, Radius, Shadow, Spacing, Type } from '@/constants/theme';
-import { mockPatients, getVitalSignsForPatient } from '@/lib/mocks';
+import { LoadingSpinner, EmptyState } from '@/components/ui';
+import { useApiData, allCached } from '@/hooks/useApiData';
+import { fetchPatients, fetchMyVitals, submitVitalReading, VitalReading } from '@/lib/api';
+import { VITAL_RULES } from '@/lib/vitals-rules';
 
 const primaryColor = Palette.primary;
+
+function fmt(value: number | null | undefined, digits = 0): string {
+  if (value == null) return '—';
+  return digits > 0 ? value.toFixed(digits) : String(value);
+}
+
+function VitalsRow({ reading }: { reading: VitalReading }) {
+  return (
+    <View style={styles.historyVitals}>
+      <View style={styles.historyVitalItem}>
+        <Text style={styles.historyVitalLabel}>HR</Text>
+        <Text style={[styles.historyVitalValue, reading.is_anomaly && styles.vitalAlert]}>
+          {fmt(reading.heart_rate)}
+        </Text>
+      </View>
+      <View style={styles.historyVitalItem}>
+        <Text style={styles.historyVitalLabel}>BP</Text>
+        <Text style={[styles.historyVitalValue, reading.is_anomaly && styles.vitalAlert]}>
+          {reading.bp_systolic != null || reading.bp_diastolic != null
+            ? `${fmt(reading.bp_systolic)}/${fmt(reading.bp_diastolic)}`
+            : '—'}
+        </Text>
+      </View>
+      <View style={styles.historyVitalItem}>
+        <Text style={styles.historyVitalLabel}>Temp</Text>
+        <Text style={[styles.historyVitalValue, reading.is_anomaly && styles.vitalAlert]}>
+          {reading.temperature_c != null ? reading.temperature_c.toFixed(1) : '—'}
+        </Text>
+      </View>
+      <View style={styles.historyVitalItem}>
+        <Text style={styles.historyVitalLabel}>RR</Text>
+        <Text style={[styles.historyVitalValue, reading.is_anomaly && styles.vitalAlert]}>
+          {fmt(reading.respiratory_rate)}
+        </Text>
+      </View>
+      <View style={styles.historyVitalItem}>
+        <Text style={styles.historyVitalLabel}>SpO2</Text>
+        <Text style={[styles.historyVitalValue, reading.is_anomaly && styles.vitalAlert]}>
+          {fmt(reading.oxygen_saturation)}
+        </Text>
+      </View>
+    </View>
+  );
+}
 
 export default function VitalDetailScreen() {
   const { id } = useLocalSearchParams();
   const patientId = id as string;
 
-  const patient = mockPatients.find((p) => p.id === patientId);
-  const vitals = getVitalSignsForPatient(patientId);
-  const latestVital = vitals.length > 0 ? vitals[vitals.length - 1] : null;
+  const { data, loading, error, reload } = useApiData(() =>
+    allCached(fetchPatients(), fetchMyVitals(patientId)),
+  );
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'Stable': return Accent.green.fg;
-      case 'Guarded': return Accent.amber.fg;
-      case 'Critical': return Accent.red.fg;
-      default: return Palette.textSecondary;
-    }
-  };
+  const [heartRate, setHeartRate] = useState('');
+  const [bpSystolic, setBpSystolic] = useState('');
+  const [bpDiastolic, setBpDiastolic] = useState('');
+  const [temperature, setTemperature] = useState('');
+  const [respiration, setRespiration] = useState('');
+  const [spo2, setSpo2] = useState('');
+  const [painScore, setPainScore] = useState('');
+  const [notes, setNotes] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  if (loading && !data) {
+    return <LoadingSpinner />;
+  }
+
+  const [patients, readings] = data ?? [[], []];
+  const patient = patients.find((p) => p.id === patientId);
+  const latest = readings[0] ?? null;
 
   if (!patient) {
     return (
       <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>Patient not found</Text>
+        <EmptyState icon="alert-circle-outline" message={error ?? 'Patient not found'} />
       </View>
     );
   }
+
+  const parseField = (raw: string, isFloat = false): number | null | 'invalid' => {
+    if (raw.trim() === '') return null;
+    const num = isFloat ? parseFloat(raw) : parseInt(raw, 10);
+    return Number.isNaN(num) ? 'invalid' : num;
+  };
+
+  const handleRecord = async () => {
+    const values = {
+      heart_rate: parseField(heartRate),
+      bp_systolic: parseField(bpSystolic),
+      bp_diastolic: parseField(bpDiastolic),
+      temperature_c: parseField(temperature, true),
+      respiratory_rate: parseField(respiration),
+      oxygen_saturation: parseField(spo2),
+      pain_score: parseField(painScore),
+    };
+
+    if (Object.values(values).some((v) => v === 'invalid')) {
+      Alert.alert('Error', 'Please enter valid numeric values');
+      return;
+    }
+    const entries = Object.entries(values).filter(([, v]) => v !== null);
+    if (entries.length === 0) {
+      Alert.alert('Error', 'Enter at least one vital sign');
+      return;
+    }
+    for (const rule of VITAL_RULES) {
+      const value = values[rule.field as keyof typeof values];
+      if (typeof value === 'number' && (value < rule.min || value > rule.max)) {
+        Alert.alert('Error', `${rule.label} must be between ${rule.min} and ${rule.max} ${rule.unit}`);
+        return;
+      }
+    }
+    const pain = values.pain_score;
+    if (typeof pain === 'number' && (pain < 0 || pain > 10)) {
+      Alert.alert('Error', 'Pain score must be between 0 and 10');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const result = await submitVitalReading({
+        patient_id: patientId,
+        ...(values as Record<string, number | null>),
+        notes,
+      });
+
+      setHeartRate('');
+      setBpSystolic('');
+      setBpDiastolic('');
+      setTemperature('');
+      setRespiration('');
+      setSpo2('');
+      setPainScore('');
+      setNotes('');
+
+      const anomalyDetail = result.anomaly_reasons.map((r) => `• ${r.message}`).join('\n');
+      if (result.queued) {
+        Alert.alert(
+          result.is_anomaly ? 'Queued — Anomaly Flagged' : 'Saved Offline',
+          (result.is_anomaly
+            ? `Local rules flagged this reading:\n${anomalyDetail}\n\n`
+            : '') + 'No connection right now — the reading is queued and will sync automatically.',
+        );
+      } else {
+        await reload();
+        if (result.is_anomaly) {
+          Alert.alert('Anomaly Detected', `${anomalyDetail}\n\nYour faculty has been notified.`);
+        } else {
+          Alert.alert('Vitals Recorded', 'All values are within normal ranges.');
+        }
+      }
+    } catch (err) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Unable to record vitals');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
     >
       <View style={styles.patientHeader}>
         <View style={styles.patientCard}>
-          <View style={[styles.avatarContainer, { backgroundColor: getStatusColor(patient.status) + '15' }]}>
-            <Ionicons name="person" size={32} color={getStatusColor(patient.status)} />
+          <View style={[styles.avatarContainer, { backgroundColor: Accent.teal.bg }]}>
+            <Ionicons name="person" size={32} color={Accent.teal.fg} />
           </View>
           <Text style={styles.patientName}>{patient.name}</Text>
           <View style={styles.patientMeta}>
             <View style={styles.metaRow}>
               <Ionicons name="calendar-outline" size={14} color="#64748b" />
-              <Text style={styles.metaText}>{patient.age} years • {patient.gender}</Text>
-            </View>
-            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(patient.status) + '15' }]}>
-              <View style={[styles.statusDot, { backgroundColor: getStatusColor(patient.status) }]} />
-              <Text style={[styles.statusBadgeText, { color: getStatusColor(patient.status) }]}>{patient.status}</Text>
+              <Text style={styles.metaText}>
+                {patient.age !== null ? `${patient.age} years` : 'Age —'} • {patient.gender ?? '—'}
+              </Text>
             </View>
           </View>
           <View style={styles.roomRow}>
             <Ionicons name="bed-outline" size={14} color="#94a3b8" />
-            <Text style={styles.roomText}>{patient.room}</Text>
+            <Text style={styles.roomText}>{patient.room_number ? `Room ${patient.room_number}` : 'No room'}</Text>
           </View>
         </View>
       </View>
@@ -67,7 +201,7 @@ export default function VitalDetailScreen() {
           <Text style={styles.alertTitle}>Anomaly Detection</Text>
         </View>
         <Text style={styles.alertDesc}>
-          Real-time monitoring with rule-based detection:
+          Readings are checked against clinical thresholds — even offline:
         </Text>
         <View style={styles.rulesGrid}>
           <View style={styles.ruleItem}>
@@ -76,11 +210,11 @@ export default function VitalDetailScreen() {
           </View>
           <View style={styles.ruleItem}>
             <View style={[styles.ruleDot, { backgroundColor: '#7c3aed' }]} />
-            <Text style={styles.ruleText}>BP: &lt;140/90</Text>
+            <Text style={styles.ruleText}>BP: 90-140/60-90</Text>
           </View>
           <View style={styles.ruleItem}>
             <View style={[styles.ruleDot, { backgroundColor: '#d97706' }]} />
-            <Text style={styles.ruleText}>Temp: 36-38°C</Text>
+            <Text style={styles.ruleText}>Temp: 36.1-37.5°C</Text>
           </View>
           <View style={styles.ruleItem}>
             <View style={[styles.ruleDot, { backgroundColor: '#0891b2' }]} />
@@ -90,122 +224,174 @@ export default function VitalDetailScreen() {
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Current Vitals</Text>
-        {latestVital && (
-          <View style={styles.vitalsCard}>
-            <View style={styles.vitalsGrid}>
-              <View style={styles.vitalItem}>
-                <View style={[styles.vitalIconBox, { backgroundColor: '#fee2e2' }]}>
-                  <Ionicons name="heart" size={18} color="#dc2626" />
-                </View>
-                <Text style={[styles.vitalValue, latestVital.isAnomaly && styles.vitalAlert]}>
-                  {latestVital.heartRate}
-                </Text>
-                <Text style={styles.vitalLabel}>bpm</Text>
-              </View>
-              <View style={styles.vitalItem}>
-                <View style={[styles.vitalIconBox, { backgroundColor: '#f3e8ff' }]}>
-                  <Ionicons name="speedometer" size={18} color="#7c3aed" />
-                </View>
-                <Text style={[styles.vitalValue, latestVital.isAnomaly && styles.vitalAlert]}>
-                  {latestVital.bloodPressureSystolic}/{latestVital.bloodPressureDiastolic}
-                </Text>
-                <Text style={styles.vitalLabel}>mmHg</Text>
-              </View>
-              <View style={styles.vitalItem}>
-                <View style={[styles.vitalIconBox, { backgroundColor: '#fef3c7' }]}>
-                  <Ionicons name="thermometer" size={18} color="#d97706" />
-                </View>
-                <Text style={[styles.vitalValue, latestVital.isAnomaly && styles.vitalAlert]}>
-                  {latestVital.temperature.toFixed(1)}
-                </Text>
-                <Text style={styles.vitalLabel}>°C</Text>
-              </View>
-              <View style={styles.vitalItem}>
-                <View style={[styles.vitalIconBox, { backgroundColor: '#cffafe' }]}>
-                  <Ionicons name="water" size={18} color="#0891b2" />
-                </View>
-                <Text style={[styles.vitalValue, latestVital.isAnomaly && styles.vitalAlert]}>
-                  {latestVital.oxygenSaturation}
-                </Text>
-                <Text style={styles.vitalLabel}>%</Text>
-              </View>
-              <View style={styles.vitalItem}>
-                <View style={[styles.vitalIconBox, { backgroundColor: '#dcfce7' }]}>
-                  <Ionicons name="analytics" size={18} color="#16a34a" />
-                </View>
-                <Text style={[styles.vitalValue, latestVital.isAnomaly && styles.vitalAlert]}>
-                  {latestVital.respirationRate}
-                </Text>
-                <Text style={styles.vitalLabel}>/min</Text>
-              </View>
+        <Text style={styles.sectionTitle}>Record New Vitals</Text>
+        <View style={styles.formCard}>
+          <View style={styles.formRow}>
+            <View style={styles.formField}>
+              <Text style={styles.formLabel}>HR (bpm)</Text>
+              <TextInput
+                style={styles.formInput}
+                value={heartRate}
+                onChangeText={setHeartRate}
+                keyboardType="number-pad"
+                placeholder="60-100"
+                placeholderTextColor="#94a3b8"
+              />
             </View>
-            {latestVital.isAnomaly && (
+            <View style={styles.formField}>
+              <Text style={styles.formLabel}>Temp (°C)</Text>
+              <TextInput
+                style={styles.formInput}
+                value={temperature}
+                onChangeText={setTemperature}
+                keyboardType="decimal-pad"
+                placeholder="36.5"
+                placeholderTextColor="#94a3b8"
+              />
+            </View>
+          </View>
+          <View style={styles.formRow}>
+            <View style={styles.formField}>
+              <Text style={styles.formLabel}>BP Systolic</Text>
+              <TextInput
+                style={styles.formInput}
+                value={bpSystolic}
+                onChangeText={setBpSystolic}
+                keyboardType="number-pad"
+                placeholder="120"
+                placeholderTextColor="#94a3b8"
+              />
+            </View>
+            <View style={styles.formField}>
+              <Text style={styles.formLabel}>BP Diastolic</Text>
+              <TextInput
+                style={styles.formInput}
+                value={bpDiastolic}
+                onChangeText={setBpDiastolic}
+                keyboardType="number-pad"
+                placeholder="80"
+                placeholderTextColor="#94a3b8"
+              />
+            </View>
+          </View>
+          <View style={styles.formRow}>
+            <View style={styles.formField}>
+              <Text style={styles.formLabel}>RR (/min)</Text>
+              <TextInput
+                style={styles.formInput}
+                value={respiration}
+                onChangeText={setRespiration}
+                keyboardType="number-pad"
+                placeholder="12-20"
+                placeholderTextColor="#94a3b8"
+              />
+            </View>
+            <View style={styles.formField}>
+              <Text style={styles.formLabel}>SpO2 (%)</Text>
+              <TextInput
+                style={styles.formInput}
+                value={spo2}
+                onChangeText={setSpo2}
+                keyboardType="number-pad"
+                placeholder="95-100"
+                placeholderTextColor="#94a3b8"
+              />
+            </View>
+          </View>
+          <View style={styles.formRow}>
+            <View style={styles.formField}>
+              <Text style={styles.formLabel}>Pain (0-10)</Text>
+              <TextInput
+                style={styles.formInput}
+                value={painScore}
+                onChangeText={setPainScore}
+                keyboardType="number-pad"
+                placeholder="0"
+                placeholderTextColor="#94a3b8"
+              />
+            </View>
+            <View style={styles.formField}>
+              <Text style={styles.formLabel}>Notes</Text>
+              <TextInput
+                style={styles.formInput}
+                value={notes}
+                onChangeText={setNotes}
+                placeholder="Optional"
+                placeholderTextColor="#94a3b8"
+              />
+            </View>
+          </View>
+          <Pressable
+            style={({ pressed }) => [styles.recordButton, (pressed || saving) && { opacity: 0.85 }]}
+            onPress={handleRecord}
+            disabled={saving}
+          >
+            <Ionicons name="add-circle" size={22} color="#fff" />
+            <Text style={styles.recordButtonText}>{saving ? 'Recording…' : 'Record Vitals'}</Text>
+          </Pressable>
+        </View>
+      </View>
+
+      {latest && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Latest Reading</Text>
+          <View style={styles.vitalsCard}>
+            <VitalsRow reading={latest} />
+            {latest.is_anomaly && (
               <View style={styles.anomalyAlert}>
                 <Ionicons name="warning" size={16} color="#dc2626" />
                 <View style={styles.anomalyContent}>
                   <Text style={styles.anomalyTitle}>Anomaly Detected</Text>
-                  <Text style={styles.anomalyDesc}>Requires clinical attention</Text>
+                  {latest.anomaly_reasons.map((reason, idx) => (
+                    <Text key={idx} style={styles.anomalyDesc}>{reason.message}</Text>
+                  ))}
                 </View>
               </View>
             )}
             <View style={styles.timestampRow}>
               <Ionicons name="time-outline" size={12} color="#94a3b8" />
               <Text style={styles.timestamp}>
-                {new Date(latestVital.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                {new Date(latest.recorded_at).toLocaleString([], {
+                  month: 'short',
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
               </Text>
             </View>
           </View>
-        )}
-      </View>
+        </View>
+      )}
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>History</Text>
         <View style={styles.historyCard}>
-          {[...vitals].reverse().map((vital, index) => (
+          {readings.length === 0 && (
+            <Text style={styles.emptyHistory}>No readings recorded for this patient yet</Text>
+          )}
+          {readings.map((reading, index) => (
             <View
-              key={vital.id}
-              style={[styles.historyItem, index < vitals.length - 1 && styles.historyBorder]}
+              key={reading.id}
+              style={[styles.historyItem, index < readings.length - 1 && styles.historyBorder]}
             >
               <View style={styles.historyHeader}>
                 <View style={styles.historyTimeRow}>
                   <Ionicons name="time-outline" size={12} color="#64748b" />
                   <Text style={styles.historyTime}>
-                    {new Date(vital.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    {new Date(reading.recorded_at).toLocaleString([], {
+                      month: 'short',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
                   </Text>
                 </View>
-                {vital.isAnomaly && (
-                  <View style={styles.anomalyDot} />
-                )}
+                {reading.is_anomaly && <View style={styles.anomalyDot} />}
               </View>
-              <View style={styles.historyVitals}>
-                <View style={styles.historyVitalItem}>
-                  <Text style={styles.historyVitalLabel}>HR</Text>
-                  <Text style={[styles.historyVitalValue, vital.isAnomaly && styles.vitalAlert]}>{vital.heartRate}</Text>
-                </View>
-                <View style={styles.historyVitalItem}>
-                  <Text style={styles.historyVitalLabel}>BP</Text>
-                  <Text style={[styles.historyVitalValue, vital.isAnomaly && styles.vitalAlert]}>{vital.bloodPressureSystolic}/{vital.bloodPressureDiastolic}</Text>
-                </View>
-                <View style={styles.historyVitalItem}>
-                  <Text style={styles.historyVitalLabel}>Temp</Text>
-                  <Text style={[styles.historyVitalValue, vital.isAnomaly && styles.vitalAlert]}>{vital.temperature.toFixed(1)}</Text>
-                </View>
-                <View style={styles.historyVitalItem}>
-                  <Text style={styles.historyVitalLabel}>SpO2</Text>
-                  <Text style={[styles.historyVitalValue, vital.isAnomaly && styles.vitalAlert]}>{vital.oxygenSaturation}</Text>
-                </View>
-              </View>
+              <VitalsRow reading={reading} />
             </View>
           ))}
         </View>
-      </View>
-
-      <View style={styles.section}>
-        <Pressable style={({ pressed }) => [styles.recordButton, pressed && { opacity: 0.85 }]}>
-          <Ionicons name="add-circle" size={22} color="#fff" />
-          <Text style={styles.recordButtonText}>Record New Vitals</Text>
-        </Pressable>
       </View>
     </ScrollView>
   );
@@ -223,12 +409,7 @@ const styles = StyleSheet.create({
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
-    alignItems: 'center',
     backgroundColor: Palette.background,
-  },
-  errorText: {
-    fontSize: 16,
-    color: Palette.textSecondary,
   },
   patientHeader: {
     marginBottom: Spacing.lg,
@@ -270,23 +451,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Palette.textSecondary,
     marginLeft: 4,
-  },
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: Radius.pill,
-  },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 6,
-  },
-  statusBadgeText: {
-    fontSize: 12,
-    fontWeight: '600',
   },
   roomRow: {
     flexDirection: 'row',
@@ -353,6 +517,37 @@ const styles = StyleSheet.create({
     ...Type.sectionTitle,
     marginBottom: Spacing.md,
   },
+  formCard: {
+    backgroundColor: Palette.surface,
+    borderRadius: Radius.lg,
+    padding: Spacing.lg,
+    borderWidth: 1,
+    borderColor: Palette.border,
+    ...Shadow.card,
+  },
+  formRow: {
+    flexDirection: 'row',
+    gap: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  formField: {
+    flex: 1,
+  },
+  formLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Palette.text,
+    marginBottom: 6,
+  },
+  formInput: {
+    backgroundColor: Palette.surfaceMuted,
+    borderRadius: Radius.md,
+    padding: 12,
+    fontSize: 16,
+    color: '#1E293B',
+    borderWidth: 1,
+    borderColor: Palette.border,
+  },
   vitalsCard: {
     backgroundColor: Palette.surface,
     borderRadius: Radius.lg,
@@ -361,47 +556,20 @@ const styles = StyleSheet.create({
     borderColor: Palette.border,
     ...Shadow.card,
   },
-  vitalsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  vitalItem: {
-    width: '30%',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  vitalIconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
-  },
-  vitalLabel: {
-    fontSize: 10,
-    color: Palette.textMuted,
-    marginTop: 2,
-  },
-  vitalValue: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: Palette.ink,
-  },
   vitalAlert: {
     color: Accent.red.fg,
   },
   anomalyAlert: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     backgroundColor: Accent.red.bg,
     borderRadius: Radius.md,
     padding: Spacing.md,
-    marginTop: Spacing.sm,
+    marginTop: Spacing.md,
   },
   anomalyContent: {
     marginLeft: 10,
+    flex: 1,
   },
   anomalyTitle: {
     fontSize: 13,
@@ -481,6 +649,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#1E293B',
   },
+  emptyHistory: {
+    fontSize: 13,
+    color: Palette.textMuted,
+    textAlign: 'center',
+    paddingVertical: Spacing.md,
+  },
   recordButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -488,6 +662,7 @@ const styles = StyleSheet.create({
     backgroundColor: primaryColor,
     borderRadius: Radius.md,
     paddingVertical: 15,
+    marginTop: Spacing.xs,
     ...Shadow.raised,
   },
   recordButtonText: {

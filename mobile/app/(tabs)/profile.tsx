@@ -1,11 +1,12 @@
 import React from 'react';
-import { ScrollView, View, Text, StyleSheet, Pressable, Alert } from 'react-native';
+import { ScrollView, View, Text, StyleSheet, Pressable, Alert, RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Accent, Palette, Radius, Shadow, Spacing, Type } from '@/constants/theme';
 import { SectionHeader } from '@/components/ui';
 import { useAuth } from '@/hooks/useAuth';
-import { mockPerformanceLogs, mockAIRecommendations } from '@/lib/mocks';
+import { useApiData, allCached } from '@/hooks/useApiData';
+import { fetchProgress, fetchRecommendations } from '@/lib/api';
 
 function getInitials(name?: string) {
   if (!name) return 'S';
@@ -18,15 +19,13 @@ function competencyAccent(score: number) {
   return { ...Accent.red, label: 'Needs Work' };
 }
 
-const REC_ACCENT: Record<string, { fg: string; bg: string; icon: 'document-text' | 'list' | 'book' }> = {
-  quiz: { ...Accent.violet, icon: 'document-text' },
-  task: { ...Accent.amber, icon: 'list' },
-  resource: { ...Accent.blue, icon: 'book' },
-};
-
 export default function ProfileScreen() {
   const router = useRouter();
   const { user, logout } = useAuth();
+  const { data, refreshing, refresh } = useApiData(() =>
+    allCached(fetchProgress(), fetchRecommendations()),
+  );
+  const [progress, recommendations] = data ?? [null, []];
 
   const handleLogout = () => {
     Alert.alert('Logout', 'Are you sure you want to logout?', [
@@ -42,19 +41,24 @@ export default function ProfileScreen() {
     ]);
   };
 
-  const avgScore = Math.round(
-    mockPerformanceLogs.reduce((a, b) => a + b.score, 0) / mockPerformanceLogs.length
-  );
+  const attempts = progress?.attempts ?? [];
+  const scored = attempts.filter((a) => a.score !== null);
+  const avgScore =
+    scored.length > 0
+      ? Math.round(scored.reduce((sum, a) => sum + (a.score ?? 0), 0) / scored.length)
+      : null;
 
-  const competencies = Object.entries(
-    mockPerformanceLogs.reduce((acc, log) => {
-      if (!acc[log.competency]) acc[log.competency] = [];
-      acc[log.competency].push(log.score);
-      return acc;
-    }, {} as Record<string, number[]>)
-  ).map(([competency, scores]) => ({
+  const byCompetency = new Map<string, { total: number; count: number }>();
+  for (const record of progress?.competency_scores ?? []) {
+    const name = record.competency_areas?.name ?? 'General';
+    const entry = byCompetency.get(name) ?? { total: 0, count: 0 };
+    entry.total += record.score;
+    entry.count += 1;
+    byCompetency.set(name, entry);
+  }
+  const competencies = [...byCompetency.entries()].map(([competency, { total, count }]) => ({
     competency,
-    avgScore: Math.round(scores.reduce((a, b) => a + b, 0) / scores.length),
+    avgScore: Math.round(total / count),
   }));
 
   const quickLinks = [
@@ -69,6 +73,9 @@ export default function ProfileScreen() {
       style={styles.container}
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={refresh} colors={[Palette.primary]} tintColor={Palette.primary} />
+      }
     >
       <View style={styles.headerCard}>
         <View style={styles.avatarRow}>
@@ -102,7 +109,9 @@ export default function ProfileScreen() {
             <View style={[styles.perfIconBox, { backgroundColor: Palette.primaryTint }]}>
               <Ionicons name="trending-up" size={18} color={Palette.primary} />
             </View>
-            <Text style={[styles.perfValue, { color: Palette.primary }]}>{avgScore}%</Text>
+            <Text style={[styles.perfValue, { color: Palette.primary }]}>
+              {avgScore === null ? '—' : `${avgScore}%`}
+            </Text>
             <Text style={styles.perfLabel}>Avg Score</Text>
           </View>
           <View style={styles.perfDivider} />
@@ -110,7 +119,7 @@ export default function ProfileScreen() {
             <View style={[styles.perfIconBox, { backgroundColor: Accent.violet.bg }]}>
               <Ionicons name="analytics" size={18} color={Accent.violet.fg} />
             </View>
-            <Text style={styles.perfValue}>{mockPerformanceLogs.length}</Text>
+            <Text style={styles.perfValue}>{attempts.length}</Text>
             <Text style={styles.perfLabel}>Activities</Text>
           </View>
           <View style={styles.perfDivider} />
@@ -127,6 +136,11 @@ export default function ProfileScreen() {
       <View style={styles.section}>
         <SectionHeader title="Competencies" />
         <View style={styles.listCard}>
+          {competencies.length === 0 && (
+            <Text style={styles.emptyListText}>
+              Competency scores appear here once your faculty validates your work.
+            </Text>
+          )}
           {competencies.map((comp, index) => {
             const accent = competencyAccent(comp.avgScore);
             return (
@@ -160,9 +174,13 @@ export default function ProfileScreen() {
       <View style={styles.section}>
         <SectionHeader title="AI Recommendations" actionLabel="See all" onAction={() => router.push('/recommendations')} />
         <View style={styles.listCard}>
-          {mockAIRecommendations.slice(0, 2).map((rec, index) => {
-            const accent = REC_ACCENT[rec.type] ?? REC_ACCENT.resource;
-            const priority = rec.priority === 'high' ? Accent.red : Accent.amber;
+          {recommendations.length === 0 && (
+            <Text style={styles.emptyListText}>
+              Personalized suggestions appear here after your quiz results are analyzed.
+            </Text>
+          )}
+          {recommendations.slice(0, 2).map((rec, index) => {
+            const priority = rec.rank <= 1 ? Accent.red : Accent.amber;
             return (
               <Pressable
                 key={rec.id}
@@ -170,16 +188,16 @@ export default function ProfileScreen() {
                 onPress={() => router.push('/recommendations')}
               >
                 <View style={styles.recHeader}>
-                  <View style={[styles.recIconContainer, { backgroundColor: accent.bg }]}>
-                    <Ionicons name={accent.icon} size={15} color={accent.fg} />
+                  <View style={[styles.recIconContainer, { backgroundColor: Accent.violet.bg }]}>
+                    <Ionicons name="document-text" size={15} color={Accent.violet.fg} />
                   </View>
                   <View style={[styles.priorityBadge, { backgroundColor: priority.bg }]}>
-                    <Text style={[styles.priorityText, { color: priority.fg }]}>{rec.priority}</Text>
+                    <Text style={[styles.priorityText, { color: priority.fg }]}>#{rec.rank}</Text>
                   </View>
                 </View>
-                <Text style={styles.recTitle}>{rec.title}</Text>
+                <Text style={styles.recTitle}>{rec.assessments?.title ?? 'Recommended practice'}</Text>
                 <Text style={styles.recDesc} numberOfLines={2}>
-                  {rec.description}
+                  {rec.reason}
                 </Text>
               </Pressable>
             );
@@ -394,6 +412,12 @@ const styles = StyleSheet.create({
   compBadgeText: {
     fontSize: 10,
     fontWeight: '700',
+  },
+  emptyListText: {
+    fontSize: 13,
+    color: Palette.textMuted,
+    textAlign: 'center',
+    paddingVertical: Spacing.lg,
   },
   recItem: {
     paddingVertical: Spacing.md,

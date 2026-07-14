@@ -1,24 +1,25 @@
 import React from 'react';
-import { ScrollView, View, Text, StyleSheet, Pressable } from 'react-native';
+import { ScrollView, View, Text, StyleSheet, Pressable, RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Accent, Palette, Radius, Shadow, Spacing, Type } from '@/constants/theme';
-import { ScreenHeader, SectionHeader } from '@/components/ui';
-import { mockPatients } from '@/lib/mocks';
-
-const STATUS_ACCENT: Record<string, { fg: string; bg: string }> = {
-  Stable: Accent.green,
-  Guarded: Accent.amber,
-  Critical: Accent.red,
-};
+import { ScreenHeader, SectionHeader, LoadingSpinner, EmptyState } from '@/components/ui';
+import { useApiData } from '@/hooks/useApiData';
+import { fetchPatients } from '@/lib/api';
 
 export default function EHRScreen() {
   const router = useRouter();
+  const { data, loading, refreshing, error, refresh, fromCache } = useApiData(fetchPatients);
 
+  if (loading && !data) {
+    return <LoadingSpinner />;
+  }
+
+  const patients = data ?? [];
   const stats = [
-    { label: 'Total', value: mockPatients.length, icon: 'people' as const, accent: Accent.teal },
-    { label: 'Critical', value: 2, icon: 'warning' as const, accent: Accent.red },
-    { label: 'Guarded', value: 1, icon: 'alert-circle' as const, accent: Accent.amber },
+    { label: 'Total', value: patients.length, icon: 'people' as const, accent: Accent.teal },
+    { label: 'In Rooms', value: patients.filter((p) => p.room_number).length, icon: 'bed' as const, accent: Accent.violet },
+    { label: 'Diagnosed', value: patients.filter((p) => p.diagnosis).length, icon: 'medkit' as const, accent: Accent.amber },
   ];
 
   return (
@@ -26,11 +27,14 @@ export default function EHRScreen() {
       style={styles.container}
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={refresh} colors={[Palette.primary]} tintColor={Palette.primary} />
+      }
     >
       <ScreenHeader
         eyebrow="EHR System"
         title="Patient Records"
-        subtitle={`${mockPatients.length} patients in database`}
+        subtitle={`${patients.length} patients in database${fromCache ? ' (offline copy)' : ''}`}
         icon="folder-open-outline"
         accent="violet"
       />
@@ -47,9 +51,14 @@ export default function EHRScreen() {
         ))}
       </View>
 
-      <SectionHeader title="Patient Records" count={mockPatients.length} />
-      {mockPatients.map((patient) => {
-        const status = STATUS_ACCENT[patient.status] ?? Accent.slate;
+      <SectionHeader title="Patient Records" count={patients.length} />
+      {patients.length === 0 && (
+        <EmptyState
+          icon={error ? 'cloud-offline-outline' : 'folder-open-outline'}
+          message={error ?? 'No patients yet — your admin loads them from the MIMIC dataset.'}
+        />
+      )}
+      {patients.map((patient) => {
         return (
           <Pressable
             key={patient.id}
@@ -57,35 +66,30 @@ export default function EHRScreen() {
             onPress={() => router.push(`/ehr/${patient.id}`)}
           >
             <View style={styles.patientHeader}>
-              <View style={[styles.avatarContainer, { backgroundColor: status.bg }]}>
-                <Ionicons name="person" size={18} color={status.fg} />
+              <View style={[styles.avatarContainer, { backgroundColor: Accent.teal.bg }]}>
+                <Ionicons name="person" size={18} color={Accent.teal.fg} />
               </View>
               <View style={styles.patientInfo}>
                 <Text style={styles.patientName}>{patient.name}</Text>
                 <Text style={styles.patientDetails}>
-                  {patient.age} yrs • {patient.gender}
+                  {patient.age !== null ? `${patient.age} yrs` : 'Age —'} • {patient.gender ?? '—'}
                 </Text>
               </View>
-              <View style={[styles.statusBadge, { backgroundColor: status.bg }]}>
-                <View style={[styles.statusDot, { backgroundColor: status.fg }]} />
-                <Text style={[styles.statusBadgeText, { color: status.fg }]}>{patient.status}</Text>
+              <View style={[styles.statusBadge, { backgroundColor: Accent.slate.bg }]}>
+                <Ionicons name="bed-outline" size={12} color={Accent.slate.fg} />
+                <Text style={[styles.statusBadgeText, { color: Accent.slate.fg, marginLeft: 4 }]}>
+                  {patient.room_number ?? 'Unassigned'}
+                </Text>
               </View>
             </View>
 
             <View style={styles.patientDetailsSection}>
               <View style={styles.detailRow}>
                 <View style={styles.detailItem}>
-                  <Ionicons name="bed-outline" size={14} color={Palette.textMuted} />
-                  <Text style={styles.detailLabel}>Room</Text>
-                </View>
-                <Text style={styles.detailValue}>{patient.room}</Text>
-              </View>
-              <View style={styles.detailRow}>
-                <View style={styles.detailItem}>
                   <Ionicons name="medkit-outline" size={14} color={Palette.textMuted} />
                   <Text style={styles.detailLabel}>Diagnosis</Text>
                 </View>
-                <Text style={styles.detailValue} numberOfLines={1}>{patient.diagnosis}</Text>
+                <Text style={styles.detailValue} numberOfLines={1}>{patient.diagnosis ?? '—'}</Text>
               </View>
               <View style={[styles.detailRow, styles.detailRowLast]}>
                 <View style={styles.detailItem}>
@@ -93,7 +97,7 @@ export default function EHRScreen() {
                   <Text style={styles.detailLabel}>Admitted</Text>
                 </View>
                 <Text style={styles.detailValue}>
-                  {new Date(patient.admittedDate).toLocaleDateString()}
+                  {patient.admission_date ? new Date(patient.admission_date).toLocaleDateString() : '—'}
                 </Text>
               </View>
             </View>

@@ -3,9 +3,16 @@ import { ScrollView, View, Text, StyleSheet, Pressable, RefreshControl } from 'r
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Accent, Palette, Radius, Shadow, Spacing, Type } from '@/constants/theme';
-import { SectionHeader } from '@/components/ui';
+import { SectionHeader, LoadingSpinner } from '@/components/ui';
 import { useAuth } from '@/hooks/useAuth';
-import { mockTasks, mockPerformanceLogs, mockQuizzes } from '@/lib/mocks';
+import { useApiData, allCached } from '@/hooks/useApiData';
+import {
+  fetchScenarioAssignments,
+  fetchAssessments,
+  fetchProgress,
+  fetchPatients,
+  ScenarioAssignment,
+} from '@/lib/api';
 
 const today = new Date();
 const dateStr = today.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
@@ -25,29 +32,40 @@ function getInitials(name?: string) {
 const STATUS_COLORS: Record<string, string> = {
   completed: Accent.green.fg,
   in_progress: Accent.amber.fg,
+  overdue: Accent.red.fg,
 };
+
+function formatDeadline(assignment: ScenarioAssignment): string {
+  if (!assignment.deadline) return 'No deadline';
+  return new Date(assignment.deadline).toLocaleDateString([], { month: 'short', day: 'numeric' });
+}
 
 export default function DashboardScreen() {
   const router = useRouter();
   const { user } = useAuth();
-  const [refreshing, setRefreshing] = React.useState(false);
 
-  const onRefresh = React.useCallback(() => {
-    setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 1000);
-  }, []);
-
-  const pendingTasks = mockTasks.filter((t) => t.status !== 'completed').length;
-  const avgScore = Math.round(
-    mockPerformanceLogs.reduce((a, b) => a + b.score, 0) / mockPerformanceLogs.length
+  const { data, loading, refreshing, refresh } = useApiData(() =>
+    allCached(fetchScenarioAssignments(), fetchAssessments(), fetchProgress(), fetchPatients()),
   );
-  const quizzesAvailable = mockQuizzes.filter((q) => q.completedCount < q.questionsCount).length;
+  const [assignments, assessments, progress, patients] = data ?? [[], [], null, []];
+
+  if (loading && !data) {
+    return <LoadingSpinner />;
+  }
+
+  const openTasks = assignments.filter((a) => a.status !== 'completed');
+  const scoredAttempts = (progress?.attempts ?? []).filter((a) => a.score !== null);
+  const avgScore =
+    scoredAttempts.length > 0
+      ? Math.round(scoredAttempts.reduce((sum, a) => sum + (a.score ?? 0), 0) / scoredAttempts.length)
+      : null;
+  const quizzesAvailable = assessments.filter((a) => a.attempt_count === 0).length;
 
   const stats = [
-    { label: 'Pending Tasks', value: String(pendingTasks), icon: 'clipboard-outline' as const, accent: Accent.teal, href: '/tasks' },
-    { label: 'Avg Score', value: `${avgScore}%`, icon: 'trending-up' as const, accent: Accent.green, href: '/progress' },
+    { label: 'Pending Tasks', value: String(openTasks.length), icon: 'clipboard-outline' as const, accent: Accent.teal, href: '/tasks' },
+    { label: 'Avg Score', value: avgScore === null ? '—' : `${avgScore}%`, icon: 'trending-up' as const, accent: Accent.green, href: '/progress' },
     { label: 'Quizzes Available', value: String(quizzesAvailable), icon: 'document-text-outline' as const, accent: Accent.violet, href: '/tasks/quizzes' },
-    { label: 'Total Patients', value: '5', icon: 'people-outline' as const, accent: Accent.cyan, href: '/ehr' },
+    { label: 'Total Patients', value: String(patients.length), icon: 'people-outline' as const, accent: Accent.cyan, href: '/ehr' },
   ];
 
   const quickActions = [
@@ -63,7 +81,7 @@ export default function DashboardScreen() {
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Palette.primary]} tintColor={Palette.primary} />
+        <RefreshControl refreshing={refreshing} onRefresh={refresh} colors={[Palette.primary]} tintColor={Palette.primary} />
       }
     >
       <View style={styles.greetingRow}>
@@ -119,42 +137,45 @@ export default function DashboardScreen() {
 
       <View style={styles.section}>
         <SectionHeader
-          title="Today's Tasks"
-          subtitle={`${pendingTasks} pending`}
+          title="Assigned Scenarios"
+          subtitle={`${openTasks.length} pending`}
           actionLabel="See all"
           onAction={() => router.push('/tasks')}
         />
         <View style={styles.taskList}>
-          {mockTasks.slice(0, 3).map((task, index) => (
-            <Pressable
-              key={task.id}
-              style={({ pressed }) => [
-                styles.taskItem,
-                index > 0 && styles.taskItemBorder,
-                pressed && styles.pressedDim,
-              ]}
-              onPress={() => router.push(`/tasks/${task.id}`)}
-            >
-              <View
-                style={[
-                  styles.taskStatusDot,
-                  { backgroundColor: STATUS_COLORS[task.status] ?? Palette.textMuted },
+          {openTasks.length === 0 ? (
+            <Text style={styles.emptyTasks}>No scenarios assigned yet — your faculty will assign them here.</Text>
+          ) : (
+            openTasks.slice(0, 3).map((task, index) => (
+              <Pressable
+                key={task.id}
+                style={({ pressed }) => [
+                  styles.taskItem,
+                  index > 0 && styles.taskItemBorder,
+                  pressed && styles.pressedDim,
                 ]}
-              />
-              <View style={styles.taskContent}>
-                <Text style={styles.taskTitle} numberOfLines={1}>{task.title}</Text>
-                <View style={styles.taskMeta}>
-                  <Ionicons name="person-outline" size={12} color={Palette.textSecondary} />
-                  <Text style={styles.taskPatient}>{task.patientName}</Text>
-                  <Ionicons name="time-outline" size={12} color={Palette.textMuted} style={styles.taskMetaIcon} />
-                  <Text style={styles.taskDue}>
-                    {new Date(task.dueDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </Text>
+                onPress={() => router.push(`/tasks/${task.id}`)}
+              >
+                <View
+                  style={[
+                    styles.taskStatusDot,
+                    { backgroundColor: STATUS_COLORS[task.status] ?? Palette.textMuted },
+                  ]}
+                />
+                <View style={styles.taskContent}>
+                  <Text style={styles.taskTitle} numberOfLines={1}>{task.scenario_title}</Text>
+                  <View style={styles.taskMeta}>
+                    <Ionicons name="time-outline" size={12} color={Palette.textMuted} />
+                    <Text style={styles.taskDue}>Due {formatDeadline(task)}</Text>
+                    {task.required && (
+                      <Text style={styles.taskRequired}>Required</Text>
+                    )}
+                  </View>
                 </View>
-              </View>
-              <Ionicons name="chevron-forward" size={16} color={Palette.textFaint} />
-            </Pressable>
-          ))}
+                <Ionicons name="chevron-forward" size={16} color={Palette.textFaint} />
+              </Pressable>
+            ))
+          )}
         </View>
       </View>
     </ScrollView>
@@ -332,5 +353,19 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Palette.textMuted,
     marginLeft: 4,
+  },
+  taskRequired: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Accent.red.fg,
+    marginLeft: Spacing.md,
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+  },
+  emptyTasks: {
+    fontSize: 13,
+    color: Palette.textMuted,
+    paddingVertical: Spacing.xl,
+    textAlign: 'center',
   },
 });

@@ -1,9 +1,10 @@
 import React from 'react';
-import { ScrollView, View, Text, StyleSheet, Pressable } from 'react-native';
-import { useRouter } from 'expo-router';
+import { ScrollView, View, Text, StyleSheet, Pressable, RefreshControl } from 'react-native';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { SectionHeader } from '@/components/ui';
-import { mockQuizzes } from '@/lib/mocks';
+import { SectionHeader, LoadingSpinner, EmptyState } from '@/components/ui';
+import { useApiData } from '@/hooks/useApiData';
+import { fetchAssessments, StudentAssessment } from '@/lib/api';
 import { Accent, Palette, Radius, Shadow, Spacing, Type } from '@/constants/theme';
 
 const DIFFICULTY_ACCENT: Record<string, { fg: string; bg: string }> = {
@@ -12,70 +13,143 @@ const DIFFICULTY_ACCENT: Record<string, { fg: string; bg: string }> = {
   advanced: Accent.red,
 };
 
-export default function QuizzesScreen() {
-  const router = useRouter();
+function formatTimeLimit(seconds: number | null): string {
+  if (!seconds) return 'No time limit';
+  return `${Math.round(seconds / 60)} min`;
+}
 
-  const availableQuizzes = mockQuizzes.filter((q) => q.completedCount < q.questionsCount);
-  const completedQuizzes = mockQuizzes.filter((q) => q.completedCount >= q.questionsCount);
+function QuizCard({ quiz, onPress }: { quiz: StudentAssessment; onPress: () => void }) {
+  const difficulty = DIFFICULTY_ACCENT[quiz.difficulty] ?? Accent.slate;
+  const attempted = quiz.attempt_count > 0;
+  const dueSoon = quiz.assignment?.deadline
+    ? new Date(quiz.assignment.deadline).toLocaleDateString([], { month: 'short', day: 'numeric' })
+    : null;
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+    <Pressable style={({ pressed }) => [styles.quizCard, pressed && styles.pressed]} onPress={onPress}>
+      <View style={styles.quizHeader}>
+        <View style={[styles.quizIcon, { backgroundColor: attempted ? Accent.green.bg : difficulty.bg }]}>
+          <Ionicons
+            name={attempted ? 'checkmark' : 'document-text'}
+            size={19}
+            color={attempted ? Accent.green.fg : difficulty.fg}
+          />
+        </View>
+        <View style={styles.quizInfo}>
+          <Text style={styles.quizTitle}>{quiz.title}</Text>
+          <Text style={styles.quizDesc} numberOfLines={1}>
+            {quiz.description || quiz.category}
+          </Text>
+        </View>
+        {attempted && quiz.best_score !== null ? (
+          <View style={styles.scoreBadge}>
+            <Ionicons name="trophy" size={13} color={Accent.green.fg} />
+            <Text style={styles.scoreText}>{quiz.best_score}%</Text>
+          </View>
+        ) : (
+          <Ionicons name="chevron-forward" size={17} color={Palette.textFaint} />
+        )}
+      </View>
+      <View style={styles.quizMeta}>
+        <View style={styles.categoryBadge}>
+          <Text style={styles.categoryText}>{quiz.category}</Text>
+        </View>
+        <View style={[styles.difficultyBadge, { backgroundColor: difficulty.bg }]}>
+          <View style={[styles.difficultyDot, { backgroundColor: difficulty.fg }]} />
+          <Text style={[styles.difficultyText, { color: difficulty.fg }]}>{quiz.difficulty}</Text>
+        </View>
+        {quiz.assignment?.required && !attempted && (
+          <View style={[styles.difficultyBadge, { backgroundColor: Accent.red.bg }]}>
+            <Text style={[styles.difficultyText, { color: Accent.red.fg }]}>Required</Text>
+          </View>
+        )}
+      </View>
+      <View style={styles.quizFooter}>
+        <View style={styles.footerItem}>
+          <Ionicons name="help-circle-outline" size={13} color={Palette.textMuted} />
+          <Text style={styles.footerText}>{quiz.question_count} questions</Text>
+        </View>
+        <View style={styles.footerItem}>
+          <Ionicons name="time-outline" size={13} color={Palette.textMuted} />
+          <Text style={styles.footerText}>{formatTimeLimit(quiz.time_limit_seconds)}</Text>
+        </View>
+        {dueSoon && (
+          <View style={styles.footerItem}>
+            <Ionicons name="calendar-outline" size={13} color={Palette.textMuted} />
+            <Text style={styles.footerText}>Due {dueSoon}</Text>
+          </View>
+        )}
+        {attempted && (
+          <View style={styles.footerItem}>
+            <Ionicons name="repeat-outline" size={13} color={Palette.textMuted} />
+            <Text style={styles.footerText}>
+              {quiz.attempt_count} {quiz.attempt_count === 1 ? 'attempt' : 'attempts'}
+            </Text>
+          </View>
+        )}
+      </View>
+    </Pressable>
+  );
+}
+
+export default function QuizzesScreen() {
+  const router = useRouter();
+  const { data, loading, refreshing, error, refresh, reload } = useApiData(fetchAssessments);
+
+  // Refresh scores/attempt counts when returning from a quiz.
+  useFocusEffect(
+    React.useCallback(() => {
+      if (data) reload();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [reload]),
+  );
+
+  if (loading && !data) {
+    return <LoadingSpinner />;
+  }
+
+  const assessments = data ?? [];
+  const assigned = assessments.filter(
+    (q) => q.assignment && q.assignment.status !== 'completed' && q.attempt_count === 0,
+  );
+  const available = assessments.filter(
+    (q) => q.attempt_count === 0 && !assigned.includes(q),
+  );
+  const completed = assessments.filter((q) => q.attempt_count > 0);
+
+  return (
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={refresh} colors={[Palette.primary]} tintColor={Palette.primary} />
+      }
+    >
       <View style={styles.intro}>
         <Ionicons name="school-outline" size={16} color={Accent.violet.fg} />
-        <Text style={styles.introText}>Personalized questions based on your knowledge gaps</Text>
+        <Text style={styles.introText}>Assessments from your faculty&apos;s question banks</Text>
       </View>
 
-      {availableQuizzes.length > 0 ? (
+      {error && !data ? <EmptyState icon="cloud-offline-outline" message={error} /> : null}
+
+      {assigned.length > 0 && (
         <View style={styles.section}>
-          <SectionHeader title="Available Quizzes" count={availableQuizzes.length} />
-          {availableQuizzes.map((quiz) => {
-            const difficulty = DIFFICULTY_ACCENT[quiz.difficulty] ?? Accent.slate;
-            return (
-              <Pressable
-                key={quiz.id}
-                style={({ pressed }) => [styles.quizCard, pressed && styles.pressed]}
-                onPress={() => router.push(`/tasks/quizzes/${quiz.id}`)}
-              >
-                <View style={styles.quizHeader}>
-                  <View style={[styles.quizIcon, { backgroundColor: difficulty.bg }]}>
-                    <Ionicons name="document-text" size={19} color={difficulty.fg} />
-                  </View>
-                  <View style={styles.quizInfo}>
-                    <Text style={styles.quizTitle}>{quiz.title}</Text>
-                    <Text style={styles.quizDesc} numberOfLines={1}>{quiz.description}</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={17} color={Palette.textFaint} />
-                </View>
-                <View style={styles.quizMeta}>
-                  <View style={styles.categoryBadge}>
-                    <Text style={styles.categoryText}>{quiz.category}</Text>
-                  </View>
-                  <View style={[styles.difficultyBadge, { backgroundColor: difficulty.bg }]}>
-                    <View style={[styles.difficultyDot, { backgroundColor: difficulty.fg }]} />
-                    <Text style={[styles.difficultyText, { color: difficulty.fg }]}>{quiz.difficulty}</Text>
-                  </View>
-                </View>
-                <View style={styles.quizProgress}>
-                  <View style={styles.progressBar}>
-                    <View
-                      style={[
-                        styles.progressFill,
-                        {
-                          width: `${(quiz.completedCount / quiz.questionsCount) * 100}%`,
-                          backgroundColor: difficulty.fg,
-                        },
-                      ]}
-                    />
-                  </View>
-                  <Text style={styles.progressText}>
-                    {quiz.completedCount}/{quiz.questionsCount}
-                  </Text>
-                </View>
-              </Pressable>
-            );
-          })}
+          <SectionHeader title="Assigned to You" count={assigned.length} />
+          {assigned.map((quiz) => (
+            <QuizCard key={quiz.id} quiz={quiz} onPress={() => router.push(`/tasks/quizzes/${quiz.id}`)} />
+          ))}
         </View>
-      ) : (
+      )}
+
+      {available.length > 0 ? (
+        <View style={styles.section}>
+          <SectionHeader title="Available Quizzes" count={available.length} />
+          {available.map((quiz) => (
+            <QuizCard key={quiz.id} quiz={quiz} onPress={() => router.push(`/tasks/quizzes/${quiz.id}`)} />
+          ))}
+        </View>
+      ) : assigned.length === 0 && completed.length > 0 ? (
         <View style={styles.emptySection}>
           <View style={styles.emptyIconContainer}>
             <Ionicons name="checkmark-circle" size={44} color={Accent.green.fg} />
@@ -83,27 +157,15 @@ export default function QuizzesScreen() {
           <Text style={styles.emptyTitle}>All Quizzes Completed!</Text>
           <Text style={styles.emptyText}>Check back later for new quizzes.</Text>
         </View>
-      )}
+      ) : assigned.length === 0 && completed.length === 0 && !error ? (
+        <EmptyState icon="document-text-outline" message="No quizzes published yet — check back once your faculty publishes one." />
+      ) : null}
 
-      {completedQuizzes.length > 0 && (
+      {completed.length > 0 && (
         <View style={styles.section}>
-          <SectionHeader title="Completed" count={completedQuizzes.length} />
-          {completedQuizzes.map((quiz) => (
-            <View key={quiz.id} style={[styles.quizCard, styles.quizCardCompleted]}>
-              <View style={styles.quizHeader}>
-                <View style={[styles.quizIcon, { backgroundColor: Accent.green.bg }]}>
-                  <Ionicons name="checkmark" size={19} color={Accent.green.fg} />
-                </View>
-                <View style={styles.quizInfo}>
-                  <Text style={[styles.quizTitle, styles.quizTitleCompleted]}>{quiz.title}</Text>
-                  <Text style={styles.quizDesc} numberOfLines={1}>{quiz.description}</Text>
-                </View>
-                <View style={styles.scoreBadge}>
-                  <Ionicons name="trophy" size={13} color={Accent.green.fg} />
-                  <Text style={styles.scoreText}>{quiz.lastScore}%</Text>
-                </View>
-              </View>
-            </View>
+          <SectionHeader title="Completed" count={completed.length} />
+          {completed.map((quiz) => (
+            <QuizCard key={quiz.id} quiz={quiz} onPress={() => router.push(`/tasks/quizzes/${quiz.id}`)} />
           ))}
         </View>
       )}
@@ -152,9 +214,6 @@ const styles = StyleSheet.create({
     borderColor: Palette.border,
     ...Shadow.card,
   },
-  quizCardCompleted: {
-    opacity: 0.7,
-  },
   quizHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -174,10 +233,6 @@ const styles = StyleSheet.create({
   quizTitle: {
     ...Type.itemTitle,
     fontWeight: '700',
-  },
-  quizTitleCompleted: {
-    textDecorationLine: 'line-through',
-    color: Palette.textMuted,
   },
   quizDesc: {
     fontSize: 12,
@@ -219,28 +274,20 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textTransform: 'capitalize',
   },
-  quizProgress: {
+  quizFooter: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: Spacing.lg,
+    flexWrap: 'wrap',
   },
-  progressBar: {
-    flex: 1,
-    height: 6,
-    backgroundColor: Palette.border,
-    borderRadius: 3,
-    marginRight: 10,
-    overflow: 'hidden',
+  footerItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
-  progressFill: {
-    height: '100%',
-    borderRadius: 3,
-  },
-  progressText: {
+  footerText: {
     fontSize: 12,
-    color: Palette.textSecondary,
-    width: 40,
-    textAlign: 'right',
-    fontWeight: '500',
+    color: Palette.textMuted,
   },
   scoreBadge: {
     flexDirection: 'row',

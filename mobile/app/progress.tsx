@@ -1,8 +1,9 @@
 import React from 'react';
-import { ScrollView, View, Text, StyleSheet } from 'react-native';
-import { Card, StatCard, SectionHeader } from '@/components/ui';
+import { ScrollView, View, Text, StyleSheet, RefreshControl } from 'react-native';
+import { Card, StatCard, SectionHeader, LoadingSpinner } from '@/components/ui';
 import { Accent, Palette, Spacing } from '@/constants/theme';
-import { mockPerformanceLogs, getPerformanceByCategory } from '@/lib/mocks';
+import { useApiData } from '@/hooks/useApiData';
+import { fetchProgress } from '@/lib/api';
 
 function scoreColor(score: number) {
   if (score >= 70) return Accent.green.fg;
@@ -11,27 +12,67 @@ function scoreColor(score: number) {
 }
 
 export default function ProgressScreen() {
-  const categoryStats = getPerformanceByCategory();
-  const avgScore = Math.round(
-    mockPerformanceLogs.reduce((a, b) => a + b.score, 0) / mockPerformanceLogs.length
-  );
+  const { data, loading, refreshing, error, refresh } = useApiData(fetchProgress);
 
-  const recentLogs = [...mockPerformanceLogs].reverse().slice(0, 7);
+  if (loading && !data) {
+    return <LoadingSpinner />;
+  }
+
+  const attempts = data?.attempts ?? [];
+  const competencyScores = data?.competency_scores ?? [];
+
+  const scored = attempts.filter((a) => a.score !== null);
+  const avgScore =
+    scored.length > 0
+      ? Math.round(scored.reduce((sum, a) => sum + (a.score ?? 0), 0) / scored.length)
+      : 0;
+
+  // Average score per competency area.
+  const byCategory = new Map<string, { total: number; count: number }>();
+  for (const record of competencyScores) {
+    const name = record.competency_areas?.name ?? 'General';
+    const entry = byCategory.get(name) ?? { total: 0, count: 0 };
+    entry.total += record.score;
+    entry.count += 1;
+    byCategory.set(name, entry);
+  }
+  const categoryStats = [...byCategory.entries()].map(([category, { total, count }]) => ({
+    category,
+    avgScore: Math.round(total / count),
+  }));
+
+  const recentAttempts = attempts.slice(0, 7);
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={refresh} colors={[Palette.primary]} tintColor={Palette.primary} />
+      }
+    >
       <View style={styles.statsGrid}>
         <View style={styles.statItem}>
-          <StatCard title="Overall Score" value={`${avgScore}%`} icon="bar-chart" color={scoreColor(avgScore)} />
+          <StatCard
+            title="Overall Score"
+            value={scored.length > 0 ? `${avgScore}%` : '—'}
+            icon="bar-chart"
+            color={scoreColor(avgScore)}
+          />
         </View>
         <View style={styles.statItem}>
-          <StatCard title="Activities" value={mockPerformanceLogs.length} icon="pulse" color={Palette.primary} />
+          <StatCard title="Quizzes Taken" value={attempts.length} icon="pulse" color={Palette.primary} />
         </View>
       </View>
 
       <View style={styles.section}>
-        <SectionHeader title="By Category" />
+        <SectionHeader title="By Competency" />
         <Card>
+          {categoryStats.length === 0 && (
+            <Text style={styles.emptyText}>
+              {error ?? 'No competency scores yet — they appear as your faculty validates your work.'}
+            </Text>
+          )}
           {categoryStats.map((stat, index) => (
             <View key={stat.category} style={[styles.categoryItem, index > 0 && styles.rowBorder]}>
               <Text style={styles.categoryName}>{stat.category}</Text>
@@ -40,7 +81,7 @@ export default function ProgressScreen() {
                   <View
                     style={[
                       styles.progressFill,
-                      { width: `${stat.avgScore}%`, backgroundColor: scoreColor(stat.avgScore) },
+                      { width: `${Math.min(stat.avgScore, 100)}%`, backgroundColor: scoreColor(stat.avgScore) },
                     ]}
                   />
                 </View>
@@ -54,14 +95,23 @@ export default function ProgressScreen() {
       <View style={styles.section}>
         <SectionHeader title="Recent Activity" />
         <Card>
-          {recentLogs.map((log, index) => (
-            <View key={log.id} style={[styles.activityItem, index > 0 && styles.rowBorder]}>
+          {recentAttempts.length === 0 && (
+            <Text style={styles.emptyText}>No quiz attempts yet — take one from the Quizzes tab.</Text>
+          )}
+          {recentAttempts.map((attempt, index) => (
+            <View key={attempt.id} style={[styles.activityItem, index > 0 && styles.rowBorder]}>
               <View style={styles.activityDate}>
-                <Text style={styles.activityDateText}>{new Date(log.date).toLocaleDateString()}</Text>
+                <Text style={styles.activityDateText}>
+                  {new Date(attempt.submitted_at).toLocaleDateString()}
+                </Text>
               </View>
               <View style={styles.activityInfo}>
-                <Text style={styles.activityComp}>{log.competency}</Text>
-                <Text style={[styles.activityScore, { color: scoreColor(log.score) }]}>{log.score}%</Text>
+                <Text style={styles.activityComp} numberOfLines={1}>
+                  {attempt.assessments?.title ?? 'Assessment'}
+                </Text>
+                <Text style={[styles.activityScore, { color: scoreColor(attempt.score ?? 0) }]}>
+                  {attempt.score !== null ? `${attempt.score}%` : '—'}
+                </Text>
               </View>
             </View>
           ))}
@@ -159,5 +209,11 @@ const styles = StyleSheet.create({
   activityScore: {
     fontSize: 14,
     fontWeight: '700',
+  },
+  emptyText: {
+    fontSize: 13,
+    color: Palette.textMuted,
+    textAlign: 'center',
+    paddingVertical: Spacing.md,
   },
 });

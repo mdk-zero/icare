@@ -1,26 +1,31 @@
 import React from 'react';
-import { ScrollView, View, Text, StyleSheet, Pressable } from 'react-native';
-import { useRouter } from 'expo-router';
+import { ScrollView, View, Text, StyleSheet, Pressable, RefreshControl } from 'react-native';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Accent, Palette, Radius, Shadow, Spacing, Type } from '@/constants/theme';
-import { ScreenHeader, SectionHeader, EmptyState } from '@/components/ui';
-import { mockTasks } from '@/lib/mocks';
+import { ScreenHeader, SectionHeader, EmptyState, LoadingSpinner } from '@/components/ui';
+import { useApiData } from '@/hooks/useApiData';
+import { fetchScenarioAssignments, ScenarioAssignment } from '@/lib/api';
 
-type Task = (typeof mockTasks)[number];
-
-const PRIORITY_ACCENT: Record<string, { fg: string; bg: string }> = {
-  high: Accent.red,
-  medium: Accent.amber,
-  low: Accent.green,
-};
-
-function TaskCard({ task, onPress }: { task: Task; onPress: () => void }) {
+function TaskCard({ task, onPress }: { task: ScenarioAssignment; onPress: () => void }) {
   const completed = task.status === 'completed';
   const statusAccent =
-    task.status === 'completed' ? Accent.green : task.status === 'in_progress' ? Accent.amber : Accent.slate;
+    task.status === 'completed'
+      ? Accent.green
+      : task.status === 'in_progress'
+        ? Accent.amber
+        : task.status === 'overdue'
+          ? Accent.red
+          : Accent.slate;
   const statusIcon =
-    task.status === 'completed' ? 'checkmark' : task.status === 'in_progress' ? 'ellipse' : 'ellipse-outline';
-  const priority = PRIORITY_ACCENT[task.priority] ?? Accent.slate;
+    task.status === 'completed'
+      ? 'checkmark'
+      : task.status === 'in_progress'
+        ? 'ellipse'
+        : task.status === 'overdue'
+          ? 'alert'
+          : 'ellipse-outline';
+  const requiredAccent = task.required ? Accent.red : Accent.slate;
 
   return (
     <Pressable
@@ -34,35 +39,52 @@ function TaskCard({ task, onPress }: { task: Task; onPress: () => void }) {
           </View>
           <View style={styles.taskHeaderText}>
             <Text style={[styles.taskTitle, completed && styles.taskTitleCompleted]} numberOfLines={1}>
-              {task.title}
+              {task.scenario_title}
             </Text>
             <View style={styles.taskPatientRow}>
-              <Ionicons name="person-outline" size={12} color={Palette.textSecondary} />
-              <Text style={styles.taskPatient}>{task.patientName}</Text>
+              <Ionicons name="calendar-outline" size={12} color={Palette.textSecondary} />
+              <Text style={styles.taskPatient}>
+                Assigned {new Date(task.assigned_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+              </Text>
             </View>
           </View>
         </View>
         <Ionicons name="chevron-forward" size={17} color={Palette.textFaint} />
       </View>
 
-      {!completed && (
-        <>
-          <Text style={styles.taskDescription} numberOfLines={2}>
-            {task.description}
-          </Text>
-          <View style={styles.taskFooter}>
-            <View style={[styles.priorityPill, { backgroundColor: priority.bg }]}>
-              <View style={[styles.priorityDot, { backgroundColor: priority.fg }]} />
-              <Text style={[styles.priorityText, { color: priority.fg }]}>{task.priority}</Text>
-            </View>
+      {completed ? (
+        <View style={styles.taskFooter}>
+          <View style={[styles.priorityPill, { backgroundColor: Accent.green.bg }]}>
+            <Text style={[styles.priorityText, { color: Accent.green.fg }]}>
+              Score: {task.score ?? '—'}%
+            </Text>
+          </View>
+          {task.completed_at && (
             <View style={styles.dueRow}>
-              <Ionicons name="time-outline" size={12} color={Palette.textMuted} />
+              <Ionicons name="checkmark-done-outline" size={12} color={Palette.textMuted} />
               <Text style={styles.taskDue}>
-                {new Date(task.dueDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                {new Date(task.completed_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}
               </Text>
             </View>
+          )}
+        </View>
+      ) : (
+        <View style={styles.taskFooter}>
+          <View style={[styles.priorityPill, { backgroundColor: requiredAccent.bg }]}>
+            <View style={[styles.priorityDot, { backgroundColor: requiredAccent.fg }]} />
+            <Text style={[styles.priorityText, { color: requiredAccent.fg }]}>
+              {task.required ? 'Required' : 'Optional'}
+            </Text>
           </View>
-        </>
+          <View style={styles.dueRow}>
+            <Ionicons name="time-outline" size={12} color={Palette.textMuted} />
+            <Text style={styles.taskDue}>
+              {task.deadline
+                ? `Due ${new Date(task.deadline).toLocaleDateString([], { month: 'short', day: 'numeric' })}`
+                : 'No deadline'}
+            </Text>
+          </View>
+        </View>
       )}
     </Pressable>
   );
@@ -70,10 +92,24 @@ function TaskCard({ task, onPress }: { task: Task; onPress: () => void }) {
 
 export default function TasksScreen() {
   const router = useRouter();
+  const { data, loading, refreshing, error, refresh, reload } = useApiData(fetchScenarioAssignments);
 
-  const pendingTasks = mockTasks.filter((t) => t.status === 'pending');
-  const inProgressTasks = mockTasks.filter((t) => t.status === 'in_progress');
-  const completedTasks = mockTasks.filter((t) => t.status === 'completed');
+  // Re-pull when returning from the scenario runner so completions show up.
+  useFocusEffect(
+    React.useCallback(() => {
+      if (data) reload();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [reload]),
+  );
+
+  if (loading && !data) {
+    return <LoadingSpinner />;
+  }
+
+  const assignments = data ?? [];
+  const pendingTasks = assignments.filter((t) => t.status === 'pending' || t.status === 'overdue');
+  const inProgressTasks = assignments.filter((t) => t.status === 'in_progress');
+  const completedTasks = assignments.filter((t) => t.status === 'completed');
   const remaining = pendingTasks.length + inProgressTasks.length;
 
   const quickLinks = [
@@ -87,13 +123,18 @@ export default function TasksScreen() {
       style={styles.container}
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={refresh} colors={[Palette.primary]} tintColor={Palette.primary} />
+      }
     >
       <ScreenHeader
         eyebrow="Clinical Duty"
-        title="Clinical Tasks"
+        title="Assigned Scenarios"
         subtitle={`${remaining} ${remaining === 1 ? 'task' : 'tasks'} remaining`}
         icon="clipboard-outline"
       />
+
+      {error && !data ? <EmptyState icon="cloud-offline-outline" message={error} /> : null}
 
       <View style={styles.quickLinks}>
         {quickLinks.map((link) => (
@@ -135,11 +176,9 @@ export default function TasksScreen() {
       <View style={styles.section}>
         <SectionHeader title="Completed" count={completedTasks.length} />
         {completedTasks.length > 0 ? (
-          completedTasks
-            .slice(0, 2)
-            .map((task) => (
-              <TaskCard key={task.id} task={task} onPress={() => router.push(`/tasks/${task.id}`)} />
-            ))
+          completedTasks.map((task) => (
+            <TaskCard key={task.id} task={task} onPress={() => router.push(`/tasks/${task.id}`)} />
+          ))
         ) : (
           <EmptyState message="No completed tasks yet" />
         )}
