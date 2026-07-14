@@ -1,22 +1,49 @@
 import React from 'react';
-import { ScrollView, View, Text, StyleSheet, Pressable } from 'react-native';
+import { ScrollView, View, Text, StyleSheet, Pressable, RefreshControl, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { mockAIRecommendations } from '@/lib/mocks';
 import { Accent, Palette, Radius, Shadow, Spacing, Type } from '@/constants/theme';
-import { SectionHeader } from '@/components/ui';
+import { SectionHeader, LoadingSpinner, EmptyState } from '@/components/ui';
+import { useApiData } from '@/hooks/useApiData';
+import { fetchRecommendations, dismissRecommendation } from '@/lib/api';
 
-const TYPE_ACCENT: Record<string, { fg: string; bg: string; icon: keyof typeof Ionicons.glyphMap }> = {
-  quiz: { ...Accent.violet, icon: 'document-text' },
-  task: { ...Accent.amber, icon: 'list' },
-  review: { ...Accent.blue, icon: 'book' },
-};
+const RANK_ACCENT = (rank: number) => (rank <= 1 ? Accent.red : rank === 2 ? Accent.amber : Accent.teal);
 
 export default function RecommendationsScreen() {
   const router = useRouter();
+  const { data, loading, refreshing, error, refresh, reload } = useApiData(fetchRecommendations);
+
+  if (loading && !data) {
+    return <LoadingSpinner />;
+  }
+
+  const recommendations = data ?? [];
+
+  const handleDismiss = (id: string) => {
+    Alert.alert('Dismiss Recommendation', 'Hide this suggestion?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Dismiss',
+        onPress: async () => {
+          try {
+            await dismissRecommendation(id);
+            await reload();
+          } catch (err) {
+            Alert.alert('Error', err instanceof Error ? err.message : 'Unable to dismiss');
+          }
+        },
+      },
+    ]);
+  };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={refresh} colors={[Palette.primary]} tintColor={Palette.primary} />
+      }
+    >
       <View style={styles.aiHeader}>
         <View style={styles.aiIconContainer}>
           <Ionicons name="bulb" size={24} color="#fff" />
@@ -27,35 +54,51 @@ export default function RecommendationsScreen() {
         </View>
       </View>
 
-      <SectionHeader title="Recommended for You" count={mockAIRecommendations.length} />
+      <SectionHeader title="Recommended for You" count={recommendations.length} />
 
-      {mockAIRecommendations.map((rec) => {
-        const accent = TYPE_ACCENT[rec.type] ?? { ...Accent.teal, icon: 'bulb' as const };
-        const priority = rec.priority === 'high' ? Accent.red : Accent.amber;
+      {recommendations.length === 0 && (
+        <EmptyState
+          icon={error ? 'cloud-offline-outline' : 'bulb-outline'}
+          message={error ?? 'No recommendations yet — they appear after your quiz results are analyzed.'}
+        />
+      )}
+
+      {recommendations.map((rec) => {
+        const priority = RANK_ACCENT(rec.rank);
 
         return (
           <Pressable
             key={rec.id}
             style={({ pressed }) => [styles.recommendationCard, pressed && styles.pressed]}
             onPress={() => {
-              if (rec.type === 'quiz') router.push('/tasks/quizzes');
-              else if (rec.type === 'task') router.push('/tasks');
+              if (rec.assessments) router.push(`/tasks/quizzes/${rec.assessment_id}`);
+              else router.push('/tasks/quizzes');
             }}
+            onLongPress={() => handleDismiss(rec.id)}
           >
             <View style={styles.recHeader}>
-              <View style={[styles.recIconContainer, { backgroundColor: accent.bg }]}>
-                <Ionicons name={accent.icon} size={18} color={accent.fg} />
+              <View style={[styles.recIconContainer, { backgroundColor: Accent.violet.bg }]}>
+                <Ionicons name="document-text" size={18} color={Accent.violet.fg} />
               </View>
-              <View style={[styles.priorityBadge, { backgroundColor: priority.bg }]}>
-                <Text style={[styles.priorityText, { color: priority.fg }]}>{rec.priority}</Text>
+              <View style={styles.recHeaderRight}>
+                <View style={[styles.priorityBadge, { backgroundColor: priority.bg }]}>
+                  <Text style={[styles.priorityText, { color: priority.fg }]}>#{rec.rank}</Text>
+                </View>
+                <Pressable hitSlop={8} onPress={() => handleDismiss(rec.id)}>
+                  <Ionicons name="close" size={16} color={Palette.textFaint} />
+                </Pressable>
               </View>
             </View>
-            <Text style={styles.recTitle}>{rec.title}</Text>
-            <Text style={styles.recDesc}>{rec.description}</Text>
+            <Text style={styles.recTitle}>{rec.assessments?.title ?? 'Recommended practice'}</Text>
+            <Text style={styles.recDesc}>{rec.reason}</Text>
+            {rec.competency_areas?.name ? (
+              <View style={styles.competencyRow}>
+                <Ionicons name="school-outline" size={12} color={Palette.textMuted} />
+                <Text style={styles.competencyText}>{rec.competency_areas.name}</Text>
+              </View>
+            ) : null}
             <View style={styles.recActionRow}>
-              <Text style={styles.recAction}>
-                {rec.type === 'quiz' ? 'Start Quiz' : rec.type === 'task' ? 'View Task' : 'Learn More'}
-              </Text>
+              <Text style={styles.recAction}>Start Quiz</Text>
               <Ionicons name="arrow-forward" size={14} color={Palette.primary} />
             </View>
           </Pressable>
@@ -135,6 +178,21 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: Spacing.md,
+  },
+  recHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+  },
+  competencyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: Spacing.sm,
+  },
+  competencyText: {
+    fontSize: 12,
+    color: Palette.textMuted,
   },
   recIconContainer: {
     width: 38,

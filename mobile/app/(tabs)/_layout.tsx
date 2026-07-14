@@ -1,11 +1,11 @@
-import { Tabs, useRouter } from 'expo-router';
-import React from 'react';
+import { Tabs, useRouter, usePathname } from 'expo-router';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Image, Pressable, Platform } from 'react-native';
 import logoImg from '@/assets/images/logo-pill.png';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Palette } from '@/constants/theme';
-import { mockNotifications } from '@/lib/mocks';
+import { fetchNotifications } from '@/lib/api';
 
 const TAB_ICONS: Record<string, { active: keyof typeof Ionicons.glyphMap; inactive: keyof typeof Ionicons.glyphMap }> = {
   index: { active: 'home', inactive: 'home-outline' },
@@ -123,7 +123,23 @@ function AppHeader({ notificationCount }: { notificationCount: number }) {
 }
 
 export default function TabLayout() {
-  const unreadCount = mockNotifications.filter((n) => !n.read).length;
+  const pathname = usePathname();
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  // Refresh the badge whenever the active tab changes (cheap, cached read).
+  useEffect(() => {
+    let cancelled = false;
+    fetchNotifications()
+      .then((result) => {
+        if (!cancelled) setUnreadCount(result.data.unread ?? 0);
+      })
+      .catch(() => {
+        // offline with no cache; keep the last known count
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [pathname]);
 
   return (
     <View style={{ flex: 1, backgroundColor: Palette.background }}>
