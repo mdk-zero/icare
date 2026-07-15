@@ -227,6 +227,31 @@ export default function ScenarioRunnerScreen() {
 
       {scenario && <PatientCase patientCase={scenario.patient_case} />}
 
+      {scenario?.patient_id && (
+        <Card style={styles.blockCard}>
+          <Text style={styles.blockLabel}>Assigned Patient</Text>
+          <Text style={styles.patientLinkHint}>
+            This scenario is linked to a patient — chart your vitals and EHR records there.
+          </Text>
+          <View style={styles.patientLinkRow}>
+            <Pressable
+              style={({ pressed }) => [styles.patientLinkButton, pressed && styles.patientLinkPressed]}
+              onPress={() => router.push(`/ehr/${scenario.patient_id}`)}
+            >
+              <Ionicons name="folder-open-outline" size={16} color={Palette.primary} />
+              <Text style={styles.patientLinkText}>Patient Chart</Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [styles.patientLinkButton, pressed && styles.patientLinkPressed]}
+              onPress={() => router.push(`/vitals/${scenario.patient_id}`)}
+            >
+              <Ionicons name="pulse-outline" size={16} color={Palette.primary} />
+              <Text style={styles.patientLinkText}>Record Vitals</Text>
+            </Pressable>
+          </View>
+        </Card>
+      )}
+
       {scenario && scenario.learning_objectives.length > 0 && (
         <Card style={styles.blockCard}>
           <Text style={styles.blockLabel}>Learning Objectives</Text>
@@ -324,6 +349,22 @@ const styles = StyleSheet.create({
   },
   caseKey: { fontSize: 13, color: Palette.textSecondary, textTransform: 'capitalize' },
   caseValue: { fontSize: 13, fontWeight: '600', color: Palette.ink, flexShrink: 1, textAlign: 'right' },
+  patientLinkHint: { fontSize: 13, color: Palette.textSecondary, lineHeight: 19, marginBottom: Spacing.md },
+  patientLinkRow: { flexDirection: 'row', gap: Spacing.md },
+  patientLinkButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: Spacing.md,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Palette.border,
+    backgroundColor: Palette.primaryTint,
+  },
+  patientLinkPressed: { opacity: 0.7 },
+  patientLinkText: { fontSize: 13, fontWeight: '600', color: Palette.primary },
   objectiveRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: Spacing.sm },
   objectiveIcon: { marginTop: 2, marginRight: Spacing.sm },
   objectiveText: { flex: 1, fontSize: 13, color: Palette.text, lineHeight: 19 },

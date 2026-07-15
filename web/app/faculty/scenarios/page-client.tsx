@@ -49,6 +49,7 @@ const emptyCreateForm = {
   difficulty: "intermediate" as "beginner" | "intermediate" | "advanced",
   category: "",
   learningObjectives: "",
+  patientId: "",
 };
 
 const inputClassName =
@@ -169,6 +170,7 @@ export default function FacultyScenariosClient() {
       description: createForm.description,
       difficulty: createForm.difficulty,
       category: createForm.category || "General",
+      patient_id: createForm.patientId || null,
       learning_objectives: createForm.learningObjectives
         .split("\n")
         .map((o) => o.trim())
@@ -246,6 +248,7 @@ export default function FacultyScenariosClient() {
       difficulty: aiPreview.difficulty,
       category: aiPreview.category,
       patient_case: aiPreview.patient_case,
+      patient_id: selectedPatientId || null,
       learning_objectives: aiPreview.learning_objectives,
       is_ai_generated: true,
     });
@@ -588,6 +591,12 @@ export default function FacultyScenariosClient() {
                   <span className="px-2.5 py-1 bg-gray-100 text-gray-700 text-xs font-medium rounded-full">
                     {scenario.category}
                   </span>
+                  {scenario.patient_name && (
+                    <span className="px-2.5 py-1 bg-teal-50 text-teal-700 text-xs font-medium rounded-full flex items-center gap-1">
+                      <FontAwesomeIcon icon={faUsers} className="w-3 h-3" />
+                      {scenario.patient_name}
+                    </span>
+                  )}
                 </div>
               </div>
               <div className="p-5 bg-gray-50/50">
@@ -723,6 +732,34 @@ export default function FacultyScenariosClient() {
                     />
                   </div>
                 </div>
+              </div>
+              <div>
+                <label className={labelClassName}>Patient</label>
+                <div className="relative">
+                  <select
+                    value={createForm.patientId}
+                    onChange={(e) =>
+                      setCreateForm({ ...createForm, patientId: e.target.value })
+                    }
+                    className={selectClassName + " pr-10"}
+                  >
+                    <option value="">No linked patient</option>
+                    {patients.map((patient) => (
+                      <option key={patient.id} value={patient.id}>
+                        {patient.name} — {patient.diagnosis}
+                        {patient.room_number ? ` (Room ${patient.room_number})` : ""}
+                      </option>
+                    ))}
+                  </select>
+                  <FontAwesomeIcon
+                    icon={faChevronDown}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none"
+                  />
+                </div>
+                <p className="text-xs text-gray-500 mt-1.5">
+                  Students only see patients linked to their assigned scenarios — link one so
+                  they can chart vitals and EHR records for this case.
+                </p>
               </div>
               <div>
                 <label className={labelClassName}>Learning Objectives</label>

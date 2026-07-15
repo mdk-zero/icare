@@ -224,6 +224,7 @@ export interface ScenarioAssignment {
   id: string;
   scenario_id: string;
   scenario_title: string;
+  patient_id: string | null;
   assigned_at: string;
   deadline: string | null;
   status: 'pending' | 'in_progress' | 'completed' | 'overdue';
@@ -244,6 +245,7 @@ export interface Scenario {
   description: string;
   difficulty: 'beginner' | 'intermediate' | 'advanced';
   category: string;
+  patient_id: string | null;
   patient_case: Record<string, unknown>;
   learning_objectives: string[];
   created_at: string;

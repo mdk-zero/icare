@@ -97,7 +97,7 @@ export default function VitalsScreen() {
       <ScreenHeader
         eyebrow="Vitals Encoding"
         title="Patient Vitals"
-        subtitle={`${patients.length} simulated patients`}
+        subtitle={`${patients.length} ${patients.length === 1 ? 'patient' : 'patients'} from your scenarios`}
         icon="pulse"
         accent="red"
       />
@@ -117,7 +117,10 @@ export default function VitalsScreen() {
       )}
 
       {!error && patients.length === 0 && (
-        <EmptyState icon="people-outline" message="No simulated patients available yet." />
+        <EmptyState
+          icon="people-outline"
+          message="No patients yet — they appear when your faculty assigns you a scenario with a linked patient."
+        />
       )}
 
       {patients.map((patient) => {

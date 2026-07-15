@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { logAudit } from '@/app/lib/audit';
+import { isPatientAssigned } from '@/app/lib/assigned-patients';
 
 // Simulated EHR documentation (manuscript F4): TPR sheet, IVF sheet,
 // progress notes. One route handles all three record types.
@@ -80,6 +81,14 @@ export async function POST(request: NextRequest) {
       .eq('id', patient_id)
       .single();
     if (!patient) return NextResponse.json({ error: 'Patient not found' }, { status: 404 });
+
+    // Students may only chart on patients from their assigned scenarios.
+    if (!(await isPatientAssigned(supabase, session.uid, patient_id))) {
+      return NextResponse.json(
+        { error: 'This patient is not part of any scenario assigned to you' },
+        { status: 403 },
+      );
+    }
 
     let row: Record<string, unknown>;
     if (type === 'tpr') {

@@ -3,6 +3,7 @@ import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { logAudit } from '@/app/lib/audit';
 import { evaluateVitals, VITAL_RULES, type VitalSignsInput } from '@/app/lib/vitals/rules';
+import { isPatientAssigned } from '@/app/lib/assigned-patients';
 
 export async function GET(request: NextRequest) {
   const session = await readSession();
@@ -93,6 +94,14 @@ export async function POST(request: NextRequest) {
       .single();
     if (patientError || !patient) {
       return NextResponse.json({ error: 'Patient not found' }, { status: 404 });
+    }
+
+    // Students may only chart on patients from their assigned scenarios.
+    if (!(await isPatientAssigned(supabase, session.uid, patient_id))) {
+      return NextResponse.json(
+        { error: 'This patient is not part of any scenario assigned to you' },
+        { status: 403 },
+      );
     }
 
     const evaluation = evaluateVitals(vitals);

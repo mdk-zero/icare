@@ -65,7 +65,7 @@ export default function DashboardScreen() {
     { label: 'Pending Tasks', value: String(openTasks.length), icon: 'clipboard-outline' as const, accent: Accent.teal, href: '/tasks' },
     { label: 'Avg Score', value: avgScore === null ? '—' : `${avgScore}%`, icon: 'trending-up' as const, accent: Accent.green, href: '/progress' },
     { label: 'Quizzes Available', value: String(quizzesAvailable), icon: 'document-text-outline' as const, accent: Accent.violet, href: '/tasks/quizzes' },
-    { label: 'Total Patients', value: String(patients.length), icon: 'people-outline' as const, accent: Accent.cyan, href: '/ehr' },
+    { label: 'My Patients', value: String(patients.length), icon: 'people-outline' as const, accent: Accent.cyan, href: '/ehr' },
   ];
 
   const quickActions = [

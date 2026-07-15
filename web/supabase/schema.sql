@@ -174,6 +174,7 @@ exception when duplicate_object then null; end $$;
 create table if not exists public.scenarios (
   id uuid primary key default gen_random_uuid(),
   created_by uuid references public.users(id) on delete set null,
+  patient_id uuid references public.patients(id) on delete set null,
   title text not null,
   description text not null default '',
   difficulty scenario_difficulty not null,
@@ -188,6 +189,7 @@ create table if not exists public.scenarios (
 create index if not exists idx_scenarios_created_by on public.scenarios(created_by);
 create index if not exists idx_scenarios_difficulty on public.scenarios(difficulty);
 create index if not exists idx_scenarios_category on public.scenarios(category);
+create index if not exists idx_scenarios_patient_id on public.scenarios(patient_id);
 
 alter table public.scenarios enable row level security;
 

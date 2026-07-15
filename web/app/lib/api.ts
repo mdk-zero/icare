@@ -968,6 +968,8 @@ export interface SimulationScenario {
   difficulty: string;
   category: string;
   patient_case: any;
+  patient_id?: string | null;
+  patient_name?: string | null;
   learning_objectives: string[];
   is_ai_generated: boolean;
   student_count: number;

@@ -44,6 +44,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     difficulty,
     category,
     patient_case,
+    patient_id,
     learning_objectives,
   } = body as {
     title?: unknown;
@@ -51,6 +52,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     difficulty?: unknown;
     category?: unknown;
     patient_case?: unknown;
+    patient_id?: unknown;
     learning_objectives?: unknown;
   };
 
@@ -85,6 +87,13 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     updateData.patient_case = patient_case && typeof patient_case === 'object' ? patient_case : {};
   }
 
+  if (patient_id !== undefined) {
+    if (patient_id !== null && typeof patient_id !== 'string') {
+      return NextResponse.json({ error: 'Invalid patient_id' }, { status: 400 });
+    }
+    updateData.patient_id = typeof patient_id === 'string' && patient_id.trim() ? patient_id.trim() : null;
+  }
+
   if (learning_objectives !== undefined) {
     updateData.learning_objectives = Array.isArray(learning_objectives)
       ? learning_objectives.filter((o): o is string => typeof o === 'string')
@@ -111,6 +120,17 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     if (session.role !== 'admin' && existing.created_by !== session.uid) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    if (typeof updateData.patient_id === 'string') {
+      const { data: patient } = await supabase
+        .from('patients')
+        .select('id')
+        .eq('id', updateData.patient_id)
+        .maybeSingle();
+      if (!patient) {
+        return NextResponse.json({ error: 'Patient not found' }, { status: 400 });
+      }
     }
 
     const { data: scenario, error } = await supabase

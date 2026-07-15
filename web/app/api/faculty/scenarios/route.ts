@@ -35,7 +35,7 @@ export async function GET() {
     const { data: scenarios, error } = await supabase
       .from('scenarios')
       .select(
-        'id, created_by, title, description, difficulty, category, learning_objectives, is_ai_generated, created_at, updated_at, scenario_assignments(count)',
+        'id, created_by, title, description, difficulty, category, learning_objectives, is_ai_generated, created_at, updated_at, patient_id, patients(name), scenario_assignments(count)',
       )
       .order('created_at', { ascending: false })
       .limit(500);
@@ -59,6 +59,8 @@ export async function GET() {
       is_ai_generated: s.is_ai_generated,
       created_at: s.created_at,
       updated_at: s.updated_at,
+      patient_id: s.patient_id,
+      patient_name: (s as unknown as { patients: { name: string } | null }).patients?.name ?? null,
       student_count: Number((s as unknown as { scenario_assignments: [{ count: number }] }).scenario_assignments?.[0]?.count ?? 0),
     }));
 
@@ -91,6 +93,7 @@ export async function POST(request: NextRequest) {
     difficulty,
     category,
     patient_case,
+    patient_id,
     learning_objectives,
     is_ai_generated,
   } = body as {
@@ -99,6 +102,7 @@ export async function POST(request: NextRequest) {
     difficulty?: unknown;
     category?: unknown;
     patient_case?: unknown;
+    patient_id?: unknown;
     learning_objectives?: unknown;
     is_ai_generated?: unknown;
   };
@@ -119,13 +123,30 @@ export async function POST(request: NextRequest) {
     ? learning_objectives.filter((o): o is string => typeof o === 'string')
     : [];
 
+  if (patient_id !== undefined && patient_id !== null && typeof patient_id !== 'string') {
+    return NextResponse.json({ error: 'Invalid patient_id' }, { status: 400 });
+  }
+
   try {
     const supabase = getSupabaseAdmin();
+
+    const linkedPatientId = typeof patient_id === 'string' && patient_id.trim() ? patient_id.trim() : null;
+    if (linkedPatientId) {
+      const { data: patient } = await supabase
+        .from('patients')
+        .select('id')
+        .eq('id', linkedPatientId)
+        .maybeSingle();
+      if (!patient) {
+        return NextResponse.json({ error: 'Patient not found' }, { status: 400 });
+      }
+    }
 
     const { data: scenario, error } = await supabase
       .from('scenarios')
       .insert({
         created_by: session.uid,
+        patient_id: linkedPatientId,
         title: title.trim(),
         description: typeof description === 'string' ? description.trim() : '',
         difficulty: difficulty as typeof validDifficulties[number],

@@ -34,7 +34,7 @@ export default function EHRScreen() {
       <ScreenHeader
         eyebrow="EHR System"
         title="Patient Records"
-        subtitle={`${patients.length} patients in database${fromCache ? ' (offline copy)' : ''}`}
+        subtitle={`${patients.length} ${patients.length === 1 ? 'patient' : 'patients'} from your scenarios${fromCache ? ' (offline copy)' : ''}`}
         icon="folder-open-outline"
         accent="violet"
       />
@@ -55,7 +55,7 @@ export default function EHRScreen() {
       {patients.length === 0 && (
         <EmptyState
           icon={error ? 'cloud-offline-outline' : 'folder-open-outline'}
-          message={error ?? 'No patients yet — your admin loads them from the MIMIC dataset.'}
+          message={error ?? 'No patients yet — they appear when your faculty assigns you a scenario with a linked patient.'}
         />
       )}
       {patients.map((patient) => {
