@@ -165,27 +165,137 @@ export default function LoginPage() {
             </svg>
           </div>
 
-          <MedicalCross className="absolute top-[12%] left-[10%] w-16 h-16 text-white/8 animate-float-slow" />
-          <MedicalCross className="absolute top-[30%] right-[12%] w-10 h-10 text-white/10 animate-float-medium" />
-          <MedicalCross className="absolute bottom-[20%] left-[15%] w-12 h-12 text-white/6 animate-float-slow" />
-          <MedicalCross className="absolute bottom-[38%] right-[8%] w-8 h-8 text-white/8 animate-float-medium" />
+          <MedicalCross className="absolute top-[14%] right-[10%] w-14 h-14 text-white/8 animate-float-slow" />
+          <MedicalCross className="absolute top-[46%] right-[22%] w-8 h-8 text-white/10 animate-float-medium" />
+          <MedicalCross className="absolute bottom-[26%] left-[6%] w-10 h-10 text-white/6 animate-float-slow" />
 
           <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-white/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3" />
-          <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-white/5 rounded-full blur-3xl translate-y-1/3 -translate-x-1/4" />
+          <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-[#7DD3D8]/10 rounded-full blur-3xl translate-y-1/3 -translate-x-1/4" />
 
-          <div className="relative z-10 flex flex-col justify-center items-center w-full px-14 xl:px-20 text-white">
-            <div className="mb-8 p-6 bg-white/10 backdrop-blur-md rounded-3xl border border-white/10 shadow-2xl shadow-black/10">
-              <Image
-                src={logo_white}
-                alt="iCare++ Logo"
-                className="h-24 w-auto drop-shadow-md"
-                priority
-              />
+          <div className="relative z-10 flex flex-col w-full px-14 xl:px-20 py-10 xl:py-14 text-white">
+            {/* Brand */}
+            <div className="opacity-0 animate-fade-in-up">
+              <div className="inline-flex p-4 bg-white/10 backdrop-blur-md rounded-2xl border border-white/10 shadow-xl shadow-black/10">
+                <Image
+                  src={logo_white}
+                  alt="iCare++ Logo"
+                  className="h-12 w-auto drop-shadow-md"
+                  priority
+                />
+              </div>
             </div>
-            <p className="text-lg xl:text-xl text-white/85 text-center max-w-md leading-relaxed">
-              A Scalable Machine Learning-Driven Clinical Competency Assessment and Adaptive
-              Learning System for Nursing Students
-            </p>
+
+            {/* Story */}
+            <div className="flex-1 flex flex-col justify-center max-w-xl py-10">
+              <p className="opacity-0 animate-fade-in-up [animation-delay:100ms] text-[11px] font-semibold uppercase tracking-[0.28em] text-[#7DD3D8] mb-4">
+                Clinical Competency Platform
+              </p>
+              <h2 className="opacity-0 animate-fade-in-up [animation-delay:200ms] text-4xl xl:text-[2.75rem] font-semibold tracking-tight leading-[1.12] mb-5">
+                Sharpen clinical judgment,
+                <br />
+                one scenario at a time.
+              </h2>
+              <p className="opacity-0 animate-fade-in-up [animation-delay:300ms] text-base text-white/70 leading-relaxed mb-10">
+                A scalable machine learning–driven clinical competency assessment and adaptive
+                learning system for nursing students.
+              </p>
+
+              <ul className="space-y-5">
+                {[
+                  {
+                    title: "Adaptive learning paths",
+                    description: "Scenarios that adjust to each student's performance",
+                    delay: "400ms",
+                    icon: (
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={1.5}
+                        d="M13 10V3L4 14h7v7l9-11h-7z"
+                      />
+                    ),
+                  },
+                  {
+                    title: "ML-driven assessment",
+                    description: "Objective, consistent competency scoring on every attempt",
+                    delay: "500ms",
+                    icon: (
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={1.5}
+                        d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+                      />
+                    ),
+                  },
+                  {
+                    title: "Realistic simulation",
+                    description: "EHR charts, live vitals, and patient encounters",
+                    delay: "600ms",
+                    icon: (
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={1.5}
+                        d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
+                      />
+                    ),
+                  },
+                ].map((feature) => (
+                  <li
+                    key={feature.title}
+                    className="opacity-0 animate-fade-in-up flex items-start gap-4"
+                    style={{ animationDelay: feature.delay }}
+                  >
+                    <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-white/10 border border-white/10 backdrop-blur-md flex items-center justify-center text-[#7DD3D8]">
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        {feature.icon}
+                      </svg>
+                    </div>
+                    <div>
+                      <p className="font-medium text-white leading-tight mb-0.5">{feature.title}</p>
+                      <p className="text-sm text-white/60 leading-relaxed">{feature.description}</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Simulated patient monitor */}
+            <div className="opacity-0 animate-fade-in-up [animation-delay:700ms]">
+              <div className="rounded-2xl border border-white/10 bg-black/20 backdrop-blur-md px-6 pt-4 pb-3">
+                <div className="flex items-center justify-between text-[11px] font-mono tracking-wider text-white/60 mb-1">
+                  <span className="flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#4ADE80] animate-pulse-dot" />
+                    SIMULATION READY
+                  </span>
+                  <span aria-hidden="true">HR 76 &middot; SpO&#8322; 98% &middot; NIBP 118/76</span>
+                </div>
+                <svg
+                  className="w-full h-14"
+                  viewBox="0 0 600 100"
+                  preserveAspectRatio="none"
+                  fill="none"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M0,50 h55 q8,-9 16,0 h18 l6,5 l7,-32 l7,40 l6,-13 h14 q12,-13 24,0 h47 h55 q8,-9 16,0 h18 l6,5 l7,-32 l7,40 l6,-13 h14 q12,-13 24,0 h47 h55 q8,-9 16,0 h18 l6,5 l7,-32 l7,40 l6,-13 h14 q12,-13 24,0 h47"
+                    stroke="rgba(255,255,255,0.15)"
+                    strokeWidth={1.5}
+                    vectorEffect="non-scaling-stroke"
+                  />
+                  <path
+                    d="M0,50 h55 q8,-9 16,0 h18 l6,5 l7,-32 l7,40 l6,-13 h14 q12,-13 24,0 h47 h55 q8,-9 16,0 h18 l6,5 l7,-32 l7,40 l6,-13 h14 q12,-13 24,0 h47 h55 q8,-9 16,0 h18 l6,5 l7,-32 l7,40 l6,-13 h14 q12,-13 24,0 h47"
+                    stroke="#7DD3D8"
+                    strokeWidth={2}
+                    vectorEffect="non-scaling-stroke"
+                    pathLength={1}
+                    strokeDasharray="0.18 0.82"
+                    className="animate-ecg-sweep drop-shadow-[0_0_6px_rgba(125,211,216,0.9)]"
+                  />
+                </svg>
+              </div>
+            </div>
           </div>
         </div>
         {/* Right panel — cards */}
