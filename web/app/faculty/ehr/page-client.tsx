@@ -9,6 +9,8 @@ import {
   EhrRecord,
   EhrType,
 } from "../../lib/api";
+import PageHeader from "../../components/PageHeader";
+import Card from "../../components/Card";
 
 const TABS: { id: EhrType; label: string }[] = [
   { id: "tpr", label: "TPR Sheets" },
@@ -69,19 +71,18 @@ export default function FacultyEhrClient() {
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900 mb-2 flex items-center gap-3">
-          <FontAwesomeIcon icon={faNotesMedical} className="text-[#1B6B7B]" />
-          EHR Review
-        </h1>
-        <p className="text-gray-500">
-          Clinical documentation encoded by students — review and sign off progress notes
-        </p>
-      </div>
+    <div className="space-y-4">
+      <PageHeader
+        badge={{
+          icon: <FontAwesomeIcon icon={faNotesMedical} className="w-3.5 h-3.5" />,
+          label: "EHR Review",
+        }}
+        title="EHR Review"
+        subtitle="Clinical documentation encoded by students — review and sign off progress notes"
+      />
 
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="border-b border-gray-100 flex gap-6 px-6">
+      <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden">
+        <div className="border-b border-gray-100/80 flex gap-4 px-4">
           {TABS.map((t) => (
             <button
               key={t.id}
@@ -118,39 +119,39 @@ export default function FacultyEhrClient() {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-gray-50/50 border-b border-gray-200">
+              <thead className="bg-gray-50/50 border-b border-gray-100">
                 <tr>
-                  <th className="text-left py-4 px-6 font-semibold text-gray-600">Student</th>
-                  <th className="text-left py-4 px-6 font-semibold text-gray-600">Patient</th>
-                  <th className="text-left py-4 px-6 font-semibold text-gray-600">Entry</th>
-                  <th className="text-left py-4 px-6 font-semibold text-gray-600">Recorded</th>
+                  <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Student</th>
+                  <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Patient</th>
+                  <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Entry</th>
+                  <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Recorded</th>
                   {tab === "note" && (
-                    <th className="text-left py-4 px-6 font-semibold text-gray-600">Review</th>
+                    <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Review</th>
                   )}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-gray-100/80">
                 {records.map((record) => (
                   <tr key={record.id} className="hover:bg-gray-50/50 transition-colors">
-                    <td className="py-4 px-6">
+                    <td className="py-3 px-4">
                       <p className="font-semibold text-gray-800">{record.users?.name ?? "Unknown"}</p>
                       <p className="text-xs text-gray-500">{record.users?.email ?? ""}</p>
                     </td>
-                    <td className="py-4 px-6">
+                    <td className="py-3 px-4">
                       <p className="text-gray-800">{record.patients?.name ?? "Unknown"}</p>
                       <p className="text-xs text-gray-500">{record.patients?.room_number || "No room"}</p>
                     </td>
-                    <td className="py-4 px-6 text-sm text-gray-600 max-w-md">
+                    <td className="py-3 px-4 text-sm text-gray-600 max-w-md">
                       <p className="line-clamp-2">{summarize(record, tab)}</p>
                       {record.remarks && tab !== "note" && (
                         <p className="text-xs text-gray-400 mt-0.5">{record.remarks}</p>
                       )}
                     </td>
-                    <td className="py-4 px-6 text-sm text-gray-500 whitespace-nowrap">
+                    <td className="py-3 px-4 text-sm text-gray-500 whitespace-nowrap">
                       {new Date(record.created_at).toLocaleString()}
                     </td>
                     {tab === "note" && (
-                      <td className="py-4 px-6">
+                      <td className="py-3 px-4">
                         {record.reviewed_at ? (
                           <span className="px-2 py-1 text-xs font-medium rounded-full flex items-center gap-1 w-fit bg-emerald-100 text-emerald-700">
                             <FontAwesomeIcon icon={faCheckCircle} className="w-3 h-3" />
