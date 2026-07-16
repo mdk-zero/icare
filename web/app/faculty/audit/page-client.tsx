@@ -15,6 +15,8 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import { fetchAuditTrail, AuditLog } from "../../lib/api";
 import PageHeader from "../../components/PageHeader";
+import StatTile from "../../components/StatTile";
+import Card from "../../components/Card";
 
 export default function FacultyAuditClient() {
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
@@ -82,7 +84,7 @@ export default function FacultyAuditClient() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto">
+    <div>
       <PageHeader
         badge={{
           icon: (
@@ -96,43 +98,31 @@ export default function FacultyAuditClient() {
         subtitle="Complete history of all faculty activities and interactions"
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-[#1B6B7B]/10 rounded-xl flex items-center justify-center">
-              <FontAwesomeIcon icon={faClipboard} className="w-5 h-5 text-[#1B6B7B]" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-800">{auditLogs.length}</p>
-              <p className="text-xs text-gray-500">Total Activities</p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-red-50 rounded-xl flex items-center justify-center">
-              <FontAwesomeIcon icon={faTriangleExclamation} className="w-5 h-5 text-red-600" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-800">{auditLogs.filter(a => a.action.toLowerCase().includes('alert')).length}</p>
-              <p className="text-xs text-gray-500">Alert Activities</p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-purple-50 rounded-xl flex items-center justify-center">
-              <FontAwesomeIcon icon={faFlask} className="w-5 h-5 text-purple-600" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-800">{auditLogs.filter(a => a.action.toLowerCase().includes('scenario')).length}</p>
-              <p className="text-xs text-gray-500">Scenario Activities</p>
-            </div>
-          </div>
-        </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+        <StatTile
+          icon={<FontAwesomeIcon icon={faClipboard} className="w-5 h-5" />}
+          value={auditLogs.length}
+          label="Total Activities"
+          iconBg="bg-[#1B6B7B]/10"
+          iconColor="text-[#1B6B7B]"
+        />
+        <StatTile
+          icon={<FontAwesomeIcon icon={faTriangleExclamation} className="w-5 h-5" />}
+          value={auditLogs.filter(a => a.action.toLowerCase().includes('alert')).length}
+          label="Alert Activities"
+          iconBg="bg-red-50"
+          iconColor="text-red-600"
+        />
+        <StatTile
+          icon={<FontAwesomeIcon icon={faFlask} className="w-5 h-5" />}
+          value={auditLogs.filter(a => a.action.toLowerCase().includes('scenario')).length}
+          label="Scenario Activities"
+          iconBg="bg-purple-50"
+          iconColor="text-purple-600"
+        />
       </div>
 
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <select
           value={actionFilter}
           onChange={(e) => setActionFilter(e.target.value)}
@@ -151,32 +141,32 @@ export default function FacultyAuditClient() {
         </p>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-gray-50/50 border-b border-gray-200">
+            <thead className="bg-gray-50/50 border-b border-gray-100">
               <tr>
-                <th className="text-left py-4 px-6 font-semibold text-gray-600">Category</th>
-                <th className="text-left py-4 px-6 font-semibold text-gray-600">Action</th>
-                <th className="text-left py-4 px-6 font-semibold text-gray-600">Details</th>
-                <th className="text-left py-4 px-6 font-semibold text-gray-600">Faculty</th>
-                <th className="text-left py-4 px-6 font-semibold text-gray-600">Timestamp</th>
+                <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Category</th>
+                <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Action</th>
+                <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Details</th>
+                <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Faculty</th>
+                <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Timestamp</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-gray-100/80">
               {loading ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <tr key={i} className="animate-pulse">
-                    <td className="py-4 px-6"><div className="h-5 w-16 bg-gray-200 rounded-lg" /></td>
-                    <td className="py-4 px-6"><div className="h-6 w-24 bg-gray-200 rounded-full" /></td>
-                    <td className="py-4 px-6"><div className="h-4 w-48 bg-gray-200 rounded" /></td>
-                    <td className="py-4 px-6">
+                    <td className="py-3 px-4"><div className="h-5 w-16 bg-gray-200 rounded-lg" /></td>
+                    <td className="py-3 px-4"><div className="h-6 w-24 bg-gray-200 rounded-full" /></td>
+                    <td className="py-3 px-4"><div className="h-4 w-48 bg-gray-200 rounded" /></td>
+                    <td className="py-3 px-4">
                       <div className="flex items-center gap-2">
                         <div className="w-6 h-6 bg-gray-200 rounded-full" />
                         <div className="h-4 w-24 bg-gray-200 rounded" />
                       </div>
                     </td>
-                    <td className="py-4 px-6"><div className="h-4 w-28 bg-gray-200 rounded" /></td>
+                    <td className="py-3 px-4"><div className="h-4 w-28 bg-gray-200 rounded" /></td>
                   </tr>
                 ))
               ) : auditLogs.length === 0 ? (
@@ -188,19 +178,19 @@ export default function FacultyAuditClient() {
               ) : (
                 auditLogs.map((log) => (
                   <tr key={log.id} className="hover:bg-gray-50/50 transition-colors">
-                    <td className="py-4 px-6">
+                    <td className="py-3 px-4">
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-lg text-xs font-medium ${getTabColor(log.tab)}`}>
                         {log.tab.replace('_', ' ')}
                       </span>
                     </td>
-                    <td className="py-4 px-6">
+                    <td className="py-3 px-4">
                       <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getActionColor(log.action)}`}>
                         <FontAwesomeIcon icon={getActionIcon(log.action)} className="w-4 h-4 mr-1" />
                         {log.action}
                       </span>
                     </td>
-                    <td className="py-4 px-6 text-gray-600">{log.details}</td>
-                    <td className="py-4 px-6">
+                    <td className="py-3 px-4 text-gray-600">{log.details}</td>
+                    <td className="py-3 px-4">
                       <div className="flex items-center gap-2">
                         <div className="w-6 h-6 bg-gray-100 rounded-full flex items-center justify-center text-xs font-medium text-gray-600">
                           {log.faculty_name.charAt(0)}
@@ -208,7 +198,7 @@ export default function FacultyAuditClient() {
                         <span className="text-gray-800">{log.faculty_name}</span>
                       </div>
                     </td>
-                    <td className="py-4 px-6 text-gray-500 text-sm">{formatTimestamp(log.created_at)}</td>
+                    <td className="py-3 px-4 text-gray-500 text-sm">{formatTimestamp(log.created_at)}</td>
                   </tr>
                 ))
               )}
