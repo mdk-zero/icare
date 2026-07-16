@@ -27,15 +27,18 @@ export default function LoginPage() {
     setGoogleMounted(true);
   }, []);
 
-  const redirectAfterAuth = useCallback((user: User) => {
-    if (user.force_password_change) {
-      router.push("/change-password");
-      return;
-    }
-    router.push(
-      user.role === "student" ? "/dashboard" : user.role === "faculty" ? "/faculty" : "/admin",
-    );
-  }, [router]);
+  const redirectAfterAuth = useCallback(
+    (user: User) => {
+      if (user.force_password_change) {
+        router.push("/change-password");
+        return;
+      }
+      router.push(
+        user.role === "student" ? "/dashboard" : user.role === "faculty" ? "/faculty" : "/admin",
+      );
+    },
+    [router],
+  );
 
   useLayoutEffect(() => {
     const updateWidth = () => {
@@ -167,14 +170,12 @@ export default function LoginPage() {
           <div className="relative z-10 flex flex-col w-full px-14 xl:px-20 py-10 xl:py-14 text-white">
             {/* Brand */}
             <div className="opacity-0 animate-fade-in-up">
-              <div className="inline-flex p-4 bg-white/10 backdrop-blur-md rounded-2xl border border-white/10 shadow-xl shadow-black/10">
-                <Image
-                  src={logo_white}
-                  alt="iCare++ Logo"
-                  className="h-12 w-auto drop-shadow-md"
-                  priority
-                />
-              </div>
+              <Image
+                src={logo_white}
+                alt="iCare++ Logo"
+                className="h-14 w-auto drop-shadow-md"
+                priority
+              />
             </div>
 
             {/* Story */}
@@ -240,7 +241,12 @@ export default function LoginPage() {
                     style={{ animationDelay: feature.delay }}
                   >
                     <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-white/10 border border-white/10 backdrop-blur-md flex items-center justify-center text-[#7DD3D8]">
-                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <svg
+                        className="w-5 h-5"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
                         {feature.icon}
                       </svg>
                     </div>
@@ -251,33 +257,6 @@ export default function LoginPage() {
                   </li>
                 ))}
               </ul>
-            </div>
-
-            {/* Simulated patient monitor */}
-            <div className="opacity-0 animate-fade-in-up [animation-delay:700ms]">
-              <div className="rounded-2xl border border-white/10 bg-black/20 backdrop-blur-md px-6 pt-4 pb-3">
-                <div className="flex items-center justify-between text-[11px] font-mono tracking-wider text-white/60 mb-1">
-                  <span className="flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#4ADE80] animate-pulse-dot" />
-                    SIMULATION READY
-                  </span>
-                  <span aria-hidden="true">HR 76 &middot; SpO&#8322; 98% &middot; NIBP 118/76</span>
-                </div>
-                <svg
-                  className="w-full h-14"
-                  viewBox="0 0 600 100"
-                  preserveAspectRatio="none"
-                  fill="none"
-                  aria-hidden="true"
-                >
-                  <path
-                    d="M0,50 h55 q8,-9 16,0 h18 l6,5 l7,-32 l7,40 l6,-13 h14 q12,-13 24,0 h47 h55 q8,-9 16,0 h18 l6,5 l7,-32 l7,40 l6,-13 h14 q12,-13 24,0 h47 h55 q8,-9 16,0 h18 l6,5 l7,-32 l7,40 l6,-13 h14 q12,-13 24,0 h47"
-                    stroke="rgba(125,211,216,0.45)"
-                    strokeWidth={1.5}
-                    vectorEffect="non-scaling-stroke"
-                  />
-                </svg>
-              </div>
             </div>
           </div>
         </div>
@@ -494,10 +473,7 @@ export default function LoginPage() {
               </div>
 
               {/* Google button */}
-              <div
-                ref={googleButtonRef}
-                className="w-full flex justify-center overflow-hidden"
-              >
+              <div ref={googleButtonRef} className="w-full flex justify-center overflow-hidden">
                 {isGoogleLoading ? (
                   <div className="w-full h-[44px] border border-[#E2E8F0] rounded-xl flex items-center justify-center gap-2.5 text-[#64748B] bg-[#F8FAFC] text-sm">
                     <svg
