@@ -2,8 +2,12 @@
 
 import { useState, useEffect } from "react";
 import { fetchNotifications, markNotificationRead, markAllNotificationsRead, FacultyNotification } from "../../lib/api";
-import { SkeletonInlineStatCard, SkeletonNotificationItem } from "../../components/skeletons";
+import { SkeletonNotificationItem } from "../../components/skeletons";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faBell, faTriangleExclamation } from "@fortawesome/free-solid-svg-icons";
 import PageHeader from "../../components/PageHeader";
+import StatTile from "../../components/StatTile";
+import Card from "../../components/Card";
 
 export default function FacultyNotificationsClient() {
   const [notifications, setNotifications] = useState<FacultyNotification[]>([]);
@@ -57,7 +61,7 @@ export default function FacultyNotificationsClient() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div>
       <PageHeader
         badge={{
           icon: (
@@ -80,46 +84,28 @@ export default function FacultyNotificationsClient() {
         } : undefined}
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-[#1B6B7B]/10 rounded-xl flex items-center justify-center">
-              <svg className="w-5 h-5 text-[#1B6B7B]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-              </svg>
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-800">{notifications.length}</p>
-              <p className="text-xs text-gray-500">Total</p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-red-50 rounded-xl flex items-center justify-center">
-              <svg className="w-5 h-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-800">{notifications.filter(n => n.type === 'alert').length}</p>
-              <p className="text-xs text-gray-500">Alerts</p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center">
-              <svg className="w-5 h-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-800">{unreadCount}</p>
-              <p className="text-xs text-gray-500">Unread</p>
-            </div>
-          </div>
-        </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+        <StatTile
+          icon={<FontAwesomeIcon icon={faBell} className="w-5 h-5" />}
+          value={notifications.length}
+          label="Total"
+          iconBg="bg-[#1B6B7B]/10"
+          iconColor="text-[#1B6B7B]"
+        />
+        <StatTile
+          icon={<FontAwesomeIcon icon={faTriangleExclamation} className="w-5 h-5" />}
+          value={notifications.filter(n => n.type === 'alert').length}
+          label="Alerts"
+          iconBg="bg-red-50"
+          iconColor="text-red-600"
+        />
+        <StatTile
+          icon={<FontAwesomeIcon icon={faTriangleExclamation} className="w-5 h-5" />}
+          value={unreadCount}
+          label="Unread"
+          iconBg="bg-amber-50"
+          iconColor="text-amber-600"
+        />
       </div>
 
       {loading ? (
@@ -133,7 +119,7 @@ export default function FacultyNotificationsClient() {
           {notifications.map((notification) => (
             <div 
               key={notification.id}
-              className={`bg-white rounded-2xl p-5 shadow-sm border transition-all ${
+              className={`bg-white rounded-xl p-3 shadow-sm border transition-all ${
                 notification.is_read 
                   ? 'border-gray-100' 
                   : 'border-l-4 border-l-[#1B6B7B] border-gray-100'
@@ -171,7 +157,7 @@ export default function FacultyNotificationsClient() {
             </div>
           ))}
           {notifications.length === 0 && (
-            <div className="bg-white rounded-2xl p-12 text-center">
+            <div className="bg-white rounded-xl p-12 border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] text-center">
               <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <svg className="w-8 h-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />

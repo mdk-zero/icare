@@ -282,7 +282,7 @@ export default function FacultyAssessmentsClient() {
   // ---------- render ----------
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <PageHeader
         title="Question Bank"
         subtitle="Create quizzes, manage questions, and assign them to your students"
@@ -297,7 +297,7 @@ export default function FacultyAssessmentsClient() {
       <div className="flex justify-end">
         <button
           onClick={openCreateModal}
-          className="flex items-center gap-2 px-5 py-2.5 bg-[#1B6B7B] text-white rounded-xl hover:bg-[#155663] transition-colors text-sm font-medium"
+          className="flex items-center gap-2 px-5 py-2.5 bg-[#1B6B7B] text-white rounded-lg hover:bg-[#155663] transition-colors text-sm font-medium shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
         >
           <FontAwesomeIcon icon={faPlus} className="w-3.5 h-3.5" />
           New Assessment
@@ -309,15 +309,20 @@ export default function FacultyAssessmentsClient() {
           <FontAwesomeIcon icon={faSpinner} spin className="w-6 h-6 text-[#1B6B7B]" />
         </div>
       ) : assessments.length === 0 ? (
-        <div className="bg-white p-12 rounded-2xl shadow-sm border border-gray-100 text-center text-gray-500">
+        <div className="bg-white p-12 rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] text-center text-gray-500">
           No assessments yet. Create your first quiz to start building the question bank.
         </div>
       ) : (
         <div className="space-y-4">
           {assessments.map((a) => (
-            <div key={a.id} className="bg-white rounded-2xl shadow-sm border border-gray-100">
+            <div key={a.id} className="relative bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden">
+              <span className={`absolute left-0 top-0 h-full w-0.5 ${
+                a.difficulty === "beginner" ? "bg-emerald-500" :
+                a.difficulty === "intermediate" ? "bg-amber-500" :
+                a.difficulty === "advanced" ? "bg-rose-500" : "bg-gray-500"
+              }`} aria-hidden />
               <div className="p-6">
-                <div className="flex items-start justify-between gap-4">
+                <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap mb-1">
                       <h3 className="font-semibold text-gray-800">{a.title}</h3>
@@ -414,7 +419,7 @@ export default function FacultyAssessmentsClient() {
       {/* ---------- create/edit assessment modal ---------- */}
       {showAssessmentModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] w-full max-w-lg p-4 space-y-2 max-h-[90vh] overflow-y-auto border border-gray-200/80">
             <div className="flex items-center justify-between">
               <h3 className="font-semibold text-gray-800">
                 {editingAssessment ? "Edit Assessment" : "New Assessment"}
@@ -446,7 +451,7 @@ export default function FacultyAssessmentsClient() {
                 className={inputClassName}
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className={labelClassName}>Difficulty</label>
                 <select
@@ -499,7 +504,7 @@ export default function FacultyAssessmentsClient() {
             </div>
             <div>
               <label className={labelClassName}>Visible to sections</label>
-              <div className="flex gap-4">
+              <div className="flex gap-3">
                 {["A", "B", "C"].map((s) => (
                   <label key={s} className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
                     <input
@@ -545,7 +550,7 @@ export default function FacultyAssessmentsClient() {
       {/* ---------- assign modal ---------- */}
       {assignTarget && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] w-full max-w-lg p-4 space-y-2 max-h-[90vh] overflow-y-auto border border-gray-200/80">
             <div className="flex items-center justify-between">
               <h3 className="font-semibold text-gray-800">
                 Assign &ldquo;{assignTarget.title}&rdquo;
@@ -570,7 +575,7 @@ export default function FacultyAssessmentsClient() {
               <label className={labelClassName}>
                 Students ({selectedStudents.size} selected)
               </label>
-              <div className="border border-gray-200 rounded-xl divide-y divide-gray-100 max-h-64 overflow-y-auto">
+              <div className="border border-gray-200/80 rounded-xl divide-y divide-gray-100/80 max-h-64 overflow-y-auto">
                 {students.length === 0 && (
                   <p className="p-4 text-sm text-gray-500">No students in your roster yet.</p>
                 )}

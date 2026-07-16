@@ -66,7 +66,7 @@ const EnrollStudentModal = ({ isOpen, onClose, onEnroll }: { isOpen: boolean; on
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
+      <div className="bg-white rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] w-full max-w-md mx-4 overflow-hidden border border-gray-200/80" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <h2 className="text-xl font-bold text-gray-900">Enroll New Student</h2>
           <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
@@ -75,7 +75,7 @@ const EnrollStudentModal = ({ isOpen, onClose, onEnroll }: { isOpen: boolean; on
             </svg>
           </button>
         </div>
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-4 space-y-2">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">Full Name</label>
             <input
@@ -186,7 +186,7 @@ export default function StudentManagementClient() {
   });
 
   return (
-    <div className="max-w-7xl mx-auto">
+    <div>
       <PageHeader
         badge={{
           icon: (
@@ -226,7 +226,7 @@ export default function StudentManagementClient() {
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 hover:shadow-lg hover:border-[#1B6B7B]/30 transition-all duration-300">
+        <div className="bg-white rounded-xl p-4 border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-[#1B6B7B]/10 rounded-xl flex items-center justify-center">
               <svg className="w-5 h-5 text-[#1B6B7B]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -239,7 +239,7 @@ export default function StudentManagementClient() {
             </div>
           </div>
         </div>
-        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 hover:shadow-lg hover:border-[#1B6B7B]/30 transition-all duration-300">
+        <div className="bg-white rounded-xl p-4 border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center">
               <svg className="w-5 h-5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -252,7 +252,7 @@ export default function StudentManagementClient() {
             </div>
           </div>
         </div>
-        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 hover:shadow-lg hover:border-[#1B6B7B]/30 transition-all duration-300">
+        <div className="bg-white rounded-xl p-4 border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-rose-50 rounded-xl flex items-center justify-center">
               <svg className="w-5 h-5 text-rose-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -265,7 +265,7 @@ export default function StudentManagementClient() {
             </div>
           </div>
         </div>
-        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 hover:shadow-lg hover:border-[#1B6B7B]/30 transition-all duration-300">
+        <div className="bg-white rounded-xl p-4 border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-[#1B6B7B]/10 rounded-xl flex items-center justify-center">
               <svg className="w-5 h-5 text-[#1B6B7B]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -311,12 +311,12 @@ export default function StudentManagementClient() {
         />
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 hover:shadow-lg hover:border-[#1B6B7B]/30 transition-all duration-300 overflow-hidden">
+      <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-gray-50/50 border-b border-gray-200">
+            <thead className="bg-gray-50/50 border-b border-gray-100">
               <tr>
-                <th className="text-left py-4 px-4 sm:px-6 font-semibold text-gray-600">
+                <th className="text-left py-4 px-4 sm:px-6 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
                   <button onClick={() => { setSortBy('name'); setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc'); }} className="flex items-center gap-1 hover:text-[#1B6B7B] transition-colors">
                     Student
                     {sortBy === 'name' && (
@@ -326,7 +326,7 @@ export default function StudentManagementClient() {
                     )}
                   </button>
                 </th>
-                <th className="text-left py-4 px-4 sm:px-6 font-semibold text-gray-600">
+                <th className="text-left py-4 px-4 sm:px-6 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
                   <button onClick={() => { setSortBy('quizzes_completed'); setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc'); }} className="flex items-center gap-1 hover:text-[#1B6B7B] transition-colors">
                     Quizzes
                     {sortBy === 'quizzes_completed' && (
@@ -336,7 +336,7 @@ export default function StudentManagementClient() {
                     )}
                   </button>
                 </th>
-                <th className="text-left py-4 px-4 sm:px-6 font-semibold text-gray-600">
+                <th className="text-left py-4 px-4 sm:px-6 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
                   <button onClick={() => { setSortBy('average_score'); setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc'); }} className="flex items-center gap-1 hover:text-[#1B6B7B] transition-colors">
                     Avg. Score
                     {sortBy === 'average_score' && (
@@ -346,8 +346,8 @@ export default function StudentManagementClient() {
                     )}
                   </button>
                 </th>
-                <th className="text-left py-4 px-4 sm:px-6 font-semibold text-gray-600">Status</th>
-                <th className="text-left py-4 px-4 sm:px-6 font-semibold text-gray-600 hidden sm:table-cell">
+                <th className="text-left py-4 px-4 sm:px-6 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Status</th>
+                <th className="text-left py-4 px-4 sm:px-6 text-[11px] font-semibold text-gray-500 uppercase tracking-wider hidden sm:table-cell">
                   <button onClick={() => { setSortBy('last_active'); setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc'); }} className="flex items-center gap-1 hover:text-[#1B6B7B] transition-colors">
                     Last Active
                     {sortBy === 'last_active' && (
@@ -359,7 +359,7 @@ export default function StudentManagementClient() {
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-gray-100/80">
               {loading ? (
                 <tr>
                   <td colSpan={5} className="py-12 text-center text-gray-400">Loading students…</td>

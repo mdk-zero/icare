@@ -13,6 +13,8 @@ import {
 import { fetchAnalyticsSummary, AnalyticsSummary } from "../../lib/api";
 import { SkeletonStatCard, SkeletonChartArea, SkeletonCompetencyGrid } from "../../components/skeletons";
 import PageHeader from "../../components/PageHeader";
+import Card from "../../components/Card";
+import StatTile from "../../components/StatTile";
 
 export default function FacultyAnalyticsClient() {
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
@@ -28,8 +30,8 @@ export default function FacultyAnalyticsClient() {
 
   if (loading) {
     return (
-      <div className="max-w-7xl mx-auto space-y-6">
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 sm:p-8 mb-6 animate-pulse">
+      <div>
+        <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] p-4 sm:p-5 mb-4 animate-pulse">
           <div className="space-y-3">
             <div className="h-5 w-32 bg-gray-200 rounded-full" />
             <div className="h-8 w-64 bg-gray-200 rounded" />
@@ -41,7 +43,7 @@ export default function FacultyAnalyticsClient() {
             <SkeletonStatCard key={i} />
           ))}
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <SkeletonChartArea />
           <SkeletonChartArea />
         </div>
@@ -62,30 +64,34 @@ export default function FacultyAnalyticsClient() {
       icon: faChartBar,
       value: summary?.cohort.average_score != null ? `${summary.cohort.average_score}%` : "—",
       label: "Cohort Average Score",
-      tint: "bg-blue-50 text-blue-600",
+      iconBg: "bg-blue-50",
+      iconColor: "text-blue-600",
     },
     {
       icon: faClipboardCheck,
       value: `${summary?.cohort.submitted_attempts ?? 0}`,
       label: "Submitted Quiz Attempts",
-      tint: "bg-green-50 text-green-600",
+      iconBg: "bg-green-50",
+      iconColor: "text-green-600",
     },
     {
       icon: faUsers,
       value: `${summary?.cohort.active_students_30d ?? 0}/${summary?.cohort.total_students ?? 0}`,
       label: "Active Students (30 days)",
-      tint: "bg-purple-50 text-purple-600",
+      iconBg: "bg-purple-50",
+      iconColor: "text-purple-600",
     },
     {
       icon: faExclamationTriangle,
       value: `${atRisk}`,
       label: "At-Risk Students",
-      tint: "bg-amber-50 text-amber-600",
+      iconBg: "bg-amber-50",
+      iconColor: "text-amber-600",
     },
   ];
 
   return (
-    <div className="max-w-7xl mx-auto">
+    <div>
       <PageHeader
         badge={{
           icon: (
@@ -99,20 +105,21 @@ export default function FacultyAnalyticsClient() {
         subtitle="Performance and clinical training data from the iCARE++ warehouse"
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
         {statCards.map((card) => (
-          <div key={card.label} className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-            <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-4 ${card.tint}`}>
-              <FontAwesomeIcon icon={card.icon} className="w-5 h-5" />
-            </div>
-            <p className="text-3xl font-bold text-gray-900">{card.value}</p>
-            <p className="text-gray-500 text-sm mt-1">{card.label}</p>
-          </div>
+          <StatTile
+            key={card.label}
+            icon={<FontAwesomeIcon icon={card.icon} className="w-5 h-5" />}
+            value={card.value}
+            label={card.label}
+            iconBg={card.iconBg}
+            iconColor={card.iconColor}
+          />
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+        <Card padding="md">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Weekly Score Trend</h3>
           {trend.length === 0 ? (
             <p className="text-gray-400 text-sm py-12 text-center">
@@ -144,9 +151,9 @@ export default function FacultyAnalyticsClient() {
               </div>
             </>
           )}
-        </div>
+        </Card>
 
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+        <Card padding="md">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">At-Risk Prediction Snapshot</h3>
           {predicted === 0 ? (
             <div className="py-10 text-center">
@@ -172,10 +179,10 @@ export default function FacultyAnalyticsClient() {
               </div>
             </div>
           )}
-        </div>
+        </Card>
       </div>
 
-      <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 mb-6">
+      <Card padding="md" className="mb-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Competency Breakdown</h3>
         {Object.keys(summary?.competency_breakdown ?? {}).length === 0 ? (
           <p className="text-gray-400 text-sm">
@@ -208,9 +215,9 @@ export default function FacultyAnalyticsClient() {
             ))}
           </div>
         )}
-      </div>
+      </Card>
 
-      <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+      <Card padding="md">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Clinical Training Activity</h3>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
           {[
@@ -233,7 +240,7 @@ export default function FacultyAnalyticsClient() {
             Warehouse last refreshed {new Date(summary.etl.last_run_at).toLocaleString()}
           </p>
         )}
-      </div>
+      </Card>
     </div>
   );
 }

@@ -28,6 +28,8 @@ import {
   RiskPrediction,
 } from "../../lib/api";
 import PageHeader from "../../components/PageHeader";
+import StatTile from "../../components/StatTile";
+import Card from "../../components/Card";
 
 export default function FacultyStudentsClient() {
   const router = useRouter();
@@ -329,7 +331,7 @@ export default function FacultyStudentsClient() {
   const safeCount = studentUsers.filter((u) => predictions[u.id]?.risk === "safe").length;
 
   return (
-    <div className="max-w-7xl mx-auto">
+    <div>
       <PageHeader
         badge={{
           icon: (
@@ -358,43 +360,31 @@ export default function FacultyStudentsClient() {
         }}
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 hover:shadow-lg hover:border-[#1B6B7B]/30 transition-all duration-300">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-[#1B6B7B]/10 rounded-xl flex items-center justify-center">
-              <FontAwesomeIcon icon={faUser} className="w-5 h-5 text-[#1B6B7B]" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-800">{students.length}</p>
-              <p className="text-xs text-gray-500">Total Students</p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 hover:shadow-lg hover:border-red-200 transition-all duration-300">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-red-50 rounded-xl flex items-center justify-center">
-              <FontAwesomeIcon icon={faTriangleExclamation} className="w-5 h-5 text-red-600" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-800">{atRiskCount}</p>
-              <p className="text-xs text-gray-500">At Risk (ML)</p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 hover:shadow-lg hover:border-emerald-200 transition-all duration-300">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center">
-              <FontAwesomeIcon icon={faUser} className="w-5 h-5 text-emerald-600" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-800">{safeCount}</p>
-              <p className="text-xs text-gray-500">Safe (ML)</p>
-            </div>
-          </div>
-        </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+        <StatTile
+          icon={<FontAwesomeIcon icon={faUser} className="w-5 h-5" />}
+          value={students.length}
+          label="Total Students"
+          iconBg="bg-[#1B6B7B]/10"
+          iconColor="text-[#1B6B7B]"
+        />
+        <StatTile
+          icon={<FontAwesomeIcon icon={faTriangleExclamation} className="w-5 h-5" />}
+          value={atRiskCount}
+          label="At Risk (ML)"
+          iconBg="bg-red-50"
+          iconColor="text-red-600"
+        />
+        <StatTile
+          icon={<FontAwesomeIcon icon={faUser} className="w-5 h-5" />}
+          value={safeCount}
+          label="Safe (ML)"
+          iconBg="bg-emerald-50"
+          iconColor="text-emerald-600"
+        />
       </div>
 
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-4">
           <button
             onClick={() => {
@@ -404,7 +394,7 @@ export default function FacultyStudentsClient() {
               setCopiedPassword(false);
               if (newEmailRef.current) newEmailRef.current.value = "";
             }}
-            className="px-4 py-2.5 bg-[#1B6B7B] text-white font-medium rounded-xl hover:bg-[#145A63] transition-all flex items-center gap-2 shadow-sm"
+            className="px-4 py-2.5 bg-[#1B6B7B] text-white font-medium rounded-lg hover:bg-[#145A63] transition-all flex items-center gap-2 shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
           >
             <FontAwesomeIcon icon={faPlus} className="w-5 h-5" />
             Register Student
@@ -437,10 +427,10 @@ export default function FacultyStudentsClient() {
 
       {showCreateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg border border-gray-100 overflow-hidden max-h-[90vh] flex flex-col">
-            <div className="flex items-center justify-between px-7 py-5 border-b border-gray-100 bg-gray-50/50 flex-shrink-0">
+          <div className="bg-white rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] w-full max-w-lg border border-gray-200/80 overflow-hidden max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100/80 bg-gray-50/50 flex-shrink-0">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-[#1B6B7B]/10 rounded-xl flex items-center justify-center">
+                <div className="w-10 h-10 bg-[#1B6B7B]/10 rounded-lg flex items-center justify-center">
                   <FontAwesomeIcon icon={faPlus} className="text-[#1B6B7B] w-5 h-5" />
                 </div>
                 <div>
@@ -459,7 +449,7 @@ export default function FacultyStudentsClient() {
                   setCreatedPassword(null);
                   setCopiedPassword(false);
                 }}
-                className="p-2 hover:bg-gray-200 rounded-xl transition-all"
+                className="p-2 hover:bg-gray-200 rounded-lg transition-all"
               >
                 <FontAwesomeIcon icon={faXmark} className="w-5 h-5 text-gray-500" />
               </button>
@@ -467,7 +457,7 @@ export default function FacultyStudentsClient() {
 
             <form
               onSubmit={handleCreateStudent}
-              className="p-7 space-y-6 overflow-y-auto flex-1 min-h-0"
+              className="p-5 space-y-4 overflow-y-auto flex-1 min-h-0"
             >
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -600,14 +590,14 @@ export default function FacultyStudentsClient() {
                     setCreatedPassword(null);
                     setCopiedPassword(false);
                   }}
-                  className="px-5 py-2.5 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl font-medium transition-all"
+                  className="px-5 py-2.5 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-all"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="px-6 py-2.5 bg-[#1B6B7B] text-white font-medium rounded-xl hover:bg-[#145A63] transition-all disabled:opacity-60 flex items-center gap-2"
+                  className="px-6 py-2.5 bg-[#1B6B7B] text-white font-medium rounded-lg hover:bg-[#145A63] transition-all disabled:opacity-60 flex items-center gap-2 shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
                 >
                   {isSubmitting ? (
                     <>
@@ -625,38 +615,38 @@ export default function FacultyStudentsClient() {
       )}
 
       <div className="mt-8">
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 hover:shadow-lg hover:border-[#1B6B7B]/30 transition-all duration-300 overflow-hidden">
+        <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200 overflow-hidden">
           {loadingStudentUsers ? (
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-gray-50/50 border-b border-gray-200">
+                <thead className="bg-gray-50/50 border-b border-gray-100">
                   <tr>
-                    <th className="text-left py-4 px-6 font-semibold text-gray-600">Student</th>
-                    <th className="text-left py-4 px-6 font-semibold text-gray-600">Email</th>
-                    <th className="text-left py-4 px-6 font-semibold text-gray-600">Role</th>
-                    <th className="text-left py-4 px-6 font-semibold text-gray-600">Risk (ML)</th>
-                    <th className="text-left py-4 px-6 font-semibold text-gray-600">Actions</th>
+                    <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Student</th>
+                    <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Email</th>
+                    <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Role</th>
+                    <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Risk (ML)</th>
+                    <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-gray-100/80">
                   {[1, 2, 3].map((i) => (
                     <tr key={i}>
-                      <td className="py-4 px-6">
+                      <td className="py-3 px-4">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 bg-gray-200 rounded-full animate-pulse" />
                           <div className="h-4 w-32 bg-gray-200 rounded animate-pulse" />
                         </div>
                       </td>
-                      <td className="py-4 px-6">
+                      <td className="py-3 px-4">
                         <div className="h-4 w-48 bg-gray-200 rounded animate-pulse" />
                       </td>
-                      <td className="py-4 px-6">
+                      <td className="py-3 px-4">
                         <div className="h-6 w-16 bg-gray-200 rounded-full animate-pulse" />
                       </td>
-                      <td className="py-4 px-6">
+                      <td className="py-3 px-4">
                         <div className="h-6 w-16 bg-gray-200 rounded-full animate-pulse" />
                       </td>
-                      <td className="py-4 px-6">
+                      <td className="py-3 px-4">
                         <div className="flex items-center gap-2">
                           <div className="h-8 w-16 bg-gray-200 rounded-lg animate-pulse" />
                           <div className="h-8 w-16 bg-gray-200 rounded-lg animate-pulse" />
@@ -670,19 +660,19 @@ export default function FacultyStudentsClient() {
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-gray-50/50 border-b border-gray-200">
+                <thead className="bg-gray-50/50 border-b border-gray-100">
                   <tr>
-                    <th className="text-left py-4 px-6 font-semibold text-gray-600">Student</th>
-                    <th className="text-left py-4 px-6 font-semibold text-gray-600">Email</th>
-                    <th className="text-left py-4 px-6 font-semibold text-gray-600">Role</th>
-                    <th className="text-left py-4 px-6 font-semibold text-gray-600">Risk (ML)</th>
-                    <th className="text-left py-4 px-6 font-semibold text-gray-600">Actions</th>
+                    <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Student</th>
+                    <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Email</th>
+                    <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Role</th>
+                    <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Risk (ML)</th>
+                    <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-gray-100/80">
                   {filteredStudentUsers.map((user) => (
                     <tr key={user.id} className="hover:bg-gray-50/50 transition-colors">
-                      <td className="py-4 px-6">
+                      <td className="py-3 px-4">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 bg-[#1B6B7B]/10 rounded-full flex items-center justify-center text-[#1B6B7B] font-semibold">
                             {user.name?.charAt(0) || "?"}
@@ -690,13 +680,13 @@ export default function FacultyStudentsClient() {
                           <p className="font-semibold text-gray-800">{user.name}</p>
                         </div>
                       </td>
-                      <td className="py-4 px-6 text-gray-600">{user.email}</td>
-                      <td className="py-4 px-6">
+                      <td className="py-3 px-4 text-gray-600">{user.email}</td>
+                      <td className="py-3 px-4">
                         <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-[#1B6B7B]/10 text-[#1B6B7B] border border-[#1B6B7B]/20">
                           {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
                         </span>
                       </td>
-                      <td className="py-4 px-6">
+                      <td className="py-3 px-4">
                         {predictions[user.id] ? (
                           <span
                             className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${
@@ -714,7 +704,7 @@ export default function FacultyStudentsClient() {
                           <span className="text-sm text-gray-400">Not scored</span>
                         )}
                       </td>
-                      <td className="py-4 px-6">
+                      <td className="py-3 px-4">
                         <div className="flex items-center gap-2">
                           <button
                             onClick={() => openUpdateModal(user)}
@@ -748,10 +738,10 @@ export default function FacultyStudentsClient() {
 
       {showUpdateModal && updatingStudent && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg border border-gray-100 overflow-hidden">
-            <div className="flex items-center justify-between px-7 py-5 border-b border-gray-100 bg-gray-50/50">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-[#1B6B7B]/10 rounded-xl flex items-center justify-center">
+          <div className="bg-white rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] w-full max-w-lg border border-gray-200/80 overflow-hidden">
+              <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100/80 bg-gray-50/50">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-[#1B6B7B]/10 rounded-lg flex items-center justify-center">
                   <FontAwesomeIcon icon={faUser} className="text-[#1B6B7B] w-5 h-5" />
                 </div>
                 <div>
@@ -764,12 +754,12 @@ export default function FacultyStudentsClient() {
                   setShowUpdateModal(false);
                   setUpdatingStudent(null);
                 }}
-                className="p-2 hover:bg-gray-200 rounded-xl transition-all"
+                className="p-2 hover:bg-gray-200 rounded-lg transition-all"
               >
                 <FontAwesomeIcon icon={faXmark} className="w-5 h-5 text-gray-500" />
               </button>
             </div>
-            <form onSubmit={handleUpdateStudent} className="p-7 space-y-6">
+            <form onSubmit={handleUpdateStudent} className="p-5 space-y-4">
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
                   Student Name <span className="text-red-500">*</span>
@@ -814,14 +804,14 @@ export default function FacultyStudentsClient() {
                     setShowUpdateModal(false);
                     setUpdatingStudent(null);
                   }}
-                  className="px-5 py-2.5 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl font-medium transition-all"
+                  className="px-5 py-2.5 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-all"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isUpdating}
-                  className="px-6 py-2.5 bg-[#1B6B7B] text-white font-medium rounded-xl hover:bg-[#145A63] transition-all disabled:opacity-60 flex items-center gap-2"
+                  className="px-6 py-2.5 bg-[#1B6B7B] text-white font-medium rounded-lg hover:bg-[#145A63] transition-all disabled:opacity-60 flex items-center gap-2 shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
                 >
                   {isUpdating ? (
                     <>
@@ -840,10 +830,10 @@ export default function FacultyStudentsClient() {
 
       {showDeleteModal && deletingStudent && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md border border-gray-100 overflow-hidden">
-            <div className="flex items-center justify-between px-7 py-5 border-b border-gray-100 bg-gray-50/50">
+          <div className="bg-white rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] w-full max-w-md border border-gray-200/80 overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100/80 bg-gray-50/50">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center">
+                <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
                   <FontAwesomeIcon icon={faTrashCan} className="text-red-600 w-5 h-5" />
                 </div>
                 <div>
@@ -856,33 +846,33 @@ export default function FacultyStudentsClient() {
                   setShowDeleteModal(false);
                   setDeletingStudent(null);
                 }}
-                className="p-2 hover:bg-gray-200 rounded-xl transition-all"
+                className="p-2 hover:bg-gray-200 rounded-lg transition-all"
               >
                 <FontAwesomeIcon icon={faXmark} className="w-5 h-5 text-gray-500" />
               </button>
             </div>
-            <div className="p-7">
+            <div className="p-5">
               <p className="text-gray-600 text-sm">
                 Are you sure you want to delete{" "}
                 <span className="font-semibold text-gray-900">{deletingStudent.name}</span>? This
                 action cannot be undone.
               </p>
             </div>
-            <div className="flex items-center justify-end gap-3 px-7 py-5 border-t border-gray-100 bg-gray-50/50">
+            <div className="flex items-center justify-end gap-3 px-5 py-3 border-t border-gray-100/80 bg-gray-50/50">
               <button
                 type="button"
                 onClick={() => {
                   setShowDeleteModal(false);
                   setDeletingStudent(null);
                 }}
-                className="px-5 py-2.5 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl font-medium transition-all"
+                className="px-5 py-2.5 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-all"
               >
                 Cancel
               </button>
               <button
                 onClick={handleDeleteStudent}
                 disabled={isDeleting}
-                className="px-6 py-2.5 bg-red-600 text-white font-medium rounded-xl hover:bg-red-700 transition-all disabled:opacity-60 flex items-center gap-2"
+                className="px-6 py-2.5 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition-all disabled:opacity-60 flex items-center gap-2"
               >
                 {isDeleting ? (
                   <>

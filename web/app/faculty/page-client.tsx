@@ -18,7 +18,17 @@ import {
   SkeletonStudentRow,
   SkeletonActivityItem,
 } from "../components/skeletons";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faHouse, faUsers, faTriangleExclamation, faBell, faCheckCircle } from "@fortawesome/free-solid-svg-icons";
 import PageHeader from "../components/PageHeader";
+import StatTile from "../components/StatTile";
+
+const RISK_STYLES: Record<string, { bar: string; badge: string }> = {
+  high: { bar: "bg-red-500", badge: "bg-red-100 text-red-700 border-red-200" },
+  medium: { bar: "bg-amber-500", badge: "bg-amber-100 text-amber-700 border-amber-200" },
+  low: { bar: "bg-emerald-500", badge: "bg-emerald-100 text-emerald-700 border-emerald-200" },
+  default: { bar: "bg-gray-300", badge: "bg-gray-100 text-gray-700 border-gray-200" },
+};
 
 export default function FacultyDashboard() {
   const router = useRouter();
@@ -57,14 +67,7 @@ export default function FacultyDashboard() {
     loadDashboardData();
   }, []);
 
-  const getRiskColor = (risk?: string) => {
-    switch (risk) {
-      case 'high': return 'bg-red-100 text-red-700 border-red-200';
-      case 'medium': return 'bg-amber-100 text-amber-700 border-amber-200';
-      case 'low': return 'bg-emerald-100 text-emerald-700 border-emerald-200';
-      default: return 'bg-gray-100 text-gray-700 border-gray-200';
-    }
-  };
+  const getRisk = (risk?: string) => RISK_STYLES[risk ?? "default"] ?? RISK_STYLES.default;
 
   const getSeverityColor = (severity: string) => {
     switch (severity) {
@@ -75,19 +78,31 @@ export default function FacultyDashboard() {
     }
   };
 
-  const getActivityIcon = (type: string) => {
+  const getActivityMeta = (type: string) => {
     if (type.toLowerCase().includes('alert')) {
-      return 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z';
+      return {
+        path: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z',
+        dot: 'bg-red-500',
+        ring: 'ring-red-100',
+      };
     } else if (type.toLowerCase().includes('scenario')) {
-      return 'M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.414 1.414.586 3.414-1.414 3.414H12m8 0h2a2 2 0 002-2v-4a2 2 0 00-2-2h-2';
+      return {
+        path: 'M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.414 1.414.586 3.414-1.414 3.414H12m8 0h2a2 2 0 002-2v-4a2 2 0 00-2-2h-2',
+        dot: 'bg-[#1B6B7B]',
+        ring: 'ring-teal-100',
+      };
     }
-    return 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4';
+    return {
+      path: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4',
+      dot: 'bg-emerald-500',
+      ring: 'ring-emerald-100',
+    };
   };
 
   if (loading) {
     return (
-      <div className="space-y-6">
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 sm:p-8 mb-6 animate-pulse">
+      <div className="space-y-4">
+        <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] p-4 sm:p-5 mb-4 animate-pulse">
           <div className="space-y-3">
             <div className="h-5 w-32 bg-gray-200 rounded-full" />
             <div className="h-8 w-48 bg-gray-200 rounded" />
@@ -99,32 +114,32 @@ export default function FacultyDashboard() {
             <SkeletonStatCard key={i} />
           ))}
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden animate-pulse">
-            <div className="p-5 border-b border-gray-100">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden animate-pulse">
+            <div className="p-3 border-b border-gray-100">
               <div className="h-5 w-28 bg-gray-200 rounded" />
               <div className="h-4 w-44 bg-gray-200 rounded mt-1" />
             </div>
-            <div className="divide-y divide-gray-100">
+            <div className="divide-y divide-gray-100/80">
               {Array.from({ length: 5 }).map((_, i) => (
                 <SkeletonStudentRow key={i} />
               ))}
             </div>
           </div>
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden animate-pulse">
-            <div className="p-5 border-b border-gray-100">
+          <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden animate-pulse">
+            <div className="p-3 border-b border-gray-100">
               <div className="h-5 w-32 bg-gray-200 rounded" />
               <div className="h-4 w-44 bg-gray-200 rounded mt-1" />
             </div>
-            <div className="p-4 space-y-4">
+            <div className="p-3 space-y-2">
               {Array.from({ length: 4 }).map((_, i) => (
                 <SkeletonActivityItem key={i} />
               ))}
             </div>
           </div>
         </div>
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden animate-pulse">
-          <div className="p-5 border-b border-gray-100">
+        <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden animate-pulse">
+          <div className="p-3 border-b border-gray-100">
             <div className="h-5 w-28 bg-gray-200 rounded" />
             <div className="h-4 w-44 bg-gray-200 rounded mt-1" />
           </div>
@@ -139,11 +154,11 @@ export default function FacultyDashboard() {
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-gray-100/80">
                 {Array.from({ length: 4 }).map((_, i) => (
                   <tr key={i}>
                     {Array.from({ length: 6 }).map((_, j) => (
-                      <td key={j} className="px-5 py-4">
+                      <td key={j} className="px-4 py-3">
                         <div className={`h-4 ${["w-24", "w-20", "w-16", "w-20", "w-16", "w-12"][j]} bg-gray-200 rounded`} />
                       </td>
                     ))}
@@ -157,83 +172,65 @@ export default function FacultyDashboard() {
     );
   }
 
+  const total = stats?.total_students ?? 0;
+  const atRisk = stats?.at_risk_students ?? 0;
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <PageHeader
         badge={{
-          icon: (
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-            </svg>
-          ),
+          icon: <FontAwesomeIcon icon={faHouse} className="w-3.5 h-3.5" />,
           label: "Dashboard",
         }}
         title="Welcome back, Faculty!"
         subtitle="Here&apos;s what&apos;s happening with your students today."
         action={{
-          icon: (
-            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-            </svg>
-          ),
+          icon: <FontAwesomeIcon icon={faUsers} className="w-6 h-6" />,
           onClick: () => router.push('/faculty/students'),
           label: "View Students",
         }}
       />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between">
-            <div className="p-3 bg-blue-50 rounded-xl">
-              <svg className="w-6 h-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-              </svg>
-            </div>
-          </div>
-          <p className="text-3xl font-bold text-gray-900 mt-4">{stats?.total_students ?? 0}</p>
-          <p className="text-gray-500 text-sm mt-1">Total Students</p>
-        </div>
-
-        <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between">
-            <div className="p-3 bg-red-50 rounded-xl">
-              <svg className="w-6 h-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
-            </div>
-          </div>
-          <p className="text-3xl font-bold text-gray-900 mt-4">{stats?.at_risk_students ?? 0}</p>
-          <p className="text-gray-500 text-sm mt-1">At-Risk Students</p>
-        </div>
-
-        <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between">
-            <div className="p-3 bg-amber-50 rounded-xl">
-              <svg className="w-6 h-6 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-              </svg>
-            </div>
-          </div>
-          <p className="text-3xl font-bold text-gray-900 mt-4">{stats?.active_alerts ?? 0}</p>
-          <p className="text-gray-500 text-sm mt-1">Active Alerts</p>
-        </div>
-
-        <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between">
-            <div className="p-3 bg-emerald-50 rounded-xl">
-              <svg className="w-6 h-6 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-          </div>
-          <p className="text-3xl font-bold text-gray-900 mt-4">{stats?.active_scenarios ?? 0}</p>
-          <p className="text-gray-500 text-sm mt-1">Active Scenarios</p>
-        </div>
+        <StatTile
+          icon={<FontAwesomeIcon icon={faUsers} className="w-5 h-5" />}
+          iconBg="bg-[#1B6B7B]/10"
+          iconColor="text-[#1B6B7B]"
+          value={total}
+          label="Total Students"
+          caption="Enrolled under you"
+          onClick={() => router.push('/faculty/students')}
+        />
+        <StatTile
+          icon={<FontAwesomeIcon icon={faTriangleExclamation} className="w-5 h-5" />}
+          iconBg="bg-red-50"
+          iconColor="text-red-600"
+          value={atRisk}
+          label="At-Risk Students"
+          caption={total > 0 ? `${Math.round((atRisk / total) * 100)}% of total` : "No students yet"}
+          onClick={() => router.push('/faculty/students')}
+        />
+        <StatTile
+          icon={<FontAwesomeIcon icon={faBell} className="w-5 h-5" />}
+          iconBg="bg-amber-50"
+          iconColor="text-amber-600"
+          value={stats?.active_alerts ?? 0}
+          label="Active Alerts"
+          caption="Awaiting your review"
+        />
+        <StatTile
+          icon={<FontAwesomeIcon icon={faCheckCircle} className="w-5 h-5" />}
+          iconBg="bg-emerald-50"
+          iconColor="text-emerald-600"
+          value={stats?.active_scenarios ?? 0}
+          label="Active Scenarios"
+          caption="Currently in progress"
+        />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          <div className="p-5 border-b border-gray-100 flex items-center justify-between">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden">
+          <div className="p-4 border-b border-gray-100 flex items-center justify-between">
             <div>
               <h2 className="text-lg font-semibold text-gray-900">My Students</h2>
               <p className="text-sm text-gray-500 mt-0.5">Students under your supervision</p>
@@ -242,28 +239,28 @@ export default function FacultyDashboard() {
               onClick={() => router.push('/faculty/students')}
               className="text-sm text-[#1B6B7B] font-medium hover:text-[#145a63] transition-colors"
             >
-              View All
+              View All →
             </button>
           </div>
-          <div className="divide-y divide-gray-100">
-            {students.map((student) => (
-              <div 
-                key={student.id} 
-                className="p-4 hover:bg-gray-50 transition-colors cursor-pointer"
-                onClick={() => router.push(`/faculty/students/${student.id}`)}
-              >
-                <div className="flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-10 h-10 bg-gradient-to-br from-[#1B6B7B] to-[#145a63] rounded-full flex items-center justify-center text-white font-semibold text-sm">
-                      {student.name.split(' ').map(n => n[0]).join('')}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="font-medium text-gray-900 truncate">{student.name}</p>
-                      <p className="text-sm text-gray-500 truncate">{student.email}</p>
-                    </div>
+          <div className="divide-y divide-gray-100/80">
+            {students.map((student) => {
+              const risk = getRisk(student.risk_level);
+              return (
+                <div
+                  key={student.id}
+                  className="relative flex items-center gap-3 p-4 pl-5 hover:bg-gray-50/80 transition-colors cursor-pointer"
+                  onClick={() => router.push(`/faculty/students/${student.id}`)}
+                >
+                  <span className={`absolute left-0 top-0 h-full w-1 ${risk.bar}`} aria-hidden />
+                  <div className="w-10 h-10 shrink-0 bg-gradient-to-br from-[#1B6B7B] to-[#145a63] rounded-full flex items-center justify-center text-white font-semibold text-sm">
+                    {student.name.split(' ').map(n => n[0]).join('')}
                   </div>
-                  <div className="flex items-center gap-3">
-                    <span className={`px-2.5 py-1 rounded-full text-xs font-medium border ${getRiskColor(student.risk_level)}`}>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium text-gray-900 truncate">{student.name}</p>
+                    <p className="text-sm text-gray-500 truncate">{student.email}</p>
+                  </div>
+                  <div className="flex flex-col items-end gap-1 shrink-0">
+                    <span className={`px-2.5 py-1 rounded-full text-xs font-medium border ${risk.badge}`}>
                       {student.risk_level
                         ? student.risk_level.charAt(0).toUpperCase() + student.risk_level.slice(1)
                         : 'Unknown'} Risk
@@ -271,36 +268,40 @@ export default function FacultyDashboard() {
                     <span className="text-xs text-gray-400">{student.last_activity}</span>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
             {students.length === 0 && (
-              <div className="p-8 text-center text-gray-500">
-                No students assigned yet
+              <div className="p-10 text-center">
+                <p className="text-gray-500 font-medium">No students assigned yet</p>
+                <p className="text-sm text-gray-400 mt-1">Students you supervise will show up here.</p>
               </div>
             )}
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          <div className="p-5 border-b border-gray-100">
+        <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden">
+          <div className="p-4 border-b border-gray-100">
             <h2 className="text-lg font-semibold text-gray-900">Recent Activity</h2>
             <p className="text-sm text-gray-500 mt-0.5">Latest updates and actions</p>
           </div>
-          <div className="p-4 space-y-4">
-            {activities.slice(0, 4).map((activity) => (
-              <div key={activity.id} className="flex gap-3">
-                <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center shrink-0">
-                  <svg className="w-4 h-4 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={getActivityIcon(activity.action)} />
-                  </svg>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-gray-900 text-sm">{activity.action}</p>
-                  <p className="text-xs text-gray-500 truncate">{activity.details}</p>
-                  <p className="text-xs text-gray-400 mt-1">{activity.created_at}</p>
-                </div>
-              </div>
-            ))}
+          <div className="p-4">
+            <ol className="relative space-y-5 before:absolute before:left-[15px] before:top-2 before:bottom-2 before:w-px before:bg-gray-100">
+              {activities.slice(0, 4).map((activity) => {
+                const meta = getActivityMeta(activity.action);
+                return (
+                  <li key={activity.id} className="relative flex gap-3">
+                    <span className={`relative z-10 w-8 h-8 shrink-0 rounded-full bg-white ring-4 ${meta.ring} flex items-center justify-center`}>
+                      <span className={`w-2 h-2 rounded-full ${meta.dot}`} />
+                    </span>
+                    <div className="flex-1 min-w-0 pb-0.5">
+                      <p className="font-medium text-gray-900 text-sm">{activity.action}</p>
+                      <p className="text-xs text-gray-500 truncate">{activity.details}</p>
+                      <p className="text-[11px] text-gray-400 mt-1">{activity.created_at}</p>
+                    </div>
+                  </li>
+                );
+              })}
+            </ol>
             {activities.length === 0 && (
               <div className="text-center text-gray-500 py-4">
                 No recent activity
@@ -310,43 +311,48 @@ export default function FacultyDashboard() {
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="p-5 border-b border-gray-100 flex items-center justify-between">
+      <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden">
+        <div className="p-4 border-b border-gray-100 flex items-center justify-between">
           <div>
             <h2 className="text-lg font-semibold text-gray-900">Pending Alerts</h2>
             <p className="text-sm text-gray-500 mt-0.5">Alerts requiring your attention</p>
           </div>
+          {alerts.length > 0 && (
+            <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-600">
+              {alerts.length} pending
+            </span>
+          )}
         </div>
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-100">
+            <thead className="bg-gray-50/80 border-b border-gray-100">
               <tr>
-                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Student</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Alert Type</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Severity</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Date</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-                <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Action</th>
+                <th className="px-5 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Student</th>
+                <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Alert Type</th>
+                <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Severity</th>
+                <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Date</th>
+                <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Status</th>
+                <th className="px-5 py-2.5 text-right text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Action</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-gray-100/80">
               {alerts.map((alert) => (
-                <tr key={alert.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-5 py-4">
+                <tr key={alert.id} className="hover:bg-gray-50/80 transition-colors">
+                  <td className="px-5 py-3.5">
                     <p className="font-medium text-gray-900">{alert.student_name}</p>
                   </td>
-                  <td className="px-5 py-4">
+                  <td className="px-4 py-3.5">
                     <p className="text-gray-600">{alert.alert_type}</p>
                   </td>
-                  <td className="px-5 py-4">
+                  <td className="px-4 py-3.5">
                     <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${getSeverityColor(alert.severity)}`}>
                       {alert.severity.charAt(0).toUpperCase() + alert.severity.slice(1)}
                     </span>
                   </td>
-                  <td className="px-5 py-4">
+                  <td className="px-4 py-3.5">
                     <p className="text-gray-500 text-sm">{alert.created_at}</p>
                   </td>
-                  <td className="px-5 py-4">
+                  <td className="px-4 py-3.5">
                     <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${
                       alert.status === 'pending' ? 'bg-amber-100 text-amber-700' :
                       alert.status === 'reviewed' ? 'bg-blue-100 text-blue-700' :
@@ -355,7 +361,7 @@ export default function FacultyDashboard() {
                       {alert.status.charAt(0).toUpperCase() + alert.status.slice(1)}
                     </span>
                   </td>
-                  <td className="px-5 py-4 text-right">
+                  <td className="px-5 py-3.5 text-right">
                     <button className="text-sm text-[#1B6B7B] font-medium hover:text-[#145a63] transition-colors">
                       Review
                     </button>
@@ -364,8 +370,9 @@ export default function FacultyDashboard() {
               ))}
               {alerts.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-5 py-8 text-center text-gray-500">
-                    No pending alerts
+                  <td colSpan={6} className="px-5 py-10 text-center">
+                    <p className="text-gray-500 font-medium">No pending alerts</p>
+                    <p className="text-sm text-gray-400 mt-1">You&apos;re all caught up.</p>
                   </td>
                 </tr>
               )}

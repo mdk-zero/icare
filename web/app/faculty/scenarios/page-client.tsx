@@ -42,6 +42,8 @@ import {
 } from "../../lib/api";
 import { SkeletonInlineStatCard, SkeletonScenarioCard } from "../../components/skeletons";
 import PageHeader from "../../components/PageHeader";
+import StatTile from "../../components/StatTile";
+import Card from "../../components/Card";
 
 const emptyCreateForm = {
   title: "",
@@ -317,6 +319,12 @@ export default function FacultyScenariosClient() {
     }
   };
 
+  const difficultyBar: Record<string, string> = {
+    advanced: "bg-rose-500",
+    intermediate: "bg-amber-500",
+    beginner: "bg-emerald-500",
+  };
+
   const getDifficultyIcon = (difficulty: string) => {
     switch (difficulty) {
       case "advanced":
@@ -399,7 +407,7 @@ export default function FacultyScenariosClient() {
     "w-full px-4 py-3 bg-white border border-gray-400 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30 focus:border-[#1B6B7B] focus:bg-white transition-all text-sm appearance-none shadow-sm cursor-pointer";
 
   return (
-    <div className="max-w-7xl mx-auto">
+    <div>
       <PageHeader
         badge={{
           icon: <FontAwesomeIcon icon={faNotesMedical} className="w-3.5 h-3.5" />,
@@ -409,10 +417,10 @@ export default function FacultyScenariosClient() {
         subtitle="Manage clinical simulation scenarios for student training"
       />
 
-      <div className="flex justify-end gap-3 mb-6">
+      <div className="flex justify-end gap-3 mb-4">
         <button
           onClick={() => setShowCreateModal(true)}
-          className="flex items-center gap-2 px-4 py-2.5 bg-[#1B6B7B] text-white font-medium rounded-xl hover:bg-[#145a63] transition-all shadow-sm"
+          className="flex items-center gap-2 px-4 py-2.5 bg-[#1B6B7B] text-white font-medium rounded-lg hover:bg-[#145a63] transition-all shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
         >
           <FontAwesomeIcon icon={faPlus} className="w-4 h-4" />
           Create Scenario
@@ -428,55 +436,39 @@ export default function FacultyScenariosClient() {
 
       {/* Stats */}
       {loading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
           {Array.from({ length: 3 }).map((_, i) => (
             <SkeletonInlineStatCard key={i} />
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-          <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 hover:shadow-md transition-all">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-[#1B6B7B]/10 rounded-xl flex items-center justify-center">
-                <FontAwesomeIcon icon={faNotesMedical} className="w-5 h-5 text-[#1B6B7B]" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-gray-800">{scenarios.length}</p>
-                <p className="text-xs text-gray-500">Total Scenarios</p>
-              </div>
-            </div>
-          </div>
-          <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 hover:shadow-md transition-all">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-purple-50 rounded-xl flex items-center justify-center">
-                <FontAwesomeIcon icon={faRobot} className="w-5 h-5 text-purple-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-gray-800">
-                  {scenarios.filter((s) => s.is_ai_generated).length}
-                </p>
-                <p className="text-xs text-gray-500">AI Generated</p>
-              </div>
-            </div>
-          </div>
-          <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 hover:shadow-md transition-all">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center">
-                <FontAwesomeIcon icon={faUsers} className="w-5 h-5 text-emerald-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-gray-800">
-                  {scenarios.reduce((sum, s) => sum + s.student_count, 0)}
-                </p>
-                <p className="text-xs text-gray-500">Students Assigned</p>
-              </div>
-            </div>
-          </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+          <StatTile
+            icon={<FontAwesomeIcon icon={faNotesMedical} className="w-5 h-5" />}
+            value={scenarios.length}
+            label="Total Scenarios"
+            iconBg="bg-[#1B6B7B]/10"
+            iconColor="text-[#1B6B7B]"
+          />
+          <StatTile
+            icon={<FontAwesomeIcon icon={faRobot} className="w-5 h-5" />}
+            value={scenarios.filter((s) => s.is_ai_generated).length}
+            label="AI Generated"
+            iconBg="bg-purple-50"
+            iconColor="text-purple-600"
+          />
+          <StatTile
+            icon={<FontAwesomeIcon icon={faUsers} className="w-5 h-5" />}
+            value={scenarios.reduce((sum, s) => sum + s.student_count, 0)}
+            label="Students Assigned"
+            iconBg="bg-emerald-50"
+            iconColor="text-emerald-600"
+          />
         </div>
       )}
 
       {/* Filters */}
-      <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 mb-6">
+      <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 mb-4">
         <div className="relative w-full lg:w-96">
           <FontAwesomeIcon
             icon={faSearch}
@@ -538,13 +530,13 @@ export default function FacultyScenariosClient() {
 
       {/* Scenarios Grid */}
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {Array.from({ length: 6 }).map((_, i) => (
             <SkeletonScenarioCard key={i} />
           ))}
         </div>
       ) : filteredScenarios.length === 0 ? (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center">
+        <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] p-12 text-center">
           <FontAwesomeIcon
             icon={faNotesMedical}
             className="w-12 h-12 text-gray-300 mx-auto mb-4"
@@ -557,13 +549,14 @@ export default function FacultyScenariosClient() {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredScenarios.map((scenario) => (
             <div
               key={scenario.id}
-              className="bg-white rounded-2xl shadow-sm border border-gray-100 hover:shadow-lg hover:border-[#1B6B7B]/30 transition-all duration-300 overflow-hidden flex flex-col"
+              className="group relative bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200 overflow-hidden flex flex-col"
             >
-              <div className="p-5 border-b border-gray-100 flex-1">
+              <span className={`absolute left-0 top-0 h-full w-0.5 ${difficultyBar[scenario.difficulty] ?? "bg-gray-500"}`} aria-hidden />
+              <div className="p-3 border-b border-gray-100/80 flex-1">
                 <div className="flex items-start justify-between mb-3">
                   <h3 className="font-semibold text-gray-900 line-clamp-2 pr-2">
                     {scenario.title}
@@ -635,10 +628,10 @@ export default function FacultyScenariosClient() {
       {/* Create Scenario Modal */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-lg max-h-[85vh] overflow-hidden flex flex-col shadow-2xl">
-            <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+          <div className="bg-white rounded-xl w-full max-w-lg max-h-[85vh] overflow-hidden flex flex-col shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-gray-200/80">
+            <div className="p-4 border-b border-gray-100/80 flex items-center justify-between bg-gray-50/50">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-[#1B6B7B]/10 rounded-xl flex items-center justify-center">
+                <div className="w-10 h-10 bg-[#1B6B7B]/10 rounded-lg flex items-center justify-center">
                   <FontAwesomeIcon icon={faPlus} className="text-[#1B6B7B] w-5 h-5" />
                 </div>
                 <div>
@@ -648,14 +641,14 @@ export default function FacultyScenariosClient() {
               </div>
               <button
                 onClick={() => setShowCreateModal(false)}
-                className="p-2 hover:bg-gray-200 rounded-xl transition-colors"
+                className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
               >
                 <FontAwesomeIcon icon={faTimes} className="w-5 h-5 text-gray-500" />
               </button>
             </div>
             <form
               onSubmit={handleCreateScenario}
-              className="p-6 space-y-5 overflow-y-auto flex-1"
+              className="p-4 space-y-3 overflow-y-auto flex-1"
             >
               <div>
                 <label className={labelClassName}>Title</label>
@@ -680,7 +673,7 @@ export default function FacultyScenariosClient() {
                   className={inputClassName + " resize-none"}
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={labelClassName}>Difficulty</label>
                   <div className="relative">
@@ -778,14 +771,14 @@ export default function FacultyScenariosClient() {
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}
-                  className="px-5 py-2.5 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl font-medium transition-colors"
+                  className="px-5 py-2.5 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-all"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={creating || !createForm.title.trim()}
-                  className="px-5 py-2.5 bg-[#1B6B7B] text-white rounded-xl font-medium hover:bg-[#145a63] transition-all disabled:opacity-50 flex items-center gap-2"
+                  className="px-5 py-2.5 bg-[#1B6B7B] text-white rounded-lg font-medium hover:bg-[#145a63] transition-all disabled:opacity-50 flex items-center gap-2 shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
                 >
                   {creating && <FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" />}
                   Create Scenario
@@ -799,8 +792,8 @@ export default function FacultyScenariosClient() {
       {/* AI Generate Modal */}
       {showAIModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col shadow-2xl">
-            <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+          <div className="bg-white rounded-xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-gray-200/80">
+            <div className="p-4 border-b border-gray-100/80 flex items-center justify-between bg-gray-50/50">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
                   <FontAwesomeIcon icon={faRobot} className="text-purple-600 w-5 h-5" />
@@ -812,13 +805,13 @@ export default function FacultyScenariosClient() {
               </div>
               <button
                 onClick={closeAIModal}
-                className="p-2 hover:bg-gray-200 rounded-xl transition-colors"
+                className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
               >
                 <FontAwesomeIcon icon={faTimes} className="w-5 h-5 text-gray-500" />
               </button>
             </div>
-            <div className="p-6 space-y-5 overflow-y-auto flex-1">
-              <div className="grid grid-cols-2 gap-4">
+            <div className="p-4 space-y-3 overflow-y-auto flex-1">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={labelClassName}>Suggested Difficulty</label>
                   <div className="relative">
@@ -1044,7 +1037,7 @@ export default function FacultyScenariosClient() {
               {/* AI Preview */}
               {aiPreview && (
                 <div className="space-y-4">
-                  <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
+                  <div className="flex items-center gap-2 pb-2 border-b border-gray-100/80">
                     <FontAwesomeIcon icon={faRobot} className="text-purple-600" />
                     <h4 className="font-bold text-gray-900">Generated Preview</h4>
                   </div>
@@ -1083,19 +1076,19 @@ export default function FacultyScenariosClient() {
                 </div>
               )}
             </div>
-            <div className="p-6 border-t border-gray-100 bg-gray-50/50 flex justify-end gap-3">
+            <div className="p-4 border-t border-gray-100/80 bg-gray-50/50 flex justify-end gap-3">
               {!aiPreview ? (
                 <>
                   <button
                     onClick={closeAIModal}
-                    className="px-5 py-2.5 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl font-medium transition-colors"
+                    className="px-5 py-2.5 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-all"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={handleGenerateAI}
                     disabled={generating || !aiPrompt.trim()}
-                    className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl font-medium hover:from-purple-700 hover:to-indigo-700 transition-all disabled:opacity-50 flex items-center gap-2"
+                    className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg font-medium hover:from-purple-700 hover:to-indigo-700 transition-all disabled:opacity-50 flex items-center gap-2 shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
                   >
                     {generating && <FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" />}
                     <FontAwesomeIcon icon={faBolt} className="w-4 h-4" />
@@ -1106,13 +1099,13 @@ export default function FacultyScenariosClient() {
                 <>
                   <button
                     onClick={() => setAiPreview(null)}
-                    className="px-5 py-2.5 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl font-medium transition-colors"
+                    className="px-5 py-2.5 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-all"
                   >
                     Regenerate
                   </button>
                   <button
                     onClick={closeAIModal}
-                    className="px-5 py-2.5 text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-xl font-medium transition-colors"
+                    className="px-5 py-2.5 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-all"
                   >
                     Discard
                   </button>
@@ -1135,12 +1128,12 @@ export default function FacultyScenariosClient() {
       {/* Details Modal */}
       {showDetailsModal && selectedScenario && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-3xl max-h-[85vh] overflow-hidden flex flex-col shadow-2xl">
-            <div className="p-6 border-b border-gray-100 bg-gray-50/50">
+          <div className="bg-white rounded-xl w-full max-w-3xl max-h-[85vh] overflow-hidden flex flex-col shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-gray-200/80">
+            <div className="p-4 border-b border-gray-100/80 bg-gray-50/50">
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-3 flex-wrap">
-                    <div className="w-10 h-10 bg-[#1B6B7B]/10 rounded-xl flex items-center justify-center">
+                    <div className="w-10 h-10 bg-[#1B6B7B]/10 rounded-lg flex items-center justify-center">
                       <FontAwesomeIcon icon={faNotesMedical} className="text-[#1B6B7B] w-5 h-5" />
                     </div>
                     <h2 className="text-2xl font-bold text-gray-900">{selectedScenario.title}</h2>
@@ -1155,7 +1148,7 @@ export default function FacultyScenariosClient() {
                 </div>
                 <button
                   onClick={() => setShowDetailsModal(false)}
-                  className="p-2 hover:bg-gray-200 rounded-xl transition-colors"
+                  className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
                 >
                   <FontAwesomeIcon icon={faTimes} className="w-5 h-5 text-gray-500" />
                 </button>
@@ -1186,7 +1179,7 @@ export default function FacultyScenariosClient() {
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
               <div>
                 <h3 className="text-lg font-bold text-gray-900 mb-3 flex items-center gap-2">
                   <FontAwesomeIcon icon={faStethoscope} className="text-[#1B6B7B]" />
@@ -1281,11 +1274,11 @@ export default function FacultyScenariosClient() {
               </div>
             </div>
 
-            <div className="p-6 border-t border-gray-100 bg-gray-50/50">
+            <div className="p-4 border-t border-gray-100/80 bg-gray-50/50">
               <div className="flex justify-end gap-3">
                 <button
                   onClick={() => setShowDetailsModal(false)}
-                  className="px-5 py-2.5 border border-gray-200 text-gray-700 bg-white hover:bg-gray-50 rounded-xl font-medium transition-all"
+                  className="px-5 py-2.5 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-all"
                 >
                   Close
                 </button>
@@ -1294,7 +1287,7 @@ export default function FacultyScenariosClient() {
                     setShowDetailsModal(false);
                     handleOpenAssignModal(selectedScenario);
                   }}
-                  className="px-5 py-2.5 bg-[#1B6B7B] text-white rounded-xl font-medium hover:bg-[#145a63] transition-all flex items-center gap-2"
+                  className="px-5 py-2.5 bg-[#1B6B7B] text-white rounded-lg font-medium hover:bg-[#145a63] transition-all flex items-center gap-2 shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
                 >
                   <FontAwesomeIcon icon={faUserPlus} className="w-4 h-4" />
                   Assign to Students
@@ -1308,11 +1301,11 @@ export default function FacultyScenariosClient() {
       {/* Assign Modal */}
       {showAssignModal && selectedScenario && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col shadow-2xl">
-            <div className="p-6 border-b border-gray-100 bg-gray-50/50">
+          <div className="bg-white rounded-xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-gray-200/80">
+            <div className="p-4 border-b border-gray-100/80 bg-gray-50/50">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-[#1B6B7B]/10 rounded-xl flex items-center justify-center">
+                  <div className="w-10 h-10 bg-[#1B6B7B]/10 rounded-lg flex items-center justify-center">
                     <FontAwesomeIcon icon={faUserPlus} className="text-[#1B6B7B] w-5 h-5" />
                   </div>
                   <div>
@@ -1322,20 +1315,20 @@ export default function FacultyScenariosClient() {
                 </div>
                 <button
                   onClick={() => setShowAssignModal(false)}
-                  className="p-2 hover:bg-gray-200 rounded-xl transition-colors"
+                  className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
                 >
                   <FontAwesomeIcon icon={faTimes} className="w-5 h-5 text-gray-500" />
                 </button>
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
               <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
                 <h3 className="text-sm font-bold text-gray-900 mb-3 flex items-center gap-2">
                   <FontAwesomeIcon icon={faCalendarDay} className="text-[#1B6B7B]" />
                   Assignment Settings
                 </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className={labelClassName}>Deadline</label>
                     <div className="relative">
@@ -1475,18 +1468,18 @@ export default function FacultyScenariosClient() {
               </div>
             </div>
 
-            <div className="p-6 border-t border-gray-100 bg-gray-50/50">
+            <div className="p-4 border-t border-gray-100/80 bg-gray-50/50">
               <div className="flex justify-end gap-3">
                 <button
                   onClick={() => setShowAssignModal(false)}
-                  className="px-5 py-2.5 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl font-medium transition-colors"
+                  className="px-5 py-2.5 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-all"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleAssignScenario}
                   disabled={selectedStudents.length === 0 || !assignDeadline || assigning}
-                  className="px-5 py-2.5 bg-[#1B6B7B] text-white rounded-xl font-medium hover:bg-[#145a63] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  className="px-5 py-2.5 bg-[#1B6B7B] text-white rounded-lg font-medium hover:bg-[#145a63] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
                 >
                   {assigning && <FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" />}
                   Assign to {selectedStudents.length} Student

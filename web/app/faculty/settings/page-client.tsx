@@ -6,7 +6,7 @@ import PageHeader from "../../components/PageHeader";
 
 export default function FacultySettingsClient() {
   return (
-    <div className="max-w-5xl mx-auto">
+    <div>
       <PageHeader
         badge={{
           icon: (
