@@ -20,6 +20,10 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci
+      # next-env.d.ts is gitignored; typegen recreates it (and route types)
+      # so tsc can resolve static image imports.
+      - name: Generate Next.js types
+        run: npx next typegen
       - name: Typecheck
         run: npx tsc --noEmit
       # TODO(phase-2): make lint blocking once the legacy mock pages
