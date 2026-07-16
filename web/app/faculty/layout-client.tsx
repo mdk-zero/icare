@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  faBell,
   faChartBar,
   faClipboardList,
   faFileLines,
@@ -30,17 +29,16 @@ function getCurrentUser(): User | null {
 }
 
 const navItems: NavItem[] = [
-  { id: "overview", label: "Overview", href: "/faculty", icon: faHouse },
-  { id: "students", label: "My Students", href: "/faculty/students", icon: faUsers },
-  { id: "scenarios", label: "Scenarios", href: "/faculty/scenarios", icon: faNotesMedical },
-  { id: "assessments", label: "Question Bank", href: "/faculty/assessments", icon: faListCheck },
-  { id: "patients", label: "Patients", href: "/faculty/patients", icon: faHospitalUser },
-  { id: "vitals", label: "Vitals Monitor", href: "/faculty/vitals", icon: faHeartbeat },
-  { id: "ehr", label: "EHR Review", href: "/faculty/ehr", icon: faNotesMedical },
-  { id: "analytics", label: "Analytics", href: "/faculty/analytics", icon: faChartBar },
-  { id: "reports", label: "Reports", href: "/faculty/reports", icon: faFileLines },
-  { id: "audit", label: "Audit Trail", href: "/faculty/audit", icon: faClipboardList },
-  { id: "notifications", label: "Notifications", href: "/faculty/notifications", icon: faBell },
+  { id: "overview", label: "Overview", href: "/faculty", icon: faHouse, section: "General" },
+  { id: "students", label: "My Students", href: "/faculty/students", icon: faUsers, section: "Teaching" },
+  { id: "scenarios", label: "Scenarios", href: "/faculty/scenarios", icon: faNotesMedical, section: "Teaching" },
+  { id: "assessments", label: "Question Bank", href: "/faculty/assessments", icon: faListCheck, section: "Teaching" },
+  { id: "patients", label: "Patients", href: "/faculty/patients", icon: faHospitalUser, section: "Clinical" },
+  { id: "vitals", label: "Vitals Monitor", href: "/faculty/vitals", icon: faHeartbeat, section: "Clinical" },
+  { id: "ehr", label: "EHR Review", href: "/faculty/ehr", icon: faNotesMedical, section: "Clinical" },
+  { id: "analytics", label: "Analytics", href: "/faculty/analytics", icon: faChartBar, section: "Data" },
+  { id: "reports", label: "Reports", href: "/faculty/reports", icon: faFileLines, section: "Data" },
+  { id: "audit", label: "Audit Trail", href: "/faculty/audit", icon: faClipboardList, section: "Administration" },
 ];
 
 function isActive(item: NavItem, pathname: string) {
