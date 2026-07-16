@@ -250,7 +250,7 @@ export default function FacultyDashboard() {
               <div 
                 key={student.id} 
                 className="p-4 hover:bg-gray-50 transition-colors cursor-pointer"
-                onClick={() => router.push(`/faculty/students/${student.student_id}`)}
+                onClick={() => router.push(`/faculty/students/${student.id}`)}
               >
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-3 min-w-0">
