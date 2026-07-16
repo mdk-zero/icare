@@ -77,8 +77,8 @@ export default function AdminAnalyticsClient() {
   const activity = summary?.clinical_activity;
 
   return (
-    <div className="max-w-7xl mx-auto">
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 sm:p-8 mb-6">
+    <div>
+      <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] p-4 sm:p-5 mb-4">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 px-3 py-1 bg-gray-100 text-[#1B6B7B] rounded-full text-xs sm:text-sm font-medium w-fit mb-3">
@@ -96,7 +96,7 @@ export default function AdminAnalyticsClient() {
             <button
               onClick={handleRunMl}
               disabled={runningMl}
-              className="px-4 py-2 bg-white text-[#1B6B7B] font-medium rounded-xl border border-[#1B6B7B]/30 hover:bg-[#1B6B7B]/5 transition-all duration-300 flex items-center gap-2 disabled:opacity-50"
+              className="px-4 py-2 bg-white text-[#1B6B7B] font-medium rounded-lg border border-[#1B6B7B]/30 hover:bg-[#1B6B7B]/5 transition-all duration-200 flex items-center gap-2 disabled:opacity-50"
             >
               <FontAwesomeIcon icon={runningMl ? faSpinner : faBrain} spin={runningMl} className="w-4 h-4" />
               {runningMl ? "Running…" : "Run ML Jobs"}
@@ -104,7 +104,7 @@ export default function AdminAnalyticsClient() {
             <button
               onClick={handleRefresh}
               disabled={refreshing}
-              className="px-4 py-2 bg-[#1B6B7B] text-white font-medium rounded-xl hover:bg-[#145a63] transition-all duration-300 flex items-center gap-2 shadow-lg shadow-[#1B6B7B]/20 disabled:opacity-50"
+              className="px-4 py-2 bg-[#1B6B7B] text-white font-medium rounded-lg hover:bg-[#145a63] transition-all duration-200 flex items-center gap-2 shadow-[0_2px_6px_rgba(27,107,123,0.2)] disabled:opacity-50"
             >
               <FontAwesomeIcon icon={refreshing ? faSpinner : faRotate} spin={refreshing} className="w-4 h-4" />
               {refreshing ? "Refreshing…" : "Refresh Warehouse"}
@@ -142,9 +142,9 @@ export default function AdminAnalyticsClient() {
             ].map((stat) => (
               <div
                 key={stat.label}
-                className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 hover:shadow-lg hover:border-[#1B6B7B]/30 transition-all duration-300"
+                className="bg-white p-5 rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200"
               >
-                <div className="w-10 h-10 bg-[#1B6B7B]/10 rounded-xl flex items-center justify-center mb-4">
+                <div className="w-10 h-10 bg-[#1B6B7B]/10 rounded-lg flex items-center justify-center mb-4">
                   <FontAwesomeIcon icon={stat.icon} className="w-5 h-5 text-[#1B6B7B]" />
                 </div>
                 <p className="text-3xl font-bold text-gray-900 mb-1">{stat.value}</p>
@@ -154,7 +154,7 @@ export default function AdminAnalyticsClient() {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+            <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)]">
               <h3 className="text-lg font-semibold text-gray-900 mb-6">Weekly Quiz Performance</h3>
               {trend.length === 0 ? (
                 <p className="text-gray-400 text-sm py-12 text-center">
@@ -180,7 +180,7 @@ export default function AdminAnalyticsClient() {
                       </div>
                     ))}
                   </div>
-                  <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100">
+                  <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100/80">
                     <div>
                       <p className="text-2xl font-bold text-gray-800">
                         {summary?.cohort.submitted_attempts ?? 0}
@@ -198,7 +198,7 @@ export default function AdminAnalyticsClient() {
               )}
             </div>
 
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+            <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)]">
               <h3 className="text-lg font-semibold text-gray-900 mb-6">Room Utilization</h3>
               {(summary?.room_utilization ?? []).length === 0 ? (
                 <p className="text-gray-400 text-sm py-12 text-center">
@@ -253,9 +253,9 @@ export default function AdminAnalyticsClient() {
             </div>
           </div>
 
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mb-8">
+          <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] mb-8">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Clinical Training Activity</h3>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
               {[
                 { icon: faHeartbeat, label: "Vital Readings", value: activity?.vital_readings ?? 0 },
                 { icon: faExclamationTriangle, label: "Anomalies Flagged", value: activity?.anomalies ?? 0 },
@@ -264,7 +264,7 @@ export default function AdminAnalyticsClient() {
                 { icon: faNotesMedical, label: "Progress Notes", value: activity?.progress_notes ?? 0 },
                 { icon: faClipboardCheck, label: "Notes Reviewed", value: activity?.notes_reviewed ?? 0 },
               ].map((item) => (
-                <div key={item.label} className="p-4 bg-gray-50 rounded-xl text-center">
+                <div key={item.label} className="p-3 bg-gray-50 rounded-lg text-center">
                   <FontAwesomeIcon icon={item.icon} className="w-4 h-4 text-[#1B6B7B] mb-2" />
                   <p className="text-2xl font-bold text-gray-800">{item.value}</p>
                   <p className="text-xs text-gray-500 mt-1">{item.label}</p>
@@ -273,8 +273,8 @@ export default function AdminAnalyticsClient() {
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="p-6 border-b border-gray-100">
+          <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden">
+            <div className="p-6 border-b border-gray-100/80">
               <h3 className="text-lg font-semibold text-gray-900">Competency Assessment Summary</h3>
               <p className="text-sm text-gray-500">
                 Faculty-validated competency scores across the cohort (pass mark: 75%)
@@ -289,20 +289,20 @@ export default function AdminAnalyticsClient() {
                 <table className="w-full">
                   <thead>
                     <tr className="bg-gray-50">
-                      <th className="text-left py-4 px-6 font-semibold text-gray-700">Competency</th>
-                      <th className="text-left py-4 px-6 font-semibold text-gray-700">Students Assessed</th>
-                      <th className="text-left py-4 px-6 font-semibold text-gray-700">Ratings</th>
-                      <th className="text-left py-4 px-6 font-semibold text-gray-700">Average Score</th>
-                      <th className="text-left py-4 px-6 font-semibold text-gray-700">Pass Rate</th>
+                      <th className="text-left py-3 px-4 font-semibold text-gray-700">Competency</th>
+                      <th className="text-left py-3 px-4 font-semibold text-gray-700">Students Assessed</th>
+                      <th className="text-left py-3 px-4 font-semibold text-gray-700">Ratings</th>
+                      <th className="text-left py-3 px-4 font-semibold text-gray-700">Average Score</th>
+                      <th className="text-left py-3 px-4 font-semibold text-gray-700">Pass Rate</th>
                     </tr>
                   </thead>
                   <tbody>
                     {summary!.competency_detail.map((row) => (
-                      <tr key={row.name} className="border-t border-gray-100 hover:bg-gray-50 transition-colors">
-                        <td className="py-4 px-6 text-gray-800 font-medium">{row.name}</td>
-                        <td className="py-4 px-6 text-gray-600">{row.students}</td>
-                        <td className="py-4 px-6 text-gray-600">{row.ratings}</td>
-                        <td className="py-4 px-6">
+                      <tr key={row.name} className="border-t border-gray-100/80 hover:bg-gray-50 transition-colors">
+                        <td className="py-3 px-4 text-gray-800 font-medium">{row.name}</td>
+                        <td className="py-3 px-4 text-gray-600">{row.students}</td>
+                        <td className="py-3 px-4 text-gray-600">{row.ratings}</td>
+                        <td className="py-3 px-4">
                           <div className="flex items-center gap-2">
                             <div className="w-16 h-2 bg-gray-200 rounded-full overflow-hidden">
                               <div
@@ -313,7 +313,7 @@ export default function AdminAnalyticsClient() {
                             <span className="text-sm font-medium text-gray-800">{row.average_score}%</span>
                           </div>
                         </td>
-                        <td className="py-4 px-6">
+                        <td className="py-3 px-4">
                           <span
                             className={`px-3 py-1 rounded-full text-xs font-medium ${
                               row.pass_rate_pct >= 90

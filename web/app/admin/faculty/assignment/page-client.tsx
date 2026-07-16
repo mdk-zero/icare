@@ -103,7 +103,7 @@ export default function AssignStudentsClient() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto">
+    <div>
       <div className="flex items-center gap-4 mb-6">
         <button onClick={handleBack} className="p-2 hover:bg-gray-100 rounded-xl transition-colors">
           <svg className="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -127,13 +127,13 @@ export default function AssignStudentsClient() {
           <div className="w-10 h-10 border-4 border-[#1B6B7B] border-t-transparent rounded-full animate-spin" />
         </div>
       ) : faculty.length === 0 ? (
-        <div className="bg-white rounded-2xl p-10 shadow-sm border border-gray-100 text-center text-gray-400">
+        <div className="bg-white rounded-xl p-10 border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] text-center text-gray-400">
           No faculty accounts yet — create one from Faculty Management first.
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-1">
-            <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+            <div className="bg-white rounded-xl p-4 border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)]">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Faculty Members</h2>
               <div className="space-y-2">
                 {faculty.map((member) => (
@@ -168,7 +168,7 @@ export default function AssignStudentsClient() {
           </div>
 
           <div className="lg:col-span-2">
-            <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+            <div className="bg-white rounded-xl p-4 border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)]">
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <h2 className="text-lg font-semibold text-gray-900">
@@ -181,7 +181,7 @@ export default function AssignStudentsClient() {
                 <button
                   onClick={handleSave}
                   disabled={busy || !hasChanges}
-                  className="px-5 py-2.5 bg-[#1B6B7B] text-white rounded-xl font-medium hover:bg-[#145a63] transition-all disabled:opacity-50"
+                  className="px-5 py-2.5 bg-[#1B6B7B] text-white rounded-lg font-medium hover:bg-[#145a63] transition-all disabled:opacity-50 shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
                 >
                   {busy ? "Saving…" : "Save Roster"}
                 </button>

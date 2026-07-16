@@ -127,7 +127,7 @@ export default function AdminAuditClient() {
   const totalPages = Math.max(Math.ceil(total / PAGE_SIZE), 1);
 
   return (
-    <div className="max-w-7xl mx-auto">
+    <div>
       <PageHeader
         badge={{
           icon: (
@@ -142,7 +142,7 @@ export default function AdminAuditClient() {
       />
 
       {/* Filters */}
-      <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 mb-6">
+      <div className="bg-white rounded-xl p-4 border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] mb-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
           <form
             className="lg:col-span-2 relative"
@@ -211,7 +211,7 @@ export default function AdminAuditClient() {
           <button
             onClick={exportCsv}
             disabled={logs.length === 0}
-            className="px-4 py-2 bg-white border border-gray-200 text-gray-700 text-sm font-medium rounded-xl hover:bg-gray-50 disabled:opacity-50 transition-all"
+            className="px-4 py-2 bg-white border border-gray-200 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-all"
           >
             Export page as CSV
           </button>
@@ -220,25 +220,25 @@ export default function AdminAuditClient() {
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-gray-50/50 border-b border-gray-200">
+            <thead className="bg-gray-50/50 border-b border-gray-100">
               <tr>
-                <th className="text-left py-4 px-6 font-semibold text-gray-600">Timestamp</th>
-                <th className="text-left py-4 px-6 font-semibold text-gray-600">Actor</th>
-                <th className="text-left py-4 px-6 font-semibold text-gray-600">Action</th>
-                <th className="text-left py-4 px-6 font-semibold text-gray-600">Entity</th>
-                <th className="text-left py-4 px-6 font-semibold text-gray-600">Details</th>
-                <th className="text-left py-4 px-6 font-semibold text-gray-600">IP</th>
+                <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Timestamp</th>
+                <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Actor</th>
+                <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Action</th>
+                <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Entity</th>
+                <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Details</th>
+                <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">IP</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-gray-100/80">
               {loading ? (
                 Array.from({ length: 8 }).map((_, i) => (
                   <tr key={i} className="animate-pulse">
                     {Array.from({ length: 6 }).map((_, j) => (
-                      <td key={j} className="py-4 px-6">
+                      <td key={j} className="py-3 px-4">
                         <div className="h-4 w-24 bg-gray-200 rounded" />
                       </td>
                     ))}
@@ -255,10 +255,10 @@ export default function AdminAuditClient() {
                   const details = detailsText(log.details);
                   return (
                     <tr key={log.id} className="hover:bg-gray-50/50 transition-colors">
-                      <td className="py-4 px-6 text-gray-500 text-sm whitespace-nowrap">
+                      <td className="py-3 px-4 text-gray-500 text-sm whitespace-nowrap">
                         {formatTimestamp(log.created_at)}
                       </td>
-                      <td className="py-4 px-6">
+                      <td className="py-3 px-4">
                         <div className="flex items-center gap-2">
                           <div className="w-7 h-7 bg-gray-100 rounded-full flex items-center justify-center text-xs font-medium text-gray-600 shrink-0">
                             {(log.actor?.name ?? "S").charAt(0)}
@@ -278,12 +278,12 @@ export default function AdminAuditClient() {
                           </div>
                         </div>
                       </td>
-                      <td className="py-4 px-6">
+                      <td className="py-3 px-4">
                         <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-[#1B6B7B]/10 text-[#1B6B7B]">
                           {log.action}
                         </span>
                       </td>
-                      <td className="py-4 px-6 text-sm text-gray-600 whitespace-nowrap">
+                      <td className="py-3 px-4 text-sm text-gray-600 whitespace-nowrap">
                         {log.entity_type ? (
                           <>
                             {log.entity_type.replaceAll("_", " ")}
@@ -295,12 +295,12 @@ export default function AdminAuditClient() {
                           <span className="text-gray-300">—</span>
                         )}
                       </td>
-                      <td className="py-4 px-6 text-sm text-gray-600 max-w-xs">
+                      <td className="py-3 px-4 text-sm text-gray-600 max-w-xs">
                         <span className="block truncate" title={details}>
                           {details || <span className="text-gray-300">—</span>}
                         </span>
                       </td>
-                      <td className="py-4 px-6 text-xs text-gray-400 font-mono whitespace-nowrap">
+                      <td className="py-3 px-4 text-xs text-gray-400 font-mono whitespace-nowrap">
                         {log.ip_address ?? "—"}
                       </td>
                     </tr>

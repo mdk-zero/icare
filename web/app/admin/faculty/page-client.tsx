@@ -130,7 +130,7 @@ export default function FacultyClient() {
   const totalAssigned = faculty.reduce((sum, f) => sum + f.student_ids.length, 0);
 
   return (
-    <div className="max-w-7xl mx-auto">
+    <div>
       <PageHeader
         badge={{
           icon: (
@@ -175,7 +175,7 @@ export default function FacultyClient() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
         {[
           { label: "Total Faculty", count: faculty.length },
           { label: "Assigned Students", count: totalAssigned },
@@ -183,7 +183,7 @@ export default function FacultyClient() {
         ].map((stat) => (
           <div
             key={stat.label}
-            className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 hover:shadow-lg hover:border-[#1B6B7B]/30 transition-all duration-300"
+            className="bg-white rounded-xl p-5 border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200"
           >
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 bg-[#1B6B7B]/10 rounded-xl flex items-center justify-center">
@@ -200,19 +200,19 @@ export default function FacultyClient() {
         ))}
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 hover:shadow-lg hover:border-[#1B6B7B]/30 transition-all duration-300 overflow-hidden">
+      <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-gray-50/50 border-b border-gray-200">
+            <thead className="bg-gray-50/50 border-b border-gray-100">
               <tr>
-                <th className="text-left py-4 px-6 font-semibold text-gray-600">Faculty Member</th>
-                <th className="text-left py-4 px-6 font-semibold text-gray-600">Students</th>
-                <th className="text-left py-4 px-6 font-semibold text-gray-600">Joined</th>
-                <th className="text-left py-4 px-6 font-semibold text-gray-600">Last Login</th>
-                <th className="text-left py-4 px-6 font-semibold text-gray-600">Actions</th>
+                <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Faculty Member</th>
+                <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Students</th>
+                <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Joined</th>
+                <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Last Login</th>
+                <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-gray-100/80">
               {loading ? (
                 <tr>
                   <td colSpan={5} className="py-12 text-center text-gray-400">Loading faculty…</td>
@@ -226,7 +226,7 @@ export default function FacultyClient() {
               ) : (
                 faculty.map((member) => (
                   <tr key={member.id} className="hover:bg-gray-50/50 transition-colors">
-                    <td className="py-4 px-6">
+                    <td className="py-3 px-4">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 bg-[#1B6B7B]/10 rounded-full flex items-center justify-center text-[#1B6B7B] font-semibold">
                           {member.name.charAt(0)}
@@ -237,12 +237,12 @@ export default function FacultyClient() {
                         </div>
                       </div>
                     </td>
-                    <td className="py-4 px-6">
+                    <td className="py-3 px-4">
                       <span className="text-gray-800 font-medium">{member.student_ids.length}</span>
                     </td>
-                    <td className="py-4 px-6 text-gray-600">{formatDate(member.created_at)}</td>
-                    <td className="py-4 px-6 text-gray-600">{formatDate(member.last_login_at)}</td>
-                    <td className="py-4 px-6">
+                    <td className="py-3 px-4 text-gray-600">{formatDate(member.created_at)}</td>
+                    <td className="py-3 px-4 text-gray-600">{formatDate(member.last_login_at)}</td>
+                    <td className="py-3 px-4">
                       <button
                         onClick={() => openAssignModal(member)}
                         className="text-[#1B6B7B] font-medium hover:text-[#145a63] transition-colors"
@@ -260,9 +260,9 @@ export default function FacultyClient() {
 
       {showAddModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-lg mx-4">
+          <div className="bg-white rounded-xl p-4 w-full max-w-lg mx-4 shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-gray-200/80">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Add New Faculty</h3>
-            <div className="space-y-4">
+            <div className="space-y-2">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Full Name</label>
                 <input
@@ -308,7 +308,7 @@ export default function FacultyClient() {
 
       {selectedFaculty && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-lg mx-4 max-h-[80vh] overflow-hidden flex flex-col">
+          <div className="bg-white rounded-xl p-4 w-full max-w-lg mx-4 shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-gray-200/80 max-h-[80vh] overflow-hidden flex flex-col">
             <div className="mb-4">
               <h3 className="text-lg font-semibold text-gray-900">
                 Assign Students to {selectedFaculty.name}

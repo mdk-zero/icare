@@ -146,7 +146,7 @@ export default function StudentDetailClient() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto">
+    <div>
       <div className="mb-6">
         <button
           onClick={() => router.push("/admin/student-management")}
@@ -161,7 +161,7 @@ export default function StudentDetailClient() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
         <div className="lg:col-span-2">
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+          <div className="bg-white rounded-xl p-6 border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)]">
             <div className="flex items-center gap-4 mb-6">
               <div className="w-16 h-16 bg-gradient-to-br from-[#1B6B7B] to-[#145a63] rounded-full flex items-center justify-center text-white font-bold text-xl">
                 {student.name.split(" ").map((n) => n[0]).join("")}
@@ -203,7 +203,7 @@ export default function StudentDetailClient() {
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+        <div className="bg-white rounded-xl p-6 border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)]">
           <div className="flex items-center gap-2 mb-4">
             <div className="p-2 bg-purple-100 rounded-lg">
               <svg className="w-5 h-5 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -245,7 +245,7 @@ export default function StudentDetailClient() {
                 </div>
               )}
               {prediction.explanations.length > 0 && (
-                <div className="border-t border-gray-100 pt-3">
+                <div className="border-t border-gray-100/80 pt-3">
                   <p className="text-sm text-gray-500 mb-2">Top Contributing Factors</p>
                   <div className="space-y-1">
                     {prediction.explanations.slice(0, 4).map((exp) => (
@@ -264,8 +264,8 @@ export default function StudentDetailClient() {
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="border-b border-gray-100">
+      <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden">
+        <div className="border-b border-gray-100/80">
           <div className="flex gap-6 px-6">
             {["performance", "scenarios", "competencies"].map((tab) => (
               <button
