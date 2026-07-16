@@ -13,6 +13,9 @@ import {
   faEnvelope,
   faSpinner,
   faTrashCan,
+  faFileCsv,
+  faDownload,
+  faCircleCheck,
 } from "@fortawesome/free-solid-svg-icons";
 import {
   fetchFacultyStudents,
@@ -30,6 +33,65 @@ import {
 import PageHeader from "../../components/PageHeader";
 import StatTile from "../../components/StatTile";
 import Card from "../../components/Card";
+
+/** Minimal CSV parser: quoted fields, "" escapes, \r\n or \n row breaks. */
+function parseCsv(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (text[i + 1] === '"') {
+          field += '"';
+          i++;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        field += ch;
+      }
+    } else if (ch === '"') {
+      inQuotes = true;
+    } else if (ch === ",") {
+      row.push(field);
+      field = "";
+    } else if (ch === "\n" || ch === "\r") {
+      if (ch === "\r" && text[i + 1] === "\n") i++;
+      row.push(field);
+      field = "";
+      if (row.some((c) => c.trim().length > 0)) rows.push(row);
+      row = [];
+    } else {
+      field += ch;
+    }
+  }
+  row.push(field);
+  if (row.some((c) => c.trim().length > 0)) rows.push(row);
+  return rows;
+}
+
+const STUDENT_CSV_TEMPLATE = `first_name,middle_name,last_name,email
+Juan,Santos,Dela Cruz,juan.delacruz@batstate-u.edu.ph
+Maria,,Reyes,maria.reyes@batstate-u.edu.ph
+`;
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+interface BulkRow {
+  line: number;
+  firstName: string;
+  middleName: string;
+  lastName: string;
+  email: string;
+  /** Validation problem found before import; the row is skipped. */
+  invalidReason?: string;
+  status: "ready" | "creating" | "created" | "warning" | "failed";
+  resultText?: string;
+}
 
 export default function FacultyStudentsClient() {
   const router = useRouter();
@@ -90,6 +152,149 @@ export default function FacultyStudentsClient() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deletingStudent, setDeletingStudent] = useState<StudentUser | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  const [showBulkModal, setShowBulkModal] = useState(false);
+  const [bulkRows, setBulkRows] = useState<BulkRow[]>([]);
+  const [bulkFileName, setBulkFileName] = useState<string | null>(null);
+  const [bulkFileError, setBulkFileError] = useState<string | null>(null);
+  const [isBulkImporting, setIsBulkImporting] = useState(false);
+  const [bulkFinished, setBulkFinished] = useState(false);
+  const csvInputRef = useRef<HTMLInputElement>(null);
+
+  const closeBulkModal = () => {
+    if (isBulkImporting) return;
+    setShowBulkModal(false);
+    setBulkRows([]);
+    setBulkFileName(null);
+    setBulkFileError(null);
+    setBulkFinished(false);
+    if (csvInputRef.current) csvInputRef.current.value = "";
+  };
+
+  const downloadCsvTemplate = () => {
+    const blob = new Blob([STUDENT_CSV_TEMPLATE], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "icare-students-template.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleCsvFile = async (file: File) => {
+    setBulkFileError(null);
+    setBulkFinished(false);
+    setBulkRows([]);
+    setBulkFileName(file.name);
+
+    const rows = parseCsv(await file.text());
+    if (rows.length < 2) {
+      setBulkFileError("The CSV needs a header row and at least one student row.");
+      return;
+    }
+
+    const header = rows[0].map((h) => h.trim().toLowerCase().replace(/\s+/g, "_"));
+    const firstIdx = header.indexOf("first_name");
+    const middleIdx = header.findIndex((h) => h === "middle_name" || h === "middle_initial");
+    const lastIdx = header.indexOf("last_name");
+    const emailIdx = header.indexOf("email");
+
+    const missing = [
+      firstIdx === -1 && "first_name",
+      lastIdx === -1 && "last_name",
+      emailIdx === -1 && "email",
+    ].filter(Boolean);
+    if (missing.length > 0) {
+      setBulkFileError(
+        `The CSV header is missing required column${missing.length > 1 ? "s" : ""}: ${missing.join(", ")}. Download the template for the expected format.`,
+      );
+      return;
+    }
+
+    const seenEmails = new Set<string>();
+    const existingEmails = new Set(studentUsers.map((u) => u.email.toLowerCase()));
+    const parsed: BulkRow[] = rows.slice(1).map((cells, i) => {
+      const row: BulkRow = {
+        line: i + 2,
+        firstName: (cells[firstIdx] ?? "").trim(),
+        middleName: middleIdx === -1 ? "" : (cells[middleIdx] ?? "").trim(),
+        lastName: (cells[lastIdx] ?? "").trim(),
+        email: (cells[emailIdx] ?? "").trim().toLowerCase(),
+        status: "ready",
+      };
+      if (!row.firstName) row.invalidReason = "Missing first name";
+      else if (!row.lastName) row.invalidReason = "Missing last name";
+      else if (!row.email) row.invalidReason = "Missing email";
+      else if (!EMAIL_REGEX.test(row.email)) row.invalidReason = "Invalid email address";
+      else if (seenEmails.has(row.email)) row.invalidReason = "Duplicate email in this file";
+      else if (existingEmails.has(row.email)) row.invalidReason = "A student with this email already exists";
+      seenEmails.add(row.email);
+      return row;
+    });
+
+    setBulkRows(parsed);
+  };
+
+  const handleBulkImport = async () => {
+    const importable = bulkRows.filter((r) => !r.invalidReason);
+    if (importable.length === 0 || isBulkImporting) return;
+
+    setIsBulkImporting(true);
+    const rows = [...bulkRows];
+    let createdCount = 0;
+
+    for (let i = 0; i < rows.length; i++) {
+      if (rows[i].invalidReason) continue;
+      rows[i] = { ...rows[i], status: "creating" };
+      setBulkRows([...rows]);
+
+      const { firstName, middleName, lastName, email } = rows[i];
+      const fullName = middleName
+        ? `${firstName} ${middleName} ${lastName}`
+        : `${firstName} ${lastName}`;
+
+      try {
+        const { data, error } = await createFacultyStudent(fullName, email);
+        if (error) {
+          rows[i] = { ...rows[i], status: "failed", resultText: error };
+        } else if (data?.warning) {
+          createdCount++;
+          rows[i] = {
+            ...rows[i],
+            status: "warning",
+            resultText: `Created, but the invitation email failed — temporary password: ${data.password}`,
+          };
+        } else {
+          createdCount++;
+          rows[i] = { ...rows[i], status: "created", resultText: "Invitation emailed" };
+        }
+      } catch {
+        rows[i] = { ...rows[i], status: "failed", resultText: "Unexpected error" };
+      }
+      setBulkRows([...rows]);
+    }
+
+    setIsBulkImporting(false);
+    setBulkFinished(true);
+
+    if (createdCount > 0) {
+      loadStudents();
+      loadStudentUsers();
+      const faculty = getCurrentFacultyUser();
+      if (faculty) {
+        logAuditAction({
+          faculty_id: faculty.id,
+          faculty_name: faculty.name,
+          tab: "students",
+          action: "bulk_register_students",
+          details: `Registered ${createdCount} student${createdCount === 1 ? "" : "s"} via CSV import`,
+          target_type: "student",
+          target_id: "",
+          metadata: { created: createdCount, file: bulkFileName ?? "" },
+        });
+      }
+    }
+  };
 
   const handleCreateStudent = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -398,6 +603,16 @@ export default function FacultyStudentsClient() {
           >
             <FontAwesomeIcon icon={faPlus} className="w-5 h-5" />
             Register Student
+          </button>
+          <button
+            onClick={() => {
+              setShowBulkModal(true);
+              setMessage(null);
+            }}
+            className="px-4 py-2.5 bg-white border border-[#1B6B7B]/30 text-[#1B6B7B] font-medium rounded-lg hover:bg-[#1B6B7B]/5 transition-all flex items-center gap-2"
+          >
+            <FontAwesomeIcon icon={faFileCsv} className="w-5 h-5" />
+            Import CSV
           </button>
           <div className="relative">
             <input
@@ -735,6 +950,219 @@ export default function FacultyStudentsClient() {
           )}
         </div>
       </div>
+
+      {showBulkModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] w-full max-w-2xl border border-gray-200/80 overflow-hidden max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100/80 bg-gray-50/50 flex-shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-[#1B6B7B]/10 rounded-lg flex items-center justify-center">
+                  <FontAwesomeIcon icon={faFileCsv} className="text-[#1B6B7B] w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-gray-900">Bulk Add Students</h2>
+                  <p className="text-sm text-gray-500">Register multiple students from a CSV file</p>
+                </div>
+              </div>
+              <button
+                onClick={closeBulkModal}
+                disabled={isBulkImporting}
+                className="p-2 hover:bg-gray-200 rounded-lg transition-all disabled:opacity-40"
+              >
+                <FontAwesomeIcon icon={faXmark} className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 overflow-y-auto flex-1 min-h-0">
+              <div className="p-4 rounded-xl border border-[#1B6B7B]/20 bg-[#1B6B7B]/5">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-[#1B6B7B] mb-1">CSV format</p>
+                    <p className="text-xs text-gray-600">
+                      The first row must be a header. Column order doesn&apos;t matter and extra
+                      columns are ignored.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={downloadCsvTemplate}
+                    className="shrink-0 px-3 py-2 text-xs font-medium text-[#1B6B7B] bg-white border border-[#1B6B7B]/20 rounded-lg hover:bg-[#1B6B7B]/10 transition-all flex items-center gap-2"
+                  >
+                    <FontAwesomeIcon icon={faDownload} className="w-3.5 h-3.5" />
+                    Download template
+                  </button>
+                </div>
+                <div className="mt-3 overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-left text-gray-500">
+                        <th className="py-1.5 pr-4 font-semibold">Column</th>
+                        <th className="py-1.5 pr-4 font-semibold">Required</th>
+                        <th className="py-1.5 font-semibold">Description</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#1B6B7B]/10 text-gray-700">
+                      <tr>
+                        <td className="py-1.5 pr-4 font-mono">first_name</td>
+                        <td className="py-1.5 pr-4">Yes</td>
+                        <td className="py-1.5">Student&apos;s first name</td>
+                      </tr>
+                      <tr>
+                        <td className="py-1.5 pr-4 font-mono">middle_name</td>
+                        <td className="py-1.5 pr-4">No</td>
+                        <td className="py-1.5">Middle name or initial (leave blank if none)</td>
+                      </tr>
+                      <tr>
+                        <td className="py-1.5 pr-4 font-mono">last_name</td>
+                        <td className="py-1.5 pr-4">Yes</td>
+                        <td className="py-1.5">Student&apos;s last name</td>
+                      </tr>
+                      <tr>
+                        <td className="py-1.5 pr-4 font-mono">email</td>
+                        <td className="py-1.5 pr-4">Yes</td>
+                        <td className="py-1.5">
+                          Student&apos;s email — the invitation and temporary password are sent here
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div>
+                <input
+                  ref={csvInputRef}
+                  type="file"
+                  accept=".csv,text/csv"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleCsvFile(file);
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => csvInputRef.current?.click()}
+                  disabled={isBulkImporting}
+                  className="w-full px-4 py-6 border-2 border-dashed border-gray-300 rounded-xl text-sm text-gray-600 hover:border-[#1B6B7B]/50 hover:bg-[#1B6B7B]/5 transition-all disabled:opacity-50"
+                >
+                  {bulkFileName ? (
+                    <span>
+                      <span className="font-semibold text-gray-800">{bulkFileName}</span> — click to
+                      choose a different file
+                    </span>
+                  ) : (
+                    "Click to choose a CSV file"
+                  )}
+                </button>
+              </div>
+
+              {bulkFileError && (
+                <div className="p-3 rounded-lg text-sm border bg-red-50 text-red-700 border-red-200">
+                  {bulkFileError}
+                </div>
+              )}
+
+              {bulkRows.length > 0 && (
+                <div className="border border-gray-200 rounded-xl overflow-hidden">
+                  <div className="px-4 py-2 bg-gray-50/50 border-b border-gray-100 text-xs text-gray-500">
+                    {bulkRows.filter((r) => !r.invalidReason).length} of {bulkRows.length} row
+                    {bulkRows.length === 1 ? "" : "s"} ready to import
+                    {bulkRows.some((r) => r.invalidReason) && " — rows with problems are skipped"}
+                  </div>
+                  <div className="max-h-56 overflow-y-auto">
+                    <table className="w-full text-sm">
+                      <tbody className="divide-y divide-gray-100/80">
+                        {bulkRows.map((row) => (
+                          <tr key={row.line} className={row.invalidReason ? "bg-red-50/40" : ""}>
+                            <td className="py-2 px-4 text-xs text-gray-400 whitespace-nowrap">
+                              Line {row.line}
+                            </td>
+                            <td className="py-2 px-2 text-gray-800 whitespace-nowrap">
+                              {[row.firstName, row.middleName, row.lastName]
+                                .filter(Boolean)
+                                .join(" ") || "—"}
+                            </td>
+                            <td className="py-2 px-2 text-gray-500">{row.email || "—"}</td>
+                            <td className="py-2 px-4 text-right">
+                              {row.invalidReason ? (
+                                <span className="inline-flex items-center gap-1.5 text-xs text-red-600">
+                                  <FontAwesomeIcon icon={faCircleXmark} className="w-3.5 h-3.5" />
+                                  {row.invalidReason}
+                                </span>
+                              ) : row.status === "creating" ? (
+                                <span className="inline-flex items-center gap-1.5 text-xs text-[#1B6B7B]">
+                                  <FontAwesomeIcon icon={faSpinner} spin className="w-3.5 h-3.5" />
+                                  Creating…
+                                </span>
+                              ) : row.status === "created" ? (
+                                <span className="inline-flex items-center gap-1.5 text-xs text-emerald-600">
+                                  <FontAwesomeIcon icon={faCircleCheck} className="w-3.5 h-3.5" />
+                                  {row.resultText}
+                                </span>
+                              ) : row.status === "warning" ? (
+                                <span className="inline-flex items-center gap-1.5 text-xs text-amber-600">
+                                  <FontAwesomeIcon icon={faTriangleExclamation} className="w-3.5 h-3.5" />
+                                  {row.resultText}
+                                </span>
+                              ) : row.status === "failed" ? (
+                                <span className="inline-flex items-center gap-1.5 text-xs text-red-600">
+                                  <FontAwesomeIcon icon={faCircleXmark} className="w-3.5 h-3.5" />
+                                  {row.resultText}
+                                </span>
+                              ) : (
+                                <span className="text-xs text-gray-400">Ready</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {bulkFinished && (
+                <div className="p-3 rounded-lg text-sm border bg-green-50 text-green-700 border-green-200">
+                  Import finished:{" "}
+                  {bulkRows.filter((r) => r.status === "created" || r.status === "warning").length}{" "}
+                  created, {bulkRows.filter((r) => r.status === "failed").length} failed,{" "}
+                  {bulkRows.filter((r) => r.invalidReason).length} skipped. Each new student
+                  receives an email with a temporary password and must change it on first login.
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-3 px-5 py-3 border-t border-gray-100/80 bg-gray-50/50 flex-shrink-0">
+              <button
+                type="button"
+                onClick={closeBulkModal}
+                disabled={isBulkImporting}
+                className="px-5 py-2.5 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-all disabled:opacity-50"
+              >
+                {bulkFinished ? "Close" : "Cancel"}
+              </button>
+              {!bulkFinished && (
+                <button
+                  type="button"
+                  onClick={handleBulkImport}
+                  disabled={isBulkImporting || bulkRows.every((r) => r.invalidReason) || bulkRows.length === 0}
+                  className="px-6 py-2.5 bg-[#1B6B7B] text-white font-medium rounded-lg hover:bg-[#145A63] transition-all disabled:opacity-60 flex items-center gap-2 shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
+                >
+                  {isBulkImporting ? (
+                    <>
+                      <FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" />
+                      Importing…
+                    </>
+                  ) : (
+                    `Import ${bulkRows.filter((r) => !r.invalidReason).length} Student${bulkRows.filter((r) => !r.invalidReason).length === 1 ? "" : "s"}`
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {showUpdateModal && updatingStudent && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
