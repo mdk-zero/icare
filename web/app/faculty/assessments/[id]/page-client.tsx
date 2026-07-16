@@ -645,7 +645,7 @@ export default function AssessmentQuestionsClient({
 
   if (!assessment) {
     return (
-      <div className="bg-white p-10 rounded-2xl shadow-sm border border-gray-100 text-center">
+      <div className="bg-white p-10 rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] text-center">
         <p className="text-gray-500 mb-4">Assessment not found.</p>
         <button
           onClick={() => router.push("/faculty/assessments")}
@@ -658,7 +658,7 @@ export default function AssessmentQuestionsClient({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center gap-4">
         <button
@@ -705,7 +705,7 @@ export default function AssessmentQuestionsClient({
         </button>
 
         {showCriteriaEditor && (
-          <div className="px-5 pb-5 space-y-4 border-t border-gray-100 pt-4">
+          <div className="px-4 pb-4 space-y-2 border-t border-gray-100 pt-3">
             {criteria.length > 0 && (
               <div className="space-y-2">
                 {criteria.map((c, i) => {
@@ -816,7 +816,7 @@ export default function AssessmentQuestionsClient({
                   key={q.id}
                   className="bg-white rounded-xl border border-gray-200 shadow-sm"
                 >
-                  <div className="p-5 space-y-4">
+                  <div className="p-4 space-y-2">
                     {/* Question header */}
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-3">
@@ -956,7 +956,7 @@ export default function AssessmentQuestionsClient({
                     )}
 
                     {/* Answer key row */}
-                    <div className="flex items-center gap-4 pt-2 border-t border-gray-100 flex-wrap">
+                    <div className="flex items-center gap-3 pt-2 border-t border-gray-100 flex-wrap">
                       <div className="flex items-center gap-2">
                         <label className="text-sm text-gray-600 font-medium">
                           Points
@@ -1008,7 +1008,7 @@ export default function AssessmentQuestionsClient({
         )}
 
         {showAIPanel && (
-          <div className="bg-white rounded-xl border border-[#1B6B7B]/30 shadow-sm p-5 space-y-4">
+          <div className="bg-white rounded-xl border border-[#1B6B7B]/30 shadow-sm p-4 space-y-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <FontAwesomeIcon icon={faWandMagicSparkles} className="w-4 h-4 text-[#1B6B7B]" />

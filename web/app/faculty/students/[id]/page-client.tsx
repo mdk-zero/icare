@@ -17,6 +17,7 @@ import {
   CompetencyScore,
 } from "../../../lib/api";
 import { SkeletonProfileHeader, SkeletonRiskPredictionCard, SkeletonTabContent } from "../../../components/skeletons";
+import Card from "../../../components/Card";
 
 interface PerformanceHistory {
   quiz_title: string;
@@ -163,17 +164,17 @@ export default function StudentDetailClient() {
 
   if (loading) {
     return (
-      <div className="max-w-7xl mx-auto space-y-6">
-        <div className="h-5 w-32 bg-gray-200 rounded animate-pulse mb-6" />
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div>
+        <div className="h-5 w-32 bg-gray-200 rounded animate-pulse mb-4" />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div className="lg:col-span-2">
             <SkeletonProfileHeader />
           </div>
           <SkeletonRiskPredictionCard />
         </div>
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden animate-pulse">
-          <div className="border-b border-gray-100">
-            <div className="flex gap-6 px-6">
+        <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden animate-pulse">
+          <div className="border-b border-gray-100/80">
+            <div className="flex gap-4 px-4">
               {Array.from({ length: 3 }).map((_, i) => (
                 <div key={i} className="py-4">
                   <div className="h-4 w-20 bg-gray-200 rounded" />
@@ -204,8 +205,8 @@ export default function StudentDetailClient() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto">
-      <div className="mb-6">
+    <div>
+      <div className="mb-4">
         <button 
           onClick={() => router.push('/faculty/students')}
           className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
@@ -217,9 +218,9 @@ export default function StudentDetailClient() {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
         <div className="lg:col-span-2">
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+          <Card padding="sm">
             <div className="flex items-center gap-4 mb-6">
               <div className="w-16 h-16 bg-gradient-to-br from-[#1B6B7B] to-[#145a63] rounded-full flex items-center justify-center text-white font-bold text-xl">
                 {student.name.split(' ').map(n => n[0]).join('')}
@@ -231,7 +232,7 @@ export default function StudentDetailClient() {
               </div>
             </div>
             
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div className="text-center p-4 bg-gray-50 rounded-xl">
                 <p className="text-2xl font-bold text-gray-900">{student.average_score}%</p>
                 <p className="text-sm text-gray-500">Avg Score</p>
@@ -252,10 +253,10 @@ export default function StudentDetailClient() {
                 </span>
               </div>
             </div>
-          </div>
+          </Card>
         </div>
 
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+        <Card padding="sm">
           <div className="flex items-center gap-2 mb-4">
             <div className="p-2 bg-purple-100 rounded-lg">
               <svg className="w-5 h-5 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -295,7 +296,7 @@ export default function StudentDetailClient() {
                 </div>
               )}
               {riskPrediction.explanations.length > 0 && (
-                <div className="border-t border-gray-100 pt-3">
+                <div className="border-t border-gray-100/80 pt-3">
                   <p className="text-sm text-gray-500 mb-2">Top Contributing Factors</p>
                   <div className="space-y-2">
                     {riskPrediction.explanations.map((exp) => (
@@ -312,7 +313,7 @@ export default function StudentDetailClient() {
                   </div>
                 </div>
               )}
-              <p className="text-xs text-gray-400 border-t border-gray-100 pt-3">
+              <p className="text-xs text-gray-400 border-t border-gray-100/80 pt-3">
                 {riskPrediction.ml_models
                   ? `${riskPrediction.ml_models.kind.replace(/_/g, ' ')} v${riskPrediction.ml_models.version}${riskPrediction.ml_models.is_baseline ? ' (pre-trained baseline)' : ''}`
                   : 'model unknown'}
@@ -321,12 +322,12 @@ export default function StudentDetailClient() {
               </p>
             </div>
           )}
-        </div>
+        </Card>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="border-b border-gray-100">
-          <div className="flex gap-6 px-6">
+        <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden">
+          <div className="border-b border-gray-100/80">
+            <div className="flex gap-4 px-4">
             {['performance', 'scenarios', 'competencies'].map((tab) => (
               <button
                 key={tab}
@@ -345,9 +346,9 @@ export default function StudentDetailClient() {
 
         <div className="p-6">
           {activeTab === 'performance' && (
-            <div className="space-y-4">
+            <div className="space-y-2">
               {performanceHistory.map((record, idx) => (
-                <div key={idx} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                   <div>
                     <p className="font-medium text-gray-900">{record.quiz_title}</p>
                     <p className="text-sm text-gray-500">{record.date} • {record.time_taken} min</p>
@@ -361,12 +362,12 @@ export default function StudentDetailClient() {
           )}
 
           {activeTab === 'scenarios' && (
-            <div className="space-y-4">
+            <div className="space-y-2">
               {scenarioHistory.length === 0 ? (
                 <p className="text-gray-500 text-center py-8">No scenario performance records yet</p>
               ) : (
                 scenarioHistory.map((record) => (
-                  <div key={record.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                  <div key={record.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                     <div>
                       <p className="font-medium text-gray-900">{record.scenario_title}</p>
                       <p className="text-sm text-gray-500">{record.completed_at} • {Math.floor(record.time_taken / 60)}m {record.time_taken % 60}s</p>
@@ -388,9 +389,9 @@ export default function StudentDetailClient() {
                   No validated competency scores yet. Record the first one below.
                 </p>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                   {Object.entries(competencies).map(([key, value]) => (
-                    <div key={key} className="p-4 bg-gray-50 rounded-xl">
+                    <div key={key} className="p-3 bg-gray-50 rounded-lg">
                       <div className="flex items-center justify-between mb-2 gap-2">
                         <span className="font-medium text-gray-900">{key}</span>
                         <span className={`font-bold ${getScoreColor(value)}`}>{value}%</span>
@@ -406,7 +407,7 @@ export default function StudentDetailClient() {
                 </div>
               )}
 
-              <div className="p-5 bg-[#1B6B7B]/5 border border-[#1B6B7B]/20 rounded-2xl">
+              <div className="p-5 bg-[#1B6B7B]/5 border border-[#1B6B7B]/20 rounded-xl">
                 <h3 className="font-semibold text-gray-900 mb-3">Validate competency</h3>
                 {validateError && (
                   <div className="mb-3 p-3 bg-rose-50 border border-rose-200 rounded-xl text-sm text-rose-700">
@@ -440,7 +441,7 @@ export default function StudentDetailClient() {
                   <button
                     onClick={handleValidate}
                     disabled={validating}
-                    className="px-4 py-2 bg-[#1B6B7B] text-white rounded-xl font-medium text-sm hover:bg-[#145a63] transition-all disabled:opacity-50"
+                    className="px-4 py-2 bg-[#1B6B7B] text-white rounded-lg font-medium text-sm hover:bg-[#145a63] transition-all disabled:opacity-50 shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
                   >
                     {validating ? "Saving…" : "Record Score"}
                   </button>
