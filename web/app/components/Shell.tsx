@@ -2,16 +2,14 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import { SkeletonSidebar } from "./skeletons";
 import {
   faBars,
   faBell,
-  faChevronDown,
   faRightFromBracket,
-  faUser,
 } from "@fortawesome/free-solid-svg-icons";
 import {
   getCurrentUser,
@@ -27,6 +25,7 @@ export interface NavItem {
   label: string;
   href: string;
   icon: IconDefinition;
+  section?: string;
 }
 
 interface ShellProps {
@@ -70,8 +69,6 @@ export default function Shell({
   const [isLoading, setIsLoading] = useState(true);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [userDropdownOpen, setUserDropdownOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
 
   const { logo, portalLabel, mobileRoleLabel, profileHref } = config[role];
 
@@ -108,19 +105,6 @@ export default function Shell({
     };
   }, [router, role]);
 
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(event.target as Node)
-      ) {
-        setUserDropdownOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
   const handleLogout = () => {
     if (user?.role === "faculty") {
       void logAuditAction({
@@ -142,169 +126,133 @@ export default function Shell({
   return (
     <>
       <style>{`
-        .custom-scrollbar::-webkit-scrollbar {
-          width: 6px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-          background: transparent;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: #1B6B7B;
-          border-radius: 3px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: #145a63;
-        }
-        .sidebar-scrollbar::-webkit-scrollbar {
-          width: 4px;
-        }
-        .sidebar-scrollbar::-webkit-scrollbar-track {
-          background: transparent;
-        }
-        .sidebar-scrollbar::-webkit-scrollbar-thumb {
-          background: rgba(255,255,255,0.3);
-          border-radius: 2px;
-        }
-        .sidebar-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: rgba(255,255,255,0.5);
-        }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #2b8a7e; border-radius: 3px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #3da89a; }
+        .sidebar-scrollbar::-webkit-scrollbar { width: 4px; }
+        .sidebar-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .sidebar-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 2px; }
+        .sidebar-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.35); }
       `}</style>
-      <div className="h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 flex overflow-hidden">
+      <div className="h-screen bg-[#f8fafc] flex overflow-hidden">
         <div
-          className={`fixed md:relative z-40 md:z-auto w-72 h-full bg-gradient-to-b from-[#1B6B7B] via-[#18636F] to-[#145A63] text-white flex flex-col shadow-2xl overflow-hidden md:overflow-y-auto sidebar-scrollbar transform transition-transform duration-300 ${
+          className={`fixed md:relative z-40 md:z-auto w-60 h-full text-white flex flex-col shadow-[4px_0_20px_-6px_rgba(0,0,0,0.25)] overflow-y-auto sidebar-scrollbar transform transition-transform duration-300 ${
             sidebarOpen ? "translate-x-0" : "-translate-x-full"
           } md:translate-x-0`}
+          style={{
+            background: 'linear-gradient(180deg, #0b3d3d 0%, #146464 50%, #0f5252 100%)',
+          }}
         >
-          <div className="absolute top-0 left-0 right-0 bottom-0 opacity-10">
-            <div className="absolute top-10 left-10 w-32 h-32 bg-white rounded-full blur-3xl" />
-            <div className="absolute bottom-20 right-10 w-40 h-40 bg-white rounded-full blur-3xl" />
-          </div>
+          {/* subtle pattern overlay */}
+          <div className="absolute inset-0 opacity-[0.03]" style={{
+            backgroundImage: 'radial-gradient(circle at 25% 20%, rgba(255,255,255,0.6) 0%, transparent 50%), radial-gradient(circle at 75% 80%, rgba(255,255,255,0.3) 0%, transparent 40%)'
+          }} />
 
-          <div className="p-6 border-b border-white/10 relative z-10">
-            <div className="flex items-center gap-3">
-              {role === "student" ? (
-                <>
-                  <img
-                    src={logo}
-                    alt="iCARE++"
-                    className="h-12 w-auto object-contain drop-shadow-md"
-                  />
-                  <div>
-                    <h1 className="text-xl font-bold tracking-tight">iCARE++</h1>
-                    <p className="text-xs text-white/60">{portalLabel}</p>
-                  </div>
-                </>
-              ) : (
-                <img
-                  src={logo}
-                  alt="iCARE++"
-                  className="h-12 w-auto object-contain drop-shadow-md"
-                />
-              )}
-            </div>
-          </div>
-
-          <nav className="flex-1 p-4 space-y-1 relative z-10">
-            <p className="px-4 text-[10px] font-semibold text-white/40 uppercase tracking-wider mb-2">
-              Menu
-            </p>
-            {navItems.map((item) => {
-              const active = isActive(item, pathname, searchParams);
-              return (
-                <Link
-                  key={item.id}
-                  href={item.href}
-                  onClick={() => setSidebarOpen(false)}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 relative ${
-                    active
-                      ? "bg-white/20 shadow-lg backdrop-blur-sm"
-                      : "hover:bg-white/10"
-                  }`}
-                >
-                  {active && (
-                    <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-white rounded-r-full" />
-                  )}
-                  <div
-                    className={`p-1.5 rounded-lg ${
-                      active ? "bg-white/20" : "bg-white/10"
-                    }`}
-                  >
-                    <FontAwesomeIcon icon={item.icon} className="w-4 h-4" />
-                  </div>
-                  <span
-                    className={`font-medium ${
-                      active ? "text-white" : "text-white/80"
-                    }`}
-                  >
-                    {item.label}
-                  </span>
-                </Link>
-              );
-            })}
-          </nav>
-
-          <div className="p-4 border-t border-white/10 relative z-10">
-            <div className="p-4 bg-white/10 rounded-2xl backdrop-blur-sm border border-white/10 relative">
-              <div
-                className="flex items-center gap-3 cursor-pointer"
-                onClick={() => setUserDropdownOpen(!userDropdownOpen)}
-              >
-                <div className="w-11 h-11 bg-white/20 rounded-full flex items-center justify-center shadow-inner overflow-hidden">
-                  {avatarUrl ? (
-                    <img
-                      src={avatarUrl}
-                      alt=""
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <span className="text-sm font-bold">
+          {/* Profile + Notification */}
+          <div className="relative z-10 flex items-center gap-2 px-4 py-3 border-b border-white/10">
+            <Link
+              href={profileHref}
+              onClick={() => setSidebarOpen(false)}
+              className="flex items-center gap-3 flex-1 min-w-0 rounded-lg hover:bg-white/[0.04] transition-colors -mx-1 px-1 py-1"
+            >
+              <div className="w-9 h-9 rounded-full flex items-center justify-center overflow-hidden shrink-0 ring-2 ring-white/15">
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full bg-gradient-to-br from-white/20 to-white/5 flex items-center justify-center">
+                    <span className="text-sm font-bold text-white/80">
                       {user.name.charAt(0).toUpperCase()}
                     </span>
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold truncate text-sm">{user.name}</p>
-                  <p className="text-xs text-white/50 capitalize">{user.role}</p>
-                </div>
-                <FontAwesomeIcon
-                  icon={faChevronDown}
-                  className={`w-4 h-4 text-white/50 transition-transform ${
-                    userDropdownOpen ? "rotate-180" : ""
-                  }`}
-                />
+                  </div>
+                )}
               </div>
-              {userDropdownOpen && (
-                <div className="absolute bottom-full left-0 right-0 mb-2 bg-[#145a63]/90 backdrop-blur-xl border border-white/10 rounded-xl overflow-hidden shadow-xl">
-                  <Link
-                    href={profileHref}
-                    onClick={() => {
-                      setUserDropdownOpen(false);
-                      setSidebarOpen(false);
-                    }}
-                    className="w-full flex items-center gap-3 px-4 py-3 text-sm text-white/80 hover:bg-white/10 transition-colors"
-                  >
-                    <FontAwesomeIcon icon={faUser} className="w-4 h-4" />
-                    <span>Profile</span>
-                  </Link>
-                  <button
-                    onClick={handleLogout}
-                    className="w-full flex items-center gap-3 px-4 py-3 text-sm text-white/80 hover:bg-white/10 transition-colors"
-                  >
-                    <FontAwesomeIcon
-                      icon={faRightFromBracket}
-                      className="w-4 h-4"
-                    />
-                    <span>Logout</span>
-                  </button>
-                </div>
-              )}
-            </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-white/85 truncate">{user.name}</p>
+                <p className="text-[10px] text-white/40 capitalize tracking-wide">{user.role}</p>
+              </div>
+            </Link>
+            {role === "faculty" && (
+              <Link
+                href="/faculty/notifications"
+                onClick={() => setSidebarOpen(false)}
+                className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-white/[0.1] transition-colors shrink-0"
+              >
+                <svg className="w-4 h-4 text-white/50" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                </svg>
+              </Link>
+            )}
           </div>
 
-          <div className="px-4 py-3 border-t border-white/5 relative z-10">
-            <p className="text-[10px] text-white/30 text-center">
-              iCARE++ v1.0 • Academic Year 2024-2025
-            </p>
+          {/* Navigation */}
+          <nav className="relative z-10 flex-1 px-3 py-3 space-y-0.5">
+            {navItems.reduce<{ section: string; items: NavItem[] }[]>((groups, item) => {
+              const section = item.section ?? "General";
+              const existing = groups.find((g) => g.section === section);
+              if (existing) {
+                existing.items.push(item);
+              } else {
+                groups.push({ section, items: [item] });
+              }
+              return groups;
+            }, []).map((group) => (
+              <div key={group.section} className="mb-1">
+                <p className="px-3 py-1.5 text-[9px] font-bold text-white/30 uppercase tracking-[0.12em]">
+                  {group.section}
+                </p>
+                {group.items.map((item) => {
+                  const active = isActive(item, pathname, searchParams);
+                  return (
+                    <Link
+                      key={item.id}
+                      href={item.href}
+                      onClick={() => setSidebarOpen(false)}
+                      className={`group relative w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-150 ${
+                        active
+                          ? "bg-white/15 shadow-sm"
+                          : "hover:bg-white/[0.06]"
+                      }`}
+                    >
+                      {active && (
+                        <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-4 bg-emerald-300 rounded-r-full shadow-[0_0_6px_rgba(110,231,183,0.3)]" />
+                      )}
+                      <div className={`flex items-center justify-center w-7 h-7 rounded-lg transition-all ${
+                        active ? "bg-white/20" : "bg-white/[0.06]"
+                      }`}>
+                        <FontAwesomeIcon
+                          icon={item.icon}
+                          className={`w-3.5 h-3.5 transition-colors ${
+                            active ? "text-white" : "text-white/50 group-hover:text-white/70"
+                          }`}
+                        />
+                      </div>
+                      <span className={`text-xs font-semibold tracking-wide ${
+                        active ? "text-white" : "text-white/60 group-hover:text-white/80"
+                      }`}>
+                        {item.label}
+                      </span>
+                      {active && (
+                        <span className="ml-auto w-1.5 h-1.5 rounded-full bg-emerald-300 shadow-[0_0_6px_rgba(110,231,183,0.4)]" />
+                      )}
+                    </Link>
+                  );
+                })}
+              </div>
+            ))}
+          </nav>
+
+          {/* Logout */}
+          <div className="relative z-10 px-3 pb-3 border-t border-white/10 pt-2">
+            <button
+              onClick={handleLogout}
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-white/40 hover:text-red-300 hover:bg-red-500/10 transition-all duration-150 text-xs font-semibold tracking-wide"
+            >
+              <div className="flex items-center justify-center w-7 h-7 rounded-lg">
+                <FontAwesomeIcon icon={faRightFromBracket} className="w-3.5 h-3.5" />
+              </div>
+              <span>Logout</span>
+            </button>
           </div>
         </div>
 
@@ -328,11 +276,11 @@ export default function Shell({
                 />
               </button>
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 bg-[#1B6B7B] rounded-lg flex items-center justify-center p-1">
+                <div className="w-8 h-8 bg-gradient-to-br from-[#0b3d3d] to-[#146464] rounded-lg flex items-center justify-center p-1">
                   <img
                     src={logo}
                     alt="iCARE++"
-                    className="w-full h-full object-contain"
+                    className="w-full h-full object-contain brightness-0 invert"
                   />
                 </div>
               </div>
@@ -346,13 +294,13 @@ export default function Shell({
                   />
                 </button>
               )}
-              <span className="px-2 py-1.5 bg-gradient-to-r from-[#1B6B7B] to-[#145a63] text-white text-xs font-medium rounded-lg">
+              <span className="px-2 py-1.5 bg-gradient-to-br from-[#0b3d3d] to-[#146464] text-white text-xs font-medium rounded-lg">
                 {mobileRoleLabel}
               </span>
             </div>
           </div>
 
-          <div className="flex-1 p-4 lg:p-8 overflow-y-auto h-full custom-scrollbar">
+          <div className="flex-1 p-3 lg:p-5 overflow-y-auto h-full custom-scrollbar">
             {children}
           </div>
         </div>
