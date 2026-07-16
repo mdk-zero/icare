@@ -24,6 +24,8 @@ import {
 } from "../../lib/api";
 import { SkeletonTable } from "../../components/skeletons";
 import PageHeader from "../../components/PageHeader";
+import StatTile from "../../components/StatTile";
+import Card from "../../components/Card";
 
 const inputClassName =
   "w-full px-4 py-3 bg-white border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30 focus:border-[#1B6B7B] focus:bg-white transition-all text-sm shadow-sm";
@@ -229,7 +231,7 @@ export default function FacultyPatientsClient() {
   }).length;
 
   return (
-    <div className="max-w-7xl mx-auto">
+    <div>
       <PageHeader
         badge={{
           icon: (
@@ -243,45 +245,31 @@ export default function FacultyPatientsClient() {
         subtitle="View and manage patient cases with clinical decision support"
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-[#1B6B7B]/10 rounded-xl flex items-center justify-center">
-              <FontAwesomeIcon icon={faUsers} className="w-5 h-5 text-[#1B6B7B]" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-800">{patients.length}</p>
-              <p className="text-xs text-gray-500">Total Patients</p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-red-50 rounded-xl flex items-center justify-center">
-              <FontAwesomeIcon icon={faTriangleExclamation} className="w-5 h-5 text-red-600" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-800">{criticalCount}</p>
-              <p className="text-xs text-gray-500">Critical Vitals</p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-purple-50 rounded-xl flex items-center justify-center">
-              <FontAwesomeIcon icon={faFlask} className="w-5 h-5 text-purple-600" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-800">
-                {patients.filter((p) => Object.keys(p.labs || {}).length > 0).length}
-              </p>
-              <p className="text-xs text-gray-500">Lab Results Available</p>
-            </div>
-          </div>
-        </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+        <StatTile
+          icon={<FontAwesomeIcon icon={faUsers} className="w-5 h-5" />}
+          value={patients.length}
+          label="Total Patients"
+          iconBg="bg-[#1B6B7B]/10"
+          iconColor="text-[#1B6B7B]"
+        />
+        <StatTile
+          icon={<FontAwesomeIcon icon={faTriangleExclamation} className="w-5 h-5" />}
+          value={criticalCount}
+          label="Critical Vitals"
+          iconBg="bg-red-50"
+          iconColor="text-red-600"
+        />
+        <StatTile
+          icon={<FontAwesomeIcon icon={faFlask} className="w-5 h-5" />}
+          value={patients.filter((p) => Object.keys(p.labs || {}).length > 0).length}
+          label="Lab Results Available"
+          iconBg="bg-purple-50"
+          iconColor="text-purple-600"
+        />
       </div>
 
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
         <div className="relative w-full sm:w-96">
           <FontAwesomeIcon
             icon={faSearch}
@@ -297,7 +285,7 @@ export default function FacultyPatientsClient() {
         </div>
         <button
           onClick={openAddModal}
-          className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#1B6B7B] hover:bg-[#145a68] text-white text-sm font-medium rounded-xl transition-colors"
+          className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#1B6B7B] hover:bg-[#145a68] text-white text-sm font-medium rounded-lg transition-colors shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
         >
           <FontAwesomeIcon icon={faPlus} className="w-4 h-4" />
           Add Patient
@@ -307,7 +295,7 @@ export default function FacultyPatientsClient() {
       {loading ? (
         <SkeletonTable rows={5} cols={10} />
       ) : patients.length === 0 ? (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center">
+        <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] p-12 text-center">
           <FontAwesomeIcon icon={faUsers} className="w-12 h-12 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-gray-700">No patients found</h3>
           <p className="text-gray-500 text-sm mt-1">
@@ -317,24 +305,24 @@ export default function FacultyPatientsClient() {
           </p>
         </div>
       ) : (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-gray-50/50 border-b border-gray-200">
+              <thead className="bg-gray-50/50 border-b border-gray-100">
                 <tr>
-                  <th className="text-left py-4 px-6 font-semibold text-gray-600">Patient</th>
-                  <th className="text-left py-4 px-6 font-semibold text-gray-600">Room</th>
-                  <th className="text-left py-4 px-6 font-semibold text-gray-600">Diagnosis</th>
-                  <th className="text-left py-4 px-6 font-semibold text-gray-600">HR</th>
-                  <th className="text-left py-4 px-6 font-semibold text-gray-600">BP</th>
-                  <th className="text-left py-4 px-6 font-semibold text-gray-600">Temp</th>
-                  <th className="text-left py-4 px-6 font-semibold text-gray-600">RR</th>
-                  <th className="text-left py-4 px-6 font-semibold text-gray-600">SpO2</th>
-                  <th className="text-left py-4 px-6 font-semibold text-gray-600">MIMIC ID</th>
-                  <th className="text-left py-4 px-6 font-semibold text-gray-600">Actions</th>
+                  <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Patient</th>
+                  <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Room</th>
+                  <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Diagnosis</th>
+                  <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">HR</th>
+                  <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">BP</th>
+                  <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Temp</th>
+                  <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">RR</th>
+                  <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">SpO2</th>
+                  <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">MIMIC ID</th>
+                  <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-gray-100/80">
                 {patients.map((patient) => {
                   const vitals = patient.vital_signs;
                   const hrStatus = getVitalStatus(vitals?.heart_rate ?? null, "heart_rate");
@@ -353,7 +341,7 @@ export default function FacultyPatientsClient() {
 
                   return (
                     <tr key={patient.id} className="hover:bg-gray-50/50 transition-colors">
-                      <td className="py-4 px-6">
+                      <td className="py-3 px-4">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-semibold">
                             {patient.name.charAt(0)}
@@ -366,31 +354,31 @@ export default function FacultyPatientsClient() {
                           </div>
                         </div>
                       </td>
-                      <td className="py-4 px-6 text-gray-600">{patient.room_number}</td>
-                      <td className="py-4 px-6">
+                      <td className="py-3 px-4 text-gray-600">{patient.room_number}</td>
+                      <td className="py-3 px-4">
                         <span className="px-2 py-1 bg-gray-100 text-gray-700 text-sm rounded">
                           {patient.diagnosis}
                         </span>
                       </td>
-                      <td className={`py-4 px-6 font-medium ${hrStatus.color}`}>
+                      <td className={`py-3 px-4 font-medium ${hrStatus.color}`}>
                         {vitals?.heart_rate ?? "—"}
                       </td>
-                      <td className="py-4 px-6 text-gray-600">
+                      <td className="py-3 px-4 text-gray-600">
                         {vitals?.blood_pressure || "—"}
                       </td>
-                      <td className={`py-4 px-6 font-medium ${tempStatus.color}`}>
+                      <td className={`py-3 px-4 font-medium ${tempStatus.color}`}>
                         {vitals?.temperature != null ? `${vitals.temperature}°C` : "—"}
                       </td>
-                      <td className={`py-4 px-6 font-medium ${rrStatus.color}`}>
+                      <td className={`py-3 px-4 font-medium ${rrStatus.color}`}>
                         {vitals?.respiratory_rate ?? "—"}
                       </td>
-                      <td className={`py-4 px-6 font-medium ${spo2Status.color}`}>
+                      <td className={`py-3 px-4 font-medium ${spo2Status.color}`}>
                         {vitals?.oxygen_saturation != null ? `${vitals.oxygen_saturation}%` : "—"}
                       </td>
-                      <td className="py-4 px-6">
+                      <td className="py-3 px-4">
                         <span className="text-xs text-gray-500 font-mono">{patient.mimic_id}</span>
                       </td>
-                      <td className="py-4 px-6">
+                      <td className="py-3 px-4">
                         <div className="flex items-center gap-2">
                           <button
                             onClick={() => openEditModal(patient)}
@@ -424,10 +412,10 @@ export default function FacultyPatientsClient() {
 
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
-            <div className="flex items-center justify-between p-6 border-b border-gray-100 bg-gray-50/50">
+          <div className="bg-white rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col border border-gray-200/80">
+            <div className="flex items-center justify-between p-4 border-b border-gray-100/80 bg-gray-50/50">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-[#1B6B7B]/10 rounded-xl flex items-center justify-center">
+                <div className="w-10 h-10 bg-[#1B6B7B]/10 rounded-lg flex items-center justify-center">
                   <FontAwesomeIcon icon={editingPatient ? faPen : faPlus} className="text-[#1B6B7B] w-5 h-5" />
                 </div>
                 <div>
@@ -441,19 +429,19 @@ export default function FacultyPatientsClient() {
               </div>
               <button
                 onClick={closeModal}
-                className="p-2 hover:bg-gray-200 rounded-xl transition-colors"
+                className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
               >
                 <FontAwesomeIcon icon={faTimes} className="w-5 h-5 text-gray-500" />
               </button>
             </div>
             <div className="overflow-y-auto flex-1 custom-scrollbar">
 
-            <form onSubmit={handleSubmit} className="p-6 space-y-6">
+            <form onSubmit={handleSubmit} className="p-4 space-y-4">
               {error && (
                 <div className="p-3 bg-red-50 text-red-700 text-sm rounded-lg">{error}</div>
               )}
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className={labelClassName}>
                     Full Name
@@ -534,7 +522,7 @@ export default function FacultyPatientsClient() {
                   <FontAwesomeIcon icon={faHeartPulse} className="w-4 h-4 text-red-500" />
                   Vital Signs
                 </h3>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   <div>
                     <label className={vitalLabelClassName}>
                       Heart Rate (bpm)
@@ -597,18 +585,18 @@ export default function FacultyPatientsClient() {
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-100/80">
                 <button
                   type="button"
                   onClick={closeModal}
-                  className="px-5 py-2.5 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl font-medium transition-colors"
+                  className="px-5 py-2.5 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-all"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#1B6B7B] hover:bg-[#145a68] disabled:opacity-60 text-white font-medium rounded-xl transition-colors"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#1B6B7B] hover:bg-[#145a68] disabled:opacity-60 text-white font-medium rounded-lg transition-colors shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
                 >
                   {saving && <FontAwesomeIcon icon={faSpinner} className="w-4 h-4 animate-spin" />}
                   <FontAwesomeIcon icon={faSave} className="w-4 h-4" />
