@@ -11,15 +11,6 @@ import logo_white from "../../public/logo-white-no-bg.png";
 
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? "";
 
-function MedicalCross({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <rect x="16" y="4" width="8" height="32" rx="2" fill="currentColor" />
-      <rect x="4" y="16" width="32" height="8" rx="2" fill="currentColor" />
-    </svg>
-  );
-}
-
 export default function LoginPage() {
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
@@ -154,20 +145,21 @@ export default function LoginPage() {
       <div className="min-h-screen flex">
         {/* Left panel — logo & description */}
         <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-gradient-to-br from-[#0D7377] via-[#0A5C5F] to-[#084A4D]">
-          <div className="absolute inset-0 opacity-[0.05]">
+          {/* ECG graph-paper grid, fading toward the top-left */}
+          <div className="absolute inset-0 opacity-[0.07] [mask-image:linear-gradient(135deg,transparent_15%,black_70%)]">
             <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
               <defs>
-                <pattern id="crossPattern" width="80" height="80" patternUnits="userSpaceOnUse">
-                  <path d="M36 28h8v12h12v8h-12v12h-8v-12h-12v-8h12z" fill="#ffffff" />
+                <pattern id="gridMinor" width="28" height="28" patternUnits="userSpaceOnUse">
+                  <path d="M28 0H0v28" fill="none" stroke="#ffffff" strokeWidth="0.5" />
+                </pattern>
+                <pattern id="gridMajor" width="140" height="140" patternUnits="userSpaceOnUse">
+                  <path d="M140 0H0v140" fill="none" stroke="#ffffff" strokeWidth="1" />
                 </pattern>
               </defs>
-              <rect width="100%" height="100%" fill="url(#crossPattern)" />
+              <rect width="100%" height="100%" fill="url(#gridMinor)" />
+              <rect width="100%" height="100%" fill="url(#gridMajor)" />
             </svg>
           </div>
-
-          <MedicalCross className="absolute top-[14%] right-[10%] w-14 h-14 text-white/8 animate-float-slow" />
-          <MedicalCross className="absolute top-[46%] right-[22%] w-8 h-8 text-white/10 animate-float-medium" />
-          <MedicalCross className="absolute bottom-[26%] left-[6%] w-10 h-10 text-white/6 animate-float-slow" />
 
           <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-white/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3" />
           <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-[#7DD3D8]/10 rounded-full blur-3xl translate-y-1/3 -translate-x-1/4" />
