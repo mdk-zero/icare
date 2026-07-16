@@ -149,8 +149,8 @@ export default async function AdminDashboard() {
   const safeCount = totalStudents - atRiskStudents.length;
 
   return (
-    <div className="max-w-7xl mx-auto">
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 sm:p-8 mb-6">
+    <div>
+      <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] p-4 sm:p-5 mb-4">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 px-3 py-1 bg-gray-100 text-[#1B6B7B] rounded-full text-xs sm:text-sm font-medium w-fit mb-3">
@@ -168,7 +168,7 @@ export default async function AdminDashboard() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <div className="bg-white rounded-2xl p-4 md:p-6 shadow-sm border border-gray-100 hover:shadow-lg hover:border-[#1B6B7B]/30 transition-all duration-300">
+        <div className="bg-white rounded-xl p-4 md:p-6 border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200">
           <div className="flex items-center justify-between mb-4">
             <div className="w-12 h-12 bg-[#1B6B7B]/10 rounded-xl flex items-center justify-center">
               <svg className="w-6 h-6 text-[#1B6B7B]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -181,7 +181,7 @@ export default async function AdminDashboard() {
           <p className="mt-4 text-xs text-gray-400">{facultyCount} faculty · {totalUsers} accounts overall</p>
         </div>
 
-        <div className="bg-white rounded-2xl p-4 md:p-6 shadow-sm border border-gray-100 hover:shadow-lg hover:border-[#1B6B7B]/30 transition-all duration-300">
+        <div className="bg-white rounded-xl p-4 md:p-6 border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200">
           <div className="flex items-center justify-between mb-4">
             <div className="w-12 h-12 bg-[#1B6B7B]/10 rounded-xl flex items-center justify-center">
               <svg className="w-6 h-6 text-[#1B6B7B]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -201,7 +201,7 @@ export default async function AdminDashboard() {
           </p>
         </div>
 
-        <div className="bg-white rounded-2xl p-4 md:p-6 shadow-sm border border-gray-100 hover:shadow-lg hover:border-[#1B6B7B]/30 transition-all duration-300">
+        <div className="bg-white rounded-xl p-4 md:p-6 border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200">
           <div className="flex items-center justify-between mb-4">
             <div className="w-12 h-12 bg-[#1B6B7B]/10 rounded-xl flex items-center justify-center">
               <svg className="w-6 h-6 text-[#1B6B7B]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -230,7 +230,7 @@ export default async function AdminDashboard() {
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl p-4 md:p-6 shadow-sm border border-gray-100 hover:shadow-lg hover:border-[#1B6B7B]/30 transition-all duration-300">
+        <div className="bg-white rounded-xl p-4 md:p-6 border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200">
           <div className="flex items-center justify-between mb-4">
             <div className="w-12 h-12 bg-[#1B6B7B]/10 rounded-xl flex items-center justify-center">
               <svg className="w-6 h-6 text-[#1B6B7B]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -254,7 +254,7 @@ export default async function AdminDashboard() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <div className="md:col-span-2 lg:col-span-2 bg-white rounded-2xl p-4 md:p-6 shadow-sm border border-gray-100 hover:shadow-lg hover:border-[#1B6B7B]/30 transition-all duration-300">
+        <div className="md:col-span-2 lg:col-span-2 bg-white rounded-xl p-4 md:p-6 border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200">
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-lg font-semibold text-gray-900">Room Capacity</h3>
             <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">Occupancy</span>
@@ -293,7 +293,7 @@ export default async function AdminDashboard() {
           )}
         </div>
 
-        <div className="bg-white rounded-2xl p-4 md:p-6 shadow-sm border border-gray-100 hover:shadow-lg hover:border-[#1B6B7B]/30 transition-all duration-300">
+        <div className="bg-white rounded-xl p-4 md:p-6 border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-gray-900">Quick Actions</h3>
           </div>
@@ -333,7 +333,7 @@ export default async function AdminDashboard() {
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl p-4 md:p-6 shadow-sm border border-gray-100 hover:shadow-lg hover:border-[#1B6B7B]/30 transition-all duration-300">
+        <div className="bg-white rounded-xl p-4 md:p-6 border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-gray-900">Recent Activity</h3>
             <Link href="/admin/audit" className="text-xs text-[#1B6B7B] hover:underline">Audit trail</Link>
@@ -365,7 +365,7 @@ export default async function AdminDashboard() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <Link href="/admin/rooms">
-          <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 hover:shadow-lg hover:border-[#1B6B7B]/30 transition-all duration-300 cursor-pointer group">
+          <div className="bg-white rounded-xl p-5 border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200 cursor-pointer group">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-[#1B6B7B]/10 group-hover:scale-110 transition-transform duration-300">
                 <svg className="w-6 h-6 text-[#1B6B7B]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -380,7 +380,7 @@ export default async function AdminDashboard() {
           </div>
         </Link>
         <Link href="/admin/faculty">
-          <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 hover:shadow-lg hover:border-[#1B6B7B]/30 transition-all duration-300 cursor-pointer group">
+          <div className="bg-white rounded-xl p-5 border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200 cursor-pointer group">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-[#1B6B7B]/10 group-hover:scale-110 transition-transform duration-300">
                 <svg className="w-6 h-6 text-[#1B6B7B]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -395,7 +395,7 @@ export default async function AdminDashboard() {
           </div>
         </Link>
         <Link href="/admin/users">
-          <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 hover:shadow-lg hover:border-[#1B6B7B]/30 transition-all duration-300 cursor-pointer group">
+          <div className="bg-white rounded-xl p-5 border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200 cursor-pointer group">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-[#1B6B7B]/10 group-hover:scale-110 transition-transform duration-300">
                 <svg className="w-6 h-6 text-[#1B6B7B]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -410,7 +410,7 @@ export default async function AdminDashboard() {
           </div>
         </Link>
         <Link href="/admin/analytics">
-          <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 hover:shadow-lg hover:border-[#1B6B7B]/30 transition-all duration-300 cursor-pointer group">
+          <div className="bg-white rounded-xl p-5 border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200 cursor-pointer group">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-[#1B6B7B]/10 group-hover:scale-110 transition-transform duration-300">
                 <svg className="w-6 h-6 text-[#1B6B7B]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -429,7 +429,7 @@ export default async function AdminDashboard() {
       </div>
 
       {atRiskStudents.length > 0 && (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 hover:shadow-lg hover:border-[#1B6B7B]/30 transition-all duration-300 overflow-hidden">
+        <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200 overflow-hidden">
           <div className="p-6 border-b border-gray-100 flex items-center justify-between">
             <div className="flex items-center gap-4">
               <div className="w-10 h-10 bg-rose-50 rounded-xl flex items-center justify-center">

@@ -15,7 +15,7 @@ export default function SettingsClient() {
   ];
 
   return (
-    <div className="max-w-7xl mx-auto">
+    <div>
       <PageHeader
         badge={{
           icon: (
@@ -31,7 +31,7 @@ export default function SettingsClient() {
 
       <div className="flex flex-col lg:flex-row gap-6">
         <div className="lg:w-64 flex-shrink-0">
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-2">
+          <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] p-2">
             {sections.map((section) => (
               <button
                 key={section.id}
@@ -58,7 +58,7 @@ export default function SettingsClient() {
 
           {activeSection === "access" && (
             <div className="space-y-6">
-              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 hover:shadow-lg hover:border-[#1B6B7B]/30 transition-all duration-300">
+              <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] p-6 hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200">
                 <h2 className="text-xl font-semibold text-gray-900 mb-2">Role-Based Access Control</h2>
                 <p className="text-gray-500 text-sm mb-6">Configure access permissions for each user role</p>
                 <div className="space-y-4">
@@ -67,7 +67,7 @@ export default function SettingsClient() {
                     { role: "Faculty", desc: "Student management, grading, performance monitoring, and room oversight" },
                     { role: "Student", desc: "Clinical tasks, quizzes, patient monitoring, and learning recommendations" },
                   ].map((item, idx) => (
-                    <div key={idx} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                    <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                       <div>
                         <p className="font-medium text-gray-800">{item.role}</p>
                         <p className="text-sm text-gray-500">{item.desc}</p>
@@ -80,7 +80,7 @@ export default function SettingsClient() {
                 </div>
               </div>
 
-              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 hover:shadow-lg hover:border-[#1B6B7B]/30 transition-all duration-300">
+              <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] p-6 hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200">
                 <h2 className="text-xl font-semibold text-gray-900 mb-2">Security Settings</h2>
                 <p className="text-gray-500 text-sm mb-6">Manage password policies and authentication</p>
                 <div className="space-y-4 max-w-md">
@@ -88,7 +88,7 @@ export default function SettingsClient() {
                     <label className="block text-sm font-medium text-gray-700 mb-2">Minimum Password Length</label>
                     <input type="number" defaultValue={8} className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/50 focus:border-[#1B6B7B] transition-all" />
                   </div>
-                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                  <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                     <div>
                       <p className="font-medium text-gray-800">Two-Factor Authentication</p>
                       <p className="text-sm text-gray-500">Require 2FA for all administrators</p>
@@ -105,7 +105,7 @@ export default function SettingsClient() {
 
           {activeSection === "privacy" && (
             <div className="space-y-6">
-              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 hover:shadow-lg hover:border-[#1B6B7B]/30 transition-all duration-300">
+              <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] p-6 hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200">
                 <h2 className="text-xl font-semibold text-gray-900 mb-2">Data Privacy Compliance</h2>
                 <p className="text-gray-500 text-sm mb-6">Ensure compliance with the Philippine Data Privacy Act of 2012</p>
                 
@@ -151,10 +151,10 @@ export default function SettingsClient() {
                 </div>
               </div>
 
-              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 hover:shadow-lg hover:border-[#1B6B7B]/30 transition-all duration-300">
+              <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] p-6 hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200">
                 <h2 className="text-xl font-semibold text-gray-900 mb-4">Privacy Settings</h2>
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                  <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                     <div>
                       <p className="font-medium text-gray-800">Data Retention Policy</p>
                       <p className="text-sm text-gray-500">Automatically archive data after 5 years</p>
@@ -163,7 +163,7 @@ export default function SettingsClient() {
                       Configure
                     </button>
                   </div>
-                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                  <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                     <div>
                       <p className="font-medium text-gray-800">Student Consent Management</p>
                       <p className="text-sm text-gray-500">Manage data processing consent records</p>
@@ -172,7 +172,7 @@ export default function SettingsClient() {
                       View
                     </button>
                   </div>
-                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                  <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                     <div>
                       <p className="font-medium text-gray-800">Data Export</p>
                       <p className="text-sm text-gray-500">Export student data upon request</p>
@@ -187,7 +187,7 @@ export default function SettingsClient() {
           )}
 
           {activeSection === "notifications" && (
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 hover:shadow-lg hover:border-[#1B6B7B]/30 transition-all duration-300">
+            <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] p-6 hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200">
               <h2 className="text-xl font-semibold text-gray-900 mb-2">Notification Preferences</h2>
               <p className="text-gray-500 text-sm mb-6">Configure alerts for administrative activities</p>
               <div className="space-y-4">
@@ -199,7 +199,7 @@ export default function SettingsClient() {
                   { label: "System updates", desc: "Important system announcements" },
                   { label: "Room maintenance alerts", desc: "Notifications when rooms require attention" },
                 ].map((item, idx) => (
-                  <div key={idx} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
+                  <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
                     <div>
                       <p className="font-medium text-gray-800">{item.label}</p>
                       <p className="text-sm text-gray-500">{item.desc}</p>

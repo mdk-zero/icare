@@ -27,14 +27,14 @@ function getCurrentUser(): User | null {
 }
 
 const navItems: NavItem[] = [
-  { id: "overview", label: "Overview", href: "/admin", icon: faHouse },
-  { id: "students", label: "Students", href: "/admin/student-management", icon: faUsers },
-  { id: "analytics", label: "Analytics", href: "/admin/analytics", icon: faChartBar },
-  { id: "reports", label: "Reports", href: "/admin/reports", icon: faFileLines },
-  { id: "rooms", label: "Rooms", href: "/admin/rooms", icon: faDoorOpen },
-  { id: "faculty", label: "Faculty", href: "/admin/faculty", icon: faUserTie },
-  { id: "users", label: "Users", href: "/admin/users", icon: faUsers },
-  { id: "audit", label: "Activity Log", href: "/admin/audit", icon: faClockRotateLeft },
+  { id: "overview", label: "Overview", href: "/admin", icon: faHouse, section: "General" },
+  { id: "students", label: "Students", href: "/admin/student-management", icon: faUsers, section: "Management" },
+  { id: "faculty", label: "Faculty", href: "/admin/faculty", icon: faUserTie, section: "Management" },
+  { id: "rooms", label: "Rooms", href: "/admin/rooms", icon: faDoorOpen, section: "Management" },
+  { id: "users", label: "Users", href: "/admin/users", icon: faUsers, section: "Management" },
+  { id: "analytics", label: "Analytics", href: "/admin/analytics", icon: faChartBar, section: "Data" },
+  { id: "reports", label: "Reports", href: "/admin/reports", icon: faFileLines, section: "Data" },
+  { id: "audit", label: "Activity Log", href: "/admin/audit", icon: faClockRotateLeft, section: "Administration" },
 ];
 
 function isActive(item: NavItem, pathname: string) {

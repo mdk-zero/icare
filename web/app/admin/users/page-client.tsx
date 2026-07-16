@@ -131,7 +131,7 @@ export default function UsersClient() {
   );
 
   return (
-    <div className="max-w-7xl mx-auto">
+    <div>
       <PageHeader
         badge={{
           icon: (
@@ -176,7 +176,7 @@ export default function UsersClient() {
         ].map((stat) => (
           <div
             key={stat.label}
-            className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 hover:shadow-lg hover:border-[#1B6B7B]/30 transition-all duration-300"
+            className="bg-white rounded-xl p-4 border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200"
           >
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-[#1B6B7B]/10 rounded-xl flex items-center justify-center">
@@ -215,19 +215,19 @@ export default function UsersClient() {
         </button>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 hover:shadow-lg hover:border-[#1B6B7B]/30 transition-all duration-300 overflow-hidden">
+      <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-gray-50/50 border-b border-gray-200">
+            <thead className="bg-gray-50/50 border-b border-gray-100">
               <tr>
-                <th className="text-left py-4 px-6 font-semibold text-gray-600">User</th>
-                <th className="text-left py-4 px-6 font-semibold text-gray-600">Role</th>
-                <th className="text-left py-4 px-6 font-semibold text-gray-600">Created</th>
-                <th className="text-left py-4 px-6 font-semibold text-gray-600">Last Login</th>
-                <th className="text-left py-4 px-6 font-semibold text-gray-600">Actions</th>
+                <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">User</th>
+                <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Role</th>
+                <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Created</th>
+                <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Last Login</th>
+                <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-gray-100/80">
               {loading ? (
                 <tr>
                   <td colSpan={5} className="py-12 text-center text-gray-400">
@@ -243,7 +243,7 @@ export default function UsersClient() {
               ) : (
                 filteredUsers.map((user) => (
                   <tr key={user.id} className="hover:bg-gray-50/50 transition-colors">
-                    <td className="py-4 px-6">
+                    <td className="py-3 px-4">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 bg-[#1B6B7B]/10 rounded-full flex items-center justify-center text-[#1B6B7B] font-semibold">
                           {user.name.charAt(0)}
@@ -254,14 +254,14 @@ export default function UsersClient() {
                         </div>
                       </div>
                     </td>
-                    <td className="py-4 px-6">
+                    <td className="py-3 px-4">
                       <span className="px-3 py-1 bg-[#1B6B7B]/10 text-[#1B6B7B] rounded-full text-sm font-medium">
                         {roleLabels[user.role] ?? user.role}
                       </span>
                     </td>
-                    <td className="py-4 px-6 text-gray-500">{formatDate(user.created_at)}</td>
-                    <td className="py-4 px-6 text-gray-500">{formatDate(user.last_login_at)}</td>
-                    <td className="py-4 px-6">
+                    <td className="py-3 px-4 text-gray-500">{formatDate(user.created_at)}</td>
+                    <td className="py-3 px-4 text-gray-500">{formatDate(user.last_login_at)}</td>
+                    <td className="py-3 px-4">
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => {
@@ -297,9 +297,9 @@ export default function UsersClient() {
 
       {showAddModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-lg mx-4">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Add New User</h3>
-            <div className="space-y-4">
+            <div className="bg-white rounded-xl p-4 w-full max-w-lg mx-4 shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-gray-200/80">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Add New User</h3>
+              <div className="space-y-2">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Full Name</label>
                 <input
@@ -357,10 +357,10 @@ export default function UsersClient() {
 
       {editingUser && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-lg mx-4">
-            <h3 className="text-lg font-semibold text-gray-900 mb-1">Edit User</h3>
-            <p className="text-sm text-gray-500 mb-4">{editingUser.email}</p>
-            <div className="space-y-4">
+            <div className="bg-white rounded-xl p-4 w-full max-w-lg mx-4 shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-gray-200/80">
+              <h3 className="text-lg font-semibold text-gray-900 mb-1">Edit User</h3>
+              <p className="text-sm text-gray-500 mb-4">{editingUser.email}</p>
+              <div className="space-y-2">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Full Name</label>
                 <input
