@@ -168,18 +168,18 @@ export default function LoginPage() {
           <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-[#7DD3D8]/10 rounded-full blur-3xl translate-y-1/3 -translate-x-1/4" />
 
           <div className="relative z-10 flex flex-col w-full px-14 xl:px-20 py-10 xl:py-14 text-white">
-            {/* Brand */}
-            <div className="opacity-0 animate-fade-in-up">
-              <Image
-                src={logo_white}
-                alt="iCare++ Logo"
-                className="h-14 w-auto drop-shadow-md"
-                priority
-              />
-            </div>
-
             {/* Story */}
             <div className="flex-1 flex flex-col justify-center max-w-xl py-10">
+              {/* Brand */}
+              <div className="mb-12 opacity-0 animate-fade-in-up">
+                <Image
+                  src={logo_white}
+                  alt="iCare++ Logo"
+                  className="h-14 w-auto drop-shadow-md"
+                  priority
+                />
+              </div>
+
               <p className="opacity-0 animate-fade-in-up [animation-delay:100ms] text-[11px] font-semibold uppercase tracking-[0.28em] text-[#7DD3D8] mb-4">
                 Clinical Competency Platform
               </p>
@@ -269,7 +269,7 @@ export default function LoginPage() {
           <div className="relative z-10 w-full max-w-[520px] animate-fade-in-up">
             {/* Mobile header */}
             <div className="lg:hidden flex flex-col items-center mb-6">
-              <div className="p-3.5 bg-[#E8F6F5] rounded-2xl shadow-md mb-3">
+              <div className="p-3.5 rounded-2xl mb-3">
                 <Image src={logo} alt="iCare++ Logo" className="h-12 w-auto" priority />
               </div>
             </div>
