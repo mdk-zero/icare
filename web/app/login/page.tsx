@@ -272,18 +272,9 @@ export default function LoginPage() {
                 >
                   <path
                     d="M0,50 h55 q8,-9 16,0 h18 l6,5 l7,-32 l7,40 l6,-13 h14 q12,-13 24,0 h47 h55 q8,-9 16,0 h18 l6,5 l7,-32 l7,40 l6,-13 h14 q12,-13 24,0 h47 h55 q8,-9 16,0 h18 l6,5 l7,-32 l7,40 l6,-13 h14 q12,-13 24,0 h47"
-                    stroke="rgba(255,255,255,0.15)"
+                    stroke="rgba(125,211,216,0.45)"
                     strokeWidth={1.5}
                     vectorEffect="non-scaling-stroke"
-                  />
-                  <path
-                    d="M0,50 h55 q8,-9 16,0 h18 l6,5 l7,-32 l7,40 l6,-13 h14 q12,-13 24,0 h47 h55 q8,-9 16,0 h18 l6,5 l7,-32 l7,40 l6,-13 h14 q12,-13 24,0 h47 h55 q8,-9 16,0 h18 l6,5 l7,-32 l7,40 l6,-13 h14 q12,-13 24,0 h47"
-                    stroke="#7DD3D8"
-                    strokeWidth={2}
-                    vectorEffect="non-scaling-stroke"
-                    pathLength={1}
-                    strokeDasharray="0.18 0.82"
-                    className="animate-ecg-sweep drop-shadow-[0_0_6px_rgba(125,211,216,0.9)]"
                   />
                 </svg>
               </div>

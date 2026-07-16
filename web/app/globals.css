@@ -16,17 +16,7 @@
   --animate-shake: shake 0.3s ease-in-out;
   --animate-float-slow: floatSlow 6s ease-in-out infinite;
   --animate-float-medium: floatMedium 4.5s ease-in-out infinite;
-  --animate-ecg-sweep: ecgSweep 3.5s linear infinite;
   --animate-pulse-dot: pulseDot 1.6s ease-in-out infinite;
-}
-
-@keyframes ecgSweep {
-  from {
-    stroke-dashoffset: 1;
-  }
-  to {
-    stroke-dashoffset: 0;
-  }
 }
 
 @keyframes pulseDot {
