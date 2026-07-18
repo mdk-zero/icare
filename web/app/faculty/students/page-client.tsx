@@ -17,6 +17,7 @@ import {
   faDownload,
   faCircleCheck,
   faHourglassHalf,
+  faEllipsisVertical,
 } from "@fortawesome/free-solid-svg-icons";
 import {
   fetchFacultyStudents,
@@ -154,6 +155,13 @@ export default function FacultyStudentsClient() {
   const [deletingStudent, setDeletingStudent] = useState<StudentUser | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  const [openMenu, setOpenMenu] = useState<{
+    user: StudentUser;
+    x: number;
+    y: number;
+    openUp: boolean;
+  } | null>(null);
+
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [bulkRows, setBulkRows] = useState<BulkRow[]>([]);
   const [bulkFileName, setBulkFileName] = useState<string | null>(null);
@@ -228,7 +236,8 @@ export default function FacultyStudentsClient() {
       else if (!row.email) row.invalidReason = "Missing email";
       else if (!EMAIL_REGEX.test(row.email)) row.invalidReason = "Invalid email address";
       else if (seenEmails.has(row.email)) row.invalidReason = "Duplicate email in this file";
-      else if (existingEmails.has(row.email)) row.invalidReason = "A student with this email already exists";
+      else if (existingEmails.has(row.email))
+        row.invalidReason = "A student with this email already exists";
       seenEmails.add(row.email);
       return row;
     });
@@ -372,11 +381,11 @@ export default function FacultyStudentsClient() {
         logAuditAction({
           faculty_id: faculty.id,
           faculty_name: faculty.name,
-          tab: 'students',
-          action: 'register_student',
+          tab: "students",
+          action: "register_student",
           details: `Registered new student ${fullName}`,
-          target_type: 'student',
-          target_id: data?.student?.id ?? '',
+          target_type: "student",
+          target_id: data?.student?.id ?? "",
           metadata: { student_name: fullName, email: emailTrimmed },
         });
       }
@@ -427,10 +436,10 @@ export default function FacultyStudentsClient() {
         logAuditAction({
           faculty_id: faculty.id,
           faculty_name: faculty.name,
-          tab: 'students',
-          action: 'update_student',
+          tab: "students",
+          action: "update_student",
           details: `Updated student ${data!.name}`,
-          target_type: 'student',
+          target_type: "student",
           target_id: updatingStudent.id,
           metadata: { student_name: data!.name, email: emailTrimmed },
         });
@@ -467,10 +476,10 @@ export default function FacultyStudentsClient() {
         logAuditAction({
           faculty_id: faculty.id,
           faculty_name: faculty.name,
-          tab: 'students',
-          action: 'delete_student',
+          tab: "students",
+          action: "delete_student",
           details: `Deleted student ${deletingStudent.name}`,
-          target_type: 'student',
+          target_type: "student",
           target_id: deletingStudent.id,
           metadata: { student_name: deletingStudent.name },
         });
@@ -547,7 +556,12 @@ export default function FacultyStudentsClient() {
         badge={{
           icon: (
             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l9-5-9-5-9 5 9 5z M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z M12 14l9-5-9-5-9 5 9 5z M12 22v-6" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 14l9-5-9-5-9 5 9 5z M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z M12 14l9-5-9-5-9 5 9 5z M12 22v-6"
+              />
             </svg>
           ),
           label: "Student Management",
@@ -557,7 +571,12 @@ export default function FacultyStudentsClient() {
         action={{
           icon: (
             <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 6v6m0 0v6m0-6h6m-6 0H6"
+              />
             </svg>
           ),
           onClick: () => {
@@ -856,11 +875,18 @@ export default function FacultyStudentsClient() {
               <table className="w-full">
                 <thead className="bg-gray-50/50 border-b border-gray-100">
                   <tr>
-                    <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Student</th>
-                    <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Email</th>
-                    <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Role</th>
-                    <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Risk (ML)</th>
-                    <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
+                    <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
+                      Student
+                    </th>
+                    <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
+                      Email
+                    </th>
+                    <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
+                      Risk (ML)
+                    </th>
+                    <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100/80">
@@ -879,13 +905,7 @@ export default function FacultyStudentsClient() {
                         <div className="h-6 w-16 bg-gray-200 rounded-full animate-pulse" />
                       </td>
                       <td className="py-3 px-4">
-                        <div className="h-6 w-16 bg-gray-200 rounded-full animate-pulse" />
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-2">
-                          <div className="h-8 w-16 bg-gray-200 rounded-lg animate-pulse" />
-                          <div className="h-8 w-16 bg-gray-200 rounded-lg animate-pulse" />
-                        </div>
+                        <div className="h-8 w-8 bg-gray-200 rounded-lg animate-pulse" />
                       </td>
                     </tr>
                   ))}
@@ -897,11 +917,18 @@ export default function FacultyStudentsClient() {
               <table className="w-full">
                 <thead className="bg-gray-50/50 border-b border-gray-100">
                   <tr>
-                    <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Student</th>
-                    <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Email</th>
-                    <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Role</th>
-                    <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Risk (ML)</th>
-                    <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
+                    <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
+                      Student
+                    </th>
+                    <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
+                      Email
+                    </th>
+                    <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
+                      Risk (ML)
+                    </th>
+                    <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100/80">
@@ -909,7 +936,7 @@ export default function FacultyStudentsClient() {
                     <tr
                       key={user.id}
                       onClick={() => router.push(`/faculty/students/${user.id}`)}
-                      className="hover:bg-gray-50/50 transition-colors cursor-pointer"
+                      className="group hover:bg-gray-50/50 transition-colors cursor-pointer"
                     >
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-3">
@@ -920,11 +947,6 @@ export default function FacultyStudentsClient() {
                         </div>
                       </td>
                       <td className="py-3 px-4 text-gray-600">{user.email}</td>
-                      <td className="py-3 px-4">
-                        <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-[#1B6B7B]/10 text-[#1B6B7B] border border-[#1B6B7B]/20">
-                          {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
-                        </span>
-                      </td>
                       <td className="py-3 px-4">
                         {predictions[user.id] ? (
                           <span
@@ -944,35 +966,31 @@ export default function FacultyStudentsClient() {
                         )}
                       </td>
                       <td className="py-3 px-4">
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              router.push(`/faculty/students/${user.id}`);
-                            }}
-                            className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-all"
-                          >
-                            View
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openUpdateModal(user);
-                            }}
-                            className="px-3 py-1.5 text-xs font-medium text-[#1B6B7B] bg-[#1B6B7B]/10 hover:bg-[#1B6B7B]/20 rounded-lg transition-all"
-                          >
-                            Update
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openDeleteModal(user);
-                            }}
-                            className="px-3 py-1.5 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-all"
-                          >
-                            Delete
-                          </button>
-                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (openMenu?.user.id === user.id) {
+                              setOpenMenu(null);
+                              return;
+                            }
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            const openUp = rect.bottom + 150 > window.innerHeight;
+                            setOpenMenu({
+                              user,
+                              x: rect.right,
+                              y: openUp ? rect.top - 4 : rect.bottom + 4,
+                              openUp,
+                            });
+                          }}
+                          className={`w-8 h-8 flex items-center justify-center rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-200/70 transition-all ${
+                            openMenu?.user.id === user.id
+                              ? "opacity-100 bg-gray-200/70"
+                              : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+                          }`}
+                          aria-label={`Actions for ${user.name}`}
+                        >
+                          <FontAwesomeIcon icon={faEllipsisVertical} className="w-4 h-4" />
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -990,6 +1008,52 @@ export default function FacultyStudentsClient() {
         </div>
       </div>
 
+      {openMenu && (
+        <>
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => setOpenMenu(null)}
+            onWheel={() => setOpenMenu(null)}
+          />
+          <div
+            className="fixed z-50 w-40 bg-white rounded-xl border border-gray-200/80 shadow-[0_8px_30px_rgba(0,0,0,0.12)] py-1"
+            style={{
+              left: openMenu.x,
+              top: openMenu.y,
+              transform: `translateX(-100%)${openMenu.openUp ? " translateY(-100%)" : ""}`,
+            }}
+          >
+            <button
+              onClick={() => {
+                setOpenMenu(null);
+                router.push(`/faculty/students/${openMenu.user.id}`);
+              }}
+              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              View
+            </button>
+            <button
+              onClick={() => {
+                setOpenMenu(null);
+                openUpdateModal(openMenu.user);
+              }}
+              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              Update
+            </button>
+            <button
+              onClick={() => {
+                setOpenMenu(null);
+                openDeleteModal(openMenu.user);
+              }}
+              className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+            >
+              Delete
+            </button>
+          </div>
+        </>
+      )}
+
       {showBulkModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
           <div className="bg-white rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] w-full max-w-2xl border border-gray-200/80 overflow-hidden max-h-[90vh] flex flex-col">
@@ -1000,7 +1064,9 @@ export default function FacultyStudentsClient() {
                 </div>
                 <div>
                   <h2 className="text-lg font-bold text-gray-900">Bulk Add Students</h2>
-                  <p className="text-sm text-gray-500">Register multiple students from a CSV file</p>
+                  <p className="text-sm text-gray-500">
+                    Register multiple students from a CSV file
+                  </p>
                 </div>
               </div>
               <button
@@ -1141,7 +1207,10 @@ export default function FacultyStudentsClient() {
                                 </span>
                               ) : row.status === "warning" ? (
                                 <span className="inline-flex items-center gap-1.5 text-xs text-amber-600">
-                                  <FontAwesomeIcon icon={faTriangleExclamation} className="w-3.5 h-3.5" />
+                                  <FontAwesomeIcon
+                                    icon={faTriangleExclamation}
+                                    className="w-3.5 h-3.5"
+                                  />
                                   {row.resultText}
                                 </span>
                               ) : row.status === "failed" ? (
@@ -1185,7 +1254,11 @@ export default function FacultyStudentsClient() {
                 <button
                   type="button"
                   onClick={handleBulkImport}
-                  disabled={isBulkImporting || bulkRows.every((r) => r.invalidReason) || bulkRows.length === 0}
+                  disabled={
+                    isBulkImporting ||
+                    bulkRows.every((r) => r.invalidReason) ||
+                    bulkRows.length === 0
+                  }
                   className="px-6 py-2.5 bg-[#1B6B7B] text-white font-medium rounded-lg hover:bg-[#145A63] transition-all disabled:opacity-60 flex items-center gap-2 shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
                 >
                   {isBulkImporting ? (
@@ -1206,9 +1279,9 @@ export default function FacultyStudentsClient() {
       {showUpdateModal && updatingStudent && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
           <div className="bg-white rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] w-full max-w-lg border border-gray-200/80 overflow-hidden">
-              <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100/80 bg-gray-50/50">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-[#1B6B7B]/10 rounded-lg flex items-center justify-center">
+            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100/80 bg-gray-50/50">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-[#1B6B7B]/10 rounded-lg flex items-center justify-center">
                   <FontAwesomeIcon icon={faUser} className="text-[#1B6B7B] w-5 h-5" />
                 </div>
                 <div>
@@ -1357,4 +1430,3 @@ export default function FacultyStudentsClient() {
     </div>
   );
 }
-

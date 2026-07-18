@@ -58,9 +58,10 @@ export default function StudentDetailClient() {
   const [activeTab, setActiveTab] = useState("performance");
   const [aiSummary, setAiSummary] = useState<StudentAISummary | null>(null);
   const [summaryGeneratedAt, setSummaryGeneratedAt] = useState<string | null>(null);
-  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryLoading, setSummaryLoading] = useState(true);
   const [summaryError, setSummaryError] = useState<string | null>(null);
   const loggedRef = useRef(false);
+  const summaryRequestedRef = useRef(false);
 
   useEffect(() => {
     if (!studentId || loggedRef.current) return;
@@ -83,6 +84,12 @@ export default function StudentDetailClient() {
     if (studentId) {
       loadStudentData();
     }
+  }, [studentId]);
+
+  useEffect(() => {
+    if (!studentId || summaryRequestedRef.current) return;
+    summaryRequestedRef.current = true;
+    handleGenerateSummary();
   }, [studentId]);
 
   const loadCompetencyData = async () => {
@@ -373,13 +380,14 @@ export default function StudentDetailClient() {
                 </p>
               </div>
             </div>
-            <button
-              onClick={handleGenerateSummary}
-              disabled={summaryLoading}
-              className="px-4 py-2 bg-[#1B6B7B] text-white rounded-lg font-medium text-sm hover:bg-[#145a63] transition-all disabled:opacity-50 shadow-[0_2px_6px_rgba(27,107,123,0.2)] shrink-0"
-            >
-              {summaryLoading ? "Generating…" : aiSummary ? "Regenerate" : "Generate Summary"}
-            </button>
+            {!summaryLoading && (
+              <button
+                onClick={handleGenerateSummary}
+                className="px-4 py-2 bg-[#1B6B7B] text-white rounded-lg font-medium text-sm hover:bg-[#145a63] transition-all shadow-[0_2px_6px_rgba(27,107,123,0.2)] shrink-0"
+              >
+                {summaryError ? "Retry" : "Regenerate"}
+              </button>
+            )}
           </div>
 
           {summaryError && (
@@ -394,13 +402,6 @@ export default function StudentDetailClient() {
               <div className="h-4 w-full bg-gray-200 rounded" />
               <div className="h-4 w-2/3 bg-gray-200 rounded" />
             </div>
-          )}
-
-          {!summaryLoading && !aiSummary && !summaryError && (
-            <p className="mt-3 text-sm text-gray-500">
-              Get an AI-written overview of this student&apos;s performance with strengths,
-              areas for improvement, and suggested next steps.
-            </p>
           )}
 
           {!summaryLoading && aiSummary && (
