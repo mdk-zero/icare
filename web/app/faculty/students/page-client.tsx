@@ -16,6 +16,7 @@ import {
   faFileCsv,
   faDownload,
   faCircleCheck,
+  faHourglassHalf,
 } from "@fortawesome/free-solid-svg-icons";
 import {
   fetchFacultyStudents,
@@ -534,6 +535,11 @@ export default function FacultyStudentsClient() {
 
   const atRiskCount = studentUsers.filter((u) => predictions[u.id]?.risk === "at_risk").length;
   const safeCount = studentUsers.filter((u) => predictions[u.id]?.risk === "safe").length;
+  const pendingCount = studentUsers.filter((u) => !predictions[u.id]).length;
+  const pctOfRoster = (count: number) =>
+    studentUsers.length > 0
+      ? `${Math.round((count / studentUsers.length) * 100)}% of roster`
+      : "No students yet";
 
   return (
     <div>
@@ -565,11 +571,12 @@ export default function FacultyStudentsClient() {
         }}
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
         <StatTile
           icon={<FontAwesomeIcon icon={faUser} className="w-5 h-5" />}
           value={students.length}
           label="Total Students"
+          caption="Enrolled under you"
           iconBg="bg-[#1B6B7B]/10"
           iconColor="text-[#1B6B7B]"
         />
@@ -577,15 +584,28 @@ export default function FacultyStudentsClient() {
           icon={<FontAwesomeIcon icon={faTriangleExclamation} className="w-5 h-5" />}
           value={atRiskCount}
           label="At Risk (ML)"
+          caption={pctOfRoster(atRiskCount)}
           iconBg="bg-red-50"
           iconColor="text-red-600"
+          onClick={() => setRiskFilter("at_risk")}
         />
         <StatTile
-          icon={<FontAwesomeIcon icon={faUser} className="w-5 h-5" />}
+          icon={<FontAwesomeIcon icon={faCircleCheck} className="w-5 h-5" />}
           value={safeCount}
           label="Safe (ML)"
+          caption={pctOfRoster(safeCount)}
           iconBg="bg-emerald-50"
           iconColor="text-emerald-600"
+          onClick={() => setRiskFilter("safe")}
+        />
+        <StatTile
+          icon={<FontAwesomeIcon icon={faHourglassHalf} className="w-5 h-5" />}
+          value={pendingCount}
+          label="No Prediction"
+          caption="Awaiting ML assessment"
+          iconBg="bg-gray-100"
+          iconColor="text-gray-600"
+          onClick={() => setRiskFilter("none")}
         />
       </div>
 
