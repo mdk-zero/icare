@@ -15,6 +15,7 @@ import {
   faEyeSlash,
 } from "@fortawesome/free-solid-svg-icons";
 import PageHeader from "../../components/PageHeader";
+import { fetchSections, type Section } from "../../lib/api";
 
 const inputClassName =
   "w-full px-4 py-3 bg-white border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30 focus:border-[#1B6B7B] focus:bg-white transition-all text-sm shadow-sm";
@@ -68,6 +69,7 @@ export default function FacultyAssessmentsClient() {
   const router = useRouter();
   const [assessments, setAssessments] = useState<Assessment[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
+  const [sections, setSections] = useState<Section[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -104,6 +106,7 @@ export default function FacultyAssessmentsClient() {
           setStudents(j.students ?? []);
         }
       }),
+      fetchSections().then(setSections),
     ]).finally(() => setLoading(false));
   }, [loadAssessments]);
 
@@ -504,26 +507,35 @@ export default function FacultyAssessmentsClient() {
             </div>
             <div>
               <label className={labelClassName}>Visible to sections</label>
-              <div className="flex gap-3">
-                {["A", "B", "C"].map((s) => (
-                  <label key={s} className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={assessmentForm.target_sections.includes(s)}
-                      onChange={(e) =>
-                        setAssessmentForm((f) => ({
-                          ...f,
-                          target_sections: e.target.checked
-                            ? [...f.target_sections, s]
-                            : f.target_sections.filter((x) => x !== s),
-                        }))
-                      }
-                      className="w-4 h-4 accent-[#1B6B7B]"
-                    />
-                    Section {s}
-                  </label>
-                ))}
-              </div>
+              {sections.length === 0 ? (
+                <p className="text-sm text-gray-500">
+                  No sections exist yet — this assessment will be visible to all students.
+                </p>
+              ) : (
+                <div className="flex flex-wrap gap-3">
+                  {sections.map((s) => (
+                    <label
+                      key={s.id}
+                      className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={assessmentForm.target_sections.includes(s.name)}
+                        onChange={(e) =>
+                          setAssessmentForm((f) => ({
+                            ...f,
+                            target_sections: e.target.checked
+                              ? [...f.target_sections, s.name]
+                              : f.target_sections.filter((x) => x !== s.name),
+                          }))
+                        }
+                        className="w-4 h-4 accent-[#1B6B7B]"
+                      />
+                      Section {s.name}
+                    </label>
+                  ))}
+                </div>
+              )}
               <p className="text-xs text-gray-400 mt-1">
                 Leave all unchecked to make visible to all sections.
               </p>

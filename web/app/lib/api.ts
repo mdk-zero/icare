@@ -953,6 +953,7 @@ export interface FacultyStudent {
   student_id: string;
   name: string;
   email: string;
+  section?: string | null;
   program: string;
   year: number;
   average_score: number;
@@ -2013,12 +2014,13 @@ export async function submitScenarioPerformance(
 export async function createFacultyStudent(
   name: string,
   email: string,
+  sectionId: string,
 ): Promise<{ data?: CreateStudentResponse; error?: string }> {
   try {
     const res = await fetch('/api/faculty/students', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, email }),
+      body: JSON.stringify({ name, email, section_id: sectionId }),
     });
 
     const json = await res.json() as { student?: CreateStudentResponse['student']; password?: string; warning?: string; error?: string };
@@ -2040,6 +2042,45 @@ export interface StudentUser {
   name: string;
   role: string;
   picture_url: string | null;
+  section_id: string | null;
+  section: string | null;
+}
+
+export interface Section {
+  id: string;
+  name: string;
+}
+
+/** All sections (faculty/admin). */
+export async function fetchSections(): Promise<Section[]> {
+  try {
+    const res = await fetch('/api/sections', { credentials: 'include' });
+    const json = (await res.json()) as { sections?: Section[]; error?: string };
+    if (!res.ok) {
+      console.error('fetchSections() failed', json.error);
+      return [];
+    }
+    return json.sections ?? [];
+  } catch (err) {
+    console.error('fetchSections() failed', err);
+    return [];
+  }
+}
+
+/** The signed-in faculty member's assigned sections (admin: all sections). */
+export async function fetchFacultySections(): Promise<Section[]> {
+  try {
+    const res = await fetch('/api/faculty/sections', { credentials: 'include' });
+    const json = (await res.json()) as { sections?: Section[]; error?: string };
+    if (!res.ok) {
+      console.error('fetchFacultySections() failed', json.error);
+      return [];
+    }
+    return json.sections ?? [];
+  } catch (err) {
+    console.error('fetchFacultySections() failed', err);
+    return [];
+  }
 }
 
 export async function fetchAllStudentUsers(): Promise<StudentUser[]> {
@@ -2063,12 +2104,13 @@ export async function updateStudentUser(
   id: string,
   name: string,
   email: string,
+  sectionId?: string,
 ): Promise<{ data?: StudentUser; error?: string }> {
   try {
     const res = await fetch('/api/faculty/students', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, name, email }),
+      body: JSON.stringify({ id, name, email, section_id: sectionId }),
     });
 
     const json = await res.json();

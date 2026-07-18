@@ -267,7 +267,18 @@ export default function StudentDetailClient() {
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">{student.name}</h1>
                 <p className="text-gray-500">{student.email}</p>
-                <p className="text-sm text-gray-400">{student.program} - Year {student.year}</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-sm text-gray-400">{student.program} - Year {student.year}</p>
+                  {student.section ? (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-[#1B6B7B]/10 text-[#1B6B7B] border border-[#1B6B7B]/20">
+                      Section {student.section}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500 border border-gray-200">
+                      No section
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
             

@@ -24,6 +24,7 @@ import {
   createFacultyStudent,
   fetchAllStudentUsers,
   fetchAllPredictions,
+  fetchFacultySections,
   updateStudentUser,
   deleteStudentUser,
   logAuditAction,
@@ -31,6 +32,7 @@ import {
   FacultyStudent,
   StudentUser,
   RiskPrediction,
+  Section,
 } from "../../lib/api";
 import PageHeader from "../../components/PageHeader";
 import StatTile from "../../components/StatTile";
@@ -76,9 +78,9 @@ function parseCsv(text: string): string[][] {
   return rows;
 }
 
-const STUDENT_CSV_TEMPLATE = `first_name,middle_name,last_name,email
-Juan,Santos,Dela Cruz,juan.delacruz@batstate-u.edu.ph
-Maria,,Reyes,maria.reyes@batstate-u.edu.ph
+const STUDENT_CSV_TEMPLATE = `first_name,middle_name,last_name,email,section
+Juan,Santos,Dela Cruz,juan.delacruz@batstate-u.edu.ph,A
+Maria,,Reyes,maria.reyes@batstate-u.edu.ph,
 `;
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -89,6 +91,10 @@ interface BulkRow {
   middleName: string;
   lastName: string;
   email: string;
+  /** Section name as written in the CSV (may be empty). */
+  sectionName: string;
+  /** Resolved section id when sectionName matched one of the faculty's sections. */
+  sectionId: string | null;
   /** Validation problem found before import; the row is skipped. */
   invalidReason?: string;
   status: "ready" | "creating" | "created" | "warning" | "failed";
@@ -104,11 +110,16 @@ export default function FacultyStudentsClient() {
   const [studentUsers, setStudentUsers] = useState<StudentUser[]>([]);
   const [loadingStudentUsers, setLoadingStudentUsers] = useState(true);
   const [predictions, setPredictions] = useState<Record<string, RiskPrediction>>({});
+  const [sections, setSections] = useState<Section[]>([]);
 
   useEffect(() => {
     loadStudents();
     loadStudentUsers();
   }, [riskFilter, searchQuery]);
+
+  useEffect(() => {
+    fetchFacultySections().then(setSections);
+  }, []);
 
   useEffect(() => {
     fetchAllPredictions().then((rows) => {
@@ -136,6 +147,7 @@ export default function FacultyStudentsClient() {
   const [firstName, setFirstName] = useState("");
   const [middleInitial, setMiddleInitial] = useState("");
   const [lastName, setLastName] = useState("");
+  const [newSectionId, setNewSectionId] = useState("");
   const newEmailRef = useRef<HTMLInputElement>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState<{
@@ -148,6 +160,7 @@ export default function FacultyStudentsClient() {
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [updatingStudent, setUpdatingStudent] = useState<StudentUser | null>(null);
   const [updateName, setUpdateName] = useState("");
+  const [updateSectionId, setUpdateSectionId] = useState("");
   const updateEmailRef = useRef<HTMLInputElement>(null);
   const [isUpdating, setIsUpdating] = useState(false);
 
@@ -168,6 +181,7 @@ export default function FacultyStudentsClient() {
   const [bulkFileError, setBulkFileError] = useState<string | null>(null);
   const [isBulkImporting, setIsBulkImporting] = useState(false);
   const [bulkFinished, setBulkFinished] = useState(false);
+  const [bulkDefaultSectionId, setBulkDefaultSectionId] = useState("");
   const csvInputRef = useRef<HTMLInputElement>(null);
 
   const closeBulkModal = () => {
@@ -177,6 +191,7 @@ export default function FacultyStudentsClient() {
     setBulkFileName(null);
     setBulkFileError(null);
     setBulkFinished(false);
+    setBulkDefaultSectionId("");
     if (csvInputRef.current) csvInputRef.current.value = "";
   };
 
@@ -207,6 +222,7 @@ export default function FacultyStudentsClient() {
     const middleIdx = header.findIndex((h) => h === "middle_name" || h === "middle_initial");
     const lastIdx = header.indexOf("last_name");
     const emailIdx = header.indexOf("email");
+    const sectionIdx = header.indexOf("section");
 
     const missing = [
       firstIdx === -1 && "first_name",
@@ -222,13 +238,17 @@ export default function FacultyStudentsClient() {
 
     const seenEmails = new Set<string>();
     const existingEmails = new Set(studentUsers.map((u) => u.email.toLowerCase()));
+    const sectionByName = new Map(sections.map((s) => [s.name.toLowerCase(), s.id]));
     const parsed: BulkRow[] = rows.slice(1).map((cells, i) => {
+      const sectionName = sectionIdx === -1 ? "" : (cells[sectionIdx] ?? "").trim();
       const row: BulkRow = {
         line: i + 2,
         firstName: (cells[firstIdx] ?? "").trim(),
         middleName: middleIdx === -1 ? "" : (cells[middleIdx] ?? "").trim(),
         lastName: (cells[lastIdx] ?? "").trim(),
         email: (cells[emailIdx] ?? "").trim().toLowerCase(),
+        sectionName,
+        sectionId: sectionName ? (sectionByName.get(sectionName.toLowerCase()) ?? null) : null,
         status: "ready",
       };
       if (!row.firstName) row.invalidReason = "Missing first name";
@@ -238,6 +258,8 @@ export default function FacultyStudentsClient() {
       else if (seenEmails.has(row.email)) row.invalidReason = "Duplicate email in this file";
       else if (existingEmails.has(row.email))
         row.invalidReason = "A student with this email already exists";
+      else if (row.sectionName && !row.sectionId)
+        row.invalidReason = `"${row.sectionName}" is not one of your sections`;
       seenEmails.add(row.email);
       return row;
     });
@@ -248,6 +270,7 @@ export default function FacultyStudentsClient() {
   const handleBulkImport = async () => {
     const importable = bulkRows.filter((r) => !r.invalidReason);
     if (importable.length === 0 || isBulkImporting) return;
+    if (importable.some((r) => !r.sectionId) && !bulkDefaultSectionId) return;
 
     setIsBulkImporting(true);
     const rows = [...bulkRows];
@@ -262,9 +285,10 @@ export default function FacultyStudentsClient() {
       const fullName = middleName
         ? `${firstName} ${middleName} ${lastName}`
         : `${firstName} ${lastName}`;
+      const sectionId = rows[i].sectionId ?? bulkDefaultSectionId;
 
       try {
-        const { data, error } = await createFacultyStudent(fullName, email);
+        const { data, error } = await createFacultyStudent(fullName, email, sectionId);
         if (error) {
           rows[i] = { ...rows[i], status: "failed", resultText: error };
         } else if (data?.warning) {
@@ -335,6 +359,11 @@ export default function FacultyStudentsClient() {
       return;
     }
 
+    if (!newSectionId) {
+      setMessage({ type: "error", text: "Please select a section" });
+      return;
+    }
+
     const duplicateEmail = students.some(
       (s) => s.email.toLowerCase() === emailTrimmed.toLowerCase(),
     );
@@ -350,7 +379,7 @@ export default function FacultyStudentsClient() {
     setIsSubmitting(true);
 
     try {
-      const { data, error } = await createFacultyStudent(fullName, emailTrimmed);
+      const { data, error } = await createFacultyStudent(fullName, emailTrimmed, newSectionId);
 
       if (error) {
         setMessage({ type: "error", text: error });
@@ -373,6 +402,7 @@ export default function FacultyStudentsClient() {
       setFirstName("");
       setMiddleInitial("");
       setLastName("");
+      setNewSectionId("");
       if (newEmailRef.current) newEmailRef.current.value = "";
       loadStudents();
       loadStudentUsers();
@@ -420,6 +450,7 @@ export default function FacultyStudentsClient() {
         updatingStudent.id,
         nameTrimmed,
         emailTrimmed,
+        updateSectionId || undefined,
       );
 
       if (error) {
@@ -494,6 +525,7 @@ export default function FacultyStudentsClient() {
   const openUpdateModal = (student: StudentUser) => {
     setUpdatingStudent(student);
     setUpdateName(student.name);
+    setUpdateSectionId(student.section_id ?? "");
     if (updateEmailRef.current) updateEmailRef.current.value = student.email;
     setShowUpdateModal(true);
     setMessage(null);
@@ -698,6 +730,7 @@ export default function FacultyStudentsClient() {
                   setFirstName("");
                   setMiddleInitial("");
                   setLastName("");
+                  setNewSectionId("");
                   if (newEmailRef.current) newEmailRef.current.value = "";
                   setMessage(null);
                   setCreatedPassword(null);
@@ -785,6 +818,33 @@ export default function FacultyStudentsClient() {
                 </div>
               </div>
 
+              <div>
+                <label
+                  htmlFor="new-student-section"
+                  className="block text-sm font-semibold text-gray-700 mb-2"
+                >
+                  Section <span className="text-red-500">*</span>
+                </label>
+                <select
+                  id="new-student-section"
+                  value={newSectionId}
+                  onChange={(e) => setNewSectionId(e.target.value)}
+                  className="w-full px-4 py-3 bg-white border border-gray-400 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30 focus:border-[#1B6B7B] transition-all shadow-sm"
+                >
+                  <option value="">Select section…</option>
+                  {sections.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+                {sections.length === 0 && (
+                  <p className="mt-1.5 text-xs text-amber-600">
+                    You have no assigned sections yet — ask an admin to assign you one first.
+                  </p>
+                )}
+              </div>
+
               {message && showCreateModal && (
                 <div
                   className={`p-3 rounded-lg text-sm border ${
@@ -839,6 +899,7 @@ export default function FacultyStudentsClient() {
                     setFirstName("");
                     setMiddleInitial("");
                     setLastName("");
+                    setNewSectionId("");
                     if (newEmailRef.current) newEmailRef.current.value = "";
                     setMessage(null);
                     setCreatedPassword(null);
@@ -882,11 +943,12 @@ export default function FacultyStudentsClient() {
                       Email
                     </th>
                     <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
-                      Risk (ML)
+                      Section
                     </th>
                     <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
-                      Actions
+                      Risk (ML)
                     </th>
+                    <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100/80">
@@ -905,8 +967,9 @@ export default function FacultyStudentsClient() {
                         <div className="h-6 w-16 bg-gray-200 rounded-full animate-pulse" />
                       </td>
                       <td className="py-3 px-4">
-                        <div className="h-8 w-8 bg-gray-200 rounded-lg animate-pulse" />
+                        <div className="h-6 w-16 bg-gray-200 rounded-full animate-pulse" />
                       </td>
+                      <td className="py-3 px-4"></td>
                     </tr>
                   ))}
                 </tbody>
@@ -924,11 +987,12 @@ export default function FacultyStudentsClient() {
                       Email
                     </th>
                     <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
-                      Risk (ML)
+                      Section
                     </th>
                     <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
-                      Actions
+                      Risk (ML)
                     </th>
+                    <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100/80">
@@ -947,6 +1011,15 @@ export default function FacultyStudentsClient() {
                         </div>
                       </td>
                       <td className="py-3 px-4 text-gray-600">{user.email}</td>
+                      <td className="py-3 px-4">
+                        {user.section ? (
+                          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-[#1B6B7B]/10 text-[#1B6B7B] border border-[#1B6B7B]/20">
+                            {user.section}
+                          </span>
+                        ) : (
+                          <span className="text-sm text-gray-400">Unassigned</span>
+                        )}
+                      </td>
                       <td className="py-3 px-4">
                         {predictions[user.id] ? (
                           <span
@@ -996,7 +1069,7 @@ export default function FacultyStudentsClient() {
                   ))}
                   {filteredStudentUsers.length === 0 && (
                     <tr>
-                      <td colSpan={5} className="py-8 text-center text-gray-500">
+                      <td colSpan={6} className="py-8 text-center text-gray-500">
                         No student accounts found
                       </td>
                     </tr>
@@ -1129,6 +1202,14 @@ export default function FacultyStudentsClient() {
                           Student&apos;s email — the invitation and temporary password are sent here
                         </td>
                       </tr>
+                      <tr>
+                        <td className="py-1.5 pr-4 font-mono">section</td>
+                        <td className="py-1.5 pr-4">No</td>
+                        <td className="py-1.5">
+                          Section name — must match one of your sections. Rows without one use the
+                          default section selected below
+                        </td>
+                      </tr>
                     </tbody>
                   </table>
                 </div>
@@ -1162,6 +1243,32 @@ export default function FacultyStudentsClient() {
                 </button>
               </div>
 
+              <div>
+                <label
+                  htmlFor="bulk-default-section"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
+                  Default section
+                </label>
+                <select
+                  id="bulk-default-section"
+                  value={bulkDefaultSectionId}
+                  onChange={(e) => setBulkDefaultSectionId(e.target.value)}
+                  disabled={isBulkImporting}
+                  className="w-full px-4 py-3 bg-white border border-gray-400 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30 focus:border-[#1B6B7B] transition-all disabled:opacity-50"
+                >
+                  <option value="">No default — every row needs its own section</option>
+                  {sections.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1.5 text-xs text-gray-500">
+                  Applied to rows whose section column is blank.
+                </p>
+              </div>
+
               {bulkFileError && (
                 <div className="p-3 rounded-lg text-sm border bg-red-50 text-red-700 border-red-200">
                   {bulkFileError}
@@ -1189,6 +1296,22 @@ export default function FacultyStudentsClient() {
                                 .join(" ") || "—"}
                             </td>
                             <td className="py-2 px-2 text-gray-500">{row.email || "—"}</td>
+                            <td className="py-2 px-2 whitespace-nowrap">
+                              {row.sectionId ? (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-[#1B6B7B]/10 text-[#1B6B7B] border border-[#1B6B7B]/20">
+                                  {row.sectionName}
+                                </span>
+                              ) : row.invalidReason ? (
+                                <span className="text-xs text-gray-400">—</span>
+                              ) : bulkDefaultSectionId ? (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200">
+                                  {sections.find((s) => s.id === bulkDefaultSectionId)?.name}{" "}
+                                  (default)
+                                </span>
+                              ) : (
+                                <span className="text-xs text-amber-600">No section</span>
+                              )}
+                            </td>
                             <td className="py-2 px-4 text-right">
                               {row.invalidReason ? (
                                 <span className="inline-flex items-center gap-1.5 text-xs text-red-600">
@@ -1257,7 +1380,9 @@ export default function FacultyStudentsClient() {
                   disabled={
                     isBulkImporting ||
                     bulkRows.every((r) => r.invalidReason) ||
-                    bulkRows.length === 0
+                    bulkRows.length === 0 ||
+                    (bulkRows.some((r) => !r.invalidReason && !r.sectionId) &&
+                      !bulkDefaultSectionId)
                   }
                   className="px-6 py-2.5 bg-[#1B6B7B] text-white font-medium rounded-lg hover:bg-[#145A63] transition-all disabled:opacity-60 flex items-center gap-2 shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
                 >
@@ -1336,6 +1461,31 @@ export default function FacultyStudentsClient() {
                     className="w-full pl-10 pr-4 py-3 bg-white border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30 focus:border-[#1B6B7B] focus:bg-white transition-all shadow-sm"
                   />
                 </div>
+              </div>
+              <div>
+                <label
+                  htmlFor="update-student-section"
+                  className="block text-sm font-semibold text-gray-700 mb-2"
+                >
+                  Section
+                </label>
+                <select
+                  id="update-student-section"
+                  value={updateSectionId}
+                  onChange={(e) => setUpdateSectionId(e.target.value)}
+                  className="w-full px-4 py-3 bg-white border border-gray-400 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30 focus:border-[#1B6B7B] transition-all shadow-sm"
+                >
+                  <option value="">
+                    {updatingStudent.section
+                      ? `Keep current (${updatingStudent.section})`
+                      : "No section"}
+                  </option>
+                  {sections.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="flex items-center justify-end gap-3 pt-2">
                 <button
