@@ -2137,3 +2137,35 @@ export async function fetchStudentScenarioHistory(studentId: string): Promise<Sc
     return [];
   }
 }
+
+export interface StudentAISummary {
+  overview: string;
+  strengths: string[];
+  areas_for_improvement: string[];
+  recommendations: string[];
+}
+
+export async function generateStudentSummary(
+  studentId: string,
+): Promise<{ summary?: StudentAISummary; generated_at?: string; error?: string }> {
+  try {
+    const res = await fetch(`/api/faculty/students/${studentId}/summary`, {
+      method: 'POST',
+      credentials: 'include',
+    });
+    const json = (await res.json()) as {
+      summary?: StudentAISummary;
+      generated_at?: string;
+      error?: string;
+    };
+
+    if (!res.ok || !json.summary) {
+      return { error: json.error || 'Unable to generate summary' };
+    }
+
+    return { summary: json.summary, generated_at: json.generated_at };
+  } catch (err) {
+    console.error('generateStudentSummary() failed', err);
+    return { error: 'Unable to generate summary. Please try again.' };
+  }
+}

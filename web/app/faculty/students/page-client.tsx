@@ -906,7 +906,11 @@ export default function FacultyStudentsClient() {
                 </thead>
                 <tbody className="divide-y divide-gray-100/80">
                   {filteredStudentUsers.map((user) => (
-                    <tr key={user.id} className="hover:bg-gray-50/50 transition-colors">
+                    <tr
+                      key={user.id}
+                      onClick={() => router.push(`/faculty/students/${user.id}`)}
+                      className="hover:bg-gray-50/50 transition-colors cursor-pointer"
+                    >
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 bg-[#1B6B7B]/10 rounded-full flex items-center justify-center text-[#1B6B7B] font-semibold">
@@ -942,13 +946,28 @@ export default function FacultyStudentsClient() {
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-2">
                           <button
-                            onClick={() => openUpdateModal(user)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              router.push(`/faculty/students/${user.id}`);
+                            }}
+                            className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-all"
+                          >
+                            View
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openUpdateModal(user);
+                            }}
                             className="px-3 py-1.5 text-xs font-medium text-[#1B6B7B] bg-[#1B6B7B]/10 hover:bg-[#1B6B7B]/20 rounded-lg transition-all"
                           >
                             Update
                           </button>
                           <button
-                            onClick={() => openDeleteModal(user)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openDeleteModal(user);
+                            }}
                             className="px-3 py-1.5 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-all"
                           >
                             Delete
