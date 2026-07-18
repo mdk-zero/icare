@@ -54,3 +54,5 @@ next-env.d.ts
 # Firebase Admin SDK service account (secret — never commit)
 firebase-service-account.json
 *firebase-adminsdk*.json
+
+*/.temp/*
