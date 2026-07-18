@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { isStudentInFacultySections } from '@/app/lib/roster';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -22,7 +23,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
 
     const { data: student, error } = await supabase
       .from('users')
-      .select('id, email, name, role, picture_url')
+      .select('id, email, name, role, picture_url, section_id, sections(id, name)')
       .eq('id', id)
       .eq('role', 'student')
       .maybeSingle();
@@ -36,21 +37,17 @@ export async function GET(_request: Request, { params }: RouteParams) {
       return NextResponse.json({ error: 'Student not found' }, { status: 404 });
     }
 
-    // Faculty can only view students in their roster.
+    // Faculty can only view students in their sections.
     if (session.role === 'faculty') {
-      const { data: rosterRow } = await supabase
-        .from('faculty_students')
-        .select('id')
-        .eq('faculty_id', session.uid)
-        .eq('student_id', id)
-        .maybeSingle();
-
-      if (!rosterRow) {
+      const allowed = await isStudentInFacultySections(supabase, session.uid, id);
+      if (!allowed) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
     }
 
-    return NextResponse.json({ student });
+    const { sections, ...rest } = student;
+    const section = sections as unknown as { id: string; name: string } | null;
+    return NextResponse.json({ student: { ...rest, section: section?.name ?? null } });
   } catch (err) {
     console.error('Fetch student detail failed', err);
     return NextResponse.json({ error: 'Unable to fetch student' }, { status: 500 });

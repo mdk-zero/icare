@@ -82,22 +82,34 @@ def _latest_risk_by_student(db: Db) -> dict[str, str]:
 def _notify_at_risk_transitions(db: Db, newly_at_risk: list[str]) -> int:
     if not newly_at_risk:
         return 0
-    roster = db.select(
-        "faculty_students", "faculty_id,student_id",
-        [("student_id", "in", newly_at_risk)],
+    # Faculty are connected to students through sections: notify every faculty
+    # member assigned to an at-risk student's section.
+    students = db.select(
+        "users", "id,name,section_id", [("id", "in", newly_at_risk)],
     )
-    students = db.select("users", "id,name", [("id", "in", newly_at_risk)])
-    names = {s["id"]: s.get("name") or "A student" for s in students}
+    section_ids = sorted({s["section_id"] for s in students if s.get("section_id")})
+    if not section_ids:
+        return 0
+    links = db.select(
+        "faculty_sections", "faculty_id,section_id",
+        [("section_id", "in", section_ids)],
+    )
+    faculty_by_section: dict[str, list[str]] = {}
+    for link in links:
+        faculty_by_section.setdefault(link["section_id"], []).append(link["faculty_id"])
     notifications = [
         {
-            "user_id": link["faculty_id"],
+            "user_id": faculty_id,
             "type": "at_risk_flag",
             "title": "Student flagged at risk",
-            "body": f"{names.get(link['student_id'], 'A student')} was classified at-risk by the performance prediction model.",
-            "data": {"student_id": link["student_id"], "kind": "at_risk_flag"},
+            "body": f"{student.get('name') or 'A student'} was classified at-risk by the performance prediction model.",
+            "data": {"student_id": student["id"], "kind": "at_risk_flag"},
         }
-        for link in roster
+        for student in students
+        for faculty_id in faculty_by_section.get(student.get("section_id") or "", [])
     ]
+    if not notifications:
+        return 0
     db.insert("notifications", notifications)
     return len(notifications)
 

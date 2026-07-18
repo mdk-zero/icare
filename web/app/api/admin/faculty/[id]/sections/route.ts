@@ -7,7 +7,7 @@ interface RouteParams {
   params: Promise<{ id: string }>;
 }
 
-/** Replaces a faculty member's student roster with the given set. */
+/** Replaces a faculty member's assigned sections with the given set. */
 export async function PUT(request: NextRequest, { params }: RouteParams) {
   const session = await readSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -24,11 +24,11 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const { student_ids } = body as { student_ids?: unknown };
-  if (!Array.isArray(student_ids) || student_ids.some((s) => typeof s !== 'string')) {
-    return NextResponse.json({ error: 'student_ids must be an array of ids' }, { status: 400 });
+  const { section_ids } = body as { section_ids?: unknown };
+  if (!Array.isArray(section_ids) || section_ids.some((s) => typeof s !== 'string')) {
+    return NextResponse.json({ error: 'section_ids must be an array of ids' }, { status: 400 });
   }
-  const studentIds = [...new Set(student_ids as string[])];
+  const sectionIds = [...new Set(section_ids as string[])];
 
   try {
     const supabase = getSupabaseAdmin();
@@ -43,53 +43,49 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Faculty not found' }, { status: 404 });
     }
 
-    if (studentIds.length > 0) {
+    if (sectionIds.length > 0) {
       const { count } = await supabase
-        .from('users')
+        .from('sections')
         .select('id', { count: 'exact', head: true })
-        .eq('role', 'student')
-        .in('id', studentIds);
-      if ((count ?? 0) !== studentIds.length) {
-        return NextResponse.json(
-          { error: 'One or more ids are not student accounts' },
-          { status: 400 },
-        );
+        .in('id', sectionIds);
+      if ((count ?? 0) !== sectionIds.length) {
+        return NextResponse.json({ error: 'One or more ids are not sections' }, { status: 400 });
       }
     }
 
     const { error: deleteError } = await supabase
-      .from('faculty_students')
+      .from('faculty_sections')
       .delete()
       .eq('faculty_id', facultyId);
     if (deleteError) {
-      console.error('Failed to clear faculty roster', deleteError);
-      return NextResponse.json({ error: 'Unable to update roster' }, { status: 500 });
+      console.error('Failed to clear faculty sections', deleteError);
+      return NextResponse.json({ error: 'Unable to update sections' }, { status: 500 });
     }
 
-    if (studentIds.length > 0) {
+    if (sectionIds.length > 0) {
       const { error: insertError } = await supabase
-        .from('faculty_students')
-        .insert(studentIds.map((student_id) => ({ faculty_id: facultyId, student_id })));
+        .from('faculty_sections')
+        .insert(sectionIds.map((section_id) => ({ faculty_id: facultyId, section_id })));
       if (insertError) {
-        console.error('Failed to insert faculty roster', insertError);
-        return NextResponse.json({ error: 'Unable to update roster' }, { status: 500 });
+        console.error('Failed to insert faculty sections', insertError);
+        return NextResponse.json({ error: 'Unable to update sections' }, { status: 500 });
       }
     }
 
     await logAudit(
       session,
       {
-        action: 'faculty.roster.update',
-        entityType: 'faculty_students',
+        action: 'faculty.sections.update',
+        entityType: 'faculty_sections',
         entityId: facultyId,
-        details: { student_count: studentIds.length },
+        details: { section_count: sectionIds.length },
       },
       request,
     );
 
-    return NextResponse.json({ success: true, student_ids: studentIds });
+    return NextResponse.json({ success: true, section_ids: sectionIds });
   } catch (err) {
-    console.error('Update faculty roster failed', err);
-    return NextResponse.json({ error: 'Unable to update roster' }, { status: 500 });
+    console.error('Update faculty sections failed', err);
+    return NextResponse.json({ error: 'Unable to update sections' }, { status: 500 });
   }
 }

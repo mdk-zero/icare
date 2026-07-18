@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { callAI, aiErrorResponse } from '@/app/lib/ai/generate';
+import { isStudentInFacultySections } from '@/app/lib/roster';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -145,16 +146,10 @@ export async function POST(_request: Request, { params }: RouteParams) {
       return NextResponse.json({ error: 'Student not found' }, { status: 404 });
     }
 
-    // Faculty can only summarize students in their roster.
+    // Faculty can only summarize students in their sections.
     if (session.role === 'faculty') {
-      const { data: rosterRow } = await supabase
-        .from('faculty_students')
-        .select('id')
-        .eq('faculty_id', session.uid)
-        .eq('student_id', id)
-        .maybeSingle();
-
-      if (!rosterRow) {
+      const allowed = await isStudentInFacultySections(supabase, session.uid, id);
+      if (!allowed) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
     }

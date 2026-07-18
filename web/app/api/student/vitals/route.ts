@@ -174,10 +174,17 @@ async function notifyRosterFaculty(
   try {
     const supabase = getSupabaseAdmin();
 
-    const [{ data: roster }, { data: student }] = await Promise.all([
-      supabase.from('faculty_students').select('faculty_id').eq('student_id', studentId),
-      supabase.from('users').select('name').eq('id', studentId).single(),
-    ]);
+    const { data: student } = await supabase
+      .from('users')
+      .select('name, section_id')
+      .eq('id', studentId)
+      .single();
+    if (!student?.section_id) return;
+
+    const { data: roster } = await supabase
+      .from('faculty_sections')
+      .select('faculty_id')
+      .eq('section_id', student.section_id);
     if (!roster || roster.length === 0) return;
 
     const studentName = student?.name ?? 'A student';

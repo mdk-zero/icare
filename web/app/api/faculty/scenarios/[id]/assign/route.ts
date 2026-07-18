@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { getFacultyStudentIds } from '@/app/lib/roster';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -60,24 +61,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Scenario not found' }, { status: 404 });
     }
 
-    // Faculty can only assign to students in their roster.
+    // Faculty can only assign to students in their sections.
     if (session.role === 'faculty') {
-      const { data: roster, error: rosterError } = await supabase
-        .from('faculty_students')
-        .select('student_id')
-        .eq('faculty_id', session.uid)
-        .in('student_id', normalizedStudentIds);
-
-      if (rosterError) {
-        console.error('Failed to fetch faculty roster', rosterError);
-        return NextResponse.json({ error: 'Unable to validate roster' }, { status: 500 });
-      }
-
-      const rosterIds = new Set(roster?.map((r) => r.student_id) ?? []);
+      const rosterIds = new Set(await getFacultyStudentIds(supabase, session.uid));
       const invalid = normalizedStudentIds.filter((sid) => !rosterIds.has(sid));
       if (invalid.length > 0) {
         return NextResponse.json(
-          { error: 'Some students are not in your roster', invalid },
+          { error: 'Some students are not in your sections', invalid },
           { status: 403 },
         );
       }
