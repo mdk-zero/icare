@@ -4,8 +4,9 @@ import { View, Text, StyleSheet, Image, Pressable, useWindowDimensions } from "r
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
-  withSpring,
+  withTiming,
   interpolate,
+  Easing,
 } from "react-native-reanimated";
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import logoImg from "@/assets/images/logo-pill.png";
@@ -33,7 +34,10 @@ const TAB_ICONS: Record<string, string> = {
   profile: "user",
 };
 
-/** One tab: springs wide into a gradient pill when focused, rests as a quiet icon otherwise. */
+/** Quick, no-bounce transition for the active orb. */
+const QUICK = { duration: 160, easing: Easing.out(Easing.cubic) };
+
+/** One tab: the focused one gets a larger raised gradient circle around its icon. */
 function TabItem({
   icon,
   label,
@@ -48,30 +52,31 @@ function TabItem({
   const progress = useSharedValue(isFocused ? 1 : 0);
 
   useEffect(() => {
-    progress.value = withSpring(isFocused ? 1 : 0, { damping: 12, stiffness: 140 });
+    progress.value = withTiming(isFocused ? 1 : 0, QUICK);
   }, [isFocused, progress]);
 
-  const containerStyle = useAnimatedStyle(() => ({
-    flex: 1 + progress.value,
-  }));
-
-  const fillStyle = useAnimatedStyle(() => ({
+  const orbStyle = useAnimatedStyle(() => ({
     opacity: progress.value,
-    transform: [{ scale: interpolate(progress.value, [0, 1], [0.75, 1]) }],
+    transform: [
+      { translateY: interpolate(progress.value, [0, 1], [6, -14]) },
+      { scale: interpolate(progress.value, [0, 1], [0.4, 1]) },
+    ],
   }));
 
   const iconStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: interpolate(progress.value, [0, 1], [1, 1.18]) }],
+    transform: [
+      { translateY: interpolate(progress.value, [0, 1], [0, -14]) },
+      { scale: interpolate(progress.value, [0, 1], [1, 1.15]) },
+    ],
   }));
 
   const labelStyle = useAnimatedStyle(() => ({
     opacity: progress.value,
-    maxWidth: progress.value * 72,
-    transform: [{ translateX: interpolate(progress.value, [0, 1], [-8, 0]) }],
+    transform: [{ translateY: interpolate(progress.value, [0, 1], [4, 0]) }],
   }));
 
   return (
-    <Animated.View style={[styles.tabItem, containerStyle]}>
+    <View style={styles.tabItem}>
       <Pressable
         onPress={onPress}
         accessibilityRole="tab"
@@ -79,7 +84,7 @@ function TabItem({
         accessibilityLabel={label}
         style={({ pressed }) => [styles.tabPressable, pressed && !isFocused && { opacity: 0.65 }]}
       >
-        <Animated.View style={[styles.activePill, fillStyle]}>
+        <Animated.View style={[styles.orb, orbStyle]}>
           <LinearGradient
             colors={[Teal.light, Teal.primary, Teal.deep]}
             start={{ x: 0, y: 0 }}
@@ -87,21 +92,19 @@ function TabItem({
             style={StyleSheet.absoluteFill}
           />
         </Animated.View>
-        <View style={styles.tabRow}>
-          <Animated.View style={iconStyle}>
-            <FontAwesome6
-              name={icon}
-              size={18}
-              solid
-              color={isFocused ? "#FFFFFF" : Palette.textMuted}
-            />
-          </Animated.View>
-          <Animated.Text numberOfLines={1} style={[styles.tabLabel, labelStyle]}>
-            {label}
-          </Animated.Text>
-        </View>
+        <Animated.View style={iconStyle}>
+          <FontAwesome6
+            name={icon}
+            size={19}
+            solid
+            color={isFocused ? "#FFFFFF" : Palette.textMuted}
+          />
+        </Animated.View>
+        <Animated.Text numberOfLines={1} style={[styles.tabLabel, labelStyle]}>
+          {label}
+        </Animated.Text>
       </Pressable>
-    </Animated.View>
+    </View>
   );
 }
 
@@ -381,36 +384,34 @@ const styles = StyleSheet.create({
     elevation: 14,
   },
   tabItem: {
-    height: 50,
+    flex: 1,
+    height: 56,
   },
   tabPressable: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
   },
-  activePill: {
+  orb: {
     position: "absolute",
-    top: 3,
-    bottom: 3,
-    left: 3,
-    right: 3,
-    borderRadius: 22,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     overflow: "hidden",
+    borderWidth: 3,
+    borderColor: "#FFFFFF",
     shadowColor: Teal.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  tabRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 7,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 8,
   },
   tabLabel: {
-    fontSize: 11,
+    position: "absolute",
+    bottom: 3,
+    fontSize: 9.5,
     fontWeight: "700",
-    color: "#FFFFFF",
-    letterSpacing: 0.3,
+    color: Teal.primary,
+    letterSpacing: 0.4,
   },
 });
