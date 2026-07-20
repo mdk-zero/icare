@@ -1,6 +1,7 @@
 import React from 'react';
 import { Pressable, Text, StyleSheet, ViewStyle, ActivityIndicator } from 'react-native';
-import { Palette, Radius } from '@/constants/theme';
+import { Radius } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
 
 interface PrimaryButtonProps {
   title: string;
@@ -28,12 +29,13 @@ export function PrimaryButton({
   loading = false,
   style,
 }: PrimaryButtonProps) {
+  const { Palette, Accent } = useTheme();
   const backgroundColor = disabled
     ? Palette.border
     : variant === 'primary'
       ? Palette.primary
       : variant === 'danger'
-        ? '#DC2626'
+        ? Accent.red.fg
         : variant === 'secondary'
           ? Palette.surfaceMuted
           : 'transparent';

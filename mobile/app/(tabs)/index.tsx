@@ -14,7 +14,8 @@ import { FontAwesome6 } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import Svg, { Path, Circle } from "react-native-svg";
 import Animated, { FadeInDown } from "react-native-reanimated";
-import { Accent, Palette, Radius, Shadow, Spacing, Type } from "@/constants/theme";
+import { Radius, Spacing } from "@/constants/theme";
+import { useTheme } from "@/hooks/useTheme";
 import { SectionHeader, SkeletonScreen } from "@/components/ui";
 import { useAuth } from "@/hooks/useAuth";
 import { useApiData, allCached } from "@/hooks/useApiData";
@@ -59,11 +60,13 @@ function getInitials(name?: string) {
     .slice(0, 2);
 }
 
-const STATUS_COLORS: Record<string, string> = {
-  completed: Accent.green.fg,
-  in_progress: Accent.amber.fg,
-  overdue: Accent.red.fg,
-};
+function statusColors(Accent: ReturnType<typeof useTheme>['Accent']): Record<string, string> {
+  return {
+    completed: Accent.green.fg,
+    in_progress: Accent.amber.fg,
+    overdue: Accent.red.fg,
+  };
+}
 
 function formatDeadline(assignment: ScenarioAssignment): string {
   if (!assignment.deadline) return "No deadline";
@@ -97,6 +100,9 @@ export default function DashboardScreen() {
   const { width } = useWindowDimensions();
   const router = useRouter();
   const { user } = useAuth();
+  const { Palette, Accent, Shadow, Type } = useTheme();
+  const styles = React.useMemo(() => createStyles(Palette, Accent, Shadow, Type), [Palette, Accent, Shadow, Type]);
+  const STATUS_COLORS = React.useMemo(() => statusColors(Accent), [Accent]);
 
   const { data, loading, refreshing, refresh } = useApiData(() =>
     allCached(fetchScenarioAssignments(), fetchAssessments(), fetchProgress(), fetchPatients()),
@@ -335,7 +341,13 @@ export default function DashboardScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(
+  Palette: ReturnType<typeof useTheme>['Palette'],
+  Accent: ReturnType<typeof useTheme>['Accent'],
+  Shadow: ReturnType<typeof useTheme>['Shadow'],
+  Type: ReturnType<typeof useTheme>['Type'],
+) {
+  return StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Palette.background,
@@ -612,4 +624,5 @@ const styles = StyleSheet.create({
     textAlign: "center",
     paddingHorizontal: Spacing.lg,
   },
-});
+  });
+}

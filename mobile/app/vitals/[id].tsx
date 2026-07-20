@@ -2,20 +2,25 @@ import React, { useState } from 'react';
 import { ScrollView, View, Text, StyleSheet, Pressable, TextInput, Alert } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Accent, Palette, Radius, Shadow, Spacing, Type } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
 import { SkeletonScreen, EmptyState } from '@/components/ui';
 import { useApiData, allCached } from '@/hooks/useApiData';
 import { fetchPatients, fetchMyVitals, submitVitalReading, VitalReading } from '@/lib/api';
 import { VITAL_RULES } from '@/lib/vitals-rules';
-
-const primaryColor = Palette.primary;
 
 function fmt(value: number | null | undefined, digits = 0): string {
   if (value == null) return '—';
   return digits > 0 ? value.toFixed(digits) : String(value);
 }
 
-function VitalsRow({ reading }: { reading: VitalReading }) {
+function VitalsRow({
+  reading,
+  styles,
+}: {
+  reading: VitalReading;
+  styles: ReturnType<typeof createStyles>;
+}) {
   return (
     <View style={styles.historyVitals}>
       <View style={styles.historyVitalItem}>
@@ -57,6 +62,8 @@ function VitalsRow({ reading }: { reading: VitalReading }) {
 export default function VitalDetailScreen() {
   const { id } = useLocalSearchParams();
   const patientId = id as string;
+  const { Palette, Accent, Shadow, Type } = useTheme();
+  const styles = React.useMemo(() => createStyles(Palette, Accent, Shadow, Type), [Palette, Accent, Shadow, Type]);
 
   const { data, loading, error, reload } = useApiData(() =>
     allCached(fetchPatients(), fetchMyVitals(patientId)),
@@ -336,7 +343,7 @@ export default function VitalDetailScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Latest Reading</Text>
           <View style={styles.vitalsCard}>
-            <VitalsRow reading={latest} />
+            <VitalsRow reading={latest} styles={styles} />
             {latest.is_anomaly && (
               <View style={styles.anomalyAlert}>
                 <Ionicons name="warning" size={16} color="#dc2626" />
@@ -388,7 +395,7 @@ export default function VitalDetailScreen() {
                 </View>
                 {reading.is_anomaly && <View style={styles.anomalyDot} />}
               </View>
-              <VitalsRow reading={reading} />
+              <VitalsRow reading={reading} styles={styles} />
             </View>
           ))}
         </View>
@@ -397,7 +404,13 @@ export default function VitalDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(
+  Palette: ReturnType<typeof useTheme>['Palette'],
+  Accent: ReturnType<typeof useTheme>['Accent'],
+  Shadow: ReturnType<typeof useTheme>['Shadow'],
+  Type: ReturnType<typeof useTheme>['Type'],
+) {
+  return StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Palette.background,
@@ -659,7 +672,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: primaryColor,
+    backgroundColor: Palette.primary,
     borderRadius: Radius.md,
     paddingVertical: 15,
     marginTop: Spacing.xs,
@@ -671,4 +684,5 @@ const styles = StyleSheet.create({
     color: '#fff',
     marginLeft: 8,
   },
-});
+  });
+}

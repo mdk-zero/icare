@@ -1,13 +1,12 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { ScrollView, View, Text, StyleSheet, TextInput, Pressable, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Accent, Palette, Radius, Shadow, Spacing, Type } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
 import { Card, Badge, SkeletonScreen, EmptyState } from '@/components/ui';
 import { useApiData, allCached } from '@/hooks/useApiData';
 import { fetchPatients, fetchEhrRecords, createEhrRecord, updateIvfStatus } from '@/lib/api';
-
-const primaryColor = Palette.primary;
 
 const STATUS_VARIANT: Record<string, 'info' | 'success' | 'warning'> = {
   ongoing: 'info',
@@ -19,6 +18,9 @@ export default function IVFSheetScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
   const patientId = id as string;
+  const { Palette, Accent, Shadow, Type } = useTheme();
+  const primaryColor = Palette.primary;
+  const styles = useMemo(() => createStyles(Palette, Accent, Shadow, Type), [Palette, Accent, Shadow, Type]);
 
   const { data, loading, error, reload } = useApiData(() =>
     allCached(fetchPatients(), fetchEhrRecords('ivf', patientId)),
@@ -290,7 +292,13 @@ export default function IVFSheetScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(
+  Palette: ReturnType<typeof useTheme>['Palette'],
+  Accent: ReturnType<typeof useTheme>['Accent'],
+  Shadow: ReturnType<typeof useTheme>['Shadow'],
+  Type: ReturnType<typeof useTheme>['Type'],
+) {
+  return StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Palette.background,
@@ -389,7 +397,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     padding: 14,
     fontSize: 16,
-    color: '#1E293B',
+    color: Palette.ink,
     borderWidth: 1,
     borderColor: Palette.border,
   },
@@ -474,7 +482,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: primaryColor,
+    backgroundColor: Palette.primary,
     borderRadius: Radius.md,
     paddingVertical: 15,
     marginTop: Spacing.sm,
@@ -486,4 +494,5 @@ const styles = StyleSheet.create({
     color: '#fff',
     marginLeft: 8,
   },
-});
+  });
+}

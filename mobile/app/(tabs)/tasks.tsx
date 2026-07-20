@@ -3,12 +3,15 @@ import { ScrollView, View, Text, StyleSheet, Pressable, RefreshControl } from 'r
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Accent, Palette, Radius, Shadow, Spacing, Type } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
 import { ScreenHeader, SectionHeader, EmptyState, SkeletonScreen } from '@/components/ui';
 import { useApiData } from '@/hooks/useApiData';
 import { fetchScenarioAssignments, ScenarioAssignment } from '@/lib/api';
 
 function TaskCard({ task, onPress }: { task: ScenarioAssignment; onPress: () => void }) {
+  const { Palette, Accent, Shadow, Type } = useTheme();
+  const styles = React.useMemo(() => createStyles(Palette, Accent, Shadow, Type), [Palette, Accent, Shadow, Type]);
   const completed = task.status === 'completed';
   const statusAccent =
     task.status === 'completed'
@@ -95,6 +98,8 @@ export default function TasksScreen() {
   // content starts below the floating header, then scrolls beneath it
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { Palette, Accent, Shadow, Type } = useTheme();
+  const styles = React.useMemo(() => createStyles(Palette, Accent, Shadow, Type), [Palette, Accent, Shadow, Type]);
   const { data, loading, refreshing, error, refresh, reload } = useApiData(fetchScenarioAssignments);
 
   // Re-pull when returning from the scenario runner so completions show up.
@@ -190,7 +195,13 @@ export default function TasksScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(
+  Palette: ReturnType<typeof useTheme>['Palette'],
+  Accent: ReturnType<typeof useTheme>['Accent'],
+  Shadow: ReturnType<typeof useTheme>['Shadow'],
+  Type: ReturnType<typeof useTheme>['Type'],
+) {
+  return StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Palette.background,
@@ -323,4 +334,5 @@ const styles = StyleSheet.create({
     color: Palette.textMuted,
     marginLeft: 4,
   },
-});
+  });
+}

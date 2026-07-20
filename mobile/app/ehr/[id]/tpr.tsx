@@ -2,17 +2,19 @@ import React, { useState } from 'react';
 import { ScrollView, View, Text, StyleSheet, TextInput, Pressable, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Palette, Radius, Shadow, Spacing, Type } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
 import { Card, Badge, SkeletonScreen, EmptyState } from '@/components/ui';
 import { useApiData, allCached } from '@/hooks/useApiData';
 import { fetchPatients, fetchEhrRecords, createEhrRecord } from '@/lib/api';
-
-const primaryColor = Palette.primary;
 
 export default function TPRSheetScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
   const patientId = id as string;
+  const { Palette, Shadow, Type } = useTheme();
+  const styles = React.useMemo(() => createStyles(Palette, Shadow, Type), [Palette, Shadow, Type]);
+  const primaryColor = Palette.primary;
 
   const { data, loading, error, reload } = useApiData(() =>
     allCached(fetchPatients(), fetchEhrRecords('tpr', patientId)),
@@ -270,7 +272,12 @@ export default function TPRSheetScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(
+  Palette: ReturnType<typeof useTheme>['Palette'],
+  Shadow: ReturnType<typeof useTheme>['Shadow'],
+  Type: ReturnType<typeof useTheme>['Type'],
+) {
+  return StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Palette.background,
@@ -357,7 +364,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     padding: 14,
     fontSize: 18,
-    color: '#1E293B',
+    color: Palette.ink,
     borderWidth: 1,
     borderColor: Palette.border,
   },
@@ -445,7 +452,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: primaryColor,
+    backgroundColor: Palette.primary,
     borderRadius: Radius.md,
     paddingVertical: 15,
     marginTop: Spacing.sm,
@@ -457,4 +464,5 @@ const styles = StyleSheet.create({
     color: '#fff',
     marginLeft: 8,
   },
-});
+  });
+}

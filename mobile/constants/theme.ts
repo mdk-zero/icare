@@ -1,7 +1,7 @@
 import { Platform } from 'react-native';
 
 const tintColorLight = '#1B6B7B';
-const tintColorDark = '#1B6B7B';
+const tintColorDark = '#35859B';
 
 export const Colors = {
   light: {
@@ -24,29 +24,32 @@ export const Colors = {
   },
   dark: {
     text: '#ECEDEE',
-    background: '#151718',
+    background: '#0B1214',
     tint: tintColorDark,
     icon: '#9BA1A6',
     tabIconDefault: '#9BA1A6',
     tabIconSelected: tintColorDark,
-    primary: '#1B6B7B',
-    primaryDark: '#145a63',
-    primaryDarker: '#155663',
-    cardBackground: '#1e1e1e',
-    surface: '#1a1a1a',
-    border: '#2d2d2d',
-    success: '#16a34a',
-    warning: '#d97706',
-    danger: '#dc2626',
-    info: '#2563eb',
+    primary: '#35859B',
+    primaryDark: '#1B6B7B',
+    primaryDarker: '#145A63',
+    cardBackground: '#111C1F',
+    surface: '#0E1619',
+    border: '#1E2C30',
+    success: '#4ADE80',
+    warning: '#FBBF24',
+    danger: '#F87171',
+    info: '#60A5FA',
   },
 };
 
+export type ColorScheme = 'light' | 'dark';
+
 /**
  * Design tokens — single source of truth for the visual language.
- * Screens should pull from these instead of hardcoding hex values.
+ * Screens should read these via `useTheme()` (hooks/useTheme.ts) rather than
+ * importing a fixed scheme, so the app follows the system light/dark setting.
  */
-export const Palette = {
+const lightPalette = {
   primary: '#1B6B7B',
   primaryDark: '#145A63',
   primaryTint: '#E7F0F1', // ~8% primary on white, for tinted chips/tiles
@@ -63,8 +66,33 @@ export const Palette = {
   white: '#FFFFFF',
 };
 
+const darkPalette: typeof lightPalette = {
+  primary: '#35859B',
+  primaryDark: '#1B6B7B',
+  primaryTint: '#12313A',
+  ink: '#F1F5F9',
+  text: '#CBD5E1',
+  textSecondary: '#94A3B8',
+  textMuted: '#64748B',
+  textFaint: '#475569',
+  background: '#0B1214',
+  surface: '#111C1F',
+  surfaceMuted: '#0E1619',
+  border: '#1E2C30',
+  borderLight: '#182226',
+  white: '#FFFFFF',
+};
+
+export const Palettes: Record<ColorScheme, typeof lightPalette> = {
+  light: lightPalette,
+  dark: darkPalette,
+};
+
+/** Default/fallback palette for the (rare) module-scope reference that can't call the hook. */
+export const Palette = lightPalette;
+
 /** Semantic accent pairs: fg for text/icons, bg for tinted fills. */
-export const Accent = {
+const lightAccent = {
   red: { fg: '#DC2626', bg: '#FEE2E2', border: '#FECACA' },
   amber: { fg: '#D97706', bg: '#FEF3C7', border: '#FDE68A' },
   green: { fg: '#16A34A', bg: '#DCFCE7', border: '#BBF7D0' },
@@ -74,6 +102,25 @@ export const Accent = {
   slate: { fg: '#64748B', bg: '#F1F5F9', border: '#E2E8F0' },
   teal: { fg: '#1B6B7B', bg: '#E7F0F1', border: '#CDE0E3' },
 };
+
+const darkAccent: typeof lightAccent = {
+  red: { fg: '#F87171', bg: '#3F1D1D', border: '#5B2626' },
+  amber: { fg: '#FBBF24', bg: '#3F2F0E', border: '#5B4419' },
+  green: { fg: '#4ADE80', bg: '#123822', border: '#1C5233' },
+  blue: { fg: '#60A5FA', bg: '#122A44', border: '#1D3E63' },
+  violet: { fg: '#A78BFA', bg: '#2A1F44', border: '#3D2C63' },
+  cyan: { fg: '#22D3EE', bg: '#0E2E36', border: '#164752' },
+  slate: { fg: '#94A3B8', bg: '#1A2226', border: '#28353B' },
+  teal: { fg: '#5FA6B8', bg: '#0F2A30', border: '#1B3D44' },
+};
+
+export const Accents: Record<ColorScheme, typeof lightAccent> = {
+  light: lightAccent,
+  dark: darkAccent,
+};
+
+/** Default/fallback accent set for the (rare) module-scope reference that can't call the hook. */
+export const Accent = lightAccent;
 
 export const Spacing = {
   xs: 4,
@@ -92,8 +139,16 @@ export const Radius = {
   pill: 999,
 };
 
+interface ShadowPreset {
+  shadowColor: string;
+  shadowOffset: { width: number; height: number };
+  shadowOpacity: number;
+  shadowRadius: number;
+  elevation: number;
+}
+
 /** Elevation presets — pair iOS shadows with Android elevation. */
-export const Shadow = {
+const lightShadow: { card: ShadowPreset; raised: ShadowPreset } = {
   card: {
     shadowColor: '#0F172A',
     shadowOffset: { width: 0, height: 1 },
@@ -108,25 +163,57 @@ export const Shadow = {
     shadowRadius: 16,
     elevation: 4,
   },
+};
+
+const darkShadow: typeof lightShadow = {
+  card: {
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 1,
+  },
+  raised: {
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.45,
+    shadowRadius: 16,
+    elevation: 4,
+  },
 } as const;
 
-/** Type scale — keep font sizes/weights consistent across screens. */
-export const Type = {
-  screenTitle: { fontSize: 24, fontWeight: '800' as const, color: Palette.ink, letterSpacing: -0.4 },
-  title: { fontSize: 18, fontWeight: '700' as const, color: Palette.ink },
-  sectionTitle: { fontSize: 16, fontWeight: '700' as const, color: Palette.ink },
-  body: { fontSize: 14, color: Palette.text },
-  itemTitle: { fontSize: 15, fontWeight: '600' as const, color: '#1E293B' },
-  caption: { fontSize: 12, color: Palette.textSecondary },
-  micro: { fontSize: 11, color: Palette.textMuted },
-  eyebrow: {
-    fontSize: 11,
-    fontWeight: '700' as const,
-    color: Palette.textMuted,
-    textTransform: 'uppercase' as const,
-    letterSpacing: 1,
-  },
+export const Shadows: Record<ColorScheme, typeof lightShadow> = {
+  light: lightShadow,
+  dark: darkShadow,
 };
+
+/** Default/fallback shadow set for the (rare) module-scope reference that can't call the hook. */
+export const Shadow = lightShadow;
+
+/** Type scale — keep font sizes/weights consistent across screens; colors derive from a palette. */
+export function getType(palette: typeof lightPalette) {
+  return {
+    screenTitle: { fontSize: 24, fontWeight: '800' as const, color: palette.ink, letterSpacing: -0.4 },
+    title: { fontSize: 18, fontWeight: '700' as const, color: palette.ink },
+    sectionTitle: { fontSize: 16, fontWeight: '700' as const, color: palette.ink },
+    body: { fontSize: 14, color: palette.text },
+    itemTitle: { fontSize: 15, fontWeight: '600' as const, color: palette.ink },
+    caption: { fontSize: 12, color: palette.textSecondary },
+    micro: { fontSize: 11, color: palette.textMuted },
+    eyebrow: {
+      fontSize: 11,
+      fontWeight: '700' as const,
+      color: palette.textMuted,
+      textTransform: 'uppercase' as const,
+      letterSpacing: 1,
+    },
+  };
+}
+
+export type AppType = ReturnType<typeof getType>;
+
+/** Default/fallback type scale for the (rare) module-scope reference that can't call the hook. */
+export const Type = getType(lightPalette);
 
 export const Fonts = Platform.select({
   ios: {

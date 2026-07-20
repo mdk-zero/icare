@@ -14,7 +14,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { FontAwesome6 } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import Svg, { Path, Circle } from "react-native-svg";
-import { Palette } from "@/constants/theme";
+import { useTheme } from "@/hooks/useTheme";
 import { fetchNotifications } from "@/lib/api";
 
 /** Teal ramp sampled from the pill logo's cap (same as the login screen). */
@@ -49,6 +49,7 @@ function TabItem({
   isFocused: boolean;
   onPress: () => void;
 }) {
+  const { Palette } = useTheme();
   const progress = useSharedValue(isFocused ? 1 : 0);
 
   useEffect(() => {
@@ -110,13 +111,14 @@ function TabItem({
 
 function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
+  const { Palette } = useTheme();
 
   return (
     <View
       pointerEvents="box-none"
       style={[styles.tabBarWrap, { paddingBottom: Math.max(insets.bottom, 12) }]}
     >
-      <View style={styles.tabBarPill}>
+      <View style={[styles.tabBarPill, { backgroundColor: Palette.surface, borderColor: Palette.borderLight }]}>
         {state.routes.map((route, index) => {
           const { options } = descriptors[route.key];
           const label = options.title ?? route.name;
@@ -230,6 +232,7 @@ function AppHeader({ notificationCount }: { notificationCount: number }) {
 export default function TabLayout() {
   const pathname = usePathname();
   const [unreadCount, setUnreadCount] = useState(0);
+  const { Palette } = useTheme();
 
   // Refresh the badge whenever the active tab changes (cheap, cached read).
   useEffect(() => {
@@ -372,10 +375,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     height: 62,
-    backgroundColor: "#FFFFFF",
     borderRadius: 31,
     borderWidth: 1,
-    borderColor: Palette.borderLight,
     paddingHorizontal: 6,
     shadowColor: Teal.deepest,
     shadowOffset: { width: 0, height: 10 },

@@ -4,7 +4,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Accent, Palette, Radius, Shadow, Spacing, Type } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
 import { SectionHeader } from '@/components/ui';
 import { useAuth } from '@/hooks/useAuth';
 import { useApiData, allCached } from '@/hooks/useApiData';
@@ -23,7 +24,7 @@ function getInitials(name?: string) {
   return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 }
 
-function competencyAccent(score: number) {
+function competencyAccent(Accent: ReturnType<typeof useTheme>['Accent'], score: number) {
   if (score >= 70) return { ...Accent.green, label: 'Proficient' };
   if (score >= 50) return { ...Accent.amber, label: 'Developing' };
   return { ...Accent.red, label: 'Needs Work' };
@@ -34,6 +35,8 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, logout } = useAuth();
+  const { Palette, Accent, Shadow, Type } = useTheme();
+  const styles = React.useMemo(() => createStyles(Palette, Accent, Shadow, Type), [Palette, Accent, Shadow, Type]);
   const { data, refreshing, refresh } = useApiData(() =>
     allCached(fetchProgress(), fetchRecommendations()),
   );
@@ -164,7 +167,7 @@ export default function ProfileScreen() {
             </Text>
           )}
           {competencies.map((comp, index) => {
-            const accent = competencyAccent(comp.avgScore);
+            const accent = competencyAccent(Accent, comp.avgScore);
             return (
               <View
                 key={comp.competency}
@@ -261,7 +264,13 @@ export default function ProfileScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(
+  Palette: ReturnType<typeof useTheme>['Palette'],
+  Accent: ReturnType<typeof useTheme>['Accent'],
+  Shadow: ReturnType<typeof useTheme>['Shadow'],
+  Type: ReturnType<typeof useTheme>['Type'],
+) {
+  return StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Palette.background,
@@ -406,7 +415,7 @@ const styles = StyleSheet.create({
   compName: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#1E293B',
+    color: Palette.ink,
     marginBottom: 6,
   },
   compScore: {
@@ -474,7 +483,7 @@ const styles = StyleSheet.create({
   recTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1E293B',
+    color: Palette.ink,
     marginBottom: 3,
   },
   recDesc: {
@@ -499,7 +508,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     fontWeight: '500',
-    color: '#1E293B',
+    color: Palette.ink,
   },
   logoutButton: {
     flexDirection: 'row',
@@ -520,4 +529,5 @@ const styles = StyleSheet.create({
     ...Type.micro,
     textAlign: 'center',
   },
-});
+  });
+}

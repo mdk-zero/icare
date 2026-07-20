@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Accent } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
 
 interface BadgeProps {
   label: string;
@@ -8,15 +8,15 @@ interface BadgeProps {
   size?: 'sm' | 'md';
 }
 
-const variantAccent = {
-  default: Accent.slate,
-  success: Accent.green,
-  warning: Accent.amber,
-  danger: Accent.red,
-  info: Accent.blue,
-} as const;
-
 export function Badge({ label, variant = 'default', size = 'md' }: BadgeProps) {
+  const { Accent } = useTheme();
+  const variantAccent = {
+    default: Accent.slate,
+    success: Accent.green,
+    warning: Accent.amber,
+    danger: Accent.red,
+    info: Accent.blue,
+  } as const;
   const accent = variantAccent[variant];
   const fontSize = size === 'sm' ? 10 : 11;
 

@@ -3,7 +3,8 @@ import { ScrollView, View, Text, StyleSheet, Pressable, RefreshControl } from 'r
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Accent, Palette, Radius, Shadow, Spacing, Type } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
 import { ScreenHeader, SectionHeader, SkeletonScreen, EmptyState } from '@/components/ui';
 import { useApiData } from '@/hooks/useApiData';
 import { fetchPatients } from '@/lib/api';
@@ -12,6 +13,8 @@ export default function EHRScreen() {
   // content starts below the floating header, then scrolls beneath it
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { Palette, Accent, Shadow, Type } = useTheme();
+  const styles = React.useMemo(() => createStyles(Palette, Shadow, Type), [Palette, Shadow, Type]);
   const { data, loading, refreshing, error, refresh, fromCache } = useApiData(fetchPatients);
 
   if (loading && !data) {
@@ -116,7 +119,12 @@ export default function EHRScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(
+  Palette: ReturnType<typeof useTheme>['Palette'],
+  Shadow: ReturnType<typeof useTheme>['Shadow'],
+  Type: ReturnType<typeof useTheme>['Type'],
+) {
+  return StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Palette.background,
@@ -241,7 +249,7 @@ const styles = StyleSheet.create({
   detailValue: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#1E293B',
+    color: Palette.ink,
     flex: 1,
     textAlign: 'right',
     marginLeft: Spacing.md,
@@ -259,4 +267,5 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Palette.primary,
   },
-});
+  });
+}

@@ -3,16 +3,19 @@ import { ScrollView, View, Text, StyleSheet, Pressable, RefreshControl } from 'r
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Accent, Palette, Radius, Shadow, Spacing, Type } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
 import { ScreenHeader, EmptyState, SkeletonScreen } from '@/components/ui';
 import { fetchPatients, fetchMyVitals, Patient, VitalReading } from '@/lib/api';
 
-const VITAL_FIELDS = [
-  { key: 'hr', icon: 'heart' as const, accent: Accent.red, unit: 'bpm' },
-  { key: 'bp', icon: 'speedometer' as const, accent: Accent.violet, unit: 'mmHg' },
-  { key: 'temp', icon: 'thermometer' as const, accent: Accent.amber, unit: '°C' },
-  { key: 'spo2', icon: 'water' as const, accent: Accent.cyan, unit: '%' },
-];
+function vitalFields(Accent: ReturnType<typeof useTheme>['Accent']) {
+  return [
+    { key: 'hr', icon: 'heart' as const, accent: Accent.red, unit: 'bpm' },
+    { key: 'bp', icon: 'speedometer' as const, accent: Accent.violet, unit: 'mmHg' },
+    { key: 'temp', icon: 'thermometer' as const, accent: Accent.amber, unit: '°C' },
+    { key: 'spo2', icon: 'water' as const, accent: Accent.cyan, unit: '%' },
+  ];
+}
 
 function vitalValue(key: string, reading: VitalReading) {
   switch (key) {
@@ -35,6 +38,9 @@ export default function VitalsScreen() {
   // content starts below the floating header, then scrolls beneath it
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { Palette, Accent, Shadow, Type } = useTheme();
+  const styles = React.useMemo(() => createStyles(Palette, Accent, Shadow, Type), [Palette, Accent, Shadow, Type]);
+  const VITAL_FIELDS = React.useMemo(() => vitalFields(Accent), [Accent]);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [latestByPatient, setLatestByPatient] = useState<Record<string, VitalReading>>({});
   const [loading, setLoading] = useState(true);
@@ -203,7 +209,13 @@ export default function VitalsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(
+  Palette: ReturnType<typeof useTheme>['Palette'],
+  Accent: ReturnType<typeof useTheme>['Accent'],
+  Shadow: ReturnType<typeof useTheme>['Shadow'],
+  Type: ReturnType<typeof useTheme>['Type'],
+) {
+  return StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Palette.background,
@@ -260,7 +272,7 @@ const styles = StyleSheet.create({
   },
   patientCardAlert: {
     borderColor: Accent.red.border,
-    backgroundColor: '#FEF7F7',
+    backgroundColor: Accent.red.bg,
   },
   patientHeader: {
     flexDirection: 'row',
@@ -335,7 +347,7 @@ const styles = StyleSheet.create({
   vitalValue: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#1E293B',
+    color: Palette.ink,
   },
   vitalAlert: {
     color: Accent.red.fg,
@@ -390,4 +402,5 @@ const styles = StyleSheet.create({
     color: Palette.primary,
     marginRight: 2,
   },
-});
+  });
+}

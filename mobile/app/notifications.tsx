@@ -1,7 +1,8 @@
 import React from 'react';
 import { ScrollView, View, Text, StyleSheet, Pressable, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Accent, Palette, Radius, Shadow, Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
 import { SkeletonScreen, EmptyState } from '@/components/ui';
 import { useApiData } from '@/hooks/useApiData';
 import {
@@ -11,21 +12,28 @@ import {
   AppNotification,
 } from '@/lib/api';
 
-const TYPE_ACCENT: Record<
+function typeAccent(
+  Accent: ReturnType<typeof useTheme>['Accent'],
+): Record<
   AppNotification['type'],
   { fg: string; bg: string; icon: keyof typeof Ionicons.glyphMap; label: string }
-> = {
-  assignment_created: { ...Accent.violet, icon: 'clipboard', label: 'Assignment' },
-  deadline_reminder: { ...Accent.amber, icon: 'alarm', label: 'Deadline' },
-  at_risk_flag: { ...Accent.red, icon: 'warning', label: 'At Risk' },
-  vitals_anomaly: { ...Accent.red, icon: 'pulse', label: 'Vitals' },
-  performance_validated: { ...Accent.green, icon: 'checkmark-circle', label: 'Validated' },
-  assistance_request: { ...Accent.blue, icon: 'hand-left', label: 'Assistance' },
-  system: { ...Accent.teal, icon: 'information-circle', label: 'System' },
-};
+> {
+  return {
+    assignment_created: { ...Accent.violet, icon: 'clipboard', label: 'Assignment' },
+    deadline_reminder: { ...Accent.amber, icon: 'alarm', label: 'Deadline' },
+    at_risk_flag: { ...Accent.red, icon: 'warning', label: 'At Risk' },
+    vitals_anomaly: { ...Accent.red, icon: 'pulse', label: 'Vitals' },
+    performance_validated: { ...Accent.green, icon: 'checkmark-circle', label: 'Validated' },
+    assistance_request: { ...Accent.blue, icon: 'hand-left', label: 'Assistance' },
+    system: { ...Accent.teal, icon: 'information-circle', label: 'System' },
+  };
+}
 
 export default function NotificationsScreen() {
   const { data, loading, refreshing, error, refresh, reload } = useApiData(fetchNotifications);
+  const { Palette, Accent, Shadow } = useTheme();
+  const styles = React.useMemo(() => createStyles(Palette, Shadow), [Palette, Shadow]);
+  const TYPE_ACCENT = React.useMemo(() => typeAccent(Accent), [Accent]);
 
   if (loading && !data) {
     return <SkeletonScreen />;
@@ -124,7 +132,11 @@ export default function NotificationsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(
+  Palette: ReturnType<typeof useTheme>['Palette'],
+  Shadow: ReturnType<typeof useTheme>['Shadow'],
+) {
+  return StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Palette.background,
@@ -195,7 +207,7 @@ const styles = StyleSheet.create({
   notificationTitle: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#1E293B',
+    color: Palette.ink,
     flex: 1,
     marginRight: Spacing.sm,
   },
@@ -230,4 +242,5 @@ const styles = StyleSheet.create({
     color: Palette.textMuted,
     marginLeft: 4,
   },
-});
+  });
+}

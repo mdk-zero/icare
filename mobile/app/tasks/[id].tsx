@@ -3,7 +3,8 @@ import { ScrollView, View, Text, StyleSheet, Alert, Pressable } from 'react-nati
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Card, Badge, PrimaryButton, SkeletonScreen, EmptyState } from '@/components/ui';
-import { Accent, Palette, Radius, Spacing, Type } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
 import { useApiData, allCached } from '@/hooks/useApiData';
 import {
   fetchScenarioAssignments,
@@ -39,7 +40,13 @@ function formatTime(seconds: number) {
   return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 }
 
-function PatientCase({ patientCase }: { patientCase: Record<string, unknown> }) {
+function PatientCase({
+  patientCase,
+  styles,
+}: {
+  patientCase: Record<string, unknown>;
+  styles: ReturnType<typeof createStyles>;
+}) {
   const entries = Object.entries(patientCase).filter(
     ([, value]) => typeof value === 'string' || typeof value === 'number',
   );
@@ -61,6 +68,8 @@ export default function ScenarioRunnerScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
   const assignmentId = id as string;
+  const { Palette, Accent, Type } = useTheme();
+  const styles = useMemo(() => createStyles(Palette, Accent, Type), [Palette, Accent, Type]);
 
   const { data, loading, error } = useApiData(() =>
     allCached(fetchScenarioAssignments()),
@@ -225,7 +234,7 @@ export default function ScenarioRunnerScreen() {
         </Card>
       )}
 
-      {scenario && <PatientCase patientCase={scenario.patient_case} />}
+      {scenario && <PatientCase patientCase={scenario.patient_case} styles={styles} />}
 
       {scenario?.patient_id && (
         <Card style={styles.blockCard}>
@@ -307,7 +316,12 @@ export default function ScenarioRunnerScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(
+  Palette: ReturnType<typeof useTheme>['Palette'],
+  Accent: ReturnType<typeof useTheme>['Accent'],
+  Type: ReturnType<typeof useTheme>['Type'],
+) {
+  return StyleSheet.create({
   container: { flex: 1, backgroundColor: Palette.background },
   content: { padding: Spacing.lg, paddingBottom: 32 },
   errorContainer: { flex: 1, justifyContent: 'center', backgroundColor: Palette.background },
@@ -391,4 +405,5 @@ const styles = StyleSheet.create({
     borderRadius: Radius.pill,
     overflow: 'hidden',
   },
-});
+  });
+}

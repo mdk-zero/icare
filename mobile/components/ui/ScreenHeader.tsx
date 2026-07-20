@@ -2,10 +2,12 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Accent, Radius, Spacing, Type } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
 
-/** Gradient stops per accent, sampled darker→lighter for the header icon tile. */
-const ACCENT_GRADIENTS: Record<keyof typeof Accent, [string, string]> = {
+/** Gradient stops per accent, sampled darker→lighter for the header icon tile.
+ * Fixed decorative gradient — stays constant across schemes, not theme-driven. */
+const ACCENT_GRADIENTS: Record<keyof ReturnType<typeof useTheme>['Accent'], [string, string]> = {
   red: ['#DC2626', '#F87171'],
   amber: ['#D97706', '#FBBF24'],
   green: ['#16A34A', '#4ADE80'],
@@ -21,7 +23,7 @@ interface ScreenHeaderProps {
   title: string;
   subtitle?: string;
   icon?: keyof typeof Ionicons.glyphMap;
-  accent?: keyof typeof Accent;
+  accent?: keyof ReturnType<typeof useTheme>['Accent'];
   right?: React.ReactNode;
 }
 
@@ -37,6 +39,8 @@ export function ScreenHeader({
   accent = 'teal',
   right,
 }: ScreenHeaderProps) {
+  const { Palette, Type } = useTheme();
+  const styles = React.useMemo(() => createStyles(Palette, Type), [Palette, Type]);
   const gradient = ACCENT_GRADIENTS[accent];
   return (
     <View style={styles.container}>
@@ -55,38 +59,40 @@ export function ScreenHeader({
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: Spacing.sm,
-    marginBottom: Spacing.lg,
-  },
-  textColumn: {
-    flex: 1,
-    marginRight: Spacing.md,
-  },
-  eyebrow: {
-    ...Type.eyebrow,
-    marginBottom: Spacing.xs,
-  },
-  title: Type.screenTitle,
-  subtitle: {
-    ...Type.caption,
-    fontSize: 13,
-    marginTop: Spacing.xs,
-  },
-  iconTile: {
-    width: 46,
-    height: 46,
-    borderRadius: Radius.md + 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.18,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-});
+function createStyles(Palette: ReturnType<typeof useTheme>['Palette'], Type: ReturnType<typeof useTheme>['Type']) {
+  return StyleSheet.create({
+    container: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingVertical: Spacing.sm,
+      marginBottom: Spacing.lg,
+    },
+    textColumn: {
+      flex: 1,
+      marginRight: Spacing.md,
+    },
+    eyebrow: {
+      ...Type.eyebrow,
+      marginBottom: Spacing.xs,
+    },
+    title: Type.screenTitle,
+    subtitle: {
+      ...Type.caption,
+      fontSize: 13,
+      marginTop: Spacing.xs,
+    },
+    iconTile: {
+      width: 46,
+      height: 46,
+      borderRadius: Radius.md + 2,
+      alignItems: 'center',
+      justifyContent: 'center',
+      shadowColor: Palette.ink,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.18,
+      shadowRadius: 8,
+      elevation: 3,
+    },
+  });
+}

@@ -1,9 +1,10 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Card, PrimaryButton, SkeletonScreen, EmptyState } from '@/components/ui';
-import { Accent, Palette, Radius, Spacing, Type } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
 import { startAttempt, submitAttempt, StartedAttempt, AttemptResult } from '@/lib/api';
 import { isNetworkError } from '@/lib/client';
 
@@ -17,6 +18,8 @@ export default function QuizInterfaceScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
   const assessmentId = id as string;
+  const { Palette, Accent, Type } = useTheme();
+  const styles = useMemo(() => createStyles(Palette, Accent, Type), [Palette, Accent, Type]);
 
   const [started, setStarted] = useState<StartedAttempt | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -274,7 +277,12 @@ export default function QuizInterfaceScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(
+  Palette: ReturnType<typeof useTheme>['Palette'],
+  Accent: ReturnType<typeof useTheme>['Accent'],
+  Type: ReturnType<typeof useTheme>['Type'],
+) {
+  return StyleSheet.create({
   container: { flex: 1, backgroundColor: Palette.background },
   content: { padding: Spacing.lg, paddingBottom: 32 },
   errorContainer: { flex: 1, justifyContent: 'center', backgroundColor: Palette.background },
@@ -353,4 +361,5 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     marginTop: Spacing.sm,
   },
-});
+  });
+}

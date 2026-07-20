@@ -8,7 +8,8 @@ import Animated, {
   withTiming,
   Easing,
 } from 'react-native-reanimated';
-import { Palette, Radius, Spacing, Shadow } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
 
 interface SkeletonBlockProps {
   width?: DimensionValue;
@@ -19,6 +20,7 @@ interface SkeletonBlockProps {
 
 /** A single shimmering placeholder block — the atom every skeleton layout is built from. */
 export function SkeletonBlock({ width = '100%', height = 14, radius = Radius.sm, style }: SkeletonBlockProps) {
+  const { Palette } = useTheme();
   const opacity = useSharedValue(0.45);
 
   useEffect(() => {
@@ -43,6 +45,8 @@ export function SkeletonBlock({ width = '100%', height = 14, radius = Radius.sm,
 
 /** Skeleton for a ScreenHeader: eyebrow, title, subtitle + icon tile. */
 export function SkeletonHeader() {
+  const { Palette, Shadow } = useTheme();
+  const styles = React.useMemo(() => createStyles(Palette, Shadow), [Palette, Shadow]);
   return (
     <View style={styles.headerRow}>
       <View style={{ flex: 1, marginRight: Spacing.md }}>
@@ -58,6 +62,8 @@ export function SkeletonHeader() {
 /** Generic card skeleton: icon + two text lines, optional footer row — matches the
  * bordered white-surface card shape used across vitals/tasks/ehr lists. */
 export function SkeletonCard({ footer = true }: { footer?: boolean }) {
+  const { Palette, Shadow } = useTheme();
+  const styles = React.useMemo(() => createStyles(Palette, Shadow), [Palette, Shadow]);
   return (
     <View style={styles.card}>
       <View style={styles.cardHeaderRow}>
@@ -93,44 +99,49 @@ export function SkeletonList({ count = 3, footer = true }: { count?: number; foo
  * render nothing but a spinner while their first fetch resolves. */
 export function SkeletonScreen({ cards = 3 }: { cards?: number }) {
   return (
-    <View style={styles.screen}>
+    <View style={staticStyles.screen}>
       <SkeletonHeader />
       <SkeletonList count={cards} />
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const staticStyles = StyleSheet.create({
   screen: {
     padding: Spacing.lg,
   },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: Spacing.sm,
-    marginBottom: Spacing.lg,
-  },
-  card: {
-    backgroundColor: Palette.surface,
-    borderRadius: Radius.lg,
-    padding: Spacing.lg,
-    marginBottom: Spacing.md,
-    borderWidth: 1,
-    borderColor: Palette.border,
-    ...Shadow.card,
-  },
-  cardHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  cardFooterRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: Spacing.md,
-    paddingTop: Spacing.sm + 2,
-    borderTopWidth: 1,
-    borderTopColor: Palette.borderLight,
-  },
 });
+
+function createStyles(Palette: ReturnType<typeof useTheme>['Palette'], Shadow: ReturnType<typeof useTheme>['Shadow']) {
+  return StyleSheet.create({
+    headerRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingVertical: Spacing.sm,
+      marginBottom: Spacing.lg,
+    },
+    card: {
+      backgroundColor: Palette.surface,
+      borderRadius: Radius.lg,
+      padding: Spacing.lg,
+      marginBottom: Spacing.md,
+      borderWidth: 1,
+      borderColor: Palette.border,
+      ...Shadow.card,
+    },
+    cardHeaderRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    cardFooterRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginTop: Spacing.md,
+      paddingTop: Spacing.sm + 2,
+      borderTopWidth: 1,
+      borderTopColor: Palette.borderLight,
+    },
+  });
+}

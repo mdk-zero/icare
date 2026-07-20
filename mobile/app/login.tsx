@@ -16,7 +16,8 @@ import { useRouter } from 'expo-router';
 import { FontAwesome6 } from '@expo/vector-icons';
 import Svg, { Defs, LinearGradient as SvgGradient, Stop, Rect, Circle, Path } from 'react-native-svg';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Accent, Palette, Radius, Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
 import { useAuth } from '@/hooks/useAuth';
 import { API_URL } from '@/lib/client';
 import logoImg from '@/assets/images/logo-pill.png';
@@ -127,6 +128,8 @@ export default function LoginScreen() {
   const emailRef = useRef<TextInput>(null);
   const passwordRef = useRef<TextInput>(null);
   const { width } = useWindowDimensions();
+  const { Palette, Accent } = useTheme();
+  const styles = React.useMemo(() => createStyles(Palette, Accent), [Palette, Accent]);
 
   const handleLogin = async () => {
     setError('');
@@ -337,7 +340,8 @@ export default function LoginScreen() {
 
 const LOGO_SIZE = 96;
 
-const styles = StyleSheet.create({
+function createStyles(Palette: ReturnType<typeof useTheme>['Palette'], Accent: ReturnType<typeof useTheme>['Accent']) {
+  return StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Teal.deepest,
@@ -384,7 +388,7 @@ const styles = StyleSheet.create({
   },
   sheet: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Palette.surface,
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,
     marginTop: -40,
@@ -401,7 +405,7 @@ const styles = StyleSheet.create({
     width: LOGO_SIZE,
     height: LOGO_SIZE,
     borderRadius: LOGO_SIZE / 2,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Palette.surface,
     alignItems: 'center',
     justifyContent: 'center',
     alignSelf: 'center',
@@ -449,7 +453,7 @@ const styles = StyleSheet.create({
   },
   inputWrapperFocused: {
     borderColor: Teal.primary,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Palette.surface,
     shadowColor: Teal.primary,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.12,
@@ -474,7 +478,7 @@ const styles = StyleSheet.create({
   },
   input: {
     fontSize: 16,
-    color: '#1E293B',
+    color: Palette.ink,
     paddingVertical: 4,
     paddingHorizontal: 0,
   },
@@ -562,4 +566,5 @@ const styles = StyleSheet.create({
     color: Palette.textFaint,
     letterSpacing: 0.3,
   },
-});
+  });
+}

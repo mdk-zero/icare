@@ -2,16 +2,22 @@ import React from 'react';
 import { ScrollView, View, Text, StyleSheet, Pressable, RefreshControl, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Accent, Palette, Radius, Shadow, Spacing, Type } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
 import { SectionHeader, SkeletonScreen, EmptyState } from '@/components/ui';
 import { useApiData } from '@/hooks/useApiData';
 import { fetchRecommendations, dismissRecommendation } from '@/lib/api';
 
-const RANK_ACCENT = (rank: number) => (rank <= 1 ? Accent.red : rank === 2 ? Accent.amber : Accent.teal);
+function makeRankAccent(Accent: ReturnType<typeof useTheme>['Accent']) {
+  return (rank: number) => (rank <= 1 ? Accent.red : rank === 2 ? Accent.amber : Accent.teal);
+}
 
 export default function RecommendationsScreen() {
   const router = useRouter();
   const { data, loading, refreshing, error, refresh, reload } = useApiData(fetchRecommendations);
+  const { Palette, Accent, Shadow, Type } = useTheme();
+  const styles = React.useMemo(() => createStyles(Palette, Accent, Shadow, Type), [Palette, Accent, Shadow, Type]);
+  const RANK_ACCENT = React.useMemo(() => makeRankAccent(Accent), [Accent]);
 
   if (loading && !data) {
     return <SkeletonScreen />;
@@ -119,7 +125,13 @@ export default function RecommendationsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(
+  Palette: ReturnType<typeof useTheme>['Palette'],
+  Accent: ReturnType<typeof useTheme>['Accent'],
+  Shadow: ReturnType<typeof useTheme>['Shadow'],
+  Type: ReturnType<typeof useTheme>['Type'],
+) {
+  return StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Palette.background,
@@ -251,7 +263,8 @@ const styles = StyleSheet.create({
   },
   infoText: {
     fontSize: 13,
-    color: '#1E40AF',
+    color: Accent.blue.fg,
     lineHeight: 19,
   },
-});
+  });
+}
