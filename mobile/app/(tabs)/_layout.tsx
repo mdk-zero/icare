@@ -253,6 +253,9 @@ export default function TabLayout() {
     <View style={{ flex: 1, backgroundColor: Palette.background }}>
       <AppHeader notificationCount={unreadCount} />
       <Tabs
+        // Without this, the tab navigator defaults to whichever Tabs.Screen
+        // is registered first (Vitals) instead of Home.
+        initialRouteName="index"
         tabBar={(props) => <FloatingTabBar {...props} />}
         screenOptions={{
           headerShown: false,
