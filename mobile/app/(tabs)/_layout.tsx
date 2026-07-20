@@ -100,7 +100,6 @@ function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
               <Text style={[styles.sideTabLabel, isFocused && styles.sideTabLabelFocused]}>
                 {label}
               </Text>
-              <View style={[styles.activeDot, !isFocused && styles.activeDotHidden]} />
             </Pressable>
           );
         })}
@@ -270,8 +269,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    gap: 2,
-    paddingTop: 8,
+    gap: 3,
   },
   sideTabLabel: {
     fontSize: 10,
@@ -281,15 +279,6 @@ const styles = StyleSheet.create({
   sideTabLabelFocused: {
     color: Teal.primary,
     fontWeight: "700",
-  },
-  activeDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: Teal.primary,
-  },
-  activeDotHidden: {
-    opacity: 0,
   },
   centerSlot: {
     flex: 1,
