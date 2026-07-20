@@ -16,6 +16,7 @@ import {
   faWandMagicSparkles,
   faFileImport,
 } from "@fortawesome/free-solid-svg-icons";
+import { SkeletonQuestionCard } from "../../../components/skeletons";
 
 const inputClassName =
   "w-full px-4 py-3 bg-white border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30 focus:border-[#1B6B7B] focus:bg-white transition-all text-sm shadow-sm";
@@ -637,8 +638,22 @@ export default function AssessmentQuestionsClient({
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-24">
-        <FontAwesomeIcon icon={faSpinner} spin className="w-6 h-6 text-[#1B6B7B]" />
+      <div className="space-y-4">
+        <div className="flex items-center gap-4">
+          <div className="p-2 rounded-lg border border-gray-200 bg-gray-100 animate-pulse w-9 h-9" />
+          <div className="space-y-2 animate-pulse">
+            <div className="h-5 w-48 bg-gray-100 rounded" />
+            <div className="h-4 w-64 bg-gray-100 rounded" />
+          </div>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm animate-pulse p-4">
+          <div className="h-8 w-48 bg-gray-100 rounded" />
+        </div>
+        <div className="space-y-4">
+          <div className="h-5 w-32 bg-gray-100 rounded animate-pulse" />
+          <SkeletonQuestionCard />
+          <SkeletonQuestionCard />
+        </div>
       </div>
     );
   }

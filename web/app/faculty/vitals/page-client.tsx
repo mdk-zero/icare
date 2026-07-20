@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faHeartbeat,
-  faSpinner,
   faExclamationTriangle,
   faCheckCircle,
   faFilter,
@@ -16,6 +15,7 @@ import { fetchFacultyVitalReadings, VitalReading } from "../../lib/api";
 import PageHeader from "../../components/PageHeader";
 import StatTile from "../../components/StatTile";
 import Card from "../../components/Card";
+import { SkeletonTable } from "../../components/skeletons";
 
 function formatVitals(reading: VitalReading): string {
   return [
@@ -104,9 +104,7 @@ export default function FacultyVitalsClient() {
 
       <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden">
         {loading ? (
-          <div className="flex items-center justify-center p-12">
-            <FontAwesomeIcon icon={faSpinner} spin className="w-8 h-8 text-[#1B6B7B]" />
-          </div>
+          <SkeletonTable rows={5} cols={6} />
         ) : readings.length === 0 ? (
           <div className="p-12 text-center">
             <FontAwesomeIcon icon={faHeartbeat} className="w-12 h-12 text-gray-300 mx-auto mb-4" />

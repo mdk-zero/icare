@@ -6,7 +6,6 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faPlus,
   faTimes,
-  faSpinner,
   faUserPlus,
   faListCheck,
   faTrash,
@@ -15,6 +14,7 @@ import {
   faEyeSlash,
 } from "@fortawesome/free-solid-svg-icons";
 import PageHeader from "../../components/PageHeader";
+import { SkeletonAssessmentCard } from "../../components/skeletons";
 
 const inputClassName =
   "w-full px-4 py-3 bg-white border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30 focus:border-[#1B6B7B] focus:bg-white transition-all text-sm shadow-sm";
@@ -305,8 +305,10 @@ export default function FacultyAssessmentsClient() {
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center py-16">
-          <FontAwesomeIcon icon={faSpinner} spin className="w-6 h-6 text-[#1B6B7B]" />
+        <div className="space-y-4">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <SkeletonAssessmentCard key={i} />
+          ))}
         </div>
       ) : assessments.length === 0 ? (
         <div className="bg-white p-12 rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] text-center text-gray-500">
