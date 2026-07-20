@@ -111,7 +111,7 @@ export default function TasksScreen() {
   );
 
   if (loading && !data) {
-    return <SkeletonScreen />;
+    return <SkeletonScreen topOffset={insets.top + 88} />;
   }
 
   const assignments = data ?? [];

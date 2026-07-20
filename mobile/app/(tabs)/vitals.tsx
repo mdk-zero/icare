@@ -79,7 +79,7 @@ export default function VitalsScreen() {
   };
 
   if (loading) {
-    return <SkeletonScreen cards={4} />;
+    return <SkeletonScreen cards={4} topOffset={insets.top + 88} />;
   }
 
   return (

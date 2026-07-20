@@ -110,7 +110,7 @@ export default function DashboardScreen() {
   const [assignments, assessments, progress, patients] = data ?? [[], [], null, []];
 
   if (loading && !data) {
-    return <SkeletonScreen />;
+    return <SkeletonScreen topOffset={insets.top + 88} />;
   }
 
   const openTasks = assignments.filter((a) => a.status !== "completed");

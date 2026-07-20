@@ -18,7 +18,7 @@ export default function EHRScreen() {
   const { data, loading, refreshing, error, refresh, fromCache } = useApiData(fetchPatients);
 
   if (loading && !data) {
-    return <SkeletonScreen />;
+    return <SkeletonScreen topOffset={insets.top + 88} />;
   }
 
   const patients = data ?? [];

@@ -97,9 +97,9 @@ export function SkeletonList({ count = 3, footer = true }: { count?: number; foo
 
 /** Full-screen skeleton: header + a list of card placeholders, for screens that
  * render nothing but a spinner while their first fetch resolves. */
-export function SkeletonScreen({ cards = 3 }: { cards?: number }) {
+export function SkeletonScreen({ cards = 3, topOffset }: { cards?: number; topOffset?: number }) {
   return (
-    <View style={staticStyles.screen}>
+    <View style={[staticStyles.screen, topOffset !== undefined && { paddingTop: topOffset }]}>
       <SkeletonHeader />
       <SkeletonList count={cards} />
     </View>
