@@ -9,6 +9,7 @@ import {
   api,
   cachedGet,
   CachedResult,
+  clearCache,
   clearToken,
   enqueueWrite,
   isNetworkError,
@@ -37,6 +38,9 @@ export async function login(email: string, password: string): Promise<User> {
     body: { email, password },
     auth: false,
   });
+  // Cached GETs are keyed by path only, not by user — drop any reads left
+  // over from a previous account on this device before adopting this one.
+  await clearCache();
   await setToken(result.sessionToken);
   return result.user;
 }
@@ -48,6 +52,7 @@ export async function logout(): Promise<void> {
     // best effort; the bearer token is what actually matters
   }
   await clearToken();
+  await clearCache();
 }
 
 /** Validates the stored token against the server. null = not signed in. */
