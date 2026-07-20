@@ -32,7 +32,7 @@ export interface User {
   studentId?: string;
 }
 
-export async function login(email: string, password: string): Promise<User> {
+export async function login(email: string, password: string, rememberMe: boolean = true): Promise<User> {
   const result = await api<{ user: User; sessionToken: string }>('/api/auth/login', {
     method: 'POST',
     body: { email, password },
@@ -41,8 +41,33 @@ export async function login(email: string, password: string): Promise<User> {
   // Cached GETs are keyed by path only, not by user — drop any reads left
   // over from a previous account on this device before adopting this one.
   await clearCache();
-  await setToken(result.sessionToken);
+  await setToken(result.sessionToken, rememberMe);
   return result.user;
+}
+
+export type GoogleLoginResult = { user: User } | { needsRoleSelection: true };
+
+/**
+ * Same `/api/auth/google` endpoint the web app uses: exchanges a verified
+ * Google ID token for a session. A brand-new Google account with no matching
+ * iCARE++ user comes back as `needsRoleSelection` — self-registration via
+ * Google is web-only (faculty/admin), so the mobile UI just surfaces that.
+ */
+export async function loginWithGoogle(idToken: string, rememberMe: boolean = true): Promise<GoogleLoginResult> {
+  const result = await api<{ user?: User; sessionToken?: string; needsRoleSelection?: boolean }>(
+    '/api/auth/google',
+    {
+      method: 'POST',
+      body: { id_token: idToken },
+      auth: false,
+    },
+  );
+  if (result.needsRoleSelection || !result.user || !result.sessionToken) {
+    return { needsRoleSelection: true };
+  }
+  await clearCache();
+  await setToken(result.sessionToken, rememberMe);
+  return { user: result.user };
 }
 
 export async function logout(): Promise<void> {

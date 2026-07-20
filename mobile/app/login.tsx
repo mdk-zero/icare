@@ -16,11 +16,27 @@ import { useRouter } from 'expo-router';
 import { FontAwesome6 } from '@expo/vector-icons';
 import Svg, { Defs, LinearGradient as SvgGradient, Stop, Rect, Circle, Path } from 'react-native-svg';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as Google from 'expo-auth-session/providers/google';
+import * as WebBrowser from 'expo-web-browser';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { useAuth } from '@/hooks/useAuth';
 import { API_URL } from '@/lib/client';
 import logoImg from '@/assets/images/logo-pill.png';
+
+// Required once per app so the browser sheet closes itself after the
+// provider redirects back into the app.
+WebBrowser.maybeCompleteAuthSession();
+
+// Google Cloud Console client IDs — see mobile/.env.example. The web client
+// ID alone is enough to test with (implicit id_token flow); iOS/Android
+// client IDs are only needed for a standalone/dev-client build.
+const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
+const GOOGLE_IOS_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
+const GOOGLE_ANDROID_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID;
+const GOOGLE_SIGN_IN_CONFIGURED = Boolean(
+  GOOGLE_WEB_CLIENT_ID || GOOGLE_IOS_CLIENT_ID || GOOGLE_ANDROID_CLIENT_ID,
+);
 
 /** Gradient stops sampled from the pill logo's teal cap. */
 const Teal = {
@@ -122,14 +138,24 @@ export default function LoginScreen() {
   const [error, setError] = useState('');
   const [isNetworkIssue, setIsNetworkIssue] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [focusedField, setFocusedField] = useState<string | null>(null);
-  const { login, isLoading } = useAuth();
+  const { login, loginWithGoogle, isLoading } = useAuth();
   const router = useRouter();
   const emailRef = useRef<TextInput>(null);
   const passwordRef = useRef<TextInput>(null);
   const { width } = useWindowDimensions();
   const { Palette, Accent } = useTheme();
   const styles = React.useMemo(() => createStyles(Palette, Accent), [Palette, Accent]);
+
+  const [googleRequest, googleResponse, promptGoogleSignIn] = Google.useIdTokenAuthRequest({
+    // A placeholder keeps the hook from throwing when unconfigured; actual
+    // use is gated behind GOOGLE_SIGN_IN_CONFIGURED (button hidden/disabled).
+    webClientId: GOOGLE_WEB_CLIENT_ID || 'not-configured',
+    iosClientId: GOOGLE_IOS_CLIENT_ID,
+    androidClientId: GOOGLE_ANDROID_CLIENT_ID,
+  });
 
   const handleLogin = async () => {
     setError('');
@@ -139,7 +165,7 @@ export default function LoginScreen() {
       return;
     }
 
-    const result = await login(email, password);
+    const result = await login(email, password, rememberMe);
     if (result.ok) {
       router.replace('/(tabs)');
     } else {
@@ -148,6 +174,46 @@ export default function LoginScreen() {
       setIsNetworkIssue(message.toLowerCase().includes('cannot reach'));
     }
   };
+
+  const handleGoogleIdToken = React.useCallback(
+    async (idToken: string) => {
+      setError('');
+      setIsNetworkIssue(false);
+      setIsGoogleLoading(true);
+      try {
+        const result = await loginWithGoogle(idToken, rememberMe);
+        if (result.ok) {
+          router.replace('/(tabs)');
+        } else if (result.needsRoleSelection) {
+          setError(
+            "This Google account isn't linked to an iCARE++ profile yet. Ask your instructor to set up your account, or finish setup on the web app.",
+          );
+        } else {
+          const message = result.error ?? 'Google sign-in failed.';
+          setError(message);
+          setIsNetworkIssue(message.toLowerCase().includes('cannot reach'));
+        }
+      } finally {
+        setIsGoogleLoading(false);
+      }
+    },
+    [loginWithGoogle, rememberMe, router],
+  );
+
+  React.useEffect(() => {
+    if (!googleResponse) return;
+    if (googleResponse.type === 'success') {
+      const idToken = googleResponse.params?.id_token ?? googleResponse.authentication?.idToken;
+      if (idToken) {
+        handleGoogleIdToken(idToken);
+      } else {
+        setError('Google sign-in did not return a valid credential.');
+      }
+    } else if (googleResponse.type === 'error') {
+      setError(googleResponse.error?.message ?? 'Google sign-in failed.');
+    }
+    // 'cancel'/'dismiss': the user backed out — no error to show.
+  }, [googleResponse, handleGoogleIdToken]);
 
   return (
     <View style={styles.container}>
@@ -278,6 +344,26 @@ export default function LoginScreen() {
                 </View>
               </Pressable>
 
+              <View style={styles.optionsRow}>
+                <Pressable
+                  style={({ pressed }) => [styles.rememberMeRow, pressed && { opacity: 0.7 }]}
+                  onPress={() => setRememberMe((v) => !v)}
+                  hitSlop={8}
+                >
+                  <View style={[styles.checkbox, rememberMe && styles.checkboxChecked]}>
+                    {rememberMe && <FontAwesome6 name="check" size={10} solid color="#FFFFFF" />}
+                  </View>
+                  <Text style={styles.rememberMeText}>Remember me</Text>
+                </Pressable>
+
+                <Pressable
+                  style={({ pressed }) => [pressed && { opacity: 0.6 }]}
+                  onPress={() => router.push('/forgot-password')}
+                >
+                  <Text style={styles.forgotText}>Forgot Password?</Text>
+                </Pressable>
+              </View>
+
               {error ? (
                 <View style={styles.errorBanner}>
                   <FontAwesome6
@@ -320,12 +406,33 @@ export default function LoginScreen() {
                 )}
               </Pressable>
 
-              <Pressable
-                style={({ pressed }) => [styles.forgotButton, pressed && { opacity: 0.6 }]}
-                onPress={() => router.push('/forgot-password')}
-              >
-                <Text style={styles.forgotText}>Forgot Password?</Text>
-              </Pressable>
+              {GOOGLE_SIGN_IN_CONFIGURED && (
+                <>
+                  <View style={styles.dividerRow}>
+                    <View style={styles.dividerLine} />
+                    <Text style={styles.dividerText}>or continue with</Text>
+                    <View style={styles.dividerLine} />
+                  </View>
+
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.googleButton,
+                      (pressed || isLoading || isGoogleLoading) && styles.buttonPressed,
+                    ]}
+                    onPress={() => promptGoogleSignIn()}
+                    disabled={!googleRequest || isLoading || isGoogleLoading}
+                  >
+                    {isGoogleLoading ? (
+                      <ActivityIndicator size="small" color={Teal.primary} />
+                    ) : (
+                      <>
+                        <FontAwesome6 name="google" size={16} color={Teal.primary} />
+                        <Text style={styles.googleButtonText}>Sign in with Google</Text>
+                      </>
+                    )}
+                  </Pressable>
+                </>
+              )}
             </View>
 
             <View style={styles.footer}>
@@ -547,14 +654,72 @@ function createStyles(Palette: ReturnType<typeof useTheme>['Palette'], Accent: R
     fontWeight: '700',
     letterSpacing: 0.5,
   },
-  forgotButton: {
+  optionsRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: Spacing.sm,
+    justifyContent: 'space-between',
+    marginTop: -Spacing.sm,
+  },
+  rememberMeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  checkbox: {
+    width: 18,
+    height: 18,
+    borderRadius: 5,
+    borderWidth: 1.5,
+    borderColor: Palette.textFaint,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxChecked: {
+    backgroundColor: Teal.primary,
+    borderColor: Teal.primary,
+  },
+  rememberMeText: {
+    fontSize: 13.5,
+    fontWeight: '500',
+    color: Palette.textSecondary,
   },
   forgotText: {
     fontSize: 14,
     fontWeight: '600',
     color: Teal.primary,
+  },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    marginTop: Spacing.sm,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: Palette.borderLight,
+  },
+  dividerText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Palette.textMuted,
+    letterSpacing: 0.2,
+  },
+  googleButton: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    backgroundColor: Palette.surface,
+    borderRadius: Radius.lg,
+    borderWidth: 1.5,
+    borderColor: Palette.borderLight,
+    paddingVertical: 15,
+  },
+  googleButtonText: {
+    color: Palette.ink,
+    fontSize: 15,
+    fontWeight: '700',
   },
   footer: {
     flexDirection: 'row',

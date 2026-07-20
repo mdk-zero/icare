@@ -12,7 +12,11 @@ interface AuthContextType {
   /** True only during the initial stored-session restore at app launch. */
   isBootstrapping: boolean;
   isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
+  login: (email: string, password: string, rememberMe?: boolean) => Promise<{ ok: boolean; error?: string }>;
+  loginWithGoogle: (
+    idToken: string,
+    rememberMe?: boolean,
+  ) => Promise<{ ok: boolean; needsRoleSelection?: boolean; error?: string }>;
   logout: () => Promise<void>;
 }
 
@@ -60,10 +64,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     checkAuth();
   }, [checkAuth]);
 
-  const login = async (email: string, password: string): Promise<{ ok: boolean; error?: string }> => {
+  const login = async (
+    email: string,
+    password: string,
+    rememberMe: boolean = true,
+  ): Promise<{ ok: boolean; error?: string }> => {
     setIsLoading(true);
     try {
-      const loggedIn = await apiClient.login(email.trim().toLowerCase(), password);
+      const loggedIn = await apiClient.login(email.trim().toLowerCase(), password, rememberMe);
       setUser(loggedIn);
       AsyncStorage.setItem(USER_KEY, JSON.stringify(loggedIn)).catch(() => {});
       flushOutbox().catch(() => {});
@@ -74,6 +82,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         : error instanceof Error
           ? error.message
           : 'Sign-in failed';
+      return { ok: false, error: message };
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const loginWithGoogle = async (
+    idToken: string,
+    rememberMe: boolean = true,
+  ): Promise<{ ok: boolean; needsRoleSelection?: boolean; error?: string }> => {
+    setIsLoading(true);
+    try {
+      const result = await apiClient.loginWithGoogle(idToken, rememberMe);
+      if ('needsRoleSelection' in result) {
+        return { ok: false, needsRoleSelection: true };
+      }
+      setUser(result.user);
+      AsyncStorage.setItem(USER_KEY, JSON.stringify(result.user)).catch(() => {});
+      flushOutbox().catch(() => {});
+      return { ok: true };
+    } catch (error) {
+      const message = isNetworkError(error)
+        ? 'Cannot reach the iCARE++ server. Check your connection and API URL.'
+        : error instanceof Error
+          ? error.message
+          : 'Google sign-in failed';
       return { ok: false, error: message };
     } finally {
       setIsLoading(false);
@@ -94,6 +128,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isBootstrapping,
         isAuthenticated: !!user,
         login,
+        loginWithGoogle,
         logout,
       }}
     >

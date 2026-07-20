@@ -33,19 +33,54 @@ const OUTBOX_KEY = '@icare_outbox';
 // Token storage
 // ---------------------------------------------------------------
 
-export async function getToken(): Promise<string | null> {
+/**
+ * "Remember me" unchecked: the token still needs to work for the rest of
+ * this JS session, but must not survive an app restart. Since a cold start
+ * wipes JS memory anyway, keeping it in a plain module variable instead of
+ * SecureStore/AsyncStorage is exactly "forget on relaunch" with no extra
+ * bookkeeping.
+ */
+let memoryToken: string | null = null;
+
+async function getPersistedToken(): Promise<string | null> {
   if (Platform.OS === 'web') return AsyncStorage.getItem(TOKEN_KEY);
   return SecureStore.getItemAsync(TOKEN_KEY);
 }
 
-export async function setToken(token: string): Promise<void> {
+async function setPersistedToken(token: string): Promise<void> {
   if (Platform.OS === 'web') return AsyncStorage.setItem(TOKEN_KEY, token);
   return SecureStore.setItemAsync(TOKEN_KEY, token);
 }
 
-export async function clearToken(): Promise<void> {
+async function clearPersistedToken(): Promise<void> {
   if (Platform.OS === 'web') return AsyncStorage.removeItem(TOKEN_KEY);
   return SecureStore.deleteItemAsync(TOKEN_KEY);
+}
+
+export async function getToken(): Promise<string | null> {
+  if (memoryToken) return memoryToken;
+  return getPersistedToken();
+}
+
+/**
+ * `remember` controls whether the token survives an app restart.
+ * Defaults to true so existing callers (session refresh, etc.) keep the
+ * prior persisted-by-default behavior.
+ */
+export async function setToken(token: string, remember: boolean = true): Promise<void> {
+  if (remember) {
+    memoryToken = null;
+    return setPersistedToken(token);
+  }
+  // An explicit "don't remember me" must win even if a previous session on
+  // this device left a persisted token behind.
+  memoryToken = token;
+  await clearPersistedToken();
+}
+
+export async function clearToken(): Promise<void> {
+  memoryToken = null;
+  return clearPersistedToken();
 }
 
 // ---------------------------------------------------------------
