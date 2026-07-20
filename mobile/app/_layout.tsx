@@ -23,6 +23,7 @@ function AuthStack() {
     >
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="login" options={{ headerShown: false }} />
+      <Stack.Screen name="forgot-password" options={{ headerShown: false }} />
       <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
       <Stack.Screen name="vitals/[id]" options={{ title: 'Vital Signs' }} />
       <Stack.Screen name="tasks/[id]" options={{ title: 'Task' }} />

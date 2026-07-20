@@ -62,6 +62,41 @@ export async function fetchSession(): Promise<User | null> {
 }
 
 // ---------------------------------------------------------------
+// Forgot password (email OTP, shared with the web app's flow)
+// ---------------------------------------------------------------
+
+/** Sends a reset-code email. Always resolves — server hides whether the account exists. */
+export async function requestPasswordReset(email: string): Promise<{ message: string }> {
+  return api('/api/auth/forgot-password/request', {
+    method: 'POST',
+    body: { email },
+    auth: false,
+  });
+}
+
+/** Verifies a 6-digit code without consuming it — the code stays valid for the reset step. */
+export async function checkPasswordResetCode(email: string, otp: string): Promise<{ message: string }> {
+  return api('/api/auth/forgot-password/check-code', {
+    method: 'POST',
+    body: { email, otp },
+    auth: false,
+  });
+}
+
+/** Consumes the code and sets the new password. */
+export async function resetPassword(
+  email: string,
+  otp: string,
+  newPassword: string,
+): Promise<{ message: string }> {
+  return api('/api/auth/forgot-password/verify', {
+    method: 'POST',
+    body: { email, otp, newPassword },
+    auth: false,
+  });
+}
+
+// ---------------------------------------------------------------
 // Patients
 // ---------------------------------------------------------------
 
