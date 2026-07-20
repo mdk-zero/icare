@@ -1,114 +1,135 @@
 import React from 'react';
-import { ScrollView, View, Text, StyleSheet, Pressable, RefreshControl } from 'react-native';
+import { ScrollView, View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Accent, Palette, Radius, Shadow, Spacing, Type } from '@/constants/theme';
-import { ScreenHeader, SectionHeader, LoadingSpinner, EmptyState } from '@/components/ui';
-import { useApiData } from '@/hooks/useApiData';
-import { fetchPatients } from '@/lib/api';
+import { Colors } from '@/constants/theme';
+import { Card, Avatar } from '@/components/ui';
+import { mockPatients } from '@/lib/api';
+
+const primaryColor = Colors.light.primary;
 
 export default function EHRScreen() {
   const router = useRouter();
-  const { data, loading, refreshing, error, refresh, fromCache } = useApiData(fetchPatients);
 
-  if (loading && !data) {
-    return <LoadingSpinner />;
-  }
-
-  const patients = data ?? [];
-  const stats = [
-    { label: 'Total', value: patients.length, icon: 'people' as const, accent: Accent.teal },
-    { label: 'In Rooms', value: patients.filter((p) => p.room_number).length, icon: 'bed' as const, accent: Accent.violet },
-    { label: 'Diagnosed', value: patients.filter((p) => p.diagnosis).length, icon: 'medkit' as const, accent: Accent.amber },
-  ];
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'Stable': return '#16a34a';
+      case 'Guarded': return '#d97706';
+      case 'Critical': return '#dc2626';
+      default: return '#6b7280';
+    }
+  };
 
   return (
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={refresh} colors={[Palette.primary]} tintColor={Palette.primary} />
-      }
     >
-      <ScreenHeader
-        eyebrow="EHR System"
-        title="Patient Records"
-        subtitle={`${patients.length} patients in database${fromCache ? ' (offline copy)' : ''}`}
-        icon="folder-open-outline"
-        accent="violet"
-      />
-
-      <View style={styles.statsContainer}>
-        {stats.map((stat) => (
-          <View key={stat.label} style={styles.statCard}>
-            <View style={[styles.statIconBox, { backgroundColor: stat.accent.bg }]}>
-              <Ionicons name={stat.icon} size={18} color={stat.accent.fg} />
+      <View style={styles.header}>
+        <View style={styles.headerTop}>
+          <View>
+            <View style={styles.headerBadge}>
+              <Ionicons name="folder-open" size={12} color="#7c3aed" />
+              <Text style={styles.headerBadgeText}>EHR System</Text>
             </View>
-            <Text style={[styles.statValue, { color: stat.accent.fg }]}>{stat.value}</Text>
-            <Text style={styles.statLabel}>{stat.label}</Text>
+            <Text style={styles.title}>Patient Records</Text>
+            <Text style={styles.subtitle}>
+              {mockPatients.length} patients in database
+            </Text>
           </View>
-        ))}
+          <View style={styles.headerIconBox}>
+            <Ionicons name="folder-open-outline" size={24} color="#7c3aed" />
+          </View>
+        </View>
       </View>
 
-      <SectionHeader title="Patient Records" count={patients.length} />
-      {patients.length === 0 && (
-        <EmptyState
-          icon={error ? 'cloud-offline-outline' : 'folder-open-outline'}
-          message={error ?? 'No patients yet — your admin loads them from the MIMIC dataset.'}
-        />
-      )}
-      {patients.map((patient) => {
-        return (
-          <Pressable
-            key={patient.id}
-            style={({ pressed }) => [styles.patientCard, pressed && styles.pressedCard]}
-            onPress={() => router.push(`/ehr/${patient.id}`)}
-          >
-            <View style={styles.patientHeader}>
-              <View style={[styles.avatarContainer, { backgroundColor: Accent.teal.bg }]}>
-                <Ionicons name="person" size={18} color={Accent.teal.fg} />
-              </View>
-              <View style={styles.patientInfo}>
-                <Text style={styles.patientName}>{patient.name}</Text>
-                <Text style={styles.patientDetails}>
-                  {patient.age !== null ? `${patient.age} yrs` : 'Age —'} • {patient.gender ?? '—'}
-                </Text>
-              </View>
-              <View style={[styles.statusBadge, { backgroundColor: Accent.slate.bg }]}>
-                <Ionicons name="bed-outline" size={12} color={Accent.slate.fg} />
-                <Text style={[styles.statusBadgeText, { color: Accent.slate.fg, marginLeft: 4 }]}>
-                  {patient.room_number ?? 'Unassigned'}
-                </Text>
-              </View>
-            </View>
+      <View style={styles.statsContainer}>
+        <View style={styles.statCard}>
+          <View style={[styles.statIconBox, { backgroundColor: primaryColor + '15' }]}>
+            <Ionicons name="people" size={20} color={primaryColor} />
+          </View>
+          <Text style={styles.statValue}>{mockPatients.length}</Text>
+          <Text style={styles.statLabel}>Total</Text>
+        </View>
+        <View style={styles.statCard}>
+          <View style={[styles.statIconBox, { backgroundColor: '#fee2e2' }]}>
+            <Ionicons name="warning" size={20} color="#dc2626" />
+          </View>
+          <Text style={[styles.statValue, { color: '#dc2626' }]}>2</Text>
+          <Text style={styles.statLabel}>Critical</Text>
+        </View>
+        <View style={styles.statCard}>
+          <View style={[styles.statIconBox, { backgroundColor: '#fef3c7' }]}>
+            <Ionicons name="alert-circle" size={20} color="#d97706" />
+          </View>
+          <Text style={[styles.statValue, { color: '#d97706' }]}>1</Text>
+          <Text style={styles.statLabel}>Guarded</Text>
+        </View>
+      </View>
 
-            <View style={styles.patientDetailsSection}>
-              <View style={styles.detailRow}>
-                <View style={styles.detailItem}>
-                  <Ionicons name="medkit-outline" size={14} color={Palette.textMuted} />
-                  <Text style={styles.detailLabel}>Diagnosis</Text>
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Patient Records</Text>
+        <View style={styles.patientList}>
+          {mockPatients.map((patient) => (
+            <TouchableOpacity
+              key={patient.id}
+              style={styles.patientCard}
+              onPress={() => router.push(`/ehr/${patient.id}`)}
+              activeOpacity={0.7}
+            >
+              <View style={styles.patientHeader}>
+                <View style={[styles.avatarContainer, { backgroundColor: getStatusColor(patient.status) + '15' }]}>
+                  <Ionicons name="person" size={20} color={getStatusColor(patient.status)} />
                 </View>
-                <Text style={styles.detailValue} numberOfLines={1}>{patient.diagnosis ?? '—'}</Text>
-              </View>
-              <View style={[styles.detailRow, styles.detailRowLast]}>
-                <View style={styles.detailItem}>
-                  <Ionicons name="calendar-outline" size={14} color={Palette.textMuted} />
-                  <Text style={styles.detailLabel}>Admitted</Text>
+                <View style={styles.patientInfo}>
+                  <Text style={styles.patientName}>{patient.name}</Text>
+                  <Text style={styles.patientDetails}>
+                    {patient.age} yrs • {patient.gender}
+                  </Text>
                 </View>
-                <Text style={styles.detailValue}>
-                  {patient.admission_date ? new Date(patient.admission_date).toLocaleDateString() : '—'}
-                </Text>
+                <View style={[styles.statusBadge, { backgroundColor: getStatusColor(patient.status) + '15' }]}>
+                  <View style={[styles.statusDot, { backgroundColor: getStatusColor(patient.status) }]} />
+                  <Text style={[styles.statusBadgeText, { color: getStatusColor(patient.status) }]}>
+                    {patient.status}
+                  </Text>
+                </View>
               </View>
-            </View>
 
-            <View style={styles.cardFooter}>
-              <Text style={styles.viewRecord}>View Full Record</Text>
-              <Ionicons name="chevron-forward" size={16} color={Palette.primary} />
-            </View>
-          </Pressable>
-        );
-      })}
+              <View style={styles.patientDetailsSection}>
+                <View style={styles.detailRow}>
+                  <View style={styles.detailItem}>
+                    <Ionicons name="bed-outline" size={14} color="#94a3b8" />
+                    <Text style={styles.detailLabel}>Room</Text>
+                  </View>
+                  <Text style={styles.detailValue}>{patient.room}</Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <View style={styles.detailItem}>
+                    <Ionicons name="medkit-outline" size={14} color="#94a3b8" />
+                    <Text style={styles.detailLabel}>Diagnosis</Text>
+                  </View>
+                  <Text style={styles.detailValue} numberOfLines={1}>{patient.diagnosis}</Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <View style={styles.detailItem}>
+                    <Ionicons name="calendar-outline" size={14} color="#94a3b8" />
+                    <Text style={styles.detailLabel}>Admitted</Text>
+                  </View>
+                  <Text style={styles.detailValue}>
+                    {new Date(patient.admittedDate).toLocaleDateString()}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.cardFooter}>
+                <Text style={styles.viewRecord}>View Full Record</Text>
+                <Ionicons name="chevron-forward" size={18} color={primaryColor} />
+              </View>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
     </ScrollView>
   );
 }
@@ -116,81 +137,155 @@ export default function EHRScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Palette.background,
+    backgroundColor: '#f8fafc',
   },
   content: {
-    padding: Spacing.lg,
+    padding: 16,
     paddingBottom: 32,
   },
-  pressedCard: {
-    opacity: 0.85,
-    transform: [{ scale: 0.99 }],
+  header: {
+    backgroundColor: '#fff',
+    borderRadius: 24,
+    padding: 20,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  headerBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ede9fe',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+    alignSelf: 'flex-start',
+    marginBottom: 8,
+  },
+  headerBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#7c3aed',
+    marginLeft: 4,
+  },
+  headerIconBox: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: '#ede9fe',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  title: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  subtitle: {
+    fontSize: 13,
+    color: '#64748b',
+    marginTop: 4,
   },
   statsContainer: {
     flexDirection: 'row',
-    marginBottom: Spacing.xxl,
-    gap: Spacing.md,
+    marginBottom: 20,
+    gap: 12,
   },
   statCard: {
     flex: 1,
-    backgroundColor: Palette.surface,
-    borderRadius: Radius.lg,
-    padding: Spacing.md,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 14,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: Palette.border,
-    ...Shadow.card,
+    borderColor: '#e2e8f0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
   },
   statIconBox: {
-    width: 36,
-    height: 36,
-    borderRadius: Radius.md,
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: Spacing.sm,
+    marginBottom: 8,
   },
   statValue: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: '800',
+    color: '#0f172a',
   },
   statLabel: {
-    ...Type.micro,
+    fontSize: 11,
+    color: '#64748b',
     fontWeight: '500',
     marginTop: 2,
   },
-  patientCard: {
-    backgroundColor: Palette.surface,
-    borderRadius: Radius.lg,
-    padding: Spacing.lg,
-    marginBottom: Spacing.md,
+  section: {
+    marginBottom: 20,
+  },
+  sectionTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#0f172a',
+    marginBottom: 12,
+  },
+  patientList: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 16,
     borderWidth: 1,
-    borderColor: Palette.border,
-    ...Shadow.card,
+    borderColor: '#e2e8f0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 2,
+  },
+  patientCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
   },
   patientHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: Spacing.md,
+    marginBottom: 12,
   },
   avatarContainer: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
   },
   patientInfo: {
     flex: 1,
-    marginLeft: Spacing.md,
-    marginRight: Spacing.sm,
+    marginLeft: 12,
   },
   patientName: {
-    ...Type.itemTitle,
+    fontSize: 15,
     fontWeight: '700',
+    color: '#1e293b',
   },
   patientDetails: {
     fontSize: 12,
-    color: Palette.textSecondary,
+    color: '#64748b',
     marginTop: 2,
   },
   statusBadge: {
@@ -198,32 +293,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: Radius.pill,
+    borderRadius: 16,
   },
   statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    marginRight: 5,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 6,
   },
   statusBadgeText: {
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   patientDetailsSection: {
-    backgroundColor: Palette.surfaceMuted,
-    borderRadius: Radius.md,
-    padding: Spacing.md,
-    marginBottom: Spacing.md,
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 10,
   },
   detailRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: Spacing.sm,
-  },
-  detailRowLast: {
-    marginBottom: 0,
+    marginBottom: 8,
   },
   detailItem: {
     flexDirection: 'row',
@@ -231,28 +323,27 @@ const styles = StyleSheet.create({
   },
   detailLabel: {
     fontSize: 12,
-    color: Palette.textMuted,
+    color: '#94a3b8',
     marginLeft: 6,
   },
   detailValue: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#1E293B',
+    color: '#1e293b',
     flex: 1,
     textAlign: 'right',
-    marginLeft: Spacing.md,
   },
   cardFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: Spacing.sm + 2,
+    paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: Palette.borderLight,
+    borderTopColor: '#f1f5f9',
   },
   viewRecord: {
     fontSize: 13,
     fontWeight: '600',
-    color: Palette.primary,
+    color: primaryColor,
   },
 });

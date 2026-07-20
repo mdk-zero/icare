@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, Palette, Radius, Shadow } from '@/constants/theme';
+import { Colors } from '@/constants/theme';
 
 interface StatCardProps {
   title: string;
@@ -29,6 +29,14 @@ export function StatCard({
       case 'up': return '#16a34a';
       case 'down': return '#dc2626';
       default: return '#6b7280';
+    }
+  };
+
+  const getTrendIcon = () => {
+    switch (trend) {
+      case 'up': return 'trending-up';
+      case 'down': return 'trending-down';
+      default: return 'remove';
     }
   };
 
@@ -61,12 +69,16 @@ export function StatCard({
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: Palette.surface,
-    borderRadius: Radius.lg,
+    backgroundColor: '#fff',
+    borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: Palette.border,
-    ...Shadow.card,
+    borderColor: '#e5e7eb',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   header: {
     flexDirection: 'row',

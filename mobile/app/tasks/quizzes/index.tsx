@@ -1,328 +1,214 @@
 import React from 'react';
-import { ScrollView, View, Text, StyleSheet, Pressable, RefreshControl } from 'react-native';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { ScrollView, View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { SectionHeader, LoadingSpinner, EmptyState } from '@/components/ui';
-import { useApiData } from '@/hooks/useApiData';
-import { fetchAssessments, StudentAssessment } from '@/lib/api';
-import { Accent, Palette, Radius, Shadow, Spacing, Type } from '@/constants/theme';
+import { Card, Badge, PrimaryButton, StatCard } from '@/components/ui';
+import { mockQuizzes } from '@/lib/api';
+import { Colors } from '@/constants/theme';
 
-const DIFFICULTY_ACCENT: Record<string, { fg: string; bg: string }> = {
-  beginner: Accent.green,
-  intermediate: Accent.amber,
-  advanced: Accent.red,
-};
-
-function formatTimeLimit(seconds: number | null): string {
-  if (!seconds) return 'No time limit';
-  return `${Math.round(seconds / 60)} min`;
-}
-
-function QuizCard({ quiz, onPress }: { quiz: StudentAssessment; onPress: () => void }) {
-  const difficulty = DIFFICULTY_ACCENT[quiz.difficulty] ?? Accent.slate;
-  const attempted = quiz.attempt_count > 0;
-  const dueSoon = quiz.assignment?.deadline
-    ? new Date(quiz.assignment.deadline).toLocaleDateString([], { month: 'short', day: 'numeric' })
-    : null;
-
-  return (
-    <Pressable style={({ pressed }) => [styles.quizCard, pressed && styles.pressed]} onPress={onPress}>
-      <View style={styles.quizHeader}>
-        <View style={[styles.quizIcon, { backgroundColor: attempted ? Accent.green.bg : difficulty.bg }]}>
-          <Ionicons
-            name={attempted ? 'checkmark' : 'document-text'}
-            size={19}
-            color={attempted ? Accent.green.fg : difficulty.fg}
-          />
-        </View>
-        <View style={styles.quizInfo}>
-          <Text style={styles.quizTitle}>{quiz.title}</Text>
-          <Text style={styles.quizDesc} numberOfLines={1}>
-            {quiz.description || quiz.category}
-          </Text>
-        </View>
-        {attempted && quiz.best_score !== null ? (
-          <View style={styles.scoreBadge}>
-            <Ionicons name="trophy" size={13} color={Accent.green.fg} />
-            <Text style={styles.scoreText}>{quiz.best_score}%</Text>
-          </View>
-        ) : (
-          <Ionicons name="chevron-forward" size={17} color={Palette.textFaint} />
-        )}
-      </View>
-      <View style={styles.quizMeta}>
-        <View style={styles.categoryBadge}>
-          <Text style={styles.categoryText}>{quiz.category}</Text>
-        </View>
-        <View style={[styles.difficultyBadge, { backgroundColor: difficulty.bg }]}>
-          <View style={[styles.difficultyDot, { backgroundColor: difficulty.fg }]} />
-          <Text style={[styles.difficultyText, { color: difficulty.fg }]}>{quiz.difficulty}</Text>
-        </View>
-        {quiz.assignment?.required && !attempted && (
-          <View style={[styles.difficultyBadge, { backgroundColor: Accent.red.bg }]}>
-            <Text style={[styles.difficultyText, { color: Accent.red.fg }]}>Required</Text>
-          </View>
-        )}
-      </View>
-      <View style={styles.quizFooter}>
-        <View style={styles.footerItem}>
-          <Ionicons name="help-circle-outline" size={13} color={Palette.textMuted} />
-          <Text style={styles.footerText}>{quiz.question_count} questions</Text>
-        </View>
-        <View style={styles.footerItem}>
-          <Ionicons name="time-outline" size={13} color={Palette.textMuted} />
-          <Text style={styles.footerText}>{formatTimeLimit(quiz.time_limit_seconds)}</Text>
-        </View>
-        {dueSoon && (
-          <View style={styles.footerItem}>
-            <Ionicons name="calendar-outline" size={13} color={Palette.textMuted} />
-            <Text style={styles.footerText}>Due {dueSoon}</Text>
-          </View>
-        )}
-        {attempted && (
-          <View style={styles.footerItem}>
-            <Ionicons name="repeat-outline" size={13} color={Palette.textMuted} />
-            <Text style={styles.footerText}>
-              {quiz.attempt_count} {quiz.attempt_count === 1 ? 'attempt' : 'attempts'}
-            </Text>
-          </View>
-        )}
-      </View>
-    </Pressable>
-  );
-}
+const primaryColor = Colors.light.primary;
 
 export default function QuizzesScreen() {
   const router = useRouter();
-  const { data, loading, refreshing, error, refresh, reload } = useApiData(fetchAssessments);
 
-  // Refresh scores/attempt counts when returning from a quiz.
-  useFocusEffect(
-    React.useCallback(() => {
-      if (data) reload();
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [reload]),
-  );
-
-  if (loading && !data) {
-    return <LoadingSpinner />;
-  }
-
-  const assessments = data ?? [];
-  const assigned = assessments.filter(
-    (q) => q.assignment && q.assignment.status !== 'completed' && q.attempt_count === 0,
-  );
-  const available = assessments.filter(
-    (q) => q.attempt_count === 0 && !assigned.includes(q),
-  );
-  const completed = assessments.filter((q) => q.attempt_count > 0);
+  const getDifficultyColor = (difficulty: string) => {
+    switch (difficulty) {
+      case 'beginner': return '#16a34a';
+      case 'intermediate': return '#d97706';
+      case 'advanced': return '#dc2626';
+      default: return '#6b7280';
+    }
+  };
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.content}
-      showsVerticalScrollIndicator={false}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={refresh} colors={[Palette.primary]} tintColor={Palette.primary} />
-      }
-    >
-      <View style={styles.intro}>
-        <Ionicons name="school-outline" size={16} color={Accent.violet.fg} />
-        <Text style={styles.introText}>Assessments from your faculty&apos;s question banks</Text>
+    <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <View style={styles.header}>
+        <View style={styles.headerCard}>
+          <View style={styles.headerTop}>
+            <View>
+              <View style={styles.headerBadge}>
+                <Ionicons name="school" size={12} color="#7c3aed" />
+                <Text style={styles.headerBadgeText}>Adaptive Learning</Text>
+              </View>
+              <Text style={styles.title}>Adaptive Quizzes</Text>
+              <Text style={styles.subtitle}>Personalized questions based on your knowledge gaps</Text>
+            </View>
+          </View>
+        </View>
       </View>
 
-      {error && !data ? <EmptyState icon="cloud-offline-outline" message={error} /> : null}
-
-      {assigned.length > 0 && (
+      {mockQuizzes.filter(q => q.completedCount < q.questionsCount).length > 0 ? (
         <View style={styles.section}>
-          <SectionHeader title="Assigned to You" count={assigned.length} />
-          {assigned.map((quiz) => (
-            <QuizCard key={quiz.id} quiz={quiz} onPress={() => router.push(`/tasks/quizzes/${quiz.id}`)} />
-          ))}
+          <Text style={styles.sectionTitle}>Available Quizzes</Text>
+          <View style={styles.quizList}>
+            {mockQuizzes.filter(q => q.completedCount < q.questionsCount).map((quiz) => (
+              <TouchableOpacity
+                key={quiz.id}
+                style={styles.quizCard}
+                onPress={() => router.push(`/tasks/quizzes/${quiz.id}`)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.quizHeader}>
+                  <View style={[styles.quizIcon, { backgroundColor: `${getDifficultyColor(quiz.difficulty)}15` }]}>
+                    <Ionicons name="document-text" size={20} color={getDifficultyColor(quiz.difficulty)} />
+                  </View>
+                  <View style={styles.quizInfo}>
+                    <Text style={styles.quizTitle}>{quiz.title}</Text>
+                    <Text style={styles.quizDesc} numberOfLines={1}>{quiz.description}</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color="#cbd5e1" />
+                </View>
+                <View style={styles.quizMeta}>
+                  <View style={[styles.categoryBadge, { backgroundColor: '#f1f5f9' }]}>
+                    <Text style={styles.categoryText}>{quiz.category}</Text>
+                  </View>
+                  <View style={[styles.difficultyBadge, { backgroundColor: `${getDifficultyColor(quiz.difficulty)}15` }]}>
+                    <View style={[styles.difficultyDot, { backgroundColor: getDifficultyColor(quiz.difficulty) }]} />
+                    <Text style={[styles.difficultyText, { color: getDifficultyColor(quiz.difficulty) }]}>{quiz.difficulty}</Text>
+                  </View>
+                </View>
+                <View style={styles.quizProgress}>
+                  <View style={styles.progressBar}>
+                    <View style={[styles.progressFill, { width: `${(quiz.completedCount / quiz.questionsCount) * 100}%`, backgroundColor: getDifficultyColor(quiz.difficulty) }]} />
+                  </View>
+                  <Text style={styles.progressText}>
+                    {quiz.completedCount}/{quiz.questionsCount}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
         </View>
-      )}
-
-      {available.length > 0 ? (
-        <View style={styles.section}>
-          <SectionHeader title="Available Quizzes" count={available.length} />
-          {available.map((quiz) => (
-            <QuizCard key={quiz.id} quiz={quiz} onPress={() => router.push(`/tasks/quizzes/${quiz.id}`)} />
-          ))}
-        </View>
-      ) : assigned.length === 0 && completed.length > 0 ? (
+      ) : (
         <View style={styles.emptySection}>
           <View style={styles.emptyIconContainer}>
-            <Ionicons name="checkmark-circle" size={44} color={Accent.green.fg} />
+            <Ionicons name="checkmark-circle" size={48} color="#16a34a" />
           </View>
           <Text style={styles.emptyTitle}>All Quizzes Completed!</Text>
           <Text style={styles.emptyText}>Check back later for new quizzes.</Text>
         </View>
-      ) : assigned.length === 0 && completed.length === 0 && !error ? (
-        <EmptyState icon="document-text-outline" message="No quizzes published yet — check back once your faculty publishes one." />
-      ) : null}
+      )}
 
-      {completed.length > 0 && (
-        <View style={styles.section}>
-          <SectionHeader title="Completed" count={completed.length} />
-          {completed.map((quiz) => (
-            <QuizCard key={quiz.id} quiz={quiz} onPress={() => router.push(`/tasks/quizzes/${quiz.id}`)} />
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Completed</Text>
+        <View style={styles.quizList}>
+          {mockQuizzes.filter(q => q.completedCount >= q.questionsCount).map((quiz) => (
+            <TouchableOpacity key={quiz.id} style={[styles.quizCard, styles.quizCardCompleted]} activeOpacity={0.7}>
+              <View style={styles.quizHeader}>
+                <View style={[styles.quizIcon, { backgroundColor: '#dcfce7' }]}>
+                  <Ionicons name="checkmark" size={20} color="#16a34a" />
+                </View>
+                <View style={styles.quizInfo}>
+                  <Text style={[styles.quizTitle, styles.quizTitleCompleted]}>{quiz.title}</Text>
+                  <Text style={styles.quizDesc} numberOfLines={1}>{quiz.description}</Text>
+                </View>
+              </View>
+              <View style={styles.completedRow}>
+                <View style={[styles.scoreBadge, { backgroundColor: '#dcfce7' }]}>
+                  <Ionicons name="trophy" size={14} color="#16a34a" />
+                  <Text style={styles.scoreText}>{quiz.lastScore}%</Text>
+                </View>
+              </View>
+            </TouchableOpacity>
           ))}
         </View>
-      )}
+      </View>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Palette.background,
+  container: { flex: 1, backgroundColor: '#f8fafc' },
+  content: { padding: 16, paddingBottom: 32 },
+  header: { marginBottom: 20 },
+  headerCard: {
+    backgroundColor: '#fff',
+    borderRadius: 24,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
   },
-  content: {
-    padding: Spacing.lg,
-    paddingBottom: 32,
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
-  pressed: {
-    opacity: 0.85,
-    transform: [{ scale: 0.99 }],
-  },
-  intro: {
+  headerBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.sm,
-    backgroundColor: Accent.violet.bg,
-    borderRadius: Radius.md,
-    paddingVertical: 10,
-    paddingHorizontal: Spacing.lg,
-    marginBottom: Spacing.xl,
+    backgroundColor: '#ede9fe',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+    alignSelf: 'flex-start',
+    marginBottom: 8,
   },
-  introText: {
-    flex: 1,
-    fontSize: 13,
-    fontWeight: '500',
-    color: Accent.violet.fg,
+  headerBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#7c3aed',
+    marginLeft: 4,
   },
-  section: {
-    marginBottom: Spacing.xxl,
+  
+  title: { fontSize: 26, fontWeight: '800', color: '#0f172a' },
+  subtitle: { fontSize: 13, color: '#64748b', marginTop: 4 },
+  section: { marginBottom: 20 },
+  sectionTitle: { fontSize: 17, fontWeight: '700', color: '#0f172a', marginBottom: 12 },
+  quizList: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 2,
   },
   quizCard: {
-    backgroundColor: Palette.surface,
-    borderRadius: Radius.lg,
-    padding: Spacing.lg,
-    marginBottom: Spacing.sm + 2,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 10,
     borderWidth: 1,
-    borderColor: Palette.border,
-    ...Shadow.card,
+    borderColor: '#f1f5f9',
   },
-  quizHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  quizIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: Radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  quizInfo: {
-    flex: 1,
-    marginLeft: Spacing.md,
-    marginRight: Spacing.sm,
-  },
-  quizTitle: {
-    ...Type.itemTitle,
-    fontWeight: '700',
-  },
-  quizDesc: {
-    fontSize: 12,
-    color: Palette.textSecondary,
-    marginTop: 2,
-  },
-  quizMeta: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-    marginTop: Spacing.md,
-    marginBottom: Spacing.md,
-  },
-  categoryBadge: {
-    backgroundColor: Palette.borderLight,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: Radius.pill,
-  },
-  categoryText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: Palette.textSecondary,
-  },
-  difficultyBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: Radius.pill,
-  },
-  difficultyDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    marginRight: 5,
-  },
-  difficultyText: {
-    fontSize: 11,
-    fontWeight: '600',
-    textTransform: 'capitalize',
-  },
-  quizFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.lg,
-    flexWrap: 'wrap',
-  },
-  footerItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  footerText: {
-    fontSize: 12,
-    color: Palette.textMuted,
-  },
-  scoreBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: Accent.green.bg,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: Radius.pill,
-  },
-  scoreText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: Accent.green.fg,
-  },
-  emptySection: {
-    alignItems: 'center',
-    padding: 40,
-  },
+  quizCardCompleted: { opacity: 0.7, borderColor: '#f1f5f9' },
+  quizHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
+  quizIcon: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  quizInfo: { flex: 1, marginLeft: 12, marginRight: 8 },
+  quizTitle: { fontSize: 15, fontWeight: '700', color: '#1e293b' },
+  quizTitleCompleted: { textDecorationLine: 'line-through', color: '#94a3b8' },
+  quizDesc: { fontSize: 12, color: '#64748b', marginTop: 2 },
+  quizMeta: { flexDirection: 'row', marginBottom: 10, gap: 8 },
+  categoryBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+  categoryText: { fontSize: 11, fontWeight: '600', color: '#64748b' },
+  difficultyBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+  difficultyDot: { width: 6, height: 6, borderRadius: 3, marginRight: 6 },
+  difficultyText: { fontSize: 11, fontWeight: '600', textTransform: 'capitalize' },
+  quizProgress: { flexDirection: 'row', alignItems: 'center' },
+  progressBar: { flex: 1, height: 6, backgroundColor: '#e2e8f0', borderRadius: 3, marginRight: 10 },
+  progressFill: { height: '100%', borderRadius: 3 },
+  progressText: { fontSize: 12, color: '#64748b', width: 40, textAlign: 'right', fontWeight: '500' },
+  completedRow: { marginTop: 4 },
+  scoreBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, alignSelf: 'flex-start' },
+  scoreText: { fontSize: 13, fontWeight: '700', color: '#16a34a', marginLeft: 4 },
+  emptySection: { alignItems: 'center', padding: 40 },
   emptyIconContainer: {
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: Accent.green.bg,
+    backgroundColor: '#dcfce7',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: Spacing.lg,
+    marginBottom: 16,
   },
-  emptyTitle: {
-    ...Type.title,
-    marginBottom: 4,
-  },
-  emptyText: {
-    fontSize: 13,
-    color: Palette.textSecondary,
-    textAlign: 'center',
-  },
+  emptyTitle: { fontSize: 18, fontWeight: '700', color: '#0f172a', marginBottom: 6 },
+  emptyText: { fontSize: 13, color: '#64748b', textAlign: 'center' },
 });

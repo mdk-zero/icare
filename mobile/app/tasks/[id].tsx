@@ -1,353 +1,101 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ScrollView, View, Text, StyleSheet, Alert, Pressable } from 'react-native';
+import React from 'react';
+import { ScrollView, View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { Card, Badge, PrimaryButton, LoadingSpinner, EmptyState } from '@/components/ui';
-import { Accent, Palette, Radius, Spacing, Type } from '@/constants/theme';
-import { useApiData, allCached } from '@/hooks/useApiData';
-import {
-  fetchScenarioAssignments,
-  fetchScenario,
-  completeScenarioAssignment,
-  Scenario,
-  ScenarioAssignment,
-} from '@/lib/api';
-import { isNetworkError } from '@/lib/client';
+import { Card, Badge } from '@/components/ui';
+import { mockTasks } from '@/lib/api';
 
-// Same clinical checklist the web scenario runner uses; the earned share of
-// points becomes the submitted score.
-const CHECKLIST = [
-  { id: 't1', title: 'Assess Patient Vital Signs', description: 'Measure heart rate, blood pressure, temperature, and respiratory rate', points: 10 },
-  { id: 't2', title: 'Review Medical History', description: "Check patient's allergies, current medications, and past conditions", points: 10 },
-  { id: 't3', title: 'Perform Physical Examination', description: 'Conduct head-to-toe physical assessment', points: 15 },
-  { id: 't4', title: 'Administer Medication', description: 'Give prescribed medication with proper technique', points: 15 },
-  { id: 't5', title: 'Develop Care Plan', description: 'Create nursing care plan based on patient needs', points: 15 },
-  { id: 't6', title: 'Document Assessment', description: 'Accurately document all findings in patient chart', points: 10 },
-  { id: 't7', title: 'Communicate with Patient', description: 'Explain procedure and provide health education', points: 10 },
-  { id: 't8', title: 'Notify Healthcare Team', description: 'Report significant findings to physician', points: 15 },
-];
-
-const DIFFICULTY_VARIANT: Record<Scenario['difficulty'], 'success' | 'warning' | 'danger'> = {
-  beginner: 'success',
-  intermediate: 'warning',
-  advanced: 'danger',
-};
-
-function formatTime(seconds: number) {
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-}
-
-function PatientCase({ patientCase }: { patientCase: Record<string, unknown> }) {
-  const entries = Object.entries(patientCase).filter(
-    ([, value]) => typeof value === 'string' || typeof value === 'number',
-  );
-  if (entries.length === 0) return null;
-  return (
-    <Card style={styles.blockCard}>
-      <Text style={styles.blockLabel}>Patient Case</Text>
-      {entries.map(([key, value]) => (
-        <View key={key} style={styles.caseRow}>
-          <Text style={styles.caseKey}>{key.replaceAll('_', ' ')}</Text>
-          <Text style={styles.caseValue}>{String(value)}</Text>
-        </View>
-      ))}
-    </Card>
-  );
-}
-
-export default function ScenarioRunnerScreen() {
+export default function TaskDetailScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
-  const assignmentId = id as string;
+  const taskId = id as string;
+  
+  const task = mockTasks.find((t) => t.id === taskId);
 
-  const { data, loading, error } = useApiData(() =>
-    allCached(fetchScenarioAssignments()),
-  );
-  const assignment = (data?.[0] ?? []).find((a) => a.id === assignmentId) ?? null;
-
-  const [scenario, setScenario] = useState<Scenario | null>(null);
-  const [scenarioError, setScenarioError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!assignment) return;
-    let cancelled = false;
-    fetchScenario(assignment.scenario_id)
-      .then((result) => {
-        if (!cancelled) setScenario(result.data);
-      })
-      .catch((err) => {
-        if (!cancelled) setScenarioError(err instanceof Error ? err.message : 'Unable to load scenario');
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [assignment?.scenario_id]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const [checked, setChecked] = useState<string[]>([]);
-  const [elapsed, setElapsed] = useState(0);
-  const [submitting, setSubmitting] = useState(false);
-  const [result, setResult] = useState<ScenarioAssignment | null>(null);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const done = result ?? (assignment?.status === 'completed' ? assignment : null);
-
-  useEffect(() => {
-    if (done) return;
-    timerRef.current = setInterval(() => setElapsed((s) => s + 1), 1000);
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [done !== null]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const totalPoints = useMemo(() => CHECKLIST.reduce((sum, t) => sum + t.points, 0), []);
-  const earnedPoints = CHECKLIST.filter((t) => checked.includes(t.id)).reduce(
-    (sum, t) => sum + t.points,
-    0,
-  );
-
-  const toggle = (taskId: string) => {
-    if (done) return;
-    setChecked((prev) =>
-      prev.includes(taskId) ? prev.filter((t) => t !== taskId) : [...prev, taskId],
-    );
-  };
-
-  const handleComplete = () => {
-    if (!assignment) return;
-    const score = Math.round((earnedPoints / totalPoints) * 100);
-    Alert.alert(
-      'Complete Scenario',
-      `Submit with ${checked.length}/${CHECKLIST.length} tasks done (score ${score}%)?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Submit',
-          onPress: async () => {
-            setSubmitting(true);
-            try {
-              const updated = await completeScenarioAssignment(assignment.id, score, elapsed);
-              setResult(updated);
-            } catch (err) {
-              Alert.alert(
-                'Submission failed',
-                isNetworkError(err)
-                  ? 'No connection — try again when you are back online.'
-                  : err instanceof Error
-                    ? err.message
-                    : 'Unable to submit',
-              );
-            } finally {
-              setSubmitting(false);
-            }
-          },
-        },
-      ],
-    );
-  };
-
-  if (loading && !data) {
-    return <LoadingSpinner />;
-  }
-
-  if (!assignment) {
+  if (!task) {
     return (
       <View style={styles.errorContainer}>
-        <EmptyState icon="alert-circle-outline" message={error ?? 'Assignment not found'} />
+        <Text style={styles.errorText}>Task not found</Text>
       </View>
     );
   }
+
+  const handleComplete = () => {
+    Alert.alert('Complete Task', 'Mark this task as completed?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Complete', onPress: () => router.back() },
+    ]);
+  };
+
+  const getPriorityColor = (priority: string) => {
+    switch (priority) {
+      case 'high': return '#dc2626';
+      case 'medium': return '#d97706';
+      case 'low': return '#16a34a';
+      default: return '#6b7280';
+    }
+  };
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.header}>
         <Badge
-          label={done ? 'Completed' : assignment.status === 'overdue' ? 'Overdue' : assignment.status === 'in_progress' ? 'In Progress' : 'Pending'}
-          variant={done ? 'success' : assignment.status === 'overdue' ? 'danger' : assignment.status === 'in_progress' ? 'warning' : 'default'}
+          label={task.status === 'completed' ? 'Completed' : task.status === 'in_progress' ? 'In Progress' : 'Pending'}
+          variant={task.status === 'completed' ? 'success' : task.status === 'in_progress' ? 'warning' : 'default'}
         />
-        {scenario && <Badge label={scenario.difficulty} variant={DIFFICULTY_VARIANT[scenario.difficulty]} />}
-        {assignment.required && !done && <Badge label="Required" variant="danger" />}
+        <Badge label={task.priority} variant={task.priority === 'high' ? 'danger' : task.priority === 'medium' ? 'warning' : 'success'} />
       </View>
 
-      <Text style={styles.title}>{assignment.scenario_title}</Text>
-      <Text style={styles.subtitle}>
-        {assignment.deadline
-          ? `Due ${new Date(assignment.deadline).toLocaleString()}`
-          : 'No deadline'}
-      </Text>
+      <Text style={styles.title}>{task.title}</Text>
+      <Text style={styles.patientName}>Patient: {task.patientName}</Text>
 
-      {done ? (
-        <Card style={styles.resultCard}>
-          <Text style={styles.blockLabel}>Result</Text>
-          <View style={styles.resultRow}>
-            <View style={styles.resultStat}>
-              <Text style={styles.resultValue}>{done.score ?? '—'}%</Text>
-              <Text style={styles.resultLabel}>Score</Text>
-            </View>
-            <View style={styles.resultStat}>
-              <Text style={styles.resultValue}>{formatTime(done.time_taken ?? 0)}</Text>
-              <Text style={styles.resultLabel}>Time</Text>
-            </View>
-            <View style={styles.resultStat}>
-              <Text style={styles.resultValue}>
-                {done.completed_at
-                  ? new Date(done.completed_at).toLocaleDateString([], { month: 'short', day: 'numeric' })
-                  : '—'}
-              </Text>
-              <Text style={styles.resultLabel}>Completed</Text>
-            </View>
-          </View>
-        </Card>
-      ) : (
-        <Card style={styles.timerCard}>
-          <View style={styles.timerRow}>
-            <View style={styles.timerLeft}>
-              <Ionicons name="stopwatch-outline" size={18} color={Palette.primary} />
-              <Text style={styles.timerText}>{formatTime(elapsed)}</Text>
-            </View>
-            <Text style={styles.timerProgress}>
-              {checked.length}/{CHECKLIST.length} tasks · {earnedPoints}/{totalPoints} pts
-            </Text>
-          </View>
-          <View style={styles.progressTrack}>
-            <View style={[styles.progressFill, { width: `${(checked.length / CHECKLIST.length) * 100}%` }]} />
-          </View>
-        </Card>
-      )}
-
-      {scenarioError && <EmptyState icon="cloud-offline-outline" message={scenarioError} />}
-
-      {scenario && scenario.description.length > 0 && (
-        <Card style={styles.blockCard}>
-          <Text style={styles.blockLabel}>Scenario</Text>
-          <Text style={styles.description}>{scenario.description}</Text>
-        </Card>
-      )}
-
-      {scenario && <PatientCase patientCase={scenario.patient_case} />}
-
-      {scenario && scenario.learning_objectives.length > 0 && (
-        <Card style={styles.blockCard}>
-          <Text style={styles.blockLabel}>Learning Objectives</Text>
-          {scenario.learning_objectives.map((objective, idx) => (
-            <View key={idx} style={styles.objectiveRow}>
-              <Ionicons name="school-outline" size={14} color={Palette.primary} style={styles.objectiveIcon} />
-              <Text style={styles.objectiveText}>{String(objective)}</Text>
-            </View>
-          ))}
-        </Card>
-      )}
-
-      <Card style={styles.blockCard}>
-        <Text style={styles.blockLabel}>Clinical Tasks</Text>
-        {CHECKLIST.map((task) => {
-          const isChecked = done ? true : checked.includes(task.id);
-          return (
-            <Pressable
-              key={task.id}
-              style={({ pressed }) => [styles.checkRow, pressed && !done && styles.checkRowPressed]}
-              onPress={() => toggle(task.id)}
-              disabled={!!done}
-            >
-              <Ionicons
-                name={isChecked ? 'checkbox' : 'square-outline'}
-                size={22}
-                color={isChecked ? Accent.green.fg : Palette.textMuted}
-              />
-              <View style={styles.checkText}>
-                <Text style={[styles.checkTitle, isChecked && !done && styles.checkTitleDone]}>
-                  {task.title}
-                </Text>
-                <Text style={styles.checkDescription}>{task.description}</Text>
-              </View>
-              <Text style={styles.checkPoints}>{task.points} pts</Text>
-            </Pressable>
-          );
-        })}
+      <Card style={styles.descriptionCard}>
+        <Text style={styles.label}>Description</Text>
+        <Text style={styles.description}>{task.description}</Text>
       </Card>
 
-      {!done && (
-        <PrimaryButton
-          title={submitting ? 'Submitting…' : 'Complete Scenario'}
-          onPress={handleComplete}
-          size="lg"
-          disabled={submitting}
-        />
-      )}
-      {done && result && (
-        <PrimaryButton title="Back to Tasks" onPress={() => router.back()} size="lg" />
+      <Card style={styles.detailsCard}>
+        <View style={styles.detailRow}>
+          <Text style={styles.detailLabel}>Category</Text>
+          <Text style={styles.detailValue}>{task.category}</Text>
+        </View>
+        <View style={styles.detailRow}>
+          <Text style={styles.detailLabel}>Priority</Text>
+          <View style={[styles.priorityDot, { backgroundColor: getPriorityColor(task.priority) }]} />
+          <Text style={styles.detailValue}>{task.priority}</Text>
+        </View>
+        <View style={styles.detailRow}>
+          <Text style={styles.detailLabel}>Due Date</Text>
+          <Text style={styles.detailValue}>
+            {new Date(task.dueDate).toLocaleString()}
+          </Text>
+        </View>
+      </Card>
+
+      {task.status !== 'completed' && (
+        <TouchableOpacity style={styles.completeButton} onPress={handleComplete}>
+          <Text style={styles.completeButtonText}>Mark as Complete</Text>
+        </TouchableOpacity>
       )}
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Palette.background },
-  content: { padding: Spacing.lg, paddingBottom: 32 },
-  errorContainer: { flex: 1, justifyContent: 'center', backgroundColor: Palette.background },
-  header: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.lg },
-  title: { ...Type.screenTitle, marginBottom: Spacing.xs },
-  subtitle: { fontSize: 14, color: Palette.textSecondary, marginBottom: Spacing.lg },
-  timerCard: { marginBottom: Spacing.lg },
-  timerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Spacing.md,
-  },
-  timerLeft: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  timerText: { fontSize: 20, fontWeight: '800', color: Palette.ink, fontVariant: ['tabular-nums'] },
-  timerProgress: { fontSize: 12, color: Palette.textSecondary, fontWeight: '600' },
-  progressTrack: {
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: Palette.borderLight,
-    overflow: 'hidden',
-  },
-  progressFill: { height: 6, borderRadius: 3, backgroundColor: Palette.primary },
-  resultCard: { marginBottom: Spacing.lg },
-  resultRow: { flexDirection: 'row', justifyContent: 'space-around' },
-  resultStat: { alignItems: 'center' },
-  resultValue: { fontSize: 22, fontWeight: '800', color: Palette.primary },
-  resultLabel: { fontSize: 12, color: Palette.textSecondary, marginTop: 2 },
-  blockCard: { marginBottom: Spacing.lg },
-  blockLabel: { ...Type.eyebrow, marginBottom: Spacing.md },
-  description: { fontSize: 14, color: Palette.text, lineHeight: 22 },
-  caseRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: Spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: Palette.borderLight,
-    gap: Spacing.md,
-  },
-  caseKey: { fontSize: 13, color: Palette.textSecondary, textTransform: 'capitalize' },
-  caseValue: { fontSize: 13, fontWeight: '600', color: Palette.ink, flexShrink: 1, textAlign: 'right' },
-  objectiveRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: Spacing.sm },
-  objectiveIcon: { marginTop: 2, marginRight: Spacing.sm },
-  objectiveText: { flex: 1, fontSize: 13, color: Palette.text, lineHeight: 19 },
-  checkRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    paddingVertical: Spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: Palette.borderLight,
-    gap: Spacing.md,
-  },
-  checkRowPressed: { opacity: 0.7 },
-  checkText: { flex: 1 },
-  checkTitle: { ...Type.itemTitle },
-  checkTitleDone: { color: Accent.green.fg },
-  checkDescription: { fontSize: 12, color: Palette.textSecondary, marginTop: 2, lineHeight: 17 },
-  checkPoints: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: Palette.textMuted,
-    backgroundColor: Palette.borderLight,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: Radius.pill,
-    overflow: 'hidden',
-  },
+  container: { flex: 1, backgroundColor: '#f3f4f6' },
+  content: { padding: 16, paddingBottom: 32 },
+  errorContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  errorText: { fontSize: 16, color: '#6b7280' },
+  header: { flexDirection: 'row', marginBottom: 16 },
+  title: { fontSize: 24, fontWeight: '700', color: '#11181c', marginBottom: 8 },
+  patientName: { fontSize: 16, color: '#6b7280', marginBottom: 24 },
+  descriptionCard: { marginBottom: 16 },
+  label: { fontSize: 12, color: '#6b7280', marginBottom: 8 },
+  description: { fontSize: 14, color: '#11181c', lineHeight: 22 },
+  detailsCard: { marginBottom: 24 },
+  detailRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
+  detailLabel: { fontSize: 14, color: '#6b7280' },
+  detailValue: { fontSize: 14, fontWeight: '600', color: '#11181c' },
+  priorityDot: { width: 8, height: 8, borderRadius: 4, marginRight: 8 },
+  completeButton: { backgroundColor: '#1B6B7B', borderRadius: 12, padding: 16, alignItems: 'center' },
+  completeButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
 });

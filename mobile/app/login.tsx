@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -6,49 +6,64 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Pressable,
+  TouchableOpacity,
   Image,
   TextInput,
-  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { Accent, Palette, Radius, Spacing } from '@/constants/theme';
+import { Colors } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
-import { API_URL } from '@/lib/client';
 import logoImg from '@/assets/images/logo-pill.png';
+
+// Derived from the brand teal so the gradient feels intentional, not a random accent.
+const TEAL_DARK = '#0F5D5A';
+const TEAL = '#0D9488';
+const TEAL_SOFT = '#F0FDFA';
+const INK = '#0B1220';
+const SLATE = '#64748B';
+const SLATE_LIGHT = '#94A3B8';
+const FIELD_BG = '#F8FAFC';
+const FIELD_BORDER = '#E2E8F0';
+const DANGER = '#DC2626';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const [isNetworkIssue, setIsNetworkIssue] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
   const [focusedField, setFocusedField] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
   const { login, isLoading } = useAuth();
   const router = useRouter();
-  const passwordRef = useRef<TextInput>(null);
+
+  const primaryColor = Colors.light.primary ?? TEAL;
 
   const handleLogin = async () => {
     setError('');
-    setIsNetworkIssue(false);
-    if (!email.trim() || !password) {
-      setError('Please enter your email and password.');
+    if (!email || !password) {
+      setError('Please enter email and password');
       return;
     }
 
-    const result = await login(email, password);
-    if (result.ok) {
+    const success = await login(email, password);
+    if (success) {
       router.replace('/(tabs)');
     } else {
-      const message = result.error ?? 'Invalid credentials';
-      setError(message);
-      setIsNetworkIssue(message.toLowerCase().includes('cannot reach'));
+      setError('Invalid credentials');
     }
   };
 
   return (
     <View style={styles.container}>
+      {/* Ambient background: gradient wash + soft decorative blobs */}
+      <LinearGradient
+        colors={[TEAL_SOFT, '#FFFFFF']}
+        style={StyleSheet.absoluteFillObject}
+      />
+      <View style={[styles.blob, styles.blobTop]} />
+      <View style={[styles.blob, styles.blobBottom]} />
+
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
@@ -59,16 +74,20 @@ export default function LoginScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.headerSection}>
-            <View style={styles.logoCircle}>
-              <Image source={logoImg} style={styles.logoImage} />
+            <View style={styles.logoRing}>
+              <View style={styles.logoCircle}>
+                <Image source={logoImg} style={styles.logoImage} />
+              </View>
             </View>
-            <Text style={styles.appName}>iCARE++</Text>
-            <Text style={styles.tagline}>Clinical Competency Assessment</Text>
+            <Text style={styles.appName}>
+              iCARE<Text style={{ color: TEAL }}>++</Text>
+            </Text>
+            <Text style={styles.tagline}>CLINICAL COMPETENCY ASSESSMENT</Text>
           </View>
 
-          <View style={styles.contentSection}>
-            <Text style={styles.welcomeText}>Welcome Back</Text>
-            <Text style={styles.subtitleText}>Sign in to continue</Text>
+          <View style={styles.card}>
+            <Text style={styles.welcomeText}>Welcome back</Text>
+            <Text style={styles.subtitleText}>Sign in to continue your rotation</Text>
 
             <View style={styles.formSection}>
               <View
@@ -77,26 +96,26 @@ export default function LoginScreen() {
                   focusedField === 'email' && styles.inputWrapperFocused,
                 ]}
               >
-                <Text style={[styles.inputLabel, focusedField === 'email' && styles.inputLabelFocused]}>
-                  Email
-                </Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="email@example.com"
-                  placeholderTextColor={Palette.textMuted}
-                  value={email}
-                  onChangeText={setEmail}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  autoComplete="email"
-                  textContentType="emailAddress"
-                  returnKeyType="next"
-                  editable={!isLoading}
-                  onSubmitEditing={() => passwordRef.current?.focus()}
-                  onFocus={() => setFocusedField('email')}
-                  onBlur={() => setFocusedField(null)}
+                <Ionicons
+                  name="mail-outline"
+                  size={19}
+                  color={focusedField === 'email' ? TEAL : SLATE_LIGHT}
+                  style={styles.inputIcon}
                 />
+                <View style={styles.inputTextArea}>
+                  <Text style={styles.inputLabel}>Email</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="email@example.com"
+                    placeholderTextColor={SLATE_LIGHT}
+                    value={email}
+                    onChangeText={setEmail}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    onFocus={() => setFocusedField('email')}
+                    onBlur={() => setFocusedField(null)}
+                  />
+                </View>
               </View>
 
               <View
@@ -105,86 +124,86 @@ export default function LoginScreen() {
                   focusedField === 'password' && styles.inputWrapperFocused,
                 ]}
               >
-                <Text style={[styles.inputLabel, focusedField === 'password' && styles.inputLabelFocused]}>
-                  Password
-                </Text>
-                <View style={styles.passwordRow}>
+                <Ionicons
+                  name="lock-closed-outline"
+                  size={19}
+                  color={focusedField === 'password' ? TEAL : SLATE_LIGHT}
+                  style={styles.inputIcon}
+                />
+                <View style={styles.inputTextArea}>
+                  <Text style={styles.inputLabel}>Password</Text>
                   <TextInput
-                    ref={passwordRef}
-                    style={[styles.input, styles.passwordInput]}
+                    style={styles.input}
                     placeholder="••••••••"
-                    placeholderTextColor={Palette.textMuted}
+                    placeholderTextColor={SLATE_LIGHT}
                     value={password}
                     onChangeText={setPassword}
                     secureTextEntry={!showPassword}
-                    autoComplete="current-password"
-                    textContentType="password"
-                    returnKeyType="go"
-                    editable={!isLoading}
-                    onSubmitEditing={handleLogin}
                     onFocus={() => setFocusedField('password')}
                     onBlur={() => setFocusedField(null)}
                   />
-                  <Pressable
-                    onPress={() => setShowPassword((v) => !v)}
-                    hitSlop={10}
-                    style={({ pressed }) => [styles.eyeButton, pressed && { opacity: 0.6 }]}
-                  >
-                    <Ionicons
-                      name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                      size={20}
-                      color={Palette.textMuted}
-                    />
-                  </Pressable>
                 </View>
+                <TouchableOpacity
+                  onPress={() => setShowPassword((v) => !v)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Ionicons
+                    name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                    size={19}
+                    color={SLATE_LIGHT}
+                  />
+                </TouchableOpacity>
               </View>
 
               {error ? (
-                <View style={styles.errorBanner}>
-                  <Ionicons
-                    name={isNetworkIssue ? 'cloud-offline-outline' : 'alert-circle-outline'}
-                    size={18}
-                    color={Accent.red.fg}
-                  />
-                  <View style={styles.errorTextColumn}>
-                    <Text style={styles.errorText}>{error}</Text>
-                    {isNetworkIssue && (
-                      <Text style={styles.errorHint}>
-                        Tried {API_URL} — make sure the iCARE++ web server is running. On a physical
-                        device, set EXPO_PUBLIC_API_URL to your computer&apos;s LAN IP.
-                      </Text>
-                    )}
-                  </View>
+                <View style={styles.errorRow}>
+                  <Ionicons name="alert-circle" size={15} color={DANGER} />
+                  <Text style={styles.errorText}>{error}</Text>
                 </View>
               ) : null}
 
-              <Pressable
-                style={({ pressed }) => [
-                  styles.button,
-                  (pressed || isLoading) && styles.buttonPressed,
-                ]}
+              <TouchableOpacity
+                activeOpacity={0.9}
                 onPress={handleLogin}
                 disabled={isLoading}
+                style={styles.buttonShadow}
               >
-                {isLoading ? (
-                  <>
-                    <ActivityIndicator size="small" color="#fff" />
-                    <Text style={styles.buttonText}>Signing in…</Text>
-                  </>
-                ) : (
-                  <Text style={styles.buttonText}>Sign In</Text>
-                )}
-              </Pressable>
+                <LinearGradient
+                  colors={[TEAL, TEAL_DARK]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.button}
+                >
+                  <Text style={styles.buttonText}>
+                    {isLoading ? 'Signing in...' : 'Sign In'}
+                  </Text>
+                  {!isLoading && (
+                    <Ionicons name="arrow-forward" size={18} color="#fff" />
+                  )}
+                </LinearGradient>
+              </TouchableOpacity>
 
-              <Pressable style={({ pressed }) => [styles.forgotButton, pressed && { opacity: 0.6 }]}>
+              <TouchableOpacity style={styles.forgotButton}>
                 <Text style={styles.forgotText}>Forgot Password?</Text>
-              </Pressable>
+              </TouchableOpacity>
+
+              <View style={styles.dividerRow}>
+                <View style={styles.dividerLine} />
+                <Text style={styles.dividerText}>or</Text>
+                <View style={styles.dividerLine} />
+              </View>
+
+              <TouchableOpacity style={styles.biometricButton} activeOpacity={0.85}>
+                <Ionicons name="finger-print-outline" size={20} color={TEAL_DARK} />
+                <Text style={styles.biometricText}>Sign in with biometrics</Text>
+              </TouchableOpacity>
             </View>
           </View>
 
           <View style={styles.footer}>
+            <Ionicons name="shield-checkmark-outline" size={13} color={SLATE_LIGHT} />
             <Text style={styles.footerText}>
-              Protected by Philippine Data Privacy Act of 2012
+              Protected by the Philippine Data Privacy Act of 2012
             </Text>
           </View>
         </ScrollView>
@@ -198,164 +217,223 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#fff',
   },
+  blob: {
+    position: 'absolute',
+    borderRadius: 999,
+    backgroundColor: TEAL,
+    opacity: 0.07,
+  },
+  blobTop: {
+    width: 260,
+    height: 260,
+    top: -100,
+    right: -80,
+  },
+  blobBottom: {
+    width: 320,
+    height: 320,
+    bottom: -140,
+    left: -120,
+  },
   keyboardView: {
     flex: 1,
   },
   scrollContent: {
     flexGrow: 1,
-    paddingHorizontal: 32,
-    paddingTop: 72,
+    paddingHorizontal: 28,
+    paddingTop: 64,
     paddingBottom: 40,
   },
   headerSection: {
     alignItems: 'center',
-    marginBottom: 44,
+    marginBottom: 28,
+  },
+  logoRing: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(13,148,136,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
   },
   logoCircle: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: Palette.border,
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 4,
-    marginBottom: 16,
+    shadowColor: TEAL_DARK,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 6,
   },
   logoImage: {
-    width: 70,
-    height: 70,
+    width: 56,
+    height: 56,
     resizeMode: 'contain',
   },
   appName: {
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: '800',
-    letterSpacing: 1,
+    letterSpacing: 0.5,
+    color: INK,
     marginBottom: 4,
-    color: Palette.primary,
   },
   tagline: {
-    fontSize: 12,
-    color: Palette.textMuted,
-    letterSpacing: 0.5,
+    fontSize: 11,
+    fontWeight: '600',
+    color: SLATE,
+    letterSpacing: 1.2,
   },
-  contentSection: {
-    flex: 1,
+  card: {
+    backgroundColor: '#fff',
+    borderRadius: 28,
+    paddingHorizontal: 24,
+    paddingTop: 32,
+    paddingBottom: 8,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.06,
+    shadowRadius: 24,
+    elevation: 3,
   },
   welcomeText: {
-    fontSize: 30,
+    fontSize: 26,
     fontWeight: '800',
-    color: Palette.ink,
+    color: INK,
     letterSpacing: -0.5,
     marginBottom: 4,
   },
   subtitleText: {
-    fontSize: 15,
-    color: Palette.textSecondary,
+    fontSize: 14,
+    color: SLATE,
     marginBottom: 28,
   },
   formSection: {
-    gap: Spacing.lg,
+    gap: 14,
   },
   inputWrapper: {
-    borderBottomWidth: 2,
-    borderBottomColor: Palette.border,
-    paddingBottom: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: FIELD_BG,
+    borderWidth: 1.5,
+    borderColor: FIELD_BORDER,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    gap: 10,
   },
   inputWrapperFocused: {
-    borderBottomColor: Palette.primary,
+    borderColor: TEAL,
+    backgroundColor: '#fff',
+  },
+  inputIcon: {
+    marginTop: 12,
+  },
+  inputTextArea: {
+    flex: 1,
   },
   inputLabel: {
     fontSize: 11,
     fontWeight: '700',
-    letterSpacing: 0.6,
+    letterSpacing: 0.4,
+    color: SLATE,
     marginBottom: 2,
-    color: Palette.textMuted,
-    textTransform: 'uppercase',
-  },
-  inputLabelFocused: {
-    color: Palette.primary,
   },
   input: {
-    fontSize: 17,
-    color: '#1E293B',
-    paddingVertical: 8,
+    fontSize: 16,
+    color: INK,
+    paddingVertical: 2,
   },
-  passwordRow: {
+  errorRow: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  passwordInput: {
-    flex: 1,
-    marginRight: Spacing.sm,
-  },
-  eyeButton: {
-    padding: 4,
-  },
-  errorBanner: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Spacing.sm,
-    backgroundColor: Accent.red.bg,
-    borderRadius: Radius.md,
-    padding: Spacing.md,
-  },
-  errorTextColumn: {
-    flex: 1,
+    gap: 6,
+    paddingHorizontal: 2,
   },
   errorText: {
-    color: Accent.red.fg,
+    color: DANGER,
     fontSize: 13,
     fontWeight: '600',
-    lineHeight: 18,
   },
-  errorHint: {
-    color: Accent.red.fg,
-    fontSize: 12,
-    lineHeight: 17,
-    marginTop: 4,
-    opacity: 0.85,
+  buttonShadow: {
+    borderRadius: 16,
+    shadowColor: TEAL_DARK,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.28,
+    shadowRadius: 14,
+    elevation: 5,
+    marginTop: 6,
   },
   button: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    backgroundColor: Palette.primary,
-    borderRadius: Radius.md,
+    borderRadius: 16,
     paddingVertical: 17,
-    marginTop: Spacing.sm,
-  },
-  buttonPressed: {
-    opacity: 0.85,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
   },
   buttonText: {
     color: '#fff',
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '700',
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
   },
   forgotButton: {
     alignItems: 'center',
-    paddingVertical: Spacing.md,
+    paddingVertical: 10,
   },
   forgotText: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '600',
-    color: Palette.primary,
+    color: TEAL_DARK,
+  },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: FIELD_BORDER,
+  },
+  dividerText: {
+    fontSize: 12,
+    color: SLATE_LIGHT,
+    fontWeight: '600',
+  },
+  biometricButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 1.5,
+    borderColor: FIELD_BORDER,
+    borderRadius: 16,
+    paddingVertical: 14,
+    marginBottom: 8,
+  },
+  biometricText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: TEAL_DARK,
   },
   footer: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 44,
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 32,
   },
   footerText: {
     fontSize: 11,
-    color: Palette.textFaint,
-    letterSpacing: 0.3,
+    color: SLATE_LIGHT,
+    letterSpacing: 0.2,
   },
 });

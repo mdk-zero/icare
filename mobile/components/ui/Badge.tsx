@@ -1,6 +1,5 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Accent } from '@/constants/theme';
 
 interface BadgeProps {
   label: string;
@@ -8,35 +7,47 @@ interface BadgeProps {
   size?: 'sm' | 'md';
 }
 
-const variantAccent = {
-  default: Accent.slate,
-  success: Accent.green,
-  warning: Accent.amber,
-  danger: Accent.red,
-  info: Accent.blue,
-} as const;
-
 export function Badge({ label, variant = 'default', size = 'md' }: BadgeProps) {
-  const accent = variantAccent[variant];
-  const fontSize = size === 'sm' ? 10 : 11;
+  const getVariantStyle = () => {
+    switch (variant) {
+      case 'success':
+        return { bg: '#dcfce7', text: '#16a34a', border: '#bbf7d0' };
+      case 'warning':
+        return { bg: '#fef3c7', text: '#d97706', border: '#fde68a' };
+      case 'danger':
+        return { bg: '#fee2e2', text: '#dc2626', border: '#fecaca' };
+      case 'info':
+        return { bg: '#dbeafe', text: '#2563eb', border: '#bfdbfe' };
+      default:
+        return { bg: '#f3f4f6', text: '#6b7280', border: '#e5e7eb' };
+    }
+  };
+
+  const variantStyle = getVariantStyle();
+  const fontSize = size === 'sm' ? 10 : 12;
 
   return (
-    <View style={[styles.badge, { backgroundColor: accent.bg }]}>
-      <Text style={[styles.text, { color: accent.fg, fontSize }]}>{label}</Text>
+    <View
+      style={[
+        styles.badge,
+        { backgroundColor: variantStyle.bg, borderColor: variantStyle.border },
+      ]}
+    >
+      <Text style={[styles.text, { color: variantStyle.text, fontSize }]}>{label}</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   badge: {
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 999,
+    borderRadius: 20,
+    borderWidth: 1,
     alignSelf: 'flex-start',
   },
   text: {
-    fontWeight: '700',
+    fontWeight: '600',
     textTransform: 'uppercase',
-    letterSpacing: 0.3,
   },
 });

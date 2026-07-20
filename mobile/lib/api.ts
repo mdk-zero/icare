@@ -1,450 +1,868 @@
-/**
- * iCARE++ mobile API layer (Phase 5.1/5.2): typed fetchers against the web
- * app's API routes, replacing the original mock dataset. Reads go through
- * the offline cache; clinical writes (vitals, EHR) fall back to the outbox
- * when the network is unreachable.
- */
-
-import {
-  api,
-  cachedGet,
-  CachedResult,
-  clearToken,
-  enqueueWrite,
-  isNetworkError,
-  setToken,
-} from './client';
-import { evaluateVitals, VitalSignsInput, AnomalyReason } from './vitals-rules';
-
-// ---------------------------------------------------------------
-// Auth (5.1)
-// ---------------------------------------------------------------
-
-export interface User {
-  id: string;
-  email: string;
-  name: string;
-  role: 'student' | 'faculty' | 'admin';
-  picture_url?: string | null;
-  force_password_change?: boolean;
-  cohort?: string;
-  studentId?: string;
-}
-
-export async function login(email: string, password: string): Promise<User> {
-  const result = await api<{ user: User; sessionToken: string }>('/api/auth/login', {
-    method: 'POST',
-    body: { email, password },
-    auth: false,
-  });
-  await setToken(result.sessionToken);
-  return result.user;
-}
-
-export async function logout(): Promise<void> {
-  try {
-    await api('/api/auth/logout', { method: 'POST' });
-  } catch {
-    // best effort; the bearer token is what actually matters
-  }
-  await clearToken();
-}
-
-/** Validates the stored token against the server. null = not signed in. */
-export async function fetchSession(): Promise<User | null> {
-  const result = await api<{ user: User | null }>('/api/auth/session');
-  return result.user;
-}
-
-// ---------------------------------------------------------------
-// Patients
-// ---------------------------------------------------------------
-
 export interface Patient {
   id: string;
   name: string;
-  age: number | null;
-  gender: string | null;
-  room_number: string | null;
-  diagnosis: string | null;
-  admission_date: string | null;
-  medical_history: string | null;
-  vital_signs: Record<string, unknown>;
-  mimic_id: string;
+  age: number;
+  gender: 'Male' | 'Female';
+  room: string;
+  diagnosis: string;
+  admittedDate: string;
+  status: 'Stable' | 'Guarded' | 'Critical';
 }
 
-export async function fetchPatients(): Promise<CachedResult<Patient[]>> {
-  const result = await cachedGet<{ patients: Patient[] }>('/api/patients');
-  return { ...result, data: result.data.patients ?? [] };
-}
-
-// ---------------------------------------------------------------
-// Vitals (5.2 + 5.3 outbox + 5.5 anomaly UX)
-// ---------------------------------------------------------------
-
-export interface VitalReading {
+export interface VitalSign {
   id: string;
-  patient_id: string;
-  recorded_at: string;
-  heart_rate: number | null;
-  bp_systolic: number | null;
-  bp_diastolic: number | null;
-  temperature_c: number | null;
-  respiratory_rate: number | null;
-  oxygen_saturation: number | null;
-  pain_score: number | null;
-  notes: string | null;
-  is_anomaly: boolean;
-  anomaly_reasons: AnomalyReason[];
-  patients?: { name: string; room_number: string | null } | null;
+  patientId: string;
+  timestamp: string;
+  heartRate: number;
+  bloodPressureSystolic: number;
+  bloodPressureDiastolic: number;
+  temperature: number;
+  respirationRate: number;
+  oxygenSaturation: number;
+  isAnomaly: boolean;
 }
 
-export async function fetchMyVitals(patientId?: string): Promise<CachedResult<VitalReading[]>> {
-  const path = patientId
-    ? `/api/student/vitals?patient_id=${encodeURIComponent(patientId)}`
-    : '/api/student/vitals';
-  const result = await cachedGet<{ readings: VitalReading[] }>(path);
-  return { ...result, data: result.data.readings ?? [] };
-}
-
-export interface VitalSubmission extends VitalSignsInput {
-  patient_id: string;
-  notes?: string;
-}
-
-export interface VitalSubmitResult {
-  queued: boolean;
-  /** Server evaluation when online, local rule evaluation when queued. */
-  is_anomaly: boolean;
-  anomaly_reasons: AnomalyReason[];
-}
-
-export async function submitVitalReading(input: VitalSubmission): Promise<VitalSubmitResult> {
-  try {
-    const result = await api<{ reading: VitalReading }>('/api/student/vitals', {
-      method: 'POST',
-      body: input,
-    });
-    return {
-      queued: false,
-      is_anomaly: result.reading.is_anomaly,
-      anomaly_reasons: result.reading.anomaly_reasons ?? [],
-    };
-  } catch (err) {
-    if (!isNetworkError(err)) throw err;
-    // Offline: queue the write and flag with the same rule thresholds the
-    // server applies (Phase 5.5), so feedback works with no connection.
-    await enqueueWrite({
-      label: 'Vital signs entry',
-      path: '/api/student/vitals',
-      method: 'POST',
-      body: input,
-    });
-    const local = evaluateVitals(input);
-    return { queued: true, is_anomaly: local.is_anomaly, anomaly_reasons: local.reasons };
-  }
-}
-
-// ---------------------------------------------------------------
-// Quizzes (5.2: list/take)
-// ---------------------------------------------------------------
-
-export interface StudentAssessment {
+export interface ClinicalTask {
   id: string;
   title: string;
   description: string;
-  difficulty: 'beginner' | 'intermediate' | 'advanced';
+  patientId: string;
+  patientName: string;
+  dueDate: string;
+  status: 'pending' | 'in_progress' | 'completed';
+  priority: 'low' | 'medium' | 'high';
   category: string;
-  time_limit_seconds: number | null;
-  question_count: number;
-  assignment: {
-    id: string;
-    status: 'pending' | 'in_progress' | 'completed' | 'overdue';
-    deadline: string | null;
-    required: boolean;
-  } | null;
-  best_score: number | null;
-  attempt_count: number;
-  last_submitted_at: string | null;
 }
 
-export async function fetchAssessments(): Promise<CachedResult<StudentAssessment[]>> {
-  const result = await cachedGet<{ assessments: StudentAssessment[] }>('/api/student/assessments');
-  return { ...result, data: result.data.assessments ?? [] };
-}
-
-export interface AttemptQuestion {
+export interface Quiz {
   id: string;
-  position: number;
-  content: string;
+  title: string;
+  description: string;
+  category: string;
+  difficulty: 'beginner' | 'intermediate' | 'advanced';
+  questionsCount: number;
+  completedCount: number;
+  lastScore?: number;
+  dueDate?: string;
+}
+
+export interface Question {
+  id: string;
+  quizId: string;
+  text: string;
   options: string[];
+  correctIndex: number;
+  explanation: string;
 }
 
-export interface StartedAttempt {
-  attempt: { id: string; started_at: string };
-  assessment: { id: string; title: string; time_limit_seconds: number | null };
-  questions: AttemptQuestion[];
-}
-
-export async function startAttempt(assessmentId: string): Promise<StartedAttempt> {
-  return api<StartedAttempt>(`/api/student/assessments/${assessmentId}/attempts`, {
-    method: 'POST',
-  });
-}
-
-export interface AttemptResult {
-  score: number;
-  correct: number;
-  total: number;
-  time_taken_seconds: number;
-  results: {
-    question_id: string;
-    selected_index: number | null;
-    correct_index: number;
-    is_correct: boolean;
-    explanation: string;
-  }[];
-}
-
-export async function submitAttempt(
-  attemptId: string,
-  answers: { question_id: string; selected_index: number | null; time_spent_seconds?: number }[],
-): Promise<AttemptResult> {
-  return api<AttemptResult>(`/api/student/attempts/${attemptId}/submit`, {
-    method: 'POST',
-    body: { answers },
-  });
-}
-
-// ---------------------------------------------------------------
-// Scenario assignments ("Tasks" tab)
-// ---------------------------------------------------------------
-
-export interface ScenarioAssignment {
+export interface EHRRecord {
   id: string;
-  scenario_id: string;
-  scenario_title: string;
-  assigned_at: string;
-  deadline: string | null;
-  status: 'pending' | 'in_progress' | 'completed' | 'overdue';
-  required: boolean;
-  score: number | null;
-  completed_at: string | null;
-  time_taken: number | null;
+  patientId: string;
+  date: string;
+  type: 'progress' | 'nursing' | 'physician' | 'laboratory';
+  content: string;
+  author: string;
 }
 
-export async function fetchScenarioAssignments(): Promise<CachedResult<ScenarioAssignment[]>> {
-  const result = await cachedGet<{ assignments: ScenarioAssignment[] }>('/api/student/scenarios');
-  return { ...result, data: result.data.assignments ?? [] };
+export interface Notification {
+  id: string;
+  title: string;
+  message: string;
+  type: 'info' | 'warning' | 'alert' | 'success';
+  timestamp: string;
+  read: boolean;
 }
 
-export interface Scenario {
+export interface PerformanceLog {
+  id: string;
+  date: string;
+  category: string;
+  score: number;
+  competency: string;
+}
+
+export interface AIRecommendation {
   id: string;
   title: string;
   description: string;
-  difficulty: 'beginner' | 'intermediate' | 'advanced';
-  category: string;
-  patient_case: Record<string, unknown>;
-  learning_objectives: string[];
-  created_at: string;
+  type: 'quiz' | 'task' | 'review';
+  priority: 'high' | 'medium' | 'low';
 }
 
-export async function fetchScenario(id: string): Promise<CachedResult<Scenario>> {
-  const result = await cachedGet<{ scenario: Scenario }>(`/api/scenarios/${id}`);
-  return { ...result, data: result.data.scenario };
-}
-
-export async function completeScenarioAssignment(
-  assignmentId: string,
-  score: number,
-  timeTakenSeconds: number,
-): Promise<ScenarioAssignment> {
-  const result = await api<{ assignment: ScenarioAssignment }>(
-    `/api/student/scenarios/${assignmentId}/complete`,
-    { method: 'POST', body: { score, time_taken: timeTakenSeconds } },
-  );
-  return result.assignment;
-}
-
-// ---------------------------------------------------------------
-// EHR (5.2 + 5.3 outbox)
-// ---------------------------------------------------------------
-
-export type EhrType = 'tpr' | 'ivf' | 'note';
-
-export interface EhrRecord {
+export interface TPRRecord {
   id: string;
-  patient_id: string;
-  created_at: string;
-  // tpr
-  shift?: string | null;
-  temperature_c?: number | null;
-  pulse?: number | null;
-  respiration?: number | null;
-  remarks?: string | null;
-  // ivf
-  solution?: string;
-  volume_ml?: number | null;
-  rate_ml_hr?: number | null;
-  site?: string | null;
-  status?: 'ongoing' | 'completed' | 'discontinued';
-  ended_at?: string | null;
-  // note
-  content?: string;
-  reviewed_by?: string | null;
-  reviewed_at?: string | null;
-  patients?: { name: string; room_number: string | null } | null;
+  patientId: string;
+  date: string;
+  time: string;
+  temperature: number;
+  pulse: number;
+  respiration: number;
+  signature: string;
 }
 
-export async function fetchEhrRecords(
-  type: EhrType,
-  patientId?: string,
-): Promise<CachedResult<EhrRecord[]>> {
-  const path = patientId
-    ? `/api/student/ehr?type=${type}&patient_id=${encodeURIComponent(patientId)}`
-    : `/api/student/ehr?type=${type}`;
-  const result = await cachedGet<{ records: EhrRecord[] }>(path);
-  return { ...result, data: result.data.records ?? [] };
+export interface IVFRecord {
+  id: string;
+  patientId: string;
+  date: string;
+  time: string;
+  ivFluids: number;
+  oralIntake: number;
+  urineOutput: number;
+  vomitus: number;
+  drainage: number;
+  heartRate: number;
+  bloodPressureSystolic: number;
+  bloodPressureDiastolic: number;
+  temperature: number;
+  notes: string;
+  signature: string;
 }
 
-export interface EhrSubmitResult {
-  queued: boolean;
-  record: EhrRecord | null;
+export const mockPatients: Patient[] = [
+  {
+    id: '1',
+    name: 'Juan dela Cruz',
+    age: 65,
+    gender: 'Male',
+    room: '301-A',
+    diagnosis: 'Pneumonia',
+    admittedDate: '2024-01-15',
+    status: 'Stable',
+  },
+  {
+    id: '2',
+    name: 'Maria Garcia',
+    age: 42,
+    gender: 'Female',
+    room: '302-B',
+    diagnosis: 'Post-operative',
+    admittedDate: '2024-01-18',
+    status: 'Guarded',
+  },
+  {
+    id: '3',
+    name: 'Pedro Santos',
+    age: 58,
+    gender: 'Male',
+    room: '303-A',
+    diagnosis: 'Diabetes Complications',
+    admittedDate: '2024-01-20',
+    status: 'Stable',
+  },
+  {
+    id: '4',
+    name: 'Ana Reyes',
+    age: 35,
+    gender: 'Female',
+    room: '304-B',
+    diagnosis: 'Hypertension',
+    admittedDate: '2024-01-22',
+    status: 'Stable',
+  },
+  {
+    id: '5',
+    name: 'Luis Mendoza',
+    age: 72,
+    gender: 'Male',
+    room: '305-A',
+    diagnosis: 'Heart Failure',
+    admittedDate: '2024-01-23',
+    status: 'Critical',
+  },
+];
+
+export const mockVitalSigns: VitalSign[] = [
+  {
+    id: '1',
+    patientId: '1',
+    timestamp: '2024-01-24T08:00:00',
+    heartRate: 72,
+    bloodPressureSystolic: 120,
+    bloodPressureDiastolic: 80,
+    temperature: 36.8,
+    respirationRate: 16,
+    oxygenSaturation: 98,
+    isAnomaly: false,
+  },
+  {
+    id: '2',
+    patientId: '1',
+    timestamp: '2024-01-24T10:00:00',
+    heartRate: 78,
+    bloodPressureSystolic: 125,
+    bloodPressureDiastolic: 82,
+    temperature: 37.2,
+    respirationRate: 18,
+    oxygenSaturation: 97,
+    isAnomaly: false,
+  },
+  {
+    id: '3',
+    patientId: '2',
+    timestamp: '2024-01-24T08:30:00',
+    heartRate: 95,
+    bloodPressureSystolic: 140,
+    bloodPressureDiastolic: 90,
+    temperature: 38.1,
+    respirationRate: 22,
+    oxygenSaturation: 94,
+    isAnomaly: true,
+  },
+  {
+    id: '4',
+    patientId: '3',
+    timestamp: '2024-01-24T09:00:00',
+    heartRate: 68,
+    bloodPressureSystolic: 130,
+    bloodPressureDiastolic: 85,
+    temperature: 36.5,
+    respirationRate: 14,
+    oxygenSaturation: 96,
+    isAnomaly: false,
+  },
+  {
+    id: '5',
+    patientId: '5',
+    timestamp: '2024-01-24T10:30:00',
+    heartRate: 110,
+    bloodPressureSystolic: 160,
+    bloodPressureDiastolic: 100,
+    temperature: 37.8,
+    respirationRate: 28,
+    oxygenSaturation: 88,
+    isAnomaly: true,
+  },
+];
+
+export const mockTasks: ClinicalTask[] = [
+  {
+    id: '1',
+    title: 'Vital Signs Monitoring',
+    description: 'Record vital signs for patient in room 301-A',
+    patientId: '1',
+    patientName: 'Juan dela Cruz',
+    dueDate: '2024-01-24T12:00:00',
+    status: 'pending',
+    priority: 'high',
+    category: 'Monitoring',
+  },
+  {
+    id: '2',
+    title: 'Medication Administration',
+    description: 'Administer morning medications',
+    patientId: '2',
+    patientName: 'Maria Garcia',
+    dueDate: '2024-01-24T08:00:00',
+    status: 'completed',
+    priority: 'high',
+    category: 'Medication',
+  },
+  {
+    id: '3',
+    title: 'Wound Care',
+    description: 'Dressing change for post-operative patient',
+    patientId: '2',
+    patientName: 'Maria Garcia',
+    dueDate: '2024-01-24T14:00:00',
+    status: 'in_progress',
+    priority: 'medium',
+    category: 'Wound Care',
+  },
+  {
+    id: '4',
+    title: 'Patient Education',
+    description: 'Diabetes self-management education',
+    patientId: '3',
+    patientName: 'Pedro Santos',
+    dueDate: '2024-01-24T16:00:00',
+    status: 'pending',
+    priority: 'low',
+    category: 'Education',
+  },
+  {
+    id: '5',
+    title: 'Falls Risk Assessment',
+    description: 'Complete falls risk assessment tool',
+    patientId: '5',
+    patientName: 'Luis Mendoza',
+    dueDate: '2024-01-24T11:00:00',
+    status: 'pending',
+    priority: 'high',
+    category: 'Assessment',
+  },
+];
+
+export const mockQuizzes: Quiz[] = [
+  {
+    id: '1',
+    title: 'Vital Signs Interpretation',
+    description: 'Assessment of normal and abnormal vital sign values',
+    category: 'Clinical Skills',
+    difficulty: 'beginner',
+    questionsCount: 10,
+    completedCount: 3,
+  },
+  {
+    id: '2',
+    title: 'Medication Calculations',
+    description: 'Practice dosage calculations and conversions',
+    category: 'Pharmacology',
+    difficulty: 'intermediate',
+    questionsCount: 15,
+    completedCount: 0,
+    dueDate: '2024-01-25',
+  },
+  {
+    id: '3',
+    title: 'Emergency Response',
+    description: 'Basic emergency response and CPR protocols',
+    category: 'Emergency',
+    difficulty: 'advanced',
+    questionsCount: 20,
+    completedCount: 5,
+    lastScore: 85,
+  },
+  {
+    id: '4',
+    title: 'Patient Communication',
+    description: 'Therapeutic communication techniques',
+    category: 'Soft Skills',
+    difficulty: 'beginner',
+    questionsCount: 8,
+    completedCount: 8,
+    lastScore: 92,
+  },
+];
+
+export const mockQuestions: Question[] = [
+  {
+    id: '1',
+    quizId: '1',
+    text: 'What is the normal range for adult resting heart rate?',
+    options: ['60-100 bpm', '40-60 bpm', '100-120 bpm', '80-120 bpm'],
+    correctIndex: 0,
+    explanation: 'Normal adult resting heart rate ranges from 60-100 beats per minute.',
+  },
+  {
+    id: '2',
+    quizId: '1',
+    text: 'A blood pressure reading of 150/95 mmHg indicates:',
+    options: ['Normal', 'Pre-hypertension', 'Stage 1 Hypertension', 'Stage 2 Hypertension'],
+    correctIndex: 2,
+    explanation: 'Stage 1 hypertension is defined as systolic 130-139 or diastolic 80-89.',
+  },
+  {
+    id: '3',
+    quizId: '1',
+    text: 'Normal body temperature in Celsius is:',
+    options: ['35.5-37.5°C', '36.5-37.5°C', '37.5-38.5°C', '38.5-39.5°C'],
+    correctIndex: 1,
+    explanation: 'Normal body temperature ranges from 36.5°C to 37.5°C.',
+  },
+  {
+    id: '4',
+    quizId: '1',
+    text: 'Normal respiration rate for adults is:',
+    options: ['8-12 breaths/min', '12-20 breaths/min', '20-28 breaths/min', '28-35 breaths/min'],
+    correctIndex: 1,
+    explanation: 'Normal adult respiration rate is 12-20 breaths per minute.',
+  },
+  {
+    id: '5',
+    quizId: '1',
+    text: 'Normal oxygen saturation (SpO2) level is:',
+    options: ['90-94%', '94-98%', '98-100%', '85-90%'],
+    correctIndex: 1,
+    explanation: 'Normal SpO2 level is 94-98% in healthy individuals.',
+  },
+];
+
+export const mockEHRRecords: EHRRecord[] = [
+  {
+    id: '1',
+    patientId: '1',
+    date: '2024-01-24T08:00:00',
+    type: 'nursing',
+    content: 'Patient reported feeling better this morning. Vital signs taken and recorded. No complaints of pain.',
+    author: 'Maria Santos, RN',
+  },
+  {
+    id: '2',
+    patientId: '1',
+    date: '2024-01-23T20:00:00',
+    type: 'physician',
+    content: 'Rounding notes: Patient showing improvement. Continue current treatment plan. Consider discharge if stable tomorrow.',
+    author: 'Dr. Rodriguez',
+  },
+  {
+    id: '3',
+    patientId: '2',
+    date: '2024-01-24T07:30:00',
+    type: 'nursing',
+    content: 'Post-operative patient. Vital signs stable. Incision site clean, dry, intact. Pain management ongoing.',
+    author: 'Maria Santos, RN',
+  },
+  {
+    id: '4',
+    patientId: '2',
+    date: '2024-01-23T14:00:00',
+    type: 'laboratory',
+    content: 'Lab results: WBC 12.5, Hgb 11.2, Hct 34. No signs of infection.',
+    author: 'Lab Dept.',
+  },
+  {
+    id: '5',
+    patientId: '3',
+    date: '2024-01-24T09:00:00',
+    type: 'progress',
+    content: 'Patient blood sugar well controlled. Continue current diabetes management plan.',
+    author: 'Maria Santos, RN',
+  },
+];
+
+export const mockNotifications: Notification[] = [
+  {
+    id: '1',
+    title: 'New Task Assigned',
+    message: 'You have been assigned a new clinical task: Vital Signs Monitoring',
+    type: 'info',
+    timestamp: '2024-01-24T07:00:00',
+    read: false,
+  },
+  {
+    id: '2',
+    title: 'Quiz Due Tomorrow',
+    message: 'Medication Calculations quiz is due tomorrow',
+    type: 'warning',
+    timestamp: '2024-01-24T06:00:00',
+    read: false,
+  },
+  {
+    id: '3',
+    title: 'Patient Alert',
+    message: 'Patient Luis Mendoza requires immediate attention - vital signs abnormal',
+    type: 'alert',
+    timestamp: '2024-01-24T10:30:00',
+    read: false,
+  },
+  {
+    id: '4',
+    title: 'Task Completed',
+    message: 'Medication Administration task marked as completed',
+    type: 'success',
+    timestamp: '2024-01-24T08:15:00',
+    read: true,
+  },
+];
+
+export const mockPerformanceLogs: PerformanceLog[] = [
+  { id: '1', date: '2024-01-24', category: 'Clinical Skills', score: 85, competency: 'Vital Signs' },
+  { id: '2', date: '2024-01-23', category: 'Clinical Skills', score: 78, competency: 'Medication Admin' },
+  { id: '3', date: '2024-01-22', category: 'Patient Care', score: 92, competency: 'Communication' },
+  { id: '4', date: '2024-01-21', category: 'Clinical Skills', score: 65, competency: 'Wound Care' },
+  { id: '5', date: '2024-01-20', category: 'Patient Care', score: 88, competency: 'Documentation' },
+];
+
+export const mockAIRecommendations: AIRecommendation[] = [
+  {
+    id: '1',
+    title: 'Review Wound Care',
+    description: 'Based on your recent performance, we recommend reviewing wound care protocols',
+    type: 'review',
+    priority: 'high',
+  },
+  {
+    id: '2',
+    title: 'Complete Medication Quiz',
+    description: 'Finish the Medication Calculations quiz to improve your pharmacology knowledge',
+    type: 'quiz',
+    priority: 'high',
+  },
+  {
+    id: '3',
+    title: 'Practice Vitals Monitoring',
+    description: 'Practice more vital signs scenarios to improve your speed and accuracy',
+    type: 'task',
+    priority: 'medium',
+  },
+];
+
+export function getVitalSignsForPatient(patientId: string): VitalSign[] {
+  return mockVitalSigns.filter((v) => v.patientId === patientId);
 }
 
-export async function createEhrRecord(
-  type: EhrType,
-  patientId: string,
-  fields: Record<string, unknown>,
-): Promise<EhrSubmitResult> {
-  const body = { type, patient_id: patientId, ...fields };
-  try {
-    const result = await api<{ record: EhrRecord }>('/api/student/ehr', {
-      method: 'POST',
-      body,
-    });
-    return { queued: false, record: result.record };
-  } catch (err) {
-    if (!isNetworkError(err)) throw err;
-    const labels: Record<EhrType, string> = {
-      tpr: 'TPR entry',
-      ivf: 'IVF record',
-      note: 'Progress note',
-    };
-    await enqueueWrite({
-      label: labels[type],
-      path: '/api/student/ehr',
-      method: 'POST',
-      body,
-    });
-    return { queued: true, record: null };
-  }
+export function getPatientById(id: string): Patient | undefined {
+  return mockPatients.find((p) => p.id === id);
 }
 
-export async function updateIvfStatus(
-  id: string,
-  status: 'completed' | 'discontinued',
-): Promise<EhrRecord> {
-  const result = await api<{ record: EhrRecord }>('/api/student/ehr', {
-    method: 'PATCH',
-    body: { id, status },
+export function getEHRForPatient(patientId: string): EHRRecord[] {
+  return mockEHRRecords.filter((e) => e.patientId === patientId);
+}
+
+export function getTasksByStatus(status: ClinicalTask['status']): ClinicalTask[] {
+  return mockTasks.filter((t) => t.status === status);
+}
+
+export function getPerformanceByCategory(): { category: string; avgScore: number }[] {
+  const categories: Record<string, number[]> = {};
+  mockPerformanceLogs.forEach((log) => {
+    if (!categories[log.category]) {
+      categories[log.category] = [];
+    }
+    categories[log.category].push(log.score);
   });
-  return result.record;
+  return Object.entries(categories).map(([category, scores]) => ({
+    category,
+    avgScore: Math.round(scores.reduce((a, b) => a + b, 0) / scores.length),
+  }));
 }
 
-// ---------------------------------------------------------------
-// Notifications
-// ---------------------------------------------------------------
-
-export interface AppNotification {
-  id: string;
-  type:
-    | 'assignment_created'
-    | 'deadline_reminder'
-    | 'at_risk_flag'
-    | 'vitals_anomaly'
-    | 'performance_validated'
-    | 'assistance_request'
-    | 'system';
-  title: string;
-  body: string;
-  data: Record<string, unknown>;
-  read_at: string | null;
-  created_at: string;
+export function detectVitalAnomaly(vital: VitalSign): boolean {
+  const { heartRate, bloodPressureSystolic, bloodPressureDiastolic, temperature, respirationRate, oxygenSaturation } = vital;
+  
+  if (heartRate < 60 || heartRate > 100) return true;
+  if (bloodPressureSystolic > 140 || bloodPressureDiastolic > 90) return true;
+  if (temperature > 38 || temperature < 36) return true;
+  if (respirationRate < 12 || respirationRate > 20) return true;
+  if (oxygenSaturation < 95) return true;
+  
+  return false;
 }
 
-export async function fetchNotifications(): Promise<
-  CachedResult<{ notifications: AppNotification[]; unread: number }>
-> {
-  return cachedGet<{ notifications: AppNotification[]; unread: number }>('/api/notifications');
+export const mockTPRRecords: TPRRecord[] = [
+  {
+    id: '1',
+    patientId: '1',
+    date: '2024-01-24',
+    time: '06:00',
+    temperature: 37.2,
+    pulse: 78,
+    respiration: 18,
+    signature: 'Maria Santos, RN',
+  },
+  {
+    id: '2',
+    patientId: '1',
+    date: '2024-01-24',
+    time: '10:00',
+    temperature: 37.5,
+    pulse: 82,
+    respiration: 20,
+    signature: 'Maria Santos, RN',
+  },
+  {
+    id: '3',
+    patientId: '1',
+    date: '2024-01-24',
+    time: '14:00',
+    temperature: 37.8,
+    pulse: 85,
+    respiration: 19,
+    signature: 'Ana Reyes, RN',
+  },
+  {
+    id: '4',
+    patientId: '1',
+    date: '2024-01-24',
+    time: '18:00',
+    temperature: 37.4,
+    pulse: 80,
+    respiration: 18,
+    signature: 'Ana Reyes, RN',
+  },
+  {
+    id: '5',
+    patientId: '1',
+    date: '2024-01-24',
+    time: '22:00',
+    temperature: 37.3,
+    pulse: 76,
+    respiration: 17,
+    signature: 'Maria Santos, RN',
+  },
+  {
+    id: '6',
+    patientId: '2',
+    date: '2024-01-24',
+    time: '06:00',
+    temperature: 36.8,
+    pulse: 72,
+    respiration: 16,
+    signature: 'Liza Torres, RN',
+  },
+  {
+    id: '7',
+    patientId: '2',
+    date: '2024-01-24',
+    time: '12:00',
+    temperature: 37.0,
+    pulse: 75,
+    respiration: 18,
+    signature: 'Liza Torres, RN',
+  },
+  {
+    id: '8',
+    patientId: '2',
+    date: '2024-01-24',
+    time: '18:00',
+    temperature: 37.2,
+    pulse: 78,
+    respiration: 17,
+    signature: 'Liza Torres, RN',
+  },
+  {
+    id: '9',
+    patientId: '3',
+    date: '2024-01-24',
+    time: '08:00',
+    temperature: 38.2,
+    pulse: 95,
+    respiration: 22,
+    signature: 'Jennifer Cruz, RN',
+  },
+  {
+    id: '10',
+    patientId: '3',
+    date: '2024-01-24',
+    time: '14:00',
+    temperature: 38.5,
+    pulse: 98,
+    respiration: 24,
+    signature: 'Jennifer Cruz, RN',
+  },
+  {
+    id: '11',
+    patientId: '4',
+    date: '2024-01-24',
+    time: '06:00',
+    temperature: 37.1,
+    pulse: 80,
+    respiration: 18,
+    signature: 'Rachel Green, RN',
+  },
+  {
+    id: '12',
+    patientId: '5',
+    date: '2024-01-24',
+    time: '08:00',
+    temperature: 36.9,
+    pulse: 70,
+    respiration: 16,
+    signature: 'Rachel Green, RN',
+  },
+];
+
+export const mockIVFRecords: IVFRecord[] = [
+  {
+    id: '1',
+    patientId: '1',
+    date: '2024-01-24',
+    time: '06:00',
+    ivFluids: 500,
+    oralIntake: 200,
+    urineOutput: 300,
+    vomitus: 0,
+    drainage: 0,
+    heartRate: 78,
+    bloodPressureSystolic: 120,
+    bloodPressureDiastolic: 80,
+    temperature: 37.2,
+    notes: 'Patient stable overnight',
+    signature: 'Maria Santos, RN',
+  },
+  {
+    id: '2',
+    patientId: '1',
+    date: '2024-01-24',
+    time: '10:00',
+    ivFluids: 500,
+    oralIntake: 150,
+    urineOutput: 250,
+    vomitus: 0,
+    drainage: 0,
+    heartRate: 82,
+    bloodPressureSystolic: 125,
+    bloodPressureDiastolic: 82,
+    temperature: 37.5,
+    notes: 'Tolerating oral intake well',
+    signature: 'Maria Santos, RN',
+  },
+  {
+    id: '3',
+    patientId: '1',
+    date: '2024-01-24',
+    time: '14:00',
+    ivFluids: 500,
+    oralIntake: 200,
+    urineOutput: 350,
+    vomitus: 0,
+    drainage: 0,
+    heartRate: 85,
+    bloodPressureSystolic: 122,
+    bloodPressureDiastolic: 80,
+    temperature: 37.8,
+    notes: 'Encouraged to drink more fluids',
+    signature: 'Ana Reyes, RN',
+  },
+  {
+    id: '4',
+    patientId: '1',
+    date: '2024-01-24',
+    time: '18:00',
+    ivFluids: 500,
+    oralIntake: 250,
+    urineOutput: 400,
+    vomitus: 0,
+    drainage: 0,
+    heartRate: 80,
+    bloodPressureSystolic: 118,
+    bloodPressureDiastolic: 78,
+    temperature: 37.4,
+    notes: 'Good urine output',
+    signature: 'Ana Reyes, RN',
+  },
+  {
+    id: '5',
+    patientId: '1',
+    date: '2024-01-24',
+    time: '22:00',
+    ivFluids: 500,
+    oralIntake: 150,
+    urineOutput: 250,
+    vomitus: 0,
+    drainage: 0,
+    heartRate: 76,
+    bloodPressureSystolic: 115,
+    bloodPressureDiastolic: 75,
+    temperature: 37.3,
+    notes: 'Patient resting',
+    signature: 'Maria Santos, RN',
+  },
+  {
+    id: '6',
+    patientId: '2',
+    date: '2024-01-24',
+    time: '06:00',
+    ivFluids: 1000,
+    oralIntake: 0,
+    urineOutput: 200,
+    vomitus: 50,
+    drainage: 100,
+    heartRate: 72,
+    bloodPressureSystolic: 110,
+    bloodPressureDiastolic: 70,
+    temperature: 36.8,
+    notes: 'Post-operative, NPO',
+    signature: 'Liza Torres, RN',
+  },
+  {
+    id: '7',
+    patientId: '2',
+    date: '2024-01-24',
+    time: '12:00',
+    ivFluids: 1000,
+    oralIntake: 0,
+    urineOutput: 350,
+    vomitus: 0,
+    drainage: 120,
+    heartRate: 75,
+    bloodPressureSystolic: 112,
+    bloodPressureDiastolic: 72,
+    temperature: 37.0,
+    notes: 'Drainage decreasing',
+    signature: 'Liza Torres, RN',
+  },
+  {
+    id: '8',
+    patientId: '2',
+    date: '2024-01-24',
+    time: '18:00',
+    ivFluids: 1000,
+    oralIntake: 50,
+    urineOutput: 400,
+    vomitus: 0,
+    drainage: 80,
+    heartRate: 78,
+    bloodPressureSystolic: 115,
+    bloodPressureDiastolic: 75,
+    temperature: 37.2,
+    notes: 'Passed flatus',
+    signature: 'Liza Torres, RN',
+  },
+  {
+    id: '9',
+    patientId: '3',
+    date: '2024-01-24',
+    time: '08:00',
+    ivFluids: 1000,
+    oralIntake: 100,
+    urineOutput: 150,
+    vomitus: 200,
+    drainage: 0,
+    heartRate: 95,
+    bloodPressureSystolic: 130,
+    bloodPressureDiastolic: 85,
+    temperature: 38.2,
+    notes: 'Fever, antiemetic given',
+    signature: 'Jennifer Cruz, RN',
+  },
+  {
+    id: '10',
+    patientId: '3',
+    date: '2024-01-24',
+    time: '14:00',
+    ivFluids: 1000,
+    oralIntake: 50,
+    urineOutput: 100,
+    vomitus: 300,
+    drainage: 0,
+    heartRate: 98,
+    bloodPressureSystolic: 125,
+    bloodPressureDiastolic: 82,
+    temperature: 38.5,
+    notes: 'Continuing antiemetics',
+    signature: 'Jennifer Cruz, RN',
+  },
+  {
+    id: '11',
+    patientId: '4',
+    date: '2024-01-24',
+    time: '06:00',
+    ivFluids: 500,
+    oralIntake: 300,
+    urineOutput: 450,
+    vomitus: 0,
+    drainage: 0,
+    heartRate: 80,
+    bloodPressureSystolic: 128,
+    bloodPressureDiastolic: 82,
+    temperature: 37.1,
+    notes: 'Recovery going well',
+    signature: 'Rachel Green, RN',
+  },
+  {
+    id: '12',
+    patientId: '5',
+    date: '2024-01-24',
+    time: '08:00',
+    ivFluids: 500,
+    oralIntake: 250,
+    urineOutput: 350,
+    vomitus: 0,
+    drainage: 0,
+    heartRate: 70,
+    bloodPressureSystolic: 118,
+    bloodPressureDiastolic: 75,
+    temperature: 36.9,
+    notes: 'Stable condition',
+    signature: 'Rachel Green, RN',
+  },
+];
+
+export function getTPRForPatient(patientId: string): TPRRecord[] {
+  return mockTPRRecords.filter((t) => t.patientId === patientId);
 }
 
-export async function markNotificationRead(id: string): Promise<void> {
-  await api('/api/notifications', { method: 'PATCH', body: { id } });
-}
-
-export async function markAllNotificationsRead(): Promise<void> {
-  await api('/api/notifications', { method: 'PATCH', body: { all: true } });
-}
-
-// ---------------------------------------------------------------
-// Recommendations (ML service output, Phase 3)
-// ---------------------------------------------------------------
-
-export interface Recommendation {
-  id: string;
-  assessment_id: string;
-  rank: number;
-  reason: string;
-  created_at: string;
-  assessments: {
-    id: string;
-    title: string;
-    description: string;
-    difficulty: 'beginner' | 'intermediate' | 'advanced';
-    category: string;
-  } | null;
-  competency_areas: { name: string } | null;
-}
-
-export async function fetchRecommendations(): Promise<CachedResult<Recommendation[]>> {
-  const result = await cachedGet<{ recommendations: Recommendation[] }>(
-    '/api/student/recommendations',
-  );
-  return { ...result, data: result.data.recommendations ?? [] };
-}
-
-export async function dismissRecommendation(id: string): Promise<void> {
-  await api('/api/student/recommendations', { method: 'PATCH', body: { id } });
-}
-
-// ---------------------------------------------------------------
-// Progress
-// ---------------------------------------------------------------
-
-export interface ProgressAttempt {
-  id: string;
-  score: number | null;
-  submitted_at: string;
-  time_taken_seconds: number | null;
-  assessments: { title: string; category: string } | null;
-}
-
-export interface CompetencyScoreRecord {
-  id: string;
-  competency_id: string;
-  score: number;
-  source: string;
-  remarks: string | null;
-  created_at: string;
-  competency_areas: { name: string } | null;
-}
-
-export interface Progress {
-  attempts: ProgressAttempt[];
-  competency_scores: CompetencyScoreRecord[];
-}
-
-export async function fetchProgress(): Promise<CachedResult<Progress>> {
-  return cachedGet<Progress>('/api/student/progress');
+export function getIVFForPatient(patientId: string): IVFRecord[] {
+  return mockIVFRecords.filter((i) => i.patientId === patientId);
 }

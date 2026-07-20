@@ -1,115 +1,72 @@
 import React, { useState } from 'react';
-import { ScrollView, View, Text, StyleSheet, TextInput, Pressable, Alert } from 'react-native';
+import { ScrollView, View, Text, StyleSheet, TextInput, TouchableOpacity, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Accent, Palette, Radius, Shadow, Spacing, Type } from '@/constants/theme';
-import { Card, Badge, LoadingSpinner, EmptyState } from '@/components/ui';
-import { useApiData, allCached } from '@/hooks/useApiData';
-import { fetchPatients, fetchEhrRecords, createEhrRecord, updateIvfStatus } from '@/lib/api';
+import { Colors } from '@/constants/theme';
+import { Card, Badge } from '@/components/ui';
+import { mockPatients, getIVFForPatient } from '@/lib/api';
 
-const primaryColor = Palette.primary;
-
-const STATUS_VARIANT: Record<string, 'info' | 'success' | 'warning'> = {
-  ongoing: 'info',
-  completed: 'success',
-  discontinued: 'warning',
-};
+const primaryColor = Colors.light.primary;
 
 export default function IVFSheetScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
   const patientId = id as string;
 
-  const { data, loading, error, reload } = useApiData(() =>
-    allCached(fetchPatients(), fetchEhrRecords('ivf', patientId)),
-  );
+  const patient = mockPatients.find((p) => p.id === patientId);
+  const ivfRecords = getIVFForPatient(patientId);
 
-  const [solution, setSolution] = useState('');
-  const [volume, setVolume] = useState('');
-  const [rate, setRate] = useState('');
-  const [site, setSite] = useState('');
-  const [remarks, setRemarks] = useState('');
-  const [saving, setSaving] = useState(false);
+  const latestIVF = ivfRecords.length > 0 ? ivfRecords[ivfRecords.length - 1] : null;
 
-  if (loading && !data) {
-    return <LoadingSpinner />;
-  }
-
-  const [patients, ivfRecords] = data ?? [[], []];
-  const patient = patients.find((p) => p.id === patientId);
+  const [ivFluids, setIvFluids] = useState(latestIVF?.ivFluids?.toString() || '500');
+  const [oralIntake, setOralIntake] = useState(latestIVF?.oralIntake?.toString() || '200');
+  const [urineOutput, setUrineOutput] = useState(latestIVF?.urineOutput?.toString() || '300');
+  const [vomitus, setVomitus] = useState(latestIVF?.vomitus?.toString() || '0');
+  const [drainage, setDrainage] = useState(latestIVF?.drainage?.toString() || '0');
+  const [heartRate, setHeartRate] = useState(latestIVF?.heartRate?.toString() || '72');
+  const [bpSystolic, setBpSystolic] = useState(latestIVF?.bloodPressureSystolic?.toString() || '120');
+  const [bpDiastolic, setBpDiastolic] = useState(latestIVF?.bloodPressureDiastolic?.toString() || '80');
+  const [temperature, setTemperature] = useState(latestIVF?.temperature?.toString() || '37.0');
+  const [notes, setNotes] = useState(latestIVF?.notes || '');
+  const [signature, setSignature] = useState(latestIVF?.signature || '');
 
   if (!patient) {
     return (
       <View style={styles.errorContainer}>
-        <EmptyState icon="alert-circle-outline" message={error ?? 'Patient not found'} />
+        <Text style={styles.errorText}>Patient not found</Text>
       </View>
     );
   }
 
-  const handleSave = async () => {
-    if (!solution.trim()) {
-      Alert.alert('Error', 'IV solution is required (e.g., PNSS 1L, D5LR)');
-      return;
-    }
-    const volumeNum = volume.trim() === '' ? null : parseInt(volume, 10);
-    const rateNum = rate.trim() === '' ? null : parseInt(rate, 10);
-    if (
-      (volumeNum !== null && (Number.isNaN(volumeNum) || volumeNum <= 0)) ||
-      (rateNum !== null && (Number.isNaN(rateNum) || rateNum <= 0))
-    ) {
-      Alert.alert('Error', 'Volume and rate must be positive numbers');
+  const totalIntake = (parseInt(ivFluids) || 0) + (parseInt(oralIntake) || 0);
+  const totalOutput = (parseInt(urineOutput) || 0) + (parseInt(vomitus) || 0) + (parseInt(drainage) || 0);
+  const balance = totalIntake - totalOutput;
+
+  const handleSave = () => {
+    const tempNum = parseFloat(temperature);
+    const hrNum = parseInt(heartRate);
+    const sysNum = parseInt(bpSystolic);
+    const diaNum = parseInt(bpDiastolic);
+
+    if (isNaN(tempNum) || isNaN(hrNum) || isNaN(sysNum) || isNaN(diaNum)) {
+      Alert.alert('Error', 'Please enter valid numeric values');
       return;
     }
 
-    setSaving(true);
-    try {
-      const result = await createEhrRecord('ivf', patientId, {
-        solution: solution.trim(),
-        volume_ml: volumeNum,
-        rate_ml_hr: rateNum,
-        site,
-        remarks,
-      });
-      if (result.queued) {
-        Alert.alert(
-          'Saved Offline',
-          'No connection right now — the IVF record is queued and will sync automatically.',
-          [{ text: 'OK', onPress: () => router.back() }],
-        );
-      } else {
-        setSolution('');
-        setVolume('');
-        setRate('');
-        setSite('');
-        setRemarks('');
-        await reload();
-        Alert.alert('IVF Record Saved', 'The infusion was added to the flow sheet.');
-      }
-    } catch (err) {
-      Alert.alert('Error', err instanceof Error ? err.message : 'Unable to save the record');
-    } finally {
-      setSaving(false);
+    if (tempNum < 30 || tempNum > 45) {
+      Alert.alert('Error', 'Temperature should be between 30-45°C');
+      return;
     }
-  };
 
-  const handleStatusChange = (recordId: string, status: 'completed' | 'discontinued') => {
+    if (hrNum < 30 || hrNum > 200) {
+      Alert.alert('Error', 'Heart rate should be between 30-200 bpm');
+      return;
+    }
+
     Alert.alert(
-      status === 'completed' ? 'Complete Infusion' : 'Discontinue Infusion',
-      `Mark this infusion as ${status}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Confirm',
-          onPress: async () => {
-            try {
-              await updateIvfStatus(recordId, status);
-              await reload();
-            } catch (err) {
-              Alert.alert('Error', err instanceof Error ? err.message : 'Unable to update status');
-            }
-          },
-        },
-      ],
+      'IVF Record Saved',
+      `Intake: ${totalIntake}ml\nOutput: ${totalOutput}ml\nBalance: ${balance}ml`,
+      [{ text: 'OK', onPress: () => router.back() }]
     );
   };
 
@@ -122,15 +79,14 @@ export default function IVFSheetScreen() {
         <View style={styles.patientInfo}>
           <Text style={styles.patientName}>{patient.name}</Text>
           <Text style={styles.patientMeta}>
-            {patient.room_number ? `Room ${patient.room_number}` : 'No room'} •{' '}
-            {patient.age !== null ? `${patient.age} yrs` : 'Age —'} • {patient.gender ?? '—'}
+            {patient.room} • {patient.age} yrs • {patient.gender}
           </Text>
         </View>
       </View>
 
       <View style={styles.sheetHeader}>
         <Text style={styles.sheetTitle}>IVF Sheet</Text>
-        <Text style={styles.sheetSubtitle}>IV Fluid Infusion Record</Text>
+        <Text style={styles.sheetSubtitle}>Intake-Output & Vital Signs Flow Record</Text>
         <View style={styles.sheetDate}>
           <Ionicons name="calendar" size={16} color="#64748b" />
           <Text style={styles.sheetDateText}>
@@ -146,146 +102,220 @@ export default function IVFSheetScreen() {
 
       <Card style={styles.formCard}>
         <Text style={styles.sectionTitle}>
-          <Ionicons name="water" size={18} color="#0891b2" /> New Infusion
+          <Ionicons name="water" size={18} color="#0891b2" /> Intake
         </Text>
-
-        <View style={styles.inputSection}>
-          <Text style={styles.inputLabel}>Solution *</Text>
-          <TextInput
-            style={styles.input}
-            value={solution}
-            onChangeText={setSolution}
-            placeholder="e.g., PNSS 1L, D5LR 500ml"
-            placeholderTextColor="#94a3b8"
-          />
-        </View>
-
+        
         <View style={styles.row}>
           <View style={[styles.inputHalf, { marginRight: 8 }]}>
-            <Text style={styles.inputLabel}>Volume (ml)</Text>
+            <Text style={styles.inputLabel}>IV Fluids (ml)</Text>
             <TextInput
               style={styles.input}
-              value={volume}
-              onChangeText={setVolume}
+              value={ivFluids}
+              onChangeText={setIvFluids}
               keyboardType="number-pad"
-              placeholder="1000"
+              placeholder="0"
               placeholderTextColor="#94a3b8"
             />
           </View>
           <View style={[styles.inputHalf, { marginLeft: 8 }]}>
-            <Text style={styles.inputLabel}>Rate (ml/hr)</Text>
+            <Text style={styles.inputLabel}>Oral (ml)</Text>
             <TextInput
               style={styles.input}
-              value={rate}
-              onChangeText={setRate}
+              value={oralIntake}
+              onChangeText={setOralIntake}
               keyboardType="number-pad"
-              placeholder="120"
+              placeholder="0"
+              placeholderTextColor="#94a3b8"
+            />
+          </View>
+        </View>
+
+        <Text style={[styles.sectionTitle, { marginTop: 20 }]}>
+          <Ionicons name="water" size={18} color="#dc2626" /> Output
+        </Text>
+        
+        <View style={styles.row}>
+          <View style={[styles.inputHalf, { marginRight: 8 }]}>
+            <Text style={styles.inputLabel}>Urine (ml)</Text>
+            <TextInput
+              style={styles.input}
+              value={urineOutput}
+              onChangeText={setUrineOutput}
+              keyboardType="number-pad"
+              placeholder="0"
+              placeholderTextColor="#94a3b8"
+            />
+          </View>
+          <View style={[styles.inputHalf, { marginLeft: 8 }]}>
+            <Text style={styles.inputLabel}>Vomitus (ml)</Text>
+            <TextInput
+              style={styles.input}
+              value={vomitus}
+              onChangeText={setVomitus}
+              keyboardType="number-pad"
+              placeholder="0"
               placeholderTextColor="#94a3b8"
             />
           </View>
         </View>
 
         <View style={styles.inputSection}>
-          <Text style={styles.inputLabel}>Insertion Site</Text>
+          <Text style={styles.inputLabel}>Drainage (ml)</Text>
           <TextInput
             style={styles.input}
-            value={site}
-            onChangeText={setSite}
-            placeholder="e.g., Left metacarpal vein"
+            value={drainage}
+            onChangeText={setDrainage}
+            keyboardType="number-pad"
+            placeholder="0"
             placeholderTextColor="#94a3b8"
           />
         </View>
 
+        <View style={styles.balanceSection}>
+          <View style={styles.balanceItem}>
+            <Text style={styles.balanceLabel}>Total Intake</Text>
+            <Text style={[styles.balanceValue, { color: primaryColor }]}>{totalIntake} ml</Text>
+          </View>
+          <View style={styles.balanceItem}>
+            <Text style={styles.balanceLabel}>Total Output</Text>
+            <Text style={[styles.balanceValue, { color: '#dc2626' }]}>{totalOutput} ml</Text>
+          </View>
+          <View style={styles.balanceItem}>
+            <Text style={styles.balanceLabel}>Balance</Text>
+            <Text style={[
+              styles.balanceValue,
+              { color: balance >= 0 ? '#16a34a' : '#dc2626' }
+            ]}>
+              {balance} ml
+            </Text>
+          </View>
+        </View>
+      </Card>
+
+      <Card style={styles.formCard}>
+        <Text style={styles.sectionTitle}>
+          <Ionicons name="heart" size={18} color="#dc2626" /> Vital Signs
+        </Text>
+
+        <View style={styles.row}>
+          <View style={[styles.inputHalf, { marginRight: 8 }]}>
+            <Text style={styles.inputLabel}>
+              <Ionicons name="heart" size={14} color="#dc2626" /> HR (bpm)
+            </Text>
+            <TextInput
+              style={styles.input}
+              value={heartRate}
+              onChangeText={setHeartRate}
+              keyboardType="number-pad"
+              placeholder="60-100"
+              placeholderTextColor="#94a3b8"
+            />
+          </View>
+          <View style={[styles.inputHalf, { marginLeft: 8 }]}>
+            <Text style={styles.inputLabel}>
+              <Ionicons name="thermometer" size={14} color="#d97706" /> Temp (°C)
+            </Text>
+            <TextInput
+              style={styles.input}
+              value={temperature}
+              onChangeText={setTemperature}
+              keyboardType="decimal-pad"
+              placeholder="36-38"
+              placeholderTextColor="#94a3b8"
+            />
+          </View>
+        </View>
+
         <View style={styles.inputSection}>
-          <Text style={styles.inputLabel}>Remarks</Text>
+          <Text style={styles.inputLabel}>
+            <Ionicons name="speedometer" size={14} color="#7c3aed" /> Blood Pressure
+          </Text>
+          <View style={styles.bpRow}>
+            <TextInput
+              style={[styles.input, styles.bpInput]}
+              value={bpSystolic}
+              onChangeText={setBpSystolic}
+              keyboardType="number-pad"
+              placeholder="120"
+              placeholderTextColor="#94a3b8"
+            />
+            <Text style={styles.bpSeparator}>/</Text>
+            <TextInput
+              style={[styles.input, styles.bpInput]}
+              value={bpDiastolic}
+              onChangeText={setBpDiastolic}
+              keyboardType="number-pad"
+              placeholder="80"
+              placeholderTextColor="#94a3b8"
+            />
+            <Text style={styles.bpUnit}>mmHg</Text>
+          </View>
+        </View>
+
+        <View style={styles.inputSection}>
+          <Text style={styles.inputLabel}>Notes</Text>
           <TextInput
             style={[styles.input, styles.notesInput]}
-            value={remarks}
-            onChangeText={setRemarks}
-            placeholder="Optional clinical notes..."
+            value={notes}
+            onChangeText={setNotes}
+            placeholder="Enter clinical notes..."
             placeholderTextColor="#94a3b8"
             multiline
+          />
+        </View>
+
+        <View style={styles.inputSection}>
+          <Text style={styles.inputLabel}>Signature</Text>
+          <TextInput
+            style={[styles.input, styles.signatureInput]}
+            value={signature}
+            onChangeText={setSignature}
+            placeholder="Enter your name and title"
+            placeholderTextColor="#94a3b8"
           />
         </View>
       </Card>
 
       <View style={styles.historySection}>
-        <Text style={styles.sectionTitle}>Infusion History</Text>
+        <Text style={styles.sectionTitle}>IVF History</Text>
         <Card>
-          {ivfRecords.length === 0 && (
-            <Text style={styles.emptyHistory}>No infusions recorded for this patient yet</Text>
-          )}
-          {ivfRecords.map((record, index) => (
+          {[...ivfRecords].reverse().slice(0, 5).map((record, index) => (
             <View
               key={record.id}
-              style={[styles.historyItem, index < ivfRecords.length - 1 && styles.historyBorder]}
+              style={[
+                styles.historyItem,
+                index < 4 && styles.historyBorder,
+              ]}
             >
               <View style={styles.historyHeader}>
                 <Text style={styles.historyDateTime}>
-                  {new Date(record.created_at).toLocaleString([], {
-                    month: 'short',
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}
+                  {new Date(record.date).toLocaleDateString()} {record.time}
                 </Text>
-                <Badge
-                  label={record.status ?? 'ongoing'}
-                  variant={STATUS_VARIANT[record.status ?? 'ongoing'] ?? 'info'}
-                  size="sm"
-                />
               </View>
-              <Text style={styles.historySolution}>{record.solution}</Text>
               <View style={styles.historyValues}>
                 <View style={styles.historyValue}>
-                  <Ionicons name="flask-outline" size={13} color="#0891b2" />
+                  <Ionicons name="water" size={14} color="#0891b2" />
                   <Text style={styles.historyValueText}>
-                    {record.volume_ml != null ? `${record.volume_ml} ml` : '— ml'}
+                    In: {(record.ivFluids + record.oralIntake)}ml
                   </Text>
                 </View>
                 <View style={styles.historyValue}>
-                  <Ionicons name="speedometer-outline" size={13} color="#7c3aed" />
+                  <Ionicons name="water" size={14} color="#dc2626" />
                   <Text style={styles.historyValueText}>
-                    {record.rate_ml_hr != null ? `${record.rate_ml_hr} ml/hr` : '— ml/hr'}
+                    Out: {(record.urineOutput + record.vomitus + record.drainage)}ml
                   </Text>
                 </View>
-                {record.site ? (
-                  <View style={styles.historyValue}>
-                    <Ionicons name="locate-outline" size={13} color="#64748b" />
-                    <Text style={styles.historyValueText}>{record.site}</Text>
-                  </View>
-                ) : null}
               </View>
-              {record.remarks ? <Text style={styles.historyRemarks}>{record.remarks}</Text> : null}
-              {(record.status ?? 'ongoing') === 'ongoing' && (
-                <View style={styles.statusActions}>
-                  <Pressable
-                    style={({ pressed }) => [styles.statusButton, styles.statusButtonComplete, pressed && { opacity: 0.7 }]}
-                    onPress={() => handleStatusChange(record.id, 'completed')}
-                  >
-                    <Text style={[styles.statusButtonText, { color: Accent.green.fg }]}>Complete</Text>
-                  </Pressable>
-                  <Pressable
-                    style={({ pressed }) => [styles.statusButton, styles.statusButtonDiscontinue, pressed && { opacity: 0.7 }]}
-                    onPress={() => handleStatusChange(record.id, 'discontinued')}
-                  >
-                    <Text style={[styles.statusButtonText, { color: Accent.amber.fg }]}>Discontinue</Text>
-                  </Pressable>
-                </View>
-              )}
+              <Text style={styles.historySignature}>By: {record.signature}</Text>
             </View>
           ))}
         </Card>
       </View>
 
-      <Pressable
-        style={({ pressed }) => [styles.saveButton, (pressed || saving) && { opacity: 0.85 }]}
-        onPress={handleSave}
-        disabled={saving}
-      >
+      <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
         <Ionicons name="save" size={20} color="#fff" />
-        <Text style={styles.saveButtonText}>{saving ? 'Saving…' : 'Save IVF Record'}</Text>
-      </Pressable>
+        <Text style={styles.saveButtonText}>Save IVF Record</Text>
+      </TouchableOpacity>
     </ScrollView>
   );
 }
@@ -293,21 +323,25 @@ export default function IVFSheetScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Palette.background,
+    backgroundColor: '#f8fafc',
   },
   content: {
-    padding: Spacing.lg,
+    padding: 16,
     paddingBottom: 40,
   },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
-    backgroundColor: Palette.background,
+    alignItems: 'center',
+  },
+  errorText: {
+    fontSize: 16,
+    color: '#6b7280',
   },
   patientHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: Spacing.xl,
+    marginBottom: 20,
   },
   patientAvatar: {
     width: 56,
@@ -323,54 +357,55 @@ const styles = StyleSheet.create({
   patientName: {
     fontSize: 20,
     fontWeight: '700',
-    color: Palette.ink,
+    color: '#0f172a',
   },
   patientMeta: {
     fontSize: 14,
-    color: Palette.textSecondary,
+    color: '#64748b',
     marginTop: 2,
   },
   sheetHeader: {
-    backgroundColor: Palette.surface,
-    borderRadius: Radius.lg,
-    padding: Spacing.xl,
-    marginBottom: Spacing.lg,
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 16,
     borderWidth: 1,
-    borderColor: Palette.border,
-    ...Shadow.card,
+    borderColor: '#e2e8f0',
   },
   sheetTitle: {
-    ...Type.screenTitle,
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#0f172a',
   },
   sheetSubtitle: {
     fontSize: 14,
-    color: Palette.textSecondary,
+    color: '#64748b',
     marginTop: 4,
   },
   sheetDate: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: Spacing.md,
-    paddingTop: Spacing.md,
+    marginTop: 12,
+    paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: Palette.borderLight,
+    borderTopColor: '#e2e8f0',
   },
   sheetDateText: {
     fontSize: 14,
-    color: Palette.textSecondary,
+    color: '#64748b',
     marginLeft: 8,
   },
   formCard: {
-    marginBottom: Spacing.lg,
+    marginBottom: 16,
   },
   sectionTitle: {
-    ...Type.sectionTitle,
-    color: Palette.text,
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#334155',
     marginBottom: 14,
   },
   row: {
     flexDirection: 'row',
-    marginTop: 14,
   },
   inputHalf: {
     flex: 1,
@@ -381,54 +416,86 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 13,
     fontWeight: '600',
-    color: Palette.text,
+    color: '#475569',
     marginBottom: 8,
   },
   input: {
-    backgroundColor: Palette.surfaceMuted,
-    borderRadius: Radius.md,
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
     padding: 14,
-    fontSize: 16,
-    color: '#1E293B',
+    fontSize: 18,
+    color: '#1e293b',
     borderWidth: 1,
-    borderColor: Palette.border,
+    borderColor: '#e2e8f0',
   },
   notesInput: {
     minHeight: 80,
     textAlignVertical: 'top',
-    fontSize: 15,
+  },
+  signatureInput: {
+    fontSize: 16,
+  },
+  balanceSection: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginTop: 20,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+  },
+  balanceItem: {
+    alignItems: 'center',
+  },
+  balanceLabel: {
+    fontSize: 12,
+    color: '#64748b',
+    marginBottom: 4,
+  },
+  balanceValue: {
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  bpRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  bpInput: {
+    flex: 1,
+    textAlign: 'center',
+  },
+  bpSeparator: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#64748b',
+    marginHorizontal: 8,
+  },
+  bpUnit: {
+    fontSize: 14,
+    color: '#64748b',
+    marginLeft: 8,
   },
   historySection: {
-    marginBottom: Spacing.xl,
+    marginBottom: 20,
   },
   historyItem: {
     paddingVertical: 12,
   },
   historyBorder: {
     borderBottomWidth: 1,
-    borderBottomColor: Palette.borderLight,
+    borderBottomColor: '#f1f5f9',
   },
   historyHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 6,
+    marginBottom: 8,
   },
   historyDateTime: {
     fontSize: 13,
     fontWeight: '600',
-    color: Palette.text,
-  },
-  historySolution: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: Palette.ink,
-    marginBottom: 6,
+    color: '#334155',
   },
   historyValues: {
     flexDirection: 'row',
-    gap: Spacing.lg,
-    flexWrap: 'wrap',
+    justifyContent: 'space-around',
+    marginBottom: 4,
   },
   historyValue: {
     flexDirection: 'row',
@@ -436,49 +503,21 @@ const styles = StyleSheet.create({
   },
   historyValueText: {
     fontSize: 12,
-    color: Palette.textSecondary,
+    color: '#64748b',
     marginLeft: 4,
   },
-  historyRemarks: {
+  historySignature: {
     fontSize: 11,
-    color: Palette.textMuted,
-    marginTop: 6,
-  },
-  statusActions: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-    marginTop: Spacing.md,
-  },
-  statusButton: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 6,
-    borderRadius: Radius.pill,
-  },
-  statusButtonComplete: {
-    backgroundColor: Accent.green.bg,
-  },
-  statusButtonDiscontinue: {
-    backgroundColor: Accent.amber.bg,
-  },
-  statusButtonText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  emptyHistory: {
-    fontSize: 13,
-    color: Palette.textMuted,
-    textAlign: 'center',
-    paddingVertical: Spacing.md,
+    color: '#94a3b8',
   },
   saveButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: primaryColor,
-    borderRadius: Radius.md,
-    paddingVertical: 15,
-    marginTop: Spacing.sm,
-    ...Shadow.raised,
+    borderRadius: 14,
+    paddingVertical: 16,
+    marginTop: 8,
   },
   saveButtonText: {
     fontSize: 16,
