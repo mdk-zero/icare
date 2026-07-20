@@ -242,6 +242,136 @@ export function SkeletonTabContent() {
   );
 }
 
+export function SkeletonPatientGrid() {
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div
+          key={i}
+          className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04)] p-4 animate-pulse"
+        >
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-10 h-10 bg-gray-100 rounded-full" />
+            <div className="space-y-2 min-w-0 flex-1">
+              <div className="h-4 w-3/4 bg-gray-100 rounded" />
+              <div className="h-3 w-1/2 bg-gray-100 rounded" />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <div className="h-3 w-1/3 bg-gray-100 rounded" />
+            <div className="h-3 w-1/2 bg-gray-100 rounded" />
+          </div>
+          <div className="mt-3 pt-3 border-t border-gray-100">
+            <div className="h-5 w-full bg-gray-100 rounded" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function SkeletonEhrTable() {
+  return (
+    <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04)] overflow-hidden animate-pulse">
+      <div className="border-b border-gray-100/80 flex gap-4 px-4">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div key={i} className="py-4">
+            <div className="h-4 w-24 bg-gray-100 rounded" />
+          </div>
+        ))}
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead>
+            <tr className="border-b border-gray-100">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <th key={i} className="py-3 px-4">
+                  <div className="h-3.5 w-14 bg-gray-100 rounded" />
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {Array.from({ length: 4 }).map((_, i) => (
+              <tr key={i} className="border-b border-gray-50 last:border-0">
+                {Array.from({ length: 4 }).map((_, j) => (
+                  <td key={j} className="py-3.5 px-4">
+                    <div className={`h-3.5 ${['w-32', 'w-48', 'w-24', 'w-20'][j]} bg-gray-100 rounded`} />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+export function SkeletonAssessmentCard() {
+  return (
+    <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04)] overflow-hidden animate-pulse">
+      <span className="absolute left-0 top-0 h-full w-0.5 bg-gray-200" aria-hidden />
+      <div className="p-6">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1 space-y-3">
+            <div className="flex items-center gap-2">
+              <div className="h-5 w-40 bg-gray-100 rounded" />
+              <div className="h-5 w-16 bg-gray-100 rounded-full" />
+            </div>
+            <div className="h-4 w-3/4 bg-gray-100 rounded" />
+            <div className="flex items-center gap-3">
+              <div className="h-5 w-20 bg-gray-100 rounded" />
+              <div className="h-5 w-16 bg-gray-100 rounded" />
+              <div className="h-4 w-24 bg-gray-100 rounded" />
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="w-9 h-9 bg-gray-100 rounded-lg" />
+            <div className="w-9 h-9 bg-gray-100 rounded-lg" />
+            <div className="w-9 h-9 bg-gray-100 rounded-lg" />
+            <div className="h-9 w-24 bg-gray-100 rounded-lg" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function SkeletonQuestionCard() {
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 shadow-sm animate-pulse">
+      <div className="p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-7 h-7 bg-gray-100 rounded-full" />
+            <div className="h-8 w-32 bg-gray-100 rounded-lg" />
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="h-8 w-20 bg-gray-100 rounded-lg" />
+            <div className="h-8 w-8 bg-gray-100 rounded-lg" />
+          </div>
+        </div>
+        <div className="h-16 w-full bg-gray-100 rounded-xl" />
+        <div className="space-y-2">
+          <div className="flex items-center gap-3">
+            <div className="w-5 h-5 bg-gray-100 rounded-full" />
+            <div className="h-10 flex-1 bg-gray-100 rounded-xl" />
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="w-5 h-5 bg-gray-100 rounded-full" />
+            <div className="h-10 flex-1 bg-gray-100 rounded-xl" />
+          </div>
+        </div>
+        <div className="flex items-center gap-3 pt-2 border-t border-gray-100">
+          <div className="h-5 w-16 bg-gray-100 rounded" />
+          <div className="h-8 w-32 bg-gray-100 rounded-lg" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function SkeletonSidebar() {
   return (
     <div className="min-h-screen bg-[#f8fafc] flex animate-pulse">
