@@ -2,23 +2,41 @@ import React from 'react';
 import { ScrollView, View, Text, StyleSheet, Pressable, RefreshControl } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { SectionHeader, LoadingSpinner, EmptyState } from '@/components/ui';
+import { SectionHeader, SkeletonScreen, EmptyState } from '@/components/ui';
 import { useApiData } from '@/hooks/useApiData';
 import { fetchAssessments, StudentAssessment } from '@/lib/api';
-import { Accent, Palette, Radius, Shadow, Spacing, Type } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
 
-const DIFFICULTY_ACCENT: Record<string, { fg: string; bg: string }> = {
-  beginner: Accent.green,
-  intermediate: Accent.amber,
-  advanced: Accent.red,
-};
+function difficultyAccent(
+  Accent: ReturnType<typeof useTheme>['Accent'],
+): Record<string, { fg: string; bg: string }> {
+  return {
+    beginner: Accent.green,
+    intermediate: Accent.amber,
+    advanced: Accent.red,
+  };
+}
 
 function formatTimeLimit(seconds: number | null): string {
   if (!seconds) return 'No time limit';
   return `${Math.round(seconds / 60)} min`;
 }
 
-function QuizCard({ quiz, onPress }: { quiz: StudentAssessment; onPress: () => void }) {
+function QuizCard({
+  quiz,
+  onPress,
+  Palette,
+  Accent,
+  styles,
+}: {
+  quiz: StudentAssessment;
+  onPress: () => void;
+  Palette: ReturnType<typeof useTheme>['Palette'];
+  Accent: ReturnType<typeof useTheme>['Accent'];
+  styles: ReturnType<typeof createStyles>;
+}) {
+  const DIFFICULTY_ACCENT = difficultyAccent(Accent);
   const difficulty = DIFFICULTY_ACCENT[quiz.difficulty] ?? Accent.slate;
   const attempted = quiz.attempt_count > 0;
   const dueSoon = quiz.assignment?.deadline
@@ -94,6 +112,8 @@ function QuizCard({ quiz, onPress }: { quiz: StudentAssessment; onPress: () => v
 
 export default function QuizzesScreen() {
   const router = useRouter();
+  const { Palette, Accent, Shadow, Type } = useTheme();
+  const styles = React.useMemo(() => createStyles(Palette, Accent, Shadow, Type), [Palette, Accent, Shadow, Type]);
   const { data, loading, refreshing, error, refresh, reload } = useApiData(fetchAssessments);
 
   // Refresh scores/attempt counts when returning from a quiz.
@@ -105,7 +125,7 @@ export default function QuizzesScreen() {
   );
 
   if (loading && !data) {
-    return <LoadingSpinner />;
+    return <SkeletonScreen />;
   }
 
   const assessments = data ?? [];
@@ -137,7 +157,7 @@ export default function QuizzesScreen() {
         <View style={styles.section}>
           <SectionHeader title="Assigned to You" count={assigned.length} />
           {assigned.map((quiz) => (
-            <QuizCard key={quiz.id} quiz={quiz} onPress={() => router.push(`/tasks/quizzes/${quiz.id}`)} />
+            <QuizCard key={quiz.id} quiz={quiz} onPress={() => router.push(`/tasks/quizzes/${quiz.id}`)} Palette={Palette} Accent={Accent} styles={styles} />
           ))}
         </View>
       )}
@@ -146,7 +166,7 @@ export default function QuizzesScreen() {
         <View style={styles.section}>
           <SectionHeader title="Available Quizzes" count={available.length} />
           {available.map((quiz) => (
-            <QuizCard key={quiz.id} quiz={quiz} onPress={() => router.push(`/tasks/quizzes/${quiz.id}`)} />
+            <QuizCard key={quiz.id} quiz={quiz} onPress={() => router.push(`/tasks/quizzes/${quiz.id}`)} Palette={Palette} Accent={Accent} styles={styles} />
           ))}
         </View>
       ) : assigned.length === 0 && completed.length > 0 ? (
@@ -165,7 +185,7 @@ export default function QuizzesScreen() {
         <View style={styles.section}>
           <SectionHeader title="Completed" count={completed.length} />
           {completed.map((quiz) => (
-            <QuizCard key={quiz.id} quiz={quiz} onPress={() => router.push(`/tasks/quizzes/${quiz.id}`)} />
+            <QuizCard key={quiz.id} quiz={quiz} onPress={() => router.push(`/tasks/quizzes/${quiz.id}`)} Palette={Palette} Accent={Accent} styles={styles} />
           ))}
         </View>
       )}
@@ -173,7 +193,13 @@ export default function QuizzesScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(
+  Palette: ReturnType<typeof useTheme>['Palette'],
+  Accent: ReturnType<typeof useTheme>['Accent'],
+  Shadow: ReturnType<typeof useTheme>['Shadow'],
+  Type: ReturnType<typeof useTheme>['Type'],
+) {
+  return StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Palette.background,
@@ -325,4 +351,5 @@ const styles = StyleSheet.create({
     color: Palette.textSecondary,
     textAlign: 'center',
   },
-});
+  });
+}

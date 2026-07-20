@@ -2,15 +2,18 @@ import React from 'react';
 import { ScrollView, View, Text, StyleSheet, Pressable, RefreshControl } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Card, Badge, LoadingSpinner, EmptyState } from '@/components/ui';
+import { Card, Badge, SkeletonScreen, EmptyState } from '@/components/ui';
 import { useApiData, allCached } from '@/hooks/useApiData';
 import { fetchPatients, fetchEhrRecords } from '@/lib/api';
-import { Accent, Palette, Radius, Shadow, Spacing, Type } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
 
 export default function EHRDetailScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
   const patientId = id as string;
+  const { Palette, Accent, Shadow, Type } = useTheme();
+  const styles = React.useMemo(() => createStyles(Palette, Accent, Shadow, Type), [Palette, Accent, Shadow, Type]);
 
   const { data, loading, refreshing, error, refresh } = useApiData(() =>
     allCached(
@@ -22,7 +25,7 @@ export default function EHRDetailScreen() {
   );
 
   if (loading && !data) {
-    return <LoadingSpinner />;
+    return <SkeletonScreen />;
   }
 
   const [patients, tprRecords, ivfRecords, noteRecords] = data ?? [[], [], [], []];
@@ -132,7 +135,13 @@ export default function EHRDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(
+  Palette: ReturnType<typeof useTheme>['Palette'],
+  Accent: ReturnType<typeof useTheme>['Accent'],
+  Shadow: ReturnType<typeof useTheme>['Shadow'],
+  Type: ReturnType<typeof useTheme>['Type'],
+) {
+  return StyleSheet.create({
   container: { flex: 1, backgroundColor: Palette.background },
   content: { padding: Spacing.lg, paddingBottom: 32 },
   errorContainer: { flex: 1, justifyContent: 'center', backgroundColor: Palette.background },
@@ -159,7 +168,7 @@ const styles = StyleSheet.create({
   },
   infoRowLast: { borderBottomWidth: 0 },
   infoLabel: { fontSize: 14, color: Palette.textSecondary },
-  infoValue: { fontSize: 14, fontWeight: '600', color: '#1E293B', flexShrink: 1, textAlign: 'right', marginLeft: Spacing.md },
+  infoValue: { fontSize: 14, fontWeight: '600', color: Palette.ink, flexShrink: 1, textAlign: 'right', marginLeft: Spacing.md },
   sectionTitle: { ...Type.sectionTitle, marginBottom: Spacing.md },
   sheetButtons: {
     flexDirection: 'row',
@@ -186,7 +195,7 @@ const styles = StyleSheet.create({
   sheetButtonTitle: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#1E293B',
+    color: Palette.ink,
   },
   sheetButtonSubtitle: {
     fontSize: 11,
@@ -218,4 +227,5 @@ const styles = StyleSheet.create({
   recordDate: { fontSize: 12, color: Palette.textMuted },
   recordContent: { fontSize: 14, color: Palette.text, lineHeight: 22 },
   emptyText: { fontSize: 14, color: Palette.textMuted, textAlign: 'center', padding: Spacing.lg },
-});
+  });
+}

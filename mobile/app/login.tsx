@@ -10,13 +10,111 @@ import {
   Image,
   TextInput,
   ActivityIndicator,
+  useWindowDimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { Accent, Palette, Radius, Spacing } from '@/constants/theme';
+import { FontAwesome6 } from '@expo/vector-icons';
+import Svg, { Defs, LinearGradient as SvgGradient, Stop, Rect, Circle, Path } from 'react-native-svg';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Radius, Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
 import { useAuth } from '@/hooks/useAuth';
 import { API_URL } from '@/lib/client';
 import logoImg from '@/assets/images/logo-pill.png';
+
+/** Gradient stops sampled from the pill logo's teal cap. */
+const Teal = {
+  deepest: '#082E38',
+  deep: '#0D4550',
+  primary: '#1B6B7B',
+  light: '#35859B',
+  aqua: '#9FC8D2',
+  mist: '#E7F0F1',
+};
+
+const HERO_HEIGHT = 330;
+
+/** Teal gradient "cap" with a faint ECG trace — the pill's top half. */
+function HeroBackdrop({ width }: { width: number }) {
+  const midY = 210;
+  const pulse = [
+    `M0 ${midY}`,
+    `L${width * 0.22} ${midY}`,
+    `L${width * 0.28} ${midY - 26}`,
+    `L${width * 0.34} ${midY + 34}`,
+    `L${width * 0.39} ${midY - 8}`,
+    `L${width * 0.44} ${midY}`,
+    `L${width * 0.62} ${midY}`,
+    `L${width * 0.67} ${midY - 18}`,
+    `L${width * 0.72} ${midY + 22}`,
+    `L${width * 0.76} ${midY}`,
+    `L${width} ${midY}`,
+  ].join(' ');
+
+  return (
+    <View style={StyleSheet.absoluteFill}>
+      <LinearGradient
+        colors={[Teal.deepest, Teal.deep, Teal.primary]}
+        locations={[0, 0.55, 1]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+      <Svg width={width} height={HERO_HEIGHT} style={StyleSheet.absoluteFill}>
+      <Defs>
+        <SvgGradient id="glow" x1="0" y1="0" x2="0" y2="1">
+          <Stop offset="0" stopColor={Teal.light} stopOpacity="0.55" />
+          <Stop offset="1" stopColor={Teal.light} stopOpacity="0" />
+        </SvgGradient>
+      </Defs>
+      {/* soft light bloom, like the sheen on the capsule */}
+      <Circle cx={width * 0.85} cy={30} r={150} fill="url(#glow)" />
+      <Circle cx={width * 0.08} cy={HERO_HEIGHT - 40} r={110} fill="url(#glow)" />
+      {/* faint capsule outlines drifting in the background */}
+      <Rect
+        x={width * 0.68}
+        y={58}
+        rx={26}
+        ry={26}
+        width={52}
+        height={118}
+        stroke="#FFFFFF"
+        strokeOpacity={0.08}
+        strokeWidth={2}
+        fill="none"
+        transform={`rotate(28 ${width * 0.68 + 26} ${58 + 59})`}
+      />
+      <Rect
+        x={width * 0.1}
+        y={40}
+        rx={18}
+        ry={18}
+        width={36}
+        height={84}
+        stroke="#FFFFFF"
+        strokeOpacity={0.07}
+        strokeWidth={2}
+        fill="none"
+        transform={`rotate(-24 ${width * 0.1 + 18} ${40 + 42})`}
+      />
+      {/* ECG pulse */}
+      <Path d={pulse} stroke="#FFFFFF" strokeOpacity={0.14} strokeWidth={2} fill="none" />
+      </Svg>
+    </View>
+  );
+}
+
+/** Gradient fill for the sign-in button. */
+function ButtonGradient() {
+  return (
+    <LinearGradient
+      colors={[Teal.light, Teal.primary, Teal.deep]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={StyleSheet.absoluteFill}
+    />
+  );
+}
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -27,7 +125,11 @@ export default function LoginScreen() {
   const [focusedField, setFocusedField] = useState<string | null>(null);
   const { login, isLoading } = useAuth();
   const router = useRouter();
+  const emailRef = useRef<TextInput>(null);
   const passwordRef = useRef<TextInput>(null);
+  const { width } = useWindowDimensions();
+  const { Palette, Accent } = useTheme();
+  const styles = React.useMemo(() => createStyles(Palette, Accent), [Palette, Accent]);
 
   const handleLogin = async () => {
     setError('');
@@ -50,100 +152,138 @@ export default function LoginScreen() {
   return (
     <View style={styles.container}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.keyboardView}
       >
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+          bounces={false}
         >
-          <View style={styles.headerSection}>
+          {/* Teal cap — the pill's top half */}
+          <View style={styles.hero}>
+            <HeroBackdrop width={width} />
+            <Text style={styles.appName}>iCARE++</Text>
+            <View style={styles.taglineRow}>
+              <View style={styles.taglineRule} />
+              <Text style={styles.tagline}>CLINICAL COMPETENCY</Text>
+              <View style={styles.taglineRule} />
+            </View>
+          </View>
+
+          {/* White sheet — the pill's bottom half */}
+          <View style={styles.sheet}>
+            {/* Logo straddles the seam, like the capsule's break line */}
             <View style={styles.logoCircle}>
               <Image source={logoImg} style={styles.logoImage} />
             </View>
-            <Text style={styles.appName}>iCARE++</Text>
-            <Text style={styles.tagline}>Clinical Competency Assessment</Text>
-          </View>
 
-          <View style={styles.contentSection}>
-            <Text style={styles.welcomeText}>Welcome Back</Text>
-            <Text style={styles.subtitleText}>Sign in to continue</Text>
+            <Text style={styles.welcomeText}>Welcome back</Text>
+            <Text style={styles.subtitleText}>Sign in to continue your rounds</Text>
 
             <View style={styles.formSection}>
-              <View
+              <Pressable
+                onPress={() => emailRef.current?.focus()}
                 style={[
                   styles.inputWrapper,
                   focusedField === 'email' && styles.inputWrapperFocused,
                 ]}
               >
-                <Text style={[styles.inputLabel, focusedField === 'email' && styles.inputLabelFocused]}>
-                  Email
-                </Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="email@example.com"
-                  placeholderTextColor={Palette.textMuted}
-                  value={email}
-                  onChangeText={setEmail}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  autoComplete="email"
-                  textContentType="emailAddress"
-                  returnKeyType="next"
-                  editable={!isLoading}
-                  onSubmitEditing={() => passwordRef.current?.focus()}
-                  onFocus={() => setFocusedField('email')}
-                  onBlur={() => setFocusedField(null)}
+                <FontAwesome6
+                  name="envelope"
+                  size={17}
+                  color={focusedField === 'email' ? Teal.primary : Palette.textMuted}
+                  style={styles.inputIcon}
                 />
-              </View>
+                <View style={styles.inputColumn}>
+                  <Text
+                    style={[styles.inputLabel, focusedField === 'email' && styles.inputLabelFocused]}
+                  >
+                    Email
+                  </Text>
+                  <TextInput
+                    ref={emailRef}
+                    style={styles.input}
+                    placeholder="email@example.com"
+                    placeholderTextColor={Palette.textMuted}
+                    value={email}
+                    onChangeText={setEmail}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    autoComplete="email"
+                    textContentType="emailAddress"
+                    returnKeyType="next"
+                    editable={!isLoading}
+                    onSubmitEditing={() => passwordRef.current?.focus()}
+                    onFocus={() => setFocusedField('email')}
+                    onBlur={() => setFocusedField(null)}
+                  />
+                </View>
+              </Pressable>
 
-              <View
+              <Pressable
+                onPress={() => passwordRef.current?.focus()}
                 style={[
                   styles.inputWrapper,
                   focusedField === 'password' && styles.inputWrapperFocused,
                 ]}
               >
-                <Text style={[styles.inputLabel, focusedField === 'password' && styles.inputLabelFocused]}>
-                  Password
-                </Text>
-                <View style={styles.passwordRow}>
-                  <TextInput
-                    ref={passwordRef}
-                    style={[styles.input, styles.passwordInput]}
-                    placeholder="••••••••"
-                    placeholderTextColor={Palette.textMuted}
-                    value={password}
-                    onChangeText={setPassword}
-                    secureTextEntry={!showPassword}
-                    autoComplete="current-password"
-                    textContentType="password"
-                    returnKeyType="go"
-                    editable={!isLoading}
-                    onSubmitEditing={handleLogin}
-                    onFocus={() => setFocusedField('password')}
-                    onBlur={() => setFocusedField(null)}
-                  />
-                  <Pressable
-                    onPress={() => setShowPassword((v) => !v)}
-                    hitSlop={10}
-                    style={({ pressed }) => [styles.eyeButton, pressed && { opacity: 0.6 }]}
+                <FontAwesome6
+                  name="lock"
+                  size={17}
+                  solid
+                  color={focusedField === 'password' ? Teal.primary : Palette.textMuted}
+                  style={styles.inputIcon}
+                />
+                <View style={styles.inputColumn}>
+                  <Text
+                    style={[
+                      styles.inputLabel,
+                      focusedField === 'password' && styles.inputLabelFocused,
+                    ]}
                   >
-                    <Ionicons
-                      name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                      size={20}
-                      color={Palette.textMuted}
+                    Password
+                  </Text>
+                  <View style={styles.passwordRow}>
+                    <TextInput
+                      ref={passwordRef}
+                      style={[styles.input, styles.passwordInput]}
+                      placeholder="••••••••"
+                      placeholderTextColor={Palette.textMuted}
+                      value={password}
+                      onChangeText={setPassword}
+                      secureTextEntry={!showPassword}
+                      autoComplete="current-password"
+                      textContentType="password"
+                      returnKeyType="go"
+                      editable={!isLoading}
+                      onSubmitEditing={handleLogin}
+                      onFocus={() => setFocusedField('password')}
+                      onBlur={() => setFocusedField(null)}
                     />
-                  </Pressable>
+                    <Pressable
+                      onPress={() => setShowPassword((v) => !v)}
+                      hitSlop={10}
+                      style={({ pressed }) => [styles.eyeButton, pressed && { opacity: 0.6 }]}
+                    >
+                      <FontAwesome6
+                        name={showPassword ? 'eye-slash' : 'eye'}
+                        size={17}
+                        color={Palette.textMuted}
+                      />
+                    </Pressable>
+                  </View>
                 </View>
-              </View>
+              </Pressable>
 
               {error ? (
                 <View style={styles.errorBanner}>
-                  <Ionicons
-                    name={isNetworkIssue ? 'cloud-offline-outline' : 'alert-circle-outline'}
-                    size={18}
+                  <FontAwesome6
+                    name={isNetworkIssue ? 'wifi' : 'circle-exclamation'}
+                    size={16}
+                    solid
                     color={Accent.red.fg}
                   />
                   <View style={styles.errorTextColumn}>
@@ -166,13 +306,17 @@ export default function LoginScreen() {
                 onPress={handleLogin}
                 disabled={isLoading}
               >
+                <ButtonGradient />
                 {isLoading ? (
                   <>
                     <ActivityIndicator size="small" color="#fff" />
                     <Text style={styles.buttonText}>Signing in…</Text>
                   </>
                 ) : (
-                  <Text style={styles.buttonText}>Sign In</Text>
+                  <>
+                    <Text style={styles.buttonText}>Sign In</Text>
+                    <FontAwesome6 name="arrow-right" size={16} solid color="#fff" />
+                  </>
                 )}
               </Pressable>
 
@@ -180,12 +324,13 @@ export default function LoginScreen() {
                 <Text style={styles.forgotText}>Forgot Password?</Text>
               </Pressable>
             </View>
-          </View>
 
-          <View style={styles.footer}>
-            <Text style={styles.footerText}>
-              Protected by Philippine Data Privacy Act of 2012
-            </Text>
+            <View style={styles.footer}>
+              <FontAwesome6 name="shield-halved" size={12} solid color={Palette.textFaint} />
+              <Text style={styles.footerText}>
+                Protected by Philippine Data Privacy Act of 2012
+              </Text>
+            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -193,98 +338,149 @@ export default function LoginScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const LOGO_SIZE = 96;
+
+function createStyles(Palette: ReturnType<typeof useTheme>['Palette'], Accent: ReturnType<typeof useTheme>['Accent']) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: Teal.deepest,
   },
   keyboardView: {
     flex: 1,
   },
   scrollContent: {
     flexGrow: 1,
-    paddingHorizontal: 32,
-    paddingTop: 72,
-    paddingBottom: 40,
   },
-  headerSection: {
-    alignItems: 'center',
-    marginBottom: 44,
-  },
-  logoCircle: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    backgroundColor: '#fff',
+  hero: {
+    height: HERO_HEIGHT,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: Palette.border,
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 4,
-    marginBottom: 16,
-  },
-  logoImage: {
-    width: 70,
-    height: 70,
-    resizeMode: 'contain',
+    paddingBottom: 64,
+    overflow: 'hidden',
   },
   appName: {
-    fontSize: 24,
-    fontWeight: '800',
-    letterSpacing: 1,
-    marginBottom: 4,
-    color: Palette.primary,
+    fontSize: 34,
+    fontWeight: '900',
+    letterSpacing: 3,
+    color: '#FFFFFF',
+    textShadowColor: 'rgba(8, 46, 56, 0.45)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 8,
+  },
+  taglineRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    marginTop: Spacing.md,
+  },
+  taglineRule: {
+    width: 28,
+    height: 1,
+    backgroundColor: Teal.aqua,
+    opacity: 0.5,
   },
   tagline: {
-    fontSize: 12,
-    color: Palette.textMuted,
-    letterSpacing: 0.5,
+    fontSize: 11,
+    fontWeight: '700',
+    color: Teal.aqua,
+    letterSpacing: 3,
   },
-  contentSection: {
+  sheet: {
     flex: 1,
+    backgroundColor: Palette.surface,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    marginTop: -40,
+    paddingHorizontal: 28,
+    paddingBottom: 32,
+    alignItems: 'stretch',
+    shadowColor: Teal.deepest,
+    shadowOffset: { width: 0, height: -8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
+    elevation: 12,
+  },
+  logoCircle: {
+    width: LOGO_SIZE,
+    height: LOGO_SIZE,
+    borderRadius: LOGO_SIZE / 2,
+    backgroundColor: Palette.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+    marginTop: -(LOGO_SIZE / 2),
+    marginBottom: 18,
+    borderWidth: 4,
+    borderColor: Teal.mist,
+    shadowColor: Teal.deepest,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.18,
+    shadowRadius: 14,
+    elevation: 8,
+  },
+  logoImage: {
+    width: 66,
+    height: 66,
+    resizeMode: 'contain',
   },
   welcomeText: {
-    fontSize: 30,
+    fontSize: 26,
     fontWeight: '800',
     color: Palette.ink,
     letterSpacing: -0.5,
-    marginBottom: 4,
+    textAlign: 'center',
   },
   subtitleText: {
-    fontSize: 15,
+    fontSize: 14,
     color: Palette.textSecondary,
-    marginBottom: 28,
+    textAlign: 'center',
+    marginTop: 4,
+    marginBottom: 26,
   },
   formSection: {
     gap: Spacing.lg,
   },
   inputWrapper: {
-    borderBottomWidth: 2,
-    borderBottomColor: Palette.border,
-    paddingBottom: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Palette.surfaceMuted,
+    borderRadius: Radius.lg,
+    borderWidth: 1.5,
+    borderColor: Palette.borderLight,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: 10,
   },
   inputWrapperFocused: {
-    borderBottomColor: Palette.primary,
+    borderColor: Teal.primary,
+    backgroundColor: Palette.surface,
+    shadowColor: Teal.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  inputIcon: {
+    marginRight: Spacing.md,
+  },
+  inputColumn: {
+    flex: 1,
   },
   inputLabel: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
-    letterSpacing: 0.6,
-    marginBottom: 2,
+    letterSpacing: 0.8,
     color: Palette.textMuted,
     textTransform: 'uppercase',
   },
   inputLabelFocused: {
-    color: Palette.primary,
+    color: Teal.primary,
   },
   input: {
-    fontSize: 17,
-    color: '#1E293B',
-    paddingVertical: 8,
+    fontSize: 16,
+    color: Palette.ink,
+    paddingVertical: 4,
+    paddingHorizontal: 0,
   },
   passwordRow: {
     flexDirection: 'row',
@@ -302,6 +498,8 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: Spacing.sm,
     backgroundColor: Accent.red.bg,
+    borderWidth: 1,
+    borderColor: Accent.red.border,
     borderRadius: Radius.md,
     padding: Spacing.md,
   },
@@ -326,10 +524,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     gap: Spacing.sm,
-    backgroundColor: Palette.primary,
-    borderRadius: Radius.md,
+    backgroundColor: Teal.primary,
+    borderRadius: Radius.lg,
     paddingVertical: 17,
     marginTop: Spacing.sm,
+    overflow: 'hidden',
+    shadowColor: Teal.primary,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 6,
   },
   buttonPressed: {
     opacity: 0.85,
@@ -342,20 +546,25 @@ const styles = StyleSheet.create({
   },
   forgotButton: {
     alignItems: 'center',
-    paddingVertical: Spacing.md,
+    paddingVertical: Spacing.sm,
   },
   forgotText: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '600',
-    color: Palette.primary,
+    color: Teal.primary,
   },
   footer: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 44,
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 'auto',
+    paddingTop: 32,
   },
   footerText: {
     fontSize: 11,
     color: Palette.textFaint,
     letterSpacing: 0.3,
   },
-});
+  });
+}

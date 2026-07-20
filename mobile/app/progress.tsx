@@ -1,21 +1,27 @@
 import React from 'react';
 import { ScrollView, View, Text, StyleSheet, RefreshControl } from 'react-native';
-import { Card, StatCard, SectionHeader, LoadingSpinner } from '@/components/ui';
-import { Accent, Palette, Spacing } from '@/constants/theme';
+import { Card, StatCard, SectionHeader, SkeletonScreen } from '@/components/ui';
+import { Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
 import { useApiData } from '@/hooks/useApiData';
 import { fetchProgress } from '@/lib/api';
 
-function scoreColor(score: number) {
-  if (score >= 70) return Accent.green.fg;
-  if (score >= 50) return Accent.amber.fg;
-  return Accent.red.fg;
+function makeScoreColor(Accent: ReturnType<typeof useTheme>['Accent']) {
+  return (score: number) => {
+    if (score >= 70) return Accent.green.fg;
+    if (score >= 50) return Accent.amber.fg;
+    return Accent.red.fg;
+  };
 }
 
 export default function ProgressScreen() {
   const { data, loading, refreshing, error, refresh } = useApiData(fetchProgress);
+  const { Palette, Accent } = useTheme();
+  const styles = React.useMemo(() => createStyles(Palette), [Palette]);
+  const scoreColor = React.useMemo(() => makeScoreColor(Accent), [Accent]);
 
   if (loading && !data) {
-    return <LoadingSpinner />;
+    return <SkeletonScreen />;
   }
 
   const attempts = data?.attempts ?? [];
@@ -121,7 +127,8 @@ export default function ProgressScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(Palette: ReturnType<typeof useTheme>['Palette']) {
+  return StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Palette.background,
@@ -154,7 +161,7 @@ const styles = StyleSheet.create({
   categoryName: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#1E293B',
+    color: Palette.ink,
     flex: 1,
     marginRight: Spacing.md,
   },
@@ -202,7 +209,7 @@ const styles = StyleSheet.create({
   activityComp: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#1E293B',
+    color: Palette.ink,
     flex: 1,
     marginRight: Spacing.sm,
   },
@@ -216,4 +223,5 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingVertical: Spacing.md,
   },
-});
+  });
+}

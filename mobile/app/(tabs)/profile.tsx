@@ -1,27 +1,42 @@
 import React from 'react';
 import { ScrollView, View, Text, StyleSheet, Pressable, Alert, RefreshControl } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Accent, Palette, Radius, Shadow, Spacing, Type } from '@/constants/theme';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Radius, Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
 import { SectionHeader } from '@/components/ui';
 import { useAuth } from '@/hooks/useAuth';
 import { useApiData, allCached } from '@/hooks/useApiData';
 import { fetchProgress, fetchRecommendations } from '@/lib/api';
+
+/** Teal ramp sampled from the pill logo's cap (same as login/header/tab bar/dashboard). */
+const Teal = {
+  deepest: '#082E38',
+  deep: '#0D4550',
+  primary: '#1B6B7B',
+  light: '#35859B',
+};
 
 function getInitials(name?: string) {
   if (!name) return 'S';
   return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 }
 
-function competencyAccent(score: number) {
+function competencyAccent(Accent: ReturnType<typeof useTheme>['Accent'], score: number) {
   if (score >= 70) return { ...Accent.green, label: 'Proficient' };
   if (score >= 50) return { ...Accent.amber, label: 'Developing' };
   return { ...Accent.red, label: 'Needs Work' };
 }
 
 export default function ProfileScreen() {
+  // content starts below the floating header, then scrolls beneath it
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, logout } = useAuth();
+  const { Palette, Accent, Shadow, Type } = useTheme();
+  const styles = React.useMemo(() => createStyles(Palette, Accent, Shadow, Type), [Palette, Accent, Shadow, Type]);
   const { data, refreshing, refresh } = useApiData(() =>
     allCached(fetchProgress(), fetchRecommendations()),
   );
@@ -71,36 +86,46 @@ export default function ProfileScreen() {
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={[styles.content, { paddingTop: insets.top + 88 }]}
       showsVerticalScrollIndicator={false}
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={refresh} colors={[Palette.primary]} tintColor={Palette.primary} />
       }
     >
-      <View style={styles.headerCard}>
+      <LinearGradient
+        colors={[Teal.deepest, Teal.deep, Teal.primary]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.headerCard}
+      >
         <View style={styles.avatarRow}>
-          <View style={styles.avatarLarge}>
+          <LinearGradient
+            colors={[Teal.light, '#FFFFFF33', Teal.deep]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.avatarLarge}
+          >
             <Text style={styles.avatarText}>{getInitials(user?.name)}</Text>
-          </View>
+          </LinearGradient>
           <Pressable style={({ pressed }) => [styles.editButton, pressed && styles.pressedDim]}>
-            <Ionicons name="camera" size={14} color={Palette.primary} />
+            <Ionicons name="camera" size={14} color={Teal.primary} />
           </Pressable>
         </View>
         <Text style={styles.name}>{user?.name || 'Student'}</Text>
         <Text style={styles.email}>{user?.email || 'student@icare.edu'}</Text>
         <View style={styles.badges}>
-          <View style={[styles.badge, { backgroundColor: Palette.primaryTint }]}>
-            <Ionicons name="school-outline" size={12} color={Palette.primary} />
-            <Text style={[styles.badgeText, { color: Palette.primary }]}>{user?.cohort || 'BSN-2027'}</Text>
+          <View style={styles.badge}>
+            <Ionicons name="school-outline" size={12} color="#FFFFFF" />
+            <Text style={styles.badgeText}>{user?.cohort || 'BSN-2027'}</Text>
           </View>
-          <View style={[styles.badge, { backgroundColor: Palette.borderLight }]}>
-            <Ionicons name="id-card-outline" size={12} color={Palette.textSecondary} />
-            <Text style={[styles.badgeText, { color: Palette.textSecondary }]}>
+          <View style={styles.badge}>
+            <Ionicons name="id-card-outline" size={12} color="#FFFFFF" />
+            <Text style={styles.badgeText}>
               {user?.studentId || 'NS-2024-001'}
             </Text>
           </View>
         </View>
-      </View>
+      </LinearGradient>
 
       <View style={styles.section}>
         <SectionHeader title="Performance Overview" />
@@ -142,7 +167,7 @@ export default function ProfileScreen() {
             </Text>
           )}
           {competencies.map((comp, index) => {
-            const accent = competencyAccent(comp.avgScore);
+            const accent = competencyAccent(Accent, comp.avgScore);
             return (
               <View
                 key={comp.competency}
@@ -239,39 +264,44 @@ export default function ProfileScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(
+  Palette: ReturnType<typeof useTheme>['Palette'],
+  Accent: ReturnType<typeof useTheme>['Accent'],
+  Shadow: ReturnType<typeof useTheme>['Shadow'],
+  Type: ReturnType<typeof useTheme>['Type'],
+) {
+  return StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Palette.background,
   },
   content: {
     padding: Spacing.lg,
-    paddingBottom: 32,
+    // clears the floating tab bar so the last items can scroll above it
+    paddingBottom: 128,
   },
   pressedDim: {
     opacity: 0.7,
   },
   headerCard: {
-    backgroundColor: Palette.surface,
     borderRadius: Radius.xl,
     padding: Spacing.xxl,
     alignItems: 'center',
     marginBottom: Spacing.xxl,
-    borderWidth: 1,
-    borderColor: Palette.border,
-    ...Shadow.card,
+    ...Shadow.raised,
   },
   avatarRow: {
     position: 'relative',
     marginBottom: Spacing.lg,
   },
   avatarLarge: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: Palette.primary,
+    width: 76,
+    height: 76,
+    borderRadius: 38,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF88',
   },
   avatarText: {
     fontSize: 24,
@@ -294,10 +324,11 @@ const styles = StyleSheet.create({
   name: {
     ...Type.screenTitle,
     fontSize: 22,
+    color: '#FFFFFF',
   },
   email: {
     fontSize: 13,
-    color: Palette.textSecondary,
+    color: '#E7F0F1CC',
     marginTop: 2,
   },
   badges: {
@@ -312,10 +343,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
     paddingVertical: 5,
     borderRadius: Radius.pill,
+    backgroundColor: '#FFFFFF26',
+    borderWidth: 1,
+    borderColor: '#FFFFFF33',
   },
   badgeText: {
     fontSize: 12,
     fontWeight: '600',
+    color: '#FFFFFF',
   },
   section: {
     marginBottom: Spacing.xxl,
@@ -380,7 +415,7 @@ const styles = StyleSheet.create({
   compName: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#1E293B',
+    color: Palette.ink,
     marginBottom: 6,
   },
   compScore: {
@@ -448,7 +483,7 @@ const styles = StyleSheet.create({
   recTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1E293B',
+    color: Palette.ink,
     marginBottom: 3,
   },
   recDesc: {
@@ -473,7 +508,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     fontWeight: '500',
-    color: '#1E293B',
+    color: Palette.ink,
   },
   logoutButton: {
     flexDirection: 'row',
@@ -494,4 +529,5 @@ const styles = StyleSheet.create({
     ...Type.micro,
     textAlign: 'center',
   },
-});
+  });
+}

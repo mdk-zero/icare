@@ -1,13 +1,17 @@
 import React from 'react';
 import { ScrollView, View, Text, StyleSheet, Pressable, RefreshControl } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Accent, Palette, Radius, Shadow, Spacing, Type } from '@/constants/theme';
-import { ScreenHeader, SectionHeader, EmptyState, LoadingSpinner } from '@/components/ui';
+import { Radius, Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
+import { ScreenHeader, SectionHeader, EmptyState, SkeletonScreen } from '@/components/ui';
 import { useApiData } from '@/hooks/useApiData';
 import { fetchScenarioAssignments, ScenarioAssignment } from '@/lib/api';
 
 function TaskCard({ task, onPress }: { task: ScenarioAssignment; onPress: () => void }) {
+  const { Palette, Accent, Shadow, Type } = useTheme();
+  const styles = React.useMemo(() => createStyles(Palette, Accent, Shadow, Type), [Palette, Accent, Shadow, Type]);
   const completed = task.status === 'completed';
   const statusAccent =
     task.status === 'completed'
@@ -91,7 +95,11 @@ function TaskCard({ task, onPress }: { task: ScenarioAssignment; onPress: () => 
 }
 
 export default function TasksScreen() {
+  // content starts below the floating header, then scrolls beneath it
+  const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { Palette, Accent, Shadow, Type } = useTheme();
+  const styles = React.useMemo(() => createStyles(Palette, Accent, Shadow, Type), [Palette, Accent, Shadow, Type]);
   const { data, loading, refreshing, error, refresh, reload } = useApiData(fetchScenarioAssignments);
 
   // Re-pull when returning from the scenario runner so completions show up.
@@ -103,7 +111,7 @@ export default function TasksScreen() {
   );
 
   if (loading && !data) {
-    return <LoadingSpinner />;
+    return <SkeletonScreen />;
   }
 
   const assignments = data ?? [];
@@ -121,7 +129,7 @@ export default function TasksScreen() {
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={[styles.content, { paddingTop: insets.top + 88 }]}
       showsVerticalScrollIndicator={false}
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={refresh} colors={[Palette.primary]} tintColor={Palette.primary} />
@@ -187,14 +195,21 @@ export default function TasksScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(
+  Palette: ReturnType<typeof useTheme>['Palette'],
+  Accent: ReturnType<typeof useTheme>['Accent'],
+  Shadow: ReturnType<typeof useTheme>['Shadow'],
+  Type: ReturnType<typeof useTheme>['Type'],
+) {
+  return StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Palette.background,
   },
   content: {
     padding: Spacing.lg,
-    paddingBottom: 32,
+    // clears the floating tab bar so the last items can scroll above it
+    paddingBottom: 128,
   },
   pressedCard: {
     opacity: 0.85,
@@ -319,4 +334,5 @@ const styles = StyleSheet.create({
     color: Palette.textMuted,
     marginLeft: 4,
   },
-});
+  });
+}

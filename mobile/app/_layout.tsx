@@ -5,11 +5,11 @@ import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AuthProvider, useAuth } from '@/hooks/useAuth';
-import { Palette } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
 
 function AuthStack() {
+  const { Palette } = useTheme();
   return (
     <Stack
       screenOptions={{
@@ -38,6 +38,7 @@ function AuthStack() {
 
 function AuthNavigator() {
   const { isAuthenticated, isBootstrapping } = useAuth();
+  const { Palette } = useTheme();
   const router = useRouter();
 
   useEffect(() => {
@@ -52,7 +53,7 @@ function AuthNavigator() {
   // must not unmount the login screen (it would wipe form and error state).
   if (isBootstrapping) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#1B6B7B' }}>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Palette.primaryDark }}>
         <ActivityIndicator size="large" color="#fff" />
       </View>
     );
@@ -62,13 +63,13 @@ function AuthNavigator() {
 }
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
+  const { scheme, isDark } = useTheme();
 
   return (
     <SafeAreaProvider>
       <AuthProvider>
-        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-          <StatusBar style="auto" />
+        <ThemeProvider value={isDark ? DarkTheme : DefaultTheme}>
+          <StatusBar style={isDark ? 'light' : 'dark'} key={scheme} />
           <AuthNavigator />
         </ThemeProvider>
       </AuthProvider>
