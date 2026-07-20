@@ -1,6 +1,12 @@
 import { Tabs, useRouter, usePathname } from "expo-router";
 import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, Image, Pressable, useWindowDimensions } from "react-native";
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  interpolate,
+} from "react-native-reanimated";
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import logoImg from "@/assets/images/logo-pill.png";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -27,6 +33,78 @@ const TAB_ICONS: Record<string, string> = {
   profile: "user",
 };
 
+/** One tab: springs wide into a gradient pill when focused, rests as a quiet icon otherwise. */
+function TabItem({
+  icon,
+  label,
+  isFocused,
+  onPress,
+}: {
+  icon: string;
+  label: string;
+  isFocused: boolean;
+  onPress: () => void;
+}) {
+  const progress = useSharedValue(isFocused ? 1 : 0);
+
+  useEffect(() => {
+    progress.value = withSpring(isFocused ? 1 : 0, { damping: 12, stiffness: 140 });
+  }, [isFocused, progress]);
+
+  const containerStyle = useAnimatedStyle(() => ({
+    flex: 1 + progress.value,
+  }));
+
+  const fillStyle = useAnimatedStyle(() => ({
+    opacity: progress.value,
+    transform: [{ scale: interpolate(progress.value, [0, 1], [0.75, 1]) }],
+  }));
+
+  const iconStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: interpolate(progress.value, [0, 1], [1, 1.18]) }],
+  }));
+
+  const labelStyle = useAnimatedStyle(() => ({
+    opacity: progress.value,
+    maxWidth: progress.value * 72,
+    transform: [{ translateX: interpolate(progress.value, [0, 1], [-8, 0]) }],
+  }));
+
+  return (
+    <Animated.View style={[styles.tabItem, containerStyle]}>
+      <Pressable
+        onPress={onPress}
+        accessibilityRole="tab"
+        accessibilityState={{ selected: isFocused }}
+        accessibilityLabel={label}
+        style={({ pressed }) => [styles.tabPressable, pressed && !isFocused && { opacity: 0.65 }]}
+      >
+        <Animated.View style={[styles.activePill, fillStyle]}>
+          <LinearGradient
+            colors={[Teal.light, Teal.primary, Teal.deep]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
+        </Animated.View>
+        <View style={styles.tabRow}>
+          <Animated.View style={iconStyle}>
+            <FontAwesome6
+              name={icon}
+              size={18}
+              solid
+              color={isFocused ? "#FFFFFF" : Palette.textMuted}
+            />
+          </Animated.View>
+          <Animated.Text numberOfLines={1} style={[styles.tabLabel, labelStyle]}>
+            {label}
+          </Animated.Text>
+        </View>
+      </Pressable>
+    </Animated.View>
+  );
+}
+
 function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
 
@@ -40,7 +118,6 @@ function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
           const { options } = descriptors[route.key];
           const label = options.title ?? route.name;
           const isFocused = state.index === index;
-          const icon = TAB_ICONS[route.name] ?? "circle";
 
           const onPress = () => {
             const event = navigation.emit({
@@ -53,58 +130,14 @@ function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
             }
           };
 
-          // Home: raised gradient orb breaking out of the bar
-          if (route.name === "index") {
-            return (
-              <Pressable
-                key={route.key}
-                onPress={onPress}
-                accessibilityRole="tab"
-                accessibilityState={{ selected: isFocused }}
-                accessibilityLabel={label}
-                style={styles.centerSlot}
-              >
-                {({ pressed }) => (
-                  <View
-                    style={[
-                      styles.centerOrbRing,
-                      isFocused && styles.centerOrbRingFocused,
-                      pressed && styles.pressedScale,
-                    ]}
-                  >
-                    <LinearGradient
-                      colors={[Teal.light, Teal.primary, Teal.deep]}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={styles.centerOrb}
-                    >
-                      <FontAwesome6 name={icon} size={22} solid color="#FFFFFF" />
-                    </LinearGradient>
-                  </View>
-                )}
-              </Pressable>
-            );
-          }
-
           return (
-            <Pressable
+            <TabItem
               key={route.key}
+              icon={TAB_ICONS[route.name] ?? "circle"}
+              label={label}
+              isFocused={isFocused}
               onPress={onPress}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: isFocused }}
-              accessibilityLabel={label}
-              style={({ pressed }) => [styles.sideTab, pressed && { opacity: 0.65 }]}
-            >
-              <FontAwesome6
-                name={icon}
-                size={18}
-                solid
-                color={isFocused ? Teal.primary : Palette.textMuted}
-              />
-              <Text style={[styles.sideTabLabel, isFocused && styles.sideTabLabelFocused]}>
-                {label}
-              </Text>
-            </Pressable>
+            />
           );
         })}
       </View>
@@ -229,8 +262,6 @@ export default function TabLayout() {
   );
 }
 
-const ORB_SIZE = 58;
-
 const styles = StyleSheet.create({
   headerShadowWrap: {
     position: "absolute",
@@ -349,54 +380,37 @@ const styles = StyleSheet.create({
     shadowRadius: 24,
     elevation: 14,
   },
-  sideTab: {
+  tabItem: {
+    height: 50,
+  },
+  tabPressable: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    gap: 3,
   },
-  sideTabLabel: {
-    fontSize: 10,
-    fontWeight: "600",
-    color: Palette.textMuted,
-  },
-  sideTabLabelFocused: {
-    color: Teal.primary,
-    fontWeight: "700",
-  },
-  centerSlot: {
-    flex: 1,
-    alignItems: "center",
-  },
-  centerOrbRing: {
-    width: ORB_SIZE + 10,
-    height: ORB_SIZE + 10,
-    borderRadius: (ORB_SIZE + 10) / 2,
-    marginTop: -26,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: Palette.borderLight,
-    shadowColor: Teal.primary,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.35,
-    shadowRadius: 14,
-    elevation: 10,
-  },
-  centerOrbRingFocused: {
-    borderColor: Teal.mist,
-    borderWidth: 3,
-  },
-  centerOrb: {
-    width: ORB_SIZE,
-    height: ORB_SIZE,
-    borderRadius: ORB_SIZE / 2,
-    alignItems: "center",
-    justifyContent: "center",
+  activePill: {
+    position: "absolute",
+    top: 3,
+    bottom: 3,
+    left: 3,
+    right: 3,
+    borderRadius: 22,
     overflow: "hidden",
+    shadowColor: Teal.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
   },
-  pressedScale: {
-    transform: [{ scale: 0.94 }],
+  tabRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+  },
+  tabLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#FFFFFF",
+    letterSpacing: 0.3,
   },
 });
