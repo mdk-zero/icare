@@ -60,7 +60,7 @@ function getInitials(name?: string) {
     .slice(0, 2);
 }
 
-function statusColors(Accent: ReturnType<typeof useTheme>['Accent']): Record<string, string> {
+function statusColors(Accent: ReturnType<typeof useTheme>["Accent"]): Record<string, string> {
   return {
     completed: Accent.green.fg,
     in_progress: Accent.amber.fg,
@@ -101,7 +101,10 @@ export default function DashboardScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const { Palette, Accent, Shadow, Type } = useTheme();
-  const styles = React.useMemo(() => createStyles(Palette, Accent, Shadow, Type), [Palette, Accent, Shadow, Type]);
+  const styles = React.useMemo(
+    () => createStyles(Palette, Accent, Shadow, Type),
+    [Palette, Accent, Shadow, Type],
+  );
   const STATUS_COLORS = React.useMemo(() => statusColors(Accent), [Accent]);
 
   const { data, loading, refreshing, refresh } = useApiData(() =>
@@ -217,7 +220,6 @@ export default function DashboardScreen() {
               end={{ x: 1.1, y: 1.4 }}
               style={styles.heroCard}
             >
-              <HeroPulse width={heroWidth} />
               <View style={styles.heroTopRow}>
                 <Text style={styles.heroEyebrow}>NEXT UP</Text>
                 {nextTask.required && (
@@ -342,287 +344,287 @@ export default function DashboardScreen() {
 }
 
 function createStyles(
-  Palette: ReturnType<typeof useTheme>['Palette'],
-  Accent: ReturnType<typeof useTheme>['Accent'],
-  Shadow: ReturnType<typeof useTheme>['Shadow'],
-  Type: ReturnType<typeof useTheme>['Type'],
+  Palette: ReturnType<typeof useTheme>["Palette"],
+  Accent: ReturnType<typeof useTheme>["Accent"],
+  Shadow: ReturnType<typeof useTheme>["Shadow"],
+  Type: ReturnType<typeof useTheme>["Type"],
 ) {
   return StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Palette.background,
-  },
-  content: {
-    padding: Spacing.lg,
-    // clears the floating tab bar so the last items can scroll above it
-    paddingBottom: 128,
-  },
-  greetingRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: Spacing.sm,
-    marginBottom: Spacing.lg,
-  },
-  greetingText: {
-    flex: 1,
-    marginRight: Spacing.md,
-  },
-  greeting: {
-    fontSize: 14,
-    color: Palette.textSecondary,
-    fontWeight: "500",
-  },
-  name: {
-    ...Type.screenTitle,
-    fontSize: 27,
-    marginTop: 2,
-  },
-  dateRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginTop: Spacing.xs,
-  },
-  dateText: {
-    fontSize: 12.5,
-    fontWeight: "600",
-    color: Teal.primary,
-    letterSpacing: 0.2,
-  },
-  avatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 2,
-    borderColor: "#FFFFFF",
-    shadowColor: Teal.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  avatarText: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: "#fff",
-  },
-  pressedDim: {
-    opacity: 0.7,
-  },
-  pressedCard: {
-    opacity: 0.9,
-    transform: [{ scale: 0.98 }],
-  },
-  heroWrap: {
-    marginBottom: Spacing.xxl,
-    borderRadius: 22,
-    shadowColor: Teal.deepest,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.28,
-    shadowRadius: 18,
-    elevation: 10,
-  },
-  heroCard: {
-    borderRadius: 22,
-    padding: Spacing.xl,
-    overflow: "hidden",
-  },
-  heroTopRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: Spacing.sm,
-  },
-  heroEyebrow: {
-    fontSize: 10,
-    fontWeight: "800",
-    color: Teal.aqua,
-    letterSpacing: 2.4,
-  },
-  heroRequiredPill: {
-    backgroundColor: "rgba(255, 255, 255, 0.16)",
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.25)",
-    borderRadius: Radius.pill,
-    paddingHorizontal: 9,
-    paddingVertical: 3,
-  },
-  heroRequiredText: {
-    fontSize: 8.5,
-    fontWeight: "800",
-    color: "#FFFFFF",
-    letterSpacing: 1.2,
-  },
-  heroTitle: {
-    fontSize: 19,
-    fontWeight: "800",
-    color: "#FFFFFF",
-    letterSpacing: -0.3,
-    lineHeight: 25,
-    marginBottom: Spacing.lg,
-  },
-  heroBottomRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  heroMetaPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: "rgba(255, 255, 255, 0.12)",
-    borderRadius: Radius.pill,
-    paddingHorizontal: 11,
-    paddingVertical: 6,
-  },
-  heroMetaText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#FFFFFF",
-  },
-  heroGo: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: "#FFFFFF",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  statsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: Spacing.md,
-    marginBottom: Spacing.xxl,
-  },
-  statCard: {
-    flexBasis: "47%",
-    flexGrow: 1,
-    backgroundColor: Palette.surface,
-    borderRadius: Radius.lg,
-    padding: Spacing.lg,
-    borderWidth: 1,
-    borderColor: Palette.border,
-    ...Shadow.card,
-  },
-  statIconTile: {
-    width: 34,
-    height: 34,
-    borderRadius: Radius.md - 2,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: Spacing.md,
-  },
-  statValue: {
-    fontSize: 26,
-    fontWeight: "800",
-    color: Palette.ink,
-    letterSpacing: -0.5,
-  },
-  statLabel: {
-    fontSize: 12.5,
-    color: Palette.textSecondary,
-    fontWeight: "500",
-    marginTop: 2,
-  },
-  section: {
-    marginBottom: Spacing.xxl,
-  },
-  quickActions: {
-    flexDirection: "row",
-    backgroundColor: Palette.surface,
-    borderRadius: Radius.lg,
-    paddingVertical: Spacing.lg,
-    paddingHorizontal: Spacing.sm,
-    borderWidth: 1,
-    borderColor: Palette.border,
-    ...Shadow.card,
-  },
-  quickAction: {
-    flex: 1,
-    alignItems: "center",
-  },
-  quickActionIcon: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: Spacing.sm,
-  },
-  quickActionText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: Palette.text,
-  },
-  taskList: {
-    backgroundColor: Palette.surface,
-    borderRadius: Radius.lg,
-    paddingHorizontal: Spacing.lg,
-    borderWidth: 1,
-    borderColor: Palette.border,
-    ...Shadow.card,
-  },
-  taskItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 14,
-  },
-  taskItemBorder: {
-    borderTopWidth: 1,
-    borderTopColor: Palette.borderLight,
-  },
-  taskStatusBar: {
-    width: 3.5,
-    height: 30,
-    borderRadius: 2,
-    marginRight: Spacing.md,
-  },
-  taskContent: {
-    flex: 1,
-    marginRight: Spacing.sm,
-  },
-  taskTitle: {
-    ...Type.itemTitle,
-  },
-  taskMeta: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 3,
-  },
-  taskDue: {
-    fontSize: 12,
-    color: Palette.textMuted,
-    marginLeft: 5,
-  },
-  taskRequired: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: Accent.red.fg,
-    marginLeft: Spacing.md,
-    textTransform: "uppercase",
-    letterSpacing: 0.3,
-  },
-  emptyTasksWrap: {
-    alignItems: "center",
-    paddingVertical: Spacing.xl,
-    gap: Spacing.sm,
-  },
-  emptyTasksIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: Palette.primaryTint,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  emptyTasks: {
-    fontSize: 13,
-    color: Palette.textMuted,
-    textAlign: "center",
-    paddingHorizontal: Spacing.lg,
-  },
+    container: {
+      flex: 1,
+      backgroundColor: Palette.background,
+    },
+    content: {
+      padding: Spacing.lg,
+      // clears the floating tab bar so the last items can scroll above it
+      paddingBottom: 128,
+    },
+    greetingRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingVertical: Spacing.sm,
+      marginBottom: Spacing.lg,
+    },
+    greetingText: {
+      flex: 1,
+      marginRight: Spacing.md,
+    },
+    greeting: {
+      fontSize: 14,
+      color: Palette.textSecondary,
+      fontWeight: "500",
+    },
+    name: {
+      ...Type.screenTitle,
+      fontSize: 27,
+      marginTop: 2,
+    },
+    dateRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      marginTop: Spacing.xs,
+    },
+    dateText: {
+      fontSize: 12.5,
+      fontWeight: "600",
+      color: Teal.primary,
+      letterSpacing: 0.2,
+    },
+    avatar: {
+      width: 50,
+      height: 50,
+      borderRadius: 25,
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: 2,
+      borderColor: "#FFFFFF",
+      shadowColor: Teal.primary,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 8,
+      elevation: 5,
+    },
+    avatarText: {
+      fontSize: 16,
+      fontWeight: "800",
+      color: "#fff",
+    },
+    pressedDim: {
+      opacity: 0.7,
+    },
+    pressedCard: {
+      opacity: 0.9,
+      transform: [{ scale: 0.98 }],
+    },
+    heroWrap: {
+      marginBottom: Spacing.xxl,
+      borderRadius: 22,
+      shadowColor: Teal.deepest,
+      shadowOffset: { width: 0, height: 10 },
+      shadowOpacity: 0.28,
+      shadowRadius: 18,
+      elevation: 10,
+    },
+    heroCard: {
+      borderRadius: 22,
+      padding: Spacing.xl,
+      overflow: "hidden",
+    },
+    heroTopRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: Spacing.sm,
+    },
+    heroEyebrow: {
+      fontSize: 10,
+      fontWeight: "800",
+      color: Teal.aqua,
+      letterSpacing: 2.4,
+    },
+    heroRequiredPill: {
+      backgroundColor: "rgba(255, 255, 255, 0.16)",
+      borderWidth: 1,
+      borderColor: "rgba(255, 255, 255, 0.25)",
+      borderRadius: Radius.pill,
+      paddingHorizontal: 9,
+      paddingVertical: 3,
+    },
+    heroRequiredText: {
+      fontSize: 8.5,
+      fontWeight: "800",
+      color: "#FFFFFF",
+      letterSpacing: 1.2,
+    },
+    heroTitle: {
+      fontSize: 19,
+      fontWeight: "800",
+      color: "#FFFFFF",
+      letterSpacing: -0.3,
+      lineHeight: 25,
+      marginBottom: Spacing.lg,
+    },
+    heroBottomRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+    heroMetaPill: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      backgroundColor: "rgba(255, 255, 255, 0.12)",
+      borderRadius: Radius.pill,
+      paddingHorizontal: 11,
+      paddingVertical: 6,
+    },
+    heroMetaText: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: "#FFFFFF",
+    },
+    heroGo: {
+      width: 38,
+      height: 38,
+      borderRadius: 19,
+      backgroundColor: "#FFFFFF",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    statsGrid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: Spacing.md,
+      marginBottom: Spacing.xxl,
+    },
+    statCard: {
+      flexBasis: "47%",
+      flexGrow: 1,
+      backgroundColor: Palette.surface,
+      borderRadius: Radius.lg,
+      padding: Spacing.lg,
+      borderWidth: 1,
+      borderColor: Palette.border,
+      ...Shadow.card,
+    },
+    statIconTile: {
+      width: 34,
+      height: 34,
+      borderRadius: Radius.md - 2,
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: Spacing.md,
+    },
+    statValue: {
+      fontSize: 26,
+      fontWeight: "800",
+      color: Palette.ink,
+      letterSpacing: -0.5,
+    },
+    statLabel: {
+      fontSize: 12.5,
+      color: Palette.textSecondary,
+      fontWeight: "500",
+      marginTop: 2,
+    },
+    section: {
+      marginBottom: Spacing.xxl,
+    },
+    quickActions: {
+      flexDirection: "row",
+      backgroundColor: Palette.surface,
+      borderRadius: Radius.lg,
+      paddingVertical: Spacing.lg,
+      paddingHorizontal: Spacing.sm,
+      borderWidth: 1,
+      borderColor: Palette.border,
+      ...Shadow.card,
+    },
+    quickAction: {
+      flex: 1,
+      alignItems: "center",
+    },
+    quickActionIcon: {
+      width: 46,
+      height: 46,
+      borderRadius: 23,
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: Spacing.sm,
+    },
+    quickActionText: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: Palette.text,
+    },
+    taskList: {
+      backgroundColor: Palette.surface,
+      borderRadius: Radius.lg,
+      paddingHorizontal: Spacing.lg,
+      borderWidth: 1,
+      borderColor: Palette.border,
+      ...Shadow.card,
+    },
+    taskItem: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingVertical: 14,
+    },
+    taskItemBorder: {
+      borderTopWidth: 1,
+      borderTopColor: Palette.borderLight,
+    },
+    taskStatusBar: {
+      width: 3.5,
+      height: 30,
+      borderRadius: 2,
+      marginRight: Spacing.md,
+    },
+    taskContent: {
+      flex: 1,
+      marginRight: Spacing.sm,
+    },
+    taskTitle: {
+      ...Type.itemTitle,
+    },
+    taskMeta: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginTop: 3,
+    },
+    taskDue: {
+      fontSize: 12,
+      color: Palette.textMuted,
+      marginLeft: 5,
+    },
+    taskRequired: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: Accent.red.fg,
+      marginLeft: Spacing.md,
+      textTransform: "uppercase",
+      letterSpacing: 0.3,
+    },
+    emptyTasksWrap: {
+      alignItems: "center",
+      paddingVertical: Spacing.xl,
+      gap: Spacing.sm,
+    },
+    emptyTasksIcon: {
+      width: 38,
+      height: 38,
+      borderRadius: 19,
+      backgroundColor: Palette.primaryTint,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    emptyTasks: {
+      fontSize: 13,
+      color: Palette.textMuted,
+      textAlign: "center",
+      paddingHorizontal: Spacing.lg,
+    },
   });
 }
