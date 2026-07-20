@@ -24,7 +24,6 @@ import Svg, {
 } from "react-native-svg";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Google from "expo-auth-session/providers/google";
-import { ResponseType } from "expo-auth-session";
 import * as WebBrowser from "expo-web-browser";
 import { Radius, Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
@@ -38,16 +37,21 @@ WebBrowser.maybeCompleteAuthSession();
 
 // Google Cloud Console client IDs — see mobile/.env.example.
 //
-// Only the web client ID is actually used for sign-in: Android/iOS-type
-// clients are designed for Google's native sign-in SDK (a different, much
-// heavier integration), not a plain browser-redirect flow — pointing this
-// screen's request at them makes Google reject it with "Access blocked:
-// Authorization Error" because the app making the request (Expo Go, or any
-// build not using the native SDK) isn't the signed app registered on that
-// client. The web client's implicit id_token flow works via a normal
-// redirect on every platform, so we force that everywhere.
+// Android/iOS client types don't take a manually-registered redirect URI at
+// all: Google derives the allowed redirect from the app's real package name
+// + the SHA-1 of the build's signing certificate, which only matches when
+// running inside an actual build signed with that keystore — NOT inside
+// Expo Go (a shared container app with its own package name). So this
+// screen only works for Google sign-in from a real dev-client/standalone
+// build on Android/iOS; the web client id is what makes it work when
+// running on the web platform (`expo start --web`), which uses ordinary
+// https redirects.
 const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
-const GOOGLE_SIGN_IN_CONFIGURED = Boolean(GOOGLE_WEB_CLIENT_ID);
+const GOOGLE_IOS_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
+const GOOGLE_ANDROID_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID;
+const GOOGLE_SIGN_IN_CONFIGURED = Boolean(
+  GOOGLE_WEB_CLIENT_ID || GOOGLE_IOS_CLIENT_ID || GOOGLE_ANDROID_CLIENT_ID,
+);
 
 /** Gradient stops sampled from the pill logo's teal cap. */
 const Teal = {
@@ -160,32 +164,18 @@ export default function LoginScreen() {
   const { Palette, Accent } = useTheme();
   const styles = React.useMemo(() => createStyles(Palette, Accent), [Palette, Accent]);
 
-  const [googleRequest, googleResponse, promptGoogleSignIn] = Google.useAuthRequest(
-    {
-      // useIdTokenAuthRequest only forces the implicit id_token grant on web
-      // and defers to Code (PKCE) elsewhere, which needs an Android/iOS-type
-      // client and Google's native SDK — not what we want here (see comment
-      // above), so call the lower-level hook and force it on every platform.
-      clientId: GOOGLE_WEB_CLIENT_ID || "not-configured",
-      responseType: ResponseType.IdToken,
-    },
-    {
-      // Expo Go's default redirect URI bakes in your machine's current LAN
-      // IP, so it changes across networks/DHCP renewals and stops matching
-      // whatever's registered in Google Cloud Console. Forcing "localhost"
-      // keeps it stable — Google never actually connects to this host, it's
-      // just a URI the OS hands back to Expo Go, so the substitution is safe.
-      preferLocalhost: true,
-    },
-  );
-
-  // Dev convenience: this is the exact string to add under the web OAuth
-  // client's "Authorized redirect URIs" in Google Cloud Console.
-  React.useEffect(() => {
-    if (__DEV__ && googleRequest?.redirectUri) {
-      console.log('[Google Sign-In] Authorized redirect URI to register:', googleRequest.redirectUri);
-    }
-  }, [googleRequest]);
+  const [googleRequest, googleResponse, promptGoogleSignIn] = Google.useIdTokenAuthRequest({
+    // The hook picks androidClientId/iosClientId/webClientId based on the
+    // current platform and only falls back to the generic `clientId` prop
+    // when that platform-specific one is undefined — so `clientId` needs
+    // its own "nothing configured" placeholder, distinct from webClientId,
+    // or Android/iOS throw when only the web client id is set.
+    clientId:
+      GOOGLE_ANDROID_CLIENT_ID || GOOGLE_IOS_CLIENT_ID || GOOGLE_WEB_CLIENT_ID || "not-configured",
+    webClientId: GOOGLE_WEB_CLIENT_ID,
+    iosClientId: GOOGLE_IOS_CLIENT_ID,
+    androidClientId: GOOGLE_ANDROID_CLIENT_ID,
+  });
 
   const handleLogin = async () => {
     setError("");
