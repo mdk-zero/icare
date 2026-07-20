@@ -3,7 +3,7 @@ import { ScrollView, View, Text, StyleSheet, Pressable, RefreshControl, Alert } 
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Accent, Palette, Radius, Shadow, Spacing, Type } from '@/constants/theme';
-import { SectionHeader, LoadingSpinner, EmptyState } from '@/components/ui';
+import { SectionHeader, SkeletonScreen, EmptyState } from '@/components/ui';
 import { useApiData } from '@/hooks/useApiData';
 import { fetchRecommendations, dismissRecommendation } from '@/lib/api';
 
@@ -14,7 +14,7 @@ export default function RecommendationsScreen() {
   const { data, loading, refreshing, error, refresh, reload } = useApiData(fetchRecommendations);
 
   if (loading && !data) {
-    return <LoadingSpinner />;
+    return <SkeletonScreen />;
   }
 
   const recommendations = data ?? [];

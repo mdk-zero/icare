@@ -3,7 +3,7 @@ import { ScrollView, View, Text, StyleSheet, Pressable, TextInput, Alert } from 
 import { useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Accent, Palette, Radius, Shadow, Spacing, Type } from '@/constants/theme';
-import { LoadingSpinner, EmptyState } from '@/components/ui';
+import { SkeletonScreen, EmptyState } from '@/components/ui';
 import { useApiData, allCached } from '@/hooks/useApiData';
 import { fetchPatients, fetchMyVitals, submitVitalReading, VitalReading } from '@/lib/api';
 import { VITAL_RULES } from '@/lib/vitals-rules';
@@ -73,7 +73,7 @@ export default function VitalDetailScreen() {
   const [saving, setSaving] = useState(false);
 
   if (loading && !data) {
-    return <LoadingSpinner />;
+    return <SkeletonScreen />;
   }
 
   const [patients, readings] = data ?? [[], []];

@@ -2,7 +2,7 @@ import React from 'react';
 import { ScrollView, View, Text, StyleSheet, Pressable, RefreshControl } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Card, Badge, LoadingSpinner, EmptyState } from '@/components/ui';
+import { Card, Badge, SkeletonScreen, EmptyState } from '@/components/ui';
 import { useApiData, allCached } from '@/hooks/useApiData';
 import { fetchPatients, fetchEhrRecords } from '@/lib/api';
 import { Accent, Palette, Radius, Shadow, Spacing, Type } from '@/constants/theme';
@@ -22,7 +22,7 @@ export default function EHRDetailScreen() {
   );
 
   if (loading && !data) {
-    return <LoadingSpinner />;
+    return <SkeletonScreen />;
   }
 
   const [patients, tprRecords, ivfRecords, noteRecords] = data ?? [[], [], [], []];

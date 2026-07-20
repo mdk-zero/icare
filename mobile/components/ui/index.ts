@@ -1,7 +1,7 @@
 export { PrimaryButton } from './PrimaryButton';
 export { Card } from './Card';
 export { Badge } from './Badge';
-export { LoadingSpinner } from './LoadingSpinner';
+export { SkeletonBlock, SkeletonHeader, SkeletonCard, SkeletonList, SkeletonScreen } from './Skeleton';
 export { Avatar } from './Avatar';
 export { IconContainer } from './IconContainer';
 export { FormInput } from './FormInput';

@@ -3,7 +3,7 @@ import { ScrollView, View, Text, StyleSheet, TextInput, Pressable, Alert } from 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Accent, Palette, Radius, Shadow, Spacing, Type } from '@/constants/theme';
-import { Card, Badge, LoadingSpinner, EmptyState } from '@/components/ui';
+import { Card, Badge, SkeletonScreen, EmptyState } from '@/components/ui';
 import { useApiData, allCached } from '@/hooks/useApiData';
 import { fetchPatients, fetchEhrRecords, createEhrRecord, updateIvfStatus } from '@/lib/api';
 
@@ -32,7 +32,7 @@ export default function IVFSheetScreen() {
   const [saving, setSaving] = useState(false);
 
   if (loading && !data) {
-    return <LoadingSpinner />;
+    return <SkeletonScreen />;
   }
 
   const [patients, ivfRecords] = data ?? [[], []];

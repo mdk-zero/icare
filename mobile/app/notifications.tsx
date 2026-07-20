@@ -2,7 +2,7 @@ import React from 'react';
 import { ScrollView, View, Text, StyleSheet, Pressable, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Accent, Palette, Radius, Shadow, Spacing } from '@/constants/theme';
-import { LoadingSpinner, EmptyState } from '@/components/ui';
+import { SkeletonScreen, EmptyState } from '@/components/ui';
 import { useApiData } from '@/hooks/useApiData';
 import {
   fetchNotifications,
@@ -28,7 +28,7 @@ export default function NotificationsScreen() {
   const { data, loading, refreshing, error, refresh, reload } = useApiData(fetchNotifications);
 
   if (loading && !data) {
-    return <LoadingSpinner />;
+    return <SkeletonScreen />;
   }
 
   const notifications = data?.notifications ?? [];

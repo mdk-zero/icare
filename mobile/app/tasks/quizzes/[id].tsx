@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ScrollView, View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Card, PrimaryButton, LoadingSpinner, EmptyState } from '@/components/ui';
+import { Card, PrimaryButton, SkeletonScreen, EmptyState } from '@/components/ui';
 import { Accent, Palette, Radius, Spacing, Type } from '@/constants/theme';
 import { startAttempt, submitAttempt, StartedAttempt, AttemptResult } from '@/lib/api';
 import { isNetworkError } from '@/lib/client';
@@ -132,7 +132,7 @@ export default function QuizInterfaceScreen() {
   }
 
   if (!started) {
-    return <LoadingSpinner />;
+    return <SkeletonScreen />;
   }
 
   // ------------------------------------------------------------

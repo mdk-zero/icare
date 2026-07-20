@@ -2,7 +2,7 @@ import React from 'react';
 import { ScrollView, View, Text, StyleSheet, Pressable, RefreshControl } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { SectionHeader, LoadingSpinner, EmptyState } from '@/components/ui';
+import { SectionHeader, SkeletonScreen, EmptyState } from '@/components/ui';
 import { useApiData } from '@/hooks/useApiData';
 import { fetchAssessments, StudentAssessment } from '@/lib/api';
 import { Accent, Palette, Radius, Shadow, Spacing, Type } from '@/constants/theme';
@@ -105,7 +105,7 @@ export default function QuizzesScreen() {
   );
 
   if (loading && !data) {
-    return <LoadingSpinner />;
+    return <SkeletonScreen />;
   }
 
   const assessments = data ?? [];

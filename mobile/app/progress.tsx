@@ -1,6 +1,6 @@
 import React from 'react';
 import { ScrollView, View, Text, StyleSheet, RefreshControl } from 'react-native';
-import { Card, StatCard, SectionHeader, LoadingSpinner } from '@/components/ui';
+import { Card, StatCard, SectionHeader, SkeletonScreen } from '@/components/ui';
 import { Accent, Palette, Spacing } from '@/constants/theme';
 import { useApiData } from '@/hooks/useApiData';
 import { fetchProgress } from '@/lib/api';
@@ -15,7 +15,7 @@ export default function ProgressScreen() {
   const { data, loading, refreshing, error, refresh } = useApiData(fetchProgress);
 
   if (loading && !data) {
-    return <LoadingSpinner />;
+    return <SkeletonScreen />;
   }
 
   const attempts = data?.attempts ?? [];

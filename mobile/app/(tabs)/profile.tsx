@@ -3,11 +3,20 @@ import { ScrollView, View, Text, StyleSheet, Pressable, Alert, RefreshControl } 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Accent, Palette, Radius, Shadow, Spacing, Type } from '@/constants/theme';
 import { SectionHeader } from '@/components/ui';
 import { useAuth } from '@/hooks/useAuth';
 import { useApiData, allCached } from '@/hooks/useApiData';
 import { fetchProgress, fetchRecommendations } from '@/lib/api';
+
+/** Teal ramp sampled from the pill logo's cap (same as login/header/tab bar/dashboard). */
+const Teal = {
+  deepest: '#082E38',
+  deep: '#0D4550',
+  primary: '#1B6B7B',
+  light: '#35859B',
+};
 
 function getInitials(name?: string) {
   if (!name) return 'S';
@@ -80,30 +89,40 @@ export default function ProfileScreen() {
         <RefreshControl refreshing={refreshing} onRefresh={refresh} colors={[Palette.primary]} tintColor={Palette.primary} />
       }
     >
-      <View style={styles.headerCard}>
+      <LinearGradient
+        colors={[Teal.deepest, Teal.deep, Teal.primary]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.headerCard}
+      >
         <View style={styles.avatarRow}>
-          <View style={styles.avatarLarge}>
+          <LinearGradient
+            colors={[Teal.light, '#FFFFFF33', Teal.deep]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.avatarLarge}
+          >
             <Text style={styles.avatarText}>{getInitials(user?.name)}</Text>
-          </View>
+          </LinearGradient>
           <Pressable style={({ pressed }) => [styles.editButton, pressed && styles.pressedDim]}>
-            <Ionicons name="camera" size={14} color={Palette.primary} />
+            <Ionicons name="camera" size={14} color={Teal.primary} />
           </Pressable>
         </View>
         <Text style={styles.name}>{user?.name || 'Student'}</Text>
         <Text style={styles.email}>{user?.email || 'student@icare.edu'}</Text>
         <View style={styles.badges}>
-          <View style={[styles.badge, { backgroundColor: Palette.primaryTint }]}>
-            <Ionicons name="school-outline" size={12} color={Palette.primary} />
-            <Text style={[styles.badgeText, { color: Palette.primary }]}>{user?.cohort || 'BSN-2027'}</Text>
+          <View style={styles.badge}>
+            <Ionicons name="school-outline" size={12} color="#FFFFFF" />
+            <Text style={styles.badgeText}>{user?.cohort || 'BSN-2027'}</Text>
           </View>
-          <View style={[styles.badge, { backgroundColor: Palette.borderLight }]}>
-            <Ionicons name="id-card-outline" size={12} color={Palette.textSecondary} />
-            <Text style={[styles.badgeText, { color: Palette.textSecondary }]}>
+          <View style={styles.badge}>
+            <Ionicons name="id-card-outline" size={12} color="#FFFFFF" />
+            <Text style={styles.badgeText}>
               {user?.studentId || 'NS-2024-001'}
             </Text>
           </View>
         </View>
-      </View>
+      </LinearGradient>
 
       <View style={styles.section}>
         <SectionHeader title="Performance Overview" />
@@ -256,26 +275,24 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   headerCard: {
-    backgroundColor: Palette.surface,
     borderRadius: Radius.xl,
     padding: Spacing.xxl,
     alignItems: 'center',
     marginBottom: Spacing.xxl,
-    borderWidth: 1,
-    borderColor: Palette.border,
-    ...Shadow.card,
+    ...Shadow.raised,
   },
   avatarRow: {
     position: 'relative',
     marginBottom: Spacing.lg,
   },
   avatarLarge: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: Palette.primary,
+    width: 76,
+    height: 76,
+    borderRadius: 38,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF88',
   },
   avatarText: {
     fontSize: 24,
@@ -298,10 +315,11 @@ const styles = StyleSheet.create({
   name: {
     ...Type.screenTitle,
     fontSize: 22,
+    color: '#FFFFFF',
   },
   email: {
     fontSize: 13,
-    color: Palette.textSecondary,
+    color: '#E7F0F1CC',
     marginTop: 2,
   },
   badges: {
@@ -316,10 +334,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
     paddingVertical: 5,
     borderRadius: Radius.pill,
+    backgroundColor: '#FFFFFF26',
+    borderWidth: 1,
+    borderColor: '#FFFFFF33',
   },
   badgeText: {
     fontSize: 12,
     fontWeight: '600',
+    color: '#FFFFFF',
   },
   section: {
     marginBottom: Spacing.xxl,

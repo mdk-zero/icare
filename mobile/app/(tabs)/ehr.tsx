@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Accent, Palette, Radius, Shadow, Spacing, Type } from '@/constants/theme';
-import { ScreenHeader, SectionHeader, LoadingSpinner, EmptyState } from '@/components/ui';
+import { ScreenHeader, SectionHeader, SkeletonScreen, EmptyState } from '@/components/ui';
 import { useApiData } from '@/hooks/useApiData';
 import { fetchPatients } from '@/lib/api';
 
@@ -15,7 +15,7 @@ export default function EHRScreen() {
   const { data, loading, refreshing, error, refresh, fromCache } = useApiData(fetchPatients);
 
   if (loading && !data) {
-    return <LoadingSpinner />;
+    return <SkeletonScreen />;
   }
 
   const patients = data ?? [];

@@ -1,10 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ScrollView, View, Text, StyleSheet, Pressable, RefreshControl, ActivityIndicator } from 'react-native';
+import { ScrollView, View, Text, StyleSheet, Pressable, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Accent, Palette, Radius, Shadow, Spacing, Type } from '@/constants/theme';
-import { ScreenHeader, EmptyState } from '@/components/ui';
+import { ScreenHeader, EmptyState, SkeletonScreen } from '@/components/ui';
 import { fetchPatients, fetchMyVitals, Patient, VitalReading } from '@/lib/api';
 
 const VITAL_FIELDS = [
@@ -73,11 +73,7 @@ export default function VitalsScreen() {
   };
 
   if (loading) {
-    return (
-      <View style={[styles.container, styles.centered]}>
-        <ActivityIndicator size="large" color={Palette.primary} />
-      </View>
-    );
+    return <SkeletonScreen cards={4} />;
   }
 
   return (
@@ -211,10 +207,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Palette.background,
-  },
-  centered: {
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   content: {
     padding: Spacing.lg,

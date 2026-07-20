@@ -15,7 +15,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import Svg, { Path, Circle } from "react-native-svg";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { Accent, Palette, Radius, Shadow, Spacing, Type } from "@/constants/theme";
-import { SectionHeader, LoadingSpinner } from "@/components/ui";
+import { SectionHeader, SkeletonScreen } from "@/components/ui";
 import { useAuth } from "@/hooks/useAuth";
 import { useApiData, allCached } from "@/hooks/useApiData";
 import {
@@ -104,7 +104,7 @@ export default function DashboardScreen() {
   const [assignments, assessments, progress, patients] = data ?? [[], [], null, []];
 
   if (loading && !data) {
-    return <LoadingSpinner />;
+    return <SkeletonScreen />;
   }
 
   const openTasks = assignments.filter((a) => a.status !== "completed");

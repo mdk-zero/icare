@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, View, Text, StyleSheet, Alert, Pressable } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Card, Badge, PrimaryButton, LoadingSpinner, EmptyState } from '@/components/ui';
+import { Card, Badge, PrimaryButton, SkeletonScreen, EmptyState } from '@/components/ui';
 import { Accent, Palette, Radius, Spacing, Type } from '@/constants/theme';
 import { useApiData, allCached } from '@/hooks/useApiData';
 import {
@@ -148,7 +148,7 @@ export default function ScenarioRunnerScreen() {
   };
 
   if (loading && !data) {
-    return <LoadingSpinner />;
+    return <SkeletonScreen />;
   }
 
   if (!assignment) {

@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Accent, Palette, Radius, Shadow, Spacing, Type } from '@/constants/theme';
-import { ScreenHeader, SectionHeader, EmptyState, LoadingSpinner } from '@/components/ui';
+import { ScreenHeader, SectionHeader, EmptyState, SkeletonScreen } from '@/components/ui';
 import { useApiData } from '@/hooks/useApiData';
 import { fetchScenarioAssignments, ScenarioAssignment } from '@/lib/api';
 
@@ -106,7 +106,7 @@ export default function TasksScreen() {
   );
 
   if (loading && !data) {
-    return <LoadingSpinner />;
+    return <SkeletonScreen />;
   }
 
   const assignments = data ?? [];
