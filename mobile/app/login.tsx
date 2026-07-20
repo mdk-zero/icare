@@ -15,6 +15,7 @@ import {
 import { useRouter } from 'expo-router';
 import { FontAwesome6 } from '@expo/vector-icons';
 import Svg, { Defs, LinearGradient as SvgGradient, Stop, Rect, Circle, Path } from 'react-native-svg';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Accent, Palette, Radius, Spacing } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
 import { API_URL } from '@/lib/client';
@@ -50,19 +51,21 @@ function HeroBackdrop({ width }: { width: number }) {
   ].join(' ');
 
   return (
-    <Svg width={width} height={HERO_HEIGHT} style={StyleSheet.absoluteFill}>
+    <View style={StyleSheet.absoluteFill}>
+      <LinearGradient
+        colors={[Teal.deepest, Teal.deep, Teal.primary]}
+        locations={[0, 0.55, 1]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+      <Svg width={width} height={HERO_HEIGHT} style={StyleSheet.absoluteFill}>
       <Defs>
-        <SvgGradient id="hero" x1="0" y1="0" x2="1" y2="1">
-          <Stop offset="0" stopColor={Teal.deepest} />
-          <Stop offset="0.55" stopColor={Teal.deep} />
-          <Stop offset="1" stopColor={Teal.primary} />
-        </SvgGradient>
         <SvgGradient id="glow" x1="0" y1="0" x2="0" y2="1">
           <Stop offset="0" stopColor={Teal.light} stopOpacity="0.55" />
           <Stop offset="1" stopColor={Teal.light} stopOpacity="0" />
         </SvgGradient>
       </Defs>
-      <Rect x="0" y="0" width={width} height={HERO_HEIGHT} fill="url(#hero)" />
       {/* soft light bloom, like the sheen on the capsule */}
       <Circle cx={width * 0.85} cy={30} r={150} fill="url(#glow)" />
       <Circle cx={width * 0.08} cy={HERO_HEIGHT - 40} r={110} fill="url(#glow)" />
@@ -95,23 +98,20 @@ function HeroBackdrop({ width }: { width: number }) {
       />
       {/* ECG pulse */}
       <Path d={pulse} stroke="#FFFFFF" strokeOpacity={0.14} strokeWidth={2} fill="none" />
-    </Svg>
+      </Svg>
+    </View>
   );
 }
 
 /** Gradient fill for the sign-in button. */
 function ButtonGradient() {
   return (
-    <Svg style={StyleSheet.absoluteFill} viewBox="0 0 100 56" preserveAspectRatio="none">
-      <Defs>
-        <SvgGradient id="btn" x1="0" y1="0" x2="1" y2="1">
-          <Stop offset="0" stopColor={Teal.light} />
-          <Stop offset="0.5" stopColor={Teal.primary} />
-          <Stop offset="1" stopColor={Teal.deep} />
-        </SvgGradient>
-      </Defs>
-      <Rect x="0" y="0" width="100" height="56" fill="url(#btn)" />
-    </Svg>
+    <LinearGradient
+      colors={[Teal.light, Teal.primary, Teal.deep]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={StyleSheet.absoluteFill}
+    />
   );
 }
 
