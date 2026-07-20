@@ -382,6 +382,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.16,
     shadowRadius: 24,
     elevation: 14,
+    marginBottom: 10,
   },
   tabItem: {
     flex: 1,
