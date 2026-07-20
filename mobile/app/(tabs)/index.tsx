@@ -83,7 +83,11 @@ function HeroPulse({ width }: { width: number }) {
     `L${width} ${y}`,
   ].join(" ");
   return (
-    <Svg width={width} height={110} style={StyleSheet.absoluteFill} pointerEvents="none"></Svg>
+    <Svg width={width} height={110} style={StyleSheet.absoluteFill} pointerEvents="none">
+      <Circle cx={width * 0.14} cy={26} r={46} fill="#FFFFFF" opacity={0.06} />
+      <Circle cx={width * 0.88} cy={92} r={60} fill="#FFFFFF" opacity={0.05} />
+      <Path d={pulse} stroke="#FFFFFF" strokeOpacity={0.28} strokeWidth={2} fill="none" />
+    </Svg>
   );
 }
 
