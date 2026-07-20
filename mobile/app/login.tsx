@@ -124,6 +124,7 @@ export default function LoginScreen() {
   const [focusedField, setFocusedField] = useState<string | null>(null);
   const { login, isLoading } = useAuth();
   const router = useRouter();
+  const emailRef = useRef<TextInput>(null);
   const passwordRef = useRef<TextInput>(null);
   const { width } = useWindowDimensions();
 
@@ -148,7 +149,7 @@ export default function LoginScreen() {
   return (
     <View style={styles.container}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.keyboardView}
       >
         <ScrollView
@@ -179,7 +180,8 @@ export default function LoginScreen() {
             <Text style={styles.subtitleText}>Sign in to continue your rounds</Text>
 
             <View style={styles.formSection}>
-              <View
+              <Pressable
+                onPress={() => emailRef.current?.focus()}
                 style={[
                   styles.inputWrapper,
                   focusedField === 'email' && styles.inputWrapperFocused,
@@ -198,6 +200,7 @@ export default function LoginScreen() {
                     Email
                   </Text>
                   <TextInput
+                    ref={emailRef}
                     style={styles.input}
                     placeholder="email@example.com"
                     placeholderTextColor={Palette.textMuted}
@@ -215,9 +218,10 @@ export default function LoginScreen() {
                     onBlur={() => setFocusedField(null)}
                   />
                 </View>
-              </View>
+              </Pressable>
 
-              <View
+              <Pressable
+                onPress={() => passwordRef.current?.focus()}
                 style={[
                   styles.inputWrapper,
                   focusedField === 'password' && styles.inputWrapperFocused,
@@ -269,7 +273,7 @@ export default function LoginScreen() {
                     </Pressable>
                   </View>
                 </View>
-              </View>
+              </Pressable>
 
               {error ? (
                 <View style={styles.errorBanner}>
