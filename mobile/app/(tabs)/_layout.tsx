@@ -1,11 +1,12 @@
 import { Tabs, useRouter, usePathname } from "expo-router";
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, Image, Pressable } from "react-native";
+import { View, Text, StyleSheet, Image, Pressable, useWindowDimensions } from "react-native";
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import logoImg from "@/assets/images/logo-pill.png";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons, FontAwesome6 } from "@expo/vector-icons";
+import { FontAwesome6 } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import Svg, { Path, Circle } from "react-native-svg";
 import { Palette } from "@/constants/theme";
 import { fetchNotifications } from "@/lib/api";
 
@@ -108,36 +109,82 @@ function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   );
 }
 
+/** Faint ECG trace + light bloom drifting along the header's bottom edge. */
+function HeaderPulse({ width }: { width: number }) {
+  const y = 62;
+  const pulse = [
+    `M0 ${y}`,
+    `L${width * 0.3} ${y}`,
+    `L${width * 0.36} ${y - 16}`,
+    `L${width * 0.42} ${y + 20}`,
+    `L${width * 0.47} ${y - 5}`,
+    `L${width * 0.52} ${y}`,
+    `L${width * 0.78} ${y}`,
+    `L${width * 0.83} ${y - 12}`,
+    `L${width * 0.88} ${y + 14}`,
+    `L${width * 0.92} ${y}`,
+    `L${width} ${y}`,
+  ].join(" ");
+
+  return (
+    <Svg
+      width={width}
+      height={90}
+      style={{ position: "absolute", bottom: 0, left: 0 }}
+      pointerEvents="none"
+    >
+      <Circle cx={width * 0.92} cy={10} r={70} fill="#FFFFFF" fillOpacity={0.05} />
+      <Circle cx={width * 0.05} cy={85} r={50} fill="#FFFFFF" fillOpacity={0.04} />
+      <Path d={pulse} stroke="#FFFFFF" strokeOpacity={0.14} strokeWidth={1.5} fill="none" />
+    </Svg>
+  );
+}
+
 function AppHeader({ notificationCount }: { notificationCount: number }) {
   const router = useRouter();
+  const { width } = useWindowDimensions();
   return (
-    <SafeAreaView style={styles.headerContainer} edges={["top"]}>
-      <View style={styles.headerContent}>
-        <View style={styles.headerLeft}>
-          <Image source={logoImg} style={styles.logo} />
-          <Text style={styles.headerTitle}>CARE++</Text>
-        </View>
-        <Pressable
-          style={({ pressed }) => [
-            styles.notificationButton,
-            pressed && styles.notificationButtonPressed,
-          ]}
-          onPress={() => router.push("/notifications")}
-          hitSlop={8}
-        >
-          <View style={styles.notificationIconBox}>
-            <Ionicons name="notifications-outline" size={20} color={Palette.primary} />
-          </View>
-          {notificationCount > 0 && (
-            <View style={styles.notificationBadge}>
-              <Text style={styles.notificationBadgeText}>
-                {notificationCount > 9 ? "9+" : notificationCount}
-              </Text>
+    <View style={styles.headerShadowWrap}>
+      <LinearGradient
+        colors={[Teal.deepest, Teal.deep, Teal.primary]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1.1, y: 1.6 }}
+        style={styles.headerGradient}
+      >
+        <HeaderPulse width={width} />
+        <SafeAreaView edges={["top"]}>
+          <View style={styles.headerContent}>
+            <View style={styles.headerLeftColumn}>
+              {/* the pill logo doubles as the "i" in iCARE++ */}
+              <View style={styles.headerLockup}>
+                <Image source={logoImg} style={styles.logo} />
+                <Text style={styles.headerTitle}>CARE++</Text>
+              </View>
+              <Text style={styles.headerTagline}>CLINICAL COMPANION</Text>
             </View>
-          )}
-        </Pressable>
-      </View>
-    </SafeAreaView>
+            <Pressable
+              style={({ pressed }) => [
+                styles.notificationButton,
+                pressed && styles.notificationButtonPressed,
+              ]}
+              onPress={() => router.push("/notifications")}
+              hitSlop={8}
+            >
+              <View style={styles.notificationIconBox}>
+                <FontAwesome6 name="bell" size={17} color="#FFFFFF" />
+              </View>
+              {notificationCount > 0 && (
+                <View style={styles.notificationBadge}>
+                  <Text style={styles.notificationBadgeText}>
+                    {notificationCount > 9 ? "9+" : notificationCount}
+                  </Text>
+                </View>
+              )}
+            </Pressable>
+          </View>
+        </SafeAreaView>
+      </LinearGradient>
+    </View>
   );
 }
 
@@ -182,20 +229,32 @@ export default function TabLayout() {
 const ORB_SIZE = 58;
 
 const styles = StyleSheet.create({
-  headerContainer: {
-    backgroundColor: Palette.surface,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Palette.border,
-    zIndex: 1,
+  headerShadowWrap: {
+    zIndex: 10,
+    backgroundColor: "transparent",
+    shadowColor: Teal.deepest,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  headerGradient: {
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    overflow: "hidden",
   },
   headerContent: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingTop: 10,
+    paddingBottom: 14,
   },
-  headerLeft: {
+  headerLeftColumn: {
+    flexDirection: "column",
+  },
+  headerLockup: {
     flexDirection: "row",
     alignItems: "center",
   },
@@ -207,10 +266,21 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 19,
     fontWeight: "800",
-    color: Palette.primary,
+    color: "#FFFFFF",
     letterSpacing: 0.3,
     marginLeft: -10,
     marginTop: 8,
+    textShadowColor: "rgba(8, 46, 56, 0.4)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
+  headerTagline: {
+    fontSize: 8,
+    fontWeight: "700",
+    color: "#9FC8D2",
+    letterSpacing: 2.6,
+    marginTop: 2,
+    marginLeft: 4,
   },
   notificationButton: {
     position: "relative",
@@ -222,7 +292,9 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 12,
-    backgroundColor: Palette.primaryTint,
+    backgroundColor: "rgba(255, 255, 255, 0.14)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.22)",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -238,7 +310,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 4,
     borderWidth: 2,
-    borderColor: Palette.surface,
+    borderColor: Teal.deep,
   },
   notificationBadgeText: {
     color: "#fff",
