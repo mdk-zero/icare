@@ -13,7 +13,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { FontAwesome6 } from '@expo/vector-icons';
 import Svg, { Defs, LinearGradient as SvgGradient, Stop, Rect, Circle, Path } from 'react-native-svg';
 import { Accent, Palette, Radius, Spacing } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
@@ -185,9 +185,9 @@ export default function LoginScreen() {
                   focusedField === 'email' && styles.inputWrapperFocused,
                 ]}
               >
-                <Ionicons
-                  name="mail-outline"
-                  size={19}
+                <FontAwesome6
+                  name="envelope"
+                  size={17}
                   color={focusedField === 'email' ? Teal.primary : Palette.textMuted}
                   style={styles.inputIcon}
                 />
@@ -223,9 +223,10 @@ export default function LoginScreen() {
                   focusedField === 'password' && styles.inputWrapperFocused,
                 ]}
               >
-                <Ionicons
-                  name="lock-closed-outline"
-                  size={19}
+                <FontAwesome6
+                  name="lock"
+                  size={17}
+                  solid
                   color={focusedField === 'password' ? Teal.primary : Palette.textMuted}
                   style={styles.inputIcon}
                 />
@@ -260,9 +261,9 @@ export default function LoginScreen() {
                       hitSlop={10}
                       style={({ pressed }) => [styles.eyeButton, pressed && { opacity: 0.6 }]}
                     >
-                      <Ionicons
-                        name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                        size={20}
+                      <FontAwesome6
+                        name={showPassword ? 'eye-slash' : 'eye'}
+                        size={17}
                         color={Palette.textMuted}
                       />
                     </Pressable>
@@ -272,9 +273,10 @@ export default function LoginScreen() {
 
               {error ? (
                 <View style={styles.errorBanner}>
-                  <Ionicons
-                    name={isNetworkIssue ? 'cloud-offline-outline' : 'alert-circle-outline'}
-                    size={18}
+                  <FontAwesome6
+                    name={isNetworkIssue ? 'wifi' : 'circle-exclamation'}
+                    size={16}
+                    solid
                     color={Accent.red.fg}
                   />
                   <View style={styles.errorTextColumn}>
@@ -306,7 +308,7 @@ export default function LoginScreen() {
                 ) : (
                   <>
                     <Text style={styles.buttonText}>Sign In</Text>
-                    <Ionicons name="arrow-forward" size={18} color="#fff" />
+                    <FontAwesome6 name="arrow-right" size={16} solid color="#fff" />
                   </>
                 )}
               </Pressable>
@@ -317,7 +319,7 @@ export default function LoginScreen() {
             </View>
 
             <View style={styles.footer}>
-              <Ionicons name="shield-checkmark-outline" size={13} color={Palette.textFaint} />
+              <FontAwesome6 name="shield-halved" size={12} solid color={Palette.textFaint} />
               <Text style={styles.footerText}>
                 Protected by Philippine Data Privacy Act of 2012
               </Text>
