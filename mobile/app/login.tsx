@@ -102,7 +102,7 @@ function HeroBackdrop({ width }: { width: number }) {
 /** Gradient fill for the sign-in button. */
 function ButtonGradient() {
   return (
-    <Svg width="100%" height="100%" style={StyleSheet.absoluteFill}>
+    <Svg style={StyleSheet.absoluteFill} viewBox="0 0 100 56" preserveAspectRatio="none">
       <Defs>
         <SvgGradient id="btn" x1="0" y1="0" x2="1" y2="1">
           <Stop offset="0" stopColor={Teal.light} />
@@ -110,7 +110,7 @@ function ButtonGradient() {
           <Stop offset="1" stopColor={Teal.deep} />
         </SvgGradient>
       </Defs>
-      <Rect x="0" y="0" width="100%" height="100%" fill="url(#btn)" />
+      <Rect x="0" y="0" width="100" height="56" fill="url(#btn)" />
     </Svg>
   );
 }
@@ -514,6 +514,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     gap: Spacing.sm,
+    backgroundColor: Teal.primary,
     borderRadius: Radius.lg,
     paddingVertical: 17,
     marginTop: Spacing.sm,
