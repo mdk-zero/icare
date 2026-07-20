@@ -1,5 +1,6 @@
 import React from 'react';
 import { ScrollView, View, Text, StyleSheet, Pressable, Alert, RefreshControl } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Accent, Palette, Radius, Shadow, Spacing, Type } from '@/constants/theme';
@@ -20,6 +21,8 @@ function competencyAccent(score: number) {
 }
 
 export default function ProfileScreen() {
+  // content starts below the floating header, then scrolls beneath it
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, logout } = useAuth();
   const { data, refreshing, refresh } = useApiData(() =>
@@ -71,7 +74,7 @@ export default function ProfileScreen() {
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={[styles.content, { paddingTop: insets.top + 88 }]}
       showsVerticalScrollIndicator={false}
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={refresh} colors={[Palette.primary]} tintColor={Palette.primary} />
@@ -246,7 +249,8 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: Spacing.lg,
-    paddingBottom: 32,
+    // clears the floating tab bar so the last items can scroll above it
+    paddingBottom: 128,
   },
   pressedDim: {
     opacity: 0.7,

@@ -31,7 +31,10 @@ function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
 
   return (
-    <View style={[styles.tabBarWrap, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+    <View
+      pointerEvents="box-none"
+      style={[styles.tabBarWrap, { paddingBottom: Math.max(insets.bottom, 12) }]}
+    >
       <View style={styles.tabBarPill}>
         {state.routes.map((route, index) => {
           const { options } = descriptors[route.key];
@@ -230,6 +233,10 @@ const ORB_SIZE = 58;
 
 const styles = StyleSheet.create({
   headerShadowWrap: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
     zIndex: 10,
     backgroundColor: "transparent",
     shadowColor: Teal.deepest,
@@ -319,6 +326,10 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   tabBarWrap: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
     paddingHorizontal: 14,
     paddingTop: 6,
     backgroundColor: "transparent",

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { ScrollView, View, Text, StyleSheet, Pressable, RefreshControl, ActivityIndicator } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Accent, Palette, Radius, Shadow, Spacing, Type } from '@/constants/theme';
@@ -31,6 +32,8 @@ function vitalValue(key: string, reading: VitalReading) {
 }
 
 export default function VitalsScreen() {
+  // content starts below the floating header, then scrolls beneath it
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const [patients, setPatients] = useState<Patient[]>([]);
   const [latestByPatient, setLatestByPatient] = useState<Record<string, VitalReading>>({});
@@ -80,7 +83,7 @@ export default function VitalsScreen() {
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={[styles.content, { paddingTop: insets.top + 88 }]}
       showsVerticalScrollIndicator={false}
       refreshControl={
         <RefreshControl
@@ -215,7 +218,8 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: Spacing.lg,
-    paddingBottom: 32,
+    // clears the floating tab bar so the last items can scroll above it
+    paddingBottom: 128,
   },
   offlineBanner: {
     flexDirection: 'row',

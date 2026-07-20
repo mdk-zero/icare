@@ -1,5 +1,6 @@
 import React from 'react';
 import { ScrollView, View, Text, StyleSheet, Pressable, RefreshControl } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Accent, Palette, Radius, Shadow, Spacing, Type } from '@/constants/theme';
@@ -91,6 +92,8 @@ function TaskCard({ task, onPress }: { task: ScenarioAssignment; onPress: () => 
 }
 
 export default function TasksScreen() {
+  // content starts below the floating header, then scrolls beneath it
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const { data, loading, refreshing, error, refresh, reload } = useApiData(fetchScenarioAssignments);
 
@@ -121,7 +124,7 @@ export default function TasksScreen() {
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={[styles.content, { paddingTop: insets.top + 88 }]}
       showsVerticalScrollIndicator={false}
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={refresh} colors={[Palette.primary]} tintColor={Palette.primary} />
@@ -194,7 +197,8 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: Spacing.lg,
-    paddingBottom: 32,
+    // clears the floating tab bar so the last items can scroll above it
+    paddingBottom: 128,
   },
   pressedCard: {
     opacity: 0.85,
