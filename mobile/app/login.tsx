@@ -150,9 +150,13 @@ export default function LoginScreen() {
   const styles = React.useMemo(() => createStyles(Palette, Accent), [Palette, Accent]);
 
   const [googleRequest, googleResponse, promptGoogleSignIn] = Google.useIdTokenAuthRequest({
-    // A placeholder keeps the hook from throwing when unconfigured; actual
-    // use is gated behind GOOGLE_SIGN_IN_CONFIGURED (button hidden/disabled).
-    webClientId: GOOGLE_WEB_CLIENT_ID || 'not-configured',
+    // The hook picks androidClientId/iosClientId/webClientId based on the
+    // current platform and falls back to `clientId` only if that specific
+    // prop is undefined — so `clientId` must carry the "nothing configured
+    // yet" placeholder, not webClientId, or Android/iOS throw when only the
+    // web client ID is set (which is all we need for the Expo Go id_token flow).
+    clientId: GOOGLE_WEB_CLIENT_ID || GOOGLE_ANDROID_CLIENT_ID || GOOGLE_IOS_CLIENT_ID || 'not-configured',
+    webClientId: GOOGLE_WEB_CLIENT_ID,
     iosClientId: GOOGLE_IOS_CLIENT_ID,
     androidClientId: GOOGLE_ANDROID_CLIENT_ID,
   });
