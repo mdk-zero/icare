@@ -262,6 +262,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 10,
+    marginBottom: 8,
   },
   headerTitle: {
     fontSize: 19,
@@ -269,7 +270,7 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     letterSpacing: 0.3,
     marginLeft: -10,
-    marginTop: 8,
+    marginTop: 10,
     textShadowColor: "rgba(8, 46, 56, 0.4)",
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 4,
