@@ -28,7 +28,7 @@ function Preview({ mode }: { mode: "light" | "dark" }) {
   return (
     <span
       aria-hidden
-      className="block h-14 w-full overflow-hidden rounded-lg ring-1"
+      className="block h-9 w-14 shrink-0 overflow-hidden rounded-md"
       style={{
         backgroundColor: dark ? "#0a1214" : "#f5f8f9",
         boxShadow: `inset 0 0 0 1px ${dark ? "#1f3237" : "#e6edef"}`,
@@ -39,17 +39,17 @@ function Preview({ mode }: { mode: "light" | "dark" }) {
           className="h-full w-1/4"
           style={{ background: "linear-gradient(180deg,#0b3d3d,#146464)" }}
         />
-        <span className="flex-1 p-1.5">
+        <span className="flex-1 p-1">
           <span
-            className="mb-1 block h-2.5 w-3/5 rounded-[3px]"
+            className="mb-[3px] block h-1.5 w-3/5 rounded-[2px]"
             style={{ backgroundColor: dark ? "#2b7b8c" : "#1b6b7b" }}
           />
           <span
-            className="mb-1 block h-1.5 w-full rounded-[3px]"
+            className="mb-[3px] block h-1 w-full rounded-[2px]"
             style={{ backgroundColor: dark ? "#1f3237" : "#e6edef" }}
           />
           <span
-            className="block h-1.5 w-4/5 rounded-[3px]"
+            className="block h-1 w-4/5 rounded-[2px]"
             style={{ backgroundColor: dark ? "#1f3237" : "#e6edef" }}
           />
         </span>
@@ -58,13 +58,16 @@ function Preview({ mode }: { mode: "light" | "dark" }) {
   );
 }
 
-export default function ThemeSetting() {
+export default function ThemeSetting({ className = "" }: { className?: string }) {
   const [preference, setPreference] = useState<ThemePreference>("system");
   const [resolved, setResolved] = useState<"light" | "dark">("light");
   // Rendered on the server as "system"; only trust the DOM after mount.
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    // localStorage and matchMedia only exist client-side, so the real values
+    // can't be read until after mount without causing a hydration mismatch.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
     const stored = getStoredTheme();
     setPreference(stored);
@@ -86,28 +89,22 @@ export default function ThemeSetting() {
   };
 
   return (
-    <section className="rounded-xl border border-hairline bg-surface shadow-tile p-5">
-      <div className="mb-4 flex items-baseline justify-between gap-3">
-        <div>
-          <h2 className="font-display text-lg font-semibold tracking-[-0.01em] text-gray-900">
-            Appearance
-          </h2>
-          <p className="mt-1 text-sm text-gray-500">
-            Choose how iCARE++ looks on this device.
-          </p>
-        </div>
+    <section
+      className={`rounded-xl border border-hairline bg-surface p-4 shadow-tile ${className}`}
+    >
+      <div className="flex items-baseline justify-between gap-2">
+        <h3 className="font-display text-base font-semibold tracking-[-0.01em] text-gray-900">
+          Appearance
+        </h3>
         {mounted && preference === "system" && (
-          <span className="shrink-0 font-mono text-[10px] uppercase tracking-[0.14em] text-gray-400">
+          <span className="shrink-0 font-mono text-[10px] uppercase tracking-[0.12em] text-gray-400">
             Now {resolved}
           </span>
         )}
       </div>
+      <p className="mt-0.5 text-sm text-gray-500">How iCARE++ looks on this device.</p>
 
-      <div
-        role="radiogroup"
-        aria-label="Colour theme"
-        className="grid grid-cols-1 gap-3 sm:grid-cols-3"
-      >
+      <div role="radiogroup" aria-label="Colour theme" className="mt-3 space-y-2">
         {options.map((option) => {
           const selected = mounted && preference === option.value;
           const previewMode: "light" | "dark" =
@@ -119,34 +116,40 @@ export default function ThemeSetting() {
               role="radio"
               aria-checked={selected}
               onClick={() => choose(option.value)}
-              className={`group relative rounded-xl border p-3 text-left transition-all ${
+              className={`flex w-full items-center gap-3 rounded-lg border p-2 text-left transition-all ${
                 selected
-                  ? "border-brand-600 bg-brand-50 ring-2 ring-brand-600/30"
-                  : "border-hairline bg-surface hover:border-brand-300 hover:bg-subtle"
+                  ? "border-brand-600 bg-brand-50 ring-1 ring-brand-600/30"
+                  : "border-hairline hover:border-brand-300 hover:bg-subtle"
               }`}
             >
               <Preview mode={previewMode} />
-              <span className="mt-3 flex items-center gap-2">
-                <FontAwesomeIcon
-                  icon={option.icon}
-                  className={`h-3.5 w-3.5 ${selected ? "text-brand-600" : "text-gray-400"}`}
-                />
-                <span
-                  className={`text-sm font-semibold ${
-                    selected ? "text-brand-700" : "text-gray-700"
-                  }`}
-                >
-                  {option.label}
-                </span>
-                {selected && (
+              <span className="min-w-0 flex-1">
+                <span className="flex items-center gap-1.5">
                   <FontAwesomeIcon
-                    icon={faCheck}
-                    className="ml-auto h-3 w-3 text-brand-600"
-                    aria-hidden
+                    icon={option.icon}
+                    className={`h-3 w-3 shrink-0 ${
+                      selected ? "text-brand-600" : "text-gray-400"
+                    }`}
                   />
-                )}
+                  <span
+                    className={`truncate text-sm font-semibold ${
+                      selected ? "text-brand-700" : "text-gray-700"
+                    }`}
+                  >
+                    {option.label}
+                  </span>
+                </span>
+                <span className="mt-0.5 block truncate text-xs text-gray-500">
+                  {option.hint}
+                </span>
               </span>
-              <span className="mt-0.5 block text-xs text-gray-500">{option.hint}</span>
+              {selected && (
+                <FontAwesomeIcon
+                  icon={faCheck}
+                  className="h-3 w-3 shrink-0 text-brand-600"
+                  aria-hidden
+                />
+              )}
             </button>
           );
         })}

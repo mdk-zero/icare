@@ -127,60 +127,67 @@ export default function ProfileEditor({
   );
 
   return (
-    <div className="max-w-5xl mx-auto">
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left column — identity card */}
-        <div className="lg:col-span-1">
-          <div className="bg-surface rounded-2xl shadow-sm border border-gray-100 p-6 text-center">
-            <div className="relative inline-block mb-4">
+    <div className="space-y-3">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp,image/gif"
+        onChange={handleFileChange}
+        className="hidden"
+      />
+
+      {message && (
+        <div
+          className={`rounded-xl border p-3 text-sm ${
+            message.type === "success"
+              ? "bg-green-50 text-green-700 border-green-200"
+              : "bg-red-50 text-red-700 border-red-200"
+          }`}
+        >
+          {message.text}
+        </div>
+      )}
+
+      {/*
+        Identity and Appearance share the narrow column so neither stretches to
+        a width it has no content for; the forms take the wide one. The original
+        layout left a tall void under a centred identity card.
+      */}
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+        <div className="space-y-3 lg:col-span-1">
+          <section className="rounded-xl border border-hairline bg-surface p-4 shadow-tile">
+            <div className="flex items-center gap-3.5">
               <button
                 type="button"
                 onClick={handleAvatarClick}
                 disabled={isUploading}
-                className="relative w-28 h-28 rounded-full bg-gradient-to-br from-brand-600 to-brand-700 flex items-center justify-center text-white text-4xl font-bold overflow-hidden ring-4 ring-brand-600/10 hover:ring-brand-600/30 transition-all disabled:opacity-60"
+                aria-label="Change profile photo"
+                className="group relative h-24 w-24 shrink-0 overflow-hidden rounded-full bg-gradient-to-br from-brand-600 to-brand-700 text-3xl font-bold text-white ring-4 ring-brand-600/15 transition-all hover:ring-brand-600/40 disabled:opacity-60"
               >
                 {avatarUrl ? (
-                  <img
-                    src={avatarUrl}
-                    alt=""
-                    className="w-full h-full object-cover"
-                  />
+                  <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
                 ) : (
-                  user.name.charAt(0).toUpperCase()
+                  <span className="flex h-full w-full items-center justify-center">
+                    {user.name.charAt(0).toUpperCase()}
+                  </span>
                 )}
-                <span className="absolute inset-0 flex items-center justify-center bg-black/40 text-white text-xs opacity-0 hover:opacity-100 transition-opacity">
+                <span className="absolute inset-0 flex items-center justify-center bg-black/50 text-xs font-medium text-white opacity-0 transition-opacity group-hover:opacity-100">
                   Change
                 </span>
               </button>
-              <button
-                type="button"
-                onClick={handleAvatarClick}
-                disabled={isUploading}
-                className="absolute bottom-1 right-1 w-8 h-8 bg-surface rounded-full shadow-md flex items-center justify-center text-brand-600 hover:bg-gray-50 transition-colors disabled:opacity-60"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-              </button>
+              <div className="min-w-0">
+                <h2 className="font-display text-base font-semibold leading-tight tracking-[-0.01em] text-gray-900">
+                  {user.name}
+                </h2>
+                <p className="mt-0.5 truncate text-xs text-gray-500">{user.email}</p>
+              </div>
             </div>
 
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/jpeg,image/png,image/webp,image/gif"
-              onChange={handleFileChange}
-              className="hidden"
-            />
-
-            <h2 className="text-xl font-bold text-gray-900 mb-1">{user.name}</h2>
-            <p className="text-sm text-gray-500 mb-4">{user.email}</p>
-
-            <div className="flex items-center justify-center gap-2 mb-6">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-brand-600/10 text-brand-600 capitalize">
+            <div className="mt-3 flex flex-wrap items-center gap-1.5">
+              <span className="inline-flex items-center rounded-full bg-brand-600/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.12em] text-brand-700">
                 {user.role}
               </span>
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">
                 {providerIcon}
                 {providerLabel}
               </span>
@@ -190,99 +197,90 @@ export default function ProfileEditor({
               type="button"
               onClick={handleAvatarClick}
               disabled={isUploading}
-              className="w-full px-4 py-2.5 bg-brand-600 text-white text-sm font-medium rounded-xl hover:bg-brand-700 transition-all disabled:opacity-60"
+              className="mt-3 w-full rounded-lg border border-brand-600/30 px-3 py-2 text-sm font-semibold text-brand-700 transition-all hover:bg-brand-50 disabled:opacity-60"
             >
-              {isUploading ? "Uploading..." : "Upload new photo"}
+              {isUploading ? "Uploading…" : "Upload new photo"}
             </button>
-            <p className="text-xs text-gray-400 mt-2">
-              JPG, PNG, WebP, or GIF. Max 2 MB.
+            <p className="mt-1.5 text-center font-mono text-[10px] uppercase tracking-[0.1em] text-gray-400">
+              JPG · PNG · WebP · Max 2 MB
             </p>
-          </div>
+          </section>
+
+          <ThemeSetting />
         </div>
 
-        {/* Right column — forms */}
-        <div className="lg:col-span-2 space-y-6">
-          {message && (
-            <div
-              className={`p-4 rounded-xl text-sm border ${
-                message.type === "success"
-                  ? "bg-green-50 text-green-700 border-green-200"
-                  : "bg-red-50 text-red-700 border-red-200"
-              }`}
-            >
-              {message.text}
-            </div>
-          )}
+        <div className="space-y-3 lg:col-span-2">
+          <section className="rounded-xl border border-hairline bg-surface p-4 shadow-tile">
+            <h3 className="font-display text-base font-semibold tracking-[-0.01em] text-gray-900">
+              Account Information
+            </h3>
+            <p className="mt-0.5 text-sm text-gray-500">
+              Update your name and manage your account details.
+            </p>
 
-          <div className="bg-surface rounded-2xl shadow-sm border border-gray-100 p-6">
-            <div className="mb-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-1">
-                Account Information
-              </h3>
-              <p className="text-sm text-gray-500">
-                Update your name and manage your account details.
-              </p>
-            </div>
-
-            <form onSubmit={handleSubmit} className="space-y-5">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <form onSubmit={handleSubmit} className="mt-4">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label
+                    htmlFor="profile-name"
+                    className="mb-1.5 block text-sm font-medium text-gray-700"
+                  >
                     Full name
                   </label>
                   <input
+                    id="profile-name"
                     type="text"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-surface border border-gray-200 rounded-xl text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-600/50 focus:border-brand-600 transition-all"
+                    className="w-full rounded-lg border border-gray-200 bg-surface px-3 py-2 text-gray-700 transition-all focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/40"
                     placeholder="Your full name"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label
+                    htmlFor="profile-email"
+                    className="mb-1.5 block text-sm font-medium text-gray-700"
+                  >
                     Email address
                   </label>
                   <input
+                    id="profile-email"
                     type="email"
                     value={user.email}
                     disabled
-                    className="w-full px-4 py-2.5 bg-gray-100 border border-gray-200 rounded-xl text-gray-500 cursor-not-allowed"
+                    className="w-full cursor-not-allowed rounded-lg border border-gray-200 bg-gray-100 px-3 py-2 text-gray-500"
                   />
-                  <p className="text-xs text-gray-400 mt-1">
-                    Email cannot be changed.
-                  </p>
                 </div>
               </div>
 
-              <div className="flex justify-end pt-2">
+              <div className="mt-3 flex items-center justify-between gap-3">
+                <p className="text-xs text-gray-400">Email cannot be changed.</p>
                 <button
                   type="submit"
                   disabled={isSaving}
-                  className="px-6 py-2.5 bg-brand-600 text-white font-medium rounded-xl hover:bg-brand-700 transition-all disabled:opacity-60"
+                  className="rounded-lg bg-brand-600 px-5 py-2 text-sm font-semibold text-white shadow-[0_2px_8px_-1px_rgb(27_107_123_/_0.35)] transition-all hover:bg-brand-700 disabled:opacity-60"
                 >
-                  {isSaving ? "Saving..." : "Save changes"}
+                  {isSaving ? "Saving…" : "Save changes"}
                 </button>
               </div>
             </form>
-          </div>
+          </section>
 
-          <div className="bg-surface rounded-2xl shadow-sm border border-gray-100 p-6">
-            <div className="mb-4">
-              <h3 className="text-lg font-semibold text-gray-900 mb-1">
-                Security
-              </h3>
-              <p className="text-sm text-gray-500">
-                Manage how you sign in to your account.
-              </p>
-            </div>
+          <section className="rounded-xl border border-hairline bg-surface p-4 shadow-tile">
+            <h3 className="font-display text-base font-semibold tracking-[-0.01em] text-gray-900">
+              Security
+            </h3>
+            <p className="mt-0.5 text-sm text-gray-500">
+              Manage how you sign in to your account.
+            </p>
 
-            <div className="flex items-center justify-between py-4 border-t border-gray-100">
-              <div>
-                <p className="font-medium text-gray-800">
+            <div className="mt-3 flex items-center justify-between gap-4 rounded-lg bg-subtle p-3">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-gray-800">
                   {hasPassword ? "Change password" : "Set password"}
                 </p>
-                <p className="text-sm text-gray-500">
+                <p className="text-xs text-gray-500">
                   {hasPassword
                     ? "Update the password you use to sign in."
                     : "Add a password so you can sign in without Google."}
@@ -290,17 +288,13 @@ export default function ProfileEditor({
               </div>
               <Link
                 href={changePasswordHref}
-                className="px-4 py-2 text-sm font-medium text-brand-600 border border-brand-600 rounded-xl hover:bg-brand-600 hover:text-white transition-all"
+                className="shrink-0 rounded-lg border border-brand-600/30 px-3 py-2 text-sm font-semibold text-brand-700 transition-all hover:bg-brand-50"
               >
                 {hasPassword ? "Change" : "Set password"}
               </Link>
             </div>
-          </div>
+          </section>
         </div>
-      </div>
-
-      <div className="mt-6">
-        <ThemeSetting />
       </div>
     </div>
   );

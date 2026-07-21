@@ -136,18 +136,24 @@
   --color-hairline: #1f3237;
   --color-subtle: #16252a;
 
-  /* Brand lifts in dark so it clears contrast on the deep surfaces. */
+  /*
+   * Brand lifts in dark, but only to mid-teal. 600 has to serve two masters:
+   * `bg-brand-600` fills that carry hardcoded `text-white`, and `text-brand-600`
+   * on dark surfaces. Taking it as light as the surrounding ramp would suggest
+   * drops white-on-fill to ~1.9:1; these values keep white legible on a fill
+   * while still reading clearly as text against the deep surfaces.
+   */
   --color-brand-50: #0e252b;
   --color-brand-100: #133038;
   --color-brand-200: #17414b;
   --color-brand-300: #1f5f6d;
-  --color-brand-400: #2b7b8c;
-  --color-brand-500: #3f9aad;
-  --color-brand-600: #5cb5c6;
-  --color-brand-700: #7fc9d6;
-  --color-brand-800: #a5dde6;
-  --color-brand-900: #c9eef3;
-  --color-brand-950: #e4f7fa;
+  --color-brand-400: #26788a;
+  --color-brand-500: #2a8496;
+  --color-brand-600: #2f8f9f;
+  --color-brand-700: #46a5b4;
+  --color-brand-800: #6fc0cd;
+  --color-brand-900: #a3dbe4;
+  --color-brand-950: #d3f0f5;
 
   /*
    * Neutrals, inverted and cooled toward the brand.
