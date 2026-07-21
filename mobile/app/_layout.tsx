@@ -1,12 +1,12 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { ActivityIndicator, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AuthProvider, useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/hooks/useTheme';
+import { BootLoader } from '@/components/ui/BootLoader';
 
 function AuthStack() {
   const { Palette } = useTheme();
@@ -37,27 +37,36 @@ function AuthStack() {
   );
 }
 
+// Session restore often resolves in a handful of milliseconds (no stored
+// token, or a fast local network round-trip), which isn't enough time for
+// the boot screen to render a single animation frame. Holding it for at
+// least this long avoids an imperceptible flash on fast paths.
+const MIN_BOOT_DISPLAY_MS = 700;
+
 function AuthNavigator() {
   const { isAuthenticated, isBootstrapping } = useAuth();
-  const { Palette } = useTheme();
   const router = useRouter();
+  const [minDisplayElapsed, setMinDisplayElapsed] = useState(false);
 
   useEffect(() => {
-    if (!isBootstrapping) {
+    const timer = setTimeout(() => setMinDisplayElapsed(true), MIN_BOOT_DISPLAY_MS);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const showBootLoader = isBootstrapping || !minDisplayElapsed;
+
+  useEffect(() => {
+    if (!showBootLoader) {
       if (!isAuthenticated) {
         router.replace('/login');
       }
     }
-  }, [isBootstrapping, isAuthenticated, router]);
+  }, [showBootLoader, isAuthenticated, router]);
 
   // Only gate on the initial session restore; a login attempt in progress
   // must not unmount the login screen (it would wipe form and error state).
-  if (isBootstrapping) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Palette.primaryDark }}>
-        <ActivityIndicator size="large" color="#fff" />
-      </View>
-    );
+  if (showBootLoader) {
+    return <BootLoader />;
   }
 
   return <AuthStack />;

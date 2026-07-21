@@ -98,7 +98,7 @@ const STATS_CONFIG = [
   {
     key: "tasks",
     icon: "clipboard-outline",
-    color: C.primary,
+    color: "primary",
     tint: "#E8F4F1",
     label: "Pending Tasks",
     route: "/tasks",
@@ -106,7 +106,7 @@ const STATS_CONFIG = [
   {
     key: "score",
     icon: "trending-up",
-    color: C.success,
+    color: "success",
     tint: "#E6F7EC",
     label: "Avg Score",
     route: "/progress",
@@ -237,13 +237,6 @@ export default function DashboardScreen() {
     { label: "Quizzes", icon: "file-lines", accent: Accent.violet, href: "/tasks/quizzes" },
     { label: "AI Tips", icon: "lightbulb", accent: Accent.blue, href: "/recommendations" },
   ];
-
-  const statValues: Record<string, string | number> = {
-    tasks: pendingTasks,
-    score: `${avgScore}%`,
-    quizzes: quizzesAvailable,
-    patients: 5,
-  };
 
   return (
     <ScrollView
