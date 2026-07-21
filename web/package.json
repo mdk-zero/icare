@@ -17,6 +17,7 @@
     "@fortawesome/react-fontawesome": "^3.3.1",
     "@react-oauth/google": "^0.13.5",
     "@react-pdf/renderer": "^4.5.1",
+    "@sentry/nextjs": "^10.67.0",
     "@supabase/supabase-js": "^2.108.2",
     "bcryptjs": "^3.0.3",
     "google-auth-library": "^10.7.0",

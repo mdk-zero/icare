@@ -56,3 +56,6 @@ firebase-service-account.json
 *firebase-adminsdk*.json
 
 */.temp/*
+
+# Sentry Config File
+.env.sentry-build-plugin
