@@ -55,7 +55,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const { name, email, role } = body as { name?: unknown; email?: unknown; role?: unknown };
+  const { name, email, role, section_id } = body as {
+    name?: unknown;
+    email?: unknown;
+    role?: unknown;
+    section_id?: unknown;
+  };
 
   if (typeof name !== 'string' || name.trim().length === 0) {
     return NextResponse.json({ error: 'Name is required' }, { status: 400 });
@@ -65,6 +70,16 @@ export async function POST(request: NextRequest) {
   }
   if (typeof role !== 'string' || !(VALID_ROLES as readonly string[]).includes(role)) {
     return NextResponse.json({ error: 'Role must be student, faculty, or admin' }, { status: 400 });
+  }
+  if (section_id !== undefined && section_id !== null && typeof section_id !== 'string') {
+    return NextResponse.json({ error: 'Invalid section_id' }, { status: 400 });
+  }
+
+  const sectionId = typeof section_id === 'string' && section_id.trim() ? section_id.trim() : null;
+  // Students are enrolled into a section; a section on a faculty/admin row would
+  // silently scope them as if they were a student.
+  if (sectionId && role !== 'student') {
+    return NextResponse.json({ error: 'Only students can be placed in a section' }, { status: 400 });
   }
 
   const trimmedName = name.trim();
@@ -88,6 +103,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (sectionId) {
+      const { data: section } = await supabase
+        .from('sections')
+        .select('id')
+        .eq('id', sectionId)
+        .maybeSingle();
+      if (!section) {
+        return NextResponse.json({ error: 'Section not found' }, { status: 400 });
+      }
+    }
+
     const tempPassword = generateRandomPassword();
     const passwordHash = await hashPassword(tempPassword);
 
@@ -100,8 +126,9 @@ export async function POST(request: NextRequest) {
         password_hash: passwordHash,
         force_password_change: true,
         picture_url: null,
+        section_id: sectionId,
       })
-      .select('id, email, name, role, picture_url, created_at, last_login_at')
+      .select('id, email, name, role, picture_url, created_at, last_login_at, section_id, sections(name)')
       .single();
 
     if (insertError || !user) {

@@ -20,7 +20,7 @@ export async function GET() {
     const [studentsRes, attemptsRes, predictionsRes] = await Promise.all([
       supabase
         .from('users')
-        .select('id, email, name, picture_url, created_at, last_login_at')
+        .select('id, email, name, picture_url, created_at, last_login_at, section_id, sections(name)')
         .eq('role', 'student')
         .order('name'),
       supabase
@@ -64,6 +64,8 @@ export async function GET() {
         quizzes_completed: t?.count ?? 0,
         average_score: t && t.count > 0 ? Math.round(t.sum / t.count) : null,
         at_risk: latestRisk.get(s.id) === 'at_risk',
+        section_id: s.section_id ?? null,
+        section: (s as unknown as { sections: { name: string } | null }).sections?.name ?? null,
       };
     });
 
