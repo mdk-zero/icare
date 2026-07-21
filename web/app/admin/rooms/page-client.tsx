@@ -110,10 +110,10 @@ export default function RoomsClient() {
       />
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        <div className="bg-white rounded-xl p-4 border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200">
+        <div className="bg-surface rounded-xl p-4 border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-[#1B6B7B]/10 rounded-lg flex items-center justify-center">
-              <FontAwesomeIcon icon={faDoorOpen} className="w-5 h-5 text-[#1B6B7B]" />
+            <div className="w-10 h-10 bg-brand-600/10 rounded-lg flex items-center justify-center">
+              <FontAwesomeIcon icon={faDoorOpen} className="w-5 h-5 text-brand-600" />
             </div>
             <div>
               <p className="text-2xl font-bold text-gray-800">{rooms.length}</p>
@@ -121,7 +121,7 @@ export default function RoomsClient() {
             </div>
           </div>
         </div>
-        <div className="bg-white rounded-xl p-4 border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200">
+        <div className="bg-surface rounded-xl p-4 border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
               <FontAwesomeIcon icon={faCheckCircle} className="w-5 h-5 text-green-600" />
@@ -134,10 +134,10 @@ export default function RoomsClient() {
             </div>
           </div>
         </div>
-        <div className="bg-white rounded-xl p-4 border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200">
+        <div className="bg-surface rounded-xl p-4 border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-[#1B6B7B]/20 rounded-xl flex items-center justify-center">
-              <FontAwesomeIcon icon={faUsers} className="w-5 h-5 text-[#145a63]" />
+            <div className="w-10 h-10 bg-brand-600/20 rounded-xl flex items-center justify-center">
+              <FontAwesomeIcon icon={faUsers} className="w-5 h-5 text-brand-700" />
             </div>
             <div>
               <p className="text-2xl font-bold text-gray-800">
@@ -153,7 +153,7 @@ export default function RoomsClient() {
         <select
           value={roomFilter}
           onChange={(e) => setRoomFilter(e.target.value)}
-          className="px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/50 focus:border-[#1B6B7B] transition-all cursor-pointer"
+          className="px-4 py-2.5 bg-surface border border-gray-200 rounded-xl text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-600/50 focus:border-brand-600 transition-all cursor-pointer"
         >
           <option value="all">All Rooms</option>
           <option value="active">Active</option>
@@ -165,7 +165,7 @@ export default function RoomsClient() {
             setEditingRoom(null);
             setFormOpen(true);
           }}
-          className="flex items-center gap-2 px-4 py-2.5 bg-[#1B6B7B] text-white font-medium rounded-xl hover:bg-[#145a63] hover:shadow-lg transition-all duration-300"
+          className="flex items-center gap-2 px-4 py-2.5 bg-brand-600 text-white font-medium rounded-xl hover:bg-brand-700 hover:shadow-lg transition-all duration-300"
         >
           <FontAwesomeIcon icon={faPlus} className="w-4 h-4" />
           Add Room
@@ -174,10 +174,10 @@ export default function RoomsClient() {
 
       {loading ? (
         <div className="flex items-center justify-center p-12">
-          <FontAwesomeIcon icon={faSpinner} spin className="w-8 h-8 text-[#1B6B7B]" />
+          <FontAwesomeIcon icon={faSpinner} spin className="w-8 h-8 text-brand-600" />
         </div>
       ) : filteredRooms.length === 0 ? (
-        <div className="bg-white rounded-xl p-12 text-center border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)]">
+        <div className="bg-surface rounded-xl p-12 text-center border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)]">
           <FontAwesomeIcon icon={faDoorOpen} className="w-12 h-12 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-gray-700">No rooms found</h3>
           <p className="text-gray-500 text-sm mt-1">
@@ -196,12 +196,12 @@ export default function RoomsClient() {
             return (
               <div
                 key={room.id}
-                className="bg-white rounded-xl p-6 border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200 group"
+                className="bg-surface rounded-xl p-6 border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200 group"
               >
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-[#1B6B7B]/10 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                      <FontAwesomeIcon icon={faDoorOpen} className="w-5 h-5 text-[#1B6B7B]" />
+                    <div className="w-12 h-12 bg-brand-600/10 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                      <FontAwesomeIcon icon={faDoorOpen} className="w-5 h-5 text-brand-600" />
                     </div>
                     <div>
                       <h3 className="font-semibold text-gray-900">{room.name}</h3>
@@ -225,10 +225,10 @@ export default function RoomsClient() {
                     <div
                       className={`h-full rounded-full transition-all duration-500 ${
                         isHigh
-                          ? "bg-[#145a63]"
+                          ? "bg-brand-700"
                           : isLow
-                            ? "bg-[#1B6B7B]/50"
-                            : "bg-gradient-to-r from-[#1B6B7B] to-[#2a8a98]"
+                            ? "bg-brand-600/50"
+                            : "bg-gradient-to-r from-brand-600 to-[#2a8a98]"
                       }`}
                       style={{ width: `${Math.min(utilization, 100)}%` }}
                     />
@@ -238,10 +238,10 @@ export default function RoomsClient() {
                     <span
                       className={`text-xs font-medium ${
                         isHigh
-                          ? "text-[#145a63]"
+                          ? "text-brand-700"
                           : isLow
-                            ? "text-[#1B6B7B]/70"
-                            : "text-[#1B6B7B]"
+                            ? "text-brand-600/70"
+                            : "text-brand-600"
                       }`}
                     >
                       {Math.round(utilization)}%
@@ -251,7 +251,7 @@ export default function RoomsClient() {
                 <div className="flex items-center gap-2 mt-5 pt-4 border-t border-gray-100">
                   <button
                     onClick={() => setManagingRoom(room)}
-                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium text-[#1B6B7B] hover:bg-[#1B6B7B]/5 rounded-lg transition-colors"
+                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium text-brand-600 hover:bg-brand-600/5 rounded-lg transition-colors"
                   >
                     <FontAwesomeIcon icon={faUserPlus} className="w-3.5 h-3.5" />
                     Students
@@ -356,8 +356,8 @@ function RoomFormModal({
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl w-full max-w-md overflow-hidden flex flex-col shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-gray-200/80">
-        <div className="p-4 border-b border-gray-200/80 flex items-center justify-between">
+      <div className="bg-surface rounded-xl w-full max-w-md overflow-hidden flex flex-col shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-hairline">
+        <div className="p-4 border-b border-hairline flex items-center justify-between">
           <h2 className="text-xl font-bold text-gray-900">
             {room ? "Edit Room" : "Add Room"}
           </h2>
@@ -381,7 +381,7 @@ function RoomFormModal({
                 value={form.name}
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                 placeholder="e.g. Skills Lab A"
-                className="w-full px-3 py-2 bg-white border border-gray-300 rounded-xl text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30 focus:border-[#1B6B7B] text-sm"
+                className="w-full px-3 py-2 bg-surface border border-gray-300 rounded-xl text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 text-sm"
               />
             </div>
             <div>
@@ -391,7 +391,7 @@ function RoomFormModal({
                 value={form.room_number}
                 onChange={(e) => setForm((f) => ({ ...f, room_number: e.target.value }))}
                 placeholder="e.g. 101"
-                className="w-full px-3 py-2 bg-white border border-gray-300 rounded-xl text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30 focus:border-[#1B6B7B] text-sm"
+                className="w-full px-3 py-2 bg-surface border border-gray-300 rounded-xl text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 text-sm"
               />
             </div>
           </div>
@@ -404,7 +404,7 @@ function RoomFormModal({
                 min={0}
                 value={form.capacity}
                 onChange={(e) => setForm((f) => ({ ...f, capacity: e.target.value }))}
-                className="w-full px-3 py-2 bg-white border border-gray-300 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30 focus:border-[#1B6B7B] text-sm"
+                className="w-full px-3 py-2 bg-surface border border-gray-300 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 text-sm"
               />
             </div>
             <div>
@@ -414,7 +414,7 @@ function RoomFormModal({
                 onChange={(e) =>
                   setForm((f) => ({ ...f, status: e.target.value as Room["status"] }))
                 }
-                className="w-full px-3 py-2 bg-white border border-gray-300 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30 focus:border-[#1B6B7B] text-sm"
+                className="w-full px-3 py-2 bg-surface border border-gray-300 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 text-sm"
               >
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>
@@ -432,7 +432,7 @@ function RoomFormModal({
               value={form.description}
               onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
               placeholder="Purpose, equipment, notes..."
-              className="w-full px-3 py-2 bg-white border border-gray-300 rounded-xl text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30 focus:border-[#1B6B7B] text-sm resize-none"
+              className="w-full px-3 py-2 bg-surface border border-gray-300 rounded-xl text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 text-sm resize-none"
             />
           </div>
         </div>
@@ -440,14 +440,14 @@ function RoomFormModal({
         <div className="p-4 border-t border-gray-200 bg-gray-50 flex justify-end gap-3">
           <button
             onClick={onClose}
-            className="px-4 py-2.5 border border-gray-200 text-gray-700 rounded-xl font-medium hover:bg-white transition-all"
+            className="px-4 py-2.5 border border-gray-200 text-gray-700 rounded-xl font-medium hover:bg-surface transition-all"
           >
             Cancel
           </button>
           <button
             onClick={handleSave}
             disabled={saving}
-            className="px-4 py-2.5 bg-[#1B6B7B] text-white rounded-xl font-medium hover:bg-[#145a63] transition-all disabled:opacity-50 flex items-center gap-2"
+            className="px-4 py-2.5 bg-brand-600 text-white rounded-xl font-medium hover:bg-brand-700 transition-all disabled:opacity-50 flex items-center gap-2"
           >
             {saving && <FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" />}
             {room ? "Save Changes" : "Create Room"}
@@ -522,8 +522,8 @@ function RoomStudentsModal({
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl w-full max-w-lg max-h-[85vh] overflow-hidden flex flex-col shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-gray-200/80">
-        <div className="p-4 border-b border-gray-200/80 flex items-center justify-between">
+      <div className="bg-surface rounded-xl w-full max-w-lg max-h-[85vh] overflow-hidden flex flex-col shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-hairline">
+        <div className="p-4 border-b border-hairline flex items-center justify-between">
           <div>
             <h2 className="text-xl font-bold text-gray-900">Assigned Students</h2>
             <p className="text-sm text-gray-500">
@@ -544,7 +544,7 @@ function RoomStudentsModal({
 
           {loading ? (
             <div className="flex items-center justify-center p-8">
-              <FontAwesomeIcon icon={faSpinner} spin className="w-6 h-6 text-[#1B6B7B]" />
+              <FontAwesomeIcon icon={faSpinner} spin className="w-6 h-6 text-brand-600" />
             </div>
           ) : (
             <>
@@ -604,7 +604,7 @@ function RoomStudentsModal({
                                   : prev.filter((id) => id !== student.id),
                               )
                             }
-                            className="w-4 h-4 text-[#1B6B7B] rounded focus:ring-[#1B6B7B]"
+                            className="w-4 h-4 text-brand-600 rounded focus:ring-brand-600"
                           />
                           <div>
                             <p className="text-sm font-medium text-gray-800">{student.name}</p>
@@ -617,7 +617,7 @@ function RoomStudentsModal({
                       <select
                         value={shift}
                         onChange={(e) => setShift(e.target.value)}
-                        className="px-3 py-2 bg-white border border-gray-300 rounded-xl text-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30 focus:border-[#1B6B7B]"
+                        className="px-3 py-2 bg-surface border border-gray-300 rounded-xl text-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600"
                       >
                         <option value="">No shift</option>
                         <option value="AM">AM shift</option>
@@ -627,7 +627,7 @@ function RoomStudentsModal({
                       <button
                         onClick={handleAssign}
                         disabled={saving || selectedIds.length === 0}
-                        className="flex-1 px-4 py-2 bg-[#1B6B7B] text-white rounded-xl font-medium text-sm hover:bg-[#145a63] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                        className="flex-1 px-4 py-2 bg-brand-600 text-white rounded-xl font-medium text-sm hover:bg-brand-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                       >
                         {saving && <FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" />}
                         Assign {selectedIds.length > 0 ? `(${selectedIds.length})` : ""}
@@ -643,7 +643,7 @@ function RoomStudentsModal({
         <div className="p-4 border-t border-gray-200 bg-gray-50 flex justify-end">
           <button
             onClick={onClose}
-            className="px-4 py-2.5 border border-gray-200 text-gray-700 rounded-xl font-medium hover:bg-white transition-all"
+            className="px-4 py-2.5 border border-gray-200 text-gray-700 rounded-xl font-medium hover:bg-surface transition-all"
           >
             Close
           </button>

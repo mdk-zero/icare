@@ -78,10 +78,10 @@ export default function AdminAnalyticsClient() {
 
   return (
     <div>
-      <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] p-4 sm:p-5 mb-4">
+      <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] p-4 sm:p-5 mb-4">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <div className="min-w-0">
-            <div className="flex items-center gap-1.5 px-3 py-1 bg-gray-100 text-[#1B6B7B] rounded-full text-xs sm:text-sm font-medium w-fit mb-3">
+            <div className="flex items-center gap-1.5 px-3 py-1 bg-gray-100 text-brand-600 rounded-full text-xs sm:text-sm font-medium w-fit mb-3">
               <FontAwesomeIcon icon={faChartBar} className="w-3.5 h-3.5" />
               Analytics
             </div>
@@ -96,7 +96,7 @@ export default function AdminAnalyticsClient() {
             <button
               onClick={handleRunMl}
               disabled={runningMl}
-              className="px-4 py-2 bg-white text-[#1B6B7B] font-medium rounded-lg border border-[#1B6B7B]/30 hover:bg-[#1B6B7B]/5 transition-all duration-200 flex items-center gap-2 disabled:opacity-50"
+              className="px-4 py-2 bg-surface text-brand-600 font-medium rounded-lg border border-brand-600/30 hover:bg-brand-600/5 transition-all duration-200 flex items-center gap-2 disabled:opacity-50"
             >
               <FontAwesomeIcon icon={runningMl ? faSpinner : faBrain} spin={runningMl} className="w-4 h-4" />
               {runningMl ? "Running…" : "Run ML Jobs"}
@@ -104,7 +104,7 @@ export default function AdminAnalyticsClient() {
             <button
               onClick={handleRefresh}
               disabled={refreshing}
-              className="px-4 py-2 bg-[#1B6B7B] text-white font-medium rounded-lg hover:bg-[#145a63] transition-all duration-200 flex items-center gap-2 shadow-[0_2px_6px_rgba(27,107,123,0.2)] disabled:opacity-50"
+              className="px-4 py-2 bg-brand-600 text-white font-medium rounded-lg hover:bg-brand-700 transition-all duration-200 flex items-center gap-2 shadow-[0_2px_6px_rgba(27,107,123,0.2)] disabled:opacity-50"
             >
               <FontAwesomeIcon icon={refreshing ? faSpinner : faRotate} spin={refreshing} className="w-4 h-4" />
               {refreshing ? "Refreshing…" : "Refresh Warehouse"}
@@ -125,7 +125,7 @@ export default function AdminAnalyticsClient() {
 
       {loading ? (
         <div className="flex items-center justify-center p-16">
-          <FontAwesomeIcon icon={faSpinner} spin className="w-8 h-8 text-[#1B6B7B]" />
+          <FontAwesomeIcon icon={faSpinner} spin className="w-8 h-8 text-brand-600" />
         </div>
       ) : (
         <>
@@ -142,10 +142,10 @@ export default function AdminAnalyticsClient() {
             ].map((stat) => (
               <div
                 key={stat.label}
-                className="bg-white p-5 rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200"
+                className="bg-surface p-5 rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200"
               >
-                <div className="w-10 h-10 bg-[#1B6B7B]/10 rounded-lg flex items-center justify-center mb-4">
-                  <FontAwesomeIcon icon={stat.icon} className="w-5 h-5 text-[#1B6B7B]" />
+                <div className="w-10 h-10 bg-brand-600/10 rounded-lg flex items-center justify-center mb-4">
+                  <FontAwesomeIcon icon={stat.icon} className="w-5 h-5 text-brand-600" />
                 </div>
                 <p className="text-3xl font-bold text-gray-900 mb-1">{stat.value}</p>
                 <p className="text-sm text-gray-500">{stat.label}</p>
@@ -154,7 +154,7 @@ export default function AdminAnalyticsClient() {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-            <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)]">
+            <div className="bg-surface p-6 rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)]">
               <h3 className="text-lg font-semibold text-gray-900 mb-6">Weekly Quiz Performance</h3>
               {trend.length === 0 ? (
                 <p className="text-gray-400 text-sm py-12 text-center">
@@ -166,11 +166,11 @@ export default function AdminAnalyticsClient() {
                     {trend.map((week) => (
                       <div key={week.week_start} className="flex-1 flex flex-col items-center gap-2 group">
                         <div className="w-full relative">
-                          <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-[#1B6B7B] text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
+                          <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-brand-600 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
                             {week.average_score}% · {week.attempts} attempt{week.attempts === 1 ? "" : "s"}
                           </div>
                           <div
-                            className="w-full bg-gradient-to-t from-[#1B6B7B] to-[#2a8a98] rounded-t-lg transition-all duration-500 hover:opacity-80"
+                            className="w-full bg-gradient-to-t from-brand-600 to-[#2a8a98] rounded-t-lg transition-all duration-500 hover:opacity-80"
                             style={{ height: `${Math.max(week.average_score, 4) * 1.7}px` }}
                           />
                         </div>
@@ -180,7 +180,7 @@ export default function AdminAnalyticsClient() {
                       </div>
                     ))}
                   </div>
-                  <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100/80">
+                  <div className="flex items-center justify-between mt-4 pt-4 border-t border-hairline">
                     <div>
                       <p className="text-2xl font-bold text-gray-800">
                         {summary?.cohort.submitted_attempts ?? 0}
@@ -188,7 +188,7 @@ export default function AdminAnalyticsClient() {
                       <p className="text-sm text-gray-500">Total Submitted Attempts</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-lg font-bold text-[#1B6B7B]">
+                      <p className="text-lg font-bold text-brand-600">
                         {summary?.cohort.active_students_30d ?? 0}
                       </p>
                       <p className="text-sm text-gray-500">active students (30d)</p>
@@ -198,7 +198,7 @@ export default function AdminAnalyticsClient() {
               )}
             </div>
 
-            <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)]">
+            <div className="bg-surface p-6 rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)]">
               <h3 className="text-lg font-semibold text-gray-900 mb-6">Room Utilization</h3>
               {(summary?.room_utilization ?? []).length === 0 ? (
                 <p className="text-gray-400 text-sm py-12 text-center">
@@ -231,7 +231,7 @@ export default function AdminAnalyticsClient() {
                         <div className="flex items-center gap-3">
                           <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
                             <div
-                              className="h-full bg-gradient-to-r from-[#1B6B7B] to-[#2a8a98] rounded-full"
+                              className="h-full bg-gradient-to-r from-brand-600 to-[#2a8a98] rounded-full"
                               style={{ width: `${Math.min(room.utilization_pct, 100)}%` }}
                             />
                           </div>
@@ -253,7 +253,7 @@ export default function AdminAnalyticsClient() {
             </div>
           </div>
 
-          <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] mb-8">
+          <div className="bg-surface p-6 rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] mb-8">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Clinical Training Activity</h3>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
               {[
@@ -265,7 +265,7 @@ export default function AdminAnalyticsClient() {
                 { icon: faClipboardCheck, label: "Notes Reviewed", value: activity?.notes_reviewed ?? 0 },
               ].map((item) => (
                 <div key={item.label} className="p-3 bg-gray-50 rounded-lg text-center">
-                  <FontAwesomeIcon icon={item.icon} className="w-4 h-4 text-[#1B6B7B] mb-2" />
+                  <FontAwesomeIcon icon={item.icon} className="w-4 h-4 text-brand-600 mb-2" />
                   <p className="text-2xl font-bold text-gray-800">{item.value}</p>
                   <p className="text-xs text-gray-500 mt-1">{item.label}</p>
                 </div>
@@ -273,8 +273,8 @@ export default function AdminAnalyticsClient() {
             </div>
           </div>
 
-          <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden">
-            <div className="p-6 border-b border-gray-100/80">
+          <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden">
+            <div className="p-6 border-b border-hairline">
               <h3 className="text-lg font-semibold text-gray-900">Competency Assessment Summary</h3>
               <p className="text-sm text-gray-500">
                 Faculty-validated competency scores across the cohort (pass mark: 75%)
@@ -298,7 +298,7 @@ export default function AdminAnalyticsClient() {
                   </thead>
                   <tbody>
                     {summary!.competency_detail.map((row) => (
-                      <tr key={row.name} className="border-t border-gray-100/80 hover:bg-gray-50 transition-colors">
+                      <tr key={row.name} className="border-t border-hairline hover:bg-gray-50 transition-colors">
                         <td className="py-3 px-4 text-gray-800 font-medium">{row.name}</td>
                         <td className="py-3 px-4 text-gray-600">{row.students}</td>
                         <td className="py-3 px-4 text-gray-600">{row.ratings}</td>
@@ -306,7 +306,7 @@ export default function AdminAnalyticsClient() {
                           <div className="flex items-center gap-2">
                             <div className="w-16 h-2 bg-gray-200 rounded-full overflow-hidden">
                               <div
-                                className="h-full bg-[#1B6B7B] rounded-full"
+                                className="h-full bg-brand-600 rounded-full"
                                 style={{ width: `${Math.min(row.average_score, 100)}%` }}
                               />
                             </div>
@@ -319,7 +319,7 @@ export default function AdminAnalyticsClient() {
                               row.pass_rate_pct >= 90
                                 ? "bg-emerald-50 text-emerald-700"
                                 : row.pass_rate_pct >= 80
-                                  ? "bg-[#1B6B7B]/10 text-[#1B6B7B]"
+                                  ? "bg-brand-600/10 text-brand-600"
                                   : "bg-rose-50 text-rose-700"
                             }`}
                           >

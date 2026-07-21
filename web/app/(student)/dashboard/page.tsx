@@ -91,7 +91,7 @@ export default function StudentDashboard() {
       {activeTab === "dashboard" && (
         <>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+            <div className="bg-surface p-6 rounded-2xl shadow-sm border border-gray-100">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
                   <svg
@@ -115,7 +115,7 @@ export default function StudentDashboard() {
               </div>
             </div>
 
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+            <div className="bg-surface p-6 rounded-2xl shadow-sm border border-gray-100">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
                   <svg
@@ -139,7 +139,7 @@ export default function StudentDashboard() {
               </div>
             </div>
 
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+            <div className="bg-surface p-6 rounded-2xl shadow-sm border border-gray-100">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
                   <svg
@@ -163,7 +163,7 @@ export default function StudentDashboard() {
               </div>
             </div>
 
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+            <div className="bg-surface p-6 rounded-2xl shadow-sm border border-gray-100">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center">
                   <svg
@@ -189,7 +189,7 @@ export default function StudentDashboard() {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+            <div className="bg-surface p-6 rounded-2xl shadow-sm border border-gray-100">
               <h3 className="font-semibold text-gray-800 mb-4">
                 Recent Patients
               </h3>
@@ -227,7 +227,7 @@ export default function StudentDashboard() {
               )}
             </div>
 
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+            <div className="bg-surface p-6 rounded-2xl shadow-sm border border-gray-100">
               <h3 className="font-semibold text-gray-800 mb-4">
                 Recommended for You
               </h3>
@@ -265,7 +265,7 @@ export default function StudentDashboard() {
                         )}
                         <button
                           onClick={() => router.push(`/quizzes/${rec.assessment_id}`)}
-                          className="px-3 py-1.5 bg-[#1B6B7B] text-white text-sm rounded-lg hover:bg-[#155663] transition-colors"
+                          className="px-3 py-1.5 bg-brand-600 text-white text-sm rounded-lg hover:bg-[#155663] transition-colors"
                         >
                           Start
                         </button>
@@ -290,7 +290,7 @@ export default function StudentDashboard() {
 
       {activeTab === "patients" && (
         <div className="space-y-4">
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+          <div className="bg-surface p-6 rounded-2xl shadow-sm border border-gray-100">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-semibold text-gray-800">Patient List</h3>
               <span className="text-sm text-gray-500">
@@ -412,14 +412,14 @@ export default function StudentDashboard() {
       {activeTab === "quizzes" && (
         <div className="space-y-4">
           {quizzes.length === 0 && (
-            <div className="bg-white p-10 rounded-2xl shadow-sm border border-gray-100 text-center text-gray-500">
+            <div className="bg-surface p-10 rounded-2xl shadow-sm border border-gray-100 text-center text-gray-500">
               No quizzes are available yet. Assigned quizzes will appear here.
             </div>
           )}
           {quizzes.map((quiz) => (
             <div
               key={quiz.id}
-              className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100"
+              className="bg-surface p-6 rounded-2xl shadow-sm border border-gray-100"
             >
               <div className="flex items-center justify-between gap-4">
                 <div>
@@ -472,7 +472,7 @@ export default function StudentDashboard() {
                       </span>
                     )}
                     {quiz.best_score !== null && (
-                      <span className="text-sm font-medium text-[#1B6B7B]">
+                      <span className="text-sm font-medium text-brand-600">
                         Best: {quiz.best_score}%
                       </span>
                     )}
@@ -480,7 +480,7 @@ export default function StudentDashboard() {
                 </div>
                 <button
                   onClick={() => router.push(`/quizzes/${quiz.id}`)}
-                  className="px-6 py-2 bg-[#1B6B7B] text-white rounded-lg hover:bg-[#155663] transition-colors shrink-0"
+                  className="px-6 py-2 bg-brand-600 text-white rounded-lg hover:bg-[#155663] transition-colors shrink-0"
                 >
                   {quiz.attempt_count > 0 ? "Retake Quiz" : "Start Quiz"}
                 </button>
@@ -493,19 +493,19 @@ export default function StudentDashboard() {
       {activeTab === "scenarios" && (
         <div className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 text-center">
-              <p className="text-4xl font-bold text-[#1B6B7B]">
+            <div className="bg-surface p-6 rounded-2xl shadow-sm border border-gray-100 text-center">
+              <p className="text-4xl font-bold text-brand-600">
                 {scenarioAssignments.filter((a) => a.status === "pending").length}
               </p>
               <p className="text-gray-500 mt-2">Pending</p>
             </div>
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 text-center">
-              <p className="text-4xl font-bold text-[#1B6B7B]">
+            <div className="bg-surface p-6 rounded-2xl shadow-sm border border-gray-100 text-center">
+              <p className="text-4xl font-bold text-brand-600">
                 {scenarioAssignments.filter((a) => a.status === "in_progress").length}
               </p>
               <p className="text-gray-500 mt-2">In Progress</p>
             </div>
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 text-center">
+            <div className="bg-surface p-6 rounded-2xl shadow-sm border border-gray-100 text-center">
               <p className="text-4xl font-bold text-emerald-600">
                 {scenarioAssignments.filter((a) => a.status === "completed").length}
               </p>
@@ -513,7 +513,7 @@ export default function StudentDashboard() {
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+          <div className="bg-surface rounded-2xl shadow-sm border border-gray-100 p-6">
             <h3 className="font-semibold text-gray-800 mb-4">
               Assigned Scenarios
             </h3>
@@ -574,7 +574,7 @@ export default function StudentDashboard() {
                         onClick={() =>
                           router.push(`/scenarios/${assignment.scenario_id}`)
                         }
-                        className="px-4 py-2 bg-[#1B6B7B] text-white rounded-lg hover:bg-[#155663] transition-colors"
+                        className="px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-[#155663] transition-colors"
                       >
                         {assignment.status === "completed"
                           ? "Review"
@@ -594,21 +594,21 @@ export default function StudentDashboard() {
       {activeTab === "performance" && (
         <div className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 text-center">
-              <p className="text-4xl font-bold text-[#1B6B7B]">85%</p>
+            <div className="bg-surface p-6 rounded-2xl shadow-sm border border-gray-100 text-center">
+              <p className="text-4xl font-bold text-brand-600">85%</p>
               <p className="text-gray-500 mt-2">Average Score</p>
             </div>
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 text-center">
-              <p className="text-4xl font-bold text-[#1B6B7B]">3</p>
+            <div className="bg-surface p-6 rounded-2xl shadow-sm border border-gray-100 text-center">
+              <p className="text-4xl font-bold text-brand-600">3</p>
               <p className="text-gray-500 mt-2">Quizzes Completed</p>
             </div>
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 text-center">
-              <p className="text-4xl font-bold text-[#1B6B7B]">12m</p>
+            <div className="bg-surface p-6 rounded-2xl shadow-sm border border-gray-100 text-center">
+              <p className="text-4xl font-bold text-brand-600">12m</p>
               <p className="text-gray-500 mt-2">Avg. Time per Quiz</p>
             </div>
           </div>
 
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+          <div className="bg-surface p-6 rounded-2xl shadow-sm border border-gray-100">
             <h3 className="font-semibold text-gray-800 mb-4">
               Performance History
             </h3>

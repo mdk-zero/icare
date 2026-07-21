@@ -18,7 +18,7 @@ import { SkeletonAssessmentCard } from "../../components/skeletons";
 import { fetchSections, type Section } from "../../lib/api";
 
 const inputClassName =
-  "w-full px-4 py-3 bg-white border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30 focus:border-[#1B6B7B] focus:bg-white transition-all text-sm shadow-sm";
+  "w-full px-4 py-3 bg-surface border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 focus:bg-surface transition-all text-sm shadow-sm";
 const labelClassName = "block text-sm font-bold text-gray-800 mb-2";
 
 type Difficulty = "beginner" | "intermediate" | "advanced";
@@ -165,7 +165,7 @@ export default function FacultyAssessmentsClient() {
       />
 
       {message && (
-        <div className="bg-[#1B6B7B]/10 border border-[#1B6B7B]/30 text-[#155663] px-4 py-3 rounded-xl text-sm">
+        <div className="bg-brand-600/10 border border-brand-600/30 text-[#155663] px-4 py-3 rounded-xl text-sm">
           {message}
         </div>
       )}
@@ -173,7 +173,7 @@ export default function FacultyAssessmentsClient() {
       <div className="flex justify-end">
         <button
           onClick={() => router.push("/faculty/assessments/new")}
-          className="flex items-center gap-2 px-5 py-2.5 bg-[#1B6B7B] text-white rounded-lg hover:bg-[#155663] transition-colors text-sm font-medium shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
+          className="flex items-center gap-2 px-5 py-2.5 bg-brand-600 text-white rounded-lg hover:bg-[#155663] transition-colors text-sm font-medium shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
         >
           <FontAwesomeIcon icon={faPlus} className="w-3.5 h-3.5" />
           New Assessment
@@ -187,13 +187,13 @@ export default function FacultyAssessmentsClient() {
           ))}
         </div>
       ) : assessments.length === 0 ? (
-        <div className="bg-white p-12 rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] text-center text-gray-500">
+        <div className="bg-surface p-12 rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] text-center text-gray-500">
           No assessments yet. Create your first quiz to start building the question bank.
         </div>
       ) : (
         <div className="space-y-4">
           {assessments.map((a) => (
-            <div key={a.id} className="relative bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden">
+            <div key={a.id} className="relative bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden">
               <span className={`absolute left-0 top-0 h-full w-0.5 ${
                 a.difficulty === "beginner" ? "bg-emerald-500" :
                 a.difficulty === "intermediate" ? "bg-amber-500" :
@@ -281,7 +281,7 @@ export default function FacultyAssessmentsClient() {
                     <button
                       onClick={() => router.push(`/faculty/assessments/${a.id}`)}
                       title="Manage questions"
-                      className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-[#1B6B7B]/10 text-[#155663] hover:bg-[#1B6B7B]/20 text-sm font-medium"
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-brand-600/10 text-[#155663] hover:bg-brand-600/20 text-sm font-medium"
                     >
                       <FontAwesomeIcon icon={faListCheck} className="w-4 h-4" />
                       Questions
@@ -297,7 +297,7 @@ export default function FacultyAssessmentsClient() {
       {/* ---------- assign modal ---------- */}
       {assignTarget && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] w-full max-w-lg p-4 space-y-2 max-h-[90vh] overflow-y-auto border border-gray-200/80">
+          <div className="bg-surface rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] w-full max-w-lg p-4 space-y-2 max-h-[90vh] overflow-y-auto border border-hairline">
             <div className="flex items-center justify-between">
               <h3 className="font-semibold text-gray-800">
                 Assign &ldquo;{assignTarget.title}&rdquo;
@@ -322,7 +322,7 @@ export default function FacultyAssessmentsClient() {
               <label className={labelClassName}>
                 Students ({selectedStudents.size} selected)
               </label>
-              <div className="border border-gray-200/80 rounded-xl divide-y divide-gray-100/80 max-h-64 overflow-y-auto">
+              <div className="border border-hairline rounded-xl divide-y divide-hairline max-h-64 overflow-y-auto">
                 {students.length === 0 && (
                   <p className="p-4 text-sm text-gray-500">No students in your roster yet.</p>
                 )}
@@ -344,7 +344,7 @@ export default function FacultyAssessmentsClient() {
                             return next;
                           })
                         }
-                        className="w-4 h-4 accent-[#1B6B7B]"
+                        className="w-4 h-4 accent-brand-600"
                       />
                       <span className="text-sm text-gray-700">{s.name}</span>
                       <span className="text-xs text-gray-400 ml-auto">{s.email}</span>
@@ -363,7 +363,7 @@ export default function FacultyAssessmentsClient() {
               <button
                 onClick={submitAssign}
                 disabled={busy || selectedStudents.size === 0}
-                className="px-6 py-2 bg-[#1B6B7B] text-white rounded-lg text-sm hover:bg-[#155663] disabled:opacity-60"
+                className="px-6 py-2 bg-brand-600 text-white rounded-lg text-sm hover:bg-[#155663] disabled:opacity-60"
               >
                 {busy ? "Assigning…" : "Assign"}
               </button>

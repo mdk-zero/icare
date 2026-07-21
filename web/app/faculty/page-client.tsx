@@ -88,7 +88,7 @@ export default function FacultyDashboard() {
     } else if (type.toLowerCase().includes('scenario')) {
       return {
         path: 'M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.414 1.414.586 3.414-1.414 3.414H12m8 0h2a2 2 0 002-2v-4a2 2 0 00-2-2h-2',
-        dot: 'bg-[#1B6B7B]',
+        dot: 'bg-brand-600',
         ring: 'ring-teal-100',
       };
     }
@@ -102,7 +102,7 @@ export default function FacultyDashboard() {
   if (loading) {
     return (
       <div className="space-y-4">
-        <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] p-4 sm:p-5 mb-4 animate-pulse">
+        <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] p-4 sm:p-5 mb-4 animate-pulse">
           <div className="space-y-3">
             <div className="h-5 w-32 bg-gray-200 rounded-full" />
             <div className="h-8 w-48 bg-gray-200 rounded" />
@@ -115,18 +115,18 @@ export default function FacultyDashboard() {
           ))}
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden animate-pulse">
+          <div className="lg:col-span-2 bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden animate-pulse">
             <div className="p-3 border-b border-gray-100">
               <div className="h-5 w-28 bg-gray-200 rounded" />
               <div className="h-4 w-44 bg-gray-200 rounded mt-1" />
             </div>
-            <div className="divide-y divide-gray-100/80">
+            <div className="divide-y divide-hairline">
               {Array.from({ length: 5 }).map((_, i) => (
                 <SkeletonStudentRow key={i} />
               ))}
             </div>
           </div>
-          <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden animate-pulse">
+          <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden animate-pulse">
             <div className="p-3 border-b border-gray-100">
               <div className="h-5 w-32 bg-gray-200 rounded" />
               <div className="h-4 w-44 bg-gray-200 rounded mt-1" />
@@ -138,7 +138,7 @@ export default function FacultyDashboard() {
             </div>
           </div>
         </div>
-        <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden animate-pulse">
+        <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden animate-pulse">
           <div className="p-3 border-b border-gray-100">
             <div className="h-5 w-28 bg-gray-200 rounded" />
             <div className="h-4 w-44 bg-gray-200 rounded mt-1" />
@@ -154,7 +154,7 @@ export default function FacultyDashboard() {
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100/80">
+              <tbody className="divide-y divide-hairline">
                 {Array.from({ length: 4 }).map((_, i) => (
                   <tr key={i}>
                     {Array.from({ length: 6 }).map((_, j) => (
@@ -194,8 +194,8 @@ export default function FacultyDashboard() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatTile
           icon={<FontAwesomeIcon icon={faUsers} className="w-5 h-5" />}
-          iconBg="bg-[#1B6B7B]/10"
-          iconColor="text-[#1B6B7B]"
+          iconBg="bg-brand-600/10"
+          iconColor="text-brand-600"
           value={total}
           label="Total Students"
           caption="Enrolled under you"
@@ -229,7 +229,7 @@ export default function FacultyDashboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden">
+        <div className="lg:col-span-2 bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden">
           <div className="p-4 border-b border-gray-100 flex items-center justify-between">
             <div>
               <h2 className="text-lg font-semibold text-gray-900">My Students</h2>
@@ -237,22 +237,22 @@ export default function FacultyDashboard() {
             </div>
             <button 
               onClick={() => router.push('/faculty/students')}
-              className="text-sm text-[#1B6B7B] font-medium hover:text-[#145a63] transition-colors"
+              className="text-sm text-brand-600 font-medium hover:text-brand-700 transition-colors"
             >
               View All →
             </button>
           </div>
-          <div className="divide-y divide-gray-100/80">
+          <div className="divide-y divide-hairline">
             {students.map((student) => {
               const risk = getRisk(student.risk_level);
               return (
                 <div
                   key={student.id}
-                  className="relative flex items-center gap-3 p-4 pl-5 hover:bg-gray-50/80 transition-colors cursor-pointer"
+                  className="relative flex items-center gap-3 p-4 pl-5 hover:bg-subtle transition-colors cursor-pointer"
                   onClick={() => router.push(`/faculty/students/${student.id}`)}
                 >
                   <span className={`absolute left-0 top-0 h-full w-1 ${risk.bar}`} aria-hidden />
-                  <div className="w-10 h-10 shrink-0 bg-gradient-to-br from-[#1B6B7B] to-[#145a63] rounded-full flex items-center justify-center text-white font-semibold text-sm">
+                  <div className="w-10 h-10 shrink-0 bg-gradient-to-br from-brand-600 to-brand-700 rounded-full flex items-center justify-center text-white font-semibold text-sm">
                     {student.name.split(' ').map(n => n[0]).join('')}
                   </div>
                   <div className="min-w-0 flex-1">
@@ -279,7 +279,7 @@ export default function FacultyDashboard() {
           </div>
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden">
+        <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden">
           <div className="p-4 border-b border-gray-100">
             <h2 className="text-lg font-semibold text-gray-900">Recent Activity</h2>
             <p className="text-sm text-gray-500 mt-0.5">Latest updates and actions</p>
@@ -290,7 +290,7 @@ export default function FacultyDashboard() {
                 const meta = getActivityMeta(activity.action);
                 return (
                   <li key={activity.id} className="relative flex gap-3">
-                    <span className={`relative z-10 w-8 h-8 shrink-0 rounded-full bg-white ring-4 ${meta.ring} flex items-center justify-center`}>
+                    <span className={`relative z-10 w-8 h-8 shrink-0 rounded-full bg-surface ring-4 ${meta.ring} flex items-center justify-center`}>
                       <span className={`w-2 h-2 rounded-full ${meta.dot}`} />
                     </span>
                     <div className="flex-1 min-w-0 pb-0.5">
@@ -311,7 +311,7 @@ export default function FacultyDashboard() {
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden">
+      <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden">
         <div className="p-4 border-b border-gray-100 flex items-center justify-between">
           <div>
             <h2 className="text-lg font-semibold text-gray-900">Pending Alerts</h2>
@@ -325,7 +325,7 @@ export default function FacultyDashboard() {
         </div>
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-gray-50/80 border-b border-gray-100">
+            <thead className="bg-subtle border-b border-gray-100">
               <tr>
                 <th className="px-5 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Student</th>
                 <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Alert Type</th>
@@ -335,9 +335,9 @@ export default function FacultyDashboard() {
                 <th className="px-5 py-2.5 text-right text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Action</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100/80">
+            <tbody className="divide-y divide-hairline">
               {alerts.map((alert) => (
-                <tr key={alert.id} className="hover:bg-gray-50/80 transition-colors">
+                <tr key={alert.id} className="hover:bg-subtle transition-colors">
                   <td className="px-5 py-3.5">
                     <p className="font-medium text-gray-900">{alert.student_name}</p>
                   </td>
@@ -362,7 +362,7 @@ export default function FacultyDashboard() {
                     </span>
                   </td>
                   <td className="px-5 py-3.5 text-right">
-                    <button className="text-sm text-[#1B6B7B] font-medium hover:text-[#145a63] transition-colors">
+                    <button className="text-sm text-brand-600 font-medium hover:text-brand-700 transition-colors">
                       Review
                     </button>
                   </td>

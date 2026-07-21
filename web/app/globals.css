@@ -1,17 +1,27 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #0f172a;
-}
+/*
+ * Dark mode is driven by a `dark` class on <html>, set before first paint by
+ * the inline script in layout.tsx. The class (rather than a media query) is
+ * what lets the user pick light/dark independently of the OS.
+ */
+@custom-variant dark (&:where(.dark, .dark *));
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
   --font-display: var(--font-fraunces);
+}
+
+/*
+ * Colours live in a NON-inline @theme so Tailwind emits them as custom
+ * properties and compiles utilities to var() references. That indirection is
+ * what allows the .dark block below to retheme ~2,200 existing utility usages
+ * without touching a single page file.
+ */
+@theme {
+  --color-background: #ffffff;
+  --color-foreground: #0f172a;
 
   /*
    * Brand teal. The app had #1B6B7B hardcoded 592 times alongside four
@@ -35,6 +45,8 @@
   --color-canvas: #f5f8f9;
   --color-surface: #ffffff;
   --color-hairline: #e6edef;
+  /* Recessed areas: table headers, modal chrome, inset panels. */
+  --color-subtle: #f7fafb;
 
   --shadow-tile: 0 1px 3px 0 rgb(15 23 42 / 0.04), 0 1px 2px -1px rgb(15 23 42 / 0.06);
   --shadow-tile-hover: 0 4px 12px 0 rgb(15 23 42 / 0.06), 0 2px 4px -2px rgb(15 23 42 / 0.06);
@@ -102,9 +114,135 @@
   }
 }
 
+/*
+ * ---------------------------------------------------------------------------
+ * Dark theme
+ * ---------------------------------------------------------------------------
+ * Retheming the variables (rather than adding dark: variants to every call
+ * site) is what makes this tractable: the app has ~2,200 neutral utility usages
+ * across 21k lines, and every one of them resolves through these properties.
+ *
+ * The neutral ramp is inverted so the app's pervasive `bg-gray-50` /
+ * `text-gray-900` pairings keep their contrast relationship, and tinted ramps
+ * are inverted so badge patterns like `bg-red-100 text-red-700` stay legible.
+ * Surfaces are teal-black rather than neutral black, to stay in the brand.
+ */
+.dark {
+  --color-background: #0b1416;
+  --color-foreground: #edf4f5;
+
+  --color-canvas: #0a1214;
+  --color-surface: #111d20;
+  --color-hairline: #1f3237;
+  --color-subtle: #16252a;
+
+  /* Brand lifts in dark so it clears contrast on the deep surfaces. */
+  --color-brand-50: #0e252b;
+  --color-brand-100: #133038;
+  --color-brand-200: #17414b;
+  --color-brand-300: #1f5f6d;
+  --color-brand-400: #2b7b8c;
+  --color-brand-500: #3f9aad;
+  --color-brand-600: #5cb5c6;
+  --color-brand-700: #7fc9d6;
+  --color-brand-800: #a5dde6;
+  --color-brand-900: #c9eef3;
+  --color-brand-950: #e4f7fa;
+
+  /*
+   * Neutrals, inverted and cooled toward the brand.
+   * `--color-white` is deliberately NOT overridden: the sidebar and every
+   * brand-filled button use `text-white` on permanently dark surfaces, so
+   * retheming it would erase that text. Card fills use the `surface` token.
+   */
+  --color-gray-50: #16252a;
+  --color-gray-100: #1c2f34;
+  --color-gray-200: #263d43;
+  --color-gray-300: #35525a;
+  --color-gray-400: #6e8b92;
+  --color-gray-500: #91a9af;
+  --color-gray-600: #adc2c7;
+  --color-gray-700: #c6d7db;
+  --color-gray-800: #dcebee;
+  --color-gray-900: #eff7f9;
+
+  --color-slate-50: #16252a;
+  --color-slate-100: #1c2f34;
+  --color-slate-200: #263d43;
+  --color-slate-300: #35525a;
+  --color-slate-400: #6e8b92;
+  --color-slate-500: #91a9af;
+  --color-slate-600: #adc2c7;
+  --color-slate-700: #c6d7db;
+  --color-slate-800: #dcebee;
+  --color-slate-900: #eff7f9;
+
+  /* Status tints: dark fills, bright foregrounds. */
+  --color-red-50: #2b1214;
+  --color-red-100: #3a171a;
+  --color-red-200: #4d2024;
+  --color-red-600: #f2717c;
+  --color-red-700: #ff9aa2;
+  --color-red-800: #ffbfc4;
+
+  --color-rose-50: #2c1218;
+  --color-rose-100: #3b1720;
+  --color-rose-200: #4e2029;
+  --color-rose-600: #f4728c;
+  --color-rose-700: #ff9bad;
+  --color-rose-800: #ffc2ce;
+
+  --color-amber-50: #2a1e08;
+  --color-amber-100: #38280b;
+  --color-amber-200: #4b360f;
+  --color-amber-600: #e8a33a;
+  --color-amber-700: #f7c46b;
+  --color-amber-800: #ffdc9c;
+
+  --color-emerald-50: #0a2620;
+  --color-emerald-100: #0e332b;
+  --color-emerald-200: #134539;
+  --color-emerald-600: #3fbf94;
+  --color-emerald-700: #6ed8b1;
+  --color-emerald-800: #a3ead0;
+
+  --color-green-50: #0b2617;
+  --color-green-100: #0f331f;
+  --color-green-200: #14452a;
+  --color-green-600: #45c07a;
+  --color-green-700: #74d79b;
+  --color-green-800: #a8eac3;
+
+  --color-blue-50: #0d1e33;
+  --color-blue-100: #112843;
+  --color-blue-200: #163558;
+  --color-blue-600: #5aa6f0;
+  --color-blue-700: #8ac1f6;
+  --color-blue-800: #b8dbfb;
+
+  --color-teal-50: #0a2529;
+  --color-teal-100: #0e3136;
+  --color-teal-200: #134147;
+  --color-teal-600: #3fb8bf;
+  --color-teal-700: #6fd2d7;
+  --color-teal-800: #a5e7ea;
+
+  --color-purple-50: #1f1533;
+  --color-purple-100: #291c44;
+  --color-purple-200: #37265b;
+  --color-purple-600: #a586f0;
+  --color-purple-700: #c0aaf6;
+  --color-purple-800: #d9cbfb;
+}
+
+/* The browser paints scrollbars and form controls to match. */
+.dark {
+  color-scheme: dark;
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--color-background);
+  color: var(--color-foreground);
   /*
    * Was `Arial, Helvetica, sans-serif`, which overrode the Geist loaded by
    * next/font on every route. The app has always shipped Arial.

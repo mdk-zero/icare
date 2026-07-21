@@ -19,7 +19,7 @@ import {
 import { SkeletonQuestionCard } from "../../../components/skeletons";
 
 const inputClassName =
-  "w-full px-4 py-3 bg-white border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30 focus:border-[#1B6B7B] focus:bg-white transition-all text-sm shadow-sm";
+  "w-full px-4 py-3 bg-surface border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 focus:bg-surface transition-all text-sm shadow-sm";
 const labelClassName = "block text-sm font-bold text-gray-800 mb-2";
 
 interface AssessmentDetail {
@@ -727,7 +727,7 @@ export default function AssessmentQuestionsClient({
             <div className="h-4 w-64 bg-gray-100 rounded" />
           </div>
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm animate-pulse p-4">
+        <div className="bg-surface rounded-xl border border-gray-200 shadow-sm animate-pulse p-4">
           <div className="h-8 w-48 bg-gray-100 rounded" />
         </div>
         <div className="space-y-4">
@@ -741,11 +741,11 @@ export default function AssessmentQuestionsClient({
 
   if (!assessment) {
     return (
-      <div className="bg-white p-10 rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] text-center">
+      <div className="bg-surface p-10 rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] text-center">
         <p className="text-gray-500 mb-4">Assessment not found.</p>
         <button
           onClick={() => router.push("/faculty/assessments")}
-          className="px-6 py-2 bg-[#1B6B7B] text-white rounded-lg"
+          className="px-6 py-2 bg-brand-600 text-white rounded-lg"
         >
           Back to Question Bank
         </button>
@@ -811,7 +811,7 @@ export default function AssessmentQuestionsClient({
                 <button
                   onClick={handleSaveDetails}
                   disabled={savingDetails}
-                  className="flex items-center gap-2 px-5 py-2 bg-[#1B6B7B] text-white rounded-lg text-sm font-medium hover:bg-[#155663] disabled:opacity-60 transition-colors"
+                  className="flex items-center gap-2 px-5 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-[#155663] disabled:opacity-60 transition-colors"
                 >
                   {savingDetails ? (
                     <><FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" /> Saving…</>
@@ -859,13 +859,13 @@ export default function AssessmentQuestionsClient({
       </div>
 
       {/* Criteria section */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
+      <div className="bg-surface rounded-xl border border-gray-200 shadow-sm">
         <button
           onClick={() => setShowCriteriaEditor(!showCriteriaEditor)}
           className="w-full flex items-center justify-between p-5 text-left"
         >
           <div className="flex items-center gap-2">
-            <FontAwesomeIcon icon={faLayerGroup} className="w-4 h-4 text-[#1B6B7B]" />
+            <FontAwesomeIcon icon={faLayerGroup} className="w-4 h-4 text-brand-600" />
             <span className="font-semibold text-gray-800">
               Scoring Criteria ({criteria.length})
             </span>
@@ -894,7 +894,7 @@ export default function AssessmentQuestionsClient({
                       <span className="text-xs text-gray-500 w-40 truncate">
                         {comp?.name ?? c.competency_id.slice(0, 8)}
                       </span>
-                      <span className="text-sm font-semibold text-[#1B6B7B] w-16 text-right">
+                      <span className="text-sm font-semibold text-brand-600 w-16 text-right">
                         {c.weight}%
                       </span>
                       <button
@@ -947,7 +947,7 @@ export default function AssessmentQuestionsClient({
               </select>
               <button
                 onClick={addCriteria}
-                className="px-4 py-3 bg-[#1B6B7B] text-white rounded-xl text-sm font-medium hover:bg-[#155663] transition-colors"
+                className="px-4 py-3 bg-brand-600 text-white rounded-xl text-sm font-medium hover:bg-[#155663] transition-colors"
               >
                 Add Criteria
               </button>
@@ -963,7 +963,7 @@ export default function AssessmentQuestionsClient({
       </div>
 
       {message && (
-        <div className="bg-[#1B6B7B]/10 border border-[#1B6B7B]/30 text-[#155663] px-4 py-3 rounded-xl text-sm">
+        <div className="bg-brand-600/10 border border-brand-600/30 text-[#155663] px-4 py-3 rounded-xl text-sm">
           {message}
         </div>
       )}
@@ -977,7 +977,7 @@ export default function AssessmentQuestionsClient({
         </div>
 
         {questions.length === 0 ? (
-          <div className="bg-white p-8 rounded-xl border border-dashed border-gray-300 text-center text-gray-400 text-sm">
+          <div className="bg-surface p-8 rounded-xl border border-dashed border-gray-300 text-center text-gray-400 text-sm">
             No questions yet. Click &quot;Add Question&quot; to start building.
           </div>
         ) : (
@@ -989,7 +989,7 @@ export default function AssessmentQuestionsClient({
               return (
                 <div
                   key={q.id}
-                  className={`bg-white rounded-xl border shadow-sm ${isEditing ? "border-[#1B6B7B]/40 ring-1 ring-[#1B6B7B]/20" : "border-gray-200"}`}
+                  className={`bg-surface rounded-xl border shadow-sm ${isEditing ? "border-brand-600/40 ring-1 ring-brand-600/20" : "border-gray-200"}`}
                 >
                   <div className="p-4 space-y-2">
                     {/* Question header */}
@@ -1008,7 +1008,7 @@ export default function AssessmentQuestionsClient({
                             )
                           }
                           disabled={!isEditing}
-                          className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-600/30 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           <option value="multiple_choice">Multiple choice</option>
                           <option value="true_false">True / False</option>
@@ -1023,7 +1023,7 @@ export default function AssessmentQuestionsClient({
                               );
                             }}
                             disabled={savingQuestions[q.id]}
-                            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1B6B7B] text-white rounded-lg text-xs font-medium hover:bg-[#155663] disabled:opacity-60 transition-colors"
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-600 text-white rounded-lg text-xs font-medium hover:bg-[#155663] disabled:opacity-60 transition-colors"
                           >
                             {savingQuestions[q.id] ? (
                               <FontAwesomeIcon icon={faSpinner} spin className="w-3.5 h-3.5" />
@@ -1047,7 +1047,7 @@ export default function AssessmentQuestionsClient({
                           title={isEditing ? "Done editing" : "Edit question"}
                           className={`p-2 rounded-lg border transition-colors ${
                             isEditing
-                              ? "bg-[#1B6B7B] text-white border-[#1B6B7B] hover:bg-[#155663]"
+                              ? "bg-brand-600 text-white border-brand-600 hover:bg-[#155663]"
                               : "border-gray-200 text-gray-500 hover:bg-gray-50"
                           }`}
                         >
@@ -1125,7 +1125,7 @@ export default function AssessmentQuestionsClient({
                         {isEditing && (
                           <button
                             onClick={() => addBuilderOption(q.id)}
-                            className="text-sm text-[#1B6B7B] font-medium hover:underline"
+                            className="text-sm text-brand-600 font-medium hover:underline"
                           >
                             + Add option
                           </button>
@@ -1187,7 +1187,7 @@ export default function AssessmentQuestionsClient({
                             )
                           }
                           disabled={!isEditing}
-                          className="w-20 px-3 py-1.5 border border-gray-300 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-50"
+                          className="w-20 px-3 py-1.5 border border-gray-300 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-600/30 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-50"
                         />
                       </div>
                       <div className="flex items-center gap-2">
@@ -1201,7 +1201,7 @@ export default function AssessmentQuestionsClient({
                             updateBuilderField(q.id, "competency_ids", e.target.value ? [e.target.value] : [])
                           }
                           disabled={!isEditing}
-                          className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-50"
+                          className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-600/30 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-50"
                         >
                           <option value="">No competency</option>
                           {competencyAreas.map((ca) => (
@@ -1225,10 +1225,10 @@ export default function AssessmentQuestionsClient({
         )}
 
         {showAIPanel && (
-          <div className="bg-white rounded-xl border border-[#1B6B7B]/30 shadow-sm p-4 space-y-2">
+          <div className="bg-surface rounded-xl border border-brand-600/30 shadow-sm p-4 space-y-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <FontAwesomeIcon icon={faWandMagicSparkles} className="w-4 h-4 text-[#1B6B7B]" />
+                <FontAwesomeIcon icon={faWandMagicSparkles} className="w-4 h-4 text-brand-600" />
                 <span className="font-semibold text-gray-800">Generate questions with AI</span>
               </div>
               <button
@@ -1261,7 +1261,7 @@ export default function AssessmentQuestionsClient({
               <button
                 onClick={handleGenerateAI}
                 disabled={aiGenerating}
-                className="flex items-center justify-center gap-2 px-6 py-3 bg-[#1B6B7B] text-white rounded-xl text-sm font-medium hover:bg-[#155663] disabled:opacity-60 transition-colors"
+                className="flex items-center justify-center gap-2 px-6 py-3 bg-brand-600 text-white rounded-xl text-sm font-medium hover:bg-[#155663] disabled:opacity-60 transition-colors"
               >
                 {aiGenerating ? (
                   <><FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" /> Generating…</>
@@ -1279,7 +1279,7 @@ export default function AssessmentQuestionsClient({
         <div className="flex items-center justify-center gap-3 pt-2 flex-wrap">
           <button
             onClick={handleAddQuestion}
-            className="flex items-center gap-2 px-6 py-3 bg-[#1B6B7B] text-white rounded-xl text-sm font-medium hover:bg-[#155663] transition-colors"
+            className="flex items-center gap-2 px-6 py-3 bg-brand-600 text-white rounded-xl text-sm font-medium hover:bg-[#155663] transition-colors"
           >
             <FontAwesomeIcon icon={faPlus} className="w-4 h-4" />
             Add Question
@@ -1288,7 +1288,7 @@ export default function AssessmentQuestionsClient({
             <button
               onClick={handleSaveAll}
               disabled={savingAll}
-              className="flex items-center gap-2 px-6 py-3 bg-[#1B6B7B] text-white rounded-xl text-sm font-medium hover:bg-[#155663] disabled:opacity-60 transition-colors"
+              className="flex items-center gap-2 px-6 py-3 bg-brand-600 text-white rounded-xl text-sm font-medium hover:bg-[#155663] disabled:opacity-60 transition-colors"
             >
               {savingAll ? (
                 <><FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" /> Saving All…</>
@@ -1299,7 +1299,7 @@ export default function AssessmentQuestionsClient({
           )}
           <button
             onClick={() => setShowAIPanel((v) => !v)}
-            className="flex items-center gap-2 px-6 py-3 bg-white border border-[#1B6B7B] text-[#1B6B7B] rounded-xl text-sm font-medium hover:bg-[#1B6B7B]/5 transition-colors"
+            className="flex items-center gap-2 px-6 py-3 bg-surface border border-brand-600 text-brand-600 rounded-xl text-sm font-medium hover:bg-brand-600/5 transition-colors"
           >
             <FontAwesomeIcon icon={faWandMagicSparkles} className="w-4 h-4" />
             Generate with AI
@@ -1307,14 +1307,14 @@ export default function AssessmentQuestionsClient({
           <button
             onClick={() => csvInputRef.current?.click()}
             title='CSV columns: content, options (separated by |), correct (option number or "true"/"false"), type, points, explanation, competency'
-            className="flex items-center gap-2 px-6 py-3 bg-white border border-gray-300 text-gray-700 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors"
+            className="flex items-center gap-2 px-6 py-3 bg-surface border border-gray-300 text-gray-700 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors"
           >
             <FontAwesomeIcon icon={faFileImport} className="w-4 h-4" />
             Import CSV
           </button>
           <button
             onClick={downloadCsvTemplate}
-            className="text-sm text-gray-500 hover:text-[#1B6B7B] hover:underline"
+            className="text-sm text-gray-500 hover:text-brand-600 hover:underline"
           >
             CSV template
           </button>

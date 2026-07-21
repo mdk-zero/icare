@@ -464,7 +464,7 @@ export default function Shell({
               aria-modal="true"
               aria-labelledby="logout-title"
               aria-describedby="logout-desc"
-              className="sb-pop w-full max-w-[400px] overflow-hidden rounded-2xl bg-white shadow-[0_28px_70px_-16px_rgba(4,32,31,0.55)] ring-1 ring-black/[0.06]"
+              className="sb-pop w-full max-w-[400px] overflow-hidden rounded-2xl bg-surface shadow-[0_28px_70px_-16px_rgba(4,32,31,0.55)] ring-1 ring-black/[0.06]"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Header carries the sidebar it was launched from. */}
@@ -501,11 +501,11 @@ export default function Shell({
 
               <div className="px-6 pt-5 pb-1">
                 <div className="flex items-center gap-3 rounded-xl bg-gray-50 px-3 py-2.5 ring-1 ring-gray-200/80">
-                  <span className="h-9 w-9 shrink-0 overflow-hidden rounded-full ring-1 ring-gray-200 flex items-center justify-center bg-[#1B6B7B]/10">
+                  <span className="h-9 w-9 shrink-0 overflow-hidden rounded-full ring-1 ring-gray-200 flex items-center justify-center bg-brand-600/10">
                     {avatarUrl ? (
                       <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
                     ) : (
-                      <span className="text-sm font-bold text-[#1B6B7B]">
+                      <span className="text-sm font-bold text-brand-600">
                         {user.name.charAt(0).toUpperCase()}
                       </span>
                     )}
@@ -528,7 +528,7 @@ export default function Shell({
                   type="button"
                   autoFocus
                   onClick={() => setShowLogoutConfirm(false)}
-                  className="flex-1 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 transition-all hover:bg-gray-50 hover:border-gray-300 outline-none focus-visible:ring-2 focus-visible:ring-gray-400/60"
+                  className="flex-1 rounded-xl border border-gray-200 bg-surface px-4 py-2.5 text-sm font-semibold text-gray-700 transition-all hover:bg-gray-50 hover:border-gray-300 outline-none focus-visible:ring-2 focus-visible:ring-gray-400/60"
                 >
                   Stay signed in
                 </button>
@@ -544,7 +544,7 @@ export default function Shell({
         )}
 
         <div className="flex-1 flex flex-col overflow-hidden">
-          <div className="md:hidden flex items-center justify-between p-3 bg-white border-b border-gray-200 shadow-sm">
+          <div className="md:hidden flex items-center justify-between p-3 bg-surface border-b border-gray-200 shadow-sm">
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setSidebarOpen(true)}

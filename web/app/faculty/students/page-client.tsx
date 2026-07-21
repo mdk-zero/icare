@@ -687,8 +687,8 @@ export default function FacultyStudentsClient() {
           value={students.length}
           label="Total Students"
           caption="Enrolled under you"
-          iconBg="bg-[#1B6B7B]/10"
-          iconColor="text-[#1B6B7B]"
+          iconBg="bg-brand-600/10"
+          iconColor="text-brand-600"
         />
         <StatTile
           icon={<FontAwesomeIcon icon={faTriangleExclamation} className="w-5 h-5" />}
@@ -723,7 +723,7 @@ export default function FacultyStudentsClient() {
         <div className="flex items-center gap-4">
           <button
             onClick={openCreateModal}
-            className="px-4 py-2.5 bg-[#1B6B7B] text-white font-medium rounded-lg hover:bg-[#145A63] transition-all flex items-center gap-2 shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
+            className="px-4 py-2.5 bg-brand-600 text-white font-medium rounded-lg hover:bg-brand-700 transition-all flex items-center gap-2 shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
           >
             <FontAwesomeIcon icon={faPlus} className="w-5 h-5" />
             Register Student
@@ -733,7 +733,7 @@ export default function FacultyStudentsClient() {
               setShowBulkModal(true);
               setMessage(null);
             }}
-            className="px-4 py-2.5 bg-white border border-[#1B6B7B]/30 text-[#1B6B7B] font-medium rounded-lg hover:bg-[#1B6B7B]/5 transition-all flex items-center gap-2"
+            className="px-4 py-2.5 bg-surface border border-brand-600/30 text-brand-600 font-medium rounded-lg hover:bg-brand-600/5 transition-all flex items-center gap-2"
           >
             <FontAwesomeIcon icon={faFileCsv} className="w-5 h-5" />
             Import CSV
@@ -744,7 +744,7 @@ export default function FacultyStudentsClient() {
               placeholder="Search students..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/50 focus:border-[#1B6B7B] transition-all w-64"
+              className="pl-10 pr-4 py-2.5 bg-surface border border-gray-200 rounded-xl text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-600/50 focus:border-brand-600 transition-all w-64"
             />
             <FontAwesomeIcon
               icon={faMagnifyingGlass}
@@ -754,7 +754,7 @@ export default function FacultyStudentsClient() {
           <select
             value={riskFilter}
             onChange={(e) => setRiskFilter(e.target.value)}
-            className="px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/50 focus:border-[#1B6B7B] transition-all cursor-pointer"
+            className="px-4 py-2.5 bg-surface border border-gray-200 rounded-xl text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-600/50 focus:border-brand-600 transition-all cursor-pointer"
           >
             <option value="all">All Risk Levels</option>
             <option value="at_risk">At Risk</option>
@@ -766,11 +766,11 @@ export default function FacultyStudentsClient() {
 
       {showCreateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] w-full max-w-lg border border-gray-200/80 overflow-hidden max-h-[90vh] flex flex-col">
-            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100/80 bg-gray-50/50 flex-shrink-0">
+          <div className="bg-surface rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] w-full max-w-lg border border-hairline overflow-hidden max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between px-5 py-3 border-b border-hairline bg-subtle flex-shrink-0">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-[#1B6B7B]/10 rounded-lg flex items-center justify-center">
-                  <FontAwesomeIcon icon={faPlus} className="text-[#1B6B7B] w-5 h-5" />
+                <div className="w-10 h-10 bg-brand-600/10 rounded-lg flex items-center justify-center">
+                  <FontAwesomeIcon icon={faPlus} className="text-brand-600 w-5 h-5" />
                 </div>
                 <div>
                   <h2 className="text-lg font-bold text-gray-900">Create New Student</h2>
@@ -814,7 +814,7 @@ export default function FacultyStudentsClient() {
                         value={firstName}
                         onChange={(e) => setFirstName(e.target.value)}
                         placeholder="First name"
-                        className="w-full pl-10 pr-4 py-3 bg-white border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30 focus:border-[#1B6B7B] focus:bg-white transition-all shadow-sm"
+                        className="w-full pl-10 pr-4 py-3 bg-surface border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 focus:bg-surface transition-all shadow-sm"
                       />
                     </div>
                   </div>
@@ -829,7 +829,7 @@ export default function FacultyStudentsClient() {
                         onChange={(e) => setMiddleInitial(e.target.value)}
                         placeholder="M.I."
                         maxLength={3}
-                        className="w-full pl-10 pr-3 py-3 bg-white border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30 focus:border-[#1B6B7B] focus:bg-white transition-all shadow-sm"
+                        className="w-full pl-10 pr-3 py-3 bg-surface border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 focus:bg-surface transition-all shadow-sm"
                       />
                     </div>
                   </div>
@@ -843,7 +843,7 @@ export default function FacultyStudentsClient() {
                         value={lastName}
                         onChange={(e) => setLastName(e.target.value)}
                         placeholder="Last name"
-                        className="w-full pl-10 pr-4 py-3 bg-white border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30 focus:border-[#1B6B7B] focus:bg-white transition-all shadow-sm"
+                        className="w-full pl-10 pr-4 py-3 bg-surface border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 focus:bg-surface transition-all shadow-sm"
                       />
                     </div>
                   </div>
@@ -866,7 +866,7 @@ export default function FacultyStudentsClient() {
                     type="text"
                     ref={newEmailRef}
                     placeholder="@batstate-u.edu.ph"
-                    className="w-full pl-10 pr-4 py-3 bg-white border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30 focus:border-[#1B6B7B] focus:bg-white transition-all shadow-sm"
+                    className="w-full pl-10 pr-4 py-3 bg-surface border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 focus:bg-surface transition-all shadow-sm"
                   />
                 </div>
               </div>
@@ -882,7 +882,7 @@ export default function FacultyStudentsClient() {
                   id="new-student-section"
                   value={newSectionId}
                   onChange={(e) => setNewSectionId(e.target.value)}
-                  className="w-full px-4 py-3 bg-white border border-gray-400 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30 focus:border-[#1B6B7B] transition-all shadow-sm"
+                  className="w-full px-4 py-3 bg-surface border border-gray-400 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 transition-all shadow-sm"
                 >
                   <option value="">Select section…</option>
                   {sections.map((s) => (
@@ -913,8 +913,8 @@ export default function FacultyStudentsClient() {
               )}
 
               {createdPassword && (
-                <div className="p-4 rounded-xl border border-[#1B6B7B]/20 bg-[#1B6B7B]/5">
-                  <p className="text-sm font-medium text-[#1B6B7B] mb-2">
+                <div className="p-4 rounded-xl border border-brand-600/20 bg-brand-600/5">
+                  <p className="text-sm font-medium text-brand-600 mb-2">
                     Temporary password for {firstName ? `${firstName} ` : ""}
                     {lastName}
                   </p>
@@ -923,7 +923,7 @@ export default function FacultyStudentsClient() {
                       type="text"
                       readOnly
                       value={createdPassword}
-                      className="flex-1 px-3 py-2 bg-white border border-[#1B6B7B]/20 rounded-lg text-sm font-mono text-gray-800 focus:outline-none"
+                      className="flex-1 px-3 py-2 bg-surface border border-brand-600/20 rounded-lg text-sm font-mono text-gray-800 focus:outline-none"
                     />
                     <button
                       type="button"
@@ -932,12 +932,12 @@ export default function FacultyStudentsClient() {
                         setCopiedPassword(true);
                         setTimeout(() => setCopiedPassword(false), 2000);
                       }}
-                      className="px-3 py-2 text-sm font-medium text-[#1B6B7B] bg-white border border-[#1B6B7B]/20 rounded-lg hover:bg-[#1B6B7B]/10 transition-all"
+                      className="px-3 py-2 text-sm font-medium text-brand-600 bg-surface border border-brand-600/20 rounded-lg hover:bg-brand-600/10 transition-all"
                     >
                       {copiedPassword ? "Copied!" : "Copy"}
                     </button>
                   </div>
-                  <p className="text-xs text-[#1B6B7B]/70 mt-2">
+                  <p className="text-xs text-brand-600/70 mt-2">
                     This password has been emailed to the student. They will be asked to change it
                     on first login.
                   </p>
@@ -958,14 +958,14 @@ export default function FacultyStudentsClient() {
                     setCreatedPassword(null);
                     setCopiedPassword(false);
                   }}
-                  className="px-5 py-2.5 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-all"
+                  className="px-5 py-2.5 bg-surface border border-gray-200 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-all"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="px-6 py-2.5 bg-[#1B6B7B] text-white font-medium rounded-lg hover:bg-[#145A63] transition-all disabled:opacity-60 flex items-center gap-2 shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
+                  className="px-6 py-2.5 bg-brand-600 text-white font-medium rounded-lg hover:bg-brand-700 transition-all disabled:opacity-60 flex items-center gap-2 shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
                 >
                   {isSubmitting ? (
                     <>
@@ -991,7 +991,7 @@ export default function FacultyStudentsClient() {
           )
         ) : !selectedGroup ? (
           sectionGroups.length === 0 ? (
-            <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] py-12 text-center">
+            <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] py-12 text-center">
               <div className="w-12 h-12 mx-auto mb-3 rounded-xl bg-gray-100 flex items-center justify-center">
                 <FontAwesomeIcon icon={faLayerGroup} className="w-5 h-5 text-gray-400" />
               </div>
@@ -1008,7 +1008,7 @@ export default function FacultyStudentsClient() {
                   <button
                     key={group.key}
                     onClick={() => setSelectedSectionKey(group.key)}
-                    className="group text-left bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-[#1B6B7B]/30 transition-all duration-200 p-5"
+                    className="group text-left bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-brand-600/30 transition-all duration-200 p-5"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-center gap-3 min-w-0">
@@ -1016,7 +1016,7 @@ export default function FacultyStudentsClient() {
                           className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${
                             group.key === UNASSIGNED_KEY
                               ? "bg-gray-100 text-gray-500"
-                              : "bg-[#1B6B7B]/10 text-[#1B6B7B]"
+                              : "bg-brand-600/10 text-brand-600"
                           }`}
                         >
                           <FontAwesomeIcon icon={faLayerGroup} className="w-5 h-5" />
@@ -1033,7 +1033,7 @@ export default function FacultyStudentsClient() {
                       </div>
                       <FontAwesomeIcon
                         icon={faChevronRight}
-                        className="w-3.5 h-3.5 mt-3.5 text-gray-300 group-hover:text-[#1B6B7B] group-hover:translate-x-0.5 transition-all shrink-0"
+                        className="w-3.5 h-3.5 mt-3.5 text-gray-300 group-hover:text-brand-600 group-hover:translate-x-0.5 transition-all shrink-0"
                       />
                     </div>
 
@@ -1078,24 +1078,24 @@ export default function FacultyStudentsClient() {
             <div className="flex items-center gap-3 mb-4">
               <button
                 onClick={() => setSelectedSectionKey(null)}
-                className="px-3 py-2 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-all flex items-center gap-2"
+                className="px-3 py-2 bg-surface border border-gray-200 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-all flex items-center gap-2"
               >
                 <FontAwesomeIcon icon={faArrowLeft} className="w-3.5 h-3.5" />
                 All sections
               </button>
               <div className="flex items-center gap-2 min-w-0">
                 <h2 className="text-lg font-bold text-gray-900 truncate">{selectedGroup.name}</h2>
-                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-[#1B6B7B]/10 text-[#1B6B7B] border border-[#1B6B7B]/20 shrink-0">
+                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-brand-600/10 text-brand-600 border border-brand-600/20 shrink-0">
                   {selectedGroup.students.length} student
                   {selectedGroup.students.length === 1 ? "" : "s"}
                 </span>
               </div>
             </div>
 
-            <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200 overflow-hidden">
+            <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200 overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full">
-                  <thead className="bg-gray-50/50 border-b border-gray-100">
+                  <thead className="bg-subtle border-b border-gray-100">
                     <tr>
                       <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
                         Student
@@ -1109,16 +1109,16 @@ export default function FacultyStudentsClient() {
                       <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider"></th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100/80">
+                  <tbody className="divide-y divide-hairline">
                     {selectedGroup.students.map((user) => (
                       <tr
                         key={user.id}
                         onClick={() => router.push(`/faculty/students/${user.id}`)}
-                        className="group hover:bg-gray-50/50 transition-colors cursor-pointer"
+                        className="group hover:bg-subtle transition-colors cursor-pointer"
                       >
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-[#1B6B7B]/10 rounded-full flex items-center justify-center text-[#1B6B7B] font-semibold">
+                            <div className="w-10 h-10 bg-brand-600/10 rounded-full flex items-center justify-center text-brand-600 font-semibold">
                               {user.name?.charAt(0) || "?"}
                             </div>
                             <p className="font-semibold text-gray-800">{user.name}</p>
@@ -1195,7 +1195,7 @@ export default function FacultyStudentsClient() {
             onWheel={() => setOpenMenu(null)}
           />
           <div
-            className="fixed z-50 w-40 bg-white rounded-xl border border-gray-200/80 shadow-[0_8px_30px_rgba(0,0,0,0.12)] py-1"
+            className="fixed z-50 w-40 bg-surface rounded-xl border border-hairline shadow-[0_8px_30px_rgba(0,0,0,0.12)] py-1"
             style={{
               left: openMenu.x,
               top: openMenu.y,
@@ -1235,11 +1235,11 @@ export default function FacultyStudentsClient() {
 
       {showBulkModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] w-full max-w-2xl border border-gray-200/80 overflow-hidden max-h-[90vh] flex flex-col">
-            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100/80 bg-gray-50/50 flex-shrink-0">
+          <div className="bg-surface rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] w-full max-w-2xl border border-hairline overflow-hidden max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between px-5 py-3 border-b border-hairline bg-subtle flex-shrink-0">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-[#1B6B7B]/10 rounded-lg flex items-center justify-center">
-                  <FontAwesomeIcon icon={faFileCsv} className="text-[#1B6B7B] w-5 h-5" />
+                <div className="w-10 h-10 bg-brand-600/10 rounded-lg flex items-center justify-center">
+                  <FontAwesomeIcon icon={faFileCsv} className="text-brand-600 w-5 h-5" />
                 </div>
                 <div>
                   <h2 className="text-lg font-bold text-gray-900">Bulk Add Students</h2>
@@ -1258,10 +1258,10 @@ export default function FacultyStudentsClient() {
             </div>
 
             <div className="p-5 space-y-4 overflow-y-auto flex-1 min-h-0">
-              <div className="p-4 rounded-xl border border-[#1B6B7B]/20 bg-[#1B6B7B]/5">
+              <div className="p-4 rounded-xl border border-brand-600/20 bg-brand-600/5">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-sm font-semibold text-[#1B6B7B] mb-1">CSV format</p>
+                    <p className="text-sm font-semibold text-brand-600 mb-1">CSV format</p>
                     <p className="text-xs text-gray-600">
                       The first row must be a header. Column order doesn&apos;t matter and extra
                       columns are ignored.
@@ -1270,7 +1270,7 @@ export default function FacultyStudentsClient() {
                   <button
                     type="button"
                     onClick={downloadCsvTemplate}
-                    className="shrink-0 px-3 py-2 text-xs font-medium text-[#1B6B7B] bg-white border border-[#1B6B7B]/20 rounded-lg hover:bg-[#1B6B7B]/10 transition-all flex items-center gap-2"
+                    className="shrink-0 px-3 py-2 text-xs font-medium text-brand-600 bg-surface border border-brand-600/20 rounded-lg hover:bg-brand-600/10 transition-all flex items-center gap-2"
                   >
                     <FontAwesomeIcon icon={faDownload} className="w-3.5 h-3.5" />
                     Download template
@@ -1285,7 +1285,7 @@ export default function FacultyStudentsClient() {
                         <th className="py-1.5 font-semibold">Description</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-[#1B6B7B]/10 text-gray-700">
+                    <tbody className="divide-y divide-brand-600/10 text-gray-700">
                       <tr>
                         <td className="py-1.5 pr-4 font-mono">first_name</td>
                         <td className="py-1.5 pr-4">Yes</td>
@@ -1336,7 +1336,7 @@ export default function FacultyStudentsClient() {
                   type="button"
                   onClick={() => csvInputRef.current?.click()}
                   disabled={isBulkImporting}
-                  className="w-full px-4 py-6 border-2 border-dashed border-gray-300 rounded-xl text-sm text-gray-600 hover:border-[#1B6B7B]/50 hover:bg-[#1B6B7B]/5 transition-all disabled:opacity-50"
+                  className="w-full px-4 py-6 border-2 border-dashed border-gray-300 rounded-xl text-sm text-gray-600 hover:border-brand-600/50 hover:bg-brand-600/5 transition-all disabled:opacity-50"
                 >
                   {bulkFileName ? (
                     <span>
@@ -1361,7 +1361,7 @@ export default function FacultyStudentsClient() {
                   value={bulkDefaultSectionId}
                   onChange={(e) => setBulkDefaultSectionId(e.target.value)}
                   disabled={isBulkImporting}
-                  className="w-full px-4 py-3 bg-white border border-gray-400 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30 focus:border-[#1B6B7B] transition-all disabled:opacity-50"
+                  className="w-full px-4 py-3 bg-surface border border-gray-400 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 transition-all disabled:opacity-50"
                 >
                   <option value="">No default — every row needs its own section</option>
                   {sections.map((s) => (
@@ -1383,14 +1383,14 @@ export default function FacultyStudentsClient() {
 
               {bulkRows.length > 0 && (
                 <div className="border border-gray-200 rounded-xl overflow-hidden">
-                  <div className="px-4 py-2 bg-gray-50/50 border-b border-gray-100 text-xs text-gray-500">
+                  <div className="px-4 py-2 bg-subtle border-b border-gray-100 text-xs text-gray-500">
                     {bulkRows.filter((r) => !r.invalidReason).length} of {bulkRows.length} row
                     {bulkRows.length === 1 ? "" : "s"} ready to import
                     {bulkRows.some((r) => r.invalidReason) && " — rows with problems are skipped"}
                   </div>
                   <div className="max-h-56 overflow-y-auto">
                     <table className="w-full text-sm">
-                      <tbody className="divide-y divide-gray-100/80">
+                      <tbody className="divide-y divide-hairline">
                         {bulkRows.map((row) => (
                           <tr key={row.line} className={row.invalidReason ? "bg-red-50/40" : ""}>
                             <td className="py-2 px-4 text-xs text-gray-400 whitespace-nowrap">
@@ -1404,7 +1404,7 @@ export default function FacultyStudentsClient() {
                             <td className="py-2 px-2 text-gray-500">{row.email || "—"}</td>
                             <td className="py-2 px-2 whitespace-nowrap">
                               {row.sectionId ? (
-                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-[#1B6B7B]/10 text-[#1B6B7B] border border-[#1B6B7B]/20">
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-brand-600/10 text-brand-600 border border-brand-600/20">
                                   {row.sectionName}
                                 </span>
                               ) : row.invalidReason ? (
@@ -1425,7 +1425,7 @@ export default function FacultyStudentsClient() {
                                   {row.invalidReason}
                                 </span>
                               ) : row.status === "creating" ? (
-                                <span className="inline-flex items-center gap-1.5 text-xs text-[#1B6B7B]">
+                                <span className="inline-flex items-center gap-1.5 text-xs text-brand-600">
                                   <FontAwesomeIcon icon={faSpinner} spin className="w-3.5 h-3.5" />
                                   Creating…
                                 </span>
@@ -1470,12 +1470,12 @@ export default function FacultyStudentsClient() {
               )}
             </div>
 
-            <div className="flex items-center justify-end gap-3 px-5 py-3 border-t border-gray-100/80 bg-gray-50/50 flex-shrink-0">
+            <div className="flex items-center justify-end gap-3 px-5 py-3 border-t border-hairline bg-subtle flex-shrink-0">
               <button
                 type="button"
                 onClick={closeBulkModal}
                 disabled={isBulkImporting}
-                className="px-5 py-2.5 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-all disabled:opacity-50"
+                className="px-5 py-2.5 bg-surface border border-gray-200 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-all disabled:opacity-50"
               >
                 {bulkFinished ? "Close" : "Cancel"}
               </button>
@@ -1490,7 +1490,7 @@ export default function FacultyStudentsClient() {
                     (bulkRows.some((r) => !r.invalidReason && !r.sectionId) &&
                       !bulkDefaultSectionId)
                   }
-                  className="px-6 py-2.5 bg-[#1B6B7B] text-white font-medium rounded-lg hover:bg-[#145A63] transition-all disabled:opacity-60 flex items-center gap-2 shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
+                  className="px-6 py-2.5 bg-brand-600 text-white font-medium rounded-lg hover:bg-brand-700 transition-all disabled:opacity-60 flex items-center gap-2 shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
                 >
                   {isBulkImporting ? (
                     <>
@@ -1509,11 +1509,11 @@ export default function FacultyStudentsClient() {
 
       {showUpdateModal && updatingStudent && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] w-full max-w-lg border border-gray-200/80 overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100/80 bg-gray-50/50">
+          <div className="bg-surface rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] w-full max-w-lg border border-hairline overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-3 border-b border-hairline bg-subtle">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-[#1B6B7B]/10 rounded-lg flex items-center justify-center">
-                  <FontAwesomeIcon icon={faUser} className="text-[#1B6B7B] w-5 h-5" />
+                <div className="w-10 h-10 bg-brand-600/10 rounded-lg flex items-center justify-center">
+                  <FontAwesomeIcon icon={faUser} className="text-brand-600 w-5 h-5" />
                 </div>
                 <div>
                   <h2 className="text-lg font-bold text-gray-900">Update Student</h2>
@@ -1544,7 +1544,7 @@ export default function FacultyStudentsClient() {
                     value={updateName}
                     onChange={(e) => setUpdateName(e.target.value)}
                     placeholder="Full name"
-                    className="w-full pl-10 pr-4 py-3 bg-white border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30 focus:border-[#1B6B7B] focus:bg-white transition-all shadow-sm"
+                    className="w-full pl-10 pr-4 py-3 bg-surface border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 focus:bg-surface transition-all shadow-sm"
                   />
                 </div>
               </div>
@@ -1564,7 +1564,7 @@ export default function FacultyStudentsClient() {
                     type="text"
                     ref={updateEmailRef}
                     placeholder="student@example.edu"
-                    className="w-full pl-10 pr-4 py-3 bg-white border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30 focus:border-[#1B6B7B] focus:bg-white transition-all shadow-sm"
+                    className="w-full pl-10 pr-4 py-3 bg-surface border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 focus:bg-surface transition-all shadow-sm"
                   />
                 </div>
               </div>
@@ -1579,7 +1579,7 @@ export default function FacultyStudentsClient() {
                   id="update-student-section"
                   value={updateSectionId}
                   onChange={(e) => setUpdateSectionId(e.target.value)}
-                  className="w-full px-4 py-3 bg-white border border-gray-400 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30 focus:border-[#1B6B7B] transition-all shadow-sm"
+                  className="w-full px-4 py-3 bg-surface border border-gray-400 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 transition-all shadow-sm"
                 >
                   <option value="">
                     {updatingStudent.section
@@ -1600,14 +1600,14 @@ export default function FacultyStudentsClient() {
                     setShowUpdateModal(false);
                     setUpdatingStudent(null);
                   }}
-                  className="px-5 py-2.5 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-all"
+                  className="px-5 py-2.5 bg-surface border border-gray-200 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-all"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isUpdating}
-                  className="px-6 py-2.5 bg-[#1B6B7B] text-white font-medium rounded-lg hover:bg-[#145A63] transition-all disabled:opacity-60 flex items-center gap-2 shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
+                  className="px-6 py-2.5 bg-brand-600 text-white font-medium rounded-lg hover:bg-brand-700 transition-all disabled:opacity-60 flex items-center gap-2 shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
                 >
                   {isUpdating ? (
                     <>
@@ -1626,8 +1626,8 @@ export default function FacultyStudentsClient() {
 
       {showDeleteModal && deletingStudent && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] w-full max-w-md border border-gray-200/80 overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100/80 bg-gray-50/50">
+          <div className="bg-surface rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] w-full max-w-md border border-hairline overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-3 border-b border-hairline bg-subtle">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
                   <FontAwesomeIcon icon={faTrashCan} className="text-red-600 w-5 h-5" />
@@ -1654,14 +1654,14 @@ export default function FacultyStudentsClient() {
                 action cannot be undone.
               </p>
             </div>
-            <div className="flex items-center justify-end gap-3 px-5 py-3 border-t border-gray-100/80 bg-gray-50/50">
+            <div className="flex items-center justify-end gap-3 px-5 py-3 border-t border-hairline bg-subtle">
               <button
                 type="button"
                 onClick={() => {
                   setShowDeleteModal(false);
                   setDeletingStudent(null);
                 }}
-                className="px-5 py-2.5 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-all"
+                className="px-5 py-2.5 bg-surface border border-gray-200 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-all"
               >
                 Cancel
               </button>

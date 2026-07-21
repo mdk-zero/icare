@@ -28,7 +28,7 @@ import StatTile from "../../components/StatTile";
 import Card from "../../components/Card";
 
 const inputClassName =
-  "w-full px-4 py-3 bg-white border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30 focus:border-[#1B6B7B] focus:bg-white transition-all text-sm shadow-sm";
+  "w-full px-4 py-3 bg-surface border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 focus:bg-surface transition-all text-sm shadow-sm";
 
 const labelClassName = "block text-sm font-bold text-gray-800 mb-2";
 
@@ -250,8 +250,8 @@ export default function FacultyPatientsClient() {
           icon={<FontAwesomeIcon icon={faUsers} className="w-5 h-5" />}
           value={patients.length}
           label="Total Patients"
-          iconBg="bg-[#1B6B7B]/10"
-          iconColor="text-[#1B6B7B]"
+          iconBg="bg-brand-600/10"
+          iconColor="text-brand-600"
         />
         <StatTile
           icon={<FontAwesomeIcon icon={faTriangleExclamation} className="w-5 h-5" />}
@@ -285,7 +285,7 @@ export default function FacultyPatientsClient() {
         </div>
         <button
           onClick={openAddModal}
-          className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#1B6B7B] hover:bg-[#145a68] text-white text-sm font-medium rounded-lg transition-colors shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
+          className="inline-flex items-center gap-2 px-4 py-2.5 bg-brand-600 hover:bg-[#145a68] text-white text-sm font-medium rounded-lg transition-colors shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
         >
           <FontAwesomeIcon icon={faPlus} className="w-4 h-4" />
           Add Patient
@@ -295,7 +295,7 @@ export default function FacultyPatientsClient() {
       {loading ? (
         <SkeletonTable rows={5} cols={10} />
       ) : patients.length === 0 ? (
-        <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] p-12 text-center">
+        <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] p-12 text-center">
           <FontAwesomeIcon icon={faUsers} className="w-12 h-12 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-gray-700">No patients found</h3>
           <p className="text-gray-500 text-sm mt-1">
@@ -305,10 +305,10 @@ export default function FacultyPatientsClient() {
           </p>
         </div>
       ) : (
-        <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden">
+        <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-gray-50/50 border-b border-gray-100">
+              <thead className="bg-subtle border-b border-gray-100">
                 <tr>
                   <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Patient</th>
                   <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Room</th>
@@ -322,7 +322,7 @@ export default function FacultyPatientsClient() {
                   <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100/80">
+              <tbody className="divide-y divide-hairline">
                 {patients.map((patient) => {
                   const vitals = patient.vital_signs;
                   const hrStatus = getVitalStatus(vitals?.heart_rate ?? null, "heart_rate");
@@ -340,7 +340,7 @@ export default function FacultyPatientsClient() {
                   );
 
                   return (
-                    <tr key={patient.id} className="hover:bg-gray-50/50 transition-colors">
+                    <tr key={patient.id} className="hover:bg-subtle transition-colors">
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-semibold">
@@ -412,11 +412,11 @@ export default function FacultyPatientsClient() {
 
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col border border-gray-200/80">
-            <div className="flex items-center justify-between p-4 border-b border-gray-100/80 bg-gray-50/50">
+          <div className="bg-surface rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col border border-hairline">
+            <div className="flex items-center justify-between p-4 border-b border-hairline bg-subtle">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-[#1B6B7B]/10 rounded-lg flex items-center justify-center">
-                  <FontAwesomeIcon icon={editingPatient ? faPen : faPlus} className="text-[#1B6B7B] w-5 h-5" />
+                <div className="w-10 h-10 bg-brand-600/10 rounded-lg flex items-center justify-center">
+                  <FontAwesomeIcon icon={editingPatient ? faPen : faPlus} className="text-brand-600 w-5 h-5" />
                 </div>
                 <div>
                   <h2 className="text-lg font-bold text-gray-900">
@@ -585,18 +585,18 @@ export default function FacultyPatientsClient() {
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-100/80">
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-hairline">
                 <button
                   type="button"
                   onClick={closeModal}
-                  className="px-5 py-2.5 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-all"
+                  className="px-5 py-2.5 bg-surface border border-gray-200 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-all"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#1B6B7B] hover:bg-[#145a68] disabled:opacity-60 text-white font-medium rounded-lg transition-colors shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-brand-600 hover:bg-[#145a68] disabled:opacity-60 text-white font-medium rounded-lg transition-colors shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
                 >
                   {saving && <FontAwesomeIcon icon={faSpinner} className="w-4 h-4 animate-spin" />}
                   <FontAwesomeIcon icon={faSave} className="w-4 h-4" />

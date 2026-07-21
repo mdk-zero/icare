@@ -104,8 +104,8 @@ export default function FacultyAuditClient() {
           icon={<FontAwesomeIcon icon={faClipboard} className="w-5 h-5" />}
           value={auditLogs.length}
           label="Total Activities"
-          iconBg="bg-[#1B6B7B]/10"
-          iconColor="text-[#1B6B7B]"
+          iconBg="bg-brand-600/10"
+          iconColor="text-brand-600"
         />
         <StatTile
           icon={<FontAwesomeIcon icon={faTriangleExclamation} className="w-5 h-5" />}
@@ -127,7 +127,7 @@ export default function FacultyAuditClient() {
         <select
           value={actionFilter}
           onChange={(e) => setActionFilter(e.target.value)}
-          className="px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/50 focus:border-[#1B6B7B] transition-all cursor-pointer"
+          className="px-4 py-2.5 bg-surface border border-gray-200 rounded-xl text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-600/50 focus:border-brand-600 transition-all cursor-pointer"
         >
           <option value="all">All Actions</option>
           <option value="alert">Alerts</option>
@@ -145,10 +145,10 @@ export default function FacultyAuditClient() {
       {loading ? (
         <SkeletonTable rows={5} cols={5} />
       ) : (
-        <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden">
+        <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-gray-50/50 border-b border-gray-100">
+              <thead className="bg-subtle border-b border-gray-100">
                 <tr>
                   <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Category</th>
                   <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Action</th>
@@ -157,7 +157,7 @@ export default function FacultyAuditClient() {
                   <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Timestamp</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100/80">
+              <tbody className="divide-y divide-hairline">
                 {auditLogs.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="py-8 text-center text-gray-500">
@@ -166,7 +166,7 @@ export default function FacultyAuditClient() {
                   </tr>
                 ) : (
                   auditLogs.map((log) => (
-                    <tr key={log.id} className="hover:bg-gray-50/50 transition-colors">
+                    <tr key={log.id} className="hover:bg-subtle transition-colors">
                       <td className="py-3 px-4">
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-lg text-xs font-medium ${getTabColor(log.tab)}`}>
                           {log.tab.replace('_', ' ')}

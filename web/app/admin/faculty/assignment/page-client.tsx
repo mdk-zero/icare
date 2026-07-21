@@ -173,19 +173,19 @@ export default function AssignSectionsClient() {
       </div>
 
       {message && (
-        <div className="mb-4 bg-[#1B6B7B]/10 border border-[#1B6B7B]/30 text-[#155663] px-4 py-3 rounded-xl text-sm">
+        <div className="mb-4 bg-brand-600/10 border border-brand-600/30 text-[#155663] px-4 py-3 rounded-xl text-sm">
           {message}
         </div>
       )}
 
       {loading ? (
         <div className="flex items-center justify-center h-64">
-          <div className="w-10 h-10 border-4 border-[#1B6B7B] border-t-transparent rounded-full animate-spin" />
+          <div className="w-10 h-10 border-4 border-brand-600 border-t-transparent rounded-full animate-spin" />
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-1 space-y-6">
-            <div className="bg-white rounded-xl p-4 border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)]">
+            <div className="bg-surface rounded-xl p-4 border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)]">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Sections</h2>
               <div className="flex gap-2 mb-4">
                 <input
@@ -197,12 +197,12 @@ export default function AssignSectionsClient() {
                   }}
                   maxLength={50}
                   placeholder="New section name (e.g. A)"
-                  className="flex-1 min-w-0 px-4 py-2.5 border border-gray-200 rounded-xl text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B] focus:border-[#1B6B7B]"
+                  className="flex-1 min-w-0 px-4 py-2.5 border border-gray-200 rounded-xl text-gray-800 focus:outline-none focus:ring-2 focus:ring-brand-600 focus:border-brand-600"
                 />
                 <button
                   onClick={handleCreateSection}
                   disabled={busy || !newSectionName.trim()}
-                  className="px-4 py-2.5 bg-[#1B6B7B] text-white rounded-xl font-medium hover:bg-[#145a63] transition-all disabled:opacity-50 shrink-0"
+                  className="px-4 py-2.5 bg-brand-600 text-white rounded-xl font-medium hover:bg-brand-700 transition-all disabled:opacity-50 shrink-0"
                 >
                   Add
                 </button>
@@ -220,7 +220,7 @@ export default function AssignSectionsClient() {
                         key={section.id}
                         className="flex items-center gap-3 p-3 rounded-xl border border-gray-200"
                       >
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#1B6B7B]/10 text-[#1B6B7B] border border-[#1B6B7B]/20 shrink-0">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-brand-600/10 text-brand-600 border border-brand-600/20 shrink-0">
                           {section.name}
                         </span>
                         <p className="flex-1 text-sm text-gray-500 truncate">
@@ -245,7 +245,7 @@ export default function AssignSectionsClient() {
               </div>
             </div>
 
-            <div className="bg-white rounded-xl p-4 border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)]">
+            <div className="bg-surface rounded-xl p-4 border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)]">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Faculty Members</h2>
               {faculty.length === 0 ? (
                 <p className="text-gray-400 text-sm text-center py-6">
@@ -259,7 +259,7 @@ export default function AssignSectionsClient() {
                       onClick={() => handleFacultySelect(member)}
                       className={`w-full flex items-center gap-3 p-3 rounded-xl text-left transition-all ${
                         selectedFaculty?.id === member.id
-                          ? "bg-[#1B6B7B] text-white"
+                          ? "bg-brand-600 text-white"
                           : "hover:bg-gray-50 text-gray-800"
                       }`}
                     >
@@ -267,7 +267,7 @@ export default function AssignSectionsClient() {
                         className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold shrink-0 ${
                           selectedFaculty?.id === member.id
                             ? "bg-white/20 text-white"
-                            : "bg-[#1B6B7B]/10 text-[#1B6B7B]"
+                            : "bg-brand-600/10 text-brand-600"
                         }`}
                       >
                         {member.name.charAt(0)}
@@ -288,7 +288,7 @@ export default function AssignSectionsClient() {
           </div>
 
           <div className="lg:col-span-2">
-            <div className="bg-white rounded-xl p-4 border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)]">
+            <div className="bg-surface rounded-xl p-4 border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)]">
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <h2 className="text-lg font-semibold text-gray-900">
@@ -304,7 +304,7 @@ export default function AssignSectionsClient() {
                 <button
                   onClick={handleSave}
                   disabled={busy || !hasChanges || !selectedFaculty}
-                  className="px-5 py-2.5 bg-[#1B6B7B] text-white rounded-lg font-medium hover:bg-[#145a63] transition-all disabled:opacity-50 shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
+                  className="px-5 py-2.5 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 transition-all disabled:opacity-50 shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
                 >
                   {busy ? "Saving…" : "Save Sections"}
                 </button>
@@ -325,7 +325,7 @@ export default function AssignSectionsClient() {
                         key={section.id}
                         className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
                           selectedSections.includes(section.id)
-                            ? "border-[#1B6B7B] bg-[#1B6B7B]/5"
+                            ? "border-brand-600 bg-brand-600/5"
                             : "border-gray-200 hover:border-gray-300"
                         }`}
                       >
@@ -334,7 +334,7 @@ export default function AssignSectionsClient() {
                           checked={selectedSections.includes(section.id)}
                           onChange={() => toggleSection(section.id)}
                           disabled={!selectedFaculty}
-                          className="w-4 h-4 text-[#1B6B7B] rounded focus:ring-[#1B6B7B]"
+                          className="w-4 h-4 text-brand-600 rounded focus:ring-brand-600"
                         />
                         <p className="flex-1 min-w-0 font-medium text-gray-800 truncate">
                           Section {section.name}

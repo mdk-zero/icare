@@ -11,7 +11,7 @@ import PageHeader from "../../../components/PageHeader";
 import { fetchSections, type Section } from "../../../lib/api";
 
 const inputClassName =
-  "w-full px-4 py-3 bg-white border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30 focus:border-[#1B6B7B] focus:bg-white transition-all text-sm shadow-sm";
+  "w-full px-4 py-3 bg-surface border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 focus:bg-surface transition-all text-sm shadow-sm";
 const labelClassName = "block text-sm font-bold text-gray-800 mb-2";
 
 const CATEGORIES = [
@@ -110,7 +110,7 @@ export default function AssessmentNewClient() {
         </div>
       )}
 
-      <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] p-6 space-y-4">
+      <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] p-6 space-y-4">
         <div>
           <label className={labelClassName}>Title</label>
           <input
@@ -204,7 +204,7 @@ export default function AssessmentNewClient() {
                           : f.target_sections.filter((x) => x !== s.name),
                       }))
                     }
-                    className="w-4 h-4 accent-[#1B6B7B]"
+                    className="w-4 h-4 accent-brand-600"
                   />
                   Section {s.name}
                 </label>
@@ -225,7 +225,7 @@ export default function AssessmentNewClient() {
           <button
             onClick={handleCreate}
             disabled={busy}
-            className="flex items-center gap-2 px-6 py-2 bg-[#1B6B7B] text-white rounded-lg text-sm hover:bg-[#155663] disabled:opacity-60"
+            className="flex items-center gap-2 px-6 py-2 bg-brand-600 text-white rounded-lg text-sm hover:bg-[#155663] disabled:opacity-60"
           >
             {busy ? (
               <><FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" /> Creating…</>

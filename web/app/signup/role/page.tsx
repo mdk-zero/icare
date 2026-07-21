@@ -136,7 +136,7 @@ export default function SelectRolePage() {
             <h2 className="text-2xl font-semibold text-[#0F4C5C]">iCARE++</h2>
           </div>
 
-          <div className="bg-white rounded-3xl border border-[#E2EBEC] shadow-xl shadow-[#0D7377]/[0.05] p-7 sm:p-9">
+          <div className="bg-surface rounded-3xl border border-[#E2EBEC] shadow-xl shadow-[#0D7377]/[0.05] p-7 sm:p-9">
             <div className="mb-6">
               <h1 className="text-xl font-semibold text-[#0F172A] mb-1 tracking-tight">
                 Select your role

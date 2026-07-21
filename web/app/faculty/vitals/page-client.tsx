@@ -68,8 +68,8 @@ export default function FacultyVitalsClient() {
           icon={<FontAwesomeIcon icon={faHeartbeat} className="w-5 h-5" />}
           value={readings.length}
           label="Recent Readings"
-          iconBg="bg-[#1B6B7B]/10"
-          iconColor="text-[#1B6B7B]"
+          iconBg="bg-brand-600/10"
+          iconColor="text-brand-600"
         />
         <StatTile
           icon={<FontAwesomeIcon icon={faExclamationTriangle} className="w-5 h-5" />}
@@ -88,12 +88,12 @@ export default function FacultyVitalsClient() {
       </div>
 
       <div className="flex justify-end">
-        <label className="flex items-center gap-3 px-4 py-2.5 bg-white border border-gray-200 rounded-xl cursor-pointer hover:bg-gray-50 transition-colors">
+        <label className="flex items-center gap-3 px-4 py-2.5 bg-surface border border-gray-200 rounded-xl cursor-pointer hover:bg-gray-50 transition-colors">
           <input
             type="checkbox"
             checked={flaggedOnly}
             onChange={(e) => setFlaggedOnly(e.target.checked)}
-            className="w-4 h-4 text-[#1B6B7B] rounded focus:ring-[#1B6B7B]"
+            className="w-4 h-4 text-brand-600 rounded focus:ring-brand-600"
           />
           <span className="text-sm font-medium text-gray-700 flex items-center gap-2">
             <FontAwesomeIcon icon={faFilter} className="w-3.5 h-3.5 text-gray-500" />
@@ -102,7 +102,7 @@ export default function FacultyVitalsClient() {
         </label>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden">
+      <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden">
         {loading ? (
           <SkeletonTable rows={5} cols={6} />
         ) : readings.length === 0 ? (
@@ -118,7 +118,7 @@ export default function FacultyVitalsClient() {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-gray-50/50 border-b border-gray-100">
+              <thead className="bg-subtle border-b border-gray-100">
                 <tr>
                   <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Student</th>
                   <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Patient</th>
@@ -128,12 +128,12 @@ export default function FacultyVitalsClient() {
                   <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100/80">
+              <tbody className="divide-y divide-hairline">
                 {readings.map((reading) => (
-                  <tr key={reading.id} className="hover:bg-gray-50/50 transition-colors">
+                  <tr key={reading.id} className="hover:bg-subtle transition-colors">
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 bg-[#1B6B7B]/10 rounded-full flex items-center justify-center text-[#1B6B7B]">
+                        <div className="w-9 h-9 bg-brand-600/10 rounded-full flex items-center justify-center text-brand-600">
                           <FontAwesomeIcon icon={faUser} className="w-3.5 h-3.5" />
                         </div>
                         <div>
@@ -177,7 +177,7 @@ export default function FacultyVitalsClient() {
                     <td className="py-3 px-4">
                       <button
                         onClick={() => setSelected(reading)}
-                        className="flex items-center gap-1.5 text-[#1B6B7B] hover:text-[#145a63] font-medium text-sm hover:bg-[#1B6B7B]/5 px-3 py-1.5 rounded-lg transition-colors"
+                        className="flex items-center gap-1.5 text-brand-600 hover:text-brand-700 font-medium text-sm hover:bg-brand-600/5 px-3 py-1.5 rounded-lg transition-colors"
                       >
                         <FontAwesomeIcon icon={faEye} className="w-4 h-4" />
                         Details
@@ -193,8 +193,8 @@ export default function FacultyVitalsClient() {
 
       {selected && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl w-full max-w-lg max-h-[85vh] overflow-hidden flex flex-col shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-gray-200/80">
-            <div className="p-4 border-b border-gray-200/80 flex items-center justify-between">
+          <div className="bg-surface rounded-xl w-full max-w-lg max-h-[85vh] overflow-hidden flex flex-col shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-hairline">
+            <div className="p-4 border-b border-hairline flex items-center justify-between">
               <div>
                 <h2 className="text-xl font-bold text-gray-900">Reading Details</h2>
                 <p className="text-sm text-gray-500">
@@ -264,7 +264,7 @@ export default function FacultyVitalsClient() {
             <div className="p-4 border-t border-gray-200 bg-gray-50 flex justify-end">
               <button
                 onClick={() => setSelected(null)}
-                className="px-4 py-2.5 border border-gray-200 text-gray-700 rounded-xl font-medium hover:bg-white transition-all"
+                className="px-4 py-2.5 border border-gray-200 text-gray-700 rounded-xl font-medium hover:bg-surface transition-all"
               >
                 Close
               </button>

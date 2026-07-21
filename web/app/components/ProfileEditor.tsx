@@ -10,6 +10,7 @@ import {
   uploadAvatar,
   User,
 } from "../lib/api";
+import ThemeSetting from "./ThemeSetting";
 
 interface ProfileEditorProps {
   changePasswordHref: string;
@@ -130,13 +131,13 @@ export default function ProfileEditor({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left column — identity card */}
         <div className="lg:col-span-1">
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 text-center">
+          <div className="bg-surface rounded-2xl shadow-sm border border-gray-100 p-6 text-center">
             <div className="relative inline-block mb-4">
               <button
                 type="button"
                 onClick={handleAvatarClick}
                 disabled={isUploading}
-                className="relative w-28 h-28 rounded-full bg-gradient-to-br from-[#1B6B7B] to-[#145A63] flex items-center justify-center text-white text-4xl font-bold overflow-hidden ring-4 ring-[#1B6B7B]/10 hover:ring-[#1B6B7B]/30 transition-all disabled:opacity-60"
+                className="relative w-28 h-28 rounded-full bg-gradient-to-br from-brand-600 to-brand-700 flex items-center justify-center text-white text-4xl font-bold overflow-hidden ring-4 ring-brand-600/10 hover:ring-brand-600/30 transition-all disabled:opacity-60"
               >
                 {avatarUrl ? (
                   <img
@@ -155,7 +156,7 @@ export default function ProfileEditor({
                 type="button"
                 onClick={handleAvatarClick}
                 disabled={isUploading}
-                className="absolute bottom-1 right-1 w-8 h-8 bg-white rounded-full shadow-md flex items-center justify-center text-[#1B6B7B] hover:bg-gray-50 transition-colors disabled:opacity-60"
+                className="absolute bottom-1 right-1 w-8 h-8 bg-surface rounded-full shadow-md flex items-center justify-center text-brand-600 hover:bg-gray-50 transition-colors disabled:opacity-60"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
@@ -176,7 +177,7 @@ export default function ProfileEditor({
             <p className="text-sm text-gray-500 mb-4">{user.email}</p>
 
             <div className="flex items-center justify-center gap-2 mb-6">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-[#1B6B7B]/10 text-[#1B6B7B] capitalize">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-brand-600/10 text-brand-600 capitalize">
                 {user.role}
               </span>
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
@@ -189,7 +190,7 @@ export default function ProfileEditor({
               type="button"
               onClick={handleAvatarClick}
               disabled={isUploading}
-              className="w-full px-4 py-2.5 bg-[#1B6B7B] text-white text-sm font-medium rounded-xl hover:bg-[#145A63] transition-all disabled:opacity-60"
+              className="w-full px-4 py-2.5 bg-brand-600 text-white text-sm font-medium rounded-xl hover:bg-brand-700 transition-all disabled:opacity-60"
             >
               {isUploading ? "Uploading..." : "Upload new photo"}
             </button>
@@ -213,7 +214,7 @@ export default function ProfileEditor({
             </div>
           )}
 
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+          <div className="bg-surface rounded-2xl shadow-sm border border-gray-100 p-6">
             <div className="mb-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-1">
                 Account Information
@@ -233,7 +234,7 @@ export default function ProfileEditor({
                     type="text"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/50 focus:border-[#1B6B7B] transition-all"
+                    className="w-full px-4 py-2.5 bg-surface border border-gray-200 rounded-xl text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-600/50 focus:border-brand-600 transition-all"
                     placeholder="Your full name"
                   />
                 </div>
@@ -258,7 +259,7 @@ export default function ProfileEditor({
                 <button
                   type="submit"
                   disabled={isSaving}
-                  className="px-6 py-2.5 bg-[#1B6B7B] text-white font-medium rounded-xl hover:bg-[#145A63] transition-all disabled:opacity-60"
+                  className="px-6 py-2.5 bg-brand-600 text-white font-medium rounded-xl hover:bg-brand-700 transition-all disabled:opacity-60"
                 >
                   {isSaving ? "Saving..." : "Save changes"}
                 </button>
@@ -266,7 +267,7 @@ export default function ProfileEditor({
             </form>
           </div>
 
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+          <div className="bg-surface rounded-2xl shadow-sm border border-gray-100 p-6">
             <div className="mb-4">
               <h3 className="text-lg font-semibold text-gray-900 mb-1">
                 Security
@@ -289,13 +290,17 @@ export default function ProfileEditor({
               </div>
               <Link
                 href={changePasswordHref}
-                className="px-4 py-2 text-sm font-medium text-[#1B6B7B] border border-[#1B6B7B] rounded-xl hover:bg-[#1B6B7B] hover:text-white transition-all"
+                className="px-4 py-2 text-sm font-medium text-brand-600 border border-brand-600 rounded-xl hover:bg-brand-600 hover:text-white transition-all"
               >
                 {hasPassword ? "Change" : "Set password"}
               </Link>
             </div>
           </div>
         </div>
+      </div>
+
+      <div className="mt-6">
+        <ThemeSetting />
       </div>
     </div>
   );

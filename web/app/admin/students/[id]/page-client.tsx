@@ -124,7 +124,7 @@ export default function StudentDetailClient() {
     return (
       <div className="flex items-center justify-center h-96">
         <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 border-4 border-[#1B6B7B] border-t-transparent rounded-full animate-spin" />
+          <div className="w-12 h-12 border-4 border-brand-600 border-t-transparent rounded-full animate-spin" />
           <p className="text-gray-500 font-medium">Loading student data...</p>
         </div>
       </div>
@@ -137,7 +137,7 @@ export default function StudentDetailClient() {
         <p className="text-gray-500">Student not found</p>
         <button
           onClick={() => router.push("/admin/student-management")}
-          className="mt-4 px-4 py-2 text-[#1B6B7B] font-medium"
+          className="mt-4 px-4 py-2 text-brand-600 font-medium"
         >
           Back to Students
         </button>
@@ -161,9 +161,9 @@ export default function StudentDetailClient() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
         <div className="lg:col-span-2">
-          <div className="bg-white rounded-xl p-6 border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)]">
+          <div className="bg-surface rounded-xl p-6 border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)]">
             <div className="flex items-center gap-4 mb-6">
-              <div className="w-16 h-16 bg-gradient-to-br from-[#1B6B7B] to-[#145a63] rounded-full flex items-center justify-center text-white font-bold text-xl">
+              <div className="w-16 h-16 bg-gradient-to-br from-brand-600 to-brand-700 rounded-full flex items-center justify-center text-white font-bold text-xl">
                 {student.name.split(" ").map((n) => n[0]).join("")}
               </div>
               <div>
@@ -203,7 +203,7 @@ export default function StudentDetailClient() {
           </div>
         </div>
 
-        <div className="bg-white rounded-xl p-6 border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)]">
+        <div className="bg-surface rounded-xl p-6 border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)]">
           <div className="flex items-center gap-2 mb-4">
             <div className="p-2 bg-purple-100 rounded-lg">
               <svg className="w-5 h-5 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -245,7 +245,7 @@ export default function StudentDetailClient() {
                 </div>
               )}
               {prediction.explanations.length > 0 && (
-                <div className="border-t border-gray-100/80 pt-3">
+                <div className="border-t border-hairline pt-3">
                   <p className="text-sm text-gray-500 mb-2">Top Contributing Factors</p>
                   <div className="space-y-1">
                     {prediction.explanations.slice(0, 4).map((exp) => (
@@ -264,8 +264,8 @@ export default function StudentDetailClient() {
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden">
-        <div className="border-b border-gray-100/80">
+      <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden">
+        <div className="border-b border-hairline">
           <div className="flex gap-6 px-6">
             {["performance", "scenarios", "competencies"].map((tab) => (
               <button
@@ -273,7 +273,7 @@ export default function StudentDetailClient() {
                 onClick={() => setActiveTab(tab)}
                 className={`py-4 font-medium border-b-2 transition-colors ${
                   activeTab === tab
-                    ? "border-[#1B6B7B] text-[#1B6B7B]"
+                    ? "border-brand-600 text-brand-600"
                     : "border-transparent text-gray-500 hover:text-gray-700"
                 }`}
               >

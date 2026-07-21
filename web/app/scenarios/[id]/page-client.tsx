@@ -138,7 +138,7 @@ export default function ScenarioRunnerClient() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="w-12 h-12 border-4 border-[#1B6B7B] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <div className="w-12 h-12 border-4 border-brand-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
           <p className="text-gray-600">Loading scenario...</p>
         </div>
       </div>
@@ -152,7 +152,7 @@ export default function ScenarioRunnerClient() {
           <p className="text-red-600 mb-4">{error || "Unable to load scenario."}</p>
           <button
             onClick={() => router.push("/dashboard")}
-            className="px-4 py-2 bg-[#1B6B7B] text-white rounded-xl font-medium hover:bg-[#145a63]"
+            className="px-4 py-2 bg-brand-600 text-white rounded-xl font-medium hover:bg-brand-700"
           >
             Return to Dashboard
           </button>
@@ -165,7 +165,7 @@ export default function ScenarioRunnerClient() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
+      <header className="bg-surface border-b border-gray-200 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button 
@@ -189,11 +189,11 @@ export default function ScenarioRunnerClient() {
             </div>
             <div className="text-center">
               <p className="text-xs text-gray-500">Progress</p>
-              <p className="text-xl font-bold text-[#1B6B7B]">{Math.round(progress)}%</p>
+              <p className="text-xl font-bold text-brand-600">{Math.round(progress)}%</p>
             </div>
             <div className="w-32 h-3 bg-gray-200 rounded-full overflow-hidden">
               <div 
-                className="h-full bg-[#1B6B7B] transition-all duration-300"
+                className="h-full bg-brand-600 transition-all duration-300"
                 style={{ width: `${progress}%` }}
               />
             </div>
@@ -204,7 +204,7 @@ export default function ScenarioRunnerClient() {
       <main className="max-w-7xl mx-auto px-4 py-6">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="bg-surface rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
               <div className="border-b border-gray-100">
                 <div className="flex">
                   {[
@@ -217,7 +217,7 @@ export default function ScenarioRunnerClient() {
                       onClick={() => setActiveSection(tab.key as any)}
                       className={`flex-1 py-3 text-sm font-medium transition-colors ${
                         activeSection === tab.key
-                          ? "bg-[#1B6B7B]/5 text-[#1B6B7B] border-b-2 border-[#1B6B7B]"
+                          ? "bg-brand-600/5 text-brand-600 border-b-2 border-brand-600"
                           : "text-gray-500 hover:text-gray-700"
                       }`}
                     >
@@ -336,8 +336,8 @@ export default function ScenarioRunnerClient() {
                   <ul className="space-y-3">
                     {scenario.learning_objectives?.map((objective, index) => (
                       <li key={index} className="flex items-start gap-3 p-3 bg-gray-50 rounded-xl">
-                        <div className="w-6 h-6 rounded-full bg-[#1B6B7B]/10 flex items-center justify-center flex-shrink-0">
-                          <span className="text-sm font-medium text-[#1B6B7B]">{index + 1}</span>
+                        <div className="w-6 h-6 rounded-full bg-brand-600/10 flex items-center justify-center flex-shrink-0">
+                          <span className="text-sm font-medium text-brand-600">{index + 1}</span>
                         </div>
                         <p className="text-gray-700">{objective}</p>
                       </li>
@@ -347,7 +347,7 @@ export default function ScenarioRunnerClient() {
               </div>
             </div>
 
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+            <div className="bg-surface rounded-2xl shadow-sm border border-gray-100 p-6">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="font-semibold text-gray-900">Completion Summary</h2>
                 <span className={`px-3 py-1 rounded-full text-sm font-medium ${
@@ -368,7 +368,7 @@ export default function ScenarioRunnerClient() {
                   <p className="text-sm text-gray-500">Tasks Remaining</p>
                 </div>
                 <div className="p-4 bg-gray-50 rounded-xl">
-                  <p className="text-2xl font-bold text-[#1B6B7B]">{calculateScore()}%</p>
+                  <p className="text-2xl font-bold text-brand-600">{calculateScore()}%</p>
                   <p className="text-sm text-gray-500">Projected Score</p>
                 </div>
               </div>
@@ -376,13 +376,13 @@ export default function ScenarioRunnerClient() {
           </div>
 
           <div className="space-y-6">
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 sticky top-24">
+            <div className="bg-surface rounded-2xl shadow-sm border border-gray-100 p-6 sticky top-24">
               <h3 className="font-semibold text-gray-900 mb-4">Quick Actions</h3>
               <div className="space-y-3">
                 <button 
                   onClick={() => setActiveSection("patient")}
                   className={`w-full text-left px-4 py-3 rounded-xl transition-colors ${
-                    activeSection === "patient" ? "bg-[#1B6B7B]/10 text-[#1B6B7B]" : "hover:bg-gray-50"
+                    activeSection === "patient" ? "bg-brand-600/10 text-brand-600" : "hover:bg-gray-50"
                   }`}
                 >
                   View Patient Case
@@ -390,7 +390,7 @@ export default function ScenarioRunnerClient() {
                 <button 
                   onClick={() => setActiveSection("tasks")}
                   className={`w-full text-left px-4 py-3 rounded-xl transition-colors ${
-                    activeSection === "tasks" ? "bg-[#1B6B7B]/10 text-[#1B6B7B]" : "hover:bg-gray-50"
+                    activeSection === "tasks" ? "bg-brand-600/10 text-brand-600" : "hover:bg-gray-50"
                   }`}
                 >
                   View Tasks ({completedTasks.length}/{tasks.length})
@@ -409,7 +409,7 @@ export default function ScenarioRunnerClient() {
                     <p className="text-sm text-gray-500 mb-4">Final Score: {calculateScore()}%</p>
                     <button 
                       onClick={() => router.push("/dashboard")}
-                      className="w-full px-4 py-2.5 bg-[#1B6B7B] text-white rounded-xl font-medium hover:bg-[#145a63]"
+                      className="w-full px-4 py-2.5 bg-brand-600 text-white rounded-xl font-medium hover:bg-brand-700"
                     >
                       Return to Dashboard
                     </button>
@@ -418,7 +418,7 @@ export default function ScenarioRunnerClient() {
                   <button 
                     onClick={handleComplete}
                     disabled={completedTasks.length === 0}
-                    className="w-full px-4 py-2.5 bg-[#1B6B7B] text-white rounded-xl font-medium hover:bg-[#145a63] disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full px-4 py-2.5 bg-brand-600 text-white rounded-xl font-medium hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Complete Simulation
                   </button>
@@ -426,7 +426,7 @@ export default function ScenarioRunnerClient() {
               </div>
             </div>
 
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+            <div className="bg-surface rounded-2xl shadow-sm border border-gray-100 p-6">
               <h3 className="font-semibold text-gray-900 mb-4">Category Legend</h3>
               <div className="space-y-2">
                 {[

@@ -155,7 +155,7 @@ export default function FacultyClient() {
       />
 
       {message && (
-        <div className="mb-4 bg-[#1B6B7B]/10 border border-[#1B6B7B]/30 text-[#155663] px-4 py-3 rounded-xl text-sm">
+        <div className="mb-4 bg-brand-600/10 border border-brand-600/30 text-[#155663] px-4 py-3 rounded-xl text-sm">
           {message}
         </div>
       )}
@@ -164,7 +164,7 @@ export default function FacultyClient() {
         <div className="mb-4 bg-amber-50 border border-amber-300 text-amber-800 px-4 py-3 rounded-xl text-sm flex items-center justify-between gap-4">
           <span>
             Temporary password for <strong>{tempPassword.email}</strong>:{" "}
-            <code className="font-mono bg-white px-2 py-0.5 rounded border border-amber-200">{tempPassword.password}</code>{" "}
+            <code className="font-mono bg-surface px-2 py-0.5 rounded border border-amber-200">{tempPassword.password}</code>{" "}
             — share it with the faculty member; they must change it at first login.
           </span>
           <button
@@ -184,11 +184,11 @@ export default function FacultyClient() {
         ].map((stat) => (
           <div
             key={stat.label}
-            className="bg-white rounded-xl p-5 border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200"
+            className="bg-surface rounded-xl p-5 border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200"
           >
             <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-[#1B6B7B]/10 rounded-xl flex items-center justify-center">
-                <svg className="w-6 h-6 text-[#1B6B7B]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <div className="w-12 h-12 bg-brand-600/10 rounded-xl flex items-center justify-center">
+                <svg className="w-6 h-6 text-brand-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
               </div>
@@ -201,10 +201,10 @@ export default function FacultyClient() {
         ))}
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200 overflow-hidden">
+      <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-gray-50/50 border-b border-gray-100">
+            <thead className="bg-subtle border-b border-gray-100">
               <tr>
                 <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Faculty Member</th>
                 <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Sections</th>
@@ -214,7 +214,7 @@ export default function FacultyClient() {
                 <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100/80">
+            <tbody className="divide-y divide-hairline">
               {loading ? (
                 <tr>
                   <td colSpan={6} className="py-12 text-center text-gray-400">Loading faculty…</td>
@@ -227,10 +227,10 @@ export default function FacultyClient() {
                 </tr>
               ) : (
                 faculty.map((member) => (
-                  <tr key={member.id} className="hover:bg-gray-50/50 transition-colors">
+                  <tr key={member.id} className="hover:bg-subtle transition-colors">
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-[#1B6B7B]/10 rounded-full flex items-center justify-center text-[#1B6B7B] font-semibold">
+                        <div className="w-10 h-10 bg-brand-600/10 rounded-full flex items-center justify-center text-brand-600 font-semibold">
                           {member.name.charAt(0)}
                         </div>
                         <div>
@@ -247,7 +247,7 @@ export default function FacultyClient() {
                           {member.sections.map((s) => (
                             <span
                               key={s.id}
-                              className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#1B6B7B]/10 text-[#1B6B7B] border border-[#1B6B7B]/20"
+                              className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-brand-600/10 text-brand-600 border border-brand-600/20"
                             >
                               {s.name}
                             </span>
@@ -263,7 +263,7 @@ export default function FacultyClient() {
                     <td className="py-3 px-4">
                       <button
                         onClick={() => openAssignModal(member)}
-                        className="text-[#1B6B7B] font-medium hover:text-[#145a63] transition-colors"
+                        className="text-brand-600 font-medium hover:text-brand-700 transition-colors"
                       >
                         Assign Sections
                       </button>
@@ -278,7 +278,7 @@ export default function FacultyClient() {
 
       {showAddModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-4 w-full max-w-lg mx-4 shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-gray-200/80">
+          <div className="bg-surface rounded-xl p-4 w-full max-w-lg mx-4 shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-hairline">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Add New Faculty</h3>
             <div className="space-y-2">
               <div>
@@ -287,7 +287,7 @@ export default function FacultyClient() {
                   type="text"
                   value={newFaculty.name}
                   onChange={(e) => setNewFaculty({ ...newFaculty, name: e.target.value })}
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B] focus:border-[#1B6B7B]"
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-gray-800 focus:outline-none focus:ring-2 focus:ring-brand-600 focus:border-brand-600"
                   placeholder="Dr. Juan dela Cruz"
                 />
               </div>
@@ -297,7 +297,7 @@ export default function FacultyClient() {
                   type="email"
                   value={newFaculty.email}
                   onChange={(e) => setNewFaculty({ ...newFaculty, email: e.target.value })}
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B] focus:border-[#1B6B7B]"
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-gray-800 focus:outline-none focus:ring-2 focus:ring-brand-600 focus:border-brand-600"
                   placeholder="faculty@icare.edu"
                 />
                 <p className="text-xs text-gray-400 mt-2">
@@ -315,7 +315,7 @@ export default function FacultyClient() {
               <button
                 onClick={handleAddFaculty}
                 disabled={busy}
-                className="px-4 py-2 bg-[#1B6B7B] text-white rounded-xl font-medium hover:bg-[#145a63] disabled:opacity-60 transition-all"
+                className="px-4 py-2 bg-brand-600 text-white rounded-xl font-medium hover:bg-brand-700 disabled:opacity-60 transition-all"
               >
                 {busy ? "Creating…" : "Add Faculty"}
               </button>
@@ -326,7 +326,7 @@ export default function FacultyClient() {
 
       {selectedFaculty && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-4 w-full max-w-lg mx-4 shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-gray-200/80 max-h-[80vh] overflow-hidden flex flex-col">
+          <div className="bg-surface rounded-xl p-4 w-full max-w-lg mx-4 shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-hairline max-h-[80vh] overflow-hidden flex flex-col">
             <div className="mb-4">
               <h3 className="text-lg font-semibold text-gray-900">
                 Assign Sections to {selectedFaculty.name}
@@ -342,7 +342,7 @@ export default function FacultyClient() {
                   No sections yet — create them on the{" "}
                   <button
                     onClick={() => router.push("/admin/faculty/assignment")}
-                    className="text-[#1B6B7B] font-medium hover:underline"
+                    className="text-brand-600 font-medium hover:underline"
                   >
                     Sections page
                   </button>
@@ -359,7 +359,7 @@ export default function FacultyClient() {
                       key={section.id}
                       className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
                         selectedSections.includes(section.id)
-                          ? "border-[#1B6B7B] bg-[#1B6B7B]/5"
+                          ? "border-brand-600 bg-brand-600/5"
                           : "border-gray-200 hover:border-gray-300"
                       }`}
                     >
@@ -367,7 +367,7 @@ export default function FacultyClient() {
                         type="checkbox"
                         checked={selectedSections.includes(section.id)}
                         onChange={() => toggleSection(section.id)}
-                        className="w-4 h-4 text-[#1B6B7B] rounded focus:ring-[#1B6B7B]"
+                        className="w-4 h-4 text-brand-600 rounded focus:ring-brand-600"
                       />
                       <p className="flex-1 font-medium text-gray-800">Section {section.name}</p>
                       {otherFaculty.length > 0 && (
@@ -395,7 +395,7 @@ export default function FacultyClient() {
                 <button
                   onClick={handleSaveAssignments}
                   disabled={busy}
-                  className="px-4 py-2 bg-[#1B6B7B] text-white rounded-xl font-medium hover:bg-[#145a63] transition-all disabled:opacity-50"
+                  className="px-4 py-2 bg-brand-600 text-white rounded-xl font-medium hover:bg-brand-700 transition-all disabled:opacity-50"
                 >
                   {busy ? "Saving…" : "Save Sections"}
                 </button>

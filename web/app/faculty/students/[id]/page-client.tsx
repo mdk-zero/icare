@@ -211,8 +211,8 @@ export default function StudentDetailClient() {
           </div>
           <SkeletonRiskPredictionCard />
         </div>
-        <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden animate-pulse">
-          <div className="border-b border-gray-100/80">
+        <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden animate-pulse">
+          <div className="border-b border-hairline">
             <div className="flex gap-4 px-4">
               {Array.from({ length: 3 }).map((_, i) => (
                 <div key={i} className="py-4">
@@ -235,7 +235,7 @@ export default function StudentDetailClient() {
         <p className="text-gray-500">Student not found</p>
         <button 
           onClick={() => router.push('/faculty/students')}
-          className="mt-4 px-4 py-2 text-[#1B6B7B] font-medium"
+          className="mt-4 px-4 py-2 text-brand-600 font-medium"
         >
           Back to Students
         </button>
@@ -261,7 +261,7 @@ export default function StudentDetailClient() {
         <div className="lg:col-span-2">
           <Card padding="sm">
             <div className="flex items-center gap-4 mb-6">
-              <div className="w-16 h-16 bg-gradient-to-br from-[#1B6B7B] to-[#145a63] rounded-full flex items-center justify-center text-white font-bold text-xl">
+              <div className="w-16 h-16 bg-gradient-to-br from-brand-600 to-brand-700 rounded-full flex items-center justify-center text-white font-bold text-xl">
                 {student.name.split(' ').map(n => n[0]).join('')}
               </div>
               <div>
@@ -270,7 +270,7 @@ export default function StudentDetailClient() {
                 <div className="flex items-center gap-2">
                   <p className="text-sm text-gray-400">{student.program} - Year {student.year}</p>
                   {student.section ? (
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-[#1B6B7B]/10 text-[#1B6B7B] border border-[#1B6B7B]/20">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-brand-600/10 text-brand-600 border border-brand-600/20">
                       Section {student.section}
                     </span>
                   ) : (
@@ -346,7 +346,7 @@ export default function StudentDetailClient() {
                 </div>
               )}
               {riskPrediction.explanations.length > 0 && (
-                <div className="border-t border-gray-100/80 pt-3">
+                <div className="border-t border-hairline pt-3">
                   <p className="text-sm text-gray-500 mb-2">Top Contributing Factors</p>
                   <div className="space-y-2">
                     {riskPrediction.explanations.map((exp) => (
@@ -363,7 +363,7 @@ export default function StudentDetailClient() {
                   </div>
                 </div>
               )}
-              <p className="text-xs text-gray-400 border-t border-gray-100/80 pt-3">
+              <p className="text-xs text-gray-400 border-t border-hairline pt-3">
                 {riskPrediction.ml_models
                   ? `${riskPrediction.ml_models.kind.replace(/_/g, ' ')} v${riskPrediction.ml_models.version}${riskPrediction.ml_models.is_baseline ? ' (pre-trained baseline)' : ''}`
                   : 'model unknown'}
@@ -379,8 +379,8 @@ export default function StudentDetailClient() {
         <Card padding="sm">
           <div className="flex items-center justify-between gap-3 mb-1">
             <div className="flex items-center gap-2">
-              <div className="p-2 bg-[#1B6B7B]/10 rounded-lg">
-                <svg className="w-5 h-5 text-[#1B6B7B]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <div className="p-2 bg-brand-600/10 rounded-lg">
+                <svg className="w-5 h-5 text-brand-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
                 </svg>
               </div>
@@ -394,7 +394,7 @@ export default function StudentDetailClient() {
             {!summaryLoading && (
               <button
                 onClick={handleGenerateSummary}
-                className="px-4 py-2 bg-[#1B6B7B] text-white rounded-lg font-medium text-sm hover:bg-[#145a63] transition-all shadow-[0_2px_6px_rgba(27,107,123,0.2)] shrink-0"
+                className="px-4 py-2 bg-brand-600 text-white rounded-lg font-medium text-sm hover:bg-brand-700 transition-all shadow-[0_2px_6px_rgba(27,107,123,0.2)] shrink-0"
               >
                 {summaryError ? "Retry" : "Regenerate"}
               </button>
@@ -423,7 +423,7 @@ export default function StudentDetailClient() {
                 {[
                   { title: "Strengths", items: aiSummary.strengths, dot: "bg-emerald-500" },
                   { title: "Areas for Improvement", items: aiSummary.areas_for_improvement, dot: "bg-amber-500" },
-                  { title: "Recommendations", items: aiSummary.recommendations, dot: "bg-[#1B6B7B]" },
+                  { title: "Recommendations", items: aiSummary.recommendations, dot: "bg-brand-600" },
                 ].map((section) => (
                   <div key={section.title} className="p-4 bg-gray-50 rounded-xl">
                     <p className="text-sm font-semibold text-gray-900 mb-2">{section.title}</p>
@@ -444,7 +444,7 @@ export default function StudentDetailClient() {
               </div>
 
               {summaryGeneratedAt && (
-                <p className="text-xs text-gray-400 border-t border-gray-100/80 pt-3">
+                <p className="text-xs text-gray-400 border-t border-hairline pt-3">
                   AI-generated {new Date(summaryGeneratedAt).toLocaleString()} — review before
                   acting on it.
                 </p>
@@ -454,8 +454,8 @@ export default function StudentDetailClient() {
         </Card>
       </div>
 
-        <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden">
-          <div className="border-b border-gray-100/80">
+        <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden">
+          <div className="border-b border-hairline">
             <div className="flex gap-4 px-4">
             {['performance', 'scenarios', 'competencies'].map((tab) => (
               <button
@@ -463,7 +463,7 @@ export default function StudentDetailClient() {
                 onClick={() => setActiveTab(tab)}
                 className={`py-4 font-medium border-b-2 transition-colors ${
                   activeTab === tab
-                    ? 'border-[#1B6B7B] text-[#1B6B7B]'
+                    ? 'border-brand-600 text-brand-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700'
                 }`}
               >
@@ -536,7 +536,7 @@ export default function StudentDetailClient() {
                 </div>
               )}
 
-              <div className="p-5 bg-[#1B6B7B]/5 border border-[#1B6B7B]/20 rounded-xl">
+              <div className="p-5 bg-brand-600/5 border border-brand-600/20 rounded-xl">
                 <h3 className="font-semibold text-gray-900 mb-3">Validate competency</h3>
                 {validateError && (
                   <div className="mb-3 p-3 bg-rose-50 border border-rose-200 rounded-xl text-sm text-rose-700">
@@ -549,7 +549,7 @@ export default function StudentDetailClient() {
                     onChange={(e) =>
                       setValidateForm((f) => ({ ...f, competency_id: e.target.value }))
                     }
-                    className="px-3 py-2 bg-white border border-gray-300 rounded-xl text-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30 focus:border-[#1B6B7B]"
+                    className="px-3 py-2 bg-surface border border-gray-300 rounded-xl text-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600"
                   >
                     <option value="">Select competency…</option>
                     {competencyAreas.map((area) => (
@@ -565,12 +565,12 @@ export default function StudentDetailClient() {
                     placeholder="Score (0–100)"
                     value={validateForm.score}
                     onChange={(e) => setValidateForm((f) => ({ ...f, score: e.target.value }))}
-                    className="px-3 py-2 bg-white border border-gray-300 rounded-xl text-gray-900 placeholder:text-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30 focus:border-[#1B6B7B]"
+                    className="px-3 py-2 bg-surface border border-gray-300 rounded-xl text-gray-900 placeholder:text-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600"
                   />
                   <button
                     onClick={handleValidate}
                     disabled={validating}
-                    className="px-4 py-2 bg-[#1B6B7B] text-white rounded-lg font-medium text-sm hover:bg-[#145a63] transition-all disabled:opacity-50 shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
+                    className="px-4 py-2 bg-brand-600 text-white rounded-lg font-medium text-sm hover:bg-brand-700 transition-all disabled:opacity-50 shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
                   >
                     {validating ? "Saving…" : "Record Score"}
                   </button>
@@ -580,7 +580,7 @@ export default function StudentDetailClient() {
                   placeholder="Remarks (optional)"
                   value={validateForm.remarks}
                   onChange={(e) => setValidateForm((f) => ({ ...f, remarks: e.target.value }))}
-                  className="mt-3 w-full px-3 py-2 bg-white border border-gray-300 rounded-xl text-gray-900 placeholder:text-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30 focus:border-[#1B6B7B]"
+                  className="mt-3 w-full px-3 py-2 bg-surface border border-gray-300 rounded-xl text-gray-900 placeholder:text-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600"
                 />
               </div>
 

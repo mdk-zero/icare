@@ -33,7 +33,6 @@ const barColorMap: Record<string, string> = {
   "text-purple-600": "bg-purple-500",
   "text-gray-50": "bg-gray-500",
   "text-gray-600": "bg-gray-500",
-  "text-[#1B6B7B]": "bg-brand-600",
   "text-brand-600": "bg-brand-600",
 };
 
