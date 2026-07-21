@@ -156,7 +156,11 @@ export default function AssessmentQuestionsClient({
   >({});
   const [newQuestionOrder, setNewQuestionOrder] = useState(0);
   const [savingAll, setSavingAll] = useState(false);
-
+  const [dirtyQuestions, setDirtyQuestions] = useState<Set<string>>(new Set());
+  const markDirty = (qId: string) => setDirtyQuestions((prev) => new Set(prev).add(qId));
+  const markClean = (qId: string) => setDirtyQuestions((prev) => { const next = new Set(prev); next.delete(qId); return next; });
+  const [editingQuestions, setEditingQuestions] = useState<Set<string>>(new Set());
+  const toggleEdit = (qId: string) => setEditingQuestions((prev) => { const next = new Set(prev); if (next.has(qId)) next.delete(qId); else next.add(qId); return next; });
   // AI generation + CSV import
   const [showAIPanel, setShowAIPanel] = useState(false);
   const [aiTopic, setAiTopic] = useState("");
@@ -299,6 +303,7 @@ export default function AssessmentQuestionsClient({
       ...prev,
       [qId]: { ...prev[qId], [field]: value },
     }));
+    markDirty(qId);
   };
 
   const updateBuilderOption = (qId: string, index: number, value: string) => {
@@ -309,6 +314,7 @@ export default function AssessmentQuestionsClient({
       options[index] = value;
       return { ...prev, [qId]: { ...form, options } };
     });
+    markDirty(qId);
   };
 
   const addBuilderOption = (qId: string) => {
@@ -317,6 +323,7 @@ export default function AssessmentQuestionsClient({
       if (!form) return prev;
       return { ...prev, [qId]: { ...form, options: [...form.options, ""] } };
     });
+    markDirty(qId);
   };
 
   const removeBuilderOption = (qId: string, index: number) => {
@@ -327,6 +334,7 @@ export default function AssessmentQuestionsClient({
       const correct_index = Math.min(form.correct_index, options.length - 1);
       return { ...prev, [qId]: { ...form, options, correct_index } };
     });
+    markDirty(qId);
   };
 
   const setBuilderCorrect = (qId: string, index: number) => {
@@ -334,6 +342,7 @@ export default function AssessmentQuestionsClient({
       ...prev,
       [qId]: { ...prev[qId], correct_index: index },
     }));
+    markDirty(qId);
   };
 
   const handleSaveQuestion = async (qId: string) => {
@@ -398,8 +407,18 @@ export default function AssessmentQuestionsClient({
       });
     }
 
+    if (!isNew) {
+      setQuestions((prev) =>
+        prev.map((q) =>
+          q.id === qId
+            ? { ...q, ...payload, options: filledOptions, competency_ids: form.competency_ids }
+            : q,
+        ),
+      );
+    }
+    markClean(qId);
+    setEditingQuestions((prev) => { const next = new Set(prev); next.delete(qId); return next; });
     flash(isNew ? "Question added" : "Question updated");
-    if (!isNew) loadData();
   };
 
   const handleDeleteQuestion = async (qId: string) => {
@@ -966,10 +985,11 @@ export default function AssessmentQuestionsClient({
             {questions.map((q, i) => {
               const form = questionBuilders[q.id];
               if (!form) return null;
+              const isEditing = editingQuestions.has(q.id);
               return (
                 <div
                   key={q.id}
-                  className="bg-white rounded-xl border border-gray-200 shadow-sm"
+                  className={`bg-white rounded-xl border shadow-sm ${isEditing ? "border-[#1B6B7B]/40 ring-1 ring-[#1B6B7B]/20" : "border-gray-200"}`}
                 >
                   <div className="p-4 space-y-2">
                     {/* Question header */}
@@ -987,12 +1007,32 @@ export default function AssessmentQuestionsClient({
                               e.target.value,
                             )
                           }
-                          className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30"
+                          disabled={!isEditing}
+                          className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           <option value="multiple_choice">Multiple choice</option>
                           <option value="true_false">True / False</option>
                           <option value="short_answer">Short answer</option>
                         </select>
+                        {isEditing && dirtyQuestions.has(q.id) && (
+                          <button
+                            onClick={() => {
+                              setSavingQuestions((prev) => ({ ...prev, [q.id]: true }));
+                              handleSaveQuestion(q.id).finally(() =>
+                                setSavingQuestions((prev) => ({ ...prev, [q.id]: false }))
+                              );
+                            }}
+                            disabled={savingQuestions[q.id]}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1B6B7B] text-white rounded-lg text-xs font-medium hover:bg-[#155663] disabled:opacity-60 transition-colors"
+                          >
+                            {savingQuestions[q.id] ? (
+                              <FontAwesomeIcon icon={faSpinner} spin className="w-3.5 h-3.5" />
+                            ) : (
+                              <FontAwesomeIcon icon={faCheck} className="w-3.5 h-3.5" />
+                            )}
+                            Save Changes
+                          </button>
+                        )}
                       </div>
                       <div className="flex items-center gap-2">
                         <button
@@ -1001,6 +1041,17 @@ export default function AssessmentQuestionsClient({
                           className="px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 text-xs font-medium"
                         >
                           Duplicate
+                        </button>
+                        <button
+                          onClick={() => toggleEdit(q.id)}
+                          title={isEditing ? "Done editing" : "Edit question"}
+                          className={`p-2 rounded-lg border transition-colors ${
+                            isEditing
+                              ? "bg-[#1B6B7B] text-white border-[#1B6B7B] hover:bg-[#155663]"
+                              : "border-gray-200 text-gray-500 hover:bg-gray-50"
+                          }`}
+                        >
+                          <FontAwesomeIcon icon={faPen} className="w-3.5 h-3.5" />
                         </button>
                         <button
                           onClick={() => handleDeleteQuestion(q.id)}
@@ -1018,24 +1069,26 @@ export default function AssessmentQuestionsClient({
                       onChange={(e) =>
                         updateBuilderField(q.id, "content", e.target.value)
                       }
+                      disabled={!isEditing}
                       placeholder="Question text"
                       rows={2}
-                      className={inputClassName}
+                      className={`${inputClassName} disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-50`}
                     />
 
                     {/* Options */}
                     {form.question_type === "multiple_choice" && (
                       <div className="space-y-2">
                         {form.options.map((opt, idx) => (
-                          <div key={idx} className="flex items-center gap-3">
+                          <div key={idx} className={`flex items-center gap-3 ${!isEditing ? "opacity-60" : ""}`}>
                             <button
-                              onClick={() => setBuilderCorrect(q.id, idx)}
+                              onClick={() => isEditing && setBuilderCorrect(q.id, idx)}
                               title={
                                 idx === form.correct_index
                                   ? "Correct answer"
                                   : "Mark as correct"
                               }
-                              className="shrink-0"
+                              className={`shrink-0 ${!isEditing ? "cursor-default" : ""}`}
+                              tabIndex={isEditing ? 0 : -1}
                             >
                               {idx === form.correct_index ? (
                                 <FontAwesomeIcon
@@ -1049,15 +1102,17 @@ export default function AssessmentQuestionsClient({
                             <input
                               value={opt}
                               onChange={(e) =>
-                                updateBuilderOption(q.id, idx, e.target.value)
+                                isEditing && updateBuilderOption(q.id, idx, e.target.value)
                               }
                               placeholder={`Option ${idx + 1}`}
-                              className={inputClassName}
+                              disabled={!isEditing}
+                              className={`${inputClassName} disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-50`}
                             />
                             {form.options.length > 2 && (
                               <button
-                                onClick={() => removeBuilderOption(q.id, idx)}
-                                className="text-gray-400 hover:text-red-500 shrink-0"
+                                onClick={() => isEditing && removeBuilderOption(q.id, idx)}
+                                disabled={!isEditing}
+                                className="text-gray-400 hover:text-red-500 shrink-0 disabled:opacity-30"
                               >
                                 <FontAwesomeIcon
                                   icon={faTimes}
@@ -1067,12 +1122,14 @@ export default function AssessmentQuestionsClient({
                             )}
                           </div>
                         ))}
-                        <button
-                          onClick={() => addBuilderOption(q.id)}
-                          className="text-sm text-[#1B6B7B] font-medium hover:underline"
-                        >
-                          + Add option
-                        </button>
+                        {isEditing && (
+                          <button
+                            onClick={() => addBuilderOption(q.id)}
+                            className="text-sm text-[#1B6B7B] font-medium hover:underline"
+                          >
+                            + Add option
+                          </button>
+                        )}
                       </div>
                     )}
 
@@ -1080,10 +1137,11 @@ export default function AssessmentQuestionsClient({
                     {form.question_type === "true_false" && (
                       <div className="space-y-2">
                         {["True", "False"].map((label, idx) => (
-                          <div key={idx} className="flex items-center gap-3">
+                          <div key={idx} className={`flex items-center gap-3 ${!isEditing ? "opacity-60" : ""}`}>
                             <button
-                              onClick={() => setBuilderCorrect(q.id, idx)}
-                              className="shrink-0"
+                              onClick={() => isEditing && setBuilderCorrect(q.id, idx)}
+                              className={`shrink-0 ${!isEditing ? "cursor-default" : ""}`}
+                              tabIndex={isEditing ? 0 : -1}
                             >
                               {idx === form.correct_index ? (
                                 <FontAwesomeIcon
@@ -1094,7 +1152,7 @@ export default function AssessmentQuestionsClient({
                                 <div className="w-5 h-5 rounded-full border-2 border-gray-300" />
                               )}
                             </button>
-                            <span className="text-sm text-gray-700">
+                            <span className={`text-sm ${isEditing ? "text-gray-700" : "text-gray-400"}`}>
                               {label}
                             </span>
                           </div>
@@ -1104,16 +1162,16 @@ export default function AssessmentQuestionsClient({
 
                     {/* Short answer */}
                     {form.question_type === "short_answer" && (
-                      <p className="text-sm text-gray-400 italic">
+                      <p className={`text-sm italic ${isEditing ? "text-gray-400" : "text-gray-300"}`}>
                         Students will type a free-text response. Correct answer
                         matching is configured in the answer key.
                       </p>
                     )}
 
                     {/* Answer key row */}
-                    <div className="flex items-center gap-3 pt-2 border-t border-gray-100 flex-wrap">
+                    <div className={`flex items-center gap-3 pt-2 border-t ${isEditing ? "border-gray-100" : "border-gray-50"} flex-wrap`}>
                       <div className="flex items-center gap-2">
-                        <label className="text-sm text-gray-600 font-medium">
+                        <label className={`text-sm font-medium ${isEditing ? "text-gray-600" : "text-gray-400"}`}>
                           Points
                         </label>
                         <input
@@ -1121,25 +1179,29 @@ export default function AssessmentQuestionsClient({
                           min={1}
                           value={form.points}
                           onChange={(e) =>
+                            isEditing &&
                             updateBuilderField(
                               q.id,
                               "points",
                               Math.max(1, Number(e.target.value)),
                             )
                           }
-                          className="w-20 px-3 py-1.5 border border-gray-300 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30"
+                          disabled={!isEditing}
+                          className="w-20 px-3 py-1.5 border border-gray-300 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-50"
                         />
                       </div>
                       <div className="flex items-center gap-2">
-                        <label className="text-sm text-gray-600 font-medium">
+                        <label className={`text-sm font-medium ${isEditing ? "text-gray-600" : "text-gray-400"}`}>
                           Competency
                         </label>
                         <select
                           value={form.competency_ids[0] ?? ""}
                           onChange={(e) =>
+                            isEditing &&
                             updateBuilderField(q.id, "competency_ids", e.target.value ? [e.target.value] : [])
                           }
-                          className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30"
+                          disabled={!isEditing}
+                          className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-50"
                         >
                           <option value="">No competency</option>
                           {competencyAreas.map((ca) => (
@@ -1150,7 +1212,7 @@ export default function AssessmentQuestionsClient({
                         </select>
                       </div>
                       {form.explanation && (
-                        <span className="text-xs text-gray-400">
+                        <span className={`text-xs ${isEditing ? "text-gray-400" : "text-gray-300"}`}>
                           Has answer explanation
                         </span>
                       )}
@@ -1222,6 +1284,19 @@ export default function AssessmentQuestionsClient({
             <FontAwesomeIcon icon={faPlus} className="w-4 h-4" />
             Add Question
           </button>
+          {questions.filter((q) => q.id.startsWith("new_")).length > 0 && (
+            <button
+              onClick={handleSaveAll}
+              disabled={savingAll}
+              className="flex items-center gap-2 px-6 py-3 bg-[#1B6B7B] text-white rounded-xl text-sm font-medium hover:bg-[#155663] disabled:opacity-60 transition-colors"
+            >
+              {savingAll ? (
+                <><FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" /> Saving All…</>
+              ) : (
+                <><FontAwesomeIcon icon={faCheck} className="w-4 h-4" /> Save All</>
+              )}
+            </button>
+          )}
           <button
             onClick={() => setShowAIPanel((v) => !v)}
             className="flex items-center gap-2 px-6 py-3 bg-white border border-[#1B6B7B] text-[#1B6B7B] rounded-xl text-sm font-medium hover:bg-[#1B6B7B]/5 transition-colors"
@@ -1254,19 +1329,6 @@ export default function AssessmentQuestionsClient({
               e.target.value = "";
             }}
           />
-          {questions.filter((q) => q.id.startsWith("new_")).length > 0 && (
-            <button
-              onClick={handleSaveAll}
-              disabled={savingAll}
-              className="flex items-center gap-2 px-6 py-3 bg-[#1B6B7B] text-white rounded-xl text-sm font-medium hover:bg-[#155663] disabled:opacity-60 transition-colors"
-            >
-              {savingAll ? (
-                <><FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" /> Saving All…</>
-              ) : (
-                <><FontAwesomeIcon icon={faCheck} className="w-4 h-4" /> Save All</>
-              )}
-            </button>
-          )}
         </div>
       </div>
     </div>
