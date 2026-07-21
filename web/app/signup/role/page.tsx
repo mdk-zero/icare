@@ -74,8 +74,8 @@ export default function SelectRolePage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#F8FBFC]">
-        <div className="w-8 h-8 border-4 border-[#0D7377] border-t-transparent rounded-full animate-spin" />
+      <div className="min-h-screen flex items-center justify-center bg-canvas">
+        <div className="w-8 h-8 border-4 border-brand-600 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -121,27 +121,27 @@ export default function SelectRolePage() {
       </div>
 
       {/* Right panel — role selection */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center px-5 sm:px-8 py-12 bg-[#F8FBFC] relative overflow-hidden">
+      <div className="w-full lg:w-1/2 flex items-center justify-center px-5 sm:px-8 py-12 bg-canvas relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-full opacity-40">
           <div className="absolute top-[-10%] right-[-10%] w-[350px] h-[350px] bg-[#7DD3D8]/20 rounded-full blur-3xl" />
-          <div className="absolute bottom-[-10%] left-[-10%] w-[300px] h-[300px] bg-[#0D7377]/10 rounded-full blur-3xl" />
+          <div className="absolute bottom-[-10%] left-[-10%] w-[300px] h-[300px] bg-brand-600/10 rounded-full blur-3xl" />
         </div>
 
         <div className="relative z-10 w-full max-w-[520px] animate-fade-in-up">
           {/* Mobile header */}
           <div className="lg:hidden flex flex-col items-center mb-6">
-            <div className="p-3.5 bg-[#E8F6F5] rounded-2xl shadow-md mb-3">
+            <div className="p-3.5 bg-brand-50 rounded-2xl shadow-md mb-3">
               <Image src={logo} alt="iCare++ Logo" className="h-12 w-auto" priority />
             </div>
-            <h2 className="text-2xl font-semibold text-[#0F4C5C]">iCARE++</h2>
+            <h2 className="text-2xl font-semibold text-brand-800">iCARE++</h2>
           </div>
 
-          <div className="bg-surface rounded-3xl border border-[#E2EBEC] shadow-xl shadow-[#0D7377]/[0.05] p-7 sm:p-9">
+          <div className="bg-surface rounded-3xl border border-hairline shadow-xl shadow-brand-600/[0.05] p-7 sm:p-9">
             <div className="mb-6">
-              <h1 className="text-xl font-semibold text-[#0F172A] mb-1 tracking-tight">
+              <h1 className="text-xl font-semibold text-gray-900 mb-1 tracking-tight">
                 Select your role
               </h1>
-              <p className="text-sm text-[#64748B]">
+              <p className="text-sm text-gray-500">
                 {profile
                   ? `Welcome, ${profile.name}. Choose how you will use iCARE++.`
                   : "Choose how you will use iCARE++."}
@@ -172,11 +172,11 @@ export default function SelectRolePage() {
                   type="button"
                   onClick={() => handleSelect(role.id)}
                   disabled={isSubmitting}
-                  className="w-full flex items-start gap-4 p-4 rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] hover:border-[#0D7377] hover:bg-[#E8F6F5] transition-all disabled:opacity-60 text-left group"
+                  className="w-full flex items-start gap-4 p-4 rounded-xl border border-gray-200 bg-subtle hover:border-brand-600 hover:bg-brand-50 transition-all disabled:opacity-60 text-left group"
                 >
-                  <div className="w-11 h-11 rounded-xl bg-[#0D7377]/10 flex items-center justify-center flex-shrink-0 group-hover:bg-[#0D7377]/20 transition-colors">
+                  <div className="w-11 h-11 rounded-xl bg-brand-600/10 flex items-center justify-center flex-shrink-0 group-hover:bg-brand-600/20 transition-colors">
                     <svg
-                      className="w-6 h-6 text-[#0D7377]"
+                      className="w-6 h-6 text-brand-600"
                       fill="none"
                       viewBox="0 0 24 24"
                       stroke="currentColor"
@@ -190,11 +190,11 @@ export default function SelectRolePage() {
                     </svg>
                   </div>
                   <div className="flex-1">
-                    <p className="font-semibold text-[#0F172A]">{role.label}</p>
-                    <p className="text-sm text-[#64748B]">{role.description}</p>
+                    <p className="font-semibold text-gray-900">{role.label}</p>
+                    <p className="text-sm text-gray-500">{role.description}</p>
                   </div>
                   <svg
-                    className="w-5 h-5 text-[#94A3B8] self-center group-hover:text-[#0D7377] transition-colors"
+                    className="w-5 h-5 text-gray-400 self-center group-hover:text-brand-600 transition-colors"
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
@@ -211,12 +211,12 @@ export default function SelectRolePage() {
             </div>
 
             <div className="mt-6 text-center">
-              <p className="text-sm text-[#64748B]">
+              <p className="text-sm text-gray-500">
                 Not the right account?{" "}
                 <button
                   type="button"
                   onClick={() => router.push("/login")}
-                  className="text-[#0D7377] hover:text-[#0A5C5F] font-medium transition-colors"
+                  className="text-brand-600 hover:text-brand-700 font-medium transition-colors"
                 >
                   Go back
                 </button>

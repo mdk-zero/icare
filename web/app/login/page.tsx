@@ -261,10 +261,10 @@ export default function LoginPage() {
           </div>
         </div>
         {/* Right panel — cards */}
-        <div className="w-full lg:w-1/2 flex items-center justify-center px-5 sm:px-8 py-12 bg-[#F8FBFC] relative overflow-hidden">
+        <div className="w-full lg:w-1/2 flex items-center justify-center px-5 sm:px-8 py-12 bg-canvas relative overflow-hidden">
           <div className="absolute top-0 left-0 w-full h-full opacity-40">
             <div className="absolute top-[-10%] right-[-10%] w-[350px] h-[350px] bg-[#7DD3D8]/20 rounded-full blur-3xl" />
-            <div className="absolute bottom-[-10%] left-[-10%] w-[300px] h-[300px] bg-[#0D7377]/10 rounded-full blur-3xl" />
+            <div className="absolute bottom-[-10%] left-[-10%] w-[300px] h-[300px] bg-brand-600/10 rounded-full blur-3xl" />
           </div>
           <div className="relative z-10 w-full max-w-[520px] animate-fade-in-up">
             {/* Mobile header */}
@@ -274,12 +274,12 @@ export default function LoginPage() {
               </div>
             </div>
             {/* Login card */}
-            <div className="bg-surface rounded-3xl border border-[#E2EBEC] shadow-xl shadow-[#0D7377]/[0.05] p-7 sm:p-9">
+            <div className="bg-surface rounded-3xl border border-hairline shadow-xl shadow-brand-600/[0.05] p-7 sm:p-9">
               <div className="mb-6">
-                <h1 className="text-3xl font-semibold text-[#0F172A] mb-1 tracking-tight">
+                <h1 className="text-3xl font-semibold text-gray-900 mb-1 tracking-tight">
                   Welcome back, caregiver
                 </h1>
-                <p className="text-sm text-[#64748B]">
+                <p className="text-sm text-gray-500">
                   Sign in to continue your journey in nursing excellence
                 </p>
               </div>
@@ -304,14 +304,14 @@ export default function LoginPage() {
                 <div>
                   <label
                     htmlFor="email"
-                    className="block text-sm font-medium text-[#334155] mb-1.5"
+                    className="block text-sm font-medium text-gray-700 mb-1.5"
                   >
                     Email Address <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                       <svg
-                        className="h-5 w-5 text-[#94A3B8]"
+                        className="h-5 w-5 text-gray-400"
                         fill="none"
                         viewBox="0 0 24 24"
                         stroke="currentColor"
@@ -330,7 +330,7 @@ export default function LoginPage() {
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       required
-                      className="w-full pl-11 pr-4 py-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[#0F172A] placeholder:text-[#94A3B8] focus:outline-none focus:ring-2 focus:ring-[#0D7377]/20 focus:border-[#0D7377] transition-all"
+                      className="w-full pl-11 pr-4 py-3 bg-subtle border border-gray-200 rounded-xl text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600 transition-all"
                       placeholder="name@icare.edu"
                     />
                   </div>
@@ -339,14 +339,14 @@ export default function LoginPage() {
                 <div>
                   <label
                     htmlFor="password"
-                    className="block text-sm font-medium text-[#334155] mb-1.5"
+                    className="block text-sm font-medium text-gray-700 mb-1.5"
                   >
                     Password <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                       <svg
-                        className="h-5 w-5 text-[#94A3B8]"
+                        className="h-5 w-5 text-gray-400"
                         fill="none"
                         viewBox="0 0 24 24"
                         stroke="currentColor"
@@ -365,13 +365,13 @@ export default function LoginPage() {
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       required
-                      className="w-full pl-11 pr-11 py-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[#0F172A] placeholder:text-[#94A3B8] focus:outline-none focus:ring-2 focus:ring-[#0D7377]/20 focus:border-[#0D7377] transition-all"
+                      className="w-full pl-11 pr-11 py-3 bg-subtle border border-gray-200 rounded-xl text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600 transition-all"
                       placeholder="Enter your password"
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-[#94A3B8] hover:text-[#64748B] transition-colors"
+                      className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-gray-400 hover:text-gray-500 transition-colors"
                     >
                       {showPassword ? (
                         <svg
@@ -416,15 +416,15 @@ export default function LoginPage() {
                   <label className="flex items-center cursor-pointer group">
                     <input
                       type="checkbox"
-                      className="w-4 h-4 rounded border-[#CBD5E1] text-[#0D7377] focus:ring-[#0D7377]/30 cursor-pointer"
+                      className="w-4 h-4 rounded border-gray-300 text-brand-600 focus:ring-brand-600/30 cursor-pointer"
                     />
-                    <span className="ml-2 text-sm text-[#64748B] group-hover:text-[#475569] transition-colors">
+                    <span className="ml-2 text-sm text-gray-500 group-hover:text-gray-600 transition-colors">
                       Remember me
                     </span>
                   </label>
                   <Link
                     href="/forgot-password"
-                    className="text-sm text-[#0D7377] hover:text-[#0A5C5F] font-medium transition-colors"
+                    className="text-sm text-brand-600 hover:text-brand-700 font-medium transition-colors"
                   >
                     Forgot password?
                   </Link>
@@ -433,7 +433,7 @@ export default function LoginPage() {
                 <button
                   type="submit"
                   disabled={isLoading || isGoogleLoading}
-                  className="w-full bg-[#0D7377] hover:bg-[#0A5C5F] text-white py-3 px-6 rounded-xl font-medium transition-all duration-200 shadow-lg shadow-[#0D7377]/20 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
+                  className="w-full bg-brand-600 hover:bg-brand-700 text-white py-3 px-6 rounded-xl font-medium transition-all duration-200 shadow-lg shadow-brand-600/20 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
                 >
                   {isLoading ? (
                     <>
@@ -463,10 +463,10 @@ export default function LoginPage() {
               {/* Divider */}
               <div className="relative my-6">
                 <div className="absolute inset-0 flex items-center" aria-hidden="true">
-                  <div className="w-full h-px bg-gradient-to-r from-transparent via-[#CBD5E1] to-transparent" />
+                  <div className="w-full h-px bg-gradient-to-r from-transparent via-gray-300 to-transparent" />
                 </div>
                 <div className="relative flex justify-center text-xs">
-                  <span className="px-4 bg-surface text-[#94A3B8] uppercase tracking-wider font-medium text-[10px]">
+                  <span className="px-4 bg-surface text-gray-400 uppercase tracking-wider font-medium text-[10px]">
                     or continue with
                   </span>
                 </div>
@@ -475,9 +475,9 @@ export default function LoginPage() {
               {/* Google button */}
               <div ref={googleButtonRef} className="w-full flex justify-center overflow-hidden">
                 {isGoogleLoading ? (
-                  <div className="w-full h-[44px] border border-[#E2E8F0] rounded-xl flex items-center justify-center gap-2.5 text-[#64748B] bg-[#F8FAFC] text-sm">
+                  <div className="w-full h-[44px] border border-gray-200 rounded-xl flex items-center justify-center gap-2.5 text-gray-500 bg-subtle text-sm">
                     <svg
-                      className="animate-spin h-4 w-4 text-[#0D7377]"
+                      className="animate-spin h-4 w-4 text-brand-600"
                       fill="none"
                       viewBox="0 0 24 24"
                     >
@@ -510,16 +510,16 @@ export default function LoginPage() {
                     width={googleButtonWidth || 400}
                   />
                 ) : (
-                  <div className="w-full h-[44px] border border-[#E2E8F0] rounded-xl bg-[#F8FAFC]" />
+                  <div className="w-full h-[44px] border border-gray-200 rounded-xl bg-subtle" />
                 )}
               </div>
 
               <div className="mt-6 text-center">
-                <p className="text-sm text-[#64748B]">
+                <p className="text-sm text-gray-500">
                   Don&apos;t have an account?{" "}
                   <Link
                     href="/signup"
-                    className="text-[#0D7377] hover:text-[#0A5C5F] font-medium transition-colors"
+                    className="text-brand-600 hover:text-brand-700 font-medium transition-colors"
                   >
                     Sign up
                   </Link>
@@ -528,7 +528,7 @@ export default function LoginPage() {
             </div>
 
             {/* Footer */}
-            <p className="text-center text-xs text-[#94A3B8] mt-5">
+            <p className="text-center text-xs text-gray-400 mt-5">
               &copy; 2026 iCARE++. All rights reserved.
             </p>
           </div>
