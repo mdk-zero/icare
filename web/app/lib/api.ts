@@ -953,6 +953,7 @@ export interface FacultyStudent {
   student_id: string;
   name: string;
   email: string;
+  section?: string | null;
   program: string;
   year: number;
   average_score: number;
@@ -968,6 +969,8 @@ export interface SimulationScenario {
   difficulty: string;
   category: string;
   patient_case: any;
+  patient_id?: string | null;
+  patient_name?: string | null;
   learning_objectives: string[];
   is_ai_generated: boolean;
   student_count: number;
@@ -2011,12 +2014,13 @@ export async function submitScenarioPerformance(
 export async function createFacultyStudent(
   name: string,
   email: string,
+  sectionId: string,
 ): Promise<{ data?: CreateStudentResponse; error?: string }> {
   try {
     const res = await fetch('/api/faculty/students', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, email }),
+      body: JSON.stringify({ name, email, section_id: sectionId }),
     });
 
     const json = await res.json() as { student?: CreateStudentResponse['student']; password?: string; warning?: string; error?: string };
@@ -2038,6 +2042,45 @@ export interface StudentUser {
   name: string;
   role: string;
   picture_url: string | null;
+  section_id: string | null;
+  section: string | null;
+}
+
+export interface Section {
+  id: string;
+  name: string;
+}
+
+/** All sections (faculty/admin). */
+export async function fetchSections(): Promise<Section[]> {
+  try {
+    const res = await fetch('/api/sections', { credentials: 'include' });
+    const json = (await res.json()) as { sections?: Section[]; error?: string };
+    if (!res.ok) {
+      console.error('fetchSections() failed', json.error);
+      return [];
+    }
+    return json.sections ?? [];
+  } catch (err) {
+    console.error('fetchSections() failed', err);
+    return [];
+  }
+}
+
+/** The signed-in faculty member's assigned sections (admin: all sections). */
+export async function fetchFacultySections(): Promise<Section[]> {
+  try {
+    const res = await fetch('/api/faculty/sections', { credentials: 'include' });
+    const json = (await res.json()) as { sections?: Section[]; error?: string };
+    if (!res.ok) {
+      console.error('fetchFacultySections() failed', json.error);
+      return [];
+    }
+    return json.sections ?? [];
+  } catch (err) {
+    console.error('fetchFacultySections() failed', err);
+    return [];
+  }
 }
 
 export async function fetchAllStudentUsers(): Promise<StudentUser[]> {
@@ -2061,12 +2104,13 @@ export async function updateStudentUser(
   id: string,
   name: string,
   email: string,
+  sectionId?: string,
 ): Promise<{ data?: StudentUser; error?: string }> {
   try {
     const res = await fetch('/api/faculty/students', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, name, email }),
+      body: JSON.stringify({ id, name, email, section_id: sectionId }),
     });
 
     const json = await res.json();
@@ -2133,5 +2177,37 @@ export async function fetchStudentScenarioHistory(studentId: string): Promise<Sc
   } catch (err) {
     console.error('fetchStudentScenarioHistory() failed', err);
     return [];
+  }
+}
+
+export interface StudentAISummary {
+  overview: string;
+  strengths: string[];
+  areas_for_improvement: string[];
+  recommendations: string[];
+}
+
+export async function generateStudentSummary(
+  studentId: string,
+): Promise<{ summary?: StudentAISummary; generated_at?: string; error?: string }> {
+  try {
+    const res = await fetch(`/api/faculty/students/${studentId}/summary`, {
+      method: 'POST',
+      credentials: 'include',
+    });
+    const json = (await res.json()) as {
+      summary?: StudentAISummary;
+      generated_at?: string;
+      error?: string;
+    };
+
+    if (!res.ok || !json.summary) {
+      return { error: json.error || 'Unable to generate summary' };
+    }
+
+    return { summary: json.summary, generated_at: json.generated_at };
+  } catch (err) {
+    console.error('generateStudentSummary() failed', err);
+    return { error: 'Unable to generate summary. Please try again.' };
   }
 }

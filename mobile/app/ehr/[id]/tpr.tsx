@@ -1,66 +1,99 @@
 import React, { useState } from 'react';
-import { ScrollView, View, Text, StyleSheet, TextInput, TouchableOpacity, Alert } from 'react-native';
+import { ScrollView, View, Text, StyleSheet, TextInput, Pressable, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '@/constants/theme';
-import { Card, Badge, PrimaryButton } from '@/components/ui';
-import { mockPatients, getTPRForPatient } from '@/lib/api';
-
-const primaryColor = Colors.light.primary;
+import { Radius, Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
+import { Card, Badge, SkeletonScreen, EmptyState } from '@/components/ui';
+import { useApiData, allCached } from '@/hooks/useApiData';
+import { fetchPatients, fetchEhrRecords, createEhrRecord } from '@/lib/api';
 
 export default function TPRSheetScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
   const patientId = id as string;
+  const { Palette, Shadow, Type } = useTheme();
+  const styles = React.useMemo(() => createStyles(Palette, Shadow, Type), [Palette, Shadow, Type]);
+  const primaryColor = Palette.primary;
 
-  const patient = mockPatients.find((p) => p.id === patientId);
-  const tprRecords = getTPRForPatient(patientId);
+  const { data, loading, error, reload } = useApiData(() =>
+    allCached(fetchPatients(), fetchEhrRecords('tpr', patientId)),
+  );
 
-  const latestTPR = tprRecords.length > 0 ? tprRecords[tprRecords.length - 1] : null;
+  const [temperature, setTemperature] = useState('');
+  const [pulse, setPulse] = useState('');
+  const [respiration, setRespiration] = useState('');
+  const [remarks, setRemarks] = useState('');
+  const [saving, setSaving] = useState(false);
 
-  const [temperature, setTemperature] = useState(latestTPR?.temperature?.toString() || '37.0');
-  const [pulse, setPulse] = useState(latestTPR?.pulse?.toString() || '72');
-  const [respiration, setRespiration] = useState(latestTPR?.respiration?.toString() || '18');
-  const [signature, setSignature] = useState(latestTPR?.signature || '');
+  if (loading && !data) {
+    return <SkeletonScreen />;
+  }
+
+  const [patients, tprRecords] = data ?? [[], []];
+  const patient = patients.find((p) => p.id === patientId);
 
   if (!patient) {
     return (
       <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>Patient not found</Text>
+        <EmptyState icon="alert-circle-outline" message={error ?? 'Patient not found'} />
       </View>
     );
   }
 
-  const handleSave = () => {
-    const tempNum = parseFloat(temperature);
-    const pulseNum = parseInt(pulse);
-    const respNum = parseInt(respiration);
+  const handleSave = async () => {
+    const tempNum = temperature.trim() === '' ? null : parseFloat(temperature);
+    const pulseNum = pulse.trim() === '' ? null : parseInt(pulse, 10);
+    const respNum = respiration.trim() === '' ? null : parseInt(respiration, 10);
 
-    if (isNaN(tempNum) || isNaN(pulseNum) || isNaN(respNum)) {
+    if (tempNum === null && pulseNum === null && respNum === null) {
+      Alert.alert('Error', 'Enter at least one of temperature, pulse, or respiration');
+      return;
+    }
+    if ([tempNum, pulseNum, respNum].some((v) => v !== null && Number.isNaN(v))) {
       Alert.alert('Error', 'Please enter valid numeric values');
       return;
     }
-
-    if (tempNum < 30 || tempNum > 45) {
+    if (tempNum !== null && (tempNum < 30 || tempNum > 45)) {
       Alert.alert('Error', 'Temperature should be between 30-45°C');
       return;
     }
-
-    if (pulseNum < 30 || pulseNum > 200) {
+    if (pulseNum !== null && (pulseNum < 30 || pulseNum > 200)) {
       Alert.alert('Error', 'Pulse should be between 30-200 bpm');
       return;
     }
-
-    if (respNum < 5 || respNum > 50) {
+    if (respNum !== null && (respNum < 5 || respNum > 50)) {
       Alert.alert('Error', 'Respiration should be between 5-50 /min');
       return;
     }
 
-    Alert.alert(
-      'TPR Record Saved',
-      `Temperature: ${temperature}°C\nPulse: ${pulse} bpm\nRespiration: ${respiration} /min`,
-      [{ text: 'OK', onPress: () => router.back() }]
-    );
+    setSaving(true);
+    try {
+      const result = await createEhrRecord('tpr', patientId, {
+        temperature_c: tempNum,
+        pulse: pulseNum,
+        respiration: respNum,
+        remarks,
+      });
+      if (result.queued) {
+        Alert.alert(
+          'Saved Offline',
+          'No connection right now — the TPR entry is queued and will sync automatically.',
+          [{ text: 'OK', onPress: () => router.back() }],
+        );
+      } else {
+        setTemperature('');
+        setPulse('');
+        setRespiration('');
+        setRemarks('');
+        await reload();
+        Alert.alert('TPR Record Saved', 'The entry was added to the flow sheet.');
+      }
+    } catch (err) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Unable to save the record');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -72,7 +105,8 @@ export default function TPRSheetScreen() {
         <View style={styles.patientInfo}>
           <Text style={styles.patientName}>{patient.name}</Text>
           <Text style={styles.patientMeta}>
-            {patient.room} • {patient.age} yrs • {patient.gender}
+            {patient.room_number ? `Room ${patient.room_number}` : 'No room'} •{' '}
+            {patient.age !== null ? `${patient.age} yrs` : 'Age —'} • {patient.gender ?? '—'}
           </Text>
         </View>
       </View>
@@ -138,13 +172,13 @@ export default function TPRSheetScreen() {
 
         <View style={styles.inputSection}>
           <Text style={styles.inputLabel}>
-            <Ionicons name="create" size={16} color="#64748b" /> Signature
+            <Ionicons name="create" size={16} color="#64748b" /> Remarks
           </Text>
           <TextInput
-            style={[styles.input, styles.signatureInput]}
-            value={signature}
-            onChangeText={setSignature}
-            placeholder="Enter your name and title"
+            style={[styles.input, styles.remarksInput]}
+            value={remarks}
+            onChangeText={setRemarks}
+            placeholder="Optional observations"
             placeholderTextColor="#94a3b8"
           />
         </View>
@@ -174,21 +208,31 @@ export default function TPRSheetScreen() {
       <View style={styles.historySection}>
         <Text style={styles.sectionTitle}>TPR History</Text>
         <Card>
-          {[...tprRecords].reverse().slice(0, 5).map((record, index) => (
+          {tprRecords.length === 0 && (
+            <Text style={styles.emptyHistory}>No TPR entries for this patient yet</Text>
+          )}
+          {tprRecords.slice(0, 5).map((record, index) => (
             <View
               key={record.id}
               style={[
                 styles.historyItem,
-                index < 4 && styles.historyBorder,
+                index < Math.min(tprRecords.length, 5) - 1 && styles.historyBorder,
               ]}
             >
               <View style={styles.historyHeader}>
                 <Text style={styles.historyDateTime}>
-                  {new Date(record.date).toLocaleDateString()} {record.time}
+                  {new Date(record.created_at).toLocaleString([], {
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
                 </Text>
-                {record.temperature > 38 || record.temperature < 36 ? (
+                {record.temperature_c == null ? (
+                  <Badge label="No Temp" size="sm" />
+                ) : record.temperature_c > 38 || record.temperature_c < 36 ? (
                   <Badge label="Fever" variant="danger" size="sm" />
-                ) : record.temperature > 37.5 ? (
+                ) : record.temperature_c > 37.5 ? (
                   <Badge label="Low Grade" variant="warning" size="sm" />
                 ) : (
                   <Badge label="Normal" variant="success" size="sm" />
@@ -197,48 +241,55 @@ export default function TPRSheetScreen() {
               <View style={styles.historyValues}>
                 <View style={styles.historyValue}>
                   <Ionicons name="thermometer" size={14} color="#d97706" />
-                  <Text style={styles.historyValueText}>{record.temperature}°C</Text>
+                  <Text style={styles.historyValueText}>
+                    {record.temperature_c != null ? `${record.temperature_c}°C` : '—'}
+                  </Text>
                 </View>
                 <View style={styles.historyValue}>
                   <Ionicons name="heart" size={14} color="#dc2626" />
-                  <Text style={styles.historyValueText}>{record.pulse}</Text>
+                  <Text style={styles.historyValueText}>{record.pulse ?? '—'}</Text>
                 </View>
                 <View style={styles.historyValue}>
                   <Ionicons name="analytics" size={14} color="#7c3aed" />
-                  <Text style={styles.historyValueText}>{record.respiration}</Text>
+                  <Text style={styles.historyValueText}>{record.respiration ?? '—'}</Text>
                 </View>
               </View>
-              <Text style={styles.historySignature}>By: {record.signature}</Text>
+              {record.remarks ? <Text style={styles.historyRemarks}>{record.remarks}</Text> : null}
             </View>
           ))}
         </Card>
       </View>
 
-      <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
+      <Pressable
+        style={({ pressed }) => [styles.saveButton, (pressed || saving) && { opacity: 0.85 }]}
+        onPress={handleSave}
+        disabled={saving}
+      >
         <Ionicons name="save" size={20} color="#fff" />
-        <Text style={styles.saveButtonText}>Save TPR Record</Text>
-      </TouchableOpacity>
+        <Text style={styles.saveButtonText}>{saving ? 'Saving…' : 'Save TPR Record'}</Text>
+      </Pressable>
     </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(
+  Palette: ReturnType<typeof useTheme>['Palette'],
+  Shadow: ReturnType<typeof useTheme>['Shadow'],
+  Type: ReturnType<typeof useTheme>['Type'],
+) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: Palette.background,
   },
   content: {
-    padding: 16,
+    padding: Spacing.lg,
     paddingBottom: 40,
   },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
-  errorText: {
-    fontSize: 16,
-    color: '#6b7280',
+    backgroundColor: Palette.background,
   },
   patientHeader: {
     flexDirection: 'row',
@@ -259,42 +310,41 @@ const styles = StyleSheet.create({
   patientName: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#0f172a',
+    color: Palette.ink,
   },
   patientMeta: {
     fontSize: 14,
-    color: '#64748b',
+    color: Palette.textSecondary,
     marginTop: 2,
   },
   sheetHeader: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 16,
+    backgroundColor: Palette.surface,
+    borderRadius: Radius.lg,
+    padding: Spacing.xl,
+    marginBottom: Spacing.lg,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: Palette.border,
+    ...Shadow.card,
   },
   sheetTitle: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#0f172a',
+    ...Type.screenTitle,
   },
   sheetSubtitle: {
     fontSize: 14,
-    color: '#64748b',
+    color: Palette.textSecondary,
     marginTop: 4,
   },
   sheetDate: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 12,
-    paddingTop: 12,
+    marginTop: Spacing.md,
+    paddingTop: Spacing.md,
     borderTopWidth: 1,
-    borderTopColor: '#e2e8f0',
+    borderTopColor: Palette.borderLight,
   },
   sheetDateText: {
     fontSize: 14,
-    color: '#64748b',
+    color: Palette.textSecondary,
     marginLeft: 8,
   },
   formCard: {
@@ -306,67 +356,62 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#334155',
+    color: Palette.text,
     marginBottom: 8,
   },
   input: {
-    backgroundColor: '#f8fafc',
-    borderRadius: 12,
+    backgroundColor: Palette.surfaceMuted,
+    borderRadius: Radius.md,
     padding: 14,
     fontSize: 18,
-    color: '#1e293b',
+    color: Palette.ink,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: Palette.border,
   },
-  signatureInput: {
+  remarksInput: {
     fontSize: 16,
   },
   referenceSection: {
     marginBottom: 20,
   },
   referenceTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#64748b',
-    marginBottom: 12,
+    ...Type.eyebrow,
+    marginBottom: Spacing.md,
   },
   referenceGrid: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    gap: Spacing.sm,
   },
   referenceItem: {
     flex: 1,
     alignItems: 'center',
     padding: 14,
-    borderRadius: 14,
-    marginHorizontal: 4,
+    borderRadius: Radius.md,
   },
   referenceLabel: {
     fontSize: 11,
-    color: '#64748b',
+    color: Palette.textSecondary,
     marginTop: 6,
   },
   referenceValue: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#334155',
+    color: Palette.text,
     marginTop: 4,
   },
   historySection: {
     marginBottom: 20,
   },
   sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#0f172a',
-    marginBottom: 12,
+    ...Type.sectionTitle,
+    marginBottom: Spacing.md,
   },
   historyItem: {
     paddingVertical: 12,
   },
   historyBorder: {
     borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
+    borderBottomColor: Palette.borderLight,
   },
   historyHeader: {
     flexDirection: 'row',
@@ -377,7 +422,7 @@ const styles = StyleSheet.create({
   historyDateTime: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#334155',
+    color: Palette.text,
   },
   historyValues: {
     flexDirection: 'row',
@@ -389,22 +434,29 @@ const styles = StyleSheet.create({
   },
   historyValueText: {
     fontSize: 13,
-    color: '#64748b',
+    color: Palette.textSecondary,
     marginLeft: 4,
   },
-  historySignature: {
+  historyRemarks: {
     fontSize: 11,
-    color: '#94a3b8',
+    color: Palette.textMuted,
     marginTop: 6,
+  },
+  emptyHistory: {
+    fontSize: 13,
+    color: Palette.textMuted,
+    textAlign: 'center',
+    paddingVertical: Spacing.md,
   },
   saveButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: primaryColor,
-    borderRadius: 14,
-    paddingVertical: 16,
-    marginTop: 8,
+    backgroundColor: Palette.primary,
+    borderRadius: Radius.md,
+    paddingVertical: 15,
+    marginTop: Spacing.sm,
+    ...Shadow.raised,
   },
   saveButtonText: {
     fontSize: 16,
@@ -412,4 +464,5 @@ const styles = StyleSheet.create({
     color: '#fff',
     marginLeft: 8,
   },
-});
+  });
+}

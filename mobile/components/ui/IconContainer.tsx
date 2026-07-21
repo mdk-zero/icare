@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Colors } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
 
 interface IconContainerProps {
   icon: string;
@@ -35,9 +35,9 @@ export function IconContainer({ icon, size = 'md', variant = 'default' }: IconCo
     }
   };
 
+  const { Palette } = useTheme();
   const dimension = getSize();
-  const bgColor = variant === 'primary' ? `${Colors.light.primary}15` : '#f3f4f6';
-  const iconColor = variant === 'primary' ? Colors.light.primary : Colors.light.icon;
+  const bgColor = variant === 'primary' ? `${Palette.primary}15` : Palette.surfaceMuted;
 
   return (
     <View

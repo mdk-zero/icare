@@ -1,41 +1,95 @@
 import React from 'react';
-import { ScrollView, View, Text, StyleSheet } from 'react-native';
-import { Card, StatCard } from '@/components/ui';
-import { mockPerformanceLogs, getPerformanceByCategory } from '@/lib/api';
+import { ScrollView, View, Text, StyleSheet, RefreshControl } from 'react-native';
+import { Card, StatCard, SectionHeader, SkeletonScreen } from '@/components/ui';
+import { Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
+import { useApiData } from '@/hooks/useApiData';
+import { fetchProgress } from '@/lib/api';
+
+function makeScoreColor(Accent: ReturnType<typeof useTheme>['Accent']) {
+  return (score: number) => {
+    if (score >= 70) return Accent.green.fg;
+    if (score >= 50) return Accent.amber.fg;
+    return Accent.red.fg;
+  };
+}
 
 export default function ProgressScreen() {
-  const categoryStats = getPerformanceByCategory();
-  const avgScore = Math.round(
-    mockPerformanceLogs.reduce((a, b) => a + b.score, 0) / mockPerformanceLogs.length
-  );
+  const { data, loading, refreshing, error, refresh } = useApiData(fetchProgress);
+  const { Palette, Accent } = useTheme();
+  const styles = React.useMemo(() => createStyles(Palette), [Palette]);
+  const scoreColor = React.useMemo(() => makeScoreColor(Accent), [Accent]);
 
-  const recentLogs = [...mockPerformanceLogs].reverse().slice(0, 7);
+  if (loading && !data) {
+    return <SkeletonScreen />;
+  }
+
+  const attempts = data?.attempts ?? [];
+  const competencyScores = data?.competency_scores ?? [];
+
+  const scored = attempts.filter((a) => a.score !== null);
+  const avgScore =
+    scored.length > 0
+      ? Math.round(scored.reduce((sum, a) => sum + (a.score ?? 0), 0) / scored.length)
+      : 0;
+
+  // Average score per competency area.
+  const byCategory = new Map<string, { total: number; count: number }>();
+  for (const record of competencyScores) {
+    const name = record.competency_areas?.name ?? 'General';
+    const entry = byCategory.get(name) ?? { total: 0, count: 0 };
+    entry.total += record.score;
+    entry.count += 1;
+    byCategory.set(name, entry);
+  }
+  const categoryStats = [...byCategory.entries()].map(([category, { total, count }]) => ({
+    category,
+    avgScore: Math.round(total / count),
+  }));
+
+  const recentAttempts = attempts.slice(0, 7);
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Performance Analytics</Text>
-        <Text style={styles.subtitle}>Track your competency development</Text>
-      </View>
-
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={refresh} colors={[Palette.primary]} tintColor={Palette.primary} />
+      }
+    >
       <View style={styles.statsGrid}>
         <View style={styles.statItem}>
-          <StatCard title="Overall Score" value={`${avgScore}%`} icon="bar-chart" color={avgScore >= 70 ? '#16a34a' : '#dc2626'} />
+          <StatCard
+            title="Overall Score"
+            value={scored.length > 0 ? `${avgScore}%` : '—'}
+            icon="bar-chart"
+            color={scoreColor(avgScore)}
+          />
         </View>
         <View style={styles.statItem}>
-          <StatCard title="Activities" value={mockPerformanceLogs.length} icon="fitness-center" color="#1B6B7B" />
+          <StatCard title="Quizzes Taken" value={attempts.length} icon="pulse" color={Palette.primary} />
         </View>
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>By Category</Text>
+        <SectionHeader title="By Competency" />
         <Card>
+          {categoryStats.length === 0 && (
+            <Text style={styles.emptyText}>
+              {error ?? 'No competency scores yet — they appear as your faculty validates your work.'}
+            </Text>
+          )}
           {categoryStats.map((stat, index) => (
-            <View key={stat.category} style={[styles.categoryItem, index < categoryStats.length - 1 && styles.categoryBorder]}>
+            <View key={stat.category} style={[styles.categoryItem, index > 0 && styles.rowBorder]}>
               <Text style={styles.categoryName}>{stat.category}</Text>
               <View style={styles.categoryScore}>
                 <View style={styles.progressBar}>
-                  <View style={[styles.progressFill, { width: `${stat.avgScore}%`, backgroundColor: stat.avgScore >= 70 ? '#16a34a' : stat.avgScore >= 50 ? '#d97706' : '#dc2626' }]} />
+                  <View
+                    style={[
+                      styles.progressFill,
+                      { width: `${Math.min(stat.avgScore, 100)}%`, backgroundColor: scoreColor(stat.avgScore) },
+                    ]}
+                  />
                 </View>
                 <Text style={styles.categoryValue}>{stat.avgScore}%</Text>
               </View>
@@ -45,16 +99,25 @@ export default function ProgressScreen() {
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Recent Activity</Text>
+        <SectionHeader title="Recent Activity" />
         <Card>
-          {recentLogs.map((log, index) => (
-            <View key={log.id} style={[styles.activityItem, index < recentLogs.length - 1 && styles.activityBorder]}>
+          {recentAttempts.length === 0 && (
+            <Text style={styles.emptyText}>No quiz attempts yet — take one from the Quizzes tab.</Text>
+          )}
+          {recentAttempts.map((attempt, index) => (
+            <View key={attempt.id} style={[styles.activityItem, index > 0 && styles.rowBorder]}>
               <View style={styles.activityDate}>
-                <Text style={styles.activityDateText}>{new Date(log.date).toLocaleDateString()}</Text>
+                <Text style={styles.activityDateText}>
+                  {new Date(attempt.submitted_at).toLocaleDateString()}
+                </Text>
               </View>
               <View style={styles.activityInfo}>
-                <Text style={styles.activityComp}>{log.competency}</Text>
-                <Text style={styles.activityScore}>{log.score}%</Text>
+                <Text style={styles.activityComp} numberOfLines={1}>
+                  {attempt.assessments?.title ?? 'Assessment'}
+                </Text>
+                <Text style={[styles.activityScore, { color: scoreColor(attempt.score ?? 0) }]}>
+                  {attempt.score !== null ? `${attempt.score}%` : '—'}
+                </Text>
               </View>
             </View>
           ))}
@@ -64,28 +127,101 @@ export default function ProgressScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f3f4f6' },
-  content: { padding: 16, paddingBottom: 32 },
-  header: { marginBottom: 24 },
-  title: { fontSize: 24, fontWeight: '700', color: '#11181c' },
-  subtitle: { fontSize: 14, color: '#6b7280', marginTop: 4 },
-  statsGrid: { flexDirection: 'row', marginBottom: 24 },
-  statItem: { flex: 1, marginHorizontal: 6 },
-  section: { marginBottom: 24 },
-  sectionTitle: { fontSize: 18, fontWeight: '700', color: '#11181c', marginBottom: 12 },
-  categoryItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12 },
-  categoryBorder: { borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
-  categoryName: { fontSize: 14, fontWeight: '500', color: '#11181c', flex: 1 },
-  categoryScore: { flexDirection: 'row', alignItems: 'center' },
-  progressBar: { width: 100, height: 8, backgroundColor: '#e5e7eb', borderRadius: 4, marginRight: 12 },
-  progressFill: { height: '100%', borderRadius: 4 },
-  categoryValue: { fontSize: 14, fontWeight: '600', color: '#6b7280', width: 40, textAlign: 'right' },
-  activityItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12 },
-  activityBorder: { borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
-  activityDate: { width: 90 },
-  activityDateText: { fontSize: 12, color: '#6b7280' },
-  activityInfo: { flex: 1, flexDirection: 'row', justifyContent: 'space-between' },
-  activityComp: { fontSize: 14, fontWeight: '500', color: '#11181c' },
-  activityScore: { fontSize: 14, fontWeight: '600', color: '#1B6B7B' },
-});
+function createStyles(Palette: ReturnType<typeof useTheme>['Palette']) {
+  return StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: Palette.background,
+  },
+  content: {
+    padding: Spacing.lg,
+    paddingBottom: 32,
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    gap: Spacing.md,
+    marginBottom: Spacing.xxl,
+  },
+  statItem: {
+    flex: 1,
+  },
+  section: {
+    marginBottom: Spacing.xxl,
+  },
+  rowBorder: {
+    borderTopWidth: 1,
+    borderTopColor: Palette.borderLight,
+  },
+  categoryItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: Spacing.md,
+  },
+  categoryName: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: Palette.ink,
+    flex: 1,
+    marginRight: Spacing.md,
+  },
+  categoryScore: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  progressBar: {
+    width: 96,
+    height: 6,
+    backgroundColor: Palette.border,
+    borderRadius: 3,
+    marginRight: Spacing.sm,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 3,
+  },
+  categoryValue: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Palette.textSecondary,
+    width: 40,
+    textAlign: 'right',
+  },
+  activityItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: Spacing.md,
+  },
+  activityDate: {
+    width: 90,
+  },
+  activityDateText: {
+    fontSize: 12,
+    color: Palette.textMuted,
+  },
+  activityInfo: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  activityComp: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: Palette.ink,
+    flex: 1,
+    marginRight: Spacing.sm,
+  },
+  activityScore: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  emptyText: {
+    fontSize: 13,
+    color: Palette.textMuted,
+    textAlign: 'center',
+    paddingVertical: Spacing.md,
+  },
+  });
+}

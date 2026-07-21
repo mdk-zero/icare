@@ -29,6 +29,7 @@ import {
 import {
   fetchFacultyScenarios,
   createScenario,
+  updateScenario,
   generateAIScenario,
   suggestAIScenario,
   SimulationScenario,
@@ -51,6 +52,7 @@ const emptyCreateForm = {
   difficulty: "intermediate" as "beginner" | "intermediate" | "advanced",
   category: "",
   learningObjectives: "",
+  patientId: "",
 };
 
 const inputClassName =
@@ -95,6 +97,12 @@ export default function FacultyScenariosClient() {
   const [studentSearchQuery, setStudentSearchQuery] = useState("");
   const [assigning, setAssigning] = useState(false);
 
+  const [showLinkPatientModal, setShowLinkPatientModal] = useState(false);
+  const [linkPatientTarget, setLinkPatientTarget] = useState<SimulationScenario | null>(null);
+  const [linkPatientId, setLinkPatientId] = useState("");
+  const [linkPatientSearchQuery, setLinkPatientSearchQuery] = useState("");
+  const [savingPatientLink, setSavingPatientLink] = useState(false);
+
   const loadStudents = useCallback(async () => {
     const data = await fetchFacultyStudents();
     setStudents(data);
@@ -128,7 +136,7 @@ export default function FacultyScenariosClient() {
 
   const categories = useMemo(
     () => Array.from(new Set(scenarios.map((s) => s.category).filter(Boolean))),
-    [scenarios]
+    [scenarios],
   );
 
   const filteredScenarios = useMemo(() => {
@@ -139,8 +147,7 @@ export default function FacultyScenariosClient() {
         scenario.category.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesDifficulty =
         difficultyFilter === "all" || scenario.difficulty === difficultyFilter;
-      const matchesCategory =
-        categoryFilter === "all" || scenario.category === categoryFilter;
+      const matchesCategory = categoryFilter === "all" || scenario.category === categoryFilter;
       return matchesSearch && matchesDifficulty && matchesCategory;
     });
   }, [scenarios, searchQuery, difficultyFilter, categoryFilter]);
@@ -152,13 +159,29 @@ export default function FacultyScenariosClient() {
         p.name.toLowerCase().includes(q) ||
         p.diagnosis.toLowerCase().includes(q) ||
         (p.mimic_id || "").toLowerCase().includes(q) ||
-        p.room_number.toLowerCase().includes(q)
+        p.room_number.toLowerCase().includes(q),
     );
   }, [patients, patientSearchQuery]);
 
   const selectedPatient = useMemo(
     () => patients.find((p) => p.id === selectedPatientId) || null,
-    [patients, selectedPatientId]
+    [patients, selectedPatientId],
+  );
+
+  const linkModalFilteredPatients = useMemo(() => {
+    const q = linkPatientSearchQuery.toLowerCase();
+    return patients.filter(
+      (p) =>
+        p.name.toLowerCase().includes(q) ||
+        p.diagnosis.toLowerCase().includes(q) ||
+        (p.mimic_id || "").toLowerCase().includes(q) ||
+        p.room_number.toLowerCase().includes(q),
+    );
+  }, [patients, linkPatientSearchQuery]);
+
+  const linkPatientSelected = useMemo(
+    () => patients.find((p) => p.id === linkPatientId) || null,
+    [patients, linkPatientId],
   );
 
   const handleCreateScenario = async (e: React.FormEvent) => {
@@ -171,6 +194,7 @@ export default function FacultyScenariosClient() {
       description: createForm.description,
       difficulty: createForm.difficulty,
       category: createForm.category || "General",
+      patient_id: createForm.patientId || null,
       learning_objectives: createForm.learningObjectives
         .split("\n")
         .map((o) => o.trim())
@@ -204,10 +228,7 @@ export default function FacultyScenariosClient() {
     setAiPreview(null);
     setAiError(null);
 
-    const preview = await generateAIScenario(
-      aiPrompt,
-      selectedPatientId || undefined
-    );
+    const preview = await generateAIScenario(aiPrompt, selectedPatientId || undefined);
 
     if ("error" in preview) {
       setAiError(preview.error);
@@ -225,7 +246,7 @@ export default function FacultyScenariosClient() {
     const result = await suggestAIScenario(
       suggestDifficulty || undefined,
       suggestCategory || undefined,
-      selectedPatientId || undefined
+      selectedPatientId || undefined,
     );
 
     if ("error" in result) {
@@ -248,6 +269,7 @@ export default function FacultyScenariosClient() {
       difficulty: aiPreview.difficulty,
       category: aiPreview.category,
       patient_case: aiPreview.patient_case,
+      patient_id: selectedPatientId || null,
       learning_objectives: aiPreview.learning_objectives,
       is_ai_generated: true,
     });
@@ -349,9 +371,7 @@ export default function FacultyScenariosClient() {
 
   const toggleStudentSelection = (studentId: string) => {
     setSelectedStudents((prev) =>
-      prev.includes(studentId)
-        ? prev.filter((id) => id !== studentId)
-        : [...prev, studentId]
+      prev.includes(studentId) ? prev.filter((id) => id !== studentId) : [...prev, studentId],
     );
   };
 
@@ -363,7 +383,7 @@ export default function FacultyScenariosClient() {
       selectedScenario.id,
       selectedStudents,
       assignDeadline,
-      assignRequired
+      assignRequired,
     );
 
     if (assignments.length > 0) {
@@ -394,10 +414,56 @@ export default function FacultyScenariosClient() {
     setStudentSearchQuery("");
   };
 
+  const handleOpenLinkPatientModal = (scenario: SimulationScenario) => {
+    setLinkPatientTarget(scenario);
+    setLinkPatientId(scenario.patient_id || "");
+    setLinkPatientSearchQuery("");
+    setShowLinkPatientModal(true);
+    if (patients.length === 0) void loadPatientsForSelector();
+  };
+
+  const closeLinkPatientModal = () => {
+    setShowLinkPatientModal(false);
+    setLinkPatientTarget(null);
+    setLinkPatientId("");
+    setLinkPatientSearchQuery("");
+  };
+
+  const handleSavePatientLink = async () => {
+    if (!linkPatientTarget) return;
+
+    setSavingPatientLink(true);
+    const updated = await updateScenario(linkPatientTarget.id, {
+      patient_id: linkPatientId || null,
+    });
+
+    if (updated) {
+      await loadScenarios();
+      const faculty = getCurrentFacultyUser();
+      if (faculty) {
+        logAuditAction({
+          faculty_id: faculty.id,
+          faculty_name: faculty.name,
+          tab: "scenarios",
+          action: "link_scenario_patient",
+          details: linkPatientId
+            ? `Linked scenario "${linkPatientTarget.title}" to a patient`
+            : `Unlinked patient from scenario "${linkPatientTarget.title}"`,
+          target_type: "scenario",
+          target_id: linkPatientTarget.id,
+          metadata: { scenario_title: linkPatientTarget.title, patient_id: linkPatientId || null },
+        });
+      }
+    }
+
+    setSavingPatientLink(false);
+    closeLinkPatientModal();
+  };
+
   const filteredStudents = students.filter(
     (student) =>
       student.name.toLowerCase().includes(studentSearchQuery.toLowerCase()) ||
-      student.email.toLowerCase().includes(studentSearchQuery.toLowerCase())
+      student.email.toLowerCase().includes(studentSearchQuery.toLowerCase()),
   );
 
   const selectClassName =
@@ -413,23 +479,6 @@ export default function FacultyScenariosClient() {
         title="Simulation Scenarios"
         subtitle="Manage clinical simulation scenarios for student training"
       />
-
-      <div className="flex justify-end gap-3 mb-4">
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="flex items-center gap-2 px-4 py-2.5 bg-[#1B6B7B] text-white font-medium rounded-lg hover:bg-[#145a63] transition-all shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
-        >
-          <FontAwesomeIcon icon={faPlus} className="w-4 h-4" />
-          Create Scenario
-        </button>
-        <button
-          onClick={openAIModal}
-          className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-medium rounded-xl hover:from-purple-700 hover:to-indigo-700 transition-all shadow-lg shadow-purple-500/20"
-        >
-          <FontAwesomeIcon icon={faRobot} className="w-4 h-4" />
-          AI Generate
-        </button>
-      </div>
 
       {/* Stats */}
       {loading ? (
@@ -522,6 +571,22 @@ export default function FacultyScenariosClient() {
               className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none"
             />
           </div>
+          <div className="flex justify-end gap-3">
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="flex items-center gap-2 px-4 py-2.5 bg-[#1B6B7B] text-white font-medium rounded-lg hover:bg-[#145a63] transition-all shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
+            >
+              <FontAwesomeIcon icon={faPlus} className="w-4 h-4" />
+              Create Scenario
+            </button>
+            <button
+              onClick={openAIModal}
+              className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-medium rounded-xl hover:from-purple-700 hover:to-indigo-700 transition-all shadow-lg shadow-purple-500/20"
+            >
+              <FontAwesomeIcon icon={faRobot} className="w-4 h-4" />
+              AI Generate
+            </button>
+          </div>
         </div>
       </div>
 
@@ -534,10 +599,7 @@ export default function FacultyScenariosClient() {
         </div>
       ) : filteredScenarios.length === 0 ? (
         <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] p-12 text-center">
-          <FontAwesomeIcon
-            icon={faNotesMedical}
-            className="w-12 h-12 text-gray-300 mx-auto mb-4"
-          />
+          <FontAwesomeIcon icon={faNotesMedical} className="w-12 h-12 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-gray-700">No scenarios found</h3>
           <p className="text-gray-500 text-sm mt-1">
             {searchQuery || difficultyFilter !== "all" || categoryFilter !== "all"
@@ -552,7 +614,10 @@ export default function FacultyScenariosClient() {
               key={scenario.id}
               className="group relative bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200 overflow-hidden flex flex-col"
             >
-              <span className={`absolute left-0 top-0 h-full w-0.5 ${difficultyBar[scenario.difficulty] ?? "bg-gray-500"}`} aria-hidden />
+              <span
+                className={`absolute left-0 top-0 h-full w-0.5 ${difficultyBar[scenario.difficulty] ?? "bg-gray-500"}`}
+                aria-hidden
+              />
               <div className="p-3 border-b border-gray-100/80 flex-1">
                 <div className="flex items-start justify-between mb-3">
                   <h3 className="font-semibold text-gray-900 line-clamp-2 pr-2">
@@ -569,7 +634,7 @@ export default function FacultyScenariosClient() {
                 <div className="flex items-center gap-2 flex-wrap">
                   <span
                     className={`px-2.5 py-1 rounded-full text-xs font-medium border flex items-center gap-1 ${getDifficultyColor(
-                      scenario.difficulty
+                      scenario.difficulty,
                     )}`}
                   >
                     <FontAwesomeIcon
@@ -581,6 +646,12 @@ export default function FacultyScenariosClient() {
                   <span className="px-2.5 py-1 bg-gray-100 text-gray-700 text-xs font-medium rounded-full">
                     {scenario.category}
                   </span>
+                  {scenario.patient_name && (
+                    <span className="px-2.5 py-1 bg-teal-50 text-teal-700 text-xs font-medium rounded-full flex items-center gap-1">
+                      <FontAwesomeIcon icon={faUsers} className="w-3 h-3" />
+                      {scenario.patient_name}
+                    </span>
+                  )}
                 </div>
               </div>
               <div className="p-5 bg-gray-50/50">
@@ -608,6 +679,13 @@ export default function FacultyScenariosClient() {
                   >
                     <FontAwesomeIcon icon={faUserPlus} className="w-4 h-4" />
                     Assign
+                  </button>
+                  <button
+                    onClick={() => handleOpenLinkPatientModal(scenario)}
+                    className="flex-1 flex items-center justify-center gap-1.5 text-[#1B6B7B] font-medium hover:text-[#145a63] transition-colors py-2 rounded-lg hover:bg-[#1B6B7B]/5"
+                  >
+                    <FontAwesomeIcon icon={faHospitalUser} className="w-4 h-4" />
+                    {scenario.patient_name ? "Patient" : "Link Patient"}
                   </button>
                 </div>
               </div>
@@ -637,10 +715,7 @@ export default function FacultyScenariosClient() {
                 <FontAwesomeIcon icon={faTimes} className="w-5 h-5 text-gray-500" />
               </button>
             </div>
-            <form
-              onSubmit={handleCreateScenario}
-              className="p-4 space-y-3 overflow-y-auto flex-1"
-            >
+            <form onSubmit={handleCreateScenario} className="p-4 space-y-3 overflow-y-auto flex-1">
               <div>
                 <label className={labelClassName}>Title</label>
                 <input
@@ -656,9 +731,7 @@ export default function FacultyScenariosClient() {
                 <label className={labelClassName}>Description</label>
                 <textarea
                   value={createForm.description}
-                  onChange={(e) =>
-                    setCreateForm({ ...createForm, description: e.target.value })
-                  }
+                  onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })}
                   placeholder="Brief overview of the scenario..."
                   rows={3}
                   className={inputClassName + " resize-none"}
@@ -693,9 +766,7 @@ export default function FacultyScenariosClient() {
                   <div className="relative">
                     <select
                       value={createForm.category}
-                      onChange={(e) =>
-                        setCreateForm({ ...createForm, category: e.target.value })
-                      }
+                      onChange={(e) => setCreateForm({ ...createForm, category: e.target.value })}
                       className={selectClassName + " pr-10"}
                     >
                       <option value="">Select category</option>
@@ -716,6 +787,32 @@ export default function FacultyScenariosClient() {
                     />
                   </div>
                 </div>
+              </div>
+              <div>
+                <label className={labelClassName}>Patient</label>
+                <div className="relative">
+                  <select
+                    value={createForm.patientId}
+                    onChange={(e) => setCreateForm({ ...createForm, patientId: e.target.value })}
+                    className={selectClassName + " pr-10"}
+                  >
+                    <option value="">No linked patient</option>
+                    {patients.map((patient) => (
+                      <option key={patient.id} value={patient.id}>
+                        {patient.name} — {patient.diagnosis}
+                        {patient.room_number ? ` (Room ${patient.room_number})` : ""}
+                      </option>
+                    ))}
+                  </select>
+                  <FontAwesomeIcon
+                    icon={faChevronDown}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none"
+                  />
+                </div>
+                <p className="text-xs text-gray-500 mt-1.5">
+                  Students only see patients linked to their assigned scenarios — link one so they
+                  can chart vitals and EHR records for this case.
+                </p>
               </div>
               <div>
                 <label className={labelClassName}>Learning Objectives</label>
@@ -831,7 +928,9 @@ export default function FacultyScenariosClient() {
                     disabled={suggesting || patients.length === 0}
                     className="text-sm flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 text-purple-700 hover:bg-purple-100 rounded-lg font-medium transition-colors disabled:opacity-50"
                   >
-                    {suggesting && <FontAwesomeIcon icon={faSpinner} spin className="w-3.5 h-3.5" />}
+                    {suggesting && (
+                      <FontAwesomeIcon icon={faSpinner} spin className="w-3.5 h-3.5" />
+                    )}
                     <FontAwesomeIcon icon={faRobot} className="w-3.5 h-3.5" />
                     {suggesting ? "Suggesting..." : "Suggest Scenario"}
                   </button>
@@ -844,11 +943,15 @@ export default function FacultyScenariosClient() {
                   className={inputClassName + " resize-none"}
                 />
                 <p className="text-xs text-gray-500 mt-1.5">
-                  Suggest uses one AI request and picks a patient with abnormal labs when none is selected.
+                  Suggest uses one AI request and picks a patient with abnormal labs when none is
+                  selected.
                 </p>
                 {aiError && (
                   <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-xl flex items-start gap-2.5">
-                    <FontAwesomeIcon icon={faExclamationTriangle} className="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0" />
+                    <FontAwesomeIcon
+                      icon={faExclamationTriangle}
+                      className="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0"
+                    />
                     <p className="text-sm text-red-700">{aiError}</p>
                   </div>
                 )}
@@ -1006,35 +1109,48 @@ export default function FacultyScenariosClient() {
                   </div>
                   <div className="space-y-3">
                     <div>
-                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Title</p>
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                        Title
+                      </p>
                       <p className="text-sm font-medium text-gray-900">{aiPreview.title}</p>
                     </div>
                     <div>
-                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Description</p>
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                        Description
+                      </p>
                       <p className="text-sm text-gray-700">{aiPreview.description}</p>
                     </div>
                     <div className="flex gap-4">
                       <div>
-                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Difficulty</p>
-                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border ${getDifficultyColor(aiPreview.difficulty || 'intermediate')}`}>
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                          Difficulty
+                        </p>
+                        <span
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border ${getDifficultyColor(aiPreview.difficulty || "intermediate")}`}
+                        >
                           {aiPreview.difficulty}
                         </span>
                       </div>
                       <div>
-                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Category</p>
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                          Category
+                        </p>
                         <p className="text-sm text-gray-700">{aiPreview.category}</p>
                       </div>
                     </div>
-                    {Array.isArray(aiPreview.learning_objectives) && aiPreview.learning_objectives.length > 0 && (
-                      <div>
-                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Learning Objectives</p>
-                        <ul className="list-disc list-inside text-sm text-gray-700">
-                          {aiPreview.learning_objectives.map((obj, i) => (
-                            <li key={i}>{obj}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
+                    {Array.isArray(aiPreview.learning_objectives) &&
+                      aiPreview.learning_objectives.length > 0 && (
+                        <div>
+                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                            Learning Objectives
+                          </p>
+                          <ul className="list-disc list-inside text-sm text-gray-700">
+                            {aiPreview.learning_objectives.map((obj, i) => (
+                              <li key={i}>{obj}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
                   </div>
                 </div>
               )}
@@ -1077,7 +1193,9 @@ export default function FacultyScenariosClient() {
                     disabled={savingAIPreview}
                     className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl font-medium hover:from-purple-700 hover:to-indigo-700 transition-all disabled:opacity-50 flex items-center gap-2"
                   >
-                    {savingAIPreview && <FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" />}
+                    {savingAIPreview && (
+                      <FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" />
+                    )}
                     <FontAwesomeIcon icon={faPlus} className="w-4 h-4" />
                     {savingAIPreview ? "Saving..." : "Save Scenario"}
                   </button>
@@ -1119,7 +1237,7 @@ export default function FacultyScenariosClient() {
               <div className="flex items-center gap-3 mt-4 flex-wrap">
                 <span
                   className={`px-3 py-1 rounded-full text-sm font-semibold border flex items-center gap-1 ${getDifficultyColor(
-                    selectedScenario.difficulty
+                    selectedScenario.difficulty,
                   )}`}
                 >
                   <FontAwesomeIcon
@@ -1157,7 +1275,9 @@ export default function FacultyScenariosClient() {
                             <FontAwesomeIcon icon={faExclamationTriangle} className="w-4 h-4" />
                             Chief Complaint
                           </p>
-                          <p className="text-gray-800">{selectedScenario.patient_case.chief_complaint}</p>
+                          <p className="text-gray-800">
+                            {selectedScenario.patient_case.chief_complaint}
+                          </p>
                         </div>
                       )}
                       {selectedScenario.patient_case.vitals && (
@@ -1178,7 +1298,7 @@ export default function FacultyScenariosClient() {
                                   </p>
                                   <p className="font-semibold text-gray-800">{String(value)}</p>
                                 </div>
-                              )
+                              ),
                             )}
                           </div>
                         </div>
@@ -1186,13 +1306,19 @@ export default function FacultyScenariosClient() {
                       {selectedScenario.patient_case.medical_history && (
                         <div>
                           <p className="text-sm font-bold text-gray-600 mb-1">Medical History</p>
-                          <p className="text-gray-800">{selectedScenario.patient_case.medical_history}</p>
+                          <p className="text-gray-800">
+                            {selectedScenario.patient_case.medical_history}
+                          </p>
                         </div>
                       )}
                       {selectedScenario.patient_case.physical_exam && (
                         <div>
-                          <p className="text-sm font-bold text-gray-600 mb-1">Physical Examination</p>
-                          <p className="text-gray-800">{selectedScenario.patient_case.physical_exam}</p>
+                          <p className="text-sm font-bold text-gray-600 mb-1">
+                            Physical Examination
+                          </p>
+                          <p className="text-gray-800">
+                            {selectedScenario.patient_case.physical_exam}
+                          </p>
                         </div>
                       )}
                       {selectedScenario.patient_case.diagnosis && (
@@ -1204,7 +1330,9 @@ export default function FacultyScenariosClient() {
                       {selectedScenario.patient_case.treatment_plan && (
                         <div>
                           <p className="text-sm font-bold text-gray-600 mb-1">Treatment Plan</p>
-                          <p className="text-gray-800">{selectedScenario.patient_case.treatment_plan}</p>
+                          <p className="text-gray-800">
+                            {selectedScenario.patient_case.treatment_plan}
+                          </p>
                         </div>
                       )}
                     </div>
@@ -1410,10 +1538,10 @@ export default function FacultyScenariosClient() {
                                   student.risk_level === "high"
                                     ? "bg-red-100 text-red-700"
                                     : student.risk_level === "medium"
-                                    ? "bg-amber-100 text-amber-700"
-                                    : student.risk_level === "low"
-                                    ? "bg-emerald-100 text-emerald-700"
-                                    : "bg-gray-100 text-gray-700"
+                                      ? "bg-amber-100 text-amber-700"
+                                      : student.risk_level === "low"
+                                        ? "bg-emerald-100 text-emerald-700"
+                                        : "bg-gray-100 text-gray-700"
                                 }`}
                               >
                                 {student.risk_level ? student.risk_level : "Unknown"}
@@ -1449,6 +1577,187 @@ export default function FacultyScenariosClient() {
                   {selectedStudents.length !== 1 ? "s" : ""}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Link Patient Modal */}
+      {showLinkPatientModal && linkPatientTarget && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl w-full max-w-lg max-h-[85vh] overflow-hidden flex flex-col shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-gray-200/80">
+            <div className="p-4 border-b border-gray-100/80 flex items-center justify-between bg-gray-50/50">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-[#1B6B7B]/10 rounded-lg flex items-center justify-center">
+                  <FontAwesomeIcon icon={faHospitalUser} className="text-[#1B6B7B] w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">Link Patient</h3>
+                  <p className="text-sm text-gray-500 line-clamp-1">{linkPatientTarget.title}</p>
+                </div>
+              </div>
+              <button
+                onClick={closeLinkPatientModal}
+                className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
+              >
+                <FontAwesomeIcon icon={faTimes} className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-3 overflow-y-auto flex-1">
+              <p className="text-sm text-gray-500">
+                Students only see patients linked to their assigned scenarios — pick one so it
+                shows up for anyone already assigned this scenario.
+              </p>
+
+              <button
+                type="button"
+                onClick={() => setLinkPatientId("")}
+                className={`w-full flex items-center justify-between p-3 rounded-xl border-2 transition-all ${
+                  linkPatientId === ""
+                    ? "border-[#1B6B7B] bg-[#1B6B7B]/5"
+                    : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
+                }`}
+              >
+                <span className="text-sm font-medium text-gray-700">No linked patient</span>
+                {linkPatientId === "" && (
+                  <div className="w-6 h-6 bg-[#1B6B7B] rounded-full flex items-center justify-center">
+                    <FontAwesomeIcon icon={faCheck} className="w-3.5 h-3.5 text-white" />
+                  </div>
+                )}
+              </button>
+
+              {linkPatientSelected && (
+                <div className="p-3 bg-teal-50 border border-teal-200 rounded-xl flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-teal-100 rounded-full flex items-center justify-center text-teal-700">
+                      <FontAwesomeIcon icon={faHospitalUser} className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-gray-800">
+                        {linkPatientSelected.name}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {linkPatientSelected.diagnosis} · {linkPatientSelected.mimic_id}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setLinkPatientId("")}
+                    className="text-xs text-teal-700 hover:text-teal-900 font-medium"
+                  >
+                    Clear
+                  </button>
+                </div>
+              )}
+
+              <div className="border border-gray-200 rounded-xl overflow-hidden">
+                <div className="p-3 border-b border-gray-200 bg-gray-50/50">
+                  <div className="relative">
+                    <FontAwesomeIcon
+                      icon={faSearch}
+                      className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500"
+                    />
+                    <input
+                      type="text"
+                      value={linkPatientSearchQuery}
+                      onChange={(e) => setLinkPatientSearchQuery(e.target.value)}
+                      placeholder="Search patients by name, diagnosis, MIMIC ID, or room..."
+                      className={inputClassName + " pl-10"}
+                    />
+                  </div>
+                </div>
+                <div className="max-h-[260px] overflow-y-auto custom-scrollbar">
+                  {loadingPatients ? (
+                    <div className="p-8 text-center">
+                      <FontAwesomeIcon icon={faSpinner} spin className="w-6 h-6 text-[#1B6B7B]" />
+                      <p className="text-sm text-gray-500 mt-2">Loading patients...</p>
+                    </div>
+                  ) : linkModalFilteredPatients.length === 0 ? (
+                    <div className="p-6 text-center text-gray-500 text-sm">
+                      {linkPatientSearchQuery
+                        ? "No patients match your search."
+                        : "No MIMIC-IV patients available."}
+                    </div>
+                  ) : (
+                    <table className="w-full">
+                      <thead className="bg-gray-50 sticky top-0">
+                        <tr>
+                          <th className="text-left py-2.5 px-4 text-xs font-semibold text-gray-600">
+                            Patient
+                          </th>
+                          <th className="text-left py-2.5 px-4 text-xs font-semibold text-gray-600">
+                            Diagnosis
+                          </th>
+                          <th className="text-left py-2.5 px-4 text-xs font-semibold text-gray-600">
+                            Room
+                          </th>
+                          <th className="text-left py-2.5 px-4 text-xs font-semibold text-gray-600">
+                            MIMIC ID
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {linkModalFilteredPatients.map((patient) => (
+                          <tr
+                            key={patient.id}
+                            onClick={() => setLinkPatientId(patient.id)}
+                            className={`cursor-pointer transition-colors ${
+                              linkPatientId === patient.id
+                                ? "bg-[#1B6B7B]/5 hover:bg-[#1B6B7B]/10"
+                                : "hover:bg-gray-50"
+                            }`}
+                          >
+                            <td className="py-2.5 px-4">
+                              <div className="flex items-center gap-2">
+                                <div className="w-7 h-7 bg-[#1B6B7B]/10 rounded-full flex items-center justify-center text-[#1B6B7B] text-xs font-semibold">
+                                  {patient.name.charAt(0)}
+                                </div>
+                                <div>
+                                  <p className="text-sm font-medium text-gray-800">
+                                    {patient.name}
+                                  </p>
+                                  <p className="text-xs text-gray-500">
+                                    {patient.age}yo {patient.gender}
+                                  </p>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="py-2.5 px-4 text-sm text-gray-600">
+                              {patient.diagnosis}
+                            </td>
+                            <td className="py-2.5 px-4 text-sm text-gray-600">
+                              {patient.room_number}
+                            </td>
+                            <td className="py-2.5 px-4">
+                              <span className="text-xs font-mono text-gray-500">
+                                {patient.mimic_id}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-gray-100/80 bg-gray-50/50 flex justify-end gap-3">
+              <button
+                onClick={closeLinkPatientModal}
+                className="px-5 py-2.5 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSavePatientLink}
+                disabled={savingPatientLink}
+                className="px-5 py-2.5 bg-[#1B6B7B] text-white rounded-lg font-medium hover:bg-[#145a63] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
+              >
+                {savingPatientLink && <FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" />}
+                Save
+              </button>
             </div>
           </div>
         </div>

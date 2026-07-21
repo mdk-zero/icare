@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '@/constants/theme';
+import { Radius } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
 
 interface StatCardProps {
   title: string;
@@ -22,21 +23,17 @@ export function StatCard({
   trend,
   trendValue,
   onPress,
-  color = Colors.light.primary,
+  color,
 }: StatCardProps) {
+  const { Palette, Accent, Shadow } = useTheme();
+  const styles = React.useMemo(() => createStyles(Palette, Shadow), [Palette, Shadow]);
+  const resolvedColor = color ?? Palette.primary;
+
   const getTrendColor = () => {
     switch (trend) {
-      case 'up': return '#16a34a';
-      case 'down': return '#dc2626';
-      default: return '#6b7280';
-    }
-  };
-
-  const getTrendIcon = () => {
-    switch (trend) {
-      case 'up': return 'trending-up';
-      case 'down': return 'trending-down';
-      default: return 'remove';
+      case 'up': return Accent.green.fg;
+      case 'down': return Accent.red.fg;
+      default: return Palette.textMuted;
     }
   };
 
@@ -49,8 +46,8 @@ export function StatCard({
       activeOpacity={0.7}
     >
       <View style={styles.header}>
-        <View style={[styles.iconContainer, { backgroundColor: `${color}15` }]}>
-          <Ionicons name={(icon as any) || 'bar-chart'} size={20} color={color} />
+        <View style={[styles.iconContainer, { backgroundColor: `${resolvedColor}15` }]}>
+          <Ionicons name={(icon as any) || 'bar-chart'} size={20} color={resolvedColor} />
         </View>
         {trend && trendValue && (
           <View style={styles.trend}>
@@ -67,56 +64,54 @@ export function StatCard({
   );
 }
 
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
-  },
-  iconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  trend: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    backgroundColor: '#f3f4f6',
-  },
-  trendText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  value: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#11181c',
-    marginBottom: 4,
-  },
-  title: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#374151',
-  },
-  subtitle: {
-    fontSize: 12,
-    color: '#6b7280',
-    marginTop: 4,
-  },
-});
+function createStyles(Palette: ReturnType<typeof useTheme>['Palette'], Shadow: ReturnType<typeof useTheme>['Shadow']) {
+  return StyleSheet.create({
+    card: {
+      backgroundColor: Palette.surface,
+      borderRadius: Radius.lg,
+      padding: 16,
+      borderWidth: 1,
+      borderColor: Palette.border,
+      ...Shadow.card,
+    },
+    header: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      marginBottom: 12,
+    },
+    iconContainer: {
+      width: 40,
+      height: 40,
+      borderRadius: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    trend: {
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 8,
+      backgroundColor: Palette.surfaceMuted,
+    },
+    trendText: {
+      fontSize: 12,
+      fontWeight: '600',
+    },
+    value: {
+      fontSize: 28,
+      fontWeight: '700',
+      color: Palette.ink,
+      marginBottom: 4,
+    },
+    title: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: Palette.text,
+    },
+    subtitle: {
+      fontSize: 12,
+      color: Palette.textMuted,
+      marginTop: 4,
+    },
+  });
+}

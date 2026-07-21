@@ -3,6 +3,7 @@ import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { logAudit } from '@/app/lib/audit';
 import { evaluateVitals, VITAL_RULES, type VitalSignsInput } from '@/app/lib/vitals/rules';
+import { isPatientAssigned } from '@/app/lib/assigned-patients';
 
 export async function GET(request: NextRequest) {
   const session = await readSession();
@@ -95,6 +96,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Patient not found' }, { status: 404 });
     }
 
+    // Students may only chart on patients from their assigned scenarios.
+    if (!(await isPatientAssigned(supabase, session.uid, patient_id))) {
+      return NextResponse.json(
+        { error: 'This patient is not part of any scenario assigned to you' },
+        { status: 403 },
+      );
+    }
+
     const evaluation = evaluateVitals(vitals);
 
     const { data: reading, error } = await supabase
@@ -165,10 +174,17 @@ async function notifyRosterFaculty(
   try {
     const supabase = getSupabaseAdmin();
 
-    const [{ data: roster }, { data: student }] = await Promise.all([
-      supabase.from('faculty_students').select('faculty_id').eq('student_id', studentId),
-      supabase.from('users').select('name').eq('id', studentId).single(),
-    ]);
+    const { data: student } = await supabase
+      .from('users')
+      .select('name, section_id')
+      .eq('id', studentId)
+      .single();
+    if (!student?.section_id) return;
+
+    const { data: roster } = await supabase
+      .from('faculty_sections')
+      .select('faculty_id')
+      .eq('section_id', student.section_id);
     if (!roster || roster.length === 0) return;
 
     const studentName = student?.name ?? 'A student';

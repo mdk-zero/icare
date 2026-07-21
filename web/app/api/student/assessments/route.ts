@@ -12,14 +12,15 @@ export async function GET() {
   try {
     const supabase = getSupabaseAdmin();
 
-    // Get the student's section
+    // Get the student's section name (target_sections stores names)
     const { data: studentUser } = await supabase
       .from('users')
-      .select('section')
+      .select('section_id, sections(name)')
       .eq('id', session.uid)
       .single();
 
-    const studentSection: string | null = studentUser?.section ?? null;
+    const studentSection: string | null =
+      (studentUser?.sections as unknown as { name?: string } | null)?.name ?? null;
 
     const [{ data: published, error: pubError }, { data: assignments, error: asgError }, { data: attempts, error: attError }] =
       await Promise.all([

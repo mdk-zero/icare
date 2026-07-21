@@ -1,60 +1,242 @@
-import React, { useState, useCallback } from 'react';
-import { ScrollView, View, Text, StyleSheet, TouchableOpacity, RefreshControl, Dimensions } from 'react-native';
-import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Colors } from '@/constants/theme';
-import { useAuth } from '@/hooks/useAuth';
-import { mockTasks, mockPerformanceLogs, mockQuizzes } from '@/lib/api';
+import React from "react";
+import {
+  ScrollView,
+  View,
+  Text,
+  StyleSheet,
+  Pressable,
+  RefreshControl,
+  useWindowDimensions,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
+import { FontAwesome6 } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
+import Svg, { Path, Circle } from "react-native-svg";
+import Animated, { FadeInDown } from "react-native-reanimated";
+import { Radius, Spacing } from "@/constants/theme";
+import { useTheme } from "@/hooks/useTheme";
+import { SectionHeader, SkeletonScreen } from "@/components/ui";
+import { useAuth } from "@/hooks/useAuth";
+import { useApiData, allCached } from "@/hooks/useApiData";
+import {
+  fetchScenarioAssignments,
+  fetchAssessments,
+  fetchProgress,
+  fetchPatients,
+  ScenarioAssignment,
+} from "@/lib/api";
 
-const { width } = Dimensions.get('window');
-const { light: C } = Colors;
-const primaryColor = C.primary;
+/** Teal ramp sampled from the pill logo's cap (same as login/header/tab bar). */
+const Teal = {
+  deepest: "#082E38",
+  deep: "#0D4550",
+  primary: "#1B6B7B",
+  light: "#35859B",
+  aqua: "#9FC8D2",
+};
 
 const today = new Date();
-const dateStr = today.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+const dateStr = today.toLocaleDateString("en-US", {
+  weekday: "long",
+  month: "long",
+  day: "numeric",
+});
 
 function getGreeting() {
   const hour = new Date().getHours();
-  if (hour < 12) return 'morning';
-  if (hour < 17) return 'afternoon';
-  return 'evening';
+  if (hour < 12) return "Good morning";
+  if (hour < 17) return "Good afternoon";
+  return "Good evening";
 }
 
 function getInitials(name?: string) {
-  if (!name) return 'S';
-  return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+  if (!name) return "S";
+  return name
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+}
+
+function statusColors(Accent: ReturnType<typeof useTheme>["Accent"]): Record<string, string> {
+  return {
+    completed: Accent.green.fg,
+    in_progress: Accent.amber.fg,
+    overdue: Accent.red.fg,
+  };
+}
+
+function formatDeadline(assignment: ScenarioAssignment): string {
+  if (!assignment.deadline) return "No deadline";
+  return new Date(assignment.deadline).toLocaleDateString([], { month: "short", day: "numeric" });
+}
+
+/** Faint ECG trace drifting across the Next Up hero card. */
+function HeroPulse({ width }: { width: number }) {
+  const y = 74;
+  const pulse = [
+    `M0 ${y}`,
+    `L${width * 0.42} ${y}`,
+    `L${width * 0.48} ${y - 18}`,
+    `L${width * 0.54} ${y + 22}`,
+    `L${width * 0.59} ${y - 6}`,
+    `L${width * 0.64} ${y}`,
+    `L${width} ${y}`,
+  ].join(" ");
+  return (
+    <Svg width={width} height={110} style={StyleSheet.absoluteFill} pointerEvents="none">
+      <Circle cx={width * 0.14} cy={26} r={46} fill="#FFFFFF" opacity={0.06} />
+      <Circle cx={width * 0.88} cy={92} r={60} fill="#FFFFFF" opacity={0.05} />
+      <Path d={pulse} stroke="#FFFFFF" strokeOpacity={0.28} strokeWidth={2} fill="none" />
+    </Svg>
+  );
 }
 
 const STATS_CONFIG = [
-  { key: 'tasks', icon: 'clipboard-outline', color: C.primary, tint: '#E8F4F1', label: 'Pending Tasks', route: '/tasks' },
-  { key: 'score', icon: 'trending-up', color: C.success, tint: '#E6F7EC', label: 'Avg Score', route: '/progress' },
-  { key: 'quizzes', icon: 'document-text-outline', color: '#7c3aed', tint: '#F0EBFF', label: 'Quizzes', route: '/tasks/quizzes' },
-  { key: 'patients', icon: 'people-outline', color: '#0891b2', tint: '#E6F9FC', label: 'Patients', route: '/ehr' },
+  {
+    key: "tasks",
+    icon: "clipboard-outline",
+    color: C.primary,
+    tint: "#E8F4F1",
+    label: "Pending Tasks",
+    route: "/tasks",
+  },
+  {
+    key: "score",
+    icon: "trending-up",
+    color: C.success,
+    tint: "#E6F7EC",
+    label: "Avg Score",
+    route: "/progress",
+  },
+  {
+    key: "quizzes",
+    icon: "document-text-outline",
+    color: "#7c3aed",
+    tint: "#F0EBFF",
+    label: "Quizzes",
+    route: "/tasks/quizzes",
+  },
+  {
+    key: "patients",
+    icon: "people-outline",
+    color: "#0891b2",
+    tint: "#E6F9FC",
+    label: "Patients",
+    route: "/ehr",
+  },
 ] as const;
 
 const QUICK_ACTIONS = [
-  { key: 'vitals', icon: 'heart', color: '#dc2626', tint: '#FFE8E8', label: 'Vitals', route: '/vitals' },
-  { key: 'tasks', icon: 'list', color: '#d97706', tint: '#FFF3D6', label: 'Tasks', route: '/tasks' },
-  { key: 'quizzes', icon: 'document-text', color: '#7c3aed', tint: '#F0EBFF', label: 'Quizzes', route: '/tasks/quizzes' },
-  { key: 'tips', icon: 'bulb-outline', color: '#2563eb', tint: '#DBE8FF', label: 'AI Tips', route: '/recommendations' },
+  {
+    key: "vitals",
+    icon: "heart",
+    color: "#dc2626",
+    tint: "#FFE8E8",
+    label: "Vitals",
+    route: "/vitals",
+  },
+  {
+    key: "tasks",
+    icon: "list",
+    color: "#d97706",
+    tint: "#FFF3D6",
+    label: "Tasks",
+    route: "/tasks",
+  },
+  {
+    key: "quizzes",
+    icon: "document-text",
+    color: "#7c3aed",
+    tint: "#F0EBFF",
+    label: "Quizzes",
+    route: "/tasks/quizzes",
+  },
+  {
+    key: "tips",
+    icon: "bulb-outline",
+    color: "#2563eb",
+    tint: "#DBE8FF",
+    label: "AI Tips",
+    route: "/recommendations",
+  },
 ] as const;
 
 export default function DashboardScreen() {
+  // content starts below the floating header, then scrolls beneath it
+  const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
   const router = useRouter();
   const { user } = useAuth();
-  const [refreshing, setRefreshing] = useState(false);
-
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 1000);
-  }, []);
-
-  const pendingTasks = mockTasks.filter((t) => t.status !== 'completed').length;
-  const avgScore = Math.round(
-    mockPerformanceLogs.reduce((a, b) => a + b.score, 0) / mockPerformanceLogs.length
+  const { Palette, Accent, Shadow, Type } = useTheme();
+  const styles = React.useMemo(
+    () => createStyles(Palette, Accent, Shadow, Type),
+    [Palette, Accent, Shadow, Type],
   );
-  const quizzesAvailable = mockQuizzes.filter((q) => q.completedCount < q.questionsCount).length;
+  const STATUS_COLORS = React.useMemo(() => statusColors(Accent), [Accent]);
+
+  const { data, loading, refreshing, refresh } = useApiData(() =>
+    allCached(fetchScenarioAssignments(), fetchAssessments(), fetchProgress(), fetchPatients()),
+  );
+  const [assignments, assessments, progress, patients] = data ?? [[], [], null, []];
+
+  if (loading && !data) {
+    return <SkeletonScreen topOffset={insets.top + 88} />;
+  }
+
+  const openTasks = assignments.filter((a) => a.status !== "completed");
+  const nextTask = openTasks[0] ?? null;
+  const laterTasks = nextTask ? openTasks.slice(1, 4) : [];
+  const scoredAttempts = (progress?.attempts ?? []).filter((a) => a.score !== null);
+  const avgScore =
+    scoredAttempts.length > 0
+      ? Math.round(
+          scoredAttempts.reduce((sum, a) => sum + (a.score ?? 0), 0) / scoredAttempts.length,
+        )
+      : null;
+  const quizzesAvailable = assessments.filter((a) => a.attempt_count === 0).length;
+
+  const heroWidth = width - Spacing.lg * 2;
+
+  const stats = [
+    {
+      label: "Pending Tasks",
+      value: String(openTasks.length),
+      icon: "clipboard-list",
+      accent: Accent.teal,
+      href: "/tasks",
+    },
+    {
+      label: "Avg Score",
+      value: avgScore === null ? "—" : `${avgScore}%`,
+      icon: "chart-line",
+      accent: Accent.green,
+      href: "/progress",
+    },
+    {
+      label: "Quizzes Available",
+      value: String(quizzesAvailable),
+      icon: "file-lines",
+      accent: Accent.violet,
+      href: "/tasks/quizzes",
+    },
+    {
+      label: "My Patients",
+      value: String(patients.length),
+      icon: "hospital-user",
+      accent: Accent.cyan,
+      href: "/ehr",
+    },
+  ];
+
+  const quickActions = [
+    { label: "Vitals", icon: "heart-pulse", accent: Accent.red, href: "/vitals" },
+    { label: "Tasks", icon: "list-check", accent: Accent.amber, href: "/tasks" },
+    { label: "Quizzes", icon: "file-lines", accent: Accent.violet, href: "/tasks/quizzes" },
+    { label: "AI Tips", icon: "lightbulb", accent: Accent.blue, href: "/recommendations" },
+  ];
 
   const statValues: Record<string, string | number> = {
     tasks: pendingTasks,
@@ -64,483 +246,462 @@ export default function DashboardScreen() {
   };
 
   return (
-    <View style={styles.root}>
-      <ScrollView
-        style={styles.container}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[C.primary]} tintColor={C.primary} />
-        }
-      >
-        <LinearGradient
-          colors={['#0F5D5A', '#0D9488']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1.2, y: 1.2 }}
-          style={styles.header}
-        >
-          <View style={styles.headerDecor1} />
-          <View style={styles.headerDecor2} />
-          <View style={styles.headerContent}>
-            <View style={styles.headerTop}>
-              <View style={styles.welcomeChip}>
-                <Ionicons name="sparkles" size={13} color="#FDE68A" />
-                <Text style={styles.welcomeChipText}>Welcome back</Text>
-              </View>
-              <TouchableOpacity style={styles.avatarBtn}>
-                <Text style={styles.avatarText}>{getInitials(user?.name)}</Text>
-              </TouchableOpacity>
-            </View>
-            <Text style={styles.greeting}>Good {getGreeting()},</Text>
-            <Text style={styles.name}>{user?.name || 'Student'}</Text>
-            <View style={styles.dateRow}>
-              <Ionicons name="calendar-outline" size={13} color="rgba(255,255,255,0.7)" />
-              <Text style={styles.dateText}>{dateStr}</Text>
-            </View>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={[styles.content, { paddingTop: insets.top + 88 }]}
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={refresh}
+          colors={[Palette.primary]}
+          tintColor={Palette.primary}
+        />
+      }
+    >
+      {/* Greeting */}
+      <Animated.View entering={FadeInDown.duration(220)} style={styles.greetingRow}>
+        <View style={styles.greetingText}>
+          <Text style={styles.greeting}>{getGreeting()},</Text>
+          <Text style={styles.name}>{user?.name || "Student"}</Text>
+          <View style={styles.dateRow}>
+            <FontAwesome6 name="calendar-day" size={11} color={Teal.primary} />
+            <Text style={styles.dateText}>{dateStr}</Text>
           </View>
-        </LinearGradient>
+        </View>
+        <Pressable
+          style={({ pressed }) => [pressed && styles.pressedDim]}
+          onPress={() => router.push("/profile")}
+        >
+          <LinearGradient
+            colors={[Teal.light, Teal.primary, Teal.deep]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.avatar}
+          >
+            <Text style={styles.avatarText}>{getInitials(user?.name)}</Text>
+          </LinearGradient>
+        </Pressable>
+      </Animated.View>
 
-        <View style={styles.statsGrid}>
-          {STATS_CONFIG.map((stat) => (
-            <TouchableOpacity
-              key={stat.key}
-              style={styles.statCard}
-              onPress={() => router.push(stat.route)}
-              activeOpacity={0.7}
+      {/* Next Up hero */}
+      {nextTask && (
+        <Animated.View entering={FadeInDown.duration(220).delay(40)}>
+          <Pressable
+            style={({ pressed }) => [styles.heroWrap, pressed && styles.pressedCard]}
+            onPress={() => router.push(`/tasks/${nextTask.id}`)}
+          >
+            <LinearGradient
+              colors={[Teal.deepest, Teal.deep, Teal.primary]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1.1, y: 1.4 }}
+              style={styles.heroCard}
             >
-              <View style={[styles.statIconBox, { backgroundColor: stat.tint }]}>
-                <Ionicons name={stat.icon as any} size={20} color={stat.color} />
+              <View style={styles.heroTopRow}>
+                <Text style={styles.heroEyebrow}>NEXT UP</Text>
+                {nextTask.required && (
+                  <View style={styles.heroRequiredPill}>
+                    <Text style={styles.heroRequiredText}>REQUIRED</Text>
+                  </View>
+                )}
               </View>
-              <Text style={[styles.statValue, { color: stat.color }]}>{statValues[stat.key]}</Text>
-              <Text style={styles.statLabel}>{stat.label}</Text>
-            </TouchableOpacity>
+              <Text style={styles.heroTitle} numberOfLines={2}>
+                {nextTask.scenario_title}
+              </Text>
+              <View style={styles.heroBottomRow}>
+                <View style={styles.heroMetaPill}>
+                  <FontAwesome6 name="clock" size={11} color={Teal.aqua} />
+                  <Text style={styles.heroMetaText}>Due {formatDeadline(nextTask)}</Text>
+                </View>
+                <View style={styles.heroGo}>
+                  <FontAwesome6 name="arrow-right" size={15} solid color={Teal.primary} />
+                </View>
+              </View>
+            </LinearGradient>
+          </Pressable>
+        </Animated.View>
+      )}
+
+      {/* Stats */}
+      <Animated.View entering={FadeInDown.duration(220).delay(80)} style={styles.statsGrid}>
+        {stats.map((stat) => (
+          <Pressable
+            key={stat.label}
+            style={({ pressed }) => [styles.statCard, pressed && styles.pressedCard]}
+            onPress={() => router.push(stat.href as any)}
+          >
+            <View style={[styles.statIconTile, { backgroundColor: stat.accent.bg }]}>
+              <FontAwesome6 name={stat.icon} size={16} solid color={stat.accent.fg} />
+            </View>
+            <Text style={styles.statValue}>{stat.value}</Text>
+            <Text style={styles.statLabel}>{stat.label}</Text>
+          </Pressable>
+        ))}
+      </Animated.View>
+
+      {/* Quick Actions */}
+      <Animated.View entering={FadeInDown.duration(220).delay(120)} style={styles.section}>
+        <SectionHeader title="Quick Actions" />
+        <View style={styles.quickActions}>
+          {quickActions.map((action) => (
+            <Pressable
+              key={action.label}
+              style={({ pressed }) => [styles.quickAction, pressed && styles.pressedDim]}
+              onPress={() => router.push(action.href as any)}
+            >
+              <View style={[styles.quickActionIcon, { backgroundColor: action.accent.bg }]}>
+                <FontAwesome6 name={action.icon} size={19} solid color={action.accent.fg} />
+              </View>
+              <Text style={styles.quickActionText}>{action.label}</Text>
+            </Pressable>
           ))}
         </View>
+      </Animated.View>
 
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Quick Actions</Text>
-          </View>
-          <View style={styles.quickActionsRow}>
-            {QUICK_ACTIONS.map((action) => (
-              <TouchableOpacity
-                key={action.key}
-                style={styles.quickActionItem}
-                onPress={() => router.push(action.route)}
-                activeOpacity={0.7}
+      {/* Scenarios */}
+      <Animated.View entering={FadeInDown.duration(220).delay(160)} style={styles.section}>
+        <SectionHeader
+          title={nextTask ? "Up Later" : "Assigned Scenarios"}
+          subtitle={`${openTasks.length} pending`}
+          actionLabel="See all"
+          onAction={() => router.push("/tasks")}
+        />
+        <View style={styles.taskList}>
+          {openTasks.length === 0 ? (
+            <View style={styles.emptyTasksWrap}>
+              <View style={styles.emptyTasksIcon}>
+                <FontAwesome6 name="clipboard-list" size={18} color={Teal.primary} />
+              </View>
+              <Text style={styles.emptyTasks}>
+                No scenarios assigned yet — your faculty will assign them here.
+              </Text>
+            </View>
+          ) : nextTask && laterTasks.length === 0 ? (
+            <View style={styles.emptyTasksWrap}>
+              <View style={styles.emptyTasksIcon}>
+                <FontAwesome6 name="check" size={16} solid color={Accent.green.fg} />
+              </View>
+              <Text style={styles.emptyTasks}>That&apos;s everything — just the one above.</Text>
+            </View>
+          ) : (
+            (nextTask ? laterTasks : openTasks.slice(0, 3)).map((task, index) => (
+              <Pressable
+                key={task.id}
+                style={({ pressed }) => [
+                  styles.taskItem,
+                  index > 0 && styles.taskItemBorder,
+                  pressed && styles.pressedDim,
+                ]}
+                onPress={() => router.push(`/tasks/${task.id}`)}
               >
-                <View style={[styles.quickActionIcon, { backgroundColor: action.tint }]}>
-                  <Ionicons name={action.icon as any} size={22} color={action.color} />
-                </View>
-                <Text style={styles.quickActionLabel}>{action.label}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <View>
-              <Text style={styles.sectionTitle}>Today's Tasks</Text>
-              <Text style={styles.sectionSub}>{pendingTasks} pending</Text>
-            </View>
-            <TouchableOpacity style={styles.seeAllBtn} onPress={() => router.push('/tasks')}>
-              <Text style={styles.seeAllText}>See all</Text>
-              <Ionicons name="arrow-forward" size={13} color={C.primary} />
-            </TouchableOpacity>
-          </View>
-          <View style={styles.taskCard}>
-            {mockTasks.slice(0, 3).map((task, index) => {
-              const statusColor = task.status === 'completed' ? C.success : task.status === 'in_progress' ? C.warning : '#94a3b8';
-              return (
-                <TouchableOpacity
-                  key={task.id}
-                  style={[styles.taskItem, index < Math.min(3, mockTasks.length) - 1 && styles.taskItemBorder]}
-                  onPress={() => router.push(`/tasks/${task.id}`)}
-                  activeOpacity={0.7}
-                >
-                  <View style={[styles.taskDot, { backgroundColor: statusColor }]} />
-                  <View style={styles.taskContent}>
-                    <Text style={styles.taskTitle} numberOfLines={1}>{task.title}</Text>
-                    <View style={styles.taskMeta}>
-                      <View style={styles.taskMetaItem}>
-                        <Ionicons name="person-outline" size={11} color="#94a3b8" />
-                        <Text style={styles.taskMetaText}>{task.patientName}</Text>
-                      </View>
-                      <View style={styles.taskMetaDivider} />
-                      <View style={styles.taskMetaItem}>
-                        <Ionicons name="time-outline" size={11} color="#94a3b8" />
-                        <Text style={styles.taskMetaText}>
-                          {new Date(task.dueDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </Text>
-                      </View>
-                    </View>
-                  </View>
-                  <Ionicons name="chevron-forward" size={16} color="#dde1e6" />
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </View>
-
-        <View style={styles.streakSection}>
-          <View style={styles.streakCard}>
-            <View style={styles.streakLeft}>
-              <View style={styles.streakIconBox}>
-                <Ionicons name="flame" size={24} color="#f59e0b" />
-              </View>
-              <View>
-                <Text style={styles.streakValue}>5-day streak</Text>
-                <Text style={styles.streakLabel}>Keep it going!</Text>
-              </View>
-            </View>
-            <View style={styles.streakDots}>
-              {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((day, i) => (
                 <View
-                  key={i}
                   style={[
-                    styles.streakDot,
-                    i < 5 && styles.streakDotActive,
-                    i === 4 && styles.streakDotToday,
+                    styles.taskStatusBar,
+                    { backgroundColor: STATUS_COLORS[task.status] ?? Palette.textFaint },
                   ]}
-                >
-                  <Text
-                    style={[
-                      styles.streakDotText,
-                      i < 5 && styles.streakDotTextActive,
-                    ]}
-                  >
-                    {day}
+                />
+                <View style={styles.taskContent}>
+                  <Text style={styles.taskTitle} numberOfLines={1}>
+                    {task.scenario_title}
                   </Text>
+                  <View style={styles.taskMeta}>
+                    <FontAwesome6 name="clock" size={10} color={Palette.textMuted} />
+                    <Text style={styles.taskDue}>Due {formatDeadline(task)}</Text>
+                    {task.required && <Text style={styles.taskRequired}>Required</Text>}
+                  </View>
                 </View>
-              ))}
-            </View>
-          </View>
+                <FontAwesome6 name="chevron-right" size={13} color={Palette.textFaint} />
+              </Pressable>
+            ))
+          )}
         </View>
-      </ScrollView>
-    </View>
+      </Animated.View>
+    </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: '#F4F7FA',
-  },
-  container: {
-    flex: 1,
-  },
-  content: {
-    paddingBottom: 32,
-  },
-  header: {
-    paddingHorizontal: 22,
-    paddingTop: 16,
-    paddingBottom: 28,
-    borderBottomLeftRadius: 28,
-    borderBottomRightRadius: 28,
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  headerDecor1: {
-    position: 'absolute',
-    top: -40,
-    right: -30,
-    width: 160,
-    height: 160,
-    borderRadius: 80,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-  },
-  headerDecor2: {
-    position: 'absolute',
-    bottom: -50,
-    left: -20,
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-  },
-  headerContent: {
-    position: 'relative',
-    zIndex: 1,
-  },
-  headerTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 18,
-  },
-  welcomeChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 20,
-    gap: 5,
-  },
-  welcomeChipText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#FDE68A',
-  },
-  avatarBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.5)',
-  },
-  avatarText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#fff',
-  },
-  greeting: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.75)',
-    fontWeight: '500',
-  },
-  name: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: '#fff',
-    marginTop: 1,
-  },
-  dateRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 10,
-    gap: 5,
-  },
-  dateText: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.7)',
-    fontWeight: '500',
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    paddingHorizontal: 16,
-    marginTop: -18,
-    gap: 10,
-  },
-  statCard: {
-    width: (width - 42) / 2,
-    backgroundColor: '#fff',
-    borderRadius: 18,
-    padding: 16,
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    elevation: 2,
-  },
-  statIconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 14,
-  },
-  statValue: {
-    fontSize: 26,
-    fontWeight: '800',
-  },
-  statLabel: {
-    fontSize: 12,
-    color: '#94a3b8',
-    fontWeight: '500',
-    marginTop: 2,
-  },
-  section: {
-    paddingHorizontal: 16,
-    marginTop: 22,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  sectionTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#0f172a',
-  },
-  sectionSub: {
-    fontSize: 12,
-    color: '#94a3b8',
-    marginTop: 1,
-  },
-  seeAllBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(27,107,123,0.08)',
-    paddingHorizontal: 11,
-    paddingVertical: 6,
-    borderRadius: 18,
-    gap: 4,
-  },
-  seeAllText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: C.primary,
-  },
-  quickActionsRow: {
-    flexDirection: 'row',
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    paddingVertical: 16,
-    paddingHorizontal: 8,
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    elevation: 2,
-  },
-  quickActionItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  quickActionIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 7,
-  },
-  quickActionLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#475569',
-  },
-  taskCard: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    paddingHorizontal: 4,
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    elevation: 2,
-  },
-  taskItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 14,
-  },
-  taskItemBorder: {
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-  },
-  taskDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 14,
-  },
-  taskContent: {
-    flex: 1,
-  },
-  taskTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1e293b',
-    marginBottom: 5,
-  },
-  taskMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  taskMetaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  taskMetaText: {
-    fontSize: 11,
-    color: '#94a3b8',
-  },
-  taskMetaDivider: {
-    width: 3,
-    height: 3,
-    borderRadius: 2,
-    backgroundColor: '#dde1e6',
-    marginHorizontal: 10,
-  },
-  streakSection: {
-    paddingHorizontal: 16,
-    marginTop: 22,
-  },
-  streakCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 16,
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    elevation: 2,
-  },
-  streakLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  streakIconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: '#FFFBEB',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  streakValue: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#0f172a',
-  },
-  streakLabel: {
-    fontSize: 12,
-    color: '#94a3b8',
-    marginTop: 1,
-  },
-  streakDots: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  streakDot: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  streakDotActive: {
-    backgroundColor: C.primary,
-  },
-  streakDotToday: {
-    borderWidth: 2,
-    borderColor: '#0F5D5A',
-  },
-  streakDotText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#94a3b8',
-  },
-  streakDotTextActive: {
-    color: '#fff',
-  },
-});
+function createStyles(
+  Palette: ReturnType<typeof useTheme>["Palette"],
+  Accent: ReturnType<typeof useTheme>["Accent"],
+  Shadow: ReturnType<typeof useTheme>["Shadow"],
+  Type: ReturnType<typeof useTheme>["Type"],
+) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: Palette.background,
+    },
+    content: {
+      padding: Spacing.lg,
+      // clears the floating tab bar so the last items can scroll above it
+      paddingBottom: 128,
+    },
+    greetingRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingVertical: Spacing.sm,
+      marginBottom: Spacing.lg,
+    },
+    greetingText: {
+      flex: 1,
+      marginRight: Spacing.md,
+    },
+    greeting: {
+      fontSize: 14,
+      color: Palette.textSecondary,
+      fontWeight: "500",
+    },
+    name: {
+      ...Type.screenTitle,
+      fontSize: 27,
+      marginTop: 2,
+    },
+    dateRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      marginTop: Spacing.xs,
+    },
+    dateText: {
+      fontSize: 12.5,
+      fontWeight: "600",
+      color: Teal.primary,
+      letterSpacing: 0.2,
+    },
+    avatar: {
+      width: 50,
+      height: 50,
+      borderRadius: 25,
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: 2,
+      borderColor: "#FFFFFF",
+      shadowColor: Teal.primary,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 8,
+      elevation: 5,
+    },
+    avatarText: {
+      fontSize: 16,
+      fontWeight: "800",
+      color: "#fff",
+    },
+    pressedDim: {
+      opacity: 0.7,
+    },
+    pressedCard: {
+      opacity: 0.9,
+      transform: [{ scale: 0.98 }],
+    },
+    heroWrap: {
+      marginBottom: Spacing.xxl,
+      borderRadius: 22,
+      shadowColor: Teal.deepest,
+      shadowOffset: { width: 0, height: 10 },
+      shadowOpacity: 0.28,
+      shadowRadius: 18,
+      elevation: 10,
+    },
+    heroCard: {
+      borderRadius: 22,
+      padding: Spacing.xl,
+      overflow: "hidden",
+    },
+    heroTopRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: Spacing.sm,
+    },
+    heroEyebrow: {
+      fontSize: 10,
+      fontWeight: "800",
+      color: Teal.aqua,
+      letterSpacing: 2.4,
+    },
+    heroRequiredPill: {
+      backgroundColor: "rgba(255, 255, 255, 0.16)",
+      borderWidth: 1,
+      borderColor: "rgba(255, 255, 255, 0.25)",
+      borderRadius: Radius.pill,
+      paddingHorizontal: 9,
+      paddingVertical: 3,
+    },
+    heroRequiredText: {
+      fontSize: 8.5,
+      fontWeight: "800",
+      color: "#FFFFFF",
+      letterSpacing: 1.2,
+    },
+    heroTitle: {
+      fontSize: 19,
+      fontWeight: "800",
+      color: "#FFFFFF",
+      letterSpacing: -0.3,
+      lineHeight: 25,
+      marginBottom: Spacing.lg,
+    },
+    heroBottomRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+    heroMetaPill: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      backgroundColor: "rgba(255, 255, 255, 0.12)",
+      borderRadius: Radius.pill,
+      paddingHorizontal: 11,
+      paddingVertical: 6,
+    },
+    heroMetaText: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: "#FFFFFF",
+    },
+    heroGo: {
+      width: 38,
+      height: 38,
+      borderRadius: 19,
+      backgroundColor: "#FFFFFF",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    statsGrid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: Spacing.md,
+      marginBottom: Spacing.xxl,
+    },
+    statCard: {
+      flexBasis: "47%",
+      flexGrow: 1,
+      backgroundColor: Palette.surface,
+      borderRadius: Radius.lg,
+      padding: Spacing.lg,
+      borderWidth: 1,
+      borderColor: Palette.border,
+      ...Shadow.card,
+    },
+    statIconTile: {
+      width: 34,
+      height: 34,
+      borderRadius: Radius.md - 2,
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: Spacing.md,
+    },
+    statValue: {
+      fontSize: 26,
+      fontWeight: "800",
+      color: Palette.ink,
+      letterSpacing: -0.5,
+    },
+    statLabel: {
+      fontSize: 12.5,
+      color: Palette.textSecondary,
+      fontWeight: "500",
+      marginTop: 2,
+    },
+    section: {
+      marginBottom: Spacing.xxl,
+    },
+    quickActions: {
+      flexDirection: "row",
+      backgroundColor: Palette.surface,
+      borderRadius: Radius.lg,
+      paddingVertical: Spacing.lg,
+      paddingHorizontal: Spacing.sm,
+      borderWidth: 1,
+      borderColor: Palette.border,
+      ...Shadow.card,
+    },
+    quickAction: {
+      flex: 1,
+      alignItems: "center",
+    },
+    quickActionIcon: {
+      width: 46,
+      height: 46,
+      borderRadius: 23,
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: Spacing.sm,
+    },
+    quickActionText: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: Palette.text,
+    },
+    taskList: {
+      backgroundColor: Palette.surface,
+      borderRadius: Radius.lg,
+      paddingHorizontal: Spacing.lg,
+      borderWidth: 1,
+      borderColor: Palette.border,
+      ...Shadow.card,
+    },
+    taskItem: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingVertical: 14,
+    },
+    taskItemBorder: {
+      borderTopWidth: 1,
+      borderTopColor: Palette.borderLight,
+    },
+    taskStatusBar: {
+      width: 3.5,
+      height: 30,
+      borderRadius: 2,
+      marginRight: Spacing.md,
+    },
+    taskContent: {
+      flex: 1,
+      marginRight: Spacing.sm,
+    },
+    taskTitle: {
+      ...Type.itemTitle,
+    },
+    taskMeta: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginTop: 3,
+    },
+    taskDue: {
+      fontSize: 12,
+      color: Palette.textMuted,
+      marginLeft: 5,
+    },
+    taskRequired: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: Accent.red.fg,
+      marginLeft: Spacing.md,
+      textTransform: "uppercase",
+      letterSpacing: 0.3,
+    },
+    emptyTasksWrap: {
+      alignItems: "center",
+      paddingVertical: Spacing.xl,
+      gap: Spacing.sm,
+    },
+    emptyTasksIcon: {
+      width: 38,
+      height: 38,
+      borderRadius: 19,
+      backgroundColor: Palette.primaryTint,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    emptyTasks: {
+      fontSize: 13,
+      color: Palette.textMuted,
+      textAlign: "center",
+      paddingHorizontal: Spacing.lg,
+    },
+  });
+}

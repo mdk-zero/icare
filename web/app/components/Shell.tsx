@@ -10,6 +10,7 @@ import {
   faBars,
   faBell,
   faRightFromBracket,
+  faXmark,
 } from "@fortawesome/free-solid-svg-icons";
 import {
   getCurrentUser,
@@ -69,6 +70,7 @@ export default function Shell({
   const [isLoading, setIsLoading] = useState(true);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   const { logo, portalLabel, mobileRoleLabel, profileHref } = config[role];
 
@@ -245,7 +247,7 @@ export default function Shell({
           {/* Logout */}
           <div className="relative z-10 px-3 pb-3 border-t border-white/10 pt-2">
             <button
-              onClick={handleLogout}
+              onClick={() => setShowLogoutConfirm(true)}
               className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-white/40 hover:text-red-300 hover:bg-red-500/10 transition-all duration-150 text-xs font-semibold tracking-wide"
             >
               <div className="flex items-center justify-center w-7 h-7 rounded-lg">
@@ -261,6 +263,57 @@ export default function Shell({
             className="fixed inset-0 bg-black/50 z-30 md:hidden"
             onClick={() => setSidebarOpen(false)}
           />
+        )}
+
+        {showLogoutConfirm && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+            onClick={() => setShowLogoutConfirm(false)}
+          >
+            <div
+              className="bg-white rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] w-full max-w-md border border-gray-200/80 overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100/80 bg-gray-50/50">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
+                    <FontAwesomeIcon icon={faRightFromBracket} className="text-red-600 w-5 h-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-bold text-gray-900">Log Out</h2>
+                    <p className="text-sm text-gray-500">End your current session</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowLogoutConfirm(false)}
+                  className="p-2 hover:bg-gray-200 rounded-lg transition-all"
+                >
+                  <FontAwesomeIcon icon={faXmark} className="w-5 h-5 text-gray-500" />
+                </button>
+              </div>
+              <div className="p-5">
+                <p className="text-gray-600 text-sm">
+                  Are you sure you want to log out of your account? You will need
+                  to sign in again to continue.
+                </p>
+              </div>
+              <div className="flex items-center justify-end gap-3 px-5 py-3 border-t border-gray-100/80 bg-gray-50/50">
+                <button
+                  type="button"
+                  onClick={() => setShowLogoutConfirm(false)}
+                  className="px-5 py-2.5 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleLogout}
+                  className="px-6 py-2.5 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition-all"
+                >
+                  Log Out
+                </button>
+              </div>
+            </div>
+          </div>
         )}
 
         <div className="flex-1 flex flex-col overflow-hidden">

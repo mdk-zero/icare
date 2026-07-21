@@ -1,5 +1,7 @@
 import React from 'react';
 import { View, StyleSheet, ViewStyle } from 'react-native';
+import { Radius, Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
 
 interface CardProps {
   children: React.ReactNode;
@@ -9,42 +11,25 @@ interface CardProps {
 }
 
 export function Card({ children, style, variant = 'default' }: CardProps) {
-  const getVariantStyle = (): ViewStyle => {
-    switch (variant) {
-      case 'elevated':
-        return {
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.1,
-          shadowRadius: 8,
-          elevation: 4,
-        };
-      case 'bordered':
-        return {
-          borderWidth: 1,
-          borderColor: '#e5e7eb',
-        };
-      default:
-        return {};
-    }
-  };
-
+  const { Palette, Shadow } = useTheme();
+  const styles = React.useMemo(() => createStyles(Palette, Shadow), [Palette, Shadow]);
   return (
-    <View style={[styles.card, getVariantStyle(), style]}>
+    <View style={[styles.card, variant === 'elevated' && styles.elevated, style]}>
       {children}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-});
+function createStyles(Palette: ReturnType<typeof useTheme>['Palette'], Shadow: ReturnType<typeof useTheme>['Shadow']) {
+  return StyleSheet.create({
+    card: {
+      backgroundColor: Palette.surface,
+      borderRadius: Radius.lg,
+      padding: Spacing.lg,
+      borderWidth: 1,
+      borderColor: Palette.border,
+      ...Shadow.card,
+    },
+    elevated: Shadow.raised,
+  });
+}

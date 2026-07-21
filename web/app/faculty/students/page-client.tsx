@@ -13,12 +13,18 @@ import {
   faEnvelope,
   faSpinner,
   faTrashCan,
+  faFileCsv,
+  faDownload,
+  faCircleCheck,
+  faHourglassHalf,
+  faEllipsisVertical,
 } from "@fortawesome/free-solid-svg-icons";
 import {
   fetchFacultyStudents,
   createFacultyStudent,
   fetchAllStudentUsers,
   fetchAllPredictions,
+  fetchFacultySections,
   updateStudentUser,
   deleteStudentUser,
   logAuditAction,
@@ -26,11 +32,75 @@ import {
   FacultyStudent,
   StudentUser,
   RiskPrediction,
+  Section,
 } from "../../lib/api";
 import PageHeader from "../../components/PageHeader";
 import StatTile from "../../components/StatTile";
 import Card from "../../components/Card";
 import { SkeletonTable } from "../../components/skeletons";
+
+/** Minimal CSV parser: quoted fields, "" escapes, \r\n or \n row breaks. */
+function parseCsv(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (text[i + 1] === '"') {
+          field += '"';
+          i++;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        field += ch;
+      }
+    } else if (ch === '"') {
+      inQuotes = true;
+    } else if (ch === ",") {
+      row.push(field);
+      field = "";
+    } else if (ch === "\n" || ch === "\r") {
+      if (ch === "\r" && text[i + 1] === "\n") i++;
+      row.push(field);
+      field = "";
+      if (row.some((c) => c.trim().length > 0)) rows.push(row);
+      row = [];
+    } else {
+      field += ch;
+    }
+  }
+  row.push(field);
+  if (row.some((c) => c.trim().length > 0)) rows.push(row);
+  return rows;
+}
+
+const STUDENT_CSV_TEMPLATE = `first_name,middle_name,last_name,email,section
+Juan,Santos,Dela Cruz,juan.delacruz@batstate-u.edu.ph,A
+Maria,,Reyes,maria.reyes@batstate-u.edu.ph,
+`;
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+interface BulkRow {
+  line: number;
+  firstName: string;
+  middleName: string;
+  lastName: string;
+  email: string;
+  /** Section name as written in the CSV (may be empty). */
+  sectionName: string;
+  /** Resolved section id when sectionName matched one of the faculty's sections. */
+  sectionId: string | null;
+  /** Validation problem found before import; the row is skipped. */
+  invalidReason?: string;
+  status: "ready" | "creating" | "created" | "warning" | "failed";
+  resultText?: string;
+}
 
 export default function FacultyStudentsClient() {
   const router = useRouter();
@@ -41,11 +111,16 @@ export default function FacultyStudentsClient() {
   const [studentUsers, setStudentUsers] = useState<StudentUser[]>([]);
   const [loadingStudentUsers, setLoadingStudentUsers] = useState(true);
   const [predictions, setPredictions] = useState<Record<string, RiskPrediction>>({});
+  const [sections, setSections] = useState<Section[]>([]);
 
   useEffect(() => {
     loadStudents();
     loadStudentUsers();
   }, [riskFilter, searchQuery]);
+
+  useEffect(() => {
+    fetchFacultySections().then(setSections);
+  }, []);
 
   useEffect(() => {
     fetchAllPredictions().then((rows) => {
@@ -73,6 +148,7 @@ export default function FacultyStudentsClient() {
   const [firstName, setFirstName] = useState("");
   const [middleInitial, setMiddleInitial] = useState("");
   const [lastName, setLastName] = useState("");
+  const [newSectionId, setNewSectionId] = useState("");
   const newEmailRef = useRef<HTMLInputElement>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState<{
@@ -85,12 +161,175 @@ export default function FacultyStudentsClient() {
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [updatingStudent, setUpdatingStudent] = useState<StudentUser | null>(null);
   const [updateName, setUpdateName] = useState("");
+  const [updateSectionId, setUpdateSectionId] = useState("");
   const updateEmailRef = useRef<HTMLInputElement>(null);
   const [isUpdating, setIsUpdating] = useState(false);
 
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deletingStudent, setDeletingStudent] = useState<StudentUser | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  const [openMenu, setOpenMenu] = useState<{
+    user: StudentUser;
+    x: number;
+    y: number;
+    openUp: boolean;
+  } | null>(null);
+
+  const [showBulkModal, setShowBulkModal] = useState(false);
+  const [bulkRows, setBulkRows] = useState<BulkRow[]>([]);
+  const [bulkFileName, setBulkFileName] = useState<string | null>(null);
+  const [bulkFileError, setBulkFileError] = useState<string | null>(null);
+  const [isBulkImporting, setIsBulkImporting] = useState(false);
+  const [bulkFinished, setBulkFinished] = useState(false);
+  const [bulkDefaultSectionId, setBulkDefaultSectionId] = useState("");
+  const csvInputRef = useRef<HTMLInputElement>(null);
+
+  const closeBulkModal = () => {
+    if (isBulkImporting) return;
+    setShowBulkModal(false);
+    setBulkRows([]);
+    setBulkFileName(null);
+    setBulkFileError(null);
+    setBulkFinished(false);
+    setBulkDefaultSectionId("");
+    if (csvInputRef.current) csvInputRef.current.value = "";
+  };
+
+  const downloadCsvTemplate = () => {
+    const blob = new Blob([STUDENT_CSV_TEMPLATE], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "icare-students-template.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleCsvFile = async (file: File) => {
+    setBulkFileError(null);
+    setBulkFinished(false);
+    setBulkRows([]);
+    setBulkFileName(file.name);
+
+    const rows = parseCsv(await file.text());
+    if (rows.length < 2) {
+      setBulkFileError("The CSV needs a header row and at least one student row.");
+      return;
+    }
+
+    const header = rows[0].map((h) => h.trim().toLowerCase().replace(/\s+/g, "_"));
+    const firstIdx = header.indexOf("first_name");
+    const middleIdx = header.findIndex((h) => h === "middle_name" || h === "middle_initial");
+    const lastIdx = header.indexOf("last_name");
+    const emailIdx = header.indexOf("email");
+    const sectionIdx = header.indexOf("section");
+
+    const missing = [
+      firstIdx === -1 && "first_name",
+      lastIdx === -1 && "last_name",
+      emailIdx === -1 && "email",
+    ].filter(Boolean);
+    if (missing.length > 0) {
+      setBulkFileError(
+        `The CSV header is missing required column${missing.length > 1 ? "s" : ""}: ${missing.join(", ")}. Download the template for the expected format.`,
+      );
+      return;
+    }
+
+    const seenEmails = new Set<string>();
+    const existingEmails = new Set(studentUsers.map((u) => u.email.toLowerCase()));
+    const sectionByName = new Map(sections.map((s) => [s.name.toLowerCase(), s.id]));
+    const parsed: BulkRow[] = rows.slice(1).map((cells, i) => {
+      const sectionName = sectionIdx === -1 ? "" : (cells[sectionIdx] ?? "").trim();
+      const row: BulkRow = {
+        line: i + 2,
+        firstName: (cells[firstIdx] ?? "").trim(),
+        middleName: middleIdx === -1 ? "" : (cells[middleIdx] ?? "").trim(),
+        lastName: (cells[lastIdx] ?? "").trim(),
+        email: (cells[emailIdx] ?? "").trim().toLowerCase(),
+        sectionName,
+        sectionId: sectionName ? (sectionByName.get(sectionName.toLowerCase()) ?? null) : null,
+        status: "ready",
+      };
+      if (!row.firstName) row.invalidReason = "Missing first name";
+      else if (!row.lastName) row.invalidReason = "Missing last name";
+      else if (!row.email) row.invalidReason = "Missing email";
+      else if (!EMAIL_REGEX.test(row.email)) row.invalidReason = "Invalid email address";
+      else if (seenEmails.has(row.email)) row.invalidReason = "Duplicate email in this file";
+      else if (existingEmails.has(row.email))
+        row.invalidReason = "A student with this email already exists";
+      else if (row.sectionName && !row.sectionId)
+        row.invalidReason = `"${row.sectionName}" is not one of your sections`;
+      seenEmails.add(row.email);
+      return row;
+    });
+
+    setBulkRows(parsed);
+  };
+
+  const handleBulkImport = async () => {
+    const importable = bulkRows.filter((r) => !r.invalidReason);
+    if (importable.length === 0 || isBulkImporting) return;
+    if (importable.some((r) => !r.sectionId) && !bulkDefaultSectionId) return;
+
+    setIsBulkImporting(true);
+    const rows = [...bulkRows];
+    let createdCount = 0;
+
+    for (let i = 0; i < rows.length; i++) {
+      if (rows[i].invalidReason) continue;
+      rows[i] = { ...rows[i], status: "creating" };
+      setBulkRows([...rows]);
+
+      const { firstName, middleName, lastName, email } = rows[i];
+      const fullName = middleName
+        ? `${firstName} ${middleName} ${lastName}`
+        : `${firstName} ${lastName}`;
+      const sectionId = rows[i].sectionId ?? bulkDefaultSectionId;
+
+      try {
+        const { data, error } = await createFacultyStudent(fullName, email, sectionId);
+        if (error) {
+          rows[i] = { ...rows[i], status: "failed", resultText: error };
+        } else if (data?.warning) {
+          createdCount++;
+          rows[i] = {
+            ...rows[i],
+            status: "warning",
+            resultText: `Created, but the invitation email failed — temporary password: ${data.password}`,
+          };
+        } else {
+          createdCount++;
+          rows[i] = { ...rows[i], status: "created", resultText: "Invitation emailed" };
+        }
+      } catch {
+        rows[i] = { ...rows[i], status: "failed", resultText: "Unexpected error" };
+      }
+      setBulkRows([...rows]);
+    }
+
+    setIsBulkImporting(false);
+    setBulkFinished(true);
+
+    if (createdCount > 0) {
+      loadStudents();
+      loadStudentUsers();
+      const faculty = getCurrentFacultyUser();
+      if (faculty) {
+        logAuditAction({
+          faculty_id: faculty.id,
+          faculty_name: faculty.name,
+          tab: "students",
+          action: "bulk_register_students",
+          details: `Registered ${createdCount} student${createdCount === 1 ? "" : "s"} via CSV import`,
+          target_type: "student",
+          target_id: "",
+          metadata: { created: createdCount, file: bulkFileName ?? "" },
+        });
+      }
+    }
+  };
 
   const handleCreateStudent = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -121,6 +360,11 @@ export default function FacultyStudentsClient() {
       return;
     }
 
+    if (!newSectionId) {
+      setMessage({ type: "error", text: "Please select a section" });
+      return;
+    }
+
     const duplicateEmail = students.some(
       (s) => s.email.toLowerCase() === emailTrimmed.toLowerCase(),
     );
@@ -136,7 +380,7 @@ export default function FacultyStudentsClient() {
     setIsSubmitting(true);
 
     try {
-      const { data, error } = await createFacultyStudent(fullName, emailTrimmed);
+      const { data, error } = await createFacultyStudent(fullName, emailTrimmed, newSectionId);
 
       if (error) {
         setMessage({ type: "error", text: error });
@@ -159,6 +403,7 @@ export default function FacultyStudentsClient() {
       setFirstName("");
       setMiddleInitial("");
       setLastName("");
+      setNewSectionId("");
       if (newEmailRef.current) newEmailRef.current.value = "";
       loadStudents();
       loadStudentUsers();
@@ -167,11 +412,11 @@ export default function FacultyStudentsClient() {
         logAuditAction({
           faculty_id: faculty.id,
           faculty_name: faculty.name,
-          tab: 'students',
-          action: 'register_student',
+          tab: "students",
+          action: "register_student",
           details: `Registered new student ${fullName}`,
-          target_type: 'student',
-          target_id: data?.student?.id ?? '',
+          target_type: "student",
+          target_id: data?.student?.id ?? "",
           metadata: { student_name: fullName, email: emailTrimmed },
         });
       }
@@ -206,6 +451,7 @@ export default function FacultyStudentsClient() {
         updatingStudent.id,
         nameTrimmed,
         emailTrimmed,
+        updateSectionId || undefined,
       );
 
       if (error) {
@@ -222,10 +468,10 @@ export default function FacultyStudentsClient() {
         logAuditAction({
           faculty_id: faculty.id,
           faculty_name: faculty.name,
-          tab: 'students',
-          action: 'update_student',
+          tab: "students",
+          action: "update_student",
           details: `Updated student ${data!.name}`,
-          target_type: 'student',
+          target_type: "student",
           target_id: updatingStudent.id,
           metadata: { student_name: data!.name, email: emailTrimmed },
         });
@@ -262,10 +508,10 @@ export default function FacultyStudentsClient() {
         logAuditAction({
           faculty_id: faculty.id,
           faculty_name: faculty.name,
-          tab: 'students',
-          action: 'delete_student',
+          tab: "students",
+          action: "delete_student",
           details: `Deleted student ${deletingStudent.name}`,
-          target_type: 'student',
+          target_type: "student",
           target_id: deletingStudent.id,
           metadata: { student_name: deletingStudent.name },
         });
@@ -280,6 +526,7 @@ export default function FacultyStudentsClient() {
   const openUpdateModal = (student: StudentUser) => {
     setUpdatingStudent(student);
     setUpdateName(student.name);
+    setUpdateSectionId(student.section_id ?? "");
     if (updateEmailRef.current) updateEmailRef.current.value = student.email;
     setShowUpdateModal(true);
     setMessage(null);
@@ -330,6 +577,11 @@ export default function FacultyStudentsClient() {
 
   const atRiskCount = studentUsers.filter((u) => predictions[u.id]?.risk === "at_risk").length;
   const safeCount = studentUsers.filter((u) => predictions[u.id]?.risk === "safe").length;
+  const pendingCount = studentUsers.filter((u) => !predictions[u.id]).length;
+  const pctOfRoster = (count: number) =>
+    studentUsers.length > 0
+      ? `${Math.round((count / studentUsers.length) * 100)}% of roster`
+      : "No students yet";
 
   return (
     <div>
@@ -337,7 +589,12 @@ export default function FacultyStudentsClient() {
         badge={{
           icon: (
             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l9-5-9-5-9 5 9 5z M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z M12 14l9-5-9-5-9 5 9 5z M12 22v-6" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 14l9-5-9-5-9 5 9 5z M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z M12 14l9-5-9-5-9 5 9 5z M12 22v-6"
+              />
             </svg>
           ),
           label: "Student Management",
@@ -347,7 +604,12 @@ export default function FacultyStudentsClient() {
         action={{
           icon: (
             <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 6v6m0 0v6m0-6h6m-6 0H6"
+              />
             </svg>
           ),
           onClick: () => {
@@ -361,11 +623,12 @@ export default function FacultyStudentsClient() {
         }}
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
         <StatTile
           icon={<FontAwesomeIcon icon={faUser} className="w-5 h-5" />}
           value={students.length}
           label="Total Students"
+          caption="Enrolled under you"
           iconBg="bg-[#1B6B7B]/10"
           iconColor="text-[#1B6B7B]"
         />
@@ -373,15 +636,28 @@ export default function FacultyStudentsClient() {
           icon={<FontAwesomeIcon icon={faTriangleExclamation} className="w-5 h-5" />}
           value={atRiskCount}
           label="At Risk (ML)"
+          caption={pctOfRoster(atRiskCount)}
           iconBg="bg-red-50"
           iconColor="text-red-600"
+          onClick={() => setRiskFilter("at_risk")}
         />
         <StatTile
-          icon={<FontAwesomeIcon icon={faUser} className="w-5 h-5" />}
+          icon={<FontAwesomeIcon icon={faCircleCheck} className="w-5 h-5" />}
           value={safeCount}
           label="Safe (ML)"
+          caption={pctOfRoster(safeCount)}
           iconBg="bg-emerald-50"
           iconColor="text-emerald-600"
+          onClick={() => setRiskFilter("safe")}
+        />
+        <StatTile
+          icon={<FontAwesomeIcon icon={faHourglassHalf} className="w-5 h-5" />}
+          value={pendingCount}
+          label="No Prediction"
+          caption="Awaiting ML assessment"
+          iconBg="bg-gray-100"
+          iconColor="text-gray-600"
+          onClick={() => setRiskFilter("none")}
         />
       </div>
 
@@ -399,6 +675,16 @@ export default function FacultyStudentsClient() {
           >
             <FontAwesomeIcon icon={faPlus} className="w-5 h-5" />
             Register Student
+          </button>
+          <button
+            onClick={() => {
+              setShowBulkModal(true);
+              setMessage(null);
+            }}
+            className="px-4 py-2.5 bg-white border border-[#1B6B7B]/30 text-[#1B6B7B] font-medium rounded-lg hover:bg-[#1B6B7B]/5 transition-all flex items-center gap-2"
+          >
+            <FontAwesomeIcon icon={faFileCsv} className="w-5 h-5" />
+            Import CSV
           </button>
           <div className="relative">
             <input
@@ -445,6 +731,7 @@ export default function FacultyStudentsClient() {
                   setFirstName("");
                   setMiddleInitial("");
                   setLastName("");
+                  setNewSectionId("");
                   if (newEmailRef.current) newEmailRef.current.value = "";
                   setMessage(null);
                   setCreatedPassword(null);
@@ -532,6 +819,33 @@ export default function FacultyStudentsClient() {
                 </div>
               </div>
 
+              <div>
+                <label
+                  htmlFor="new-student-section"
+                  className="block text-sm font-semibold text-gray-700 mb-2"
+                >
+                  Section <span className="text-red-500">*</span>
+                </label>
+                <select
+                  id="new-student-section"
+                  value={newSectionId}
+                  onChange={(e) => setNewSectionId(e.target.value)}
+                  className="w-full px-4 py-3 bg-white border border-gray-400 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30 focus:border-[#1B6B7B] transition-all shadow-sm"
+                >
+                  <option value="">Select section…</option>
+                  {sections.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+                {sections.length === 0 && (
+                  <p className="mt-1.5 text-xs text-amber-600">
+                    You have no assigned sections yet — ask an admin to assign you one first.
+                  </p>
+                )}
+              </div>
+
               {message && showCreateModal && (
                 <div
                   className={`p-3 rounded-lg text-sm border ${
@@ -586,6 +900,7 @@ export default function FacultyStudentsClient() {
                     setFirstName("");
                     setMiddleInitial("");
                     setLastName("");
+                    setNewSectionId("");
                     if (newEmailRef.current) newEmailRef.current.value = "";
                     setMessage(null);
                     setCreatedPassword(null);
@@ -624,16 +939,28 @@ export default function FacultyStudentsClient() {
               <table className="w-full">
                 <thead className="bg-gray-50/50 border-b border-gray-100">
                   <tr>
-                    <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Student</th>
-                    <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Email</th>
-                    <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Role</th>
-                    <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Risk (ML)</th>
-                    <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
+                    <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
+                      Student
+                    </th>
+                    <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
+                      Email
+                    </th>
+                    <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
+                      Section
+                    </th>
+                    <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
+                      Risk (ML)
+                    </th>
+                    <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100/80">
                   {filteredStudentUsers.map((user) => (
-                    <tr key={user.id} className="hover:bg-gray-50/50 transition-colors">
+                    <tr
+                      key={user.id}
+                      onClick={() => router.push(`/faculty/students/${user.id}`)}
+                      className="group hover:bg-gray-50/50 transition-colors cursor-pointer"
+                    >
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 bg-[#1B6B7B]/10 rounded-full flex items-center justify-center text-[#1B6B7B] font-semibold">
@@ -644,9 +971,13 @@ export default function FacultyStudentsClient() {
                       </td>
                       <td className="py-3 px-4 text-gray-600">{user.email}</td>
                       <td className="py-3 px-4">
-                        <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-[#1B6B7B]/10 text-[#1B6B7B] border border-[#1B6B7B]/20">
-                          {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
-                        </span>
+                        {user.section ? (
+                          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-[#1B6B7B]/10 text-[#1B6B7B] border border-[#1B6B7B]/20">
+                            {user.section}
+                          </span>
+                        ) : (
+                          <span className="text-sm text-gray-400">Unassigned</span>
+                        )}
                       </td>
                       <td className="py-3 px-4">
                         {predictions[user.id] ? (
@@ -667,20 +998,31 @@ export default function FacultyStudentsClient() {
                         )}
                       </td>
                       <td className="py-3 px-4">
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => openUpdateModal(user)}
-                            className="px-3 py-1.5 text-xs font-medium text-[#1B6B7B] bg-[#1B6B7B]/10 hover:bg-[#1B6B7B]/20 rounded-lg transition-all"
-                          >
-                            Update
-                          </button>
-                          <button
-                            onClick={() => openDeleteModal(user)}
-                            className="px-3 py-1.5 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-all"
-                          >
-                            Delete
-                          </button>
-                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (openMenu?.user.id === user.id) {
+                              setOpenMenu(null);
+                              return;
+                            }
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            const openUp = rect.bottom + 150 > window.innerHeight;
+                            setOpenMenu({
+                              user,
+                              x: rect.right,
+                              y: openUp ? rect.top - 4 : rect.bottom + 4,
+                              openUp,
+                            });
+                          }}
+                          className={`w-8 h-8 flex items-center justify-center rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-200/70 transition-all ${
+                            openMenu?.user.id === user.id
+                              ? "opacity-100 bg-gray-200/70"
+                              : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+                          }`}
+                          aria-label={`Actions for ${user.name}`}
+                        >
+                          <FontAwesomeIcon icon={faEllipsisVertical} className="w-4 h-4" />
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -698,12 +1040,332 @@ export default function FacultyStudentsClient() {
         </div>
       </div>
 
+      {openMenu && (
+        <>
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => setOpenMenu(null)}
+            onWheel={() => setOpenMenu(null)}
+          />
+          <div
+            className="fixed z-50 w-40 bg-white rounded-xl border border-gray-200/80 shadow-[0_8px_30px_rgba(0,0,0,0.12)] py-1"
+            style={{
+              left: openMenu.x,
+              top: openMenu.y,
+              transform: `translateX(-100%)${openMenu.openUp ? " translateY(-100%)" : ""}`,
+            }}
+          >
+            <button
+              onClick={() => {
+                setOpenMenu(null);
+                router.push(`/faculty/students/${openMenu.user.id}`);
+              }}
+              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              View
+            </button>
+            <button
+              onClick={() => {
+                setOpenMenu(null);
+                openUpdateModal(openMenu.user);
+              }}
+              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              Update
+            </button>
+            <button
+              onClick={() => {
+                setOpenMenu(null);
+                openDeleteModal(openMenu.user);
+              }}
+              className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+            >
+              Delete
+            </button>
+          </div>
+        </>
+      )}
+
+      {showBulkModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] w-full max-w-2xl border border-gray-200/80 overflow-hidden max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100/80 bg-gray-50/50 flex-shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-[#1B6B7B]/10 rounded-lg flex items-center justify-center">
+                  <FontAwesomeIcon icon={faFileCsv} className="text-[#1B6B7B] w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-gray-900">Bulk Add Students</h2>
+                  <p className="text-sm text-gray-500">
+                    Register multiple students from a CSV file
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={closeBulkModal}
+                disabled={isBulkImporting}
+                className="p-2 hover:bg-gray-200 rounded-lg transition-all disabled:opacity-40"
+              >
+                <FontAwesomeIcon icon={faXmark} className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 overflow-y-auto flex-1 min-h-0">
+              <div className="p-4 rounded-xl border border-[#1B6B7B]/20 bg-[#1B6B7B]/5">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-[#1B6B7B] mb-1">CSV format</p>
+                    <p className="text-xs text-gray-600">
+                      The first row must be a header. Column order doesn&apos;t matter and extra
+                      columns are ignored.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={downloadCsvTemplate}
+                    className="shrink-0 px-3 py-2 text-xs font-medium text-[#1B6B7B] bg-white border border-[#1B6B7B]/20 rounded-lg hover:bg-[#1B6B7B]/10 transition-all flex items-center gap-2"
+                  >
+                    <FontAwesomeIcon icon={faDownload} className="w-3.5 h-3.5" />
+                    Download template
+                  </button>
+                </div>
+                <div className="mt-3 overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-left text-gray-500">
+                        <th className="py-1.5 pr-4 font-semibold">Column</th>
+                        <th className="py-1.5 pr-4 font-semibold">Required</th>
+                        <th className="py-1.5 font-semibold">Description</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#1B6B7B]/10 text-gray-700">
+                      <tr>
+                        <td className="py-1.5 pr-4 font-mono">first_name</td>
+                        <td className="py-1.5 pr-4">Yes</td>
+                        <td className="py-1.5">Student&apos;s first name</td>
+                      </tr>
+                      <tr>
+                        <td className="py-1.5 pr-4 font-mono">middle_name</td>
+                        <td className="py-1.5 pr-4">No</td>
+                        <td className="py-1.5">Middle name or initial (leave blank if none)</td>
+                      </tr>
+                      <tr>
+                        <td className="py-1.5 pr-4 font-mono">last_name</td>
+                        <td className="py-1.5 pr-4">Yes</td>
+                        <td className="py-1.5">Student&apos;s last name</td>
+                      </tr>
+                      <tr>
+                        <td className="py-1.5 pr-4 font-mono">email</td>
+                        <td className="py-1.5 pr-4">Yes</td>
+                        <td className="py-1.5">
+                          Student&apos;s email — the invitation and temporary password are sent here
+                        </td>
+                      </tr>
+                      <tr>
+                        <td className="py-1.5 pr-4 font-mono">section</td>
+                        <td className="py-1.5 pr-4">No</td>
+                        <td className="py-1.5">
+                          Section name — must match one of your sections. Rows without one use the
+                          default section selected below
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div>
+                <input
+                  ref={csvInputRef}
+                  type="file"
+                  accept=".csv,text/csv"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleCsvFile(file);
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => csvInputRef.current?.click()}
+                  disabled={isBulkImporting}
+                  className="w-full px-4 py-6 border-2 border-dashed border-gray-300 rounded-xl text-sm text-gray-600 hover:border-[#1B6B7B]/50 hover:bg-[#1B6B7B]/5 transition-all disabled:opacity-50"
+                >
+                  {bulkFileName ? (
+                    <span>
+                      <span className="font-semibold text-gray-800">{bulkFileName}</span> — click to
+                      choose a different file
+                    </span>
+                  ) : (
+                    "Click to choose a CSV file"
+                  )}
+                </button>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="bulk-default-section"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
+                  Default section
+                </label>
+                <select
+                  id="bulk-default-section"
+                  value={bulkDefaultSectionId}
+                  onChange={(e) => setBulkDefaultSectionId(e.target.value)}
+                  disabled={isBulkImporting}
+                  className="w-full px-4 py-3 bg-white border border-gray-400 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30 focus:border-[#1B6B7B] transition-all disabled:opacity-50"
+                >
+                  <option value="">No default — every row needs its own section</option>
+                  {sections.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1.5 text-xs text-gray-500">
+                  Applied to rows whose section column is blank.
+                </p>
+              </div>
+
+              {bulkFileError && (
+                <div className="p-3 rounded-lg text-sm border bg-red-50 text-red-700 border-red-200">
+                  {bulkFileError}
+                </div>
+              )}
+
+              {bulkRows.length > 0 && (
+                <div className="border border-gray-200 rounded-xl overflow-hidden">
+                  <div className="px-4 py-2 bg-gray-50/50 border-b border-gray-100 text-xs text-gray-500">
+                    {bulkRows.filter((r) => !r.invalidReason).length} of {bulkRows.length} row
+                    {bulkRows.length === 1 ? "" : "s"} ready to import
+                    {bulkRows.some((r) => r.invalidReason) && " — rows with problems are skipped"}
+                  </div>
+                  <div className="max-h-56 overflow-y-auto">
+                    <table className="w-full text-sm">
+                      <tbody className="divide-y divide-gray-100/80">
+                        {bulkRows.map((row) => (
+                          <tr key={row.line} className={row.invalidReason ? "bg-red-50/40" : ""}>
+                            <td className="py-2 px-4 text-xs text-gray-400 whitespace-nowrap">
+                              Line {row.line}
+                            </td>
+                            <td className="py-2 px-2 text-gray-800 whitespace-nowrap">
+                              {[row.firstName, row.middleName, row.lastName]
+                                .filter(Boolean)
+                                .join(" ") || "—"}
+                            </td>
+                            <td className="py-2 px-2 text-gray-500">{row.email || "—"}</td>
+                            <td className="py-2 px-2 whitespace-nowrap">
+                              {row.sectionId ? (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-[#1B6B7B]/10 text-[#1B6B7B] border border-[#1B6B7B]/20">
+                                  {row.sectionName}
+                                </span>
+                              ) : row.invalidReason ? (
+                                <span className="text-xs text-gray-400">—</span>
+                              ) : bulkDefaultSectionId ? (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200">
+                                  {sections.find((s) => s.id === bulkDefaultSectionId)?.name}{" "}
+                                  (default)
+                                </span>
+                              ) : (
+                                <span className="text-xs text-amber-600">No section</span>
+                              )}
+                            </td>
+                            <td className="py-2 px-4 text-right">
+                              {row.invalidReason ? (
+                                <span className="inline-flex items-center gap-1.5 text-xs text-red-600">
+                                  <FontAwesomeIcon icon={faCircleXmark} className="w-3.5 h-3.5" />
+                                  {row.invalidReason}
+                                </span>
+                              ) : row.status === "creating" ? (
+                                <span className="inline-flex items-center gap-1.5 text-xs text-[#1B6B7B]">
+                                  <FontAwesomeIcon icon={faSpinner} spin className="w-3.5 h-3.5" />
+                                  Creating…
+                                </span>
+                              ) : row.status === "created" ? (
+                                <span className="inline-flex items-center gap-1.5 text-xs text-emerald-600">
+                                  <FontAwesomeIcon icon={faCircleCheck} className="w-3.5 h-3.5" />
+                                  {row.resultText}
+                                </span>
+                              ) : row.status === "warning" ? (
+                                <span className="inline-flex items-center gap-1.5 text-xs text-amber-600">
+                                  <FontAwesomeIcon
+                                    icon={faTriangleExclamation}
+                                    className="w-3.5 h-3.5"
+                                  />
+                                  {row.resultText}
+                                </span>
+                              ) : row.status === "failed" ? (
+                                <span className="inline-flex items-center gap-1.5 text-xs text-red-600">
+                                  <FontAwesomeIcon icon={faCircleXmark} className="w-3.5 h-3.5" />
+                                  {row.resultText}
+                                </span>
+                              ) : (
+                                <span className="text-xs text-gray-400">Ready</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {bulkFinished && (
+                <div className="p-3 rounded-lg text-sm border bg-green-50 text-green-700 border-green-200">
+                  Import finished:{" "}
+                  {bulkRows.filter((r) => r.status === "created" || r.status === "warning").length}{" "}
+                  created, {bulkRows.filter((r) => r.status === "failed").length} failed,{" "}
+                  {bulkRows.filter((r) => r.invalidReason).length} skipped. Each new student
+                  receives an email with a temporary password and must change it on first login.
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-3 px-5 py-3 border-t border-gray-100/80 bg-gray-50/50 flex-shrink-0">
+              <button
+                type="button"
+                onClick={closeBulkModal}
+                disabled={isBulkImporting}
+                className="px-5 py-2.5 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-all disabled:opacity-50"
+              >
+                {bulkFinished ? "Close" : "Cancel"}
+              </button>
+              {!bulkFinished && (
+                <button
+                  type="button"
+                  onClick={handleBulkImport}
+                  disabled={
+                    isBulkImporting ||
+                    bulkRows.every((r) => r.invalidReason) ||
+                    bulkRows.length === 0 ||
+                    (bulkRows.some((r) => !r.invalidReason && !r.sectionId) &&
+                      !bulkDefaultSectionId)
+                  }
+                  className="px-6 py-2.5 bg-[#1B6B7B] text-white font-medium rounded-lg hover:bg-[#145A63] transition-all disabled:opacity-60 flex items-center gap-2 shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
+                >
+                  {isBulkImporting ? (
+                    <>
+                      <FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" />
+                      Importing…
+                    </>
+                  ) : (
+                    `Import ${bulkRows.filter((r) => !r.invalidReason).length} Student${bulkRows.filter((r) => !r.invalidReason).length === 1 ? "" : "s"}`
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {showUpdateModal && updatingStudent && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
           <div className="bg-white rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] w-full max-w-lg border border-gray-200/80 overflow-hidden">
-              <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100/80 bg-gray-50/50">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-[#1B6B7B]/10 rounded-lg flex items-center justify-center">
+            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100/80 bg-gray-50/50">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-[#1B6B7B]/10 rounded-lg flex items-center justify-center">
                   <FontAwesomeIcon icon={faUser} className="text-[#1B6B7B] w-5 h-5" />
                 </div>
                 <div>
@@ -758,6 +1420,31 @@ export default function FacultyStudentsClient() {
                     className="w-full pl-10 pr-4 py-3 bg-white border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30 focus:border-[#1B6B7B] focus:bg-white transition-all shadow-sm"
                   />
                 </div>
+              </div>
+              <div>
+                <label
+                  htmlFor="update-student-section"
+                  className="block text-sm font-semibold text-gray-700 mb-2"
+                >
+                  Section
+                </label>
+                <select
+                  id="update-student-section"
+                  value={updateSectionId}
+                  onChange={(e) => setUpdateSectionId(e.target.value)}
+                  className="w-full px-4 py-3 bg-white border border-gray-400 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30 focus:border-[#1B6B7B] transition-all shadow-sm"
+                >
+                  <option value="">
+                    {updatingStudent.section
+                      ? `Keep current (${updatingStudent.section})`
+                      : "No section"}
+                  </option>
+                  {sections.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="flex items-center justify-end gap-3 pt-2">
                 <button
@@ -852,4 +1539,3 @@ export default function FacultyStudentsClient() {
     </div>
   );
 }
-

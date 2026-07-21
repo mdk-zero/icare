@@ -1,177 +1,202 @@
 import React from 'react';
-import { ScrollView, View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { ScrollView, View, Text, StyleSheet, Pressable, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '@/constants/theme';
-import { mockNotifications } from '@/lib/api';
+import { Radius, Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
+import { SkeletonScreen, EmptyState } from '@/components/ui';
+import { useApiData } from '@/hooks/useApiData';
+import {
+  fetchNotifications,
+  markNotificationRead,
+  markAllNotificationsRead,
+  AppNotification,
+} from '@/lib/api';
 
-const primaryColor = Colors.light.primary;
+function typeAccent(
+  Accent: ReturnType<typeof useTheme>['Accent'],
+): Record<
+  AppNotification['type'],
+  { fg: string; bg: string; icon: keyof typeof Ionicons.glyphMap; label: string }
+> {
+  return {
+    assignment_created: { ...Accent.violet, icon: 'clipboard', label: 'Assignment' },
+    deadline_reminder: { ...Accent.amber, icon: 'alarm', label: 'Deadline' },
+    at_risk_flag: { ...Accent.red, icon: 'warning', label: 'At Risk' },
+    vitals_anomaly: { ...Accent.red, icon: 'pulse', label: 'Vitals' },
+    performance_validated: { ...Accent.green, icon: 'checkmark-circle', label: 'Validated' },
+    assistance_request: { ...Accent.blue, icon: 'hand-left', label: 'Assistance' },
+    system: { ...Accent.teal, icon: 'information-circle', label: 'System' },
+  };
+}
 
 export default function NotificationsScreen() {
-  const getTypeStyles = (type: string) => {
-    switch (type) {
-      case 'alert': 
-        return { icon: '#dc2626', bg: '#fef2f2', badge: '#dc2626' };
-      case 'warning': 
-        return { icon: '#d97706', bg: '#fefce8', badge: '#d97706' };
-      case 'success': 
-        return { icon: '#16a34a', bg: '#dcfce7', badge: '#16a34a' };
-      case 'info': 
-        return { icon: primaryColor, bg: primaryColor + '15', badge: primaryColor };
-      default: 
-        return { icon: '#64748b', bg: '#f1f5f9', badge: '#64748b' };
+  const { data, loading, refreshing, error, refresh, reload } = useApiData(fetchNotifications);
+  const { Palette, Accent, Shadow } = useTheme();
+  const styles = React.useMemo(() => createStyles(Palette, Shadow), [Palette, Shadow]);
+  const TYPE_ACCENT = React.useMemo(() => typeAccent(Accent), [Accent]);
+
+  if (loading && !data) {
+    return <SkeletonScreen />;
+  }
+
+  const notifications = data?.notifications ?? [];
+  const unread = data?.unread ?? 0;
+
+  const handleOpen = async (notification: AppNotification) => {
+    if (notification.read_at) return;
+    try {
+      await markNotificationRead(notification.id);
+      await reload();
+    } catch {
+      // best effort; badge refreshes on next load
     }
   };
 
-  const getTypeIcon = (type: string) => {
-    switch (type) {
-      case 'alert': return 'warning';
-      case 'warning': return 'warning';
-      case 'success': return 'checkmark-circle';
-      case 'info': return 'information-circle';
-      default: return 'notifications';
+  const handleMarkAll = async () => {
+    try {
+      await markAllNotificationsRead();
+      await reload();
+    } catch {
+      // best effort
     }
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <View style={styles.header}>
-        <View style={styles.headerCard}>
-          <View style={styles.headerTop}>
-            <View>
-              <Text style={styles.title}>Notifications</Text>
-              <Text style={styles.subtitle}>
-                {mockNotifications.filter(n => !n.read).length} unread messages
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={refresh} colors={[Palette.primary]} tintColor={Palette.primary} />
+      }
+    >
+      {unread > 0 && (
+        <View style={styles.summaryRow}>
+          <View style={styles.unreadDot} />
+          <Text style={styles.summaryText}>
+            {unread} unread {unread === 1 ? 'message' : 'messages'}
+          </Text>
+          <Pressable onPress={handleMarkAll} style={({ pressed }) => pressed && styles.pressed}>
+            <Text style={styles.markAllText}>Mark all read</Text>
+          </Pressable>
+        </View>
+      )}
+
+      {notifications.length === 0 && (
+        <EmptyState
+          icon={error ? 'cloud-offline-outline' : 'notifications-off-outline'}
+          message={error ?? "You're all caught up — no notifications yet."}
+        />
+      )}
+
+      {notifications.map((notification) => {
+        const accent = TYPE_ACCENT[notification.type] ?? { ...Accent.slate, icon: 'notifications' as const, label: 'Other' };
+        const isUnread = !notification.read_at;
+
+        return (
+          <Pressable
+            key={notification.id}
+            style={({ pressed }) => [
+              styles.notificationCard,
+              isUnread && styles.notificationUnread,
+              pressed && styles.pressed,
+            ]}
+            onPress={() => handleOpen(notification)}
+          >
+            <View style={styles.notificationHeader}>
+              <View style={[styles.iconContainer, { backgroundColor: accent.bg }]}>
+                <Ionicons name={accent.icon} size={18} color={accent.fg} />
+              </View>
+              <View style={styles.notificationMeta}>
+                <Text
+                  style={[styles.notificationTitle, isUnread && styles.notificationTitleUnread]}
+                  numberOfLines={1}
+                >
+                  {notification.title}
+                </Text>
+                <View style={[styles.badge, { backgroundColor: accent.bg }]}>
+                  <Text style={[styles.badgeText, { color: accent.fg }]}>{accent.label}</Text>
+                </View>
+              </View>
+            </View>
+            <Text style={styles.notificationMessage}>{notification.body}</Text>
+            <View style={styles.notificationTimeRow}>
+              <Ionicons name="time-outline" size={12} color={Palette.textMuted} />
+              <Text style={styles.notificationTime}>
+                {new Date(notification.created_at).toLocaleString()}
               </Text>
             </View>
-            <View style={[styles.notifIconBox, { backgroundColor: primaryColor + '15' }]}>
-              <Ionicons name="notifications" size={24} color={primaryColor} />
-            </View>
-          </View>
-        </View>
-      </View>
-
-      <View style={styles.notifList}>
-        {mockNotifications.map((notification, index) => {
-          const typeStyles = getTypeStyles(notification.type);
-          
-          return (
-            <TouchableOpacity
-              key={notification.id}
-              style={[
-                styles.notificationCard,
-                !notification.read && styles.notificationUnread
-              ]}
-              activeOpacity={0.7}
-            >
-              <View style={styles.notificationHeader}>
-                <View style={[styles.iconContainer, { backgroundColor: typeStyles.bg }]}>
-                  <Ionicons name={getTypeIcon(notification.type) as any} size={20} color={typeStyles.icon} />
-                </View>
-                <View style={styles.notificationMeta}>
-                  <Text style={[styles.notificationTitle, !notification.read && styles.notificationTitleUnread]}>
-                    {notification.title}
-                  </Text>
-                  <View style={[styles.badge, { backgroundColor: typeStyles.badge + '20' }]}>
-                    <Text style={[styles.badgeText, { color: typeStyles.badge }]}>{notification.type}</Text>
-                  </View>
-                </View>
-              </View>
-              <Text style={styles.notificationMessage}>{notification.message}</Text>
-              <View style={styles.notificationTimeRow}>
-                <Ionicons name="time-outline" size={12} color="#94a3b8" />
-                <Text style={styles.notificationTime}>
-                  {new Date(notification.timestamp).toLocaleString()}
-                </Text>
-              </View>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
+          </Pressable>
+        );
+      })}
     </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    backgroundColor: '#f8fafc' 
+function createStyles(
+  Palette: ReturnType<typeof useTheme>['Palette'],
+  Shadow: ReturnType<typeof useTheme>['Shadow'],
+) {
+  return StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: Palette.background,
   },
-  content: { 
-    padding: 16, 
-    paddingBottom: 32 
+  content: {
+    padding: Spacing.lg,
+    paddingBottom: 32,
   },
-  header: { 
-    marginBottom: 20 
+  pressed: {
+    opacity: 0.8,
   },
-  headerCard: {
-    backgroundColor: '#fff',
-    borderRadius: 24,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
-    elevation: 3,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  headerTop: {
+  summaryRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: Spacing.md,
+    paddingHorizontal: Spacing.xs,
   },
-  notifIconBox: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
+  unreadDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Palette.primary,
+    marginRight: Spacing.sm,
   },
-  title: { 
-    fontSize: 26, 
-    fontWeight: '800', 
-    color: '#0f172a' 
+  summaryText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: Palette.textSecondary,
   },
-  subtitle: { 
-    fontSize: 13, 
-    color: '#64748b', 
-    marginTop: 4 
+  markAllText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Palette.primary,
   },
-  notifList: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 16,
+  notificationCard: {
+    backgroundColor: Palette.surface,
+    borderRadius: Radius.lg,
+    padding: Spacing.lg,
+    marginBottom: Spacing.sm + 2,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 2,
+    borderColor: Palette.border,
+    ...Shadow.card,
   },
-  notificationCard: { 
-    backgroundColor: '#fff', 
-    borderRadius: 16, 
-    padding: 14, 
-    marginBottom: 10, 
-    borderWidth: 1, 
-    borderColor: '#f1f5f9' 
+  notificationUnread: {
+    borderLeftWidth: 3,
+    borderLeftColor: Palette.primary,
   },
-  notificationUnread: { 
-    backgroundColor: '#fafbfc',
-  },
-  notificationHeader: { 
-    flexDirection: 'row', 
-    alignItems: 'flex-start', 
-    marginBottom: 8 
+  notificationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: Spacing.sm,
   },
   iconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+    width: 36,
+    height: 36,
+    borderRadius: Radius.sm + 2,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    marginRight: Spacing.md,
   },
   notificationMeta: {
     flex: 1,
@@ -179,41 +204,43 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  notificationTitle: { 
-    fontSize: 15, 
-    fontWeight: '600', 
-    color: '#1e293b',
+  notificationTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: Palette.ink,
     flex: 1,
-    marginRight: 8,
+    marginRight: Spacing.sm,
   },
   notificationTitleUnread: {
     fontWeight: '700',
+    color: Palette.ink,
   },
   badge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 3,
+    borderRadius: Radius.pill,
   },
   badgeText: {
     fontSize: 10,
-    fontWeight: '600',
+    fontWeight: '700',
     textTransform: 'capitalize',
   },
-  notificationMessage: { 
-    fontSize: 13, 
-    color: '#64748b', 
-    lineHeight: 20, 
-    marginBottom: 8,
-    paddingLeft: 52,
+  notificationMessage: {
+    fontSize: 13,
+    color: Palette.textSecondary,
+    lineHeight: 19,
+    marginBottom: Spacing.sm,
+    paddingLeft: 48,
   },
   notificationTimeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingLeft: 52,
+    paddingLeft: 48,
   },
-  notificationTime: { 
-    fontSize: 11, 
-    color: '#94a3b8',
+  notificationTime: {
+    fontSize: 11,
+    color: Palette.textMuted,
     marginLeft: 4,
   },
-});
+  });
+}

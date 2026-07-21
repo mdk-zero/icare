@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Colors } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
 
 interface AvatarProps {
   name: string;
@@ -44,6 +44,8 @@ export function Avatar({ name, size = 'md' }: AvatarProps) {
   };
 
   const dimension = getSize();
+  const { Palette } = useTheme();
+  const styles = React.useMemo(() => createStyles(Palette), [Palette]);
 
   return (
     <View
@@ -61,14 +63,16 @@ export function Avatar({ name, size = 'md' }: AvatarProps) {
   );
 }
 
-const styles = StyleSheet.create({
-  avatar: {
-    backgroundColor: Colors.light.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  initials: {
-    color: '#fff',
-    fontWeight: '600',
-  },
-});
+function createStyles(Palette: ReturnType<typeof useTheme>['Palette']) {
+  return StyleSheet.create({
+    avatar: {
+      backgroundColor: Palette.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    initials: {
+      color: '#fff',
+      fontWeight: '600',
+    },
+  });
+}

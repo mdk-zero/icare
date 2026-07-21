@@ -1,6 +1,7 @@
 import React from 'react';
-import { TouchableOpacity, Text, StyleSheet, ViewStyle, TextStyle, ActivityIndicator } from 'react-native';
-import { Colors } from '@/constants/theme';
+import { Pressable, Text, StyleSheet, ViewStyle, ActivityIndicator } from 'react-native';
+import { Radius } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
 
 interface PrimaryButtonProps {
   title: string;
@@ -13,6 +14,12 @@ interface PrimaryButtonProps {
   style?: ViewStyle;
 }
 
+const sizeStyles = {
+  sm: { paddingVertical: 9, paddingHorizontal: 16, fontSize: 14 },
+  md: { paddingVertical: 13, paddingHorizontal: 24, fontSize: 15 },
+  lg: { paddingVertical: 16, paddingHorizontal: 32, fontSize: 17 },
+} as const;
+
 export function PrimaryButton({
   title,
   onPress,
@@ -22,103 +29,65 @@ export function PrimaryButton({
   loading = false,
   style,
 }: PrimaryButtonProps) {
-  const getBackgroundColor = () => {
-    if (disabled) return '#ccc';
-    switch (variant) {
-      case 'primary':
-        return Colors.light.primary;
-      case 'secondary':
-        return '#f3f4f6';
-      case 'outline':
-        return 'transparent';
-      case 'danger':
-        return '#dc2626';
-      default:
-        return Colors.light.primary;
-    }
-  };
+  const { Palette, Accent } = useTheme();
+  const backgroundColor = disabled
+    ? Palette.border
+    : variant === 'primary'
+      ? Palette.primary
+      : variant === 'danger'
+        ? Accent.red.fg
+        : variant === 'secondary'
+          ? Palette.surfaceMuted
+          : 'transparent';
 
-  const getTextColor = () => {
-    if (disabled) return '#888';
-    switch (variant) {
-      case 'primary':
-      case 'danger':
-        return '#fff';
-      case 'secondary':
-        return Colors.light.text;
-      case 'outline':
-        return Colors.light.primary;
-      default:
-        return '#fff';
-    }
-  };
+  const textColor = disabled
+    ? Palette.textMuted
+    : variant === 'primary' || variant === 'danger'
+      ? '#fff'
+      : variant === 'outline'
+        ? Palette.primary
+        : Palette.ink;
 
-  const getPadding = () => {
-    switch (size) {
-      case 'sm':
-        return { paddingVertical: 8, paddingHorizontal: 16 };
-      case 'md':
-        return { paddingVertical: 12, paddingHorizontal: 24 };
-      case 'lg':
-        return { paddingVertical: 16, paddingHorizontal: 32 };
-      default:
-        return { paddingVertical: 12, paddingHorizontal: 24 };
-    }
-  };
-
-  const getFontSize = () => {
-    switch (size) {
-      case 'sm':
-        return 14;
-      case 'md':
-        return 16;
-      case 'lg':
-        return 18;
-      default:
-        return 16;
-    }
-  };
+  const { fontSize, ...padding } = sizeStyles[size];
 
   return (
-    <TouchableOpacity
+    <Pressable
       onPress={onPress}
       disabled={disabled || loading}
-      style={[
+      style={({ pressed }) => [
         styles.button,
-        getPadding(),
+        padding,
         {
-          backgroundColor: getBackgroundColor(),
-          borderColor: variant === 'outline' ? Colors.light.primary : 'transparent',
-          borderWidth: variant === 'outline' ? 2 : 0,
+          backgroundColor,
+          borderColor: variant === 'outline' ? Palette.primary : 'transparent',
+          borderWidth: variant === 'outline' ? 1.5 : 0,
         },
+        pressed && !disabled && styles.pressed,
         style,
       ]}
-      activeOpacity={0.8}
     >
       {loading ? (
-        <ActivityIndicator color={getTextColor()} size="small" />
+        <ActivityIndicator color={textColor} size="small" />
       ) : (
-        <Text
-          style={[
-            styles.text,
-            { color: getTextColor(), fontSize: getFontSize() },
-          ]}
-        >
-          {title}
-        </Text>
+        <Text style={[styles.text, { color: textColor, fontSize }]}>{title}</Text>
       )}
-    </TouchableOpacity>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   button: {
-    borderRadius: 12,
+    borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
   },
+  pressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.99 }],
+  },
   text: {
-    fontWeight: '600',
+    fontWeight: '700',
+    letterSpacing: 0.2,
   },
 });

@@ -1,7 +1,13 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import PageHeader from "../../components/PageHeader";
+
+interface SectionRef {
+  id: string;
+  name: string;
+}
 
 interface Faculty {
   id: string;
@@ -9,13 +15,8 @@ interface Faculty {
   email: string;
   created_at: string;
   last_login_at: string | null;
-  student_ids: string[];
-}
-
-interface Student {
-  id: string;
-  name: string;
-  email: string;
+  sections: SectionRef[];
+  student_count: number;
 }
 
 function formatDate(value: string | null): string {
@@ -28,8 +29,9 @@ function formatDate(value: string | null): string {
 }
 
 export default function FacultyClient() {
+  const router = useRouter();
   const [faculty, setFaculty] = useState<Faculty[]>([]);
-  const [students, setStudents] = useState<Student[]>([]);
+  const [sections, setSections] = useState<SectionRef[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -39,7 +41,7 @@ export default function FacultyClient() {
   const [newFaculty, setNewFaculty] = useState({ name: "", email: "" });
 
   const [selectedFaculty, setSelectedFaculty] = useState<Faculty | null>(null);
-  const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
+  const [selectedSections, setSelectedSections] = useState<string[]>([]);
 
   const flash = (text: string) => {
     setMessage(text);
@@ -47,17 +49,17 @@ export default function FacultyClient() {
   };
 
   const loadData = useCallback(async () => {
-    const [facultyRes, studentsRes] = await Promise.all([
+    const [facultyRes, sectionsRes] = await Promise.all([
       fetch("/api/admin/faculty", { credentials: "include" }),
-      fetch("/api/admin/students", { credentials: "include" }),
+      fetch("/api/sections", { credentials: "include" }),
     ]);
     if (facultyRes.ok) {
       const json = (await facultyRes.json()) as { faculty: Faculty[] };
       setFaculty(json.faculty ?? []);
     }
-    if (studentsRes.ok) {
-      const json = (await studentsRes.json()) as { students: Student[] };
-      setStudents(json.students ?? []);
+    if (sectionsRes.ok) {
+      const json = (await sectionsRes.json()) as { sections: SectionRef[] };
+      setSections(json.sections ?? []);
     }
   }, []);
 
@@ -87,7 +89,7 @@ export default function FacultyClient() {
       flash(json.error ?? "Failed to create faculty");
       return;
     }
-    setFaculty((prev) => [...prev, { ...json.user!, student_ids: [] }]);
+    setFaculty((prev) => [...prev, { ...json.user!, sections: [], student_count: 0 }]);
     setShowAddModal(false);
     setNewFaculty({ name: "", email: "" });
     if (json.password) setTempPassword({ email: json.user.email, password: json.password });
@@ -96,38 +98,37 @@ export default function FacultyClient() {
 
   const openAssignModal = (member: Faculty) => {
     setSelectedFaculty(member);
-    setSelectedStudents([...member.student_ids]);
+    setSelectedSections(member.sections.map((s) => s.id));
   };
 
-  const toggleStudent = (studentId: string) => {
-    setSelectedStudents((prev) =>
-      prev.includes(studentId) ? prev.filter((id) => id !== studentId) : [...prev, studentId],
+  const toggleSection = (sectionId: string) => {
+    setSelectedSections((prev) =>
+      prev.includes(sectionId) ? prev.filter((id) => id !== sectionId) : [...prev, sectionId],
     );
   };
 
   const handleSaveAssignments = async () => {
     if (!selectedFaculty) return;
     setBusy(true);
-    const res = await fetch(`/api/admin/faculty/${selectedFaculty.id}/students`, {
+    const res = await fetch(`/api/admin/faculty/${selectedFaculty.id}/sections`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({ student_ids: selectedStudents }),
+      body: JSON.stringify({ section_ids: selectedSections }),
     });
     setBusy(false);
     if (!res.ok) {
       const json = (await res.json()) as { error?: string };
-      flash(json.error ?? "Failed to save assignments");
+      flash(json.error ?? "Failed to save sections");
       return;
     }
-    setFaculty((prev) =>
-      prev.map((f) => (f.id === selectedFaculty.id ? { ...f, student_ids: [...selectedStudents] } : f)),
-    );
     setSelectedFaculty(null);
-    flash("Roster updated");
+    flash("Sections updated");
+    // Reload so section names and student counts stay accurate.
+    await loadData();
   };
 
-  const totalAssigned = faculty.reduce((sum, f) => sum + f.student_ids.length, 0);
+  const facultyWithoutSections = faculty.filter((f) => f.sections.length === 0).length;
 
   return (
     <div>
@@ -141,7 +142,7 @@ export default function FacultyClient() {
           label: "Faculty Management",
         }}
         title="Faculty Management"
-        subtitle="Manage faculty accounts and student rosters"
+        subtitle="Manage faculty accounts and their handled sections"
         action={{
           icon: (
             <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -178,8 +179,8 @@ export default function FacultyClient() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
         {[
           { label: "Total Faculty", count: faculty.length },
-          { label: "Assigned Students", count: totalAssigned },
-          { label: "Unassigned Students", count: Math.max(students.length - new Set(faculty.flatMap((f) => f.student_ids)).size, 0) },
+          { label: "Sections", count: sections.length },
+          { label: "Faculty Without Sections", count: facultyWithoutSections },
         ].map((stat) => (
           <div
             key={stat.label}
@@ -206,6 +207,7 @@ export default function FacultyClient() {
             <thead className="bg-gray-50/50 border-b border-gray-100">
               <tr>
                 <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Faculty Member</th>
+                <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Sections</th>
                 <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Students</th>
                 <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Joined</th>
                 <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Last Login</th>
@@ -215,11 +217,11 @@ export default function FacultyClient() {
             <tbody className="divide-y divide-gray-100/80">
               {loading ? (
                 <tr>
-                  <td colSpan={5} className="py-12 text-center text-gray-400">Loading faculty…</td>
+                  <td colSpan={6} className="py-12 text-center text-gray-400">Loading faculty…</td>
                 </tr>
               ) : faculty.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="py-12 text-center text-gray-400">
+                  <td colSpan={6} className="py-12 text-center text-gray-400">
                     No faculty accounts yet — add one to get started
                   </td>
                 </tr>
@@ -238,7 +240,23 @@ export default function FacultyClient() {
                       </div>
                     </td>
                     <td className="py-3 px-4">
-                      <span className="text-gray-800 font-medium">{member.student_ids.length}</span>
+                      {member.sections.length === 0 ? (
+                        <span className="text-sm text-gray-400">None</span>
+                      ) : (
+                        <div className="flex flex-wrap gap-1.5">
+                          {member.sections.map((s) => (
+                            <span
+                              key={s.id}
+                              className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#1B6B7B]/10 text-[#1B6B7B] border border-[#1B6B7B]/20"
+                            >
+                              {s.name}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </td>
+                    <td className="py-3 px-4">
+                      <span className="text-gray-800 font-medium">{member.student_count}</span>
                     </td>
                     <td className="py-3 px-4 text-gray-600">{formatDate(member.created_at)}</td>
                     <td className="py-3 px-4 text-gray-600">{formatDate(member.last_login_at)}</td>
@@ -247,7 +265,7 @@ export default function FacultyClient() {
                         onClick={() => openAssignModal(member)}
                         className="text-[#1B6B7B] font-medium hover:text-[#145a63] transition-colors"
                       >
-                        Assign Students
+                        Assign Sections
                       </button>
                     </td>
                   </tr>
@@ -311,43 +329,50 @@ export default function FacultyClient() {
           <div className="bg-white rounded-xl p-4 w-full max-w-lg mx-4 shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-gray-200/80 max-h-[80vh] overflow-hidden flex flex-col">
             <div className="mb-4">
               <h3 className="text-lg font-semibold text-gray-900">
-                Assign Students to {selectedFaculty.name}
+                Assign Sections to {selectedFaculty.name}
               </h3>
               <p className="text-sm text-gray-500">
-                Checked students form this faculty&apos;s roster
+                This faculty member handles every student in the checked sections
               </p>
             </div>
 
             <div className="flex-1 overflow-y-auto space-y-2 mb-4">
-              {students.length === 0 ? (
-                <p className="text-gray-400 text-sm text-center py-8">No student accounts yet</p>
+              {sections.length === 0 ? (
+                <p className="text-gray-400 text-sm text-center py-8">
+                  No sections yet — create them on the{" "}
+                  <button
+                    onClick={() => router.push("/admin/faculty/assignment")}
+                    className="text-[#1B6B7B] font-medium hover:underline"
+                  >
+                    Sections page
+                  </button>
+                </p>
               ) : (
-                students.map((student) => {
-                  const otherFaculty = faculty.find(
-                    (f) => f.id !== selectedFaculty.id && f.student_ids.includes(student.id),
+                sections.map((section) => {
+                  const otherFaculty = faculty.filter(
+                    (f) =>
+                      f.id !== selectedFaculty.id &&
+                      f.sections.some((s) => s.id === section.id),
                   );
                   return (
                     <label
-                      key={student.id}
+                      key={section.id}
                       className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
-                        selectedStudents.includes(student.id)
+                        selectedSections.includes(section.id)
                           ? "border-[#1B6B7B] bg-[#1B6B7B]/5"
                           : "border-gray-200 hover:border-gray-300"
                       }`}
                     >
                       <input
                         type="checkbox"
-                        checked={selectedStudents.includes(student.id)}
-                        onChange={() => toggleStudent(student.id)}
+                        checked={selectedSections.includes(section.id)}
+                        onChange={() => toggleSection(section.id)}
                         className="w-4 h-4 text-[#1B6B7B] rounded focus:ring-[#1B6B7B]"
                       />
-                      <div className="flex-1">
-                        <p className="font-medium text-gray-800">{student.name}</p>
-                        <p className="text-sm text-gray-500">{student.email}</p>
-                      </div>
-                      {otherFaculty && (
+                      <p className="flex-1 font-medium text-gray-800">Section {section.name}</p>
+                      {otherFaculty.length > 0 && (
                         <span className="text-xs text-gray-400 shrink-0">
-                          Also with {otherFaculty.name}
+                          Also with {otherFaculty.map((f) => f.name).join(", ")}
                         </span>
                       )}
                     </label>
@@ -358,7 +383,7 @@ export default function FacultyClient() {
 
             <div className="flex justify-between items-center pt-4 border-t border-gray-200">
               <p className="text-sm text-gray-500">
-                {selectedStudents.length} student{selectedStudents.length !== 1 ? "s" : ""} selected
+                {selectedSections.length} section{selectedSections.length !== 1 ? "s" : ""} selected
               </p>
               <div className="flex gap-3">
                 <button
@@ -372,7 +397,7 @@ export default function FacultyClient() {
                   disabled={busy}
                   className="px-4 py-2 bg-[#1B6B7B] text-white rounded-xl font-medium hover:bg-[#145a63] transition-all disabled:opacity-50"
                 >
-                  {busy ? "Saving…" : "Save Roster"}
+                  {busy ? "Saving…" : "Save Sections"}
                 </button>
               </div>
             </div>

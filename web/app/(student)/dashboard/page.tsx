@@ -5,6 +5,8 @@ import { useState, useEffect, useCallback } from "react";
 import {
   getCurrentUser,
   User,
+  Patient,
+  fetchPatients,
   fetchStudentScenarioAssignments,
   fetchStudentAssessments,
   fetchMyRecommendations,
@@ -24,106 +26,11 @@ interface ScenarioAssignment {
   score?: number;
 }
 
-interface Patient {
-  id: string;
-  name: string;
-  age: number;
-  gender: string;
-  room_number: string;
-  diagnosis: string;
-  vital_signs: {
-    heart_rate: number | null;
-    blood_pressure: string | null;
-    temperature: number | null;
-    respiratory_rate: number | null;
-    oxygen_saturation: number | null;
-  };
-}
-
-
-const mockPatients: Patient[] = [
-  {
-    id: "1",
-    name: "Juan dela Cruz",
-    age: 45,
-    gender: "Male",
-    room_number: "Room 101",
-    diagnosis: "Hypertension",
-    vital_signs: {
-      heart_rate: 72,
-      blood_pressure: "140/90",
-      temperature: 36.5,
-      respiratory_rate: 16,
-      oxygen_saturation: 98,
-    },
-  },
-  {
-    id: "2",
-    name: "Maria Santos",
-    age: 32,
-    gender: "Female",
-    room_number: "Room 102",
-    diagnosis: "Post-operative care",
-    vital_signs: {
-      heart_rate: 80,
-      blood_pressure: "120/80",
-      temperature: 37.0,
-      respiratory_rate: 18,
-      oxygen_saturation: 97,
-    },
-  },
-  {
-    id: "3",
-    name: "Pedro Garcia",
-    age: 58,
-    gender: "Male",
-    room_number: "Room 103",
-    diagnosis: "Diabetes Type 2",
-    vital_signs: {
-      heart_rate: 76,
-      blood_pressure: "130/85",
-      temperature: 36.8,
-      respiratory_rate: 15,
-      oxygen_saturation: 96,
-    },
-  },
-  {
-    id: "4",
-    name: "Ana Reyes",
-    age: 28,
-    gender: "Female",
-    room_number: "Room 104",
-    diagnosis: "Prenatal care",
-    vital_signs: {
-      heart_rate: 78,
-      blood_pressure: "110/70",
-      temperature: 36.6,
-      respiratory_rate: 16,
-      oxygen_saturation: 99,
-    },
-  },
-  {
-    id: "5",
-    name: "Carlos Mendoza",
-    age: 65,
-    gender: "Male",
-    room_number: "Room 105",
-    diagnosis: "Pneumonia",
-    vital_signs: {
-      heart_rate: 88,
-      blood_pressure: "125/82",
-      temperature: 38.2,
-      respiratory_rate: 22,
-      oxygen_saturation: 94,
-    },
-  },
-];
-
 export default function StudentDashboard() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [user, setUser] = useState<User | null>(getCurrentUser);
-  const [patients] = useState<Patient[]>(mockPatients);
+  const [patients, setPatients] = useState<Patient[]>([]);
   const [quizzes, setQuizzes] = useState<StudentAssessment[]>([]);
   const [recommendations, setRecommendations] = useState<LearningRecommendation[]>([]);
   const [scenarioAssignments, setScenarioAssignments] = useState<
@@ -148,6 +55,7 @@ export default function StudentDashboard() {
     loadScenarioAssignments(currentUser.id);
     fetchStudentAssessments().then(setQuizzes);
     fetchMyRecommendations().then(setRecommendations);
+    fetchPatients().then(setPatients);
   }, [router, loadScenarioAssignments]);
 
   const handleDismissRecommendation = async (id: string) => {
@@ -201,7 +109,7 @@ export default function StudentDashboard() {
                   </svg>
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-gray-800">5</p>
+                  <p className="text-2xl font-bold text-gray-800">{patients.length}</p>
                   <p className="text-sm text-gray-500">Assigned Patients</p>
                 </div>
               </div>
@@ -285,6 +193,12 @@ export default function StudentDashboard() {
               <h3 className="font-semibold text-gray-800 mb-4">
                 Recent Patients
               </h3>
+              {patients.length === 0 ? (
+                <p className="text-sm text-gray-500 py-6 text-center">
+                  No patients yet — they appear here once a faculty member
+                  assigns you a scenario linked to one.
+                </p>
+              ) : (
               <div className="space-y-3">
                 {patients.slice(0, 3).map((patient) => (
                   <div
@@ -310,6 +224,7 @@ export default function StudentDashboard() {
                   </div>
                 ))}
               </div>
+              )}
             </div>
 
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
@@ -382,6 +297,12 @@ export default function StudentDashboard() {
                 {patients.length} patients assigned
               </span>
             </div>
+            {patients.length === 0 ? (
+              <p className="text-sm text-gray-500 py-8 text-center">
+                No patients yet — they appear here once a faculty member
+                assigns you a scenario linked to one.
+              </p>
+            ) : (
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
@@ -483,6 +404,7 @@ export default function StudentDashboard() {
                 </tbody>
               </table>
             </div>
+            )}
           </div>
         </div>
       )}

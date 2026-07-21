@@ -1,98 +1,133 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { Platform } from 'react-native';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  ReactNode,
+  useCallback,
+} from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as apiClient from "@/lib/api";
+import { getToken, clearToken, flushOutbox, isNetworkError } from "@/lib/client";
 
-interface User {
-  id: string;
-  name: string;
-  email: string;
-  role: 'student' | 'faculty' | 'admin';
-  studentId?: string;
-  cohort?: string;
-  avatar?: string;
-}
+const USER_KEY = "@icare_user";
 
 interface AuthContextType {
-  user: User | null;
+  user: apiClient.User | null;
+  /** True while a login/logout request is in flight. */
   isLoading: boolean;
+  /** True only during the initial stored-session restore at app launch. */
+  isBootstrapping: boolean;
   isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<boolean>;
+  login: (
+    email: string,
+    password: string,
+    rememberMe?: boolean,
+  ) => Promise<{ ok: boolean; error?: string }>;
+  loginWithGoogle: (
+    idToken: string,
+    rememberMe?: boolean,
+  ) => Promise<{ ok: boolean; needsRoleSelection?: boolean; error?: string }>;
   logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const API_HOST = '192.168.1.19';
-const API_URL = `http://${API_HOST}:3001/api`;
-
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [user, setUser] = useState<apiClient.User | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isBootstrapping, setIsBootstrapping] = useState(true);
+
+  const checkAuth = useCallback(async () => {
+    try {
+      const token = await getToken();
+      if (!token) {
+        setUser(null);
+        return;
+      }
+      const sessionUser = await apiClient.fetchSession();
+      if (sessionUser) {
+        setUser(sessionUser);
+        AsyncStorage.setItem(USER_KEY, JSON.stringify(sessionUser)).catch(() => {});
+        // Push any writes queued while offline now that we know we're online.
+        flushOutbox().catch(() => {});
+      } else {
+        // Server reachable but the token is invalid/expired.
+        await clearToken();
+        await AsyncStorage.removeItem(USER_KEY);
+        setUser(null);
+      }
+    } catch (error) {
+      if (isNetworkError(error)) {
+        // Offline with a stored token: restore the last-known identity so
+        // cached data stays usable with no connection.
+        const stored = await AsyncStorage.getItem(USER_KEY);
+        if (stored) setUser(JSON.parse(stored) as apiClient.User);
+      } else {
+        setUser(null);
+      }
+    } finally {
+      setIsBootstrapping(false);
+    }
+  }, []);
 
   useEffect(() => {
     checkAuth();
-  }, []);
+  }, [checkAuth]);
 
-  const checkAuth = async () => {
+  const login = async (
+    email: string,
+    password: string,
+    rememberMe: boolean = true,
+  ): Promise<{ ok: boolean; error?: string }> => {
+    setIsLoading(true);
     try {
-      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
-      const stored = await AsyncStorage.getItem('@icare_auth');
-      if (stored) {
-        setUser(JSON.parse(stored));
-      }
+      const loggedIn = await apiClient.login(email.trim().toLowerCase(), password, rememberMe);
+      setUser(loggedIn);
+      AsyncStorage.setItem(USER_KEY, JSON.stringify(loggedIn)).catch(() => {});
+      flushOutbox().catch(() => {});
+      return { ok: true };
     } catch (error) {
-      console.log('Auth check failed (using in-memory):', error);
+      const message = isNetworkError(error)
+        ? "Cannot reach the iCARE++ server. Check your connection and API URL."
+        : error instanceof Error
+          ? error.message
+          : "Sign-in failed";
+      return { ok: false, error: message };
     } finally {
       setIsLoading(false);
     }
   };
 
-  const login = async (email: string, password: string): Promise<boolean> => {
+  const loginWithGoogle = async (
+    idToken: string,
+    rememberMe: boolean = true,
+  ): Promise<{ ok: boolean; needsRoleSelection?: boolean; error?: string }> => {
     setIsLoading(true);
     try {
-      const res = await fetch(`${API_URL}/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        console.log('Login failed:', data.error);
-        return false;
+      const result = await apiClient.loginWithGoogle(idToken, rememberMe);
+      if ("needsRoleSelection" in result) {
+        return { ok: false, needsRoleSelection: true };
       }
-
-      const userData: User = {
-        id: String(data.user.id),
-        name: data.user.name,
-        email: data.user.email,
-        role: data.user.role,
-        studentId: data.user.studentId,
-        cohort: data.user.cohort,
-      };
-
-      try {
-        const AsyncStorage = require('@react-native-async-storage/async-storage').default;
-        await AsyncStorage.setItem('@icare_auth', JSON.stringify(userData));
-      } catch {
-        console.log('AsyncStorage unavailable, using in-memory');
-      }
-      setUser(userData);
-      return true;
+      setUser(result.user);
+      AsyncStorage.setItem(USER_KEY, JSON.stringify(result.user)).catch(() => {});
+      flushOutbox().catch(() => {});
+      return { ok: true };
     } catch (error) {
-      console.error('Login failed:', error);
-      return false;
+      const message = isNetworkError(error)
+        ? "Cannot reach the iCARE++ server. Check your connection and API URL."
+        : error instanceof Error
+          ? error.message
+          : "Google sign-in failed";
+      return { ok: false, error: message };
     } finally {
       setIsLoading(false);
     }
   };
 
   const logout = async () => {
-    try {
-      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
-      await AsyncStorage.removeItem('@icare_auth');
-    } catch {
-      console.log('AsyncStorage unavailable');
-    }
+    await apiClient.logout();
+    await AsyncStorage.removeItem(USER_KEY);
     setUser(null);
   };
 
@@ -101,8 +136,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       value={{
         user,
         isLoading,
+        isBootstrapping,
         isAuthenticated: !!user,
         login,
+        loginWithGoogle,
         logout,
       }}
     >
@@ -114,7 +151,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 export function useAuth() {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
 }

@@ -13,8 +13,10 @@ import {
   fetchCompetencyAreas,
   fetchCompetencyScores,
   recordCompetencyScore,
+  generateStudentSummary,
   CompetencyArea,
   CompetencyScore,
+  StudentAISummary,
 } from "../../../lib/api";
 import { SkeletonProfileHeader, SkeletonRiskPredictionCard, SkeletonTabContent } from "../../../components/skeletons";
 import Card from "../../../components/Card";
@@ -54,7 +56,12 @@ export default function StudentDetailClient() {
   const [riskPrediction, setRiskPrediction] = useState<RiskPrediction | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("performance");
+  const [aiSummary, setAiSummary] = useState<StudentAISummary | null>(null);
+  const [summaryGeneratedAt, setSummaryGeneratedAt] = useState<string | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(true);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
   const loggedRef = useRef(false);
+  const summaryRequestedRef = useRef(false);
 
   useEffect(() => {
     if (!studentId || loggedRef.current) return;
@@ -77,6 +84,12 @@ export default function StudentDetailClient() {
     if (studentId) {
       loadStudentData();
     }
+  }, [studentId]);
+
+  useEffect(() => {
+    if (!studentId || summaryRequestedRef.current) return;
+    summaryRequestedRef.current = true;
+    handleGenerateSummary();
   }, [studentId]);
 
   const loadCompetencyData = async () => {
@@ -112,6 +125,32 @@ export default function StudentDetailClient() {
     await loadCompetencyData();
 
     setLoading(false);
+  };
+
+  const handleGenerateSummary = async () => {
+    setSummaryLoading(true);
+    setSummaryError(null);
+    const result = await generateStudentSummary(studentId);
+    setSummaryLoading(false);
+    if (result.error || !result.summary) {
+      setSummaryError(result.error ?? "Unable to generate summary");
+      return;
+    }
+    setAiSummary(result.summary);
+    setSummaryGeneratedAt(result.generated_at ?? new Date().toISOString());
+
+    const faculty = getCurrentFacultyUser();
+    if (faculty) {
+      logAuditAction({
+        faculty_id: faculty.id,
+        faculty_name: faculty.name,
+        tab: 'student_detail',
+        action: 'generate_student_summary',
+        details: 'Generated AI performance summary',
+        target_type: 'student',
+        target_id: studentId,
+      });
+    }
   };
 
   const handleValidate = async () => {
@@ -228,7 +267,18 @@ export default function StudentDetailClient() {
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">{student.name}</h1>
                 <p className="text-gray-500">{student.email}</p>
-                <p className="text-sm text-gray-400">{student.program} - Year {student.year}</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-sm text-gray-400">{student.program} - Year {student.year}</p>
+                  {student.section ? (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-[#1B6B7B]/10 text-[#1B6B7B] border border-[#1B6B7B]/20">
+                      Section {student.section}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500 border border-gray-200">
+                      No section
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
             
@@ -320,6 +370,85 @@ export default function StudentDetailClient() {
                 {' · '}
                 {new Date(riskPrediction.predicted_at).toLocaleString()}
               </p>
+            </div>
+          )}
+        </Card>
+      </div>
+
+      <div className="mb-4">
+        <Card padding="sm">
+          <div className="flex items-center justify-between gap-3 mb-1">
+            <div className="flex items-center gap-2">
+              <div className="p-2 bg-[#1B6B7B]/10 rounded-lg">
+                <svg className="w-5 h-5 text-[#1B6B7B]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="font-semibold text-gray-900">AI Performance Summary</h3>
+                <p className="text-xs text-gray-400">
+                  Generated from quizzes, scenarios, competencies, and the ML risk prediction
+                </p>
+              </div>
+            </div>
+            {!summaryLoading && (
+              <button
+                onClick={handleGenerateSummary}
+                className="px-4 py-2 bg-[#1B6B7B] text-white rounded-lg font-medium text-sm hover:bg-[#145a63] transition-all shadow-[0_2px_6px_rgba(27,107,123,0.2)] shrink-0"
+              >
+                {summaryError ? "Retry" : "Regenerate"}
+              </button>
+            )}
+          </div>
+
+          {summaryError && (
+            <div className="mt-3 p-3 bg-rose-50 border border-rose-200 rounded-xl text-sm text-rose-700">
+              {summaryError}
+            </div>
+          )}
+
+          {summaryLoading && (
+            <div className="mt-3 space-y-2 animate-pulse">
+              <div className="h-4 w-3/4 bg-gray-200 rounded" />
+              <div className="h-4 w-full bg-gray-200 rounded" />
+              <div className="h-4 w-2/3 bg-gray-200 rounded" />
+            </div>
+          )}
+
+          {!summaryLoading && aiSummary && (
+            <div className="mt-3 space-y-4">
+              <p className="text-sm text-gray-700 leading-relaxed">{aiSummary.overview}</p>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {[
+                  { title: "Strengths", items: aiSummary.strengths, dot: "bg-emerald-500" },
+                  { title: "Areas for Improvement", items: aiSummary.areas_for_improvement, dot: "bg-amber-500" },
+                  { title: "Recommendations", items: aiSummary.recommendations, dot: "bg-[#1B6B7B]" },
+                ].map((section) => (
+                  <div key={section.title} className="p-4 bg-gray-50 rounded-xl">
+                    <p className="text-sm font-semibold text-gray-900 mb-2">{section.title}</p>
+                    {section.items.length === 0 ? (
+                      <p className="text-sm text-gray-400">Nothing noted.</p>
+                    ) : (
+                      <ul className="space-y-2">
+                        {section.items.map((item, idx) => (
+                          <li key={idx} className="flex items-start gap-2 text-sm text-gray-600">
+                            <span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${section.dot}`} />
+                            {item}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {summaryGeneratedAt && (
+                <p className="text-xs text-gray-400 border-t border-gray-100/80 pt-3">
+                  AI-generated {new Date(summaryGeneratedAt).toLocaleString()} — review before
+                  acting on it.
+                </p>
+              )}
             </div>
           )}
         </Card>

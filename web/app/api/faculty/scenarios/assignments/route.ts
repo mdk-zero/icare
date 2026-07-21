@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { getFacultyStudentIds } from '@/app/lib/roster';
 
 export async function GET(request: NextRequest) {
   const session = await readSession();
@@ -36,17 +37,7 @@ export async function GET(request: NextRequest) {
         studentIds = allStudents?.map((s) => s.id) ?? [];
       }
     } else {
-      const { data: roster, error: rosterError } = await supabase
-        .from('faculty_students')
-        .select('student_id')
-        .eq('faculty_id', session.uid);
-
-      if (rosterError) {
-        console.error('Failed to fetch faculty roster', rosterError);
-        return NextResponse.json({ error: 'Unable to fetch assignments' }, { status: 500 });
-      }
-
-      studentIds = roster?.map((r) => r.student_id) ?? [];
+      studentIds = await getFacultyStudentIds(supabase, session.uid);
 
       if (requestedStudentId) {
         if (!studentIds.includes(requestedStudentId)) {

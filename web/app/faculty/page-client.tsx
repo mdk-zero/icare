@@ -246,10 +246,10 @@ export default function FacultyDashboard() {
             {students.map((student) => {
               const risk = getRisk(student.risk_level);
               return (
-                <div 
-                  key={student.id} 
+                <div
+                  key={student.id}
                   className="relative flex items-center gap-3 p-4 pl-5 hover:bg-gray-50/80 transition-colors cursor-pointer"
-                  onClick={() => router.push(`/faculty/students/${student.student_id}`)}
+                  onClick={() => router.push(`/faculty/students/${student.id}`)}
                 >
                   <span className={`absolute left-0 top-0 h-full w-1 ${risk.bar}`} aria-hidden />
                   <div className="w-10 h-10 shrink-0 bg-gradient-to-br from-[#1B6B7B] to-[#145a63] rounded-full flex items-center justify-center text-white font-semibold text-sm">
