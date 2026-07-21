@@ -21,19 +21,6 @@ const inputClassName =
   "w-full px-4 py-3 bg-white border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30 focus:border-[#1B6B7B] focus:bg-white transition-all text-sm shadow-sm";
 const labelClassName = "block text-sm font-bold text-gray-800 mb-2";
 
-const CATEGORIES = [
-  "Cardiac Emergency",
-  "Respiratory Emergency",
-  "Neurological Emergency",
-  "Trauma",
-  "Medical-Surgical",
-  "Patient Education",
-  "Infection Management",
-  "Critical Care",
-  "Medication Safety",
-  "General",
-] as const;
-
 type Difficulty = "beginner" | "intermediate" | "advanced";
 
 interface Assessment {
@@ -56,15 +43,6 @@ interface Student {
   email: string;
 }
 
-const emptyAssessmentForm = {
-  title: "",
-  description: "",
-  difficulty: "beginner" as Difficulty,
-  category: "General" as (typeof CATEGORIES)[number],
-  time_limit_minutes: "",
-  target_sections: [] as string[],
-};
-
 export default function FacultyAssessmentsClient() {
   const router = useRouter();
   const [assessments, setAssessments] = useState<Assessment[]>([]);
@@ -73,11 +51,6 @@ export default function FacultyAssessmentsClient() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-
-  // create / edit assessment modal
-  const [showAssessmentModal, setShowAssessmentModal] = useState(false);
-  const [editingAssessment, setEditingAssessment] = useState<Assessment | null>(null);
-  const [assessmentForm, setAssessmentForm] = useState(emptyAssessmentForm);
 
   // assign modal
   const [assignTarget, setAssignTarget] = useState<Assessment | null>(null);
@@ -111,106 +84,6 @@ export default function FacultyAssessmentsClient() {
   }, [loadAssessments]);
 
   // ---------- assessment CRUD ----------
-
-  const openCreateModal = () => {
-    setEditingAssessment(null);
-    setAssessmentForm(emptyAssessmentForm);
-    setShowAssessmentModal(true);
-  };
-
-  const openEditModal = (a: Assessment) => {
-    setEditingAssessment(a);
-    setAssessmentForm({
-      title: a.title,
-      description: a.description,
-      difficulty: a.difficulty,
-      category: (CATEGORIES.includes(a.category as (typeof CATEGORIES)[number])
-        ? a.category
-        : "General") as (typeof CATEGORIES)[number],
-      time_limit_minutes: a.time_limit_seconds ? String(Math.round(a.time_limit_seconds / 60)) : "",
-      target_sections: a.target_sections ?? [],
-    });
-    setShowAssessmentModal(true);
-  };
-
-  const saveAssessment = async () => {
-    if (!assessmentForm.title.trim()) {
-      flash("Title is required");
-      return;
-    }
-    setBusy(true);
-
-    if (editingAssessment) {
-      const payload = {
-        title: assessmentForm.title,
-        description: assessmentForm.description,
-        difficulty: assessmentForm.difficulty,
-        category: assessmentForm.category,
-        time_limit_seconds: assessmentForm.time_limit_minutes
-          ? Number(assessmentForm.time_limit_minutes) * 60
-          : null,
-        target_sections:
-          assessmentForm.target_sections.length > 0
-            ? assessmentForm.target_sections
-            : null,
-      };
-      const res = await fetch(`/api/faculty/assessments/${editingAssessment.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(payload),
-      });
-      setBusy(false);
-      if (!res.ok) {
-        const j = (await res.json()) as { error?: string };
-        flash(j.error ?? "Failed to save assessment");
-        return;
-      }
-      setShowAssessmentModal(false);
-      flash("Assessment updated");
-      loadAssessments();
-      return;
-    }
-
-    try {
-      const res = await fetch("/api/faculty/assessments", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          title: assessmentForm.title.trim(),
-          description: assessmentForm.description,
-          category: assessmentForm.category,
-          difficulty: assessmentForm.difficulty,
-          time_limit_seconds: assessmentForm.time_limit_minutes
-            ? Number(assessmentForm.time_limit_minutes) * 60
-            : null,
-          target_sections:
-            assessmentForm.target_sections.length > 0
-              ? assessmentForm.target_sections
-              : null,
-        }),
-      });
-
-      setBusy(false);
-
-      if (!res.ok) {
-        const j = (await res.json()) as { error?: string };
-        flash(j.error ?? "Failed to create assessment");
-        return;
-      }
-
-      const json = (await res.json()) as { assessment: Assessment };
-      setAssessments((prev) => [json.assessment, ...prev]);
-      setShowAssessmentModal(false);
-      setAssessmentForm(emptyAssessmentForm);
-      flash("Assessment created");
-    } catch (err) {
-      setBusy(false);
-      console.error("Failed to create assessment", err);
-      flash("Failed to create assessment");
-    }
-  };
 
   const togglePublish = async (a: Assessment) => {
     setBusy(true);
@@ -299,7 +172,7 @@ export default function FacultyAssessmentsClient() {
 
       <div className="flex justify-end">
         <button
-          onClick={openCreateModal}
+          onClick={() => router.push("/faculty/assessments/new")}
           className="flex items-center gap-2 px-5 py-2.5 bg-[#1B6B7B] text-white rounded-lg hover:bg-[#155663] transition-colors text-sm font-medium shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
         >
           <FontAwesomeIcon icon={faPlus} className="w-3.5 h-3.5" />
@@ -392,7 +265,7 @@ export default function FacultyAssessmentsClient() {
                       />
                     </button>
                     <button
-                      onClick={() => openEditModal(a)}
+                      onClick={() => router.push(`/faculty/assessments/${a.id}`)}
                       title="Edit details"
                       className="p-2.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"
                     >
@@ -418,146 +291,6 @@ export default function FacultyAssessmentsClient() {
               </div>
             </div>
           ))}
-        </div>
-      )}
-
-      {/* ---------- create/edit assessment modal ---------- */}
-      {showAssessmentModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] w-full max-w-lg p-4 space-y-2 max-h-[90vh] overflow-y-auto border border-gray-200/80">
-            <div className="flex items-center justify-between">
-              <h3 className="font-semibold text-gray-800">
-                {editingAssessment ? "Edit Assessment" : "New Assessment"}
-              </h3>
-              <button
-                onClick={() => setShowAssessmentModal(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <FontAwesomeIcon icon={faTimes} className="w-4 h-4" />
-              </button>
-            </div>
-            <div>
-              <label className={labelClassName}>Title</label>
-              <input
-                value={assessmentForm.title}
-                onChange={(e) => setAssessmentForm((f) => ({ ...f, title: e.target.value }))}
-                placeholder="e.g. Vital Signs Fundamentals"
-                className={inputClassName}
-              />
-            </div>
-            <div>
-              <label className={labelClassName}>Description</label>
-              <textarea
-                value={assessmentForm.description}
-                onChange={(e) =>
-                  setAssessmentForm((f) => ({ ...f, description: e.target.value }))
-                }
-                rows={2}
-                className={inputClassName}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className={labelClassName}>Difficulty</label>
-                <select
-                  value={assessmentForm.difficulty}
-                  onChange={(e) =>
-                    setAssessmentForm((f) => ({
-                      ...f,
-                      difficulty: e.target.value as Difficulty,
-                    }))
-                  }
-                  className={inputClassName}
-                >
-                  <option value="beginner">Beginner</option>
-                  <option value="intermediate">Intermediate</option>
-                  <option value="advanced">Advanced</option>
-                </select>
-              </div>
-              <div>
-                <label className={labelClassName}>Category</label>
-                <select
-                  value={assessmentForm.category}
-                  onChange={(e) =>
-                    setAssessmentForm((f) => ({
-                      ...f,
-                      category: e.target.value as (typeof CATEGORIES)[number],
-                    }))
-                  }
-                  className={inputClassName}
-                >
-                  {CATEGORIES.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            <div>
-              <label className={labelClassName}>Time limit (minutes, optional)</label>
-              <input
-                type="number"
-                min={1}
-                value={assessmentForm.time_limit_minutes}
-                onChange={(e) =>
-                  setAssessmentForm((f) => ({ ...f, time_limit_minutes: e.target.value }))
-                }
-                placeholder="No limit"
-                className={inputClassName}
-              />
-            </div>
-            <div>
-              <label className={labelClassName}>Visible to sections</label>
-              {sections.length === 0 ? (
-                <p className="text-sm text-gray-500">
-                  No sections exist yet — this assessment will be visible to all students.
-                </p>
-              ) : (
-                <div className="flex flex-wrap gap-3">
-                  {sections.map((s) => (
-                    <label
-                      key={s.id}
-                      className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={assessmentForm.target_sections.includes(s.name)}
-                        onChange={(e) =>
-                          setAssessmentForm((f) => ({
-                            ...f,
-                            target_sections: e.target.checked
-                              ? [...f.target_sections, s.name]
-                              : f.target_sections.filter((x) => x !== s.name),
-                          }))
-                        }
-                        className="w-4 h-4 accent-[#1B6B7B]"
-                      />
-                      Section {s.name}
-                    </label>
-                  ))}
-                </div>
-              )}
-              <p className="text-xs text-gray-400 mt-1">
-                Leave all unchecked to make visible to all sections.
-              </p>
-            </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <button
-                onClick={() => setShowAssessmentModal(false)}
-                className="px-5 py-2 rounded-lg border border-gray-200 text-gray-600 text-sm hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={saveAssessment}
-                disabled={busy}
-                className="px-6 py-2 bg-[#1B6B7B] text-white rounded-lg text-sm hover:bg-[#155663] disabled:opacity-60"
-              >
-                {busy ? "Saving…" : editingAssessment ? "Save Changes" : "Create"}
-              </button>
-            </div>
-          </div>
         </div>
       )}
 
