@@ -274,7 +274,7 @@ export default function LoginPage() {
               </div>
             </div>
             {/* Login card */}
-            <div className="bg-white rounded-3xl border border-[#E2EBEC] shadow-xl shadow-[#0D7377]/[0.05] p-7 sm:p-9">
+            <div className="bg-surface rounded-3xl border border-[#E2EBEC] shadow-xl shadow-[#0D7377]/[0.05] p-7 sm:p-9">
               <div className="mb-6">
                 <h1 className="text-3xl font-semibold text-[#0F172A] mb-1 tracking-tight">
                   Welcome back, caregiver
@@ -466,7 +466,7 @@ export default function LoginPage() {
                   <div className="w-full h-px bg-gradient-to-r from-transparent via-[#CBD5E1] to-transparent" />
                 </div>
                 <div className="relative flex justify-center text-xs">
-                  <span className="px-4 bg-white text-[#94A3B8] uppercase tracking-wider font-medium text-[10px]">
+                  <span className="px-4 bg-surface text-[#94A3B8] uppercase tracking-wider font-medium text-[10px]">
                     or continue with
                   </span>
                 </div>

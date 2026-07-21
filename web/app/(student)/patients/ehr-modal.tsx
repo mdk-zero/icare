@@ -12,7 +12,7 @@ import {
 } from "../../lib/api";
 
 const inputClass =
-  "w-full px-3 py-2 bg-white border border-gray-300 rounded-xl text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30 focus:border-[#1B6B7B] text-sm";
+  "w-full px-3 py-2 bg-surface border border-gray-300 rounded-xl text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 text-sm";
 
 const TABS: { id: EhrType; label: string }[] = [
   { id: "tpr", label: "TPR Sheet" },
@@ -76,10 +76,10 @@ export default function EhrModal({
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
+      <div className="bg-surface rounded-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
         <div className="p-6 border-b border-gray-200 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-[#1B6B7B]/10 rounded-full flex items-center justify-center text-[#1B6B7B]">
+            <div className="w-12 h-12 bg-brand-600/10 rounded-full flex items-center justify-center text-brand-600">
               <FontAwesomeIcon icon={faNotesMedical} className="w-5 h-5" />
             </div>
             <div>
@@ -99,7 +99,7 @@ export default function EhrModal({
               onClick={() => setTab(t.id)}
               className={`py-3 font-medium text-sm border-b-2 transition-colors ${
                 tab === t.id
-                  ? "border-[#1B6B7B] text-[#1B6B7B]"
+                  ? "border-brand-600 text-brand-600"
                   : "border-transparent text-gray-500 hover:text-gray-700"
               }`}
             >
@@ -127,7 +127,7 @@ export default function EhrModal({
               <input type="number" placeholder="Pulse" value={form.pulse ?? ""} onChange={set("pulse")} className={inputClass} />
               <input type="number" placeholder="Respiration" value={form.respiration ?? ""} onChange={set("respiration")} className={inputClass} />
               <input type="text" placeholder="Remarks (optional)" value={form.remarks ?? ""} onChange={set("remarks")} className={`${inputClass} col-span-2 sm:col-span-3`} />
-              <button onClick={handleSave} disabled={saving} className="px-4 py-2 bg-[#1B6B7B] text-white rounded-xl font-medium text-sm hover:bg-[#145a63] disabled:opacity-50">
+              <button onClick={handleSave} disabled={saving} className="px-4 py-2 bg-brand-600 text-white rounded-xl font-medium text-sm hover:bg-brand-700 disabled:opacity-50">
                 {saving ? "Saving…" : "Add Entry"}
               </button>
             </div>
@@ -140,7 +140,7 @@ export default function EhrModal({
               <input type="number" step="0.1" placeholder="Rate mL/hr" value={form.rate_ml_hr ?? ""} onChange={set("rate_ml_hr")} className={inputClass} />
               <input type="text" placeholder="Site (e.g. L metacarpal)" value={form.site ?? ""} onChange={set("site")} className={`${inputClass} col-span-2`} />
               <input type="text" placeholder="Remarks (optional)" value={form.remarks ?? ""} onChange={set("remarks")} className={inputClass} />
-              <button onClick={handleSave} disabled={saving} className="px-4 py-2 bg-[#1B6B7B] text-white rounded-xl font-medium text-sm hover:bg-[#145a63] disabled:opacity-50">
+              <button onClick={handleSave} disabled={saving} className="px-4 py-2 bg-brand-600 text-white rounded-xl font-medium text-sm hover:bg-brand-700 disabled:opacity-50">
                 {saving ? "Saving…" : "Start IVF"}
               </button>
             </div>
@@ -150,7 +150,7 @@ export default function EhrModal({
             <div className="space-y-3">
               <textarea rows={3} placeholder="Progress note (FDAR or narrative)…" value={form.content ?? ""} onChange={set("content")} className={`${inputClass} resize-none`} />
               <div className="flex justify-end">
-                <button onClick={handleSave} disabled={saving} className="px-4 py-2 bg-[#1B6B7B] text-white rounded-xl font-medium text-sm hover:bg-[#145a63] disabled:opacity-50">
+                <button onClick={handleSave} disabled={saving} className="px-4 py-2 bg-brand-600 text-white rounded-xl font-medium text-sm hover:bg-brand-700 disabled:opacity-50">
                   {saving ? "Saving…" : "Add Note"}
                 </button>
               </div>
@@ -160,7 +160,7 @@ export default function EhrModal({
           <div>
             <h3 className="text-sm font-semibold text-gray-900 mb-2">Your entries</h3>
             {loading ? (
-              <FontAwesomeIcon icon={faSpinner} spin className="w-5 h-5 text-[#1B6B7B]" />
+              <FontAwesomeIcon icon={faSpinner} spin className="w-5 h-5 text-brand-600" />
             ) : records.length === 0 ? (
               <p className="text-sm text-gray-400">No entries yet for this patient.</p>
             ) : (
@@ -221,7 +221,7 @@ export default function EhrModal({
         </div>
 
         <div className="p-6 border-t border-gray-200 bg-gray-50 flex justify-end">
-          <button onClick={onClose} className="px-4 py-2.5 border border-gray-200 text-gray-700 rounded-xl font-medium hover:bg-white transition-all">
+          <button onClick={onClose} className="px-4 py-2.5 border border-gray-200 text-gray-700 rounded-xl font-medium hover:bg-surface transition-all">
             Close
           </button>
         </div>

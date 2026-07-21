@@ -74,17 +74,17 @@ export default function ChangePasswordPage() {
   if (!user || !user.force_password_change) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#F8FBFC]">
-        <div className="w-8 h-8 border-4 border-[#1B6B7B] border-t-transparent rounded-full animate-spin" />
+        <div className="w-8 h-8 border-4 border-brand-600 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 bg-[#F8FBFC]">
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-[#E2EBEC] p-8">
+      <div className="w-full max-w-md bg-surface rounded-2xl shadow-xl border border-[#E2EBEC] p-8">
         <div className="text-center mb-6">
-          <div className="w-12 h-12 bg-[#1B6B7B]/10 rounded-xl flex items-center justify-center mx-auto mb-4">
-            <svg className="w-6 h-6 text-[#1B6B7B]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <div className="w-12 h-12 bg-brand-600/10 rounded-xl flex items-center justify-center mx-auto mb-4">
+            <svg className="w-6 h-6 text-brand-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
             </svg>
           </div>

@@ -188,7 +188,7 @@ export default function StudentPatientsPage() {
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold text-gray-900 mb-2 flex items-center gap-3">
-          <FontAwesomeIcon icon={faHospitalUser} className="text-[#1B6B7B]" />
+          <FontAwesomeIcon icon={faHospitalUser} className="text-brand-600" />
           Patient Records
         </h1>
         <p className="text-gray-500">
@@ -198,10 +198,10 @@ export default function StudentPatientsPage() {
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+        <div className="bg-surface p-5 rounded-2xl shadow-sm border border-gray-100">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-[#1B6B7B]/10 rounded-xl flex items-center justify-center">
-              <FontAwesomeIcon icon={faHospitalUser} className="w-5 h-5 text-[#1B6B7B]" />
+            <div className="w-10 h-10 bg-brand-600/10 rounded-xl flex items-center justify-center">
+              <FontAwesomeIcon icon={faHospitalUser} className="w-5 h-5 text-brand-600" />
             </div>
             <div>
               <p className="text-2xl font-bold text-gray-800">{cleanedPatients.length}</p>
@@ -209,7 +209,7 @@ export default function StudentPatientsPage() {
             </div>
           </div>
         </div>
-        <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+        <div className="bg-surface p-5 rounded-2xl shadow-sm border border-gray-100">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-rose-50 rounded-xl flex items-center justify-center">
               <FontAwesomeIcon icon={faExclamationTriangle} className="w-5 h-5 text-rose-600" />
@@ -220,7 +220,7 @@ export default function StudentPatientsPage() {
             </div>
           </div>
         </div>
-        <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+        <div className="bg-surface p-5 rounded-2xl shadow-sm border border-gray-100">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center">
               <FontAwesomeIcon icon={faNotesMedical} className="w-5 h-5 text-amber-600" />
@@ -245,15 +245,15 @@ export default function StudentPatientsPage() {
             placeholder="Search by name, diagnosis, room, MIMIC ID..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30 focus:border-[#1B6B7B] focus:bg-white transition-all text-sm shadow-sm"
+            className="w-full pl-10 pr-4 py-2.5 bg-surface border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 focus:bg-surface transition-all text-sm shadow-sm"
           />
         </div>
-        <label className="flex items-center gap-3 px-4 py-2.5 bg-white border border-gray-200 rounded-xl cursor-pointer hover:bg-gray-50 transition-colors">
+        <label className="flex items-center gap-3 px-4 py-2.5 bg-surface border border-gray-200 rounded-xl cursor-pointer hover:bg-gray-50 transition-colors">
           <input
             type="checkbox"
             checked={abnormalOnly}
             onChange={(e) => setAbnormalOnly(e.target.checked)}
-            className="w-4 h-4 text-[#1B6B7B] rounded focus:ring-[#1B6B7B]"
+            className="w-4 h-4 text-brand-600 rounded focus:ring-brand-600"
           />
           <span className="text-sm font-medium text-gray-700 flex items-center gap-2">
             <FontAwesomeIcon icon={faFilter} className="w-3.5 h-3.5 text-gray-500" />
@@ -263,10 +263,10 @@ export default function StudentPatientsPage() {
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="bg-surface rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center p-12">
-            <FontAwesomeIcon icon={faSpinner} spin className="w-8 h-8 text-[#1B6B7B]" />
+            <FontAwesomeIcon icon={faSpinner} spin className="w-8 h-8 text-brand-600" />
           </div>
         ) : cleanedPatients.length === 0 ? (
           <div className="p-12 text-center">
@@ -281,7 +281,7 @@ export default function StudentPatientsPage() {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-gray-50/50 border-b border-gray-200">
+              <thead className="bg-subtle border-b border-gray-200">
                 <tr>
                   <th className="text-left py-4 px-6 font-semibold text-gray-600">Patient</th>
                   <th className="text-left py-4 px-6 font-semibold text-gray-600">Room</th>
@@ -299,11 +299,11 @@ export default function StudentPatientsPage() {
                 {cleanedPatients.map((patient) => (
                   <tr
                     key={patient.id}
-                    className="hover:bg-gray-50/50 transition-colors"
+                    className="hover:bg-subtle transition-colors"
                   >
                     <td className="py-4 px-6">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-[#1B6B7B]/10 rounded-full flex items-center justify-center text-[#1B6B7B] font-semibold">
+                        <div className="w-10 h-10 bg-brand-600/10 rounded-full flex items-center justify-center text-brand-600 font-semibold">
                           <FontAwesomeIcon icon={faUser} className="w-4 h-4" />
                         </div>
                         <div>
@@ -372,7 +372,7 @@ export default function StudentPatientsPage() {
                       <div className="flex items-center gap-1">
                         <button
                           onClick={() => setSelectedPatient(patient)}
-                          className="flex items-center gap-1.5 text-[#1B6B7B] hover:text-[#145a63] font-medium text-sm hover:bg-[#1B6B7B]/5 px-3 py-1.5 rounded-lg transition-colors"
+                          className="flex items-center gap-1.5 text-brand-600 hover:text-brand-700 font-medium text-sm hover:bg-brand-600/5 px-3 py-1.5 rounded-lg transition-colors"
                         >
                           <FontAwesomeIcon icon={faEye} className="w-4 h-4" />
                           Details
@@ -419,10 +419,10 @@ export default function StudentPatientsPage() {
       {/* Details Modal */}
       {selectedPatient && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
+          <div className="bg-surface rounded-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
             <div className="p-6 border-b border-gray-200 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-[#1B6B7B]/10 rounded-full flex items-center justify-center text-[#1B6B7B]">
+                <div className="w-12 h-12 bg-brand-600/10 rounded-full flex items-center justify-center text-brand-600">
                   <FontAwesomeIcon icon={faUser} className="w-5 h-5" />
                 </div>
                 <div>
@@ -571,7 +571,7 @@ export default function StudentPatientsPage() {
             <div className="p-6 border-t border-gray-200 bg-gray-50 flex justify-end">
               <button
                 onClick={() => setSelectedPatient(null)}
-                className="px-4 py-2.5 border border-gray-200 text-gray-700 rounded-xl font-medium hover:bg-white transition-all"
+                className="px-4 py-2.5 border border-gray-200 text-gray-700 rounded-xl font-medium hover:bg-surface transition-all"
               >
                 Close
               </button>
@@ -696,7 +696,7 @@ function LogVitalsModal({
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
+      <div className="bg-surface rounded-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
         <div className="p-6 border-b border-gray-200 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 bg-emerald-50 rounded-full flex items-center justify-center text-emerald-700">
@@ -778,7 +778,7 @@ function LogVitalsModal({
                   onChange={(e) =>
                     setValues((prev) => ({ ...prev, [field.key]: e.target.value }))
                   }
-                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-xl text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30 focus:border-[#1B6B7B] text-sm"
+                  className="w-full px-3 py-2 bg-surface border border-gray-300 rounded-xl text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 text-sm"
                 />
               </div>
             ))}
@@ -793,7 +793,7 @@ function LogVitalsModal({
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Observations, patient condition, context..."
-              className="w-full px-3 py-2 bg-white border border-gray-300 rounded-xl text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30 focus:border-[#1B6B7B] text-sm resize-none"
+              className="w-full px-3 py-2 bg-surface border border-gray-300 rounded-xl text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 text-sm resize-none"
             />
           </div>
 
@@ -852,14 +852,14 @@ function LogVitalsModal({
         <div className="p-6 border-t border-gray-200 bg-gray-50 flex justify-end gap-3">
           <button
             onClick={onClose}
-            className="px-4 py-2.5 border border-gray-200 text-gray-700 rounded-xl font-medium hover:bg-white transition-all"
+            className="px-4 py-2.5 border border-gray-200 text-gray-700 rounded-xl font-medium hover:bg-surface transition-all"
           >
             Close
           </button>
           <button
             onClick={handleSubmit}
             disabled={submitting || !hasAnyValue}
-            className="px-4 py-2.5 bg-[#1B6B7B] text-white rounded-xl font-medium hover:bg-[#145a63] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            className="px-4 py-2.5 bg-brand-600 text-white rounded-xl font-medium hover:bg-brand-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
             {submitting && <FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" />}
             Save Reading

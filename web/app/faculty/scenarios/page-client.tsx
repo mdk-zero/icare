@@ -83,7 +83,7 @@ const emptyEditForm = {
 };
 
 const inputClassName =
-  "w-full px-4 py-3 bg-white border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30 focus:border-[#1B6B7B] focus:bg-white transition-all text-sm shadow-sm";
+  "w-full px-4 py-3 bg-surface border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 focus:bg-surface transition-all text-sm shadow-sm";
 
 const labelClassName = "block text-sm font-bold text-gray-800 mb-2";
 
@@ -673,7 +673,7 @@ export default function FacultyScenariosClient() {
   );
 
   const selectClassName =
-    "w-full px-4 py-3 bg-white border border-gray-400 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30 focus:border-[#1B6B7B] focus:bg-white transition-all text-sm appearance-none shadow-sm cursor-pointer";
+    "w-full px-4 py-3 bg-surface border border-gray-400 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 focus:bg-surface transition-all text-sm appearance-none shadow-sm cursor-pointer";
 
   return (
     <div>
@@ -699,15 +699,15 @@ export default function FacultyScenariosClient() {
             icon={<FontAwesomeIcon icon={faNotesMedical} className="w-5 h-5" />}
             value={scenarios.length}
             label="Total Scenarios"
-            iconBg="bg-[#1B6B7B]/10"
-            iconColor="text-[#1B6B7B]"
+            iconBg="bg-brand-600/10"
+            iconColor="text-brand-600"
           />
           <StatTile
             icon={<FontAwesomeIcon icon={faRobot} className="w-5 h-5" />}
             value={scenarios.filter((s) => s.is_ai_generated).length}
             label="AI Generated"
-            iconBg="bg-purple-50"
-            iconColor="text-purple-600"
+            iconBg="bg-brand-50"
+            iconColor="text-brand-600"
           />
           <StatTile
             icon={<FontAwesomeIcon icon={faUsers} className="w-5 h-5" />}
@@ -778,25 +778,34 @@ export default function FacultyScenariosClient() {
             />
           </div>
           <div className="flex justify-end gap-3">
+            {/* Primary: the manual path. */}
             <button
               onClick={() => setShowCreateModal(true)}
-              className="flex items-center gap-2 px-4 py-2.5 bg-[#1B6B7B] text-white font-medium rounded-lg hover:bg-[#145a63] transition-all shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
+              className="flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_2px_8px_-1px_rgb(27_107_123_/_0.35)] transition-all hover:bg-brand-700 hover:shadow-[0_4px_14px_-2px_rgb(27_107_123_/_0.45)]"
             >
               <FontAwesomeIcon icon={faPlus} className="w-4 h-4" />
-              Create Scenario
+              Create
             </button>
+            {/* AI actions wear the sidebar's dark panel + mint accent, so "the
+                machine did this" is legible at a glance without leaving the palette. */}
             <button
               onClick={openAIModal}
-              className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-medium rounded-xl hover:from-purple-700 hover:to-indigo-700 transition-all shadow-lg shadow-purple-500/20"
+              className="group flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl bg-brand-950 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_4px_14px_-3px_rgb(11_61_61_/_0.5)] ring-1 ring-white/10 transition-all hover:bg-brand-900 hover:shadow-[0_6px_18px_-3px_rgb(11_61_61_/_0.6)]"
             >
-              <FontAwesomeIcon icon={faRobot} className="w-4 h-4" />
+              <FontAwesomeIcon
+                icon={faRobot}
+                className="w-4 h-4 text-[#5eead4] transition-transform group-hover:scale-110"
+              />
               AI Generate
             </button>
             <button
               onClick={openBatchModal}
-              className="flex items-center gap-2 px-4 py-2.5 bg-white border border-purple-300 text-purple-700 font-medium rounded-xl hover:bg-purple-50 transition-all whitespace-nowrap"
+              className="group flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl border border-brand-700/25 bg-surface px-4 py-2.5 text-sm font-semibold text-brand-800 transition-all hover:border-brand-700/40 hover:bg-brand-50"
             >
-              <FontAwesomeIcon icon={faLayerGroup} className="w-4 h-4" />
+              <FontAwesomeIcon
+                icon={faLayerGroup}
+                className="w-4 h-4 text-brand-600 transition-transform group-hover:scale-110"
+              />
               Generate Library
             </button>
           </div>
@@ -811,7 +820,7 @@ export default function FacultyScenariosClient() {
           ))}
         </div>
       ) : filteredScenarios.length === 0 ? (
-        <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] p-12 text-center">
+        <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] p-12 text-center">
           <FontAwesomeIcon icon={faNotesMedical} className="w-12 h-12 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-gray-700">No scenarios found</h3>
           <p className="text-gray-500 text-sm mt-1">
@@ -822,7 +831,7 @@ export default function FacultyScenariosClient() {
           {!searchQuery && difficultyFilter === "all" && categoryFilter === "all" && (
             <button
               onClick={openBatchModal}
-              className="mt-4 inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-medium rounded-xl hover:from-purple-700 hover:to-indigo-700 transition-all shadow-lg shadow-purple-500/20"
+              className="mt-4 inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-brand-600 to-brand-800 text-white font-medium rounded-xl hover:from-brand-700 hover:to-brand-900 transition-all shadow-lg shadow-[0_4px_14px_-2px_rgb(27_107_123_/_0.45)]"
             >
               <FontAwesomeIcon icon={faLayerGroup} className="w-4 h-4" />
               Generate Library
@@ -834,19 +843,19 @@ export default function FacultyScenariosClient() {
           {filteredScenarios.map((scenario) => (
             <div
               key={scenario.id}
-              className="group relative bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200 overflow-hidden flex flex-col"
+              className="group relative bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200 overflow-hidden flex flex-col"
             >
               <span
                 className={`absolute left-0 top-0 h-full w-0.5 ${difficultyBar[scenario.difficulty] ?? "bg-gray-500"}`}
                 aria-hidden
               />
-              <div className="p-3 border-b border-gray-100/80 flex-1">
+              <div className="p-3 border-b border-hairline flex-1">
                 <div className="flex items-start justify-between mb-3">
                   <h3 className="font-semibold text-gray-900 line-clamp-2 pr-2">
                     {scenario.title}
                   </h3>
                   {scenario.is_ai_generated && (
-                    <span className="px-2 py-1 bg-purple-100 text-purple-700 text-xs font-medium rounded-full flex items-center gap-1 whitespace-nowrap">
+                    <span className="px-2 py-1 bg-brand-100 text-brand-700 text-xs font-medium rounded-full flex items-center gap-1 whitespace-nowrap">
                       <FontAwesomeIcon icon={faRobot} className="w-3 h-3" />
                       AI
                     </span>
@@ -876,7 +885,7 @@ export default function FacultyScenariosClient() {
                   )}
                 </div>
               </div>
-              <div className="p-5 bg-gray-50/50">
+              <div className="p-5 bg-subtle">
                 <div className="flex items-center justify-between text-sm mb-4">
                   <span className="text-gray-500 flex items-center gap-1.5">
                     <FontAwesomeIcon icon={faUsers} className="w-3.5 h-3.5" />
@@ -890,28 +899,28 @@ export default function FacultyScenariosClient() {
                 <div className="grid grid-cols-2 gap-1">
                   <button
                     onClick={() => handleViewDetails(scenario)}
-                    className="flex items-center justify-center gap-1.5 text-sm text-[#1B6B7B] font-medium hover:text-[#145a63] transition-colors py-2 rounded-lg hover:bg-[#1B6B7B]/5"
+                    className="flex items-center justify-center gap-1.5 text-sm text-brand-600 font-medium hover:text-brand-700 transition-colors py-2 rounded-lg hover:bg-brand-600/5"
                   >
                     <FontAwesomeIcon icon={faEye} className="w-4 h-4" />
                     View
                   </button>
                   <button
                     onClick={() => handleOpenEditModal(scenario)}
-                    className="flex items-center justify-center gap-1.5 text-sm text-[#1B6B7B] font-medium hover:text-[#145a63] transition-colors py-2 rounded-lg hover:bg-[#1B6B7B]/5"
+                    className="flex items-center justify-center gap-1.5 text-sm text-brand-600 font-medium hover:text-brand-700 transition-colors py-2 rounded-lg hover:bg-brand-600/5"
                   >
                     <FontAwesomeIcon icon={faPenToSquare} className="w-4 h-4" />
                     Edit
                   </button>
                   <button
                     onClick={() => handleOpenAssignModal(scenario)}
-                    className="flex items-center justify-center gap-1.5 text-sm text-[#1B6B7B] font-medium hover:text-[#145a63] transition-colors py-2 rounded-lg hover:bg-[#1B6B7B]/5"
+                    className="flex items-center justify-center gap-1.5 text-sm text-brand-600 font-medium hover:text-brand-700 transition-colors py-2 rounded-lg hover:bg-brand-600/5"
                   >
                     <FontAwesomeIcon icon={faUserPlus} className="w-4 h-4" />
                     Assign
                   </button>
                   <button
                     onClick={() => handleOpenLinkPatientModal(scenario)}
-                    className="flex items-center justify-center gap-1.5 text-sm text-[#1B6B7B] font-medium hover:text-[#145a63] transition-colors py-2 rounded-lg hover:bg-[#1B6B7B]/5"
+                    className="flex items-center justify-center gap-1.5 text-sm text-brand-600 font-medium hover:text-brand-700 transition-colors py-2 rounded-lg hover:bg-brand-600/5"
                   >
                     <FontAwesomeIcon icon={faHospitalUser} className="w-4 h-4" />
                     {scenario.patient_name ? "Patient" : "Link"}
@@ -926,11 +935,11 @@ export default function FacultyScenariosClient() {
       {/* Create Scenario Modal */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl w-full max-w-lg max-h-[85vh] overflow-hidden flex flex-col shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-gray-200/80">
-            <div className="p-4 border-b border-gray-100/80 flex items-center justify-between bg-gray-50/50">
+          <div className="bg-surface rounded-xl w-full max-w-lg max-h-[85vh] overflow-hidden flex flex-col shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-hairline">
+            <div className="p-4 border-b border-hairline flex items-center justify-between bg-subtle">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-[#1B6B7B]/10 rounded-lg flex items-center justify-center">
-                  <FontAwesomeIcon icon={faPlus} className="text-[#1B6B7B] w-5 h-5" />
+                <div className="w-10 h-10 bg-brand-600/10 rounded-lg flex items-center justify-center">
+                  <FontAwesomeIcon icon={faPlus} className="text-brand-600 w-5 h-5" />
                 </div>
                 <div>
                   <h3 className="text-lg font-bold text-gray-900">Create Scenario</h3>
@@ -1060,14 +1069,14 @@ export default function FacultyScenariosClient() {
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}
-                  className="px-5 py-2.5 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-all"
+                  className="px-5 py-2.5 bg-surface border border-gray-200 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-all"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={creating || !createForm.title.trim()}
-                  className="px-5 py-2.5 bg-[#1B6B7B] text-white rounded-lg font-medium hover:bg-[#145a63] transition-all disabled:opacity-50 flex items-center gap-2 shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
+                  className="px-5 py-2.5 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 transition-all disabled:opacity-50 flex items-center gap-2 shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
                 >
                   {creating && <FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" />}
                   Create Scenario
@@ -1081,11 +1090,11 @@ export default function FacultyScenariosClient() {
       {/* Edit Scenario Modal */}
       {showEditModal && editTarget && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl w-full max-w-lg max-h-[85vh] overflow-hidden flex flex-col shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-gray-200/80">
-            <div className="p-4 border-b border-gray-100/80 flex items-center justify-between bg-gray-50/50">
+          <div className="bg-surface rounded-xl w-full max-w-lg max-h-[85vh] overflow-hidden flex flex-col shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-hairline">
+            <div className="p-4 border-b border-hairline flex items-center justify-between bg-subtle">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-[#1B6B7B]/10 rounded-lg flex items-center justify-center">
-                  <FontAwesomeIcon icon={faPenToSquare} className="text-[#1B6B7B] w-5 h-5" />
+                <div className="w-10 h-10 bg-brand-600/10 rounded-lg flex items-center justify-center">
+                  <FontAwesomeIcon icon={faPenToSquare} className="text-brand-600 w-5 h-5" />
                 </div>
                 <div>
                   <h3 className="text-lg font-bold text-gray-900">Edit Scenario</h3>
@@ -1202,14 +1211,14 @@ export default function FacultyScenariosClient() {
                 <button
                   type="button"
                   onClick={closeEditModal}
-                  className="px-5 py-2.5 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-all"
+                  className="px-5 py-2.5 bg-surface border border-gray-200 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-all"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={saving || !editForm.title.trim()}
-                  className="px-5 py-2.5 bg-[#1B6B7B] text-white rounded-lg font-medium hover:bg-[#145a63] transition-all disabled:opacity-50 flex items-center gap-2 shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
+                  className="px-5 py-2.5 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 transition-all disabled:opacity-50 flex items-center gap-2 shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
                 >
                   {saving && <FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" />}
                   Save Changes
@@ -1223,11 +1232,11 @@ export default function FacultyScenariosClient() {
       {/* Generate Library Modal */}
       {showBatchModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-gray-200/80">
-            <div className="p-4 border-b border-gray-100/80 flex items-center justify-between bg-gray-50/50">
+          <div className="bg-surface rounded-xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-hairline">
+            <div className="p-4 border-b border-hairline flex items-center justify-between bg-subtle">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
-                  <FontAwesomeIcon icon={faLayerGroup} className="text-purple-600 w-5 h-5" />
+                <div className="w-10 h-10 bg-brand-100 rounded-xl flex items-center justify-center">
+                  <FontAwesomeIcon icon={faLayerGroup} className="text-brand-600 w-5 h-5" />
                 </div>
                 <div>
                   <h3 className="text-lg font-bold text-gray-900">Generate Scenario Library</h3>
@@ -1259,8 +1268,8 @@ export default function FacultyScenariosClient() {
                           disabled={batchGenerating}
                           className={`flex-1 py-2.5 rounded-xl text-sm font-semibold border transition-all disabled:opacity-50 ${
                             batchCount === n
-                              ? "bg-purple-600 text-white border-purple-600 shadow-sm"
-                              : "bg-white text-gray-700 border-gray-300 hover:border-purple-300 hover:bg-purple-50"
+                              ? "bg-brand-600 text-white border-brand-600 shadow-sm"
+                              : "bg-surface text-gray-700 border-gray-300 hover:border-brand-300 hover:bg-brand-50"
                           }`}
                         >
                           {n}
@@ -1280,8 +1289,8 @@ export default function FacultyScenariosClient() {
                           disabled={batchGenerating}
                           className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all disabled:opacity-50 ${
                             batchCategories.includes(cat)
-                              ? "bg-purple-100 text-purple-700 border-purple-300"
-                              : "bg-white text-gray-600 border-gray-300 hover:border-purple-300"
+                              ? "bg-brand-100 text-brand-700 border-brand-300"
+                              : "bg-surface text-gray-600 border-gray-300 hover:border-brand-300"
                           }`}
                         >
                           {cat}
@@ -1328,13 +1337,13 @@ export default function FacultyScenariosClient() {
                     />
                   </div>
 
-                  <label className="flex items-start gap-3 p-3 rounded-xl border border-gray-200 hover:bg-gray-50/50 cursor-pointer transition-colors">
+                  <label className="flex items-start gap-3 p-3 rounded-xl border border-gray-200 hover:bg-subtle cursor-pointer transition-colors">
                     <input
                       type="checkbox"
                       checked={batchUsePatients}
                       onChange={(e) => setBatchUsePatients(e.target.checked)}
                       disabled={batchGenerating}
-                      className="mt-0.5 w-4 h-4 accent-purple-600"
+                      className="mt-0.5 w-4 h-4 accent-brand-600"
                     />
                     <span>
                       <span className="block text-sm font-semibold text-gray-800">
@@ -1358,7 +1367,7 @@ export default function FacultyScenariosClient() {
                   )}
 
                   {batchGenerating && (
-                    <div className="p-4 rounded-xl border border-purple-200 bg-purple-50/50 text-sm text-purple-800 flex items-center gap-3">
+                    <div className="p-4 rounded-xl border border-brand-200 bg-brand-50/50 text-sm text-brand-800 flex items-center gap-3">
                       <FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" />
                       Writing {batchCount} scenarios — this takes up to a minute for larger batches.
                     </div>
@@ -1390,7 +1399,7 @@ export default function FacultyScenariosClient() {
                         )
                       }
                       disabled={batchSaving}
-                      className="text-sm font-medium text-purple-700 hover:text-purple-900 disabled:opacity-50"
+                      className="text-sm font-medium text-brand-700 hover:text-brand-900 disabled:opacity-50"
                     >
                       {batchSelected.length === batchDrafts.length ? "Deselect all" : "Select all"}
                     </button>
@@ -1407,8 +1416,8 @@ export default function FacultyScenariosClient() {
                           key={i}
                           className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
                             checked
-                              ? "border-purple-300 bg-purple-50/40"
-                              : "border-gray-200 hover:bg-gray-50/50"
+                              ? "border-brand-300 bg-brand-50/40"
+                              : "border-gray-200 hover:bg-subtle"
                           }`}
                         >
                           <input
@@ -1420,7 +1429,7 @@ export default function FacultyScenariosClient() {
                                 prev.includes(i) ? prev.filter((x) => x !== i) : [...prev, i],
                               )
                             }
-                            className="mt-1 w-4 h-4 accent-purple-600"
+                            className="mt-1 w-4 h-4 accent-brand-600"
                           />
                           <div className="min-w-0 flex-1">
                             <p className="font-semibold text-gray-900">{draft.title}</p>
@@ -1457,12 +1466,12 @@ export default function FacultyScenariosClient() {
               )}
             </div>
 
-            <div className="p-4 border-t border-gray-100/80 bg-gray-50/50 flex justify-end gap-3">
+            <div className="p-4 border-t border-hairline bg-subtle flex justify-end gap-3">
               <button
                 type="button"
                 onClick={closeBatchModal}
                 disabled={batchGenerating || batchSaving}
-                className="px-5 py-2.5 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-all disabled:opacity-50"
+                className="px-5 py-2.5 bg-surface border border-gray-200 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-all disabled:opacity-50"
               >
                 Cancel
               </button>
@@ -1471,7 +1480,7 @@ export default function FacultyScenariosClient() {
                   type="button"
                   onClick={handleGenerateBatch}
                   disabled={batchGenerating}
-                  className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg font-medium hover:from-purple-700 hover:to-indigo-700 transition-all disabled:opacity-50 flex items-center gap-2 shadow-lg shadow-purple-500/20"
+                  className="px-5 py-2.5 bg-gradient-to-r from-brand-600 to-brand-800 text-white rounded-lg font-medium hover:from-brand-700 hover:to-brand-900 transition-all disabled:opacity-50 flex items-center gap-2 shadow-lg shadow-[0_4px_14px_-2px_rgb(27_107_123_/_0.45)]"
                 >
                   {batchGenerating ? (
                     <>
@@ -1491,7 +1500,7 @@ export default function FacultyScenariosClient() {
                     type="button"
                     onClick={handleGenerateBatch}
                     disabled={batchSaving}
-                    className="px-5 py-2.5 bg-white border border-purple-300 text-purple-700 rounded-lg font-medium hover:bg-purple-50 transition-all disabled:opacity-50"
+                    className="px-5 py-2.5 bg-surface border border-brand-300 text-brand-700 rounded-lg font-medium hover:bg-brand-50 transition-all disabled:opacity-50"
                   >
                     Regenerate
                   </button>
@@ -1499,7 +1508,7 @@ export default function FacultyScenariosClient() {
                     type="button"
                     onClick={handleSaveBatch}
                     disabled={batchSaving || batchSelected.length === 0}
-                    className="px-5 py-2.5 bg-[#1B6B7B] text-white rounded-lg font-medium hover:bg-[#145a63] transition-all disabled:opacity-50 flex items-center gap-2 shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
+                    className="px-5 py-2.5 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 transition-all disabled:opacity-50 flex items-center gap-2 shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
                   >
                     {batchSaving ? (
                       <>
@@ -1520,11 +1529,11 @@ export default function FacultyScenariosClient() {
       {/* AI Generate Modal */}
       {showAIModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-gray-200/80">
-            <div className="p-4 border-b border-gray-100/80 flex items-center justify-between bg-gray-50/50">
+          <div className="bg-surface rounded-xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-hairline">
+            <div className="p-4 border-b border-hairline flex items-center justify-between bg-subtle">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
-                  <FontAwesomeIcon icon={faRobot} className="text-purple-600 w-5 h-5" />
+                <div className="w-10 h-10 bg-brand-100 rounded-xl flex items-center justify-center">
+                  <FontAwesomeIcon icon={faRobot} className="text-brand-600 w-5 h-5" />
                 </div>
                 <div>
                   <h3 className="text-lg font-bold text-gray-900">AI Scenario Generator</h3>
@@ -1594,7 +1603,7 @@ export default function FacultyScenariosClient() {
                     type="button"
                     onClick={handleSuggestAI}
                     disabled={suggesting || patients.length === 0}
-                    className="text-sm flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 text-purple-700 hover:bg-purple-100 rounded-lg font-medium transition-colors disabled:opacity-50"
+                    className="text-sm flex items-center gap-1.5 px-3 py-1.5 bg-brand-50 text-brand-700 hover:bg-brand-100 rounded-lg font-medium transition-colors disabled:opacity-50"
                   >
                     {suggesting && (
                       <FontAwesomeIcon icon={faSpinner} spin className="w-3.5 h-3.5" />
@@ -1636,7 +1645,7 @@ export default function FacultyScenariosClient() {
                   onClick={() => setSelectedPatientId("")}
                   className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-all mb-3 ${
                     selectedPatientId === ""
-                      ? "border-[#1B6B7B] bg-[#1B6B7B]/5"
+                      ? "border-brand-600 bg-brand-600/5"
                       : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
                   }`}
                 >
@@ -1644,7 +1653,7 @@ export default function FacultyScenariosClient() {
                     Generate from prompt only
                   </span>
                   {selectedPatientId === "" && (
-                    <div className="w-6 h-6 bg-[#1B6B7B] rounded-full flex items-center justify-center">
+                    <div className="w-6 h-6 bg-brand-600 rounded-full flex items-center justify-center">
                       <FontAwesomeIcon icon={faCheck} className="w-3.5 h-3.5 text-white" />
                     </div>
                   )}
@@ -1652,9 +1661,9 @@ export default function FacultyScenariosClient() {
 
                 {/* Selected patient badge */}
                 {selectedPatient && (
-                  <div className="mb-3 p-3 bg-purple-50 border border-purple-200 rounded-xl flex items-center justify-between">
+                  <div className="mb-3 p-3 bg-brand-50 border border-brand-200 rounded-xl flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center text-purple-600">
+                      <div className="w-8 h-8 bg-brand-100 rounded-full flex items-center justify-center text-brand-600">
                         <FontAwesomeIcon icon={faHospitalUser} className="w-4 h-4" />
                       </div>
                       <div>
@@ -1668,7 +1677,7 @@ export default function FacultyScenariosClient() {
                     </div>
                     <button
                       onClick={() => setSelectedPatientId("")}
-                      className="text-xs text-purple-700 hover:text-purple-900 font-medium"
+                      className="text-xs text-brand-700 hover:text-brand-900 font-medium"
                     >
                       Clear
                     </button>
@@ -1677,7 +1686,7 @@ export default function FacultyScenariosClient() {
 
                 {/* Searchable patient table */}
                 <div className="border border-gray-200 rounded-xl overflow-hidden">
-                  <div className="p-3 border-b border-gray-200 bg-gray-50/50">
+                  <div className="p-3 border-b border-gray-200 bg-subtle">
                     <div className="relative">
                       <FontAwesomeIcon
                         icon={faSearch}
@@ -1695,7 +1704,7 @@ export default function FacultyScenariosClient() {
                   <div className="max-h-[220px] overflow-y-auto custom-scrollbar">
                     {loadingPatients ? (
                       <div className="p-8 text-center">
-                        <FontAwesomeIcon icon={faSpinner} spin className="w-6 h-6 text-[#1B6B7B]" />
+                        <FontAwesomeIcon icon={faSpinner} spin className="w-6 h-6 text-brand-600" />
                         <p className="text-sm text-gray-500 mt-2">Loading patients...</p>
                       </div>
                     ) : filteredPatients.length === 0 ? (
@@ -1729,13 +1738,13 @@ export default function FacultyScenariosClient() {
                               onClick={() => setSelectedPatientId(patient.id)}
                               className={`cursor-pointer transition-colors ${
                                 selectedPatientId === patient.id
-                                  ? "bg-[#1B6B7B]/5 hover:bg-[#1B6B7B]/10"
+                                  ? "bg-brand-600/5 hover:bg-brand-600/10"
                                   : "hover:bg-gray-50"
                               }`}
                             >
                               <td className="py-2.5 px-4">
                                 <div className="flex items-center gap-2">
-                                  <div className="w-7 h-7 bg-[#1B6B7B]/10 rounded-full flex items-center justify-center text-[#1B6B7B] text-xs font-semibold">
+                                  <div className="w-7 h-7 bg-brand-600/10 rounded-full flex items-center justify-center text-brand-600 text-xs font-semibold">
                                     {patient.name.charAt(0)}
                                   </div>
                                   <div>
@@ -1771,8 +1780,8 @@ export default function FacultyScenariosClient() {
               {/* AI Preview */}
               {aiPreview && (
                 <div className="space-y-4">
-                  <div className="flex items-center gap-2 pb-2 border-b border-gray-100/80">
-                    <FontAwesomeIcon icon={faRobot} className="text-purple-600" />
+                  <div className="flex items-center gap-2 pb-2 border-b border-hairline">
+                    <FontAwesomeIcon icon={faRobot} className="text-brand-600" />
                     <h4 className="font-bold text-gray-900">Generated Preview</h4>
                   </div>
                   <div className="space-y-3">
@@ -1823,19 +1832,19 @@ export default function FacultyScenariosClient() {
                 </div>
               )}
             </div>
-            <div className="p-4 border-t border-gray-100/80 bg-gray-50/50 flex justify-end gap-3">
+            <div className="p-4 border-t border-hairline bg-subtle flex justify-end gap-3">
               {!aiPreview ? (
                 <>
                   <button
                     onClick={closeAIModal}
-                    className="px-5 py-2.5 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-all"
+                    className="px-5 py-2.5 bg-surface border border-gray-200 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-all"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={handleGenerateAI}
                     disabled={generating || !aiPrompt.trim()}
-                    className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg font-medium hover:from-purple-700 hover:to-indigo-700 transition-all disabled:opacity-50 flex items-center gap-2 shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
+                    className="px-5 py-2.5 bg-gradient-to-r from-brand-600 to-brand-800 text-white rounded-lg font-medium hover:from-brand-700 hover:to-brand-900 transition-all disabled:opacity-50 flex items-center gap-2 shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
                   >
                     {generating && <FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" />}
                     <FontAwesomeIcon icon={faBolt} className="w-4 h-4" />
@@ -1846,20 +1855,20 @@ export default function FacultyScenariosClient() {
                 <>
                   <button
                     onClick={() => setAiPreview(null)}
-                    className="px-5 py-2.5 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-all"
+                    className="px-5 py-2.5 bg-surface border border-gray-200 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-all"
                   >
                     Regenerate
                   </button>
                   <button
                     onClick={closeAIModal}
-                    className="px-5 py-2.5 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-all"
+                    className="px-5 py-2.5 bg-surface border border-gray-200 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-all"
                   >
                     Discard
                   </button>
                   <button
                     onClick={handleSaveAIPreview}
                     disabled={savingAIPreview}
-                    className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl font-medium hover:from-purple-700 hover:to-indigo-700 transition-all disabled:opacity-50 flex items-center gap-2"
+                    className="px-5 py-2.5 bg-gradient-to-r from-brand-600 to-brand-800 text-white rounded-xl font-medium hover:from-brand-700 hover:to-brand-900 transition-all disabled:opacity-50 flex items-center gap-2"
                   >
                     {savingAIPreview && (
                       <FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" />
@@ -1877,17 +1886,17 @@ export default function FacultyScenariosClient() {
       {/* Details Modal */}
       {showDetailsModal && selectedScenario && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl w-full max-w-3xl max-h-[85vh] overflow-hidden flex flex-col shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-gray-200/80">
-            <div className="p-4 border-b border-gray-100/80 bg-gray-50/50">
+          <div className="bg-surface rounded-xl w-full max-w-3xl max-h-[85vh] overflow-hidden flex flex-col shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-hairline">
+            <div className="p-4 border-b border-hairline bg-subtle">
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-3 flex-wrap">
-                    <div className="w-10 h-10 bg-[#1B6B7B]/10 rounded-lg flex items-center justify-center">
-                      <FontAwesomeIcon icon={faNotesMedical} className="text-[#1B6B7B] w-5 h-5" />
+                    <div className="w-10 h-10 bg-brand-600/10 rounded-lg flex items-center justify-center">
+                      <FontAwesomeIcon icon={faNotesMedical} className="text-brand-600 w-5 h-5" />
                     </div>
                     <h2 className="text-2xl font-bold text-gray-900">{selectedScenario.title}</h2>
                     {selectedScenario.is_ai_generated && (
-                      <span className="px-2.5 py-1 bg-purple-100 text-purple-700 text-xs font-semibold rounded-full flex items-center gap-1">
+                      <span className="px-2.5 py-1 bg-brand-100 text-brand-700 text-xs font-semibold rounded-full flex items-center gap-1">
                         <FontAwesomeIcon icon={faRobot} className="w-3 h-3" />
                         AI Generated
                       </span>
@@ -1931,7 +1940,7 @@ export default function FacultyScenariosClient() {
             <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
               <div>
                 <h3 className="text-lg font-bold text-gray-900 mb-3 flex items-center gap-2">
-                  <FontAwesomeIcon icon={faStethoscope} className="text-[#1B6B7B]" />
+                  <FontAwesomeIcon icon={faStethoscope} className="text-brand-600" />
                   Patient Case
                 </h3>
                 <div className="bg-gray-50 rounded-xl p-5 border border-gray-200">
@@ -1959,7 +1968,7 @@ export default function FacultyScenariosClient() {
                               ([key, value]) => (
                                 <div
                                   key={key}
-                                  className="bg-white rounded-lg p-3 border border-gray-200"
+                                  className="bg-surface rounded-lg p-3 border border-gray-200"
                                 >
                                   <p className="text-xs text-gray-500 capitalize">
                                     {key.replace(/_/g, " ")}
@@ -2012,7 +2021,7 @@ export default function FacultyScenariosClient() {
 
               <div>
                 <h3 className="text-lg font-bold text-gray-900 mb-3 flex items-center gap-2">
-                  <FontAwesomeIcon icon={faListCheck} className="text-[#1B6B7B]" />
+                  <FontAwesomeIcon icon={faListCheck} className="text-brand-600" />
                   Learning Objectives
                 </h3>
                 <ul className="space-y-2">
@@ -2020,8 +2029,8 @@ export default function FacultyScenariosClient() {
                   selectedScenario.learning_objectives.length > 0 ? (
                     selectedScenario.learning_objectives.map((objective, index) => (
                       <li key={index} className="flex items-start gap-3">
-                        <div className="w-6 h-6 rounded-full bg-[#1B6B7B]/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                          <span className="text-sm font-bold text-[#1B6B7B]">{index + 1}</span>
+                        <div className="w-6 h-6 rounded-full bg-brand-600/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                          <span className="text-sm font-bold text-brand-600">{index + 1}</span>
                         </div>
                         <p className="text-gray-700">{objective}</p>
                       </li>
@@ -2033,11 +2042,11 @@ export default function FacultyScenariosClient() {
               </div>
             </div>
 
-            <div className="p-4 border-t border-gray-100/80 bg-gray-50/50">
+            <div className="p-4 border-t border-hairline bg-subtle">
               <div className="flex justify-end gap-3">
                 <button
                   onClick={() => setShowDetailsModal(false)}
-                  className="px-5 py-2.5 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-all"
+                  className="px-5 py-2.5 bg-surface border border-gray-200 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-all"
                 >
                   Close
                 </button>
@@ -2046,7 +2055,7 @@ export default function FacultyScenariosClient() {
                     setShowDetailsModal(false);
                     handleOpenAssignModal(selectedScenario);
                   }}
-                  className="px-5 py-2.5 bg-[#1B6B7B] text-white rounded-lg font-medium hover:bg-[#145a63] transition-all flex items-center gap-2 shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
+                  className="px-5 py-2.5 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 transition-all flex items-center gap-2 shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
                 >
                   <FontAwesomeIcon icon={faUserPlus} className="w-4 h-4" />
                   Assign to Students
@@ -2060,12 +2069,12 @@ export default function FacultyScenariosClient() {
       {/* Assign Modal */}
       {showAssignModal && selectedScenario && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-gray-200/80">
-            <div className="p-4 border-b border-gray-100/80 bg-gray-50/50">
+          <div className="bg-surface rounded-xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-hairline">
+            <div className="p-4 border-b border-hairline bg-subtle">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-[#1B6B7B]/10 rounded-lg flex items-center justify-center">
-                    <FontAwesomeIcon icon={faUserPlus} className="text-[#1B6B7B] w-5 h-5" />
+                  <div className="w-10 h-10 bg-brand-600/10 rounded-lg flex items-center justify-center">
+                    <FontAwesomeIcon icon={faUserPlus} className="text-brand-600 w-5 h-5" />
                   </div>
                   <div>
                     <h2 className="text-lg font-bold text-gray-900">Assign Scenario</h2>
@@ -2084,7 +2093,7 @@ export default function FacultyScenariosClient() {
             <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
               <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
                 <h3 className="text-sm font-bold text-gray-900 mb-3 flex items-center gap-2">
-                  <FontAwesomeIcon icon={faCalendarDay} className="text-[#1B6B7B]" />
+                  <FontAwesomeIcon icon={faCalendarDay} className="text-brand-600" />
                   Assignment Settings
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -2104,12 +2113,12 @@ export default function FacultyScenariosClient() {
                     </div>
                   </div>
                   <div className="flex items-center pt-7">
-                    <label className="flex items-center gap-3 cursor-pointer p-3 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 transition-colors w-full">
+                    <label className="flex items-center gap-3 cursor-pointer p-3 rounded-xl border border-gray-200 bg-surface hover:bg-gray-50 transition-colors w-full">
                       <input
                         type="checkbox"
                         checked={assignRequired}
                         onChange={(e) => setAssignRequired(e.target.checked)}
-                        className="w-5 h-5 text-[#1B6B7B] rounded focus:ring-[#1B6B7B]"
+                        className="w-5 h-5 text-brand-600 rounded focus:ring-brand-600"
                       />
                       <span className="text-sm font-semibold text-gray-700">
                         Required for all students
@@ -2122,12 +2131,12 @@ export default function FacultyScenariosClient() {
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
-                    <FontAwesomeIcon icon={faUser} className="text-[#1B6B7B]" />
+                    <FontAwesomeIcon icon={faUser} className="text-brand-600" />
                     Select Students
                   </h3>
                   <button
                     onClick={() => setSelectedStudents(filteredStudents.map((s) => s.id))}
-                    className="text-sm text-[#1B6B7B] hover:text-[#145a63] font-semibold"
+                    className="text-sm text-brand-600 hover:text-brand-700 font-semibold"
                   >
                     Select All
                   </button>
@@ -2178,7 +2187,7 @@ export default function FacultyScenariosClient() {
                             key={student.id}
                             className={`transition-colors cursor-pointer ${
                               selectedStudents.includes(student.id)
-                                ? "bg-[#1B6B7B]/5 hover:bg-[#1B6B7B]/10"
+                                ? "bg-brand-600/5 hover:bg-brand-600/10"
                                 : "hover:bg-gray-50"
                             }`}
                             onClick={() => toggleStudentSelection(student.id)}
@@ -2188,12 +2197,12 @@ export default function FacultyScenariosClient() {
                                 type="checkbox"
                                 checked={selectedStudents.includes(student.id)}
                                 onChange={() => toggleStudentSelection(student.id)}
-                                className="w-4 h-4 text-[#1B6B7B] rounded focus:ring-[#1B6B7B]"
+                                className="w-4 h-4 text-brand-600 rounded focus:ring-brand-600"
                               />
                             </td>
                             <td className="py-2.5 px-4 text-sm text-gray-800">
                               <div className="flex items-center gap-2">
-                                <div className="w-7 h-7 bg-[#1B6B7B]/10 rounded-full flex items-center justify-center text-[#1B6B7B] text-xs font-bold">
+                                <div className="w-7 h-7 bg-brand-600/10 rounded-full flex items-center justify-center text-brand-600 text-xs font-bold">
                                   {student.name.charAt(0)}
                                 </div>
                                 {student.name}
@@ -2227,18 +2236,18 @@ export default function FacultyScenariosClient() {
               </div>
             </div>
 
-            <div className="p-4 border-t border-gray-100/80 bg-gray-50/50">
+            <div className="p-4 border-t border-hairline bg-subtle">
               <div className="flex justify-end gap-3">
                 <button
                   onClick={() => setShowAssignModal(false)}
-                  className="px-5 py-2.5 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-all"
+                  className="px-5 py-2.5 bg-surface border border-gray-200 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-all"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleAssignScenario}
                   disabled={selectedStudents.length === 0 || !assignDeadline || assigning}
-                  className="px-5 py-2.5 bg-[#1B6B7B] text-white rounded-lg font-medium hover:bg-[#145a63] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
+                  className="px-5 py-2.5 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
                 >
                   {assigning && <FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" />}
                   Assign to {selectedStudents.length} Student
@@ -2253,11 +2262,11 @@ export default function FacultyScenariosClient() {
       {/* Link Patient Modal */}
       {showLinkPatientModal && linkPatientTarget && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl w-full max-w-lg max-h-[85vh] overflow-hidden flex flex-col shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-gray-200/80">
-            <div className="p-4 border-b border-gray-100/80 flex items-center justify-between bg-gray-50/50">
+          <div className="bg-surface rounded-xl w-full max-w-lg max-h-[85vh] overflow-hidden flex flex-col shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-hairline">
+            <div className="p-4 border-b border-hairline flex items-center justify-between bg-subtle">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-[#1B6B7B]/10 rounded-lg flex items-center justify-center">
-                  <FontAwesomeIcon icon={faHospitalUser} className="text-[#1B6B7B] w-5 h-5" />
+                <div className="w-10 h-10 bg-brand-600/10 rounded-lg flex items-center justify-center">
+                  <FontAwesomeIcon icon={faHospitalUser} className="text-brand-600 w-5 h-5" />
                 </div>
                 <div>
                   <h3 className="text-lg font-bold text-gray-900">Link Patient</h3>
@@ -2283,13 +2292,13 @@ export default function FacultyScenariosClient() {
                 onClick={() => setLinkPatientId("")}
                 className={`w-full flex items-center justify-between p-3 rounded-xl border-2 transition-all ${
                   linkPatientId === ""
-                    ? "border-[#1B6B7B] bg-[#1B6B7B]/5"
+                    ? "border-brand-600 bg-brand-600/5"
                     : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
                 }`}
               >
                 <span className="text-sm font-medium text-gray-700">No linked patient</span>
                 {linkPatientId === "" && (
-                  <div className="w-6 h-6 bg-[#1B6B7B] rounded-full flex items-center justify-center">
+                  <div className="w-6 h-6 bg-brand-600 rounded-full flex items-center justify-center">
                     <FontAwesomeIcon icon={faCheck} className="w-3.5 h-3.5 text-white" />
                   </div>
                 )}
@@ -2320,7 +2329,7 @@ export default function FacultyScenariosClient() {
               )}
 
               <div className="border border-gray-200 rounded-xl overflow-hidden">
-                <div className="p-3 border-b border-gray-200 bg-gray-50/50">
+                <div className="p-3 border-b border-gray-200 bg-subtle">
                   <div className="relative">
                     <FontAwesomeIcon
                       icon={faSearch}
@@ -2338,7 +2347,7 @@ export default function FacultyScenariosClient() {
                 <div className="max-h-[260px] overflow-y-auto custom-scrollbar">
                   {loadingPatients ? (
                     <div className="p-8 text-center">
-                      <FontAwesomeIcon icon={faSpinner} spin className="w-6 h-6 text-[#1B6B7B]" />
+                      <FontAwesomeIcon icon={faSpinner} spin className="w-6 h-6 text-brand-600" />
                       <p className="text-sm text-gray-500 mt-2">Loading patients...</p>
                     </div>
                   ) : linkModalFilteredPatients.length === 0 ? (
@@ -2372,13 +2381,13 @@ export default function FacultyScenariosClient() {
                             onClick={() => setLinkPatientId(patient.id)}
                             className={`cursor-pointer transition-colors ${
                               linkPatientId === patient.id
-                                ? "bg-[#1B6B7B]/5 hover:bg-[#1B6B7B]/10"
+                                ? "bg-brand-600/5 hover:bg-brand-600/10"
                                 : "hover:bg-gray-50"
                             }`}
                           >
                             <td className="py-2.5 px-4">
                               <div className="flex items-center gap-2">
-                                <div className="w-7 h-7 bg-[#1B6B7B]/10 rounded-full flex items-center justify-center text-[#1B6B7B] text-xs font-semibold">
+                                <div className="w-7 h-7 bg-brand-600/10 rounded-full flex items-center justify-center text-brand-600 text-xs font-semibold">
                                   {patient.name.charAt(0)}
                                 </div>
                                 <div>
@@ -2411,17 +2420,17 @@ export default function FacultyScenariosClient() {
               </div>
             </div>
 
-            <div className="p-4 border-t border-gray-100/80 bg-gray-50/50 flex justify-end gap-3">
+            <div className="p-4 border-t border-hairline bg-subtle flex justify-end gap-3">
               <button
                 onClick={closeLinkPatientModal}
-                className="px-5 py-2.5 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-all"
+                className="px-5 py-2.5 bg-surface border border-gray-200 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-all"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSavePatientLink}
                 disabled={savingPatientLink}
-                className="px-5 py-2.5 bg-[#1B6B7B] text-white rounded-lg font-medium hover:bg-[#145a63] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
+                className="px-5 py-2.5 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
               >
                 {savingPatientLink && <FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" />}
                 Save

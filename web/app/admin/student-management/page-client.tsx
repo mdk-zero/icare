@@ -27,7 +27,7 @@ const FilterSelect = ({ value, onChange, options }: { value: string; onChange: (
   <select
     value={value}
     onChange={(e) => onChange(e.target.value)}
-    className="px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/50 focus:border-[#1B6B7B] transition-all cursor-pointer"
+    className="px-4 py-2.5 bg-surface border border-gray-200 rounded-xl text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-600/50 focus:border-brand-600 transition-all cursor-pointer"
   >
     {options.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
   </select>
@@ -66,7 +66,7 @@ const EnrollStudentModal = ({ isOpen, onClose, onEnroll }: { isOpen: boolean; on
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-white rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] w-full max-w-md mx-4 overflow-hidden border border-gray-200/80" onClick={e => e.stopPropagation()}>
+      <div className="bg-surface rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] w-full max-w-md mx-4 overflow-hidden border border-hairline" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <h2 className="text-xl font-bold text-gray-900">Enroll New Student</h2>
           <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
@@ -82,7 +82,7 @@ const EnrollStudentModal = ({ isOpen, onClose, onEnroll }: { isOpen: boolean; on
               type="text"
               value={formData.name}
               onChange={e => setFormData(prev => ({ ...prev, name: e.target.value }))}
-              className={`w-full px-4 py-2.5 bg-white border rounded-xl focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/50 focus:border-[#1B6B7B] transition-all text-gray-700 placeholder:text-gray-400 ${errors.name ? 'border-rose-400' : 'border-gray-200'}`}
+              className={`w-full px-4 py-2.5 bg-surface border rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-600/50 focus:border-brand-600 transition-all text-gray-700 placeholder:text-gray-400 ${errors.name ? 'border-rose-400' : 'border-gray-200'}`}
               placeholder="Enter student's full name"
             />
             {errors.name && <p className="mt-1 text-sm text-rose-500">{errors.name}</p>}
@@ -93,7 +93,7 @@ const EnrollStudentModal = ({ isOpen, onClose, onEnroll }: { isOpen: boolean; on
               type="email"
               value={formData.email}
               onChange={e => setFormData(prev => ({ ...prev, email: e.target.value }))}
-              className={`w-full px-4 py-2.5 bg-white border rounded-xl focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/50 focus:border-[#1B6B7B] transition-all text-gray-700 placeholder:text-gray-400 ${errors.email ? 'border-rose-400' : 'border-gray-200'}`}
+              className={`w-full px-4 py-2.5 bg-surface border rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-600/50 focus:border-brand-600 transition-all text-gray-700 placeholder:text-gray-400 ${errors.email ? 'border-rose-400' : 'border-gray-200'}`}
               placeholder="student@icare.edu"
             />
             {errors.email && <p className="mt-1 text-sm text-rose-500">{errors.email}</p>}
@@ -103,7 +103,7 @@ const EnrollStudentModal = ({ isOpen, onClose, onEnroll }: { isOpen: boolean; on
             <button type="button" onClick={onClose} className="flex-1 px-4 py-2.5 border border-gray-200 text-gray-700 font-medium rounded-xl hover:bg-gray-50 transition-colors">
               Cancel
             </button>
-            <button type="submit" disabled={submitting} className="flex-1 px-4 py-2.5 bg-[#1B6B7B] text-white font-medium rounded-xl hover:bg-[#145a63] hover:shadow-lg disabled:opacity-60 transition-all">
+            <button type="submit" disabled={submitting} className="flex-1 px-4 py-2.5 bg-brand-600 text-white font-medium rounded-xl hover:bg-brand-700 hover:shadow-lg disabled:opacity-60 transition-all">
               {submitting ? "Enrolling…" : "Enroll Student"}
             </button>
           </div>
@@ -213,7 +213,7 @@ export default function StudentManagementClient() {
         <div className="mb-4 bg-amber-50 border border-amber-300 text-amber-800 px-4 py-3 rounded-xl text-sm flex items-center justify-between gap-4">
           <span>
             Temporary password for <strong>{tempPassword.email}</strong>:{" "}
-            <code className="font-mono bg-white px-2 py-0.5 rounded border border-amber-200">{tempPassword.password}</code>{" "}
+            <code className="font-mono bg-surface px-2 py-0.5 rounded border border-amber-200">{tempPassword.password}</code>{" "}
             — an invitation email was attempted; keep this as backup.
           </span>
           <button
@@ -226,10 +226,10 @@ export default function StudentManagementClient() {
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <div className="bg-white rounded-xl p-4 border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200">
+        <div className="bg-surface rounded-xl p-4 border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-[#1B6B7B]/10 rounded-xl flex items-center justify-center">
-              <svg className="w-5 h-5 text-[#1B6B7B]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div className="w-10 h-10 bg-brand-600/10 rounded-xl flex items-center justify-center">
+              <svg className="w-5 h-5 text-brand-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
             </div>
@@ -239,7 +239,7 @@ export default function StudentManagementClient() {
             </div>
           </div>
         </div>
-        <div className="bg-white rounded-xl p-4 border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200">
+        <div className="bg-surface rounded-xl p-4 border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center">
               <svg className="w-5 h-5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -252,7 +252,7 @@ export default function StudentManagementClient() {
             </div>
           </div>
         </div>
-        <div className="bg-white rounded-xl p-4 border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200">
+        <div className="bg-surface rounded-xl p-4 border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-rose-50 rounded-xl flex items-center justify-center">
               <svg className="w-5 h-5 text-rose-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -265,10 +265,10 @@ export default function StudentManagementClient() {
             </div>
           </div>
         </div>
-        <div className="bg-white rounded-xl p-4 border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200">
+        <div className="bg-surface rounded-xl p-4 border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-[#1B6B7B]/10 rounded-xl flex items-center justify-center">
-              <svg className="w-5 h-5 text-[#1B6B7B]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div className="w-10 h-10 bg-brand-600/10 rounded-xl flex items-center justify-center">
+              <svg className="w-5 h-5 text-brand-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
               </svg>
             </div>
@@ -281,7 +281,7 @@ export default function StudentManagementClient() {
       </div>
 
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 mb-6">
-        <button onClick={() => setIsEnrollModalOpen(true)} className="flex items-center justify-center gap-2 px-4 py-3 bg-[#1B6B7B] text-white font-medium rounded-xl hover:bg-[#145a63] hover:shadow-lg transition-all duration-300">
+        <button onClick={() => setIsEnrollModalOpen(true)} className="flex items-center justify-center gap-2 px-4 py-3 bg-brand-600 text-white font-medium rounded-xl hover:bg-brand-700 hover:shadow-lg transition-all duration-300">
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
           </svg>
@@ -297,7 +297,7 @@ export default function StudentManagementClient() {
             placeholder="Search by name or email..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-12 pr-4 py-3 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/50 focus:border-[#1B6B7B] transition-all placeholder:text-gray-400 text-gray-700"
+            className="w-full pl-12 pr-4 py-3 bg-surface border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-600/50 focus:border-brand-600 transition-all placeholder:text-gray-400 text-gray-700"
           />
         </div>
         <FilterSelect
@@ -311,13 +311,13 @@ export default function StudentManagementClient() {
         />
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200 overflow-hidden">
+      <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-gray-50/50 border-b border-gray-100">
+            <thead className="bg-subtle border-b border-gray-100">
               <tr>
                 <th className="text-left py-4 px-4 sm:px-6 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
-                  <button onClick={() => { setSortBy('name'); setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc'); }} className="flex items-center gap-1 hover:text-[#1B6B7B] transition-colors">
+                  <button onClick={() => { setSortBy('name'); setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc'); }} className="flex items-center gap-1 hover:text-brand-600 transition-colors">
                     Student
                     {sortBy === 'name' && (
                       <svg className={`w-4 h-4 ${sortDirection === 'asc' ? '' : 'rotate-180'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -327,7 +327,7 @@ export default function StudentManagementClient() {
                   </button>
                 </th>
                 <th className="text-left py-4 px-4 sm:px-6 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
-                  <button onClick={() => { setSortBy('quizzes_completed'); setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc'); }} className="flex items-center gap-1 hover:text-[#1B6B7B] transition-colors">
+                  <button onClick={() => { setSortBy('quizzes_completed'); setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc'); }} className="flex items-center gap-1 hover:text-brand-600 transition-colors">
                     Quizzes
                     {sortBy === 'quizzes_completed' && (
                       <svg className={`w-4 h-4 ${sortDirection === 'asc' ? '' : 'rotate-180'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -337,7 +337,7 @@ export default function StudentManagementClient() {
                   </button>
                 </th>
                 <th className="text-left py-4 px-4 sm:px-6 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
-                  <button onClick={() => { setSortBy('average_score'); setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc'); }} className="flex items-center gap-1 hover:text-[#1B6B7B] transition-colors">
+                  <button onClick={() => { setSortBy('average_score'); setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc'); }} className="flex items-center gap-1 hover:text-brand-600 transition-colors">
                     Avg. Score
                     {sortBy === 'average_score' && (
                       <svg className={`w-4 h-4 ${sortDirection === 'asc' ? '' : 'rotate-180'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -348,7 +348,7 @@ export default function StudentManagementClient() {
                 </th>
                 <th className="text-left py-4 px-4 sm:px-6 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Status</th>
                 <th className="text-left py-4 px-4 sm:px-6 text-[11px] font-semibold text-gray-500 uppercase tracking-wider hidden sm:table-cell">
-                  <button onClick={() => { setSortBy('last_active'); setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc'); }} className="flex items-center gap-1 hover:text-[#1B6B7B] transition-colors">
+                  <button onClick={() => { setSortBy('last_active'); setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc'); }} className="flex items-center gap-1 hover:text-brand-600 transition-colors">
                     Last Active
                     {sortBy === 'last_active' && (
                       <svg className={`w-4 h-4 ${sortDirection === 'asc' ? '' : 'rotate-180'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -359,7 +359,7 @@ export default function StudentManagementClient() {
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100/80">
+            <tbody className="divide-y divide-hairline">
               {loading ? (
                 <tr>
                   <td colSpan={5} className="py-12 text-center text-gray-400">Loading students…</td>
@@ -372,12 +372,12 @@ export default function StudentManagementClient() {
               filteredStudents.map((student) => (
                 <tr 
                   key={student.id} 
-                  className="hover:bg-gray-50/50 transition-colors group cursor-pointer"
+                  className="hover:bg-subtle transition-colors group cursor-pointer"
                   onClick={() => router.push(`/admin/students/${student.id}`)}
                 >
                   <td className="py-4 px-4 sm:px-6">
                     <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold ${student.at_risk ? 'bg-rose-50 text-rose-600' : 'bg-[#1B6B7B]/10 text-[#1B6B7B]'}`}>
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold ${student.at_risk ? 'bg-rose-50 text-rose-600' : 'bg-brand-600/10 text-brand-600'}`}>
                         {student.name.charAt(0)}
                       </div>
                       <div>
@@ -389,7 +389,7 @@ export default function StudentManagementClient() {
                   <td className="py-4 px-4 sm:px-6">
                     <div className="flex items-center gap-2">
                       <div className="w-16 h-2 bg-gray-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-[#1B6B7B] rounded-full" style={{ width: `${(student.quizzes_completed / 10) * 100}%` }} />
+                        <div className="h-full bg-brand-600 rounded-full" style={{ width: `${(student.quizzes_completed / 10) * 100}%` }} />
                       </div>
                       <span className="text-gray-600 font-medium text-sm">{student.quizzes_completed}</span>
                     </div>
@@ -400,9 +400,9 @@ export default function StudentManagementClient() {
                     ) : (
                       <div className="flex items-center gap-2">
                         <div className="w-12 h-2 bg-gray-100 rounded-full overflow-hidden">
-                          <div className={`h-full rounded-full ${student.average_score >= 70 ? 'bg-[#1B6B7B]' : 'bg-rose-500'}`} style={{ width: `${student.average_score}%` }} />
+                          <div className={`h-full rounded-full ${student.average_score >= 70 ? 'bg-brand-600' : 'bg-rose-500'}`} style={{ width: `${student.average_score}%` }} />
                         </div>
-                        <span className={`font-semibold text-sm ${student.average_score >= 70 ? 'text-[#1B6B7B]' : 'text-rose-600'}`}>{student.average_score}%</span>
+                        <span className={`font-semibold text-sm ${student.average_score >= 70 ? 'text-brand-600' : 'text-rose-600'}`}>{student.average_score}%</span>
                       </div>
                     )}
                   </td>

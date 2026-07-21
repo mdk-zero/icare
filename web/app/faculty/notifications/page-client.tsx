@@ -89,8 +89,8 @@ export default function FacultyNotificationsClient() {
           icon={<FontAwesomeIcon icon={faBell} className="w-5 h-5" />}
           value={notifications.length}
           label="Total"
-          iconBg="bg-[#1B6B7B]/10"
-          iconColor="text-[#1B6B7B]"
+          iconBg="bg-brand-600/10"
+          iconColor="text-brand-600"
         />
         <StatTile
           icon={<FontAwesomeIcon icon={faTriangleExclamation} className="w-5 h-5" />}
@@ -119,10 +119,10 @@ export default function FacultyNotificationsClient() {
           {notifications.map((notification) => (
             <div 
               key={notification.id}
-              className={`bg-white rounded-xl p-3 shadow-sm border transition-all ${
+              className={`bg-surface rounded-xl p-3 shadow-sm border transition-all ${
                 notification.is_read 
                   ? 'border-gray-100' 
-                  : 'border-l-4 border-l-[#1B6B7B] border-gray-100'
+                  : 'border-l-4 border-l-brand-600 border-gray-100'
               }`}
             >
               <div className="flex items-start gap-4">
@@ -137,7 +137,7 @@ export default function FacultyNotificationsClient() {
                       {notification.title}
                     </h3>
                     {!notification.is_read && (
-                      <span className="w-2 h-2 bg-[#1B6B7B] rounded-full" />
+                      <span className="w-2 h-2 bg-brand-600 rounded-full" />
                     )}
                   </div>
                   <p className="text-sm text-gray-600 mb-2">{notification.message}</p>
@@ -148,7 +148,7 @@ export default function FacultyNotificationsClient() {
                 {!notification.is_read && (
                   <button
                     onClick={() => handleMarkAsRead(notification.id)}
-                    className="px-3 py-1 text-sm text-[#1B6B7B] hover:text-[#145a63] transition-colors"
+                    className="px-3 py-1 text-sm text-brand-600 hover:text-brand-700 transition-colors"
                   >
                     Mark as read
                   </button>
@@ -157,7 +157,7 @@ export default function FacultyNotificationsClient() {
             </div>
           ))}
           {notifications.length === 0 && (
-            <div className="bg-white rounded-xl p-12 border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] text-center">
+            <div className="bg-surface rounded-xl p-12 border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] text-center">
               <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <svg className="w-8 h-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />

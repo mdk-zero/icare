@@ -31,7 +31,7 @@ export default function FacultyAnalyticsClient() {
   if (loading) {
     return (
       <div>
-        <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] p-4 sm:p-5 mb-4 animate-pulse">
+        <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] p-4 sm:p-5 mb-4 animate-pulse">
           <div className="space-y-3">
             <div className="h-5 w-32 bg-gray-200 rounded-full" />
             <div className="h-8 w-64 bg-gray-200 rounded" />
@@ -131,11 +131,11 @@ export default function FacultyAnalyticsClient() {
                 {trend.map((week) => (
                   <div key={week.week_start} className="flex-1 flex flex-col items-center gap-2 group">
                     <div className="w-full relative">
-                      <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-[#1B6B7B] text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
+                      <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-brand-600 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
                         {week.average_score}% · {week.attempts} attempt{week.attempts === 1 ? "" : "s"}
                       </div>
                       <div
-                        className="w-full bg-gradient-to-t from-[#1B6B7B] to-[#2a8a98] rounded-t transition-all duration-300 hover:opacity-80"
+                        className="w-full bg-gradient-to-t from-brand-600 to-[#2a8a98] rounded-t transition-all duration-300 hover:opacity-80"
                         style={{ height: `${Math.max(week.average_score, 4) * 1.4}px` }}
                       />
                     </div>
@@ -229,7 +229,7 @@ export default function FacultyAnalyticsClient() {
             { icon: faClipboardCheck, label: "Notes Reviewed", value: activity?.notes_reviewed ?? 0 },
           ].map((item) => (
             <div key={item.label} className="p-4 bg-gray-50 rounded-xl text-center">
-              <FontAwesomeIcon icon={item.icon} className="w-4 h-4 text-[#1B6B7B] mb-2" />
+              <FontAwesomeIcon icon={item.icon} className="w-4 h-4 text-brand-600 mb-2" />
               <p className="text-2xl font-bold text-gray-800">{item.value}</p>
               <p className="text-xs text-gray-500 mt-1">{item.label}</p>
             </div>

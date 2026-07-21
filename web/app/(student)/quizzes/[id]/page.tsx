@@ -94,18 +94,18 @@ export default function TakeQuizPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-24">
-        <div className="w-8 h-8 border-4 border-[#1B6B7B] border-t-transparent rounded-full animate-spin" />
+        <div className="w-8 h-8 border-4 border-brand-600 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
   if (error || !attempt) {
     return (
-      <div className="bg-white p-10 rounded-2xl shadow-sm border border-gray-100 text-center">
+      <div className="bg-surface p-10 rounded-2xl shadow-sm border border-gray-100 text-center">
         <p className="text-gray-600 mb-4">{error ?? "Quiz not found."}</p>
         <button
           onClick={() => router.push("/dashboard?tab=quizzes")}
-          className="px-6 py-2 bg-[#1B6B7B] text-white rounded-lg hover:bg-[#155663]"
+          className="px-6 py-2 bg-brand-600 text-white rounded-lg hover:bg-[#155663]"
         >
           Back to Quizzes
         </button>
@@ -118,9 +118,9 @@ export default function TakeQuizPage() {
     const questionById = new Map(attempt.questions.map((q) => [q.id, q]));
     return (
       <div className="max-w-3xl mx-auto space-y-6">
-        <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 text-center">
+        <div className="bg-surface p-8 rounded-2xl shadow-sm border border-gray-100 text-center">
           <p className="text-sm text-gray-500 mb-1">{attempt.assessment.title}</p>
-          <p className="text-5xl font-bold text-[#1B6B7B] mb-2">{result.score}%</p>
+          <p className="text-5xl font-bold text-brand-600 mb-2">{result.score}%</p>
           <p className="text-gray-600">
             {result.correct} of {result.total} correct ·{" "}
             {Math.floor(result.time_taken_seconds / 60)}m {result.time_taken_seconds % 60}s
@@ -128,7 +128,7 @@ export default function TakeQuizPage() {
         </div>
 
         {result.criteria_breakdown && result.criteria_breakdown.length > 0 && (
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+          <div className="bg-surface p-6 rounded-2xl shadow-sm border border-gray-100">
             <h3 className="font-semibold text-gray-800 mb-4">Competency Breakdown</h3>
             <div className="space-y-3">
               {result.criteria_breakdown.map((cb) => (
@@ -160,7 +160,7 @@ export default function TakeQuizPage() {
             return (
               <div
                 key={r.question_id}
-                className={`bg-white p-6 rounded-2xl shadow-sm border ${
+                className={`bg-surface p-6 rounded-2xl shadow-sm border ${
                   r.is_correct ? "border-green-200" : "border-red-200"
                 }`}
               >
@@ -198,7 +198,7 @@ export default function TakeQuizPage() {
         <div className="flex justify-center pb-8">
           <button
             onClick={() => router.push("/dashboard?tab=quizzes")}
-            className="px-8 py-3 bg-[#1B6B7B] text-white rounded-lg hover:bg-[#155663]"
+            className="px-8 py-3 bg-brand-600 text-white rounded-lg hover:bg-[#155663]"
           >
             Back to Quizzes
           </button>
@@ -219,7 +219,7 @@ export default function TakeQuizPage() {
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
-      <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+      <div className="bg-surface p-6 rounded-2xl shadow-sm border border-gray-100">
         <div className="flex items-center justify-between mb-4">
           <div>
             <h2 className="font-semibold text-gray-800">{attempt.assessment.title}</h2>
@@ -239,13 +239,13 @@ export default function TakeQuizPage() {
         </div>
         <div className="w-full bg-gray-100 rounded-full h-2">
           <div
-            className="bg-[#1B6B7B] h-2 rounded-full transition-all"
+            className="bg-brand-600 h-2 rounded-full transition-all"
             style={{ width: `${((currentIndex + 1) / attempt.questions.length) * 100}%` }}
           />
         </div>
       </div>
 
-      <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+      <div className="bg-surface p-6 rounded-2xl shadow-sm border border-gray-100">
         <p className="font-medium text-gray-800 mb-4">{question.content}</p>
         <div className="space-y-2">
           {question.options.map((opt, idx) => (
@@ -254,7 +254,7 @@ export default function TakeQuizPage() {
               onClick={() => setAnswers((prev) => ({ ...prev, [question.id]: idx }))}
               className={`w-full text-left px-4 py-3 rounded-lg border transition-colors ${
                 answers[question.id] === idx
-                  ? "border-[#1B6B7B] bg-[#1B6B7B]/5 text-[#1B6B7B] font-medium"
+                  ? "border-brand-600 bg-brand-600/5 text-brand-600 font-medium"
                   : "border-gray-200 hover:border-gray-300 text-gray-700"
               }`}
             >
@@ -276,14 +276,14 @@ export default function TakeQuizPage() {
           <button
             onClick={handleSubmit}
             disabled={submitting}
-            className="px-8 py-2 bg-[#1B6B7B] text-white rounded-lg hover:bg-[#155663] disabled:opacity-60"
+            className="px-8 py-2 bg-brand-600 text-white rounded-lg hover:bg-[#155663] disabled:opacity-60"
           >
             {submitting ? "Submitting…" : "Submit Quiz"}
           </button>
         ) : (
           <button
             onClick={() => goTo(currentIndex + 1)}
-            className="px-6 py-2 bg-[#1B6B7B] text-white rounded-lg hover:bg-[#155663]"
+            className="px-6 py-2 bg-brand-600 text-white rounded-lg hover:bg-[#155663]"
           >
             Next
           </button>

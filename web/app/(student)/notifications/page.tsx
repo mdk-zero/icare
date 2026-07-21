@@ -60,7 +60,7 @@ export default function StudentNotificationsPage() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 mb-2 flex items-center gap-3">
-            <FontAwesomeIcon icon={faBell} className="text-[#1B6B7B]" />
+            <FontAwesomeIcon icon={faBell} className="text-brand-600" />
             Notifications
           </h1>
           <p className="text-gray-500">
@@ -71,7 +71,7 @@ export default function StudentNotificationsPage() {
         {unreadCount > 0 && (
           <button
             onClick={handleMarkAllAsRead}
-            className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-[#1B6B7B] hover:bg-[#1B6B7B]/5 border border-[#1B6B7B]/30 rounded-xl transition-colors whitespace-nowrap"
+            className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-brand-600 hover:bg-brand-600/5 border border-brand-600/30 rounded-xl transition-colors whitespace-nowrap"
           >
             <FontAwesomeIcon icon={faCheckDouble} className="w-4 h-4" />
             Mark all as read
@@ -81,10 +81,10 @@ export default function StudentNotificationsPage() {
 
       {loading ? (
         <div className="flex items-center justify-center p-12">
-          <FontAwesomeIcon icon={faSpinner} spin className="w-8 h-8 text-[#1B6B7B]" />
+          <FontAwesomeIcon icon={faSpinner} spin className="w-8 h-8 text-brand-600" />
         </div>
       ) : notifications.length === 0 ? (
-        <div className="bg-white rounded-2xl p-12 text-center border border-gray-100">
+        <div className="bg-surface rounded-2xl p-12 text-center border border-gray-100">
           <FontAwesomeIcon icon={faBell} className="w-12 h-12 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-gray-700">No notifications yet</h3>
           <p className="text-gray-500 text-sm mt-1">
@@ -98,10 +98,10 @@ export default function StudentNotificationsPage() {
             return (
               <div
                 key={notification.id}
-                className={`bg-white rounded-2xl p-5 shadow-sm border transition-all ${
+                className={`bg-surface rounded-2xl p-5 shadow-sm border transition-all ${
                   notification.is_read
                     ? "border-gray-100"
-                    : "border-l-4 border-l-[#1B6B7B] border-gray-100"
+                    : "border-l-4 border-l-brand-600 border-gray-100"
                 }`}
               >
                 <div className="flex items-start gap-4">
@@ -120,7 +120,7 @@ export default function StudentNotificationsPage() {
                         {notification.title}
                       </h3>
                       {!notification.is_read && (
-                        <span className="w-2 h-2 bg-[#1B6B7B] rounded-full" />
+                        <span className="w-2 h-2 bg-brand-600 rounded-full" />
                       )}
                     </div>
                     <p className="text-sm text-gray-600 mb-2">{notification.message}</p>
@@ -131,7 +131,7 @@ export default function StudentNotificationsPage() {
                   {!notification.is_read && (
                     <button
                       onClick={() => handleMarkAsRead(notification.id)}
-                      className="px-3 py-1 text-sm text-[#1B6B7B] hover:text-[#145a63] transition-colors whitespace-nowrap"
+                      className="px-3 py-1 text-sm text-brand-600 hover:text-brand-700 transition-colors whitespace-nowrap"
                     >
                       Mark as read
                     </button>

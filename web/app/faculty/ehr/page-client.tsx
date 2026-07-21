@@ -84,7 +84,7 @@ const CRITICALITY = [
   { value: "normal", label: "Normal" },
 ];
 
-const inputClass = "w-full px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30 focus:border-[#1B6B7B] transition-all";
+const inputClass = "w-full px-3 py-1.5 bg-surface border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 transition-all";
 
 export default function FacultyEhrClient() {
   const [patients, setPatients] = useState<FacultyPatient[]>([]);
@@ -308,14 +308,14 @@ export default function FacultyEhrClient() {
             onClick={() => setShowFilters(!showFilters)}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium border transition-colors ${
               activeFilterCount > 0
-                ? "bg-[#1B6B7B]/10 border-[#1B6B7B]/30 text-[#1B6B7B]"
-                : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"
+                ? "bg-brand-600/10 border-brand-600/30 text-brand-600"
+                : "bg-surface border-gray-200 text-gray-600 hover:bg-gray-50"
             }`}
           >
             <FontAwesomeIcon icon={faFilter} className="w-3.5 h-3.5" />
             Filters
             {activeFilterCount > 0 && (
-              <span className="ml-0.5 w-5 h-5 bg-[#1B6B7B] text-white text-[11px] font-bold rounded-full flex items-center justify-center">
+              <span className="ml-0.5 w-5 h-5 bg-brand-600 text-white text-[11px] font-bold rounded-full flex items-center justify-center">
                 {activeFilterCount}
               </span>
             )}
@@ -330,7 +330,7 @@ export default function FacultyEhrClient() {
               placeholder="Search patients by name, room, diagnosis, or MIMIC ID..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30 focus:border-[#1B6B7B] transition-all"
+              className="w-full pl-10 pr-4 py-2.5 bg-surface border border-gray-200 rounded-xl text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 transition-all"
             />
           </div>
           {activeFilterCount > 0 && (
@@ -345,7 +345,7 @@ export default function FacultyEhrClient() {
         </div>
 
         {showFilters && (
-          <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04)] p-4">
+          <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04)] p-4">
             <div className="flex flex-wrap gap-3">
               <div>
                 <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Gender</label>
@@ -387,13 +387,13 @@ export default function FacultyEhrClient() {
         {loading ? (
           <SkeletonPatientGrid />
         ) : patients.length === 0 ? (
-          <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04)] p-12 text-center">
+          <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04)] p-12 text-center">
             <FontAwesomeIcon icon={faUsers} className="w-12 h-12 text-gray-300 mx-auto mb-4" />
             <h3 className="text-lg font-semibold text-gray-700">No patients found</h3>
             <p className="text-gray-500 text-sm mt-1">No patients have been assigned yet.</p>
           </div>
         ) : filteredPatients.length === 0 ? (
-          <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04)] p-12 text-center">
+          <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04)] p-12 text-center">
             <FontAwesomeIcon icon={faSearch} className="w-12 h-12 text-gray-300 mx-auto mb-4" />
             <h3 className="text-lg font-semibold text-gray-700">No matching patients</h3>
             <p className="text-gray-500 text-sm mt-1">Try adjusting your search or filters.</p>
@@ -409,10 +409,10 @@ export default function FacultyEhrClient() {
                 <button
                   key={patient.id}
                   onClick={() => selectPatient(patient)}
-                  className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04)] p-4 text-left hover:border-[#1B6B7B]/40 hover:shadow-[0_4px_12px_rgba(27,107,123,0.1)] transition-all group"
+                  className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04)] p-4 text-left hover:border-brand-600/40 hover:shadow-[0_4px_12px_rgba(27,107,123,0.1)] transition-all group"
                 >
                   <div className="flex items-center gap-3 mb-3">
-                    <div className="w-10 h-10 bg-[#1B6B7B]/10 rounded-full flex items-center justify-center text-[#1B6B7B] font-semibold group-hover:bg-[#1B6B7B]/20 transition-colors">
+                    <div className="w-10 h-10 bg-brand-600/10 rounded-full flex items-center justify-center text-brand-600 font-semibold group-hover:bg-brand-600/20 transition-colors">
                       {patient.name.charAt(0)}
                     </div>
                     <div className="min-w-0">
@@ -481,15 +481,15 @@ export default function FacultyEhrClient() {
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden">
-        <div className="border-b border-gray-100/80 flex gap-4 px-4">
+      <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden">
+        <div className="border-b border-hairline flex gap-4 px-4">
           {TABS.map((t) => (
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
               className={`flex items-center gap-2 py-4 font-medium border-b-2 transition-colors ${
                 tab === t.id
-                  ? "border-[#1B6B7B] text-[#1B6B7B]"
+                  ? "border-brand-600 text-brand-600"
                   : "border-transparent text-gray-500 hover:text-gray-700"
               }`}
             >
@@ -517,12 +517,12 @@ export default function FacultyEhrClient() {
           </div>
         ) : (
           <>
-            <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-100/80 bg-gray-50/30 flex-wrap">
+            <div className="flex items-center gap-3 px-4 py-3 border-b border-hairline bg-subtle flex-wrap">
               {studentOptions.length > 1 && (
                 <select
                   value={studentFilter}
                   onChange={(e) => setStudentFilter(e.target.value)}
-                  className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30"
+                  className="px-3 py-1.5 bg-surface border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-600/30"
                 >
                   <option value="all">All students</option>
                   {studentOptions.map((s) => (
@@ -534,7 +534,7 @@ export default function FacultyEhrClient() {
                 type="date"
                 value={dateFrom}
                 onChange={(e) => setDateFrom(e.target.value)}
-                className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30"
+                className="px-3 py-1.5 bg-surface border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-600/30"
                 title="From date"
               />
               <span className="text-xs text-gray-400">to</span>
@@ -542,7 +542,7 @@ export default function FacultyEhrClient() {
                 type="date"
                 value={dateTo}
                 onChange={(e) => setDateTo(e.target.value)}
-                className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30"
+                className="px-3 py-1.5 bg-surface border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-600/30"
                 title="To date"
               />
               <span className="text-xs text-gray-400 ml-auto">
@@ -552,7 +552,7 @@ export default function FacultyEhrClient() {
                 <button
                   onClick={handleBulkReview}
                   disabled={reviewingAll}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-[#1B6B7B] hover:bg-[#145a68] rounded-lg transition-colors disabled:opacity-60"
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-brand-600 hover:bg-[#145a68] rounded-lg transition-colors disabled:opacity-60"
                 >
                   {reviewingAll ? (
                     <FontAwesomeIcon icon={faSpinner} spin className="w-3.5 h-3.5" />
@@ -566,7 +566,7 @@ export default function FacultyEhrClient() {
 
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-gray-50/50 border-b border-gray-100">
+                <thead className="bg-subtle border-b border-gray-100">
                   <tr>
                     {tab === "note" && (
                       <th className="w-10 py-3 px-4">
@@ -574,7 +574,7 @@ export default function FacultyEhrClient() {
                           type="checkbox"
                           checked={filteredRecords.length > 0 && selectedIds.size === filteredRecords.length}
                           onChange={toggleSelectAll}
-                          className="w-4 h-4 accent-[#1B6B7B] rounded"
+                          className="w-4 h-4 accent-brand-600 rounded"
                         />
                       </th>
                     )}
@@ -587,11 +587,11 @@ export default function FacultyEhrClient() {
                     <th className="w-10 py-3 px-4" />
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100/80">
+                <tbody className="divide-y divide-hairline">
                   {filteredRecords.map((record) => (
                     <Fragment key={record.id}>
                       <tr
-                        className="hover:bg-gray-50/50 transition-colors cursor-pointer"
+                        className="hover:bg-subtle transition-colors cursor-pointer"
                         onClick={() => setExpandedId(expandedId === record.id ? null : record.id)}
                       >
                         {tab === "note" && (
@@ -601,7 +601,7 @@ export default function FacultyEhrClient() {
                                 type="checkbox"
                                 checked={selectedIds.has(record.id)}
                                 onChange={() => toggleSelect(record.id)}
-                                className="w-4 h-4 accent-[#1B6B7B] rounded"
+                                className="w-4 h-4 accent-brand-600 rounded"
                               />
                             )}
                           </td>
@@ -629,7 +629,7 @@ export default function FacultyEhrClient() {
                             ) : (
                               <button
                                 onClick={() => handleReview(record.id)}
-                                className="px-3 py-1.5 text-sm font-medium text-[#1B6B7B] hover:bg-[#1B6B7B]/5 border border-[#1B6B7B]/30 rounded-lg transition-colors"
+                                className="px-3 py-1.5 text-sm font-medium text-brand-600 hover:bg-brand-600/5 border border-brand-600/30 rounded-lg transition-colors"
                               >
                                 Mark reviewed
                               </button>
@@ -644,7 +644,7 @@ export default function FacultyEhrClient() {
                         </td>
                       </tr>
                       {expandedId === record.id && (
-                        <tr className="bg-gray-50/50">
+                        <tr className="bg-subtle">
                           <td
                             colSpan={tab === "note" ? 6 : 5}
                             className="px-4 py-4 border-b border-gray-100"
@@ -703,7 +703,7 @@ function ExpandableRow({ record, tab }: { record: EhrRecord; tab: EhrType }) {
 
 function DetailBox({ label, value, fullWidth }: { label: string; value: string; fullWidth?: boolean }) {
   return (
-    <div className={`${fullWidth ? "sm:col-span-4" : ""} bg-white rounded-lg border border-gray-200 p-3`}>
+    <div className={`${fullWidth ? "sm:col-span-4" : ""} bg-surface rounded-lg border border-gray-200 p-3`}>
       <p className="text-xs text-gray-500 mb-0.5">{label}</p>
       <p className="text-sm font-medium text-gray-800">{value}</p>
     </div>

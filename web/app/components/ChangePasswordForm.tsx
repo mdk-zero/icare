@@ -229,7 +229,7 @@ export default function ChangePasswordForm({
 
   return (
     <div className="max-w-2xl mx-auto">
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+      <div className="bg-surface rounded-2xl shadow-sm border border-gray-100 p-6">
         <div className="mb-6">
           <h2 className="text-xl font-semibold text-gray-900 mb-1">
             {hasPassword ? "Change Password" : "Set Password"}
@@ -270,7 +270,7 @@ export default function ChangePasswordForm({
                   value={currentPassword}
                   onChange={(e) => setCurrentPassword(e.target.value)}
                   required={hasPassword}
-                  className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/50 focus:border-[#1B6B7B] transition-all"
+                  className="w-full px-4 py-2.5 bg-surface border border-gray-200 rounded-xl text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-600/50 focus:border-brand-600 transition-all"
                 />
               </div>
             )}
@@ -278,14 +278,14 @@ export default function ChangePasswordForm({
             <div className="flex items-center justify-between pt-4 border-t border-gray-100">
               <Link
                 href={backHref}
-                className="text-[#1B6B7B] hover:text-[#145A63] text-sm font-medium transition-colors"
+                className="text-brand-600 hover:text-brand-700 text-sm font-medium transition-colors"
               >
                 {backLabel}
               </Link>
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="px-6 py-2.5 bg-[#1B6B7B] text-white font-medium rounded-xl hover:bg-[#145A63] transition-all disabled:opacity-60"
+                className="px-6 py-2.5 bg-brand-600 text-white font-medium rounded-xl hover:bg-brand-700 transition-all disabled:opacity-60"
               >
                 {isSubmitting ? "Sending code..." : "Send verification code"}
               </button>
@@ -315,7 +315,7 @@ export default function ChangePasswordForm({
                 required
                 autoFocus
                 placeholder="000000"
-                className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/50 focus:border-[#1B6B7B] transition-all tracking-[0.2em] text-center font-medium"
+                className="w-full px-4 py-2.5 bg-surface border border-gray-200 rounded-xl text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-600/50 focus:border-brand-600 transition-all tracking-[0.2em] text-center font-medium"
               />
             </div>
 
@@ -327,7 +327,7 @@ export default function ChangePasswordForm({
                   setOtp("");
                   setMessage(null);
                 }}
-                className="text-[#1B6B7B] hover:text-[#145A63] text-sm font-medium transition-colors"
+                className="text-brand-600 hover:text-brand-700 text-sm font-medium transition-colors"
               >
                 Back
               </button>
@@ -336,7 +336,7 @@ export default function ChangePasswordForm({
                   type="button"
                   onClick={handleResendCode}
                   disabled={isSubmitting || resendSeconds > 0}
-                  className="text-sm text-[#1B6B7B] hover:text-[#145A63] font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="text-sm text-brand-600 hover:text-brand-700 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {resendSeconds > 0
                     ? `Resend in ${resendSeconds}s`
@@ -345,7 +345,7 @@ export default function ChangePasswordForm({
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="px-6 py-2.5 bg-[#1B6B7B] text-white font-medium rounded-xl hover:bg-[#145A63] transition-all disabled:opacity-60"
+                  className="px-6 py-2.5 bg-brand-600 text-white font-medium rounded-xl hover:bg-brand-700 transition-all disabled:opacity-60"
                 >
                   {isSubmitting ? "Verifying..." : "Verify code"}
                 </button>
@@ -366,7 +366,7 @@ export default function ChangePasswordForm({
                 onChange={(e) => setNewPassword(e.target.value)}
                 required
                 minLength={8}
-                className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/50 focus:border-[#1B6B7B] transition-all"
+                className="w-full px-4 py-2.5 bg-surface border border-gray-200 rounded-xl text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-600/50 focus:border-brand-600 transition-all"
               />
               <p className="text-xs text-gray-500 mt-1">
                 Must be at least 8 characters.
@@ -383,7 +383,7 @@ export default function ChangePasswordForm({
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
                 minLength={8}
-                className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/50 focus:border-[#1B6B7B] transition-all"
+                className="w-full px-4 py-2.5 bg-surface border border-gray-200 rounded-xl text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-600/50 focus:border-brand-600 transition-all"
               />
             </div>
 
@@ -394,14 +394,14 @@ export default function ChangePasswordForm({
                   setStep("otp");
                   setMessage(null);
                 }}
-                className="text-[#1B6B7B] hover:text-[#145A63] text-sm font-medium transition-colors"
+                className="text-brand-600 hover:text-brand-700 text-sm font-medium transition-colors"
               >
                 Back
               </button>
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="px-6 py-2.5 bg-[#1B6B7B] text-white font-medium rounded-xl hover:bg-[#145A63] transition-all disabled:opacity-60"
+                className="px-6 py-2.5 bg-brand-600 text-white font-medium rounded-xl hover:bg-brand-700 transition-all disabled:opacity-60"
               >
                 {isSubmitting
                   ? hasPassword

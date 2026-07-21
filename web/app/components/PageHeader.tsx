@@ -9,28 +9,49 @@ interface PageHeaderProps {
 
 export default function PageHeader({ badge, title, subtitle, action }: PageHeaderProps) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] p-4 sm:p-5 mb-4">
-      <div className="flex items-start justify-between gap-4">
+    <header className="animate-rise relative overflow-hidden bg-surface rounded-2xl border border-hairline shadow-tile p-5 sm:p-6 mb-4">
+      {/* Brand light falling from the top-right, so the header has depth. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0"
+        style={{
+          backgroundImage:
+            "radial-gradient(70% 130% at 100% 0%, rgb(27 107 123 / 0.07) 0%, transparent 70%)",
+        }}
+      />
+      {/* Spine, tying every page back to the sidebar. */}
+      <span
+        aria-hidden
+        className="absolute left-0 top-0 h-full w-[3px] bg-gradient-to-b from-brand-400 via-brand-600 to-brand-800"
+      />
+
+      <div className="relative flex items-start justify-between gap-4">
         <div className="min-w-0">
           {badge && (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-gray-100/80 text-[#1B6B7B] rounded-md text-[11px] font-semibold tracking-wide w-fit mb-3">
+            <div className="inline-flex items-center gap-1.5 mb-3 rounded-full bg-brand-50 ring-1 ring-brand-100 px-2.5 py-1 font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-brand-700">
               {badge.icon}
               {badge.label}
             </div>
           )}
-          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">{title}</h1>
-          <p className="text-sm text-gray-500 mt-0.5">{subtitle}</p>
+          <h1 className="font-display text-[26px] sm:text-[31px] font-semibold leading-[1.08] tracking-[-0.015em] text-slate-900">
+            {title}
+          </h1>
+          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-500">{subtitle}</p>
         </div>
+
         {action && (
           <button
             onClick={action.onClick}
             aria-label={action.label}
-            className="w-10 h-10 sm:w-11 sm:h-11 bg-[#1B6B7B] hover:bg-[#145a63] transition-all rounded-lg flex items-center justify-center text-white shadow-[0_2px_6px_rgba(27,107,123,0.25)] hover:shadow-[0_4px_12px_rgba(27,107,123,0.3)] shrink-0"
+            title={action.label}
+            className="group shrink-0 w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center text-white bg-gradient-to-br from-brand-500 to-brand-700 shadow-[0_4px_14px_-2px_rgb(27_107_123_/_0.45)] ring-1 ring-brand-800/20 transition-all hover:shadow-[0_8px_22px_-4px_rgb(27_107_123_/_0.55)] hover:-translate-y-0.5 active:translate-y-0"
           >
-            {action.icon}
+            <span className="transition-transform duration-200 group-hover:scale-110">
+              {action.icon}
+            </span>
           </button>
         )}
       </div>
-    </div>
+    </header>
   );
 }

@@ -78,10 +78,10 @@ export default function FacultyReportsClient() {
           icon={<FontAwesomeIcon icon={faUsers} className="w-5 h-5" />}
           value={students.length}
           label="Students"
-          iconBg="bg-[#1B6B7B]/10"
-          iconColor="text-[#1B6B7B]"
+          iconBg="bg-brand-600/10"
+          iconColor="text-brand-600"
         />
-        <div className="bg-white rounded-xl p-3 border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)]">
+        <div className="bg-surface rounded-xl p-3 border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)]">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
               <FontAwesomeIcon icon={faFileLines} className="w-5 h-5 text-blue-600" />
@@ -112,35 +112,35 @@ export default function FacultyReportsClient() {
           placeholder="Search students..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-300 rounded-xl text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/30 focus:border-[#1B6B7B] text-sm shadow-sm"
+          className="w-full pl-10 pr-4 py-2.5 bg-surface border border-gray-300 rounded-xl text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 text-sm shadow-sm"
         />
       </div>
 
       {loading ? (
         <SkeletonTable rows={5} cols={3} />
       ) : (
-        <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden">
+        <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-gray-50/50 border-b border-gray-100">
+              <thead className="bg-subtle border-b border-gray-100">
                 <tr>
                   <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Student</th>
                   <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Email</th>
                   <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Report</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100/80">
+              <tbody className="divide-y divide-hairline">
                 {filtered.map((student) => {
                   const id = student.student_id || student.id;
                   return (
-                    <tr key={id} className="hover:bg-gray-50/50 transition-colors">
+                    <tr key={id} className="hover:bg-subtle transition-colors">
                       <td className="py-3 px-4 font-semibold text-gray-800">{student.name}</td>
                       <td className="py-3 px-4 text-gray-600">{student.email}</td>
                       <td className="py-3 px-4">
                         <button
                           onClick={() => handleDownload(student)}
                           disabled={downloading !== null}
-                          className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-[#1B6B7B] hover:bg-[#1B6B7B]/5 border border-[#1B6B7B]/30 rounded-lg transition-colors disabled:opacity-50"
+                          className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-brand-600 hover:bg-brand-600/5 border border-brand-600/30 rounded-lg transition-colors disabled:opacity-50"
                         >
                           <FontAwesomeIcon
                             icon={downloading === id ? faSpinner : faDownload}

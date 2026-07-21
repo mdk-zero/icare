@@ -142,7 +142,7 @@ export default function AdminAuditClient() {
       />
 
       {/* Filters */}
-      <div className="bg-white rounded-xl p-4 border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] mb-6">
+      <div className="bg-surface rounded-xl p-4 border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] mb-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
           <form
             className="lg:col-span-2 relative"
@@ -160,13 +160,13 @@ export default function AdminAuditClient() {
               placeholder="Search actions… (press Enter)"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-11 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/50 focus:border-[#1B6B7B] transition-all"
+              className="w-full pl-11 pr-4 py-2.5 bg-surface border border-gray-200 rounded-xl text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-600/50 focus:border-brand-600 transition-all"
             />
           </form>
           <select
             value={roleFilter}
             onChange={(e) => withPageReset(setRoleFilter)(e.target.value)}
-            className="px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/50 focus:border-[#1B6B7B] transition-all cursor-pointer"
+            className="px-3 py-2.5 bg-surface border border-gray-200 rounded-xl text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-600/50 focus:border-brand-600 transition-all cursor-pointer"
           >
             <option value="all">All Roles</option>
             <option value="admin">Admin</option>
@@ -176,7 +176,7 @@ export default function AdminAuditClient() {
           <select
             value={entityFilter}
             onChange={(e) => withPageReset(setEntityFilter)(e.target.value)}
-            className="px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/50 focus:border-[#1B6B7B] transition-all cursor-pointer"
+            className="px-3 py-2.5 bg-surface border border-gray-200 rounded-xl text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-600/50 focus:border-brand-600 transition-all cursor-pointer"
           >
             <option value="all">All Entities</option>
             {entityTypes.map((t) => (
@@ -190,14 +190,14 @@ export default function AdminAuditClient() {
             value={fromDate}
             onChange={(e) => withPageReset(setFromDate)(e.target.value)}
             title="From date"
-            className="px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/50 focus:border-[#1B6B7B] transition-all"
+            className="px-3 py-2.5 bg-surface border border-gray-200 rounded-xl text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-600/50 focus:border-brand-600 transition-all"
           />
           <input
             type="date"
             value={toDate}
             onChange={(e) => withPageReset(setToDate)(e.target.value)}
             title="To date"
-            className="px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#1B6B7B]/50 focus:border-[#1B6B7B] transition-all"
+            className="px-3 py-2.5 bg-surface border border-gray-200 rounded-xl text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-600/50 focus:border-brand-600 transition-all"
           />
         </div>
       </div>
@@ -211,7 +211,7 @@ export default function AdminAuditClient() {
           <button
             onClick={exportCsv}
             disabled={logs.length === 0}
-            className="px-4 py-2 bg-white border border-gray-200 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-all"
+            className="px-4 py-2 bg-surface border border-gray-200 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-all"
           >
             Export page as CSV
           </button>
@@ -220,10 +220,10 @@ export default function AdminAuditClient() {
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden">
+      <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-gray-50/50 border-b border-gray-100">
+            <thead className="bg-subtle border-b border-gray-100">
               <tr>
                 <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Timestamp</th>
                 <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Actor</th>
@@ -233,7 +233,7 @@ export default function AdminAuditClient() {
                 <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">IP</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100/80">
+            <tbody className="divide-y divide-hairline">
               {loading ? (
                 Array.from({ length: 8 }).map((_, i) => (
                   <tr key={i} className="animate-pulse">
@@ -254,7 +254,7 @@ export default function AdminAuditClient() {
                 logs.map((log) => {
                   const details = detailsText(log.details);
                   return (
-                    <tr key={log.id} className="hover:bg-gray-50/50 transition-colors">
+                    <tr key={log.id} className="hover:bg-subtle transition-colors">
                       <td className="py-3 px-4 text-gray-500 text-sm whitespace-nowrap">
                         {formatTimestamp(log.created_at)}
                       </td>
@@ -279,7 +279,7 @@ export default function AdminAuditClient() {
                         </div>
                       </td>
                       <td className="py-3 px-4">
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-[#1B6B7B]/10 text-[#1B6B7B]">
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-brand-600/10 text-brand-600">
                           {log.action}
                         </span>
                       </td>
@@ -317,7 +317,7 @@ export default function AdminAuditClient() {
             <button
               onClick={() => setPage((p) => Math.max(p - 1, 0))}
               disabled={page === 0}
-              className="px-4 py-2 bg-white border border-gray-200 text-gray-700 text-sm font-medium rounded-xl hover:bg-gray-50 disabled:opacity-50 transition-all"
+              className="px-4 py-2 bg-surface border border-gray-200 text-gray-700 text-sm font-medium rounded-xl hover:bg-gray-50 disabled:opacity-50 transition-all"
             >
               ← Previous
             </button>
@@ -327,7 +327,7 @@ export default function AdminAuditClient() {
             <button
               onClick={() => setPage((p) => Math.min(p + 1, totalPages - 1))}
               disabled={page >= totalPages - 1}
-              className="px-4 py-2 bg-white border border-gray-200 text-gray-700 text-sm font-medium rounded-xl hover:bg-gray-50 disabled:opacity-50 transition-all"
+              className="px-4 py-2 bg-surface border border-gray-200 text-gray-700 text-sm font-medium rounded-xl hover:bg-gray-50 disabled:opacity-50 transition-all"
             >
               Next →
             </button>
