@@ -16,6 +16,8 @@ import {
   faUsers,
   faTriangleExclamation,
   faSearch,
+  faPenToSquare,
+  faFolderPlus,
 } from "@fortawesome/free-solid-svg-icons";
 import PageHeader from "../../components/PageHeader";
 import StatTile from "../../components/StatTile";
@@ -318,6 +320,341 @@ function EnrollSectionModal({
   );
 }
 
+/**
+ * Create or rename a section. Renaming is safe from the admin's point of view —
+ * the API carries the new name over to any assessment aimed at this section.
+ */
+function SectionFormModal({
+  section,
+  existingNames,
+  onClose,
+  onSaved,
+}: {
+  section: Section | null;
+  existingNames: string[];
+  onClose: () => void;
+  onSaved: (message: string) => void;
+}) {
+  const [name, setName] = useState(section?.name ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const trimmed = name.trim();
+  const isDuplicate =
+    trimmed.length > 0 &&
+    existingNames.some(
+      (n) => n.toLowerCase() === trimmed.toLowerCase() && n !== section?.name,
+    );
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!trimmed) {
+      setError("Section name is required.");
+      return;
+    }
+    if (isDuplicate) {
+      setError(`A section named "${trimmed}" already exists.`);
+      return;
+    }
+    setSaving(true);
+    setError(null);
+
+    const res = await fetch(
+      section ? `/api/admin/sections/${section.id}` : "/api/admin/sections",
+      {
+        method: section ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ name: trimmed }),
+      },
+    );
+    const json = (await res.json()) as {
+      section?: Section;
+      assessments_retargeted?: number;
+      error?: string;
+    };
+    setSaving(false);
+
+    if (!res.ok || !json.section) {
+      setError(json.error ?? "Something went wrong. Try again.");
+      return;
+    }
+
+    if (section) {
+      const moved = json.assessments_retargeted ?? 0;
+      onSaved(
+        `Section renamed to "${trimmed}"` +
+          (moved > 0
+            ? ` — ${moved} assessment${moved === 1 ? "" : "s"} now target the new name.`
+            : "."),
+      );
+    } else {
+      onSaved(`Section "${trimmed}" created.`);
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+      onClick={saving ? undefined : onClose}
+    >
+      <div
+        className="w-full max-w-md overflow-hidden rounded-2xl border border-hairline bg-surface shadow-[0_8px_30px_rgba(0,0,0,0.12)]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-hairline bg-subtle px-5 py-3">
+          <div className="flex items-center gap-3">
+            <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-600/10">
+              <FontAwesomeIcon
+                icon={section ? faPenToSquare : faFolderPlus}
+                className="h-5 w-5 text-brand-600"
+              />
+            </span>
+            <div>
+              <h2 className="font-display text-lg font-semibold text-gray-900">
+                {section ? "Rename section" : "New section"}
+              </h2>
+              <p className="text-sm text-gray-500">
+                {section ? `Currently “${section.name}”` : "Sections group students and their faculty"}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            disabled={saving}
+            className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 disabled:opacity-40"
+            aria-label="Close"
+          >
+            <FontAwesomeIcon icon={faXmark} className="h-5 w-5" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-3 p-5">
+          <div>
+            <label htmlFor="section-name" className="mb-1.5 block text-sm font-semibold text-gray-700">
+              Section name <span className="text-rose-500">*</span>
+            </label>
+            <input
+              id="section-name"
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              disabled={saving}
+              maxLength={50}
+              autoFocus
+              placeholder="e.g. BSN 3-A"
+              className="w-full rounded-xl border border-gray-300 bg-surface px-4 py-2.5 text-gray-900 transition-all placeholder:text-gray-400 focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30 disabled:opacity-60"
+            />
+            {isDuplicate && (
+              <p className="mt-1.5 text-xs text-amber-600">
+                A section named &ldquo;{trimmed}&rdquo; already exists.
+              </p>
+            )}
+          </div>
+
+          {section && (
+            <p className="rounded-lg border border-hairline bg-subtle p-2.5 text-xs text-gray-500">
+              Students and faculty stay attached. Assessments aimed at this section are updated to
+              the new name automatically.
+            </p>
+          )}
+
+          {error && (
+            <p className="rounded-lg border border-rose-200 bg-rose-50 p-2.5 text-sm text-rose-700">
+              {error}
+            </p>
+          )}
+
+          <div className="flex items-center justify-end gap-3 pt-1">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={saving}
+              className="rounded-lg border border-gray-200 bg-surface px-5 py-2.5 text-sm font-medium text-gray-700 transition-all hover:bg-gray-50 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={saving || !trimmed || isDuplicate}
+              className="flex items-center gap-2 rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white shadow-[0_2px_8px_-1px_rgb(27_107_123_/_0.35)] transition-all hover:bg-brand-700 disabled:opacity-60"
+            >
+              {saving && <FontAwesomeIcon icon={faSpinner} spin className="h-4 w-4" />}
+              {section ? "Save name" : "Create section"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+interface SectionImpact {
+  student_count: number;
+  faculty: { id: string; name: string }[];
+  assessment_count: number;
+}
+
+/**
+ * Deletion is destructive in ways that aren't visible from the roster alone, so
+ * the modal loads what is attached before offering the button.
+ */
+function DeleteSectionModal({
+  section,
+  onClose,
+  onDeleted,
+}: {
+  section: Section;
+  onClose: () => void;
+  onDeleted: (message: string) => void;
+}) {
+  const [impact, setImpact] = useState<SectionImpact | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    // The blast radius lives in the database, so it can only arrive after mount.
+    void fetch(`/api/admin/sections/${section.id}`, { credentials: "include" })
+      .then((res) => (res.ok ? (res.json() as Promise<SectionImpact>) : null))
+      .then((json) => {
+        if (json) setImpact(json);
+      });
+  }, [section.id]);
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    setError(null);
+    const res = await fetch(`/api/admin/sections/${section.id}`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+    const json = (await res.json()) as { unassigned_students?: number; error?: string };
+    setDeleting(false);
+    if (!res.ok) {
+      setError(json.error ?? "Unable to delete section.");
+      return;
+    }
+    const freed = json.unassigned_students ?? 0;
+    onDeleted(
+      `Section "${section.name}" deleted` +
+        (freed > 0
+          ? ` — ${freed} student${freed === 1 ? " is" : "s are"} now unassigned.`
+          : "."),
+    );
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+      onClick={deleting ? undefined : onClose}
+    >
+      <div
+        className="w-full max-w-md overflow-hidden rounded-2xl border border-hairline bg-surface shadow-[0_8px_30px_rgba(0,0,0,0.12)]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-3 border-b border-hairline bg-subtle px-5 py-3">
+          <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-rose-100">
+            <FontAwesomeIcon icon={faTriangleExclamation} className="h-5 w-5 text-rose-600" />
+          </span>
+          <div>
+            <h2 className="font-display text-lg font-semibold text-gray-900">
+              Delete section {section.name}?
+            </h2>
+            <p className="text-sm text-gray-500">This cannot be undone.</p>
+          </div>
+        </div>
+
+        <div className="space-y-3 p-5">
+          {impact === null ? (
+            <p className="flex items-center gap-2 text-sm text-gray-500">
+              <FontAwesomeIcon icon={faSpinner} spin className="h-3.5 w-3.5" />
+              Checking what is attached…
+            </p>
+          ) : (
+            <ul className="space-y-2 text-sm text-gray-700">
+              <li className="flex items-start gap-2.5">
+                <FontAwesomeIcon icon={faUsers} className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gray-400" />
+                <span>
+                  {impact.student_count === 0 ? (
+                    "No students are enrolled here."
+                  ) : (
+                    <>
+                      <strong className="font-semibold">
+                        {impact.student_count} student{impact.student_count === 1 ? "" : "s"}
+                      </strong>{" "}
+                      become unassigned. Their accounts, attempts and scores are kept.
+                    </>
+                  )}
+                </span>
+              </li>
+              <li className="flex items-start gap-2.5">
+                <FontAwesomeIcon
+                  icon={faLayerGroup}
+                  className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gray-400"
+                />
+                <span>
+                  {impact.faculty.length === 0 ? (
+                    "No faculty member handles this section."
+                  ) : (
+                    <>
+                      Removed from{" "}
+                      <strong className="font-semibold">
+                        {impact.faculty.map((f) => f.name).join(", ")}
+                      </strong>
+                      .
+                    </>
+                  )}
+                </span>
+              </li>
+              {impact.assessment_count > 0 && (
+                <li className="flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-amber-800">
+                  <FontAwesomeIcon
+                    icon={faTriangleExclamation}
+                    className="mt-0.5 h-3.5 w-3.5 shrink-0"
+                  />
+                  {/* Built as one string: JSX drops the space at an
+                      expression/text boundary that straddles a line break. */}
+                  <span>
+                    {impact.assessment_count === 1
+                      ? `1 assessment is published to “${section.name}” and will reach nobody. Retarget it first if the cohort still needs it.`
+                      : `${impact.assessment_count} assessments are published to “${section.name}” and will reach nobody. Retarget them first if the cohort still needs them.`}
+                  </span>
+                </li>
+              )}
+            </ul>
+          )}
+
+          {error && (
+            <p className="rounded-lg border border-rose-200 bg-rose-50 p-2.5 text-sm text-rose-700">
+              {error}
+            </p>
+          )}
+
+          <div className="flex items-center justify-end gap-3 pt-1">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={deleting}
+              className="rounded-lg border border-gray-200 bg-surface px-5 py-2.5 text-sm font-medium text-gray-700 transition-all hover:bg-gray-50 disabled:opacity-50"
+            >
+              Keep section
+            </button>
+            <button
+              type="button"
+              onClick={handleDelete}
+              disabled={deleting}
+              className="flex items-center gap-2 rounded-lg bg-rose-600 px-5 py-2.5 text-sm font-semibold text-white shadow-[0_2px_8px_-1px_rgb(225_29_72_/_0.35)] transition-all hover:bg-rose-700 disabled:opacity-60"
+            >
+              {deleting && <FontAwesomeIcon icon={faSpinner} spin className="h-4 w-4" />}
+              {deleting ? "Deleting…" : "Delete section"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 interface SectionGroup {
   key: string;
   name: string;
@@ -334,6 +671,10 @@ export default function StudentManagementClient() {
   const [selectedSection, setSelectedSection] = useState<string | null>(null);
   const [isEnrollModalOpen, setIsEnrollModalOpen] = useState(false);
   const [passwords, setPasswords] = useState<{ email: string; password: string }[]>([]);
+  // `section: null` is the create form; a section is the rename form.
+  const [sectionForm, setSectionForm] = useState<{ section: Section | null } | null>(null);
+  const [sectionToDelete, setSectionToDelete] = useState<Section | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const loadStudents = useCallback(async () => {
     setLoading(true);
@@ -345,12 +686,28 @@ export default function StudentManagementClient() {
     setLoading(false);
   }, []);
 
+  const loadSections = useCallback(async () => {
+    setSections(await fetchSections());
+  }, []);
+
   useEffect(() => {
     // Both lists are remote, so they can only be populated after mount.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadStudents();
-    void fetchSections().then(setSections);
-  }, [loadStudents]);
+    void loadSections();
+  }, [loadStudents, loadSections]);
+
+  /** Sections carry names into the roster, so both lists refresh together. */
+  const refreshAfterSectionChange = useCallback(
+    (message: string) => {
+      setNotice(message);
+      setSectionForm(null);
+      setSectionToDelete(null);
+      void loadSections();
+      void loadStudents();
+    },
+    [loadSections, loadStudents],
+  );
 
   /** Provisions one account into a section; returns an error message or null. */
   const handleEnroll = useCallback(
@@ -426,6 +783,18 @@ export default function StudentManagementClient() {
           label: "Enroll students",
         }}
       />
+
+      {notice && (
+        <div className="mb-4 flex items-start justify-between gap-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          <p>{notice}</p>
+          <button
+            onClick={() => setNotice(null)}
+            className="shrink-0 font-medium text-emerald-700 hover:text-emerald-900"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {passwords.length > 0 && (
         <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
@@ -508,6 +877,13 @@ export default function StudentManagementClient() {
           <option value="at-risk">At Risk</option>
           <option value="safe">Safe</option>
         </select>
+        <button
+          onClick={() => setSectionForm({ section: null })}
+          className="flex shrink-0 items-center justify-center gap-2 rounded-xl border border-gray-200 bg-surface px-4 py-2.5 text-sm font-medium text-gray-700 transition-all hover:border-brand-300 hover:text-brand-700"
+        >
+          <FontAwesomeIcon icon={faFolderPlus} className="h-4 w-4" />
+          New section
+        </button>
       </div>
 
       {loading ? (
@@ -518,19 +894,17 @@ export default function StudentManagementClient() {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {groups.map((group) => {
             const atRisk = group.students.filter((s) => s.at_risk).length;
+            const isUnassigned = group.key === UNASSIGNED_KEY;
             return (
-              <button
+              <div
                 key={group.key}
-                onClick={() => setSelectedSection(group.key)}
-                className="group rounded-xl border border-hairline bg-surface p-5 text-left shadow-tile transition-all duration-200 hover:border-brand-300 hover:shadow-tile-hover"
+                className="group relative rounded-xl border border-hairline bg-surface p-5 shadow-tile transition-all duration-200 focus-within:border-brand-300 hover:border-brand-300 hover:shadow-tile-hover"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex min-w-0 items-center gap-3">
                     <span
                       className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${
-                        group.key === UNASSIGNED_KEY
-                          ? "bg-gray-100 text-gray-500"
-                          : "bg-brand-600/10 text-brand-600"
+                        isUnassigned ? "bg-gray-100 text-gray-500" : "bg-brand-600/10 text-brand-600"
                       }`}
                     >
                       <FontAwesomeIcon icon={faLayerGroup} className="h-5 w-5" />
@@ -542,12 +916,29 @@ export default function StudentManagementClient() {
                       </p>
                     </div>
                   </div>
-                  <FontAwesomeIcon
-                    icon={faChevronRight}
-                    className="mt-3.5 h-3.5 w-3.5 shrink-0 text-gray-300 transition-all group-hover:translate-x-0.5 group-hover:text-brand-600"
-                  />
+                  {/* Above the card-wide overlay button, so these stay clickable. */}
+                  {!isUnassigned && (
+                    <div className="relative z-10 flex shrink-0 items-center gap-0.5">
+                      <button
+                        onClick={() => setSectionForm({ section: { id: group.key, name: group.name } })}
+                        aria-label={`Rename section ${group.name}`}
+                        title="Rename"
+                        className="rounded-lg p-2 text-gray-300 transition-colors hover:bg-brand-600/10 hover:text-brand-600"
+                      >
+                        <FontAwesomeIcon icon={faPenToSquare} className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        onClick={() => setSectionToDelete({ id: group.key, name: group.name })}
+                        aria-label={`Delete section ${group.name}`}
+                        title="Delete"
+                        className="rounded-lg p-2 text-gray-300 transition-colors hover:bg-rose-50 hover:text-rose-600"
+                      >
+                        <FontAwesomeIcon icon={faTrashCan} className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  )}
                 </div>
-                <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-hairline pt-4">
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-hairline pt-4">
                   {group.students.length === 0 ? (
                     <span className="text-xs text-gray-400">No students yet</span>
                   ) : atRisk > 0 ? (
@@ -561,10 +952,39 @@ export default function StudentManagementClient() {
                       All safe
                     </span>
                   )}
+                  <span className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-400 transition-colors group-hover:text-brand-600">
+                    View roster
+                    <FontAwesomeIcon
+                      icon={faChevronRight}
+                      className="h-3 w-3 transition-transform group-hover:translate-x-0.5"
+                    />
+                  </span>
                 </div>
-              </button>
+                <button
+                  onClick={() => setSelectedSection(group.key)}
+                  aria-label={`View ${group.name} roster`}
+                  className="absolute inset-0 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-600/40"
+                />
+              </div>
             );
           })}
+
+          {groups.length === 0 && (
+            <div className="col-span-full rounded-xl border border-dashed border-gray-300 bg-surface p-12 text-center">
+              <FontAwesomeIcon icon={faLayerGroup} className="h-8 w-8 text-gray-300" />
+              <p className="mt-3 font-semibold text-gray-700">No sections yet</p>
+              <p className="mt-1 text-sm text-gray-500">
+                Create a section first — students are enrolled into one.
+              </p>
+              <button
+                onClick={() => setSectionForm({ section: null })}
+                className="mt-4 inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition-all hover:bg-brand-700"
+              >
+                <FontAwesomeIcon icon={faFolderPlus} className="h-3.5 w-3.5" />
+                Create a section
+              </button>
+            </div>
+          )}
         </div>
       ) : (
         <>
@@ -581,13 +1001,31 @@ export default function StudentManagementClient() {
               {openGroup.students.length} student{openGroup.students.length === 1 ? "" : "s"}
             </span>
             {openGroup.key !== UNASSIGNED_KEY && (
-              <button
-                onClick={() => setIsEnrollModalOpen(true)}
-                className="ml-auto flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition-all hover:bg-brand-700"
-              >
-                <FontAwesomeIcon icon={faPlus} className="h-3.5 w-3.5" />
-                Enroll into {openGroup.name}
-              </button>
+              <div className="ml-auto flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() =>
+                    setSectionForm({ section: { id: openGroup.key, name: openGroup.name } })
+                  }
+                  className="flex items-center gap-2 rounded-lg border border-gray-200 bg-surface px-3 py-2 text-sm font-medium text-gray-700 transition-all hover:border-brand-300 hover:text-brand-700"
+                >
+                  <FontAwesomeIcon icon={faPenToSquare} className="h-3.5 w-3.5" />
+                  Rename
+                </button>
+                <button
+                  onClick={() => setSectionToDelete({ id: openGroup.key, name: openGroup.name })}
+                  className="flex items-center gap-2 rounded-lg border border-gray-200 bg-surface px-3 py-2 text-sm font-medium text-gray-700 transition-all hover:border-rose-300 hover:text-rose-600"
+                >
+                  <FontAwesomeIcon icon={faTrashCan} className="h-3.5 w-3.5" />
+                  Delete
+                </button>
+                <button
+                  onClick={() => setIsEnrollModalOpen(true)}
+                  className="flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition-all hover:bg-brand-700"
+                >
+                  <FontAwesomeIcon icon={faPlus} className="h-3.5 w-3.5" />
+                  Enroll into {openGroup.name}
+                </button>
+              </div>
             )}
           </div>
 
@@ -685,6 +1123,27 @@ export default function StudentManagementClient() {
           onEnroll={handleEnroll}
           onFinished={(created) => {
             if (created > 0) void loadStudents();
+          }}
+        />
+      )}
+
+      {sectionForm && (
+        <SectionFormModal
+          section={sectionForm.section}
+          existingNames={sections.map((s) => s.name)}
+          onClose={() => setSectionForm(null)}
+          onSaved={refreshAfterSectionChange}
+        />
+      )}
+
+      {sectionToDelete && (
+        <DeleteSectionModal
+          section={sectionToDelete}
+          onClose={() => setSectionToDelete(null)}
+          onDeleted={(message) => {
+            // Its students land in Unassigned, so the open drill-in is gone.
+            if (selectedSection === sectionToDelete.id) setSelectedSection(null);
+            refreshAfterSectionChange(message);
           }}
         />
       )}
