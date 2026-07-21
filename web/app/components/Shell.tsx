@@ -243,7 +243,7 @@ export default function Shell({
   return (
     <>
       <style>{shellStyles}</style>
-      <div className="h-screen bg-[#f8fafc] flex overflow-hidden">
+      <div className="h-screen bg-canvas flex overflow-hidden">
         <aside
           inert={!isDesktop && !sidebarOpen ? true : undefined}
           className={`fixed md:relative z-40 md:z-auto w-60 h-full font-sans text-white flex flex-col shadow-[4px_0_24px_-8px_rgba(0,0,0,0.45)] transform transition-transform duration-300 ease-[cubic-bezier(0.22,0.61,0.36,1)] ${

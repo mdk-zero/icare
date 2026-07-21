@@ -13,13 +13,18 @@ const paddings = {
   lg: "p-5",
 };
 
-export default function Card({ children, className = "", padding = "md", hover = false }: CardProps) {
+export default function Card({
+  children,
+  className = "",
+  padding = "md",
+  hover = false,
+}: CardProps) {
   return (
     <div
-      className={`bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] ${
-        paddings[padding]
-      } ${
-        hover ? "hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200" : ""
+      className={`rounded-xl border border-hairline bg-surface shadow-tile ${paddings[padding]} ${
+        hover
+          ? "transition-all duration-200 hover:shadow-tile-hover hover:border-brand-200/70"
+          : ""
       } ${className}`}
     >
       {children}
@@ -27,10 +32,35 @@ export default function Card({ children, className = "", padding = "md", hover =
   );
 }
 
-export function CardHeader({ children, className = "" }: { children: ReactNode; className?: string }) {
+export function CardHeader({
+  children,
+  className = "",
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
   return (
-    <div className={`flex items-center justify-between -mx-4 -mt-4 px-4 py-3 border-b border-gray-100/80 ${className}`}>
+    <div
+      className={`-mx-4 -mt-4 mb-4 flex items-center justify-between border-b border-hairline px-4 py-3 ${className}`}
+    >
       {children}
     </div>
+  );
+}
+
+/** Section label in the app's instrument voice — mono, spaced, quiet. */
+export function CardLabel({
+  children,
+  className = "",
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <span
+      className={`font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-slate-400 ${className}`}
+    >
+      {children}
+    </span>
   );
 }

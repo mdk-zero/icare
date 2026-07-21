@@ -706,8 +706,8 @@ export default function FacultyScenariosClient() {
             icon={<FontAwesomeIcon icon={faRobot} className="w-5 h-5" />}
             value={scenarios.filter((s) => s.is_ai_generated).length}
             label="AI Generated"
-            iconBg="bg-purple-50"
-            iconColor="text-purple-600"
+            iconBg="bg-brand-50"
+            iconColor="text-brand-600"
           />
           <StatTile
             icon={<FontAwesomeIcon icon={faUsers} className="w-5 h-5" />}
@@ -778,25 +778,34 @@ export default function FacultyScenariosClient() {
             />
           </div>
           <div className="flex justify-end gap-3">
+            {/* Primary: the manual path. */}
             <button
               onClick={() => setShowCreateModal(true)}
-              className="flex items-center gap-2 px-4 py-2.5 bg-[#1B6B7B] text-white font-medium rounded-lg hover:bg-[#145a63] transition-all shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
+              className="flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_2px_8px_-1px_rgb(27_107_123_/_0.35)] transition-all hover:bg-brand-700 hover:shadow-[0_4px_14px_-2px_rgb(27_107_123_/_0.45)]"
             >
               <FontAwesomeIcon icon={faPlus} className="w-4 h-4" />
-              Create Scenario
+              Create
             </button>
+            {/* AI actions wear the sidebar's dark panel + mint accent, so "the
+                machine did this" is legible at a glance without leaving the palette. */}
             <button
               onClick={openAIModal}
-              className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-medium rounded-xl hover:from-purple-700 hover:to-indigo-700 transition-all shadow-lg shadow-purple-500/20"
+              className="group flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl bg-brand-950 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_4px_14px_-3px_rgb(11_61_61_/_0.5)] ring-1 ring-white/10 transition-all hover:bg-brand-900 hover:shadow-[0_6px_18px_-3px_rgb(11_61_61_/_0.6)]"
             >
-              <FontAwesomeIcon icon={faRobot} className="w-4 h-4" />
+              <FontAwesomeIcon
+                icon={faRobot}
+                className="w-4 h-4 text-[#5eead4] transition-transform group-hover:scale-110"
+              />
               AI Generate
             </button>
             <button
               onClick={openBatchModal}
-              className="flex items-center gap-2 px-4 py-2.5 bg-white border border-purple-300 text-purple-700 font-medium rounded-xl hover:bg-purple-50 transition-all whitespace-nowrap"
+              className="group flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl border border-brand-700/25 bg-white px-4 py-2.5 text-sm font-semibold text-brand-800 transition-all hover:border-brand-700/40 hover:bg-brand-50"
             >
-              <FontAwesomeIcon icon={faLayerGroup} className="w-4 h-4" />
+              <FontAwesomeIcon
+                icon={faLayerGroup}
+                className="w-4 h-4 text-brand-600 transition-transform group-hover:scale-110"
+              />
               Generate Library
             </button>
           </div>
@@ -822,7 +831,7 @@ export default function FacultyScenariosClient() {
           {!searchQuery && difficultyFilter === "all" && categoryFilter === "all" && (
             <button
               onClick={openBatchModal}
-              className="mt-4 inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-medium rounded-xl hover:from-purple-700 hover:to-indigo-700 transition-all shadow-lg shadow-purple-500/20"
+              className="mt-4 inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-brand-600 to-brand-800 text-white font-medium rounded-xl hover:from-brand-700 hover:to-brand-900 transition-all shadow-lg shadow-[0_4px_14px_-2px_rgb(27_107_123_/_0.45)]"
             >
               <FontAwesomeIcon icon={faLayerGroup} className="w-4 h-4" />
               Generate Library
@@ -846,7 +855,7 @@ export default function FacultyScenariosClient() {
                     {scenario.title}
                   </h3>
                   {scenario.is_ai_generated && (
-                    <span className="px-2 py-1 bg-purple-100 text-purple-700 text-xs font-medium rounded-full flex items-center gap-1 whitespace-nowrap">
+                    <span className="px-2 py-1 bg-brand-100 text-brand-700 text-xs font-medium rounded-full flex items-center gap-1 whitespace-nowrap">
                       <FontAwesomeIcon icon={faRobot} className="w-3 h-3" />
                       AI
                     </span>
@@ -1226,8 +1235,8 @@ export default function FacultyScenariosClient() {
           <div className="bg-white rounded-xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-gray-200/80">
             <div className="p-4 border-b border-gray-100/80 flex items-center justify-between bg-gray-50/50">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
-                  <FontAwesomeIcon icon={faLayerGroup} className="text-purple-600 w-5 h-5" />
+                <div className="w-10 h-10 bg-brand-100 rounded-xl flex items-center justify-center">
+                  <FontAwesomeIcon icon={faLayerGroup} className="text-brand-600 w-5 h-5" />
                 </div>
                 <div>
                   <h3 className="text-lg font-bold text-gray-900">Generate Scenario Library</h3>
@@ -1259,8 +1268,8 @@ export default function FacultyScenariosClient() {
                           disabled={batchGenerating}
                           className={`flex-1 py-2.5 rounded-xl text-sm font-semibold border transition-all disabled:opacity-50 ${
                             batchCount === n
-                              ? "bg-purple-600 text-white border-purple-600 shadow-sm"
-                              : "bg-white text-gray-700 border-gray-300 hover:border-purple-300 hover:bg-purple-50"
+                              ? "bg-brand-600 text-white border-brand-600 shadow-sm"
+                              : "bg-white text-gray-700 border-gray-300 hover:border-brand-300 hover:bg-brand-50"
                           }`}
                         >
                           {n}
@@ -1280,8 +1289,8 @@ export default function FacultyScenariosClient() {
                           disabled={batchGenerating}
                           className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all disabled:opacity-50 ${
                             batchCategories.includes(cat)
-                              ? "bg-purple-100 text-purple-700 border-purple-300"
-                              : "bg-white text-gray-600 border-gray-300 hover:border-purple-300"
+                              ? "bg-brand-100 text-brand-700 border-brand-300"
+                              : "bg-white text-gray-600 border-gray-300 hover:border-brand-300"
                           }`}
                         >
                           {cat}
@@ -1334,7 +1343,7 @@ export default function FacultyScenariosClient() {
                       checked={batchUsePatients}
                       onChange={(e) => setBatchUsePatients(e.target.checked)}
                       disabled={batchGenerating}
-                      className="mt-0.5 w-4 h-4 accent-purple-600"
+                      className="mt-0.5 w-4 h-4 accent-brand-600"
                     />
                     <span>
                       <span className="block text-sm font-semibold text-gray-800">
@@ -1358,7 +1367,7 @@ export default function FacultyScenariosClient() {
                   )}
 
                   {batchGenerating && (
-                    <div className="p-4 rounded-xl border border-purple-200 bg-purple-50/50 text-sm text-purple-800 flex items-center gap-3">
+                    <div className="p-4 rounded-xl border border-brand-200 bg-brand-50/50 text-sm text-brand-800 flex items-center gap-3">
                       <FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" />
                       Writing {batchCount} scenarios — this takes up to a minute for larger batches.
                     </div>
@@ -1390,7 +1399,7 @@ export default function FacultyScenariosClient() {
                         )
                       }
                       disabled={batchSaving}
-                      className="text-sm font-medium text-purple-700 hover:text-purple-900 disabled:opacity-50"
+                      className="text-sm font-medium text-brand-700 hover:text-brand-900 disabled:opacity-50"
                     >
                       {batchSelected.length === batchDrafts.length ? "Deselect all" : "Select all"}
                     </button>
@@ -1407,7 +1416,7 @@ export default function FacultyScenariosClient() {
                           key={i}
                           className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
                             checked
-                              ? "border-purple-300 bg-purple-50/40"
+                              ? "border-brand-300 bg-brand-50/40"
                               : "border-gray-200 hover:bg-gray-50/50"
                           }`}
                         >
@@ -1420,7 +1429,7 @@ export default function FacultyScenariosClient() {
                                 prev.includes(i) ? prev.filter((x) => x !== i) : [...prev, i],
                               )
                             }
-                            className="mt-1 w-4 h-4 accent-purple-600"
+                            className="mt-1 w-4 h-4 accent-brand-600"
                           />
                           <div className="min-w-0 flex-1">
                             <p className="font-semibold text-gray-900">{draft.title}</p>
@@ -1471,7 +1480,7 @@ export default function FacultyScenariosClient() {
                   type="button"
                   onClick={handleGenerateBatch}
                   disabled={batchGenerating}
-                  className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg font-medium hover:from-purple-700 hover:to-indigo-700 transition-all disabled:opacity-50 flex items-center gap-2 shadow-lg shadow-purple-500/20"
+                  className="px-5 py-2.5 bg-gradient-to-r from-brand-600 to-brand-800 text-white rounded-lg font-medium hover:from-brand-700 hover:to-brand-900 transition-all disabled:opacity-50 flex items-center gap-2 shadow-lg shadow-[0_4px_14px_-2px_rgb(27_107_123_/_0.45)]"
                 >
                   {batchGenerating ? (
                     <>
@@ -1491,7 +1500,7 @@ export default function FacultyScenariosClient() {
                     type="button"
                     onClick={handleGenerateBatch}
                     disabled={batchSaving}
-                    className="px-5 py-2.5 bg-white border border-purple-300 text-purple-700 rounded-lg font-medium hover:bg-purple-50 transition-all disabled:opacity-50"
+                    className="px-5 py-2.5 bg-white border border-brand-300 text-brand-700 rounded-lg font-medium hover:bg-brand-50 transition-all disabled:opacity-50"
                   >
                     Regenerate
                   </button>
@@ -1523,8 +1532,8 @@ export default function FacultyScenariosClient() {
           <div className="bg-white rounded-xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-gray-200/80">
             <div className="p-4 border-b border-gray-100/80 flex items-center justify-between bg-gray-50/50">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
-                  <FontAwesomeIcon icon={faRobot} className="text-purple-600 w-5 h-5" />
+                <div className="w-10 h-10 bg-brand-100 rounded-xl flex items-center justify-center">
+                  <FontAwesomeIcon icon={faRobot} className="text-brand-600 w-5 h-5" />
                 </div>
                 <div>
                   <h3 className="text-lg font-bold text-gray-900">AI Scenario Generator</h3>
@@ -1594,7 +1603,7 @@ export default function FacultyScenariosClient() {
                     type="button"
                     onClick={handleSuggestAI}
                     disabled={suggesting || patients.length === 0}
-                    className="text-sm flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 text-purple-700 hover:bg-purple-100 rounded-lg font-medium transition-colors disabled:opacity-50"
+                    className="text-sm flex items-center gap-1.5 px-3 py-1.5 bg-brand-50 text-brand-700 hover:bg-brand-100 rounded-lg font-medium transition-colors disabled:opacity-50"
                   >
                     {suggesting && (
                       <FontAwesomeIcon icon={faSpinner} spin className="w-3.5 h-3.5" />
@@ -1652,9 +1661,9 @@ export default function FacultyScenariosClient() {
 
                 {/* Selected patient badge */}
                 {selectedPatient && (
-                  <div className="mb-3 p-3 bg-purple-50 border border-purple-200 rounded-xl flex items-center justify-between">
+                  <div className="mb-3 p-3 bg-brand-50 border border-brand-200 rounded-xl flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center text-purple-600">
+                      <div className="w-8 h-8 bg-brand-100 rounded-full flex items-center justify-center text-brand-600">
                         <FontAwesomeIcon icon={faHospitalUser} className="w-4 h-4" />
                       </div>
                       <div>
@@ -1668,7 +1677,7 @@ export default function FacultyScenariosClient() {
                     </div>
                     <button
                       onClick={() => setSelectedPatientId("")}
-                      className="text-xs text-purple-700 hover:text-purple-900 font-medium"
+                      className="text-xs text-brand-700 hover:text-brand-900 font-medium"
                     >
                       Clear
                     </button>
@@ -1772,7 +1781,7 @@ export default function FacultyScenariosClient() {
               {aiPreview && (
                 <div className="space-y-4">
                   <div className="flex items-center gap-2 pb-2 border-b border-gray-100/80">
-                    <FontAwesomeIcon icon={faRobot} className="text-purple-600" />
+                    <FontAwesomeIcon icon={faRobot} className="text-brand-600" />
                     <h4 className="font-bold text-gray-900">Generated Preview</h4>
                   </div>
                   <div className="space-y-3">
@@ -1835,7 +1844,7 @@ export default function FacultyScenariosClient() {
                   <button
                     onClick={handleGenerateAI}
                     disabled={generating || !aiPrompt.trim()}
-                    className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg font-medium hover:from-purple-700 hover:to-indigo-700 transition-all disabled:opacity-50 flex items-center gap-2 shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
+                    className="px-5 py-2.5 bg-gradient-to-r from-brand-600 to-brand-800 text-white rounded-lg font-medium hover:from-brand-700 hover:to-brand-900 transition-all disabled:opacity-50 flex items-center gap-2 shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
                   >
                     {generating && <FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" />}
                     <FontAwesomeIcon icon={faBolt} className="w-4 h-4" />
@@ -1859,7 +1868,7 @@ export default function FacultyScenariosClient() {
                   <button
                     onClick={handleSaveAIPreview}
                     disabled={savingAIPreview}
-                    className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl font-medium hover:from-purple-700 hover:to-indigo-700 transition-all disabled:opacity-50 flex items-center gap-2"
+                    className="px-5 py-2.5 bg-gradient-to-r from-brand-600 to-brand-800 text-white rounded-xl font-medium hover:from-brand-700 hover:to-brand-900 transition-all disabled:opacity-50 flex items-center gap-2"
                   >
                     {savingAIPreview && (
                       <FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" />
@@ -1887,7 +1896,7 @@ export default function FacultyScenariosClient() {
                     </div>
                     <h2 className="text-2xl font-bold text-gray-900">{selectedScenario.title}</h2>
                     {selectedScenario.is_ai_generated && (
-                      <span className="px-2.5 py-1 bg-purple-100 text-purple-700 text-xs font-semibold rounded-full flex items-center gap-1">
+                      <span className="px-2.5 py-1 bg-brand-100 text-brand-700 text-xs font-semibold rounded-full flex items-center gap-1">
                         <FontAwesomeIcon icon={faRobot} className="w-3 h-3" />
                         AI Generated
                       </span>

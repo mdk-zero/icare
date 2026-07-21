@@ -2,20 +2,49 @@
 
 :root {
   --background: #ffffff;
-  --foreground: #171717;
+  --foreground: #0f172a;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-  --font-rubik: "Rubik Mono One";
+  --font-display: var(--font-fraunces);
+
+  /*
+   * Brand teal. The app had #1B6B7B hardcoded 592 times alongside four
+   * near-duplicates (#0D7377, #155663, #0A5C5F, #145a63/#145A63); 600 and 700
+   * below are the two that were actually in use, so existing hex literals and
+   * these tokens render identically during the migration.
+   */
+  --color-brand-50: #f0f9fa;
+  --color-brand-100: #d9eff2;
+  --color-brand-200: #b7dfe6;
+  --color-brand-300: #86c7d3;
+  --color-brand-400: #4ea6b9;
+  --color-brand-500: #2b899f;
+  --color-brand-600: #1b6b7b;
+  --color-brand-700: #145a63;
+  --color-brand-800: #124a52;
+  --color-brand-900: #103e46;
+  --color-brand-950: #0b3d3d;
+
+  /* Surfaces. The canvas carries a hint of the brand so it reads as paper, not gray. */
+  --color-canvas: #f5f8f9;
+  --color-surface: #ffffff;
+  --color-hairline: #e6edef;
+
+  --shadow-tile: 0 1px 3px 0 rgb(15 23 42 / 0.04), 0 1px 2px -1px rgb(15 23 42 / 0.06);
+  --shadow-tile-hover: 0 4px 12px 0 rgb(15 23 42 / 0.06), 0 2px 4px -2px rgb(15 23 42 / 0.06);
+  --shadow-overlay: 0 24px 60px -12px rgb(4 32 31 / 0.28);
 
   --animate-fade-in-up: fadeInUp 0.5s ease-out forwards;
   --animate-shake: shake 0.3s ease-in-out;
   --animate-float-slow: floatSlow 6s ease-in-out infinite;
   --animate-float-medium: floatMedium 4.5s ease-in-out infinite;
+  --animate-rise: rise 0.45s cubic-bezier(0.22, 0.61, 0.36, 1) backwards;
 }
 
 @keyframes fadeInUp {
@@ -62,15 +91,66 @@
   }
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 10px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
   }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  /*
+   * Was `Arial, Helvetica, sans-serif`, which overrode the Geist loaded by
+   * next/font on every route. The app has always shipped Arial.
+   */
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Page and section titles carry the display serif. */
+.font-display {
+  font-family: var(--font-fraunces), ui-serif, Georgia, serif;
+  font-optical-sizing: auto;
+}
+
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+}
+
+/* Figures line up in tables and stat tiles without per-call-site classes. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+::selection {
+  background: color-mix(in oklab, var(--color-brand-600) 22%, transparent);
+  color: var(--color-brand-900);
+}
+
+/* One consistent focus ring app-wide, instead of the browser default. */
+:focus-visible {
+  outline: 2px solid var(--color-brand-600);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
