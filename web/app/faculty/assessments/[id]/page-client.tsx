@@ -119,6 +119,19 @@ function parseCsv(text: string): string[][] {
   return rows;
 }
 
+const CATEGORIES = [
+  "Cardiac Emergency",
+  "Respiratory Emergency",
+  "Neurological Emergency",
+  "Trauma",
+  "Medical-Surgical",
+  "Patient Education",
+  "Infection Management",
+  "Critical Care",
+  "Medication Safety",
+  "General",
+] as const;
+
 const CSV_TEMPLATE = `content,options,correct,type,points,explanation,competency
 "What is the normal adult resting heart rate range?","40-50 bpm|60-100 bpm|110-130 bpm|140-160 bpm",2,multiple_choice,1,"Normal adult resting heart rate is 60-100 bpm.",Vital Signs Monitoring
 "Hand hygiene is the single most effective way to prevent infection.",,true,true_false,1,"Hand hygiene remains the cornerstone of infection control.",Infection Control
@@ -159,6 +172,48 @@ export default function AssessmentQuestionsClient({
   const [newCriterionWeight, setNewCriterionWeight] = useState("");
   const [newCriterionCompetency, setNewCriterionCompetency] = useState("");
 
+  // inline detail editing
+  const [editingDetails, setEditingDetails] = useState(false);
+  const [detailForm, setDetailForm] = useState({ title: "", description: "", difficulty: "beginner", category: "General", time_limit_minutes: "" });
+  const [savingDetails, setSavingDetails] = useState(false);
+
+  const handleSaveDetails = async () => {
+    if (!detailForm.title.trim()) {
+      flash("Title is required");
+      return;
+    }
+    setSavingDetails(true);
+    const res = await fetch(`/api/faculty/assessments/${assessmentId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        title: detailForm.title.trim(),
+        description: detailForm.description,
+        difficulty: detailForm.difficulty,
+        category: detailForm.category,
+        time_limit_seconds: detailForm.time_limit_minutes ? Number(detailForm.time_limit_minutes) * 60 : null,
+      }),
+    });
+    setSavingDetails(false);
+    if (!res.ok) {
+      flash("Failed to save details");
+      return;
+    }
+    setAssessment((prev) =>
+      prev ? {
+        ...prev,
+        title: detailForm.title.trim(),
+        description: detailForm.description,
+        difficulty: detailForm.difficulty as "beginner" | "intermediate" | "advanced",
+        category: detailForm.category,
+        time_limit_seconds: detailForm.time_limit_minutes ? Number(detailForm.time_limit_minutes) * 60 : null,
+      } : prev
+    );
+    setEditingDetails(false);
+    flash("Assessment details updated");
+  };
+
   const flash = (text: string) => {
     setMessage(text);
     setTimeout(() => setMessage(null), 4000);
@@ -190,6 +245,13 @@ export default function AssessmentQuestionsClient({
           category: a.category,
           time_limit_seconds: a.time_limit_seconds,
           question_count: a.question_count ?? json.assessment.questions.length,
+        });
+        setDetailForm({
+          title: a.title,
+          description: a.description ?? "",
+          difficulty: a.difficulty,
+          category: a.category,
+          time_limit_minutes: a.time_limit_seconds ? String(Math.round(a.time_limit_seconds / 60)) : "",
         });
         const loaded = json.assessment.questions ?? [];
         setQuestions(loaded);
@@ -675,29 +737,107 @@ export default function AssessmentQuestionsClient({
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-start gap-4">
         <button
           onClick={() => router.push("/faculty/assessments")}
-          className="p-2 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50"
+          className="p-2 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 shrink-0"
         >
           <FontAwesomeIcon icon={faArrowLeft} className="w-4 h-4" />
         </button>
-        <div>
-          <h1 className="text-xl font-bold text-gray-900">{assessment.title}</h1>
-          <p className="text-sm text-gray-500">
-            {assessment.category} · {assessment.difficulty} ·{" "}
-            {assessment.question_count} question{assessment.question_count !== 1 ? "s" : ""}
-            {assessment.time_limit_seconds &&
-              ` · ${Math.round(assessment.time_limit_seconds / 60)} min limit`}
-          </p>
+        <div className="flex-1 min-w-0">
+          {editingDetails ? (
+            <div className="space-y-3">
+              <input
+                value={detailForm.title}
+                onChange={(e) => setDetailForm((f) => ({ ...f, title: e.target.value }))}
+                placeholder="Title"
+                className={inputClassName}
+              />
+              <textarea
+                value={detailForm.description}
+                onChange={(e) => setDetailForm((f) => ({ ...f, description: e.target.value }))}
+                rows={2}
+                placeholder="Description"
+                className={inputClassName}
+              />
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <select
+                  value={detailForm.difficulty}
+                  onChange={(e) => setDetailForm((f) => ({ ...f, difficulty: e.target.value }))}
+                  className={inputClassName}
+                >
+                  <option value="beginner">Beginner</option>
+                  <option value="intermediate">Intermediate</option>
+                  <option value="advanced">Advanced</option>
+                </select>
+                <select
+                  value={detailForm.category}
+                  onChange={(e) => setDetailForm((f) => ({ ...f, category: e.target.value }))}
+                  className={inputClassName}
+                >
+                  {CATEGORIES.map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+                <input
+                  type="number"
+                  min={1}
+                  value={detailForm.time_limit_minutes}
+                  onChange={(e) => setDetailForm((f) => ({ ...f, time_limit_minutes: e.target.value }))}
+                  placeholder="Time limit (min)"
+                  className={inputClassName}
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleSaveDetails}
+                  disabled={savingDetails}
+                  className="flex items-center gap-2 px-5 py-2 bg-[#1B6B7B] text-white rounded-lg text-sm font-medium hover:bg-[#155663] disabled:opacity-60 transition-colors"
+                >
+                  {savingDetails ? (
+                    <><FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" /> Saving…</>
+                  ) : (
+                    <><FontAwesomeIcon icon={faCheck} className="w-4 h-4" /> Save</>
+                  )}
+                </button>
+                <button
+                  onClick={() => setEditingDetails(false)}
+                  className="px-5 py-2 rounded-lg border border-gray-200 text-gray-600 text-sm hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3">
+              <div className="flex-1 min-w-0">
+                <h1 className="text-xl font-bold text-gray-900 truncate">{assessment.title}</h1>
+                <p className="text-sm text-gray-500">
+                  <span className="px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">{assessment.category}</span>{" "}
+                  <span className={`px-1.5 py-0.5 rounded text-xs ${
+                    assessment.difficulty === "beginner" ? "bg-green-100 text-green-700" :
+                    assessment.difficulty === "intermediate" ? "bg-yellow-100 text-yellow-700" :
+                    "bg-red-100 text-red-700"
+                  }`}>{assessment.difficulty}</span>{" "}
+                  {assessment.question_count} question{assessment.question_count !== 1 ? "s" : ""}
+                  {assessment.time_limit_seconds &&
+                    ` · ${Math.round(assessment.time_limit_seconds / 60)} min limit`}
+                </p>
+                {assessment.description && (
+                  <p className="text-sm text-gray-600 mt-1">{assessment.description}</p>
+                )}
+              </div>
+              <button
+                onClick={() => setEditingDetails(true)}
+                title="Edit details"
+                className="p-2 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 shrink-0"
+              >
+                <FontAwesomeIcon icon={faPen} className="w-4 h-4" />
+              </button>
+            </div>
+          )}
         </div>
       </div>
-
-      {assessment.description && (
-        <p className="text-gray-600 text-sm bg-gray-50 p-4 rounded-xl border border-gray-200">
-          {assessment.description}
-        </p>
-      )}
 
       {/* Criteria section */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
