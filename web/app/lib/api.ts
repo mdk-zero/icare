@@ -1490,13 +1490,70 @@ export async function generateAIScenario(
       title: json.scenario.title || 'AI Generated Scenario',
       description: json.scenario.description || prompt,
       difficulty: json.scenario.difficulty || 'intermediate',
-      category: json.scenario.category || 'AI Generated',
+      // Must stay on the scenario_category enum or the save is rejected.
+      category: json.scenario.category || 'General',
       patient_case: json.scenario.patient_case || { generated_by_ai: true },
       learning_objectives: json.scenario.learning_objectives || ['Demonstrate clinical assessment skills'],
       is_ai_generated: true,
     };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'Unable to generate scenario' };
+  }
+}
+
+export interface ScenarioBatchOptions {
+  count: number;
+  /** Empty spreads the batch across every category. */
+  categories?: string[];
+  /** Omit to cycle beginner → intermediate → advanced. */
+  difficulty?: string;
+  topic?: string;
+  /** Ground each scenario in a real MIMIC patient record. */
+  usePatients?: boolean;
+}
+
+/** An unsaved scenario returned by batch generation, ready for review. */
+export interface ScenarioDraft {
+  title: string;
+  description: string;
+  difficulty: string;
+  category: string;
+  patient_case: Record<string, unknown>;
+  learning_objectives: string[];
+  patient_id: string | null;
+}
+
+/** Generates a library of scenarios in one request. Nothing is saved until createScenario(). */
+export async function generateScenarioBatch(
+  options: ScenarioBatchOptions,
+): Promise<{ scenarios: ScenarioDraft[]; warning?: string } | { error: string }> {
+  try {
+    const res = await fetch('/api/faculty/scenarios/generate-batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        count: options.count,
+        categories: options.categories,
+        difficulty: options.difficulty,
+        topic: options.topic,
+        use_patients: options.usePatients,
+      }),
+    });
+
+    const json = (await res.json()) as {
+      scenarios?: ScenarioDraft[];
+      warning?: string;
+      error?: string;
+    };
+
+    if (!res.ok || !json.scenarios) {
+      return { error: json.error || `Request failed (${res.status})` };
+    }
+
+    return { scenarios: json.scenarios, warning: json.warning };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : 'Unable to generate scenarios' };
   }
 }
 
