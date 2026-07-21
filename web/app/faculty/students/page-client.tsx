@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -18,6 +18,9 @@ import {
   faCircleCheck,
   faHourglassHalf,
   faEllipsisVertical,
+  faLayerGroup,
+  faChevronRight,
+  faArrowLeft,
 } from "@fortawesome/free-solid-svg-icons";
 import {
   fetchFacultyStudents,
@@ -37,7 +40,7 @@ import {
 import PageHeader from "../../components/PageHeader";
 import StatTile from "../../components/StatTile";
 import Card from "../../components/Card";
-import { SkeletonTable } from "../../components/skeletons";
+import { SkeletonSectionGrid, SkeletonTable } from "../../components/skeletons";
 
 /** Minimal CSV parser: quoted fields, "" escapes, \r\n or \n row breaks. */
 function parseCsv(text: string): string[][] {
@@ -86,6 +89,19 @@ Maria,,Reyes,maria.reyes@batstate-u.edu.ph,
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+/** Group key for students who have no section assigned. */
+const UNASSIGNED_KEY = "__unassigned__";
+
+interface SectionGroup {
+  /** Section id, or UNASSIGNED_KEY. */
+  key: string;
+  name: string;
+  /** Members left after the search and risk filters. */
+  students: StudentUser[];
+  /** Members before filtering, so cards can show "3 of 12". */
+  total: number;
+}
+
 interface BulkRow {
   line: number;
   firstName: string;
@@ -112,6 +128,8 @@ export default function FacultyStudentsClient() {
   const [loadingStudentUsers, setLoadingStudentUsers] = useState(true);
   const [predictions, setPredictions] = useState<Record<string, RiskPrediction>>({});
   const [sections, setSections] = useState<Section[]>([]);
+  /** Section whose roster is open; null shows the section cards. */
+  const [selectedSectionKey, setSelectedSectionKey] = useState<string | null>(null);
 
   useEffect(() => {
     loadStudents();
@@ -523,6 +541,16 @@ export default function FacultyStudentsClient() {
     }
   };
 
+  const openCreateModal = () => {
+    setShowCreateModal(true);
+    setMessage(null);
+    setCreatedPassword(null);
+    setCopiedPassword(false);
+    if (newEmailRef.current) newEmailRef.current.value = "";
+    // Prefill with the section being viewed, when it is one of the faculty's own.
+    setNewSectionId(sections.some((s) => s.id === selectedSectionKey) ? selectedSectionKey! : "");
+  };
+
   const openUpdateModal = (student: StudentUser) => {
     setUpdatingStudent(student);
     setUpdateName(student.name);
@@ -575,6 +603,42 @@ export default function FacultyStudentsClient() {
     return prediction?.risk === riskFilter;
   });
 
+  const sectionGroups = useMemo<SectionGroup[]>(() => {
+    const matching = new Set(filteredStudentUsers.map((u) => u.id));
+    const byKey = new Map<string, SectionGroup>();
+
+    // Seed with the faculty's own sections so empty ones still get a card.
+    for (const section of sections) {
+      byKey.set(section.id, { key: section.id, name: section.name, students: [], total: 0 });
+    }
+
+    for (const user of studentUsers) {
+      const key = user.section_id ?? UNASSIGNED_KEY;
+      let group = byKey.get(key);
+      if (!group) {
+        group = { key, name: user.section ?? "Unassigned", students: [], total: 0 };
+        byKey.set(key, group);
+      }
+      group.total++;
+      if (matching.has(user.id)) group.students.push(user);
+    }
+
+    return [...byKey.values()].sort((a, b) => {
+      if (a.key === UNASSIGNED_KEY) return 1;
+      if (b.key === UNASSIGNED_KEY) return -1;
+      return a.name.localeCompare(b.name);
+    });
+  }, [sections, studentUsers, filteredStudentUsers]);
+
+  const selectedGroup = sectionGroups.find((g) => g.key === selectedSectionKey) ?? null;
+  const filtersActive = searchQuery !== "" || riskFilter !== "all";
+
+  const riskCounts = (group: SectionGroup) => ({
+    atRisk: group.students.filter((u) => predictions[u.id]?.risk === "at_risk").length,
+    safe: group.students.filter((u) => predictions[u.id]?.risk === "safe").length,
+    unscored: group.students.filter((u) => !predictions[u.id]).length,
+  });
+
   const atRiskCount = studentUsers.filter((u) => predictions[u.id]?.risk === "at_risk").length;
   const safeCount = studentUsers.filter((u) => predictions[u.id]?.risk === "safe").length;
   const pendingCount = studentUsers.filter((u) => !predictions[u.id]).length;
@@ -612,13 +676,7 @@ export default function FacultyStudentsClient() {
               />
             </svg>
           ),
-          onClick: () => {
-            setShowCreateModal(true);
-            setMessage(null);
-            setCreatedPassword(null);
-            setCopiedPassword(false);
-            if (newEmailRef.current) newEmailRef.current.value = "";
-          },
+          onClick: openCreateModal,
           label: "Register Student",
         }}
       />
@@ -664,13 +722,7 @@ export default function FacultyStudentsClient() {
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-4">
           <button
-            onClick={() => {
-              setShowCreateModal(true);
-              setMessage(null);
-              setCreatedPassword(null);
-              setCopiedPassword(false);
-              if (newEmailRef.current) newEmailRef.current.value = "";
-            }}
+            onClick={openCreateModal}
             className="px-4 py-2.5 bg-[#1B6B7B] text-white font-medium rounded-lg hover:bg-[#145A63] transition-all flex items-center gap-2 shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
           >
             <FontAwesomeIcon icon={faPlus} className="w-5 h-5" />
@@ -931,113 +983,208 @@ export default function FacultyStudentsClient() {
       )}
 
       <div className="mt-8">
-        <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200 overflow-hidden">
-          {loadingStudentUsers ? (
-            <SkeletonTable rows={5} cols={5} />
+        {loadingStudentUsers ? (
+          selectedGroup ? (
+            <SkeletonTable rows={5} cols={4} />
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50/50 border-b border-gray-100">
-                  <tr>
-                    <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
-                      Student
-                    </th>
-                    <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
-                      Email
-                    </th>
-                    <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
-                      Section
-                    </th>
-                    <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
-                      Risk (ML)
-                    </th>
-                    <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider"></th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100/80">
-                  {filteredStudentUsers.map((user) => (
-                    <tr
-                      key={user.id}
-                      onClick={() => router.push(`/faculty/students/${user.id}`)}
-                      className="group hover:bg-gray-50/50 transition-colors cursor-pointer"
-                    >
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-[#1B6B7B]/10 rounded-full flex items-center justify-center text-[#1B6B7B] font-semibold">
-                            {user.name?.charAt(0) || "?"}
-                          </div>
-                          <p className="font-semibold text-gray-800">{user.name}</p>
-                        </div>
-                      </td>
-                      <td className="py-3 px-4 text-gray-600">{user.email}</td>
-                      <td className="py-3 px-4">
-                        {user.section ? (
-                          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-[#1B6B7B]/10 text-[#1B6B7B] border border-[#1B6B7B]/20">
-                            {user.section}
-                          </span>
-                        ) : (
-                          <span className="text-sm text-gray-400">Unassigned</span>
-                        )}
-                      </td>
-                      <td className="py-3 px-4">
-                        {predictions[user.id] ? (
-                          <span
-                            className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${
-                              predictions[user.id].risk === "at_risk"
-                                ? "bg-red-100 text-red-700 border-red-200"
-                                : "bg-emerald-100 text-emerald-700 border-emerald-200"
-                            }`}
-                            title={`Prediction from ${new Date(predictions[user.id].predicted_at).toLocaleString()}`}
-                          >
-                            {predictions[user.id].risk === "at_risk" ? "At Risk" : "Safe"}
-                            {predictions[user.id].probability != null &&
-                              ` · ${Math.round((predictions[user.id].probability as number) * 100)}%`}
-                          </span>
-                        ) : (
-                          <span className="text-sm text-gray-400">Not scored</span>
-                        )}
-                      </td>
-                      <td className="py-3 px-4">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (openMenu?.user.id === user.id) {
-                              setOpenMenu(null);
-                              return;
-                            }
-                            const rect = e.currentTarget.getBoundingClientRect();
-                            const openUp = rect.bottom + 150 > window.innerHeight;
-                            setOpenMenu({
-                              user,
-                              x: rect.right,
-                              y: openUp ? rect.top - 4 : rect.bottom + 4,
-                              openUp,
-                            });
-                          }}
-                          className={`w-8 h-8 flex items-center justify-center rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-200/70 transition-all ${
-                            openMenu?.user.id === user.id
-                              ? "opacity-100 bg-gray-200/70"
-                              : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
-                          }`}
-                          aria-label={`Actions for ${user.name}`}
-                        >
-                          <FontAwesomeIcon icon={faEllipsisVertical} className="w-4 h-4" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                  {filteredStudentUsers.length === 0 && (
-                    <tr>
-                      <td colSpan={5} className="py-8 text-center text-gray-500">
-                        No student accounts found
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+            <SkeletonSectionGrid />
+          )
+        ) : !selectedGroup ? (
+          sectionGroups.length === 0 ? (
+            <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] py-12 text-center">
+              <div className="w-12 h-12 mx-auto mb-3 rounded-xl bg-gray-100 flex items-center justify-center">
+                <FontAwesomeIcon icon={faLayerGroup} className="w-5 h-5 text-gray-400" />
+              </div>
+              <p className="font-medium text-gray-700">No sections yet</p>
+              <p className="text-sm text-gray-500 mt-1">
+                Ask an admin to assign you a section, then register students into it.
+              </p>
             </div>
-          )}
-        </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {sectionGroups.map((group) => {
+                const counts = riskCounts(group);
+                return (
+                  <button
+                    key={group.key}
+                    onClick={() => setSelectedSectionKey(group.key)}
+                    className="group text-left bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-[#1B6B7B]/30 transition-all duration-200 p-5"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div
+                          className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${
+                            group.key === UNASSIGNED_KEY
+                              ? "bg-gray-100 text-gray-500"
+                              : "bg-[#1B6B7B]/10 text-[#1B6B7B]"
+                          }`}
+                        >
+                          <FontAwesomeIcon icon={faLayerGroup} className="w-5 h-5" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-semibold text-gray-900 truncate">{group.name}</p>
+                          <p className="text-xs text-gray-500">
+                            {group.students.length} student{group.students.length === 1 ? "" : "s"}
+                            {filtersActive && group.students.length !== group.total && (
+                              <span className="text-gray-400"> of {group.total}</span>
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                      <FontAwesomeIcon
+                        icon={faChevronRight}
+                        className="w-3.5 h-3.5 mt-3.5 text-gray-300 group-hover:text-[#1B6B7B] group-hover:translate-x-0.5 transition-all shrink-0"
+                      />
+                    </div>
+
+                    <div className="mt-4 pt-4 border-t border-gray-100 flex flex-wrap items-center gap-2">
+                      {group.students.length === 0 ? (
+                        <span className="text-xs text-gray-400">
+                          {filtersActive ? "No matching students" : "No students yet"}
+                        </span>
+                      ) : (
+                        <>
+                          {counts.atRisk > 0 && (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700 border border-red-200">
+                              <FontAwesomeIcon
+                                icon={faTriangleExclamation}
+                                className="w-3 h-3"
+                              />
+                              {counts.atRisk} at risk
+                            </span>
+                          )}
+                          {counts.safe > 0 && (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700 border border-emerald-200">
+                              <FontAwesomeIcon icon={faCircleCheck} className="w-3 h-3" />
+                              {counts.safe} safe
+                            </span>
+                          )}
+                          {counts.unscored > 0 && (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200">
+                              <FontAwesomeIcon icon={faHourglassHalf} className="w-3 h-3" />
+                              {counts.unscored} not scored
+                            </span>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )
+        ) : (
+          <>
+            <div className="flex items-center gap-3 mb-4">
+              <button
+                onClick={() => setSelectedSectionKey(null)}
+                className="px-3 py-2 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-all flex items-center gap-2"
+              >
+                <FontAwesomeIcon icon={faArrowLeft} className="w-3.5 h-3.5" />
+                All sections
+              </button>
+              <div className="flex items-center gap-2 min-w-0">
+                <h2 className="text-lg font-bold text-gray-900 truncate">{selectedGroup.name}</h2>
+                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-[#1B6B7B]/10 text-[#1B6B7B] border border-[#1B6B7B]/20 shrink-0">
+                  {selectedGroup.students.length} student
+                  {selectedGroup.students.length === 1 ? "" : "s"}
+                </span>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50/50 border-b border-gray-100">
+                    <tr>
+                      <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
+                        Student
+                      </th>
+                      <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
+                        Email
+                      </th>
+                      <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
+                        Risk (ML)
+                      </th>
+                      <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100/80">
+                    {selectedGroup.students.map((user) => (
+                      <tr
+                        key={user.id}
+                        onClick={() => router.push(`/faculty/students/${user.id}`)}
+                        className="group hover:bg-gray-50/50 transition-colors cursor-pointer"
+                      >
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-[#1B6B7B]/10 rounded-full flex items-center justify-center text-[#1B6B7B] font-semibold">
+                              {user.name?.charAt(0) || "?"}
+                            </div>
+                            <p className="font-semibold text-gray-800">{user.name}</p>
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 text-gray-600">{user.email}</td>
+                        <td className="py-3 px-4">
+                          {predictions[user.id] ? (
+                            <span
+                              className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${
+                                predictions[user.id].risk === "at_risk"
+                                  ? "bg-red-100 text-red-700 border-red-200"
+                                  : "bg-emerald-100 text-emerald-700 border-emerald-200"
+                              }`}
+                              title={`Prediction from ${new Date(predictions[user.id].predicted_at).toLocaleString()}`}
+                            >
+                              {predictions[user.id].risk === "at_risk" ? "At Risk" : "Safe"}
+                              {predictions[user.id].probability != null &&
+                                ` · ${Math.round((predictions[user.id].probability as number) * 100)}%`}
+                            </span>
+                          ) : (
+                            <span className="text-sm text-gray-400">Not scored</span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (openMenu?.user.id === user.id) {
+                                setOpenMenu(null);
+                                return;
+                              }
+                              const rect = e.currentTarget.getBoundingClientRect();
+                              const openUp = rect.bottom + 150 > window.innerHeight;
+                              setOpenMenu({
+                                user,
+                                x: rect.right,
+                                y: openUp ? rect.top - 4 : rect.bottom + 4,
+                                openUp,
+                              });
+                            }}
+                            className={`w-8 h-8 flex items-center justify-center rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-200/70 transition-all ${
+                              openMenu?.user.id === user.id
+                                ? "opacity-100 bg-gray-200/70"
+                                : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+                            }`}
+                            aria-label={`Actions for ${user.name}`}
+                          >
+                            <FontAwesomeIcon icon={faEllipsisVertical} className="w-4 h-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                    {selectedGroup.students.length === 0 && (
+                      <tr>
+                        <td colSpan={4} className="py-8 text-center text-gray-500">
+                          No student accounts found in this section
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {openMenu && (
