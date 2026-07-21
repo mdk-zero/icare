@@ -73,23 +73,23 @@ export default function ChangePasswordPage() {
 
   if (!user || !user.force_password_change) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#F8FBFC]">
+      <div className="min-h-screen flex items-center justify-center bg-canvas">
         <div className="w-8 h-8 border-4 border-brand-600 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 bg-[#F8FBFC]">
-      <div className="w-full max-w-md bg-surface rounded-2xl shadow-xl border border-[#E2EBEC] p-8">
+    <div className="min-h-screen flex items-center justify-center px-4 bg-canvas">
+      <div className="w-full max-w-md bg-surface rounded-2xl shadow-xl border border-hairline p-8">
         <div className="text-center mb-6">
           <div className="w-12 h-12 bg-brand-600/10 rounded-xl flex items-center justify-center mx-auto mb-4">
             <svg className="w-6 h-6 text-brand-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
             </svg>
           </div>
-          <h1 className="text-2xl font-semibold text-[#0F172A] mb-2">Update your password</h1>
-          <p className="text-sm text-[#64748B]">
+          <h1 className="text-2xl font-semibold text-gray-900 mb-2">Update your password</h1>
+          <p className="text-sm text-gray-500">
             Your account was created with a temporary password. Please set a new password to continue.
           </p>
         </div>
@@ -105,7 +105,7 @@ export default function ChangePasswordPage() {
 
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-[#334155] mb-1.5">
+            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1.5">
               New Password <span className="text-red-500">*</span>
             </label>
             <div className="relative">
@@ -116,14 +116,14 @@ export default function ChangePasswordPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 minLength={8}
-                className="w-full px-4 py-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[#0F172A] placeholder:text-[#94A3B8] focus:outline-none focus:ring-2 focus:ring-[#0D7377]/20 focus:border-[#0D7377] transition-all"
+                className="w-full px-4 py-3 bg-subtle border border-gray-200 rounded-xl text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600 transition-all"
                 placeholder="Enter new password"
               />
             </div>
           </div>
 
           <div>
-            <label htmlFor="confirmPassword" className="block text-sm font-medium text-[#334155] mb-1.5">
+            <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1.5">
               Confirm New Password <span className="text-red-500">*</span>
             </label>
             <div className="relative">
@@ -134,7 +134,7 @@ export default function ChangePasswordPage() {
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
                 minLength={8}
-                className="w-full px-4 py-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[#0F172A] placeholder:text-[#94A3B8] focus:outline-none focus:ring-2 focus:ring-[#0D7377]/20 focus:border-[#0D7377] transition-all"
+                className="w-full px-4 py-3 bg-subtle border border-gray-200 rounded-xl text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600 transition-all"
                 placeholder="Confirm new password"
               />
             </div>
@@ -145,9 +145,9 @@ export default function ChangePasswordPage() {
               type="checkbox"
               checked={showPassword}
               onChange={(e) => setShowPassword(e.target.checked)}
-              className="w-4 h-4 rounded border-[#CBD5E1] text-[#0D7377] focus:ring-[#0D7377]/30 cursor-pointer"
+              className="w-4 h-4 rounded border-gray-300 text-brand-600 focus:ring-brand-600/30 cursor-pointer"
             />
-            <span className="text-sm text-[#64748B] group-hover:text-[#475569] transition-colors">
+            <span className="text-sm text-gray-500 group-hover:text-gray-600 transition-colors">
               Show password
             </span>
           </label>
@@ -155,7 +155,7 @@ export default function ChangePasswordPage() {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full bg-[#0D7377] hover:bg-[#0A5C5F] text-white py-3 px-6 rounded-xl font-medium transition-all duration-200 shadow-lg shadow-[#0D7377]/20 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            className="w-full bg-brand-600 hover:bg-brand-700 text-white py-3 px-6 rounded-xl font-medium transition-all duration-200 shadow-lg shadow-brand-600/20 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             {isSubmitting ? (
               <>

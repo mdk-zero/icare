@@ -106,26 +106,26 @@ export default function SignUpPage() {
       </div>
 
       {/* Right panel — sign up form */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center px-5 sm:px-8 py-12 bg-[#F8FBFC] relative overflow-hidden">
+      <div className="w-full lg:w-1/2 flex items-center justify-center px-5 sm:px-8 py-12 bg-canvas relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-full opacity-40">
           <div className="absolute top-[-10%] right-[-10%] w-[350px] h-[350px] bg-[#7DD3D8]/20 rounded-full blur-3xl" />
-          <div className="absolute bottom-[-10%] left-[-10%] w-[300px] h-[300px] bg-[#0D7377]/10 rounded-full blur-3xl" />
+          <div className="absolute bottom-[-10%] left-[-10%] w-[300px] h-[300px] bg-brand-600/10 rounded-full blur-3xl" />
         </div>
 
         <div className="relative z-10 w-full max-w-[520px] animate-fade-in-up">
           {/* Mobile header */}
           <div className="lg:hidden flex flex-col items-center mb-6">
-            <div className="p-3.5 bg-[#E8F6F5] rounded-2xl shadow-md mb-3">
+            <div className="p-3.5 bg-brand-50 rounded-2xl shadow-md mb-3">
               <Image src={logo} alt="iCare++ Logo" className="h-12 w-auto" priority />
             </div>
           </div>
 
-          <div className="bg-surface rounded-3xl border border-[#E2EBEC] shadow-xl shadow-[#0D7377]/[0.05] p-7 sm:p-9">
+          <div className="bg-surface rounded-3xl border border-hairline shadow-xl shadow-brand-600/[0.05] p-7 sm:p-9">
             <div className="mb-6">
-              <h1 className="text-xl font-semibold text-[#0F172A] mb-1 tracking-tight">
+              <h1 className="text-xl font-semibold text-gray-900 mb-1 tracking-tight">
                 Create your account
               </h1>
-              <p className="text-sm text-[#64748B]">Join iCARE++ for nursing education</p>
+              <p className="text-sm text-gray-500">Join iCARE++ for nursing education</p>
             </div>
 
             {error && (
@@ -147,13 +147,13 @@ export default function SignUpPage() {
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label htmlFor="name" className="block text-sm font-medium text-[#334155] mb-1.5">
+                <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1.5">
                   Full Name <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                     <svg
-                      className="h-5 w-5 text-[#94A3B8]"
+                      className="h-5 w-5 text-gray-400"
                       fill="none"
                       viewBox="0 0 24 24"
                       stroke="currentColor"
@@ -172,20 +172,20 @@ export default function SignUpPage() {
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     required
-                    className="w-full pl-11 pr-4 py-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[#0F172A] placeholder:text-[#94A3B8] focus:outline-none focus:ring-2 focus:ring-[#0D7377]/20 focus:border-[#0D7377] transition-all"
+                    className="w-full pl-11 pr-4 py-3 bg-subtle border border-gray-200 rounded-xl text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600 transition-all"
                     placeholder="Maria Cruz"
                   />
                 </div>
               </div>
 
               <div>
-                <label htmlFor="email" className="block text-sm font-medium text-[#334155] mb-1.5">
+                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1.5">
                   Email Address <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                     <svg
-                      className="h-5 w-5 text-[#94A3B8]"
+                      className="h-5 w-5 text-gray-400"
                       fill="none"
                       viewBox="0 0 24 24"
                       stroke="currentColor"
@@ -204,20 +204,20 @@ export default function SignUpPage() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
-                    className="w-full pl-11 pr-4 py-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[#0F172A] placeholder:text-[#94A3B8] focus:outline-none focus:ring-2 focus:ring-[#0D7377]/20 focus:border-[#0D7377] transition-all"
+                    className="w-full pl-11 pr-4 py-3 bg-subtle border border-gray-200 rounded-xl text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600 transition-all"
                     placeholder="name@icare.edu"
                   />
                 </div>
               </div>
 
               <div>
-                <label htmlFor="role" className="block text-sm font-medium text-[#334155] mb-1.5">
+                <label htmlFor="role" className="block text-sm font-medium text-gray-700 mb-1.5">
                   I am a <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                     <svg
-                      className="h-5 w-5 text-[#94A3B8]"
+                      className="h-5 w-5 text-gray-400"
                       fill="none"
                       viewBox="0 0 24 24"
                       stroke="currentColor"
@@ -235,14 +235,14 @@ export default function SignUpPage() {
                     value={role}
                     onChange={(e) => setRole(e.target.value as User["role"])}
                     required
-                    className="w-full pl-11 pr-4 py-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#0D7377]/20 focus:border-[#0D7377] transition-all appearance-none"
+                    className="w-full pl-11 pr-4 py-3 bg-subtle border border-gray-200 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600 transition-all appearance-none"
                   >
                     <option value="faculty">Faculty</option>
                     <option value="admin">Administrator</option>
                   </select>
                   <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
                     <svg
-                      className="h-4 w-4 text-[#94A3B8]"
+                      className="h-4 w-4 text-gray-400"
                       fill="none"
                       viewBox="0 0 24 24"
                       stroke="currentColor"
@@ -261,14 +261,14 @@ export default function SignUpPage() {
               <div>
                 <label
                   htmlFor="password"
-                  className="block text-sm font-medium text-[#334155] mb-1.5"
+                  className="block text-sm font-medium text-gray-700 mb-1.5"
                 >
                   Password <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                     <svg
-                      className="h-5 w-5 text-[#94A3B8]"
+                      className="h-5 w-5 text-gray-400"
                       fill="none"
                       viewBox="0 0 24 24"
                       stroke="currentColor"
@@ -288,13 +288,13 @@ export default function SignUpPage() {
                     onChange={(e) => setPassword(e.target.value)}
                     required
                     minLength={8}
-                    className="w-full pl-11 pr-11 py-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[#0F172A] placeholder:text-[#94A3B8] focus:outline-none focus:ring-2 focus:ring-[#0D7377]/20 focus:border-[#0D7377] transition-all"
+                    className="w-full pl-11 pr-11 py-3 bg-subtle border border-gray-200 rounded-xl text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600 transition-all"
                     placeholder="At least 8 characters"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-[#94A3B8] hover:text-[#64748B] transition-colors"
+                    className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-gray-400 hover:text-gray-500 transition-colors"
                   >
                     {showPassword ? (
                       <svg
@@ -338,7 +338,7 @@ export default function SignUpPage() {
               <div>
                 <label
                   htmlFor="confirmPassword"
-                  className="block text-sm font-medium text-[#334155] mb-1.5"
+                  className="block text-sm font-medium text-gray-700 mb-1.5"
                 >
                   Confirm Password <span className="text-red-500">*</span>
                 </label>
@@ -349,7 +349,7 @@ export default function SignUpPage() {
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   required
                   minLength={8}
-                  className="w-full px-4 py-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[#0F172A] placeholder:text-[#94A3B8] focus:outline-none focus:ring-2 focus:ring-[#0D7377]/20 focus:border-[#0D7377] transition-all"
+                  className="w-full px-4 py-3 bg-subtle border border-gray-200 rounded-xl text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600 transition-all"
                   placeholder="Re-enter your password"
                 />
               </div>
@@ -357,7 +357,7 @@ export default function SignUpPage() {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full bg-[#0D7377] hover:bg-[#0A5C5F] text-white py-3 px-6 rounded-xl font-medium transition-all duration-200 shadow-lg shadow-[#0D7377]/20 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
+                className="w-full bg-brand-600 hover:bg-brand-700 text-white py-3 px-6 rounded-xl font-medium transition-all duration-200 shadow-lg shadow-brand-600/20 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
               >
                 {isLoading ? (
                   <>
@@ -385,11 +385,11 @@ export default function SignUpPage() {
             </form>
 
             <div className="mt-6 text-center">
-              <p className="text-sm text-[#64748B]">
+              <p className="text-sm text-gray-500">
                 Already have an account?{" "}
                 <Link
                   href="/login"
-                  className="text-[#0D7377] hover:text-[#0A5C5F] font-medium transition-colors"
+                  className="text-brand-600 hover:text-brand-700 font-medium transition-colors"
                 >
                   Sign in
                 </Link>
