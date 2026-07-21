@@ -150,7 +150,6 @@ function ButtonGradient() {
 // Derived from the brand teal so the gradient feels intentional, not a random accent.
 const TEAL_DARK = "#0F5D5A";
 const TEAL = "#0D9488";
-const TEAL_SOFT = "#F0FDFA";
 const INK = "#0B1220";
 const SLATE = "#64748B";
 const SLATE_LIGHT = "#94A3B8";
@@ -187,8 +186,6 @@ export default function LoginScreen() {
     iosClientId: GOOGLE_IOS_CLIENT_ID,
     androidClientId: GOOGLE_ANDROID_CLIENT_ID,
   });
-
-  const primaryColor = Colors.light.primary ?? TEAL;
 
   const handleLogin = async () => {
     setError("");
@@ -250,11 +247,6 @@ export default function LoginScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Ambient background: gradient wash + soft decorative blobs */}
-      <LinearGradient colors={[TEAL_SOFT, "#FFFFFF"]} style={StyleSheet.absoluteFillObject} />
-      <View style={[styles.blob, styles.blobTop]} />
-      <View style={[styles.blob, styles.blobBottom]} />
-
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={styles.keyboardView}
@@ -432,7 +424,6 @@ export default function LoginScreen() {
                 ]}
                 onPress={handleLogin}
                 disabled={isLoading}
-                style={styles.buttonShadow}
               >
                 <ButtonGradient />
                 {isLoading ? (
