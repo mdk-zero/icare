@@ -25,6 +25,9 @@ import {
   faCheck,
   faUser,
   faChevronDown,
+  faLayerGroup,
+  faPenToSquare,
+  faTriangleExclamation,
 } from "@fortawesome/free-solid-svg-icons";
 import {
   fetchFacultyScenarios,
@@ -32,6 +35,8 @@ import {
   updateScenario,
   generateAIScenario,
   suggestAIScenario,
+  generateScenarioBatch,
+  ScenarioDraft,
   SimulationScenario,
   fetchFacultyStudents,
   FacultyStudent,
@@ -51,6 +56,28 @@ const emptyCreateForm = {
   description: "",
   difficulty: "intermediate" as "beginner" | "intermediate" | "advanced",
   category: "",
+  learningObjectives: "",
+  patientId: "",
+};
+
+const SCENARIO_CATEGORIES = [
+  "Cardiac Emergency",
+  "Respiratory Emergency",
+  "Neurological Emergency",
+  "Trauma",
+  "Medical-Surgical",
+  "Patient Education",
+  "Infection Management",
+  "Critical Care",
+  "Medication Safety",
+  "General",
+] as const;
+
+const emptyEditForm = {
+  title: "",
+  description: "",
+  difficulty: "intermediate" as "beginner" | "intermediate" | "advanced",
+  category: "General",
   learningObjectives: "",
   patientId: "",
 };
@@ -85,6 +112,25 @@ export default function FacultyScenariosClient() {
   const [aiError, setAiError] = useState<string | null>(null);
   const [patients, setPatients] = useState<FacultyPatient[]>([]);
   const [loadingPatients, setLoadingPatients] = useState(false);
+
+  const [showBatchModal, setShowBatchModal] = useState(false);
+  const [batchCount, setBatchCount] = useState(6);
+  const [batchCategories, setBatchCategories] = useState<string[]>([]);
+  const [batchDifficulty, setBatchDifficulty] = useState("");
+  const [batchTopic, setBatchTopic] = useState("");
+  const [batchUsePatients, setBatchUsePatients] = useState(true);
+  const [batchDrafts, setBatchDrafts] = useState<ScenarioDraft[] | null>(null);
+  const [batchSelected, setBatchSelected] = useState<number[]>([]);
+  const [batchGenerating, setBatchGenerating] = useState(false);
+  const [batchSaving, setBatchSaving] = useState(false);
+  const [batchSavedCount, setBatchSavedCount] = useState(0);
+  const [batchError, setBatchError] = useState<string | null>(null);
+  const [batchWarning, setBatchWarning] = useState<string | null>(null);
+
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editTarget, setEditTarget] = useState<SimulationScenario | null>(null);
+  const [editForm, setEditForm] = useState(emptyEditForm);
+  const [saving, setSaving] = useState(false);
 
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedScenario, setSelectedScenario] = useState<SimulationScenario | null>(null);
@@ -323,6 +369,166 @@ export default function FacultyScenariosClient() {
     setAiError(null);
     setShowAIModal(true);
     void loadPatientsForSelector();
+  };
+
+  const openBatchModal = () => {
+    setBatchDrafts(null);
+    setBatchSelected([]);
+    setBatchError(null);
+    setBatchWarning(null);
+    setBatchSavedCount(0);
+    setShowBatchModal(true);
+    if (patients.length === 0) void loadPatientsForSelector();
+  };
+
+  const closeBatchModal = () => {
+    if (batchGenerating || batchSaving) return;
+    setShowBatchModal(false);
+    setBatchDrafts(null);
+    setBatchSelected([]);
+    setBatchError(null);
+    setBatchWarning(null);
+    setBatchSavedCount(0);
+  };
+
+  const toggleBatchCategory = (category: string) => {
+    setBatchCategories((prev) =>
+      prev.includes(category) ? prev.filter((c) => c !== category) : [...prev, category],
+    );
+  };
+
+  const handleGenerateBatch = async () => {
+    setBatchGenerating(true);
+    setBatchError(null);
+    setBatchWarning(null);
+    setBatchDrafts(null);
+
+    const result = await generateScenarioBatch({
+      count: batchCount,
+      categories: batchCategories,
+      difficulty: batchDifficulty || undefined,
+      topic: batchTopic.trim() || undefined,
+      usePatients: batchUsePatients,
+    });
+
+    if ("error" in result) {
+      setBatchError(result.error);
+    } else {
+      setBatchDrafts(result.scenarios);
+      setBatchSelected(result.scenarios.map((_, i) => i));
+      setBatchWarning(result.warning ?? null);
+    }
+    setBatchGenerating(false);
+  };
+
+  const handleSaveBatch = async () => {
+    if (!batchDrafts || batchSelected.length === 0) return;
+
+    setBatchSaving(true);
+    setBatchSavedCount(0);
+
+    const chosen = batchSelected
+      .slice()
+      .sort((a, b) => a - b)
+      .map((i) => batchDrafts[i]);
+
+    let saved = 0;
+    for (const draft of chosen) {
+      const created = await createScenario({
+        title: draft.title,
+        description: draft.description,
+        difficulty: draft.difficulty,
+        category: draft.category,
+        patient_case: draft.patient_case,
+        patient_id: draft.patient_id,
+        learning_objectives: draft.learning_objectives,
+        is_ai_generated: true,
+      });
+      if (created) {
+        saved++;
+        setBatchSavedCount(saved);
+      }
+    }
+
+    if (saved > 0) {
+      await loadScenarios();
+      const faculty = getCurrentFacultyUser();
+      if (faculty) {
+        logAuditAction({
+          faculty_id: faculty.id,
+          faculty_name: faculty.name,
+          tab: "scenarios",
+          action: "ai_generate_scenario_library",
+          details: `AI generated and saved ${saved} scenario${saved === 1 ? "" : "s"}`,
+          target_type: "scenario",
+          target_id: "",
+          metadata: { count: saved, requested: batchCount, topic: batchTopic.trim() || null },
+        });
+      }
+    }
+
+    setBatchSaving(false);
+    setShowBatchModal(false);
+    setBatchDrafts(null);
+    setBatchSelected([]);
+  };
+
+  const handleOpenEditModal = (scenario: SimulationScenario) => {
+    setEditTarget(scenario);
+    setEditForm({
+      title: scenario.title,
+      description: scenario.description,
+      difficulty: scenario.difficulty as typeof emptyEditForm.difficulty,
+      category: scenario.category,
+      learningObjectives: (scenario.learning_objectives ?? []).join("\n"),
+      patientId: scenario.patient_id ?? "",
+    });
+    setShowEditModal(true);
+    if (patients.length === 0) void loadPatientsForSelector();
+  };
+
+  const closeEditModal = () => {
+    setShowEditModal(false);
+    setEditTarget(null);
+    setEditForm(emptyEditForm);
+  };
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editTarget || !editForm.title.trim()) return;
+
+    setSaving(true);
+    const updated = await updateScenario(editTarget.id, {
+      title: editForm.title,
+      description: editForm.description,
+      difficulty: editForm.difficulty,
+      category: editForm.category || "General",
+      patient_id: editForm.patientId || null,
+      learning_objectives: editForm.learningObjectives
+        .split("\n")
+        .map((o) => o.trim())
+        .filter(Boolean),
+    });
+
+    if (updated) {
+      await loadScenarios();
+      const faculty = getCurrentFacultyUser();
+      if (faculty) {
+        logAuditAction({
+          faculty_id: faculty.id,
+          faculty_name: faculty.name,
+          tab: "scenarios",
+          action: "update_scenario",
+          details: `Updated scenario: ${updated.title}`,
+          target_type: "scenario",
+          target_id: editTarget.id,
+          metadata: { scenario_title: updated.title },
+        });
+      }
+    }
+
+    setSaving(false);
+    closeEditModal();
   };
 
   const getDifficultyColor = (difficulty: string) => {
@@ -586,6 +792,13 @@ export default function FacultyScenariosClient() {
               <FontAwesomeIcon icon={faRobot} className="w-4 h-4" />
               AI Generate
             </button>
+            <button
+              onClick={openBatchModal}
+              className="flex items-center gap-2 px-4 py-2.5 bg-white border border-purple-300 text-purple-700 font-medium rounded-xl hover:bg-purple-50 transition-all whitespace-nowrap"
+            >
+              <FontAwesomeIcon icon={faLayerGroup} className="w-4 h-4" />
+              Generate Library
+            </button>
           </div>
         </div>
       </div>
@@ -604,8 +817,17 @@ export default function FacultyScenariosClient() {
           <p className="text-gray-500 text-sm mt-1">
             {searchQuery || difficultyFilter !== "all" || categoryFilter !== "all"
               ? "Try adjusting your filters."
-              : "Create or generate your first scenario."}
+              : "Generate a starter library, or create your first scenario by hand."}
           </p>
+          {!searchQuery && difficultyFilter === "all" && categoryFilter === "all" && (
+            <button
+              onClick={openBatchModal}
+              className="mt-4 inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-medium rounded-xl hover:from-purple-700 hover:to-indigo-700 transition-all shadow-lg shadow-purple-500/20"
+            >
+              <FontAwesomeIcon icon={faLayerGroup} className="w-4 h-4" />
+              Generate Library
+            </button>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -665,27 +887,34 @@ export default function FacultyScenariosClient() {
                     {new Date(scenario.created_at).toLocaleDateString()}
                   </span>
                 </div>
-                <div className="flex gap-2">
+                <div className="grid grid-cols-2 gap-1">
                   <button
                     onClick={() => handleViewDetails(scenario)}
-                    className="flex-1 flex items-center justify-center gap-1.5 text-[#1B6B7B] font-medium hover:text-[#145a63] transition-colors py-2 rounded-lg hover:bg-[#1B6B7B]/5"
+                    className="flex items-center justify-center gap-1.5 text-sm text-[#1B6B7B] font-medium hover:text-[#145a63] transition-colors py-2 rounded-lg hover:bg-[#1B6B7B]/5"
                   >
                     <FontAwesomeIcon icon={faEye} className="w-4 h-4" />
                     View
                   </button>
                   <button
+                    onClick={() => handleOpenEditModal(scenario)}
+                    className="flex items-center justify-center gap-1.5 text-sm text-[#1B6B7B] font-medium hover:text-[#145a63] transition-colors py-2 rounded-lg hover:bg-[#1B6B7B]/5"
+                  >
+                    <FontAwesomeIcon icon={faPenToSquare} className="w-4 h-4" />
+                    Edit
+                  </button>
+                  <button
                     onClick={() => handleOpenAssignModal(scenario)}
-                    className="flex-1 flex items-center justify-center gap-1.5 text-[#1B6B7B] font-medium hover:text-[#145a63] transition-colors py-2 rounded-lg hover:bg-[#1B6B7B]/5"
+                    className="flex items-center justify-center gap-1.5 text-sm text-[#1B6B7B] font-medium hover:text-[#145a63] transition-colors py-2 rounded-lg hover:bg-[#1B6B7B]/5"
                   >
                     <FontAwesomeIcon icon={faUserPlus} className="w-4 h-4" />
                     Assign
                   </button>
                   <button
                     onClick={() => handleOpenLinkPatientModal(scenario)}
-                    className="flex-1 flex items-center justify-center gap-1.5 text-[#1B6B7B] font-medium hover:text-[#145a63] transition-colors py-2 rounded-lg hover:bg-[#1B6B7B]/5"
+                    className="flex items-center justify-center gap-1.5 text-sm text-[#1B6B7B] font-medium hover:text-[#145a63] transition-colors py-2 rounded-lg hover:bg-[#1B6B7B]/5"
                   >
                     <FontAwesomeIcon icon={faHospitalUser} className="w-4 h-4" />
-                    {scenario.patient_name ? "Patient" : "Link Patient"}
+                    {scenario.patient_name ? "Patient" : "Link"}
                   </button>
                 </div>
               </div>
@@ -845,6 +1074,445 @@ export default function FacultyScenariosClient() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Scenario Modal */}
+      {showEditModal && editTarget && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl w-full max-w-lg max-h-[85vh] overflow-hidden flex flex-col shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-gray-200/80">
+            <div className="p-4 border-b border-gray-100/80 flex items-center justify-between bg-gray-50/50">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-[#1B6B7B]/10 rounded-lg flex items-center justify-center">
+                  <FontAwesomeIcon icon={faPenToSquare} className="text-[#1B6B7B] w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">Edit Scenario</h3>
+                  <p className="text-sm text-gray-500 line-clamp-1">{editTarget.title}</p>
+                </div>
+              </div>
+              <button
+                onClick={closeEditModal}
+                className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
+              >
+                <FontAwesomeIcon icon={faTimes} className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+            <form onSubmit={handleSaveEdit} className="p-4 space-y-3 overflow-y-auto flex-1">
+              <div>
+                <label className={labelClassName}>Title</label>
+                <input
+                  required
+                  type="text"
+                  value={editForm.title}
+                  onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+                  className={inputClassName}
+                />
+              </div>
+              <div>
+                <label className={labelClassName}>Description</label>
+                <textarea
+                  value={editForm.description}
+                  onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                  rows={3}
+                  className={inputClassName + " resize-none"}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelClassName}>Difficulty</label>
+                  <div className="relative">
+                    <select
+                      value={editForm.difficulty}
+                      onChange={(e) =>
+                        setEditForm({
+                          ...editForm,
+                          difficulty: e.target.value as typeof editForm.difficulty,
+                        })
+                      }
+                      className={selectClassName + " pr-10"}
+                    >
+                      <option value="beginner">Beginner</option>
+                      <option value="intermediate">Intermediate</option>
+                      <option value="advanced">Advanced</option>
+                    </select>
+                    <FontAwesomeIcon
+                      icon={faChevronDown}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className={labelClassName}>Category</label>
+                  <div className="relative">
+                    <select
+                      value={editForm.category}
+                      onChange={(e) => setEditForm({ ...editForm, category: e.target.value })}
+                      className={selectClassName + " pr-10"}
+                    >
+                      {SCENARIO_CATEGORIES.map((cat) => (
+                        <option key={cat} value={cat}>
+                          {cat}
+                        </option>
+                      ))}
+                    </select>
+                    <FontAwesomeIcon
+                      icon={faChevronDown}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none"
+                    />
+                  </div>
+                </div>
+              </div>
+              <div>
+                <label className={labelClassName}>Patient</label>
+                <div className="relative">
+                  <select
+                    value={editForm.patientId}
+                    onChange={(e) => setEditForm({ ...editForm, patientId: e.target.value })}
+                    className={selectClassName + " pr-10"}
+                  >
+                    <option value="">No linked patient</option>
+                    {patients.map((patient) => (
+                      <option key={patient.id} value={patient.id}>
+                        {patient.name} — {patient.diagnosis}
+                        {patient.room_number ? ` (Room ${patient.room_number})` : ""}
+                      </option>
+                    ))}
+                  </select>
+                  <FontAwesomeIcon
+                    icon={faChevronDown}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className={labelClassName}>Learning Objectives</label>
+                <textarea
+                  value={editForm.learningObjectives}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, learningObjectives: e.target.value })
+                  }
+                  rows={4}
+                  className={inputClassName + " resize-none"}
+                />
+                <p className="text-xs text-gray-500 mt-1.5">Enter one objective per line.</p>
+              </div>
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={closeEditModal}
+                  className="px-5 py-2.5 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving || !editForm.title.trim()}
+                  className="px-5 py-2.5 bg-[#1B6B7B] text-white rounded-lg font-medium hover:bg-[#145a63] transition-all disabled:opacity-50 flex items-center gap-2 shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
+                >
+                  {saving && <FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" />}
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Generate Library Modal */}
+      {showBatchModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-gray-200/80">
+            <div className="p-4 border-b border-gray-100/80 flex items-center justify-between bg-gray-50/50">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
+                  <FontAwesomeIcon icon={faLayerGroup} className="text-purple-600 w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">Generate Scenario Library</h3>
+                  <p className="text-sm text-gray-500">
+                    Build a spread of cases in one pass, then pick what to keep
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={closeBatchModal}
+                disabled={batchGenerating || batchSaving}
+                className="p-2 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-40"
+              >
+                <FontAwesomeIcon icon={faTimes} className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-4 overflow-y-auto flex-1">
+              {!batchDrafts ? (
+                <>
+                  <div>
+                    <label className={labelClassName}>How many scenarios?</label>
+                    <div className="flex gap-2">
+                      {[3, 6, 9, 12].map((n) => (
+                        <button
+                          key={n}
+                          type="button"
+                          onClick={() => setBatchCount(n)}
+                          disabled={batchGenerating}
+                          className={`flex-1 py-2.5 rounded-xl text-sm font-semibold border transition-all disabled:opacity-50 ${
+                            batchCount === n
+                              ? "bg-purple-600 text-white border-purple-600 shadow-sm"
+                              : "bg-white text-gray-700 border-gray-300 hover:border-purple-300 hover:bg-purple-50"
+                          }`}
+                        >
+                          {n}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className={labelClassName}>Categories</label>
+                    <div className="flex flex-wrap gap-2">
+                      {SCENARIO_CATEGORIES.map((cat) => (
+                        <button
+                          key={cat}
+                          type="button"
+                          onClick={() => toggleBatchCategory(cat)}
+                          disabled={batchGenerating}
+                          className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all disabled:opacity-50 ${
+                            batchCategories.includes(cat)
+                              ? "bg-purple-100 text-purple-700 border-purple-300"
+                              : "bg-white text-gray-600 border-gray-300 hover:border-purple-300"
+                          }`}
+                        >
+                          {cat}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1.5">
+                      {batchCategories.length === 0
+                        ? "None selected — the batch will be spread across every category."
+                        : `The batch cycles through the ${batchCategories.length} selected categor${batchCategories.length === 1 ? "y" : "ies"}.`}
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className={labelClassName}>Difficulty</label>
+                    <div className="relative">
+                      <select
+                        value={batchDifficulty}
+                        onChange={(e) => setBatchDifficulty(e.target.value)}
+                        disabled={batchGenerating}
+                        className={selectClassName + " pr-10"}
+                      >
+                        <option value="">Mixed — cycle beginner to advanced</option>
+                        <option value="beginner">Beginner only</option>
+                        <option value="intermediate">Intermediate only</option>
+                        <option value="advanced">Advanced only</option>
+                      </select>
+                      <FontAwesomeIcon
+                        icon={faChevronDown}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className={labelClassName}>Teaching focus (optional)</label>
+                    <input
+                      type="text"
+                      value={batchTopic}
+                      onChange={(e) => setBatchTopic(e.target.value)}
+                      disabled={batchGenerating}
+                      placeholder="e.g. post-operative care for second-year students"
+                      className={inputClassName}
+                    />
+                  </div>
+
+                  <label className="flex items-start gap-3 p-3 rounded-xl border border-gray-200 hover:bg-gray-50/50 cursor-pointer transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={batchUsePatients}
+                      onChange={(e) => setBatchUsePatients(e.target.checked)}
+                      disabled={batchGenerating}
+                      className="mt-0.5 w-4 h-4 accent-purple-600"
+                    />
+                    <span>
+                      <span className="block text-sm font-semibold text-gray-800">
+                        Base each scenario on a real MIMIC patient
+                      </span>
+                      <span className="block text-xs text-gray-500 mt-0.5">
+                        Links every scenario to a patient record so students can chart vitals and
+                        EHR data for the case.
+                      </span>
+                    </span>
+                  </label>
+
+                  {batchError && (
+                    <div className="p-3 rounded-lg text-sm border bg-red-50 text-red-700 border-red-200 flex items-start gap-2">
+                      <FontAwesomeIcon
+                        icon={faTriangleExclamation}
+                        className="w-4 h-4 mt-0.5 shrink-0"
+                      />
+                      {batchError}
+                    </div>
+                  )}
+
+                  {batchGenerating && (
+                    <div className="p-4 rounded-xl border border-purple-200 bg-purple-50/50 text-sm text-purple-800 flex items-center gap-3">
+                      <FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" />
+                      Writing {batchCount} scenarios — this takes up to a minute for larger batches.
+                    </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  {batchWarning && (
+                    <div className="p-3 rounded-lg text-sm border bg-amber-50 text-amber-700 border-amber-200 flex items-start gap-2">
+                      <FontAwesomeIcon
+                        icon={faTriangleExclamation}
+                        className="w-4 h-4 mt-0.5 shrink-0"
+                      />
+                      {batchWarning}
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm text-gray-600">
+                      <span className="font-semibold text-gray-900">{batchSelected.length}</span> of{" "}
+                      {batchDrafts.length} selected
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setBatchSelected(
+                          batchSelected.length === batchDrafts.length
+                            ? []
+                            : batchDrafts.map((_, i) => i),
+                        )
+                      }
+                      disabled={batchSaving}
+                      className="text-sm font-medium text-purple-700 hover:text-purple-900 disabled:opacity-50"
+                    >
+                      {batchSelected.length === batchDrafts.length ? "Deselect all" : "Select all"}
+                    </button>
+                  </div>
+
+                  <div className="space-y-2">
+                    {batchDrafts.map((draft, i) => {
+                      const checked = batchSelected.includes(i);
+                      const patientName = draft.patient_id
+                        ? patients.find((p) => p.id === draft.patient_id)?.name
+                        : null;
+                      return (
+                        <label
+                          key={i}
+                          className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                            checked
+                              ? "border-purple-300 bg-purple-50/40"
+                              : "border-gray-200 hover:bg-gray-50/50"
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            disabled={batchSaving}
+                            onChange={() =>
+                              setBatchSelected((prev) =>
+                                prev.includes(i) ? prev.filter((x) => x !== i) : [...prev, i],
+                              )
+                            }
+                            className="mt-1 w-4 h-4 accent-purple-600"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <p className="font-semibold text-gray-900">{draft.title}</p>
+                            <p className="text-sm text-gray-500 line-clamp-2 mt-0.5">
+                              {draft.description}
+                            </p>
+                            <div className="flex items-center gap-2 flex-wrap mt-2">
+                              <span
+                                className={`px-2 py-0.5 rounded-full text-xs font-medium border ${getDifficultyColor(
+                                  draft.difficulty,
+                                )}`}
+                              >
+                                {draft.difficulty}
+                              </span>
+                              <span className="px-2 py-0.5 bg-gray-100 text-gray-700 text-xs font-medium rounded-full">
+                                {draft.category}
+                              </span>
+                              {patientName && (
+                                <span className="px-2 py-0.5 bg-teal-50 text-teal-700 text-xs font-medium rounded-full flex items-center gap-1">
+                                  <FontAwesomeIcon icon={faHospitalUser} className="w-3 h-3" />
+                                  {patientName}
+                                </span>
+                              )}
+                              <span className="text-xs text-gray-400">
+                                {draft.learning_objectives.length} objectives
+                              </span>
+                            </div>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="p-4 border-t border-gray-100/80 bg-gray-50/50 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={closeBatchModal}
+                disabled={batchGenerating || batchSaving}
+                className="px-5 py-2.5 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-all disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              {!batchDrafts ? (
+                <button
+                  type="button"
+                  onClick={handleGenerateBatch}
+                  disabled={batchGenerating}
+                  className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg font-medium hover:from-purple-700 hover:to-indigo-700 transition-all disabled:opacity-50 flex items-center gap-2 shadow-lg shadow-purple-500/20"
+                >
+                  {batchGenerating ? (
+                    <>
+                      <FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" />
+                      Generating…
+                    </>
+                  ) : (
+                    <>
+                      <FontAwesomeIcon icon={faLayerGroup} className="w-4 h-4" />
+                      Generate {batchCount} Scenarios
+                    </>
+                  )}
+                </button>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleGenerateBatch}
+                    disabled={batchSaving}
+                    className="px-5 py-2.5 bg-white border border-purple-300 text-purple-700 rounded-lg font-medium hover:bg-purple-50 transition-all disabled:opacity-50"
+                  >
+                    Regenerate
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveBatch}
+                    disabled={batchSaving || batchSelected.length === 0}
+                    className="px-5 py-2.5 bg-[#1B6B7B] text-white rounded-lg font-medium hover:bg-[#145a63] transition-all disabled:opacity-50 flex items-center gap-2 shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
+                  >
+                    {batchSaving ? (
+                      <>
+                        <FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" />
+                        Saving {batchSavedCount}/{batchSelected.length}…
+                      </>
+                    ) : (
+                      `Save ${batchSelected.length} Scenario${batchSelected.length === 1 ? "" : "s"}`
+                    )}
+                  </button>
+                </>
+              )}
+            </div>
           </div>
         </div>
       )}
