@@ -5,6 +5,10 @@ import path from "path";
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  // Lets a one-off build write somewhere other than .next, e.g.
+  // `NEXT_DIST_DIR=.next-build npm run build`. Running a build into .next while
+  // `next dev` is live leaves the dev server serving a half-updated CSS chunk.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   // Pin the workspace root to web/ so Turbopack never falls back to scanning
   // the whole monorepo (mobile/node_modules, ml/, …), which spikes CPU/RAM.
   turbopack: {
