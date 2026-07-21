@@ -1,8 +1,8 @@
-import React from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { Spacing } from '@/constants/theme';
-import { useTheme } from '@/hooks/useTheme';
+import React from "react";
+import { View, Text, StyleSheet, Pressable } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { Spacing } from "@/constants/theme";
+import { useTheme } from "@/hooks/useTheme";
 
 interface SectionHeaderProps {
   title: string;
@@ -12,7 +12,13 @@ interface SectionHeaderProps {
   onAction?: () => void;
 }
 
-export function SectionHeader({ title, subtitle, count, actionLabel, onAction }: SectionHeaderProps) {
+export function SectionHeader({
+  title,
+  subtitle,
+  count,
+  actionLabel,
+  onAction,
+}: SectionHeaderProps) {
   const { Palette, Type } = useTheme();
   const styles = React.useMemo(() => createStyles(Palette, Type), [Palette, Type]);
   return (
@@ -29,7 +35,10 @@ export function SectionHeader({ title, subtitle, count, actionLabel, onAction }:
         {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
       </View>
       {actionLabel && onAction ? (
-        <Pressable style={({ pressed }) => [styles.action, pressed && styles.actionPressed]} onPress={onAction}>
+        <Pressable
+          style={({ pressed }) => [styles.action, pressed && styles.actionPressed]}
+          onPress={onAction}
+        >
           <Text style={styles.actionText}>{actionLabel}</Text>
           <Ionicons name="arrow-forward" size={13} color={Palette.primary} />
         </Pressable>
@@ -38,20 +47,23 @@ export function SectionHeader({ title, subtitle, count, actionLabel, onAction }:
   );
 }
 
-function createStyles(Palette: ReturnType<typeof useTheme>['Palette'], Type: ReturnType<typeof useTheme>['Type']) {
+function createStyles(
+  Palette: ReturnType<typeof useTheme>["Palette"],
+  Type: ReturnType<typeof useTheme>["Type"],
+) {
   return StyleSheet.create({
     container: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
       marginBottom: Spacing.md,
     },
     left: {
       flex: 1,
     },
     titleRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
+      flexDirection: "row",
+      alignItems: "center",
     },
     title: Type.sectionTitle,
     countPill: {
@@ -63,7 +75,7 @@ function createStyles(Palette: ReturnType<typeof useTheme>['Palette'], Type: Ret
     },
     countText: {
       fontSize: 11,
-      fontWeight: '700',
+      fontWeight: "700",
       color: Palette.textSecondary,
     },
     subtitle: {
@@ -71,8 +83,8 @@ function createStyles(Palette: ReturnType<typeof useTheme>['Palette'], Type: Ret
       marginTop: 2,
     },
     action: {
-      flexDirection: 'row',
-      alignItems: 'center',
+      flexDirection: "row",
+      alignItems: "center",
       gap: 4,
       paddingHorizontal: Spacing.md,
       paddingVertical: 6,
@@ -84,7 +96,7 @@ function createStyles(Palette: ReturnType<typeof useTheme>['Palette'], Type: Ret
     },
     actionText: {
       fontSize: 13,
-      fontWeight: '600',
+      fontWeight: "600",
       color: Palette.primary,
     },
   });

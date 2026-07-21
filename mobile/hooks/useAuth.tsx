@@ -1,9 +1,16 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as apiClient from '@/lib/api';
-import { getToken, clearToken, flushOutbox, isNetworkError } from '@/lib/client';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  ReactNode,
+  useCallback,
+} from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as apiClient from "@/lib/api";
+import { getToken, clearToken, flushOutbox, isNetworkError } from "@/lib/client";
 
-const USER_KEY = '@icare_user';
+const USER_KEY = "@icare_user";
 
 interface AuthContextType {
   user: apiClient.User | null;
@@ -12,7 +19,11 @@ interface AuthContextType {
   /** True only during the initial stored-session restore at app launch. */
   isBootstrapping: boolean;
   isAuthenticated: boolean;
-  login: (email: string, password: string, rememberMe?: boolean) => Promise<{ ok: boolean; error?: string }>;
+  login: (
+    email: string,
+    password: string,
+    rememberMe?: boolean,
+  ) => Promise<{ ok: boolean; error?: string }>;
   loginWithGoogle: (
     idToken: string,
     rememberMe?: boolean,
@@ -78,10 +89,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { ok: true };
     } catch (error) {
       const message = isNetworkError(error)
-        ? 'Cannot reach the iCARE++ server. Check your connection and API URL.'
+        ? "Cannot reach the iCARE++ server. Check your connection and API URL."
         : error instanceof Error
           ? error.message
-          : 'Sign-in failed';
+          : "Sign-in failed";
       return { ok: false, error: message };
     } finally {
       setIsLoading(false);
@@ -95,7 +106,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(true);
     try {
       const result = await apiClient.loginWithGoogle(idToken, rememberMe);
-      if ('needsRoleSelection' in result) {
+      if ("needsRoleSelection" in result) {
         return { ok: false, needsRoleSelection: true };
       }
       setUser(result.user);
@@ -104,10 +115,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { ok: true };
     } catch (error) {
       const message = isNetworkError(error)
-        ? 'Cannot reach the iCARE++ server. Check your connection and API URL.'
+        ? "Cannot reach the iCARE++ server. Check your connection and API URL."
         : error instanceof Error
           ? error.message
-          : 'Google sign-in failed';
+          : "Google sign-in failed";
       return { ok: false, error: message };
     } finally {
       setIsLoading(false);
@@ -140,7 +151,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 export function useAuth() {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
 }

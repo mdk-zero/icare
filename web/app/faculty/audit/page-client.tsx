@@ -17,6 +17,7 @@ import { fetchAuditTrail, AuditLog } from "../../lib/api";
 import PageHeader from "../../components/PageHeader";
 import StatTile from "../../components/StatTile";
 import Card from "../../components/Card";
+import { SkeletonTable } from "../../components/skeletons";
 
 export default function FacultyAuditClient() {
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
@@ -141,71 +142,60 @@ export default function FacultyAuditClient() {
         </p>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50/50 border-b border-gray-100">
-              <tr>
-                <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Category</th>
-                <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Action</th>
-                <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Details</th>
-                <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Faculty</th>
-                <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Timestamp</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100/80">
-              {loading ? (
-                Array.from({ length: 5 }).map((_, i) => (
-                  <tr key={i} className="animate-pulse">
-                    <td className="py-3 px-4"><div className="h-5 w-16 bg-gray-200 rounded-lg" /></td>
-                    <td className="py-3 px-4"><div className="h-6 w-24 bg-gray-200 rounded-full" /></td>
-                    <td className="py-3 px-4"><div className="h-4 w-48 bg-gray-200 rounded" /></td>
-                    <td className="py-3 px-4">
-                      <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 bg-gray-200 rounded-full" />
-                        <div className="h-4 w-24 bg-gray-200 rounded" />
-                      </div>
-                    </td>
-                    <td className="py-3 px-4"><div className="h-4 w-28 bg-gray-200 rounded" /></td>
-                  </tr>
-                ))
-              ) : auditLogs.length === 0 ? (
+      {loading ? (
+        <SkeletonTable rows={5} cols={5} />
+      ) : (
+        <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50/50 border-b border-gray-100">
                 <tr>
-                  <td colSpan={5} className="py-8 text-center text-gray-500">
-                    No audit logs found
-                  </td>
+                  <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Category</th>
+                  <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Action</th>
+                  <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Details</th>
+                  <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Faculty</th>
+                  <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Timestamp</th>
                 </tr>
-              ) : (
-                auditLogs.map((log) => (
-                  <tr key={log.id} className="hover:bg-gray-50/50 transition-colors">
-                    <td className="py-3 px-4">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-lg text-xs font-medium ${getTabColor(log.tab)}`}>
-                        {log.tab.replace('_', ' ')}
-                      </span>
+              </thead>
+              <tbody className="divide-y divide-gray-100/80">
+                {auditLogs.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="py-8 text-center text-gray-500">
+                      No audit logs found
                     </td>
-                    <td className="py-3 px-4">
-                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getActionColor(log.action)}`}>
-                        <FontAwesomeIcon icon={getActionIcon(log.action)} className="w-4 h-4 mr-1" />
-                        {log.action}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-gray-600">{log.details}</td>
-                    <td className="py-3 px-4">
-                      <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 bg-gray-100 rounded-full flex items-center justify-center text-xs font-medium text-gray-600">
-                          {log.faculty_name.charAt(0)}
-                        </div>
-                        <span className="text-gray-800">{log.faculty_name}</span>
-                      </div>
-                    </td>
-                    <td className="py-3 px-4 text-gray-500 text-sm">{formatTimestamp(log.created_at)}</td>
                   </tr>
-                ))
-              )}
+                ) : (
+                  auditLogs.map((log) => (
+                    <tr key={log.id} className="hover:bg-gray-50/50 transition-colors">
+                      <td className="py-3 px-4">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-lg text-xs font-medium ${getTabColor(log.tab)}`}>
+                          {log.tab.replace('_', ' ')}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getActionColor(log.action)}`}>
+                          <FontAwesomeIcon icon={getActionIcon(log.action)} className="w-4 h-4 mr-1" />
+                          {log.action}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-gray-600">{log.details}</td>
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 bg-gray-100 rounded-full flex items-center justify-center text-xs font-medium text-gray-600">
+                            {log.faculty_name.charAt(0)}
+                          </div>
+                          <span className="text-gray-800">{log.faculty_name}</span>
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 text-gray-500 text-sm">{formatTimestamp(log.created_at)}</td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
         </div>
+      )}
     </div>
   );
 }

@@ -37,6 +37,7 @@ import {
 import PageHeader from "../../components/PageHeader";
 import StatTile from "../../components/StatTile";
 import Card from "../../components/Card";
+import { SkeletonTable } from "../../components/skeletons";
 
 /** Minimal CSV parser: quoted fields, "" escapes, \r\n or \n row breaks. */
 function parseCsv(text: string): string[][] {
@@ -932,49 +933,7 @@ export default function FacultyStudentsClient() {
       <div className="mt-8">
         <div className="bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200 overflow-hidden">
           {loadingStudentUsers ? (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50/50 border-b border-gray-100">
-                  <tr>
-                    <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
-                      Student
-                    </th>
-                    <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
-                      Email
-                    </th>
-                    <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
-                      Section
-                    </th>
-                    <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
-                      Risk (ML)
-                    </th>
-                    <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider"></th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100/80">
-                  {[1, 2, 3].map((i) => (
-                    <tr key={i}>
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-gray-200 rounded-full animate-pulse" />
-                          <div className="h-4 w-32 bg-gray-200 rounded animate-pulse" />
-                        </div>
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="h-4 w-48 bg-gray-200 rounded animate-pulse" />
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="h-6 w-16 bg-gray-200 rounded-full animate-pulse" />
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="h-6 w-16 bg-gray-200 rounded-full animate-pulse" />
-                      </td>
-                      <td className="py-3 px-4"></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <SkeletonTable rows={5} cols={5} />
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full">
@@ -1069,7 +1028,7 @@ export default function FacultyStudentsClient() {
                   ))}
                   {filteredStudentUsers.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="py-8 text-center text-gray-500">
+                      <td colSpan={5} className="py-8 text-center text-gray-500">
                         No student accounts found
                       </td>
                     </tr>
