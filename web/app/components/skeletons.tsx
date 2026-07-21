@@ -400,23 +400,44 @@ export function SkeletonQuestionCard() {
 
 export function SkeletonSidebar() {
   return (
-    <div className="min-h-screen bg-[#f8fafc] flex animate-pulse">
-      <div className="w-60 p-3 space-y-4" style={{ background: 'linear-gradient(180deg, #0b3d3d 0%, #146464 50%, #0f5252 100%)' }}>
-        <div className="flex items-center gap-3 pb-3 border-b border-white/10">
-          <div className="w-8 h-8 bg-white/10 rounded-lg" />
-          <div className="space-y-1.5">
-            <div className="h-3.5 w-14 bg-white/10 rounded" />
-            <div className="h-2.5 w-20 bg-white/[0.06] rounded" />
+    <div className="h-screen bg-[#f8fafc] flex overflow-hidden animate-pulse">
+      <div
+        className="w-60 flex flex-col shrink-0"
+        style={{ background: 'linear-gradient(180deg, #0b3d3d 0%, #146464 50%, #0f5252 100%)' }}
+      >
+        {/* Brand */}
+        <div className="flex items-center gap-2.5 px-4 pt-4 pb-3.5">
+          <div className="w-9 h-9 bg-white/10 rounded-[11px]" />
+          <div className="space-y-2">
+            <div className="h-3 w-16 bg-white/10 rounded" />
+            <div className="h-2 w-20 bg-white/[0.06] rounded" />
           </div>
         </div>
-        <div className="space-y-3">
-          <div className="h-3 w-16 bg-white/10 rounded" />
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="h-8 bg-white/[0.06] rounded-lg" />
+        {/* Profile */}
+        <div className="mx-3 mb-2 flex items-center gap-2.5 rounded-xl bg-white/[0.05] px-2 py-2">
+          <div className="w-8 h-8 bg-white/10 rounded-full" />
+          <div className="space-y-2 flex-1">
+            <div className="h-3 w-24 bg-white/10 rounded" />
+            <div className="h-2 w-12 bg-white/[0.06] rounded" />
+          </div>
+        </div>
+        {/* Nav groups */}
+        <div className="flex-1 px-3 py-2 space-y-3">
+          {[3, 3, 2].map((count, group) => (
+            <div key={group} className="space-y-1.5">
+              <div className="flex items-center gap-2 px-2.5 pb-1 pt-1">
+                <div className="h-2 w-14 bg-white/10 rounded" />
+                <div className="h-px flex-1 bg-white/10" />
+              </div>
+              {Array.from({ length: count }).map((_, i) => (
+                <div key={i} className="h-9 bg-white/[0.06] rounded-lg" />
+              ))}
+            </div>
           ))}
         </div>
-        <div className="pt-2 border-t border-white/10">
-          <div className="h-8 bg-white/[0.04] rounded-lg" />
+        {/* Logout */}
+        <div className="px-3 pb-3 pt-2 border-t border-white/10">
+          <div className="h-9 bg-white/[0.04] rounded-lg" />
         </div>
       </div>
       <div className="flex-1 p-4 space-y-4">
