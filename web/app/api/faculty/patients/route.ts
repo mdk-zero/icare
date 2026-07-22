@@ -95,9 +95,11 @@ export async function GET(request: NextRequest) {
 
   try {
     const supabase = getSupabaseAdmin();
+    // vital_signs and labs are read back by the edit form, which writes whatever
+    // it holds — omitting them here made saving a patient blank both columns.
     let query = supabase
       .from('patients')
-      .select('id, subject_id, hadm_id, name, age, gender, room_number, diagnosis, admission_date, mimic_id, medical_history, created_at')
+      .select('id, subject_id, hadm_id, name, age, gender, room_number, diagnosis, admission_date, mimic_id, medical_history, vital_signs, labs, created_at')
       .order('admission_date', { ascending: false })
       .limit(500);
 
