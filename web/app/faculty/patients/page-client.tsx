@@ -485,6 +485,13 @@ export default function FacultyPatientsClient() {
   const selectedGroup = unitGroups.find((g) => g.key === selectedUnit) ?? null;
   const filtersActive = query !== "" || FILTER_KEYS.some((key) => filters[key] !== "all");
 
+  // Narrowing to a handful of patients should not leave a screen of "0 patients"
+  // cards to scroll past; the count of what was dropped keeps the omission visible.
+  const visibleGroups = filtersActive
+    ? unitGroups.filter((group) => group.patients.length > 0)
+    : unitGroups;
+  const hiddenGroups = unitGroups.length - visibleGroups.length;
+
   const setFilter = (key: FilterKey, value: string) =>
     setFilters((prev) => ({ ...prev, [key]: value }));
 
@@ -738,7 +745,7 @@ export default function FacultyPatientsClient() {
         </div>
       ) : !selectedGroup ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {unitGroups.map((group) => {
+          {visibleGroups.map((group) => {
             const critical = group.patients.filter(isCritical).length;
             const isCatchAll = group.key === GENERAL_KEY || group.key === UNASSIGNED_KEY;
             const rooms = new Set(
@@ -790,12 +797,10 @@ export default function FacultyPatientsClient() {
                 )}
                 </div>
 
+                {/* A card only reaches here with at least one patient: empty
+                    units are dropped from visibleGroups. */}
                 <div className="mt-4 pt-4 border-t border-gray-100 flex flex-wrap items-center gap-2">
-                  {group.patients.length === 0 ? (
-                    <span className="text-xs text-gray-400">
-                      {filtersActive ? "No matching patients" : "No patients"}
-                    </span>
-                  ) : critical > 0 ? (
+                  {critical > 0 ? (
                     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700 border border-red-200">
                       <FontAwesomeIcon icon={faTriangleExclamation} className="w-3 h-3" />
                       {critical} critical
@@ -811,7 +816,7 @@ export default function FacultyPatientsClient() {
             );
           })}
 
-          {unitGroups.every((g) => g.patients.length === 0) && (
+          {visibleGroups.length === 0 && (
             <div className="col-span-full bg-surface rounded-xl border border-hairline p-12 text-center">
               <FontAwesomeIcon icon={faSearch} className="w-8 h-8 text-gray-300" />
               <p className="mt-3 font-semibold text-gray-700">
@@ -828,6 +833,14 @@ export default function FacultyPatientsClient() {
                 Clear all filters
               </button>
             </div>
+          )}
+
+          {hiddenGroups > 0 && (
+            <p className="col-span-full text-center text-xs text-gray-400">
+              {hiddenGroups === 1
+                ? "1 care unit hidden — no patients match"
+                : `${hiddenGroups} care units hidden — no patients match`}
+            </p>
           )}
         </div>
       ) : (
