@@ -19,6 +19,7 @@ import {
   faArrowLeft,
   faCircleCheck,
   faHospital,
+  faFilter,
 } from "@fortawesome/free-solid-svg-icons";
 import {
   fetchFacultyPatients,
@@ -82,6 +83,170 @@ function isCritical(patient: FacultyPatient): boolean {
     const state = vitalState(v[key], key);
     return state === "low" || state === "high";
   });
+}
+
+/**
+ * Three-way, because a quarter of the roster carries no readings at all: folding
+ * those into "stable" would claim they had been checked. Keeping "none" separate
+ * is also what lets the two headline tiles stop short of the total honestly.
+ */
+function vitalStatus(patient: FacultyPatient): "critical" | "stable" | "none" {
+  const v = patient.vital_signs;
+  const recorded =
+    !!v &&
+    (v.heart_rate != null ||
+      v.temperature != null ||
+      v.respiratory_rate != null ||
+      v.oxygen_saturation != null ||
+      !!v.blood_pressure);
+  if (!recorded) return "none";
+  return isCritical(patient) ? "critical" : "stable";
+}
+
+/**
+ * The seeded MIMIC rows spell it "Male"/"Female" while the form writes "M"/"F";
+ * matching on the raw column would silently drop the long-form records.
+ */
+function genderCode(raw: string | null | undefined): string {
+  const value = (raw ?? "").trim().toLowerCase();
+  if (value.startsWith("m")) return "M";
+  if (value.startsWith("f")) return "F";
+  return "U";
+}
+
+function ageBand(age: number | null | undefined): string {
+  if (age == null || Number.isNaN(age)) return "";
+  if (age < 40) return "under40";
+  if (age < 65) return "40to64";
+  if (age < 80) return "65to79";
+  return "80plus";
+}
+
+function hasLabs(patient: FacultyPatient): boolean {
+  return Object.keys(patient.labs ?? {}).length > 0;
+}
+
+type FilterKey = "status" | "gender" | "age" | "labs";
+type Filters = Record<FilterKey, string>;
+
+const NO_FILTERS: Filters = { status: "all", gender: "all", age: "all", labs: "all" };
+
+/**
+ * One bucket function per filter, used for both the matching and the option
+ * counts, so a dropdown can never advertise a number the table disagrees with.
+ * An empty bucket means the patient falls outside every option in that
+ * dimension and is excluded whenever it is narrowed.
+ */
+const FILTER_BUCKETS: Record<FilterKey, (patient: FacultyPatient) => string> = {
+  status: vitalStatus,
+  gender: (p) => genderCode(p.gender),
+  age: (p) => ageBand(p.age),
+  labs: (p) => (hasLabs(p) ? "has" : "missing"),
+};
+
+const FILTER_KEYS = Object.keys(FILTER_BUCKETS) as FilterKey[];
+
+const FILTER_OPTIONS: Record<
+  FilterKey,
+  { label: string; options: { value: string; label: string }[] }
+> = {
+  status: {
+    label: "Filter by vitals",
+    options: [
+      { value: "all", label: "Any vitals" },
+      { value: "critical", label: "Critical" },
+      { value: "stable", label: "Stable" },
+      { value: "none", label: "Vitals not recorded" },
+    ],
+  },
+  gender: {
+    label: "Filter by gender",
+    options: [
+      { value: "all", label: "Any gender" },
+      { value: "M", label: "Male" },
+      { value: "F", label: "Female" },
+      { value: "U", label: "Unspecified" },
+    ],
+  },
+  age: {
+    label: "Filter by age",
+    options: [
+      { value: "all", label: "Any age" },
+      { value: "under40", label: "Under 40" },
+      { value: "40to64", label: "40–64" },
+      { value: "65to79", label: "65–79" },
+      { value: "80plus", label: "80+" },
+    ],
+  },
+  labs: {
+    label: "Filter by labs",
+    options: [
+      { value: "all", label: "Any labs" },
+      { value: "has", label: "Labs on file" },
+      { value: "missing", label: "No labs" },
+    ],
+  },
+};
+
+/** `except` leaves one dimension open so its own options can be counted. */
+function matchesFilters(patient: FacultyPatient, filters: Filters, except?: FilterKey): boolean {
+  return FILTER_KEYS.every(
+    (key) =>
+      key === except || filters[key] === "all" || FILTER_BUCKETS[key](patient) === filters[key],
+  );
+}
+
+function matchesSearch(patient: FacultyPatient, query: string): boolean {
+  if (!query) return true;
+  return (
+    patient.name.toLowerCase().includes(query) ||
+    (patient.diagnosis ?? "").toLowerCase().includes(query) ||
+    (patient.mimic_id ?? "").toLowerCase().includes(query) ||
+    (patient.room_number ?? "").toLowerCase().includes(query)
+  );
+}
+
+function FilterSelect({
+  filterKey,
+  value,
+  counts,
+  onChange,
+}: {
+  filterKey: FilterKey;
+  value: string;
+  counts: Record<string, number>;
+  onChange: (key: FilterKey, value: string) => void;
+}) {
+  const { label, options } = FILTER_OPTIONS[filterKey];
+  const active = value !== "all";
+
+  return (
+    <select
+      aria-label={label}
+      value={value}
+      onChange={(e) => onChange(filterKey, e.target.value)}
+      className={`px-3 py-2 bg-surface border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-600/50 focus:border-brand-600 transition-all cursor-pointer ${
+        active
+          ? "border-brand-600 bg-brand-600/5 text-brand-700 font-medium"
+          : "border-gray-200 text-gray-700"
+      }`}
+    >
+      {options.map((option) => {
+        const count = counts[option.value] ?? 0;
+        return (
+          <option
+            key={option.value}
+            value={option.value}
+            // Shown rather than hidden so the zero itself is the answer, but
+            // not selectable — picking it would only empty the screen.
+            disabled={count === 0 && option.value !== value}
+          >
+            {option.label} ({count})
+          </option>
+        );
+      })}
+    </select>
+  );
 }
 
 interface RoomLocation {
@@ -214,6 +379,7 @@ export default function FacultyPatientsClient() {
   const [patients, setPatients] = useState<FacultyPatient[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [filters, setFilters] = useState<Filters>(NO_FILTERS);
   const [selectedUnit, setSelectedUnit] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingPatient, setEditingPatient] = useState<FacultyPatient | null>(null);
@@ -236,17 +402,41 @@ export default function FacultyPatientsClient() {
     void loadPatients();
   }, [loadPatients]);
 
-  const filteredPatients = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return patients;
-    return patients.filter(
-      (p) =>
-        p.name.toLowerCase().includes(q) ||
-        (p.diagnosis ?? "").toLowerCase().includes(q) ||
-        (p.mimic_id ?? "").toLowerCase().includes(q) ||
-        (p.room_number ?? "").toLowerCase().includes(q),
-    );
-  }, [patients, search]);
+  const query = search.trim().toLowerCase();
+
+  const filteredPatients = useMemo(
+    () => patients.filter((p) => matchesSearch(p, query) && matchesFilters(p, filters)),
+    [patients, query, filters],
+  );
+
+  // Each dropdown counts against every *other* active filter, so a zero means
+  // that combination is genuinely empty rather than merely hidden by the
+  // dropdown's own current value.
+  const facets = useMemo(() => {
+    const result = {} as Record<FilterKey, Record<string, number>>;
+    for (const key of FILTER_KEYS) {
+      const base = patients.filter(
+        (p) => matchesSearch(p, query) && matchesFilters(p, filters, key),
+      );
+      const tally: Record<string, number> = { all: base.length };
+      for (const patient of base) {
+        const bucket = FILTER_BUCKETS[key](patient);
+        if (bucket) tally[bucket] = (tally[bucket] ?? 0) + 1;
+      }
+      result[key] = tally;
+    }
+    return result;
+  }, [patients, query, filters]);
+
+  // Headline counts stay on the whole roster: the tiles double as filter
+  // buttons, and a button whose number moves when you press it is a poor target.
+  const rosterStatus = useMemo(() => {
+    const tally = { critical: 0, stable: 0, none: 0 };
+    for (const patient of patients) tally[vitalStatus(patient)]++;
+    return tally;
+  }, [patients]);
+
+  const labsOnFile = useMemo(() => patients.filter(hasLabs).length, [patients]);
 
   const unitGroups = useMemo<UnitGroup[]>(() => {
     const matching = new Set(filteredPatients.map((p) => p.id));
@@ -293,8 +483,19 @@ export default function FacultyPatientsClient() {
   }, [patients, filteredPatients]);
 
   const selectedGroup = unitGroups.find((g) => g.key === selectedUnit) ?? null;
-  const filtersActive = search.trim() !== "";
-  const criticalCount = patients.filter(isCritical).length;
+  const filtersActive = query !== "" || FILTER_KEYS.some((key) => filters[key] !== "all");
+
+  const setFilter = (key: FilterKey, value: string) =>
+    setFilters((prev) => ({ ...prev, [key]: value }));
+
+  /** Stat tiles toggle, so a second press on the same tile returns to the roster. */
+  const toggleFilter = (key: FilterKey, value: string) =>
+    setFilters((prev) => ({ ...prev, [key]: prev[key] === value ? "all" : value }));
+
+  const clearAll = () => {
+    setFilters(NO_FILTERS);
+    setSearch("");
+  };
 
   const openAddModal = () => {
     setEditingPatient(null);
@@ -435,26 +636,41 @@ export default function FacultyPatientsClient() {
         />
         <StatTile
           icon={<FontAwesomeIcon icon={faTriangleExclamation} className="w-5 h-5" />}
-          value={criticalCount}
+          value={rosterStatus.critical}
           label="Critical Vitals"
           caption="Outside reference range"
           iconBg="bg-red-50"
           iconColor="text-red-600"
+          onClick={() => toggleFilter("status", "critical")}
+          className={filters.status === "critical" ? "ring-2 ring-red-500/40" : ""}
         />
         <StatTile
           icon={<FontAwesomeIcon icon={faHeartPulse} className="w-5 h-5" />}
-          value={patients.filter((p) => !isCritical(p) && p.vital_signs?.heart_rate != null).length}
+          value={rosterStatus.stable}
           label="Stable"
-          caption="All readings in range"
+          caption={
+            rosterStatus.none > 0
+              ? `${rosterStatus.none} not yet recorded`
+              : "All readings in range"
+          }
           iconBg="bg-emerald-50"
           iconColor="text-emerald-600"
+          onClick={() => toggleFilter("status", "stable")}
+          className={filters.status === "stable" ? "ring-2 ring-emerald-500/40" : ""}
         />
         <StatTile
           icon={<FontAwesomeIcon icon={faFlask} className="w-5 h-5" />}
-          value={patients.filter((p) => Object.keys(p.labs || {}).length > 0).length}
+          value={labsOnFile}
           label="Lab Results Available"
+          caption={
+            labsOnFile < patients.length
+              ? `${patients.length - labsOnFile} without labs`
+              : undefined
+          }
           iconBg="bg-purple-50"
           iconColor="text-purple-600"
+          onClick={() => toggleFilter("labs", "has")}
+          className={filters.labs === "has" ? "ring-2 ring-purple-500/40" : ""}
         />
       </div>
 
@@ -480,6 +696,35 @@ export default function FacultyPatientsClient() {
           Add Patient
         </button>
       </div>
+
+      {!loading && patients.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 mb-4">
+          <FontAwesomeIcon icon={faFilter} className="w-3.5 h-3.5 text-gray-400 mr-1" />
+          {FILTER_KEYS.map((key) => (
+            <FilterSelect
+              key={key}
+              filterKey={key}
+              value={filters[key]}
+              counts={facets[key]}
+              onChange={setFilter}
+            />
+          ))}
+          {filtersActive && (
+            <button
+              onClick={clearAll}
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              <FontAwesomeIcon icon={faTimes} className="w-3 h-3" />
+              Clear all
+            </button>
+          )}
+          <span className="ml-auto text-xs font-medium text-gray-500">
+            {filtersActive
+              ? `${filteredPatients.length} of ${patients.length} patients`
+              : `${patients.length} patients`}
+          </span>
+        </div>
+      )}
 
       {loading ? (
         <SkeletonTable rows={5} cols={5} />
@@ -569,12 +814,18 @@ export default function FacultyPatientsClient() {
           {unitGroups.every((g) => g.patients.length === 0) && (
             <div className="col-span-full bg-surface rounded-xl border border-hairline p-12 text-center">
               <FontAwesomeIcon icon={faSearch} className="w-8 h-8 text-gray-300" />
-              <p className="mt-3 font-semibold text-gray-700">No patients match “{search}”</p>
+              <p className="mt-3 font-semibold text-gray-700">
+                {/* One string: JSX drops the space at an expression/text
+                    boundary that straddles a line break. */}
+                {query
+                  ? `No patients match “${search}”`
+                  : "No patients match the current filters"}
+              </p>
               <button
-                onClick={() => setSearch("")}
+                onClick={clearAll}
                 className="mt-3 text-sm font-medium text-brand-600 hover:text-brand-700"
               >
-                Clear search
+                Clear all filters
               </button>
             </div>
           )}
@@ -702,7 +953,7 @@ export default function FacultyPatientsClient() {
                     <tr>
                       <td colSpan={5} className="py-12 text-center text-gray-400">
                         {filtersActive
-                          ? `No patients in ${selectedGroup.label} match “${search}”`
+                          ? `No patients in ${selectedGroup.label} match the current filters`
                           : "No patients in this unit"}
                       </td>
                     </tr>
