@@ -34,6 +34,31 @@ function generateRoom(subjectId: number): string {
   return `Room ${floor}${room}`;
 }
 
+/**
+ * Example clinical/teaching rooms for the admin Room Management page. The MIMIC
+ * import only fills patients.room_number (free text); the `rooms` table is a
+ * separate concept (capacity, status, student assignments) and nothing else
+ * seeds it, so the admin side would otherwise show "No rooms found".
+ */
+const EXAMPLE_ROOMS: {
+  name: string;
+  room_number: string;
+  capacity: number;
+  status: 'active' | 'inactive' | 'maintenance';
+  description: string;
+}[] = [
+  { name: 'Skills Laboratory A', room_number: '101', capacity: 12, status: 'active', description: 'Basic nursing skills practice — beds, mannequins, and supply carts.' },
+  { name: 'Skills Laboratory B', room_number: '102', capacity: 12, status: 'active', description: 'IV therapy, wound care, and medication administration stations.' },
+  { name: 'Health Assessment Room', room_number: '104', capacity: 10, status: 'active', description: 'Head-to-toe physical assessment stations.' },
+  { name: 'Debriefing Room', room_number: '105', capacity: 20, status: 'active', description: 'Post-scenario debriefing and reflection.' },
+  { name: 'Community Health Room', room_number: '106', capacity: 10, status: 'inactive', description: 'Community and public-health teaching space (currently unused).' },
+  { name: 'Simulation Ward', room_number: '201', capacity: 8, status: 'active', description: 'High-fidelity med-surg simulation with monitored beds.' },
+  { name: 'Maternity Simulation Suite', room_number: '202', capacity: 6, status: 'active', description: 'Obstetric and newborn care simulation.' },
+  { name: 'Pediatric Simulation Room', room_number: '203', capacity: 6, status: 'active', description: 'Pediatric and neonatal scenarios.' },
+  { name: 'Simulation Ward B', room_number: '204', capacity: 8, status: 'maintenance', description: 'Temporarily closed for equipment upgrades.' },
+  { name: 'ICU Simulation Bay', room_number: '301', capacity: 6, status: 'active', description: 'Critical care simulation with ventilator and telemetry.' },
+];
+
 async function readGzCsv(path: string): Promise<Record<string, string>[]> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
@@ -324,6 +349,19 @@ async function main() {
   }
 
   console.log('MIMIC-IV Demo patients seeded successfully.');
+
+  // Seed the admin Room Management table (idempotent on campus + room number).
+  const { data: campus } = await supabase.from('campuses').select('id').limit(1).maybeSingle();
+  const roomRows = EXAMPLE_ROOMS.map((room) => ({ ...room, campus_id: campus?.id ?? null }));
+  console.log(`Seeding ${roomRows.length} example rooms...`);
+  const { error: roomsError } = await supabase
+    .from('rooms')
+    .upsert(roomRows, { onConflict: 'campus_id,room_number' });
+  if (roomsError) {
+    console.error('Failed to seed rooms:', roomsError.message);
+    process.exit(1);
+  }
+  console.log('Example rooms seeded.');
 }
 
 main().catch((err) => {
