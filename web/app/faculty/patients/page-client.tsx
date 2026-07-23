@@ -19,7 +19,6 @@ import {
   faArrowLeft,
   faCircleCheck,
   faHospital,
-  faFilter,
 } from "@fortawesome/free-solid-svg-icons";
 import {
   fetchFacultyPatients,
@@ -201,9 +200,18 @@ function matchesSearch(patient: FacultyPatient, query: string): boolean {
   return (
     patient.name.toLowerCase().includes(query) ||
     (patient.diagnosis ?? "").toLowerCase().includes(query) ||
-    (patient.mimic_id ?? "").toLowerCase().includes(query) ||
-    (patient.room_number ?? "").toLowerCase().includes(query)
+    (patient.mimic_id ?? "").toLowerCase().includes(query)
   );
+}
+
+/**
+ * Its own box, separate from the patient search. room_number holds both the
+ * unit name and the room number as one string, so "CVICU", "cardiac", or the
+ * bare "4108" all narrow it.
+ */
+function matchesRoom(patient: FacultyPatient, roomQuery: string): boolean {
+  if (!roomQuery) return true;
+  return (patient.room_number ?? "").toLowerCase().includes(roomQuery);
 }
 
 function FilterSelect({
@@ -379,6 +387,7 @@ export default function FacultyPatientsClient() {
   const [patients, setPatients] = useState<FacultyPatient[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [roomSearch, setRoomSearch] = useState("");
   const [filters, setFilters] = useState<Filters>(NO_FILTERS);
   const [selectedUnit, setSelectedUnit] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -403,10 +412,14 @@ export default function FacultyPatientsClient() {
   }, [loadPatients]);
 
   const query = search.trim().toLowerCase();
+  const roomQuery = roomSearch.trim().toLowerCase();
 
   const filteredPatients = useMemo(
-    () => patients.filter((p) => matchesSearch(p, query) && matchesFilters(p, filters)),
-    [patients, query, filters],
+    () =>
+      patients.filter(
+        (p) => matchesSearch(p, query) && matchesRoom(p, roomQuery) && matchesFilters(p, filters),
+      ),
+    [patients, query, roomQuery, filters],
   );
 
   // Each dropdown counts against every *other* active filter, so a zero means
@@ -416,7 +429,7 @@ export default function FacultyPatientsClient() {
     const result = {} as Record<FilterKey, Record<string, number>>;
     for (const key of FILTER_KEYS) {
       const base = patients.filter(
-        (p) => matchesSearch(p, query) && matchesFilters(p, filters, key),
+        (p) => matchesSearch(p, query) && matchesRoom(p, roomQuery) && matchesFilters(p, filters, key),
       );
       const tally: Record<string, number> = { all: base.length };
       for (const patient of base) {
@@ -426,7 +439,7 @@ export default function FacultyPatientsClient() {
       result[key] = tally;
     }
     return result;
-  }, [patients, query, filters]);
+  }, [patients, query, roomQuery, filters]);
 
   // Headline counts stay on the whole roster: the tiles double as filter
   // buttons, and a button whose number moves when you press it is a poor target.
@@ -483,7 +496,8 @@ export default function FacultyPatientsClient() {
   }, [patients, filteredPatients]);
 
   const selectedGroup = unitGroups.find((g) => g.key === selectedUnit) ?? null;
-  const filtersActive = query !== "" || FILTER_KEYS.some((key) => filters[key] !== "all");
+  const filtersActive =
+    query !== "" || roomQuery !== "" || FILTER_KEYS.some((key) => filters[key] !== "all");
 
   // Narrowing to a handful of patients should not leave a screen of "0 patients"
   // cards to scroll past; the count of what was dropped keeps the omission visible.
@@ -502,6 +516,7 @@ export default function FacultyPatientsClient() {
   const clearAll = () => {
     setFilters(NO_FILTERS);
     setSearch("");
+    setRoomSearch("");
   };
 
   const openAddModal = () => {
@@ -681,55 +696,64 @@ export default function FacultyPatientsClient() {
         />
       </div>
 
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
-        <div className="relative w-full sm:w-96">
-          <FontAwesomeIcon
-            icon={faSearch}
-            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
-          />
-          <input
-            type="text"
-            placeholder="Search patients, diagnosis, room, MIMIC ID..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className={inputClassName + " pl-10"}
-          />
-        </div>
-        <button
-          onClick={openAddModal}
-          className="inline-flex items-center gap-2 px-4 py-2.5 bg-brand-600 hover:bg-[#145a68] text-white text-sm font-medium rounded-lg transition-colors shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
-        >
-          <FontAwesomeIcon icon={faPlus} className="w-4 h-4" />
-          Add Patient
-        </button>
-      </div>
-
-      {!loading && patients.length > 0 && (
+      {/* Top level: search rooms/units and filter the population, all on one
+          wrapping row. The patient search lives inside a unit (below), so it is
+          not shown here. */}
+      {!selectedGroup && (
         <div className="flex flex-wrap items-center gap-2 mb-4">
-          <FontAwesomeIcon icon={faFilter} className="w-3.5 h-3.5 text-gray-400 mr-1" />
-          {FILTER_KEYS.map((key) => (
-            <FilterSelect
-              key={key}
-              filterKey={key}
-              value={filters[key]}
-              counts={facets[key]}
-              onChange={setFilter}
+          <div className="relative w-full sm:w-64">
+            <FontAwesomeIcon
+              icon={faHospital}
+              className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
             />
-          ))}
-          {filtersActive && (
-            <button
-              onClick={clearAll}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
-            >
-              <FontAwesomeIcon icon={faTimes} className="w-3 h-3" />
-              Clear all
-            </button>
+            <input
+              type="text"
+              placeholder="Search room or unit..."
+              value={roomSearch}
+              onChange={(e) => setRoomSearch(e.target.value)}
+              className={inputClassName + " pl-10"}
+            />
+          </div>
+
+          {!loading && patients.length > 0 && (
+            <>
+              {FILTER_KEYS.map((key) => (
+                <FilterSelect
+                  key={key}
+                  filterKey={key}
+                  value={filters[key]}
+                  counts={facets[key]}
+                  onChange={setFilter}
+                />
+              ))}
+              {filtersActive && (
+                <button
+                  onClick={clearAll}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <FontAwesomeIcon icon={faTimes} className="w-3 h-3" />
+                  Clear all
+                </button>
+              )}
+            </>
           )}
-          <span className="ml-auto text-xs font-medium text-gray-500">
-            {filtersActive
-              ? `${filteredPatients.length} of ${patients.length} patients`
-              : `${patients.length} patients`}
-          </span>
+
+          <div className="flex items-center gap-3 ml-auto">
+            {!loading && patients.length > 0 && (
+              <span className="text-xs font-medium text-gray-500 whitespace-nowrap">
+                {filtersActive
+                  ? `${filteredPatients.length} of ${patients.length} patients`
+                  : `${patients.length} patients`}
+              </span>
+            )}
+            <button
+              onClick={openAddModal}
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-brand-600 hover:bg-[#145a68] text-white text-sm font-medium rounded-lg transition-colors shadow-[0_2px_6px_rgba(27,107,123,0.2)] whitespace-nowrap"
+            >
+              <FontAwesomeIcon icon={faPlus} className="w-4 h-4" />
+              Add Patient
+            </button>
+          </div>
         </div>
       )}
 
@@ -754,7 +778,11 @@ export default function FacultyPatientsClient() {
             return (
               <button
                 key={group.key}
-                onClick={() => setSelectedUnit(group.key)}
+                onClick={() => {
+                  setSelectedUnit(group.key);
+                  // Fresh patient search per unit; it only applies in here.
+                  setSearch("");
+                }}
                 // Flex column so the status badge sits on the card's floor:
                 // units without a full name would otherwise ride up.
                 className="group flex h-full flex-col text-left bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-brand-600/30 transition-all duration-200 p-5"
@@ -824,7 +852,9 @@ export default function FacultyPatientsClient() {
                     boundary that straddles a line break. */}
                 {query
                   ? `No patients match “${search}”`
-                  : "No patients match the current filters"}
+                  : roomQuery
+                    ? `No rooms match “${roomSearch}”`
+                    : "No patients match the current filters"}
               </p>
               <button
                 onClick={clearAll}
@@ -847,7 +877,12 @@ export default function FacultyPatientsClient() {
         <>
           <div className="flex flex-wrap items-center gap-3 mb-4">
             <button
-              onClick={() => setSelectedUnit(null)}
+              onClick={() => {
+                setSelectedUnit(null);
+                // Clear so a leftover patient query does not silently filter
+                // the unit grid, where its box is not shown.
+                setSearch("");
+              }}
               className="inline-flex items-center gap-2 px-3 py-2 bg-surface border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-all"
             >
               <FontAwesomeIcon icon={faArrowLeft} className="w-3.5 h-3.5" />
@@ -872,6 +907,21 @@ export default function FacultyPatientsClient() {
               <FontAwesomeIcon icon={faPlus} className="w-3.5 h-3.5" />
               Add to {selectedGroup.label}
             </button>
+          </div>
+
+          {/* Patient search, scoped to this unit's census. */}
+          <div className="relative w-full sm:w-72 mb-4">
+            <FontAwesomeIcon
+              icon={faSearch}
+              className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
+            />
+            <input
+              type="text"
+              placeholder="Search patients, diagnosis, MIMIC ID..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className={inputClassName + " pl-10"}
+            />
           </div>
 
           <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden">
