@@ -10,7 +10,6 @@ import {
   faCheck,
   faHospitalUser,
   faTimes,
-  faRobot,
 } from "@fortawesome/free-solid-svg-icons";
 import {
   fetchFacultyScenarios,
@@ -194,6 +193,16 @@ export default function LinkPatientsClient() {
             </button>
           ))}
         </div>
+        {mode === "auto" && (
+          <button
+            onClick={autoAssign}
+            disabled={selectedIds.size === 0}
+            className="ml-auto inline-flex items-center gap-2 px-4 py-2 bg-brand-600 text-white text-sm font-semibold rounded-lg transition-all hover:bg-brand-700 disabled:opacity-50"
+          >
+            <FontAwesomeIcon icon={faHospitalUser} className="w-4 h-4" />
+            Assign distinct patients to {selectedIds.size} selected
+          </button>
+        )}
       </div>
 
       {error && (
@@ -202,7 +211,7 @@ export default function LinkPatientsClient() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className={mode === "manual" ? "grid grid-cols-1 lg:grid-cols-2 gap-4" : ""}>
         {/* Scenarios table */}
         <div className="rounded-xl border border-hairline bg-surface overflow-hidden shadow-[0_1px_3px_0_rgba(0,0,0,0.04)]">
           <div className="p-3 border-b border-hairline bg-subtle flex items-center justify-between">
@@ -310,27 +319,8 @@ export default function LinkPatientsClient() {
           </div>
         </div>
 
-        {/* Right: auto action, or patient table */}
-        {mode === "auto" ? (
-          <div className="rounded-xl border border-hairline bg-surface p-5 shadow-[0_1px_3px_0_rgba(0,0,0,0.04)]">
-            <div className="flex items-center gap-2 mb-2">
-              <FontAwesomeIcon icon={faRobot} className="w-4 h-4 text-brand-600" />
-              <span className="text-sm font-semibold text-gray-800">Auto-assign</span>
-            </div>
-            <p className="text-xs text-gray-500 mb-4">
-              Assigns a distinct patient to each selected scenario, in order. Review the assignments
-              on the left, then apply.
-            </p>
-            <button
-              onClick={autoAssign}
-              disabled={selectedIds.size === 0}
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-brand-600 text-white text-sm font-semibold rounded-lg transition-all hover:bg-brand-700 disabled:opacity-50"
-            >
-              <FontAwesomeIcon icon={faHospitalUser} className="w-4 h-4" />
-              Assign distinct patients to {selectedIds.size} selected
-            </button>
-          </div>
-        ) : (
+        {/* Patient table (manual mode only) */}
+        {mode === "manual" && (
           <div className="rounded-xl border border-hairline bg-surface overflow-hidden shadow-[0_1px_3px_0_rgba(0,0,0,0.04)]">
             <div className="p-3 border-b border-hairline bg-subtle">
               <div className="text-sm font-bold text-gray-800 mb-2">
