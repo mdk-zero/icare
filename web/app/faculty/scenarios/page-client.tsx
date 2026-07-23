@@ -46,9 +46,13 @@ import {
   logAuditAction,
   getCurrentFacultyUser,
   fetchFacultyPatients,
+  updateFacultyPatient,
   assignPatientRooms,
+  fetchRooms,
   FacultyPatient,
+  Room,
 } from "../../lib/api";
+import { roomStatus } from "../../lib/rooms";
 import { SkeletonInlineStatCard, SkeletonScenarioCard } from "../../components/skeletons";
 import PageHeader from "../../components/PageHeader";
 import StatTile from "../../components/StatTile";
@@ -61,6 +65,7 @@ const emptyCreateForm = {
   category: "",
   learningObjectives: "",
   patientId: "",
+  roomId: "",
 };
 
 const SCENARIO_CATEGORIES = [
@@ -231,6 +236,7 @@ export default function FacultyScenariosClient() {
   const [aiGenerated, setAiGenerated] = useState(false);
   const [patients, setPatients] = useState<FacultyPatient[]>([]);
   const [loadingPatients, setLoadingPatients] = useState(false);
+  const [rooms, setRooms] = useState<Room[]>([]);
 
   const [showBatchModal, setShowBatchModal] = useState(false);
   // The committed numeric count that generation uses, plus the raw field text so
@@ -357,6 +363,17 @@ export default function FacultyScenariosClient() {
     [patients, linkPatientId],
   );
 
+  // Live room occupancy + the currently-linked patient, for the Room picker.
+  const occupancyByRoom = useMemo(() => {
+    const tally = new Map<string, number>();
+    for (const p of patients) if (p.room_id) tally.set(p.room_id, (tally.get(p.room_id) ?? 0) + 1);
+    return tally;
+  }, [patients]);
+  const createPatient = useMemo(
+    () => patients.find((p) => p.id === createForm.patientId) ?? null,
+    [patients, createForm.patientId],
+  );
+
   const handleCreateScenario = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!createForm.title.trim()) return;
@@ -392,6 +409,29 @@ export default function FacultyScenariosClient() {
         });
       }
     }
+
+    // Apply the chosen room to the linked patient (capacity-enforced by the API).
+    if (
+      newScenario &&
+      createForm.patientId &&
+      createForm.roomId &&
+      createPatient &&
+      createPatient.room_id !== createForm.roomId
+    ) {
+      const res = await updateFacultyPatient(createForm.patientId, {
+        name: createPatient.name,
+        age: createPatient.age,
+        gender: createPatient.gender,
+        diagnosis: createPatient.diagnosis,
+        admission_date: createPatient.admission_date,
+        vital_signs: createPatient.vital_signs,
+        labs: createPatient.labs,
+        room_id: createForm.roomId,
+      });
+      if (res.error) console.error("Room assignment failed:", res.error);
+      else void loadPatientsForSelector();
+    }
+
     setCreating(false);
     setShowCreateModal(false);
     setCreateForm(emptyCreateForm);
@@ -408,8 +448,10 @@ export default function FacultyScenariosClient() {
     setAiPatientCase(null);
     setAiGenerated(false);
     setShowCreateModal(true);
-    // Populate the Patient dropdown (the old Create modal never did this).
+    // Populate the Patient dropdown (the old Create modal never did this) and
+    // the Room dropdown.
     if (patients.length === 0) void loadPatientsForSelector();
+    void fetchRooms().then(setRooms);
   };
 
   /** Generate with AI and write the result INTO the create form for editing. */
@@ -1534,14 +1576,18 @@ export default function FacultyScenariosClient() {
                 <div className="relative">
                   <select
                     value={createForm.patientId}
-                    onChange={(e) => setCreateForm({ ...createForm, patientId: e.target.value })}
+                    onChange={(e) => {
+                      const patientId = e.target.value;
+                      // Default the room to wherever the picked patient already is.
+                      const picked = patients.find((p) => p.id === patientId);
+                      setCreateForm({ ...createForm, patientId, roomId: picked?.room_id ?? "" });
+                    }}
                     className={selectClassName + " pr-10"}
                   >
                     <option value="">No linked patient</option>
                     {patients.map((patient) => (
                       <option key={patient.id} value={patient.id}>
                         {patient.name} — {patient.diagnosis}
-                        {patient.room_number ? ` (Room ${patient.room_number})` : ""}
                       </option>
                     ))}
                   </select>
@@ -1553,6 +1599,38 @@ export default function FacultyScenariosClient() {
                 <p className="text-xs text-gray-500 mt-1.5">
                   Students only see patients linked to their assigned scenarios — link one so they
                   can chart vitals and EHR records for this case.
+                </p>
+              </div>
+              <div>
+                <label className={labelClassName}>Room</label>
+                <div className="relative">
+                  <select
+                    value={createForm.roomId}
+                    onChange={(e) => setCreateForm({ ...createForm, roomId: e.target.value })}
+                    disabled={!createForm.patientId}
+                    className={selectClassName + " pr-10 disabled:opacity-60"}
+                  >
+                    <option value="">No room assigned</option>
+                    {rooms.map((room) => {
+                      const occ = occupancyByRoom.get(room.id) ?? 0;
+                      const isCurrent = createPatient?.room_id === room.id;
+                      const full = roomStatus(occ, room.capacity) === "full";
+                      return (
+                        <option key={room.id} value={room.id} disabled={full && !isCurrent}>
+                          {`${room.name} · Room ${room.room_number} (${occ}/${room.capacity})${full ? " — Full" : ""}`}
+                        </option>
+                      );
+                    })}
+                  </select>
+                  <FontAwesomeIcon
+                    icon={faChevronDown}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none"
+                  />
+                </div>
+                <p className="text-xs text-gray-500 mt-1.5">
+                  {createForm.patientId
+                    ? "Assigns the linked patient to a room. Full rooms can't be selected."
+                    : "Pick a patient first to set their room."}
                 </p>
               </div>
               <div>
