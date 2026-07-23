@@ -59,7 +59,7 @@ function sanitizePatientInput(body: Record<string, unknown>): {
   name: string;
   age: number | null;
   gender: string;
-  room_number: string;
+  room_id: string | null;
   diagnosis: string;
   admission_date: string;
   vital_signs: VitalSignsInput;
@@ -69,12 +69,31 @@ function sanitizePatientInput(body: Record<string, unknown>): {
     name: typeof body.name === 'string' ? body.name.trim() : '',
     age: typeof body.age === 'number' ? body.age : null,
     gender: typeof body.gender === 'string' ? body.gender.trim() : '',
-    room_number: typeof body.room_number === 'string' ? body.room_number.trim() : '',
+    room_id: typeof body.room_id === 'string' && body.room_id.trim() ? body.room_id.trim() : null,
     diagnosis: typeof body.diagnosis === 'string' ? body.diagnosis.trim() : '',
     admission_date: typeof body.admission_date === 'string' ? body.admission_date : new Date().toISOString(),
     vital_signs: parseVitalSigns(body.vital_signs),
     labs: parseLabs(body.labs),
   };
+}
+
+/**
+ * Resolves a room_id to the stored FK plus a denormalized room_number label
+ * ("<name> · Room <number>") that EHR/Vitals/AI read. An unknown or empty id
+ * clears both. Returns { room_id: null } if the id doesn't match a room.
+ */
+async function resolveRoom(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  roomId: string | null,
+): Promise<{ room_id: string | null; room_number: string }> {
+  if (!roomId) return { room_id: null, room_number: '' };
+  const { data: room } = await supabase
+    .from('rooms')
+    .select('name, room_number')
+    .eq('id', roomId)
+    .maybeSingle();
+  if (!room) return { room_id: null, room_number: '' };
+  return { room_id: roomId, room_number: `${room.name} · Room ${room.room_number}` };
 }
 
 function validateRequired(input: ReturnType<typeof sanitizePatientInput>): string | null {
@@ -99,7 +118,7 @@ export async function GET(request: NextRequest) {
     // it holds — omitting them here made saving a patient blank both columns.
     let query = supabase
       .from('patients')
-      .select('id, subject_id, hadm_id, name, age, gender, room_number, diagnosis, admission_date, mimic_id, medical_history, vital_signs, labs, created_at')
+      .select('id, subject_id, hadm_id, name, age, gender, room_number, room_id, room:rooms(id, name, room_number), diagnosis, admission_date, mimic_id, medical_history, vital_signs, labs, created_at')
       .order('admission_date', { ascending: false })
       .limit(500);
 
@@ -154,6 +173,9 @@ export async function POST(request: NextRequest) {
 
     const nextSubjectId = minSubject?.subject_id ? minSubject.subject_id - 1 : -1;
 
+    const { room_id, ...rest } = input;
+    const room = await resolveRoom(supabase, room_id);
+
     const { data: patient, error: insertError } = await supabase
       .from('patients')
       .insert({
@@ -161,7 +183,9 @@ export async function POST(request: NextRequest) {
         hadm_id: nextSubjectId,
         mimic_id: `ICARE-${Math.abs(nextSubjectId)}`,
         created_by: session.uid,
-        ...input,
+        ...rest,
+        room_id: room.room_id,
+        room_number: room.room_number,
       })
       .select('*')
       .single();
@@ -214,13 +238,16 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Patient not found' }, { status: 404 });
     }
 
+    const room = await resolveRoom(supabase, input.room_id);
+
     const { data: patient, error: updateError } = await supabase
       .from('patients')
       .update({
         name: input.name,
         age: input.age,
         gender: input.gender,
-        room_number: input.room_number,
+        room_id: room.room_id,
+        room_number: room.room_number,
         diagnosis: input.diagnosis,
         admission_date: input.admission_date,
         vital_signs: input.vital_signs,

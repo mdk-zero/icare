@@ -1052,7 +1052,12 @@ export interface FacultyPatient {
   name: string;
   age: number;
   gender: string;
+  /** Denormalized label synced from the linked room; also read by EHR/Vitals. */
   room_number: string;
+  /** FK to the rooms table — the real room link. */
+  room_id?: string | null;
+  /** Joined room, embedded by the patients API for display. */
+  room?: { id: string; name: string; room_number: string } | null;
   diagnosis: string;
   admission_date: string;
   vital_signs?: {
