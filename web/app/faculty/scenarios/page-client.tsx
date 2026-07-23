@@ -28,6 +28,7 @@ import {
   faChevronDown,
   faLayerGroup,
   faPenToSquare,
+  faTrash,
   faTriangleExclamation,
 } from "@fortawesome/free-solid-svg-icons";
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
@@ -35,6 +36,7 @@ import {
   fetchFacultyScenarios,
   createScenario,
   updateScenario,
+  deleteScenario,
   generateAIScenario,
   suggestAIScenario,
   generateScenarioBatch,
@@ -89,7 +91,13 @@ const inputClassName =
 
 const labelClassName = "block text-sm font-bold text-gray-800 mb-2";
 
-type MenuAction = { label: string; icon: IconDefinition; onClick: () => void };
+type MenuAction = {
+  label: string;
+  icon: IconDefinition;
+  onClick: () => void;
+  /** Destructive items read red and sit below a divider. */
+  danger?: boolean;
+};
 
 /**
  * The per-card actions, collapsed behind one trigger. The menu renders in a
@@ -177,11 +185,17 @@ function ActionsMenu({ actions }: { actions: MenuAction[] }) {
                   setOpen(false);
                   action.onClick();
                 }}
-                className="group flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-sm text-gray-700 transition-colors hover:bg-brand-600/5 hover:text-brand-700"
+                className={`group flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-sm transition-colors ${
+                  action.danger
+                    ? "border-t border-hairline text-rose-600 hover:bg-rose-50"
+                    : "text-gray-700 hover:bg-brand-600/5 hover:text-brand-700"
+                }`}
               >
                 <FontAwesomeIcon
                   icon={action.icon}
-                  className="w-4 h-4 text-gray-400 transition-colors group-hover:text-brand-600"
+                  className={`w-4 h-4 transition-colors ${
+                    action.danger ? "text-rose-500" : "text-gray-400 group-hover:text-brand-600"
+                  }`}
                 />
                 {action.label}
               </button>
@@ -254,6 +268,11 @@ export default function FacultyScenariosClient() {
   const [linkPatientId, setLinkPatientId] = useState("");
   const [linkPatientSearchQuery, setLinkPatientSearchQuery] = useState("");
   const [savingPatientLink, setSavingPatientLink] = useState(false);
+
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<SimulationScenario | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const loadStudents = useCallback(async () => {
     const data = await fetchFacultyStudents();
@@ -772,6 +791,52 @@ export default function FacultyScenariosClient() {
     closeLinkPatientModal();
   };
 
+  const handleOpenDeleteModal = (scenario: SimulationScenario) => {
+    setDeleteTarget(scenario);
+    setDeleteError(null);
+    setShowDeleteModal(true);
+  };
+
+  const closeDeleteModal = () => {
+    if (deleting) return;
+    setShowDeleteModal(false);
+    setDeleteTarget(null);
+    setDeleteError(null);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+
+    setDeleting(true);
+    setDeleteError(null);
+    const ok = await deleteScenario(deleteTarget.id);
+
+    if (!ok) {
+      setDeleteError("Could not delete the scenario. Please try again.");
+      setDeleting(false);
+      return;
+    }
+
+    setScenarios((prev) => prev.filter((s) => s.id !== deleteTarget.id));
+    const faculty = getCurrentFacultyUser();
+    if (faculty) {
+      logAuditAction({
+        faculty_id: faculty.id,
+        faculty_name: faculty.name,
+        tab: "scenarios",
+        action: "delete_scenario",
+        details: `Deleted scenario: ${deleteTarget.title}`,
+        target_type: "scenario",
+        target_id: deleteTarget.id,
+        metadata: { scenario_title: deleteTarget.title },
+      });
+    }
+
+    setDeleting(false);
+    setShowDeleteModal(false);
+    setDeleteTarget(null);
+  };
+
   const filteredStudents = students.filter(
     (student) =>
       student.name.toLowerCase().includes(studentSearchQuery.toLowerCase()) ||
@@ -1020,11 +1085,80 @@ export default function FacultyScenariosClient() {
                       icon: faHospitalUser,
                       onClick: () => handleOpenLinkPatientModal(scenario),
                     },
+                    {
+                      label: "Delete",
+                      icon: faTrash,
+                      danger: true,
+                      onClick: () => handleOpenDeleteModal(scenario),
+                    },
                   ]}
                 />
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Delete Scenario Modal */}
+      {showDeleteModal && deleteTarget && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-surface rounded-xl w-full max-w-md overflow-hidden shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-hairline">
+            <div className="p-5">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-lg bg-rose-50 flex items-center justify-center shrink-0">
+                  <FontAwesomeIcon icon={faTrash} className="w-5 h-5 text-rose-600" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-lg font-bold text-gray-900">Delete scenario?</h3>
+                  <p className="text-sm text-gray-500 mt-1">
+                    <span className="font-medium text-gray-700">{deleteTarget.title}</span> will be
+                    permanently removed. This can&apos;t be undone.
+                  </p>
+                  {deleteTarget.student_count > 0 && (
+                    <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-800">
+                      <FontAwesomeIcon
+                        icon={faTriangleExclamation}
+                        className="w-3.5 h-3.5 mt-0.5 shrink-0"
+                      />
+                      <span>
+                        {`Assigned to ${deleteTarget.student_count} student${
+                          deleteTarget.student_count === 1 ? "" : "s"
+                        }. Their assignments will be removed too.`}
+                      </span>
+                    </div>
+                  )}
+                  {deleteError && (
+                    <div className="mt-3 p-2.5 rounded-lg bg-red-50 text-red-700 text-xs border border-red-200">
+                      {deleteError}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="flex justify-end gap-3 mt-5">
+                <button
+                  type="button"
+                  onClick={closeDeleteModal}
+                  disabled={deleting}
+                  className="px-5 py-2.5 bg-surface border border-gray-200 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-all disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmDelete}
+                  disabled={deleting}
+                  className="px-5 py-2.5 bg-rose-600 text-white rounded-lg font-medium hover:bg-rose-700 transition-all disabled:opacity-50 flex items-center gap-2 shadow-[0_2px_6px_rgba(225,29,72,0.25)]"
+                >
+                  {deleting ? (
+                    <FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" />
+                  ) : (
+                    <FontAwesomeIcon icon={faTrash} className="w-4 h-4" />
+                  )}
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
