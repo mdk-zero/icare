@@ -262,12 +262,6 @@ export default function FacultyScenariosClient() {
   const [linkPatientSearchQuery, setLinkPatientSearchQuery] = useState("");
   const [savingPatientLink, setSavingPatientLink] = useState(false);
 
-  const [showBulkLinkModal, setShowBulkLinkModal] = useState(false);
-  const [bulkLinkSelected, setBulkLinkSelected] = useState<Set<string>>(new Set());
-  const [bulkLinkMode, setBulkLinkMode] = useState<"auto" | "manual">("auto");
-  const [bulkLinkAssignments, setBulkLinkAssignments] = useState<Record<string, string>>({});
-  const [bulkLinking, setBulkLinking] = useState(false);
-  const [bulkLinkError, setBulkLinkError] = useState<string | null>(null);
 
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<SimulationScenario | null>(null);
@@ -756,82 +750,6 @@ export default function FacultyScenariosClient() {
     setDeleteTarget(null);
   };
 
-  const openBulkLinkModal = () => {
-    setBulkLinkSelected(new Set());
-    setBulkLinkMode("auto");
-    setBulkLinkAssignments({});
-    setBulkLinkError(null);
-    setShowBulkLinkModal(true);
-    if (patients.length === 0) void loadPatientsForSelector();
-  };
-
-  const toggleBulkLinkScenario = (id: string) => {
-    setBulkLinkSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const handleApplyBulkLink = async () => {
-    const scenarioIds = [...bulkLinkSelected];
-    if (scenarioIds.length === 0) return;
-    setBulkLinkError(null);
-
-    // Resolve a patient per selected scenario: auto = distinct patients cycled
-    // across the selection; manual = whatever was picked per row.
-    const pairs: { scenarioId: string; patientId: string | null }[] = [];
-    if (bulkLinkMode === "auto") {
-      if (patients.length === 0) {
-        setBulkLinkError("No patients available to assign.");
-        return;
-      }
-      const used = new Set<string>();
-      for (const scenarioId of scenarioIds) {
-        const next = patients.find((p) => !used.has(p.id));
-        if (next) used.add(next.id);
-        pairs.push({ scenarioId, patientId: next?.id ?? null });
-      }
-    } else {
-      for (const scenarioId of scenarioIds) {
-        pairs.push({ scenarioId, patientId: bulkLinkAssignments[scenarioId] || null });
-      }
-      if (pairs.every((p) => !p.patientId)) {
-        setBulkLinkError("Pick a patient for at least one selected scenario.");
-        return;
-      }
-    }
-
-    setBulkLinking(true);
-    let linked = 0;
-    for (const { scenarioId, patientId } of pairs) {
-      if (!patientId) continue;
-      const updated = await updateScenario(scenarioId, { patient_id: patientId });
-      if (updated) linked++;
-    }
-
-    if (linked > 0) {
-      await loadScenarios();
-      const faculty = getCurrentFacultyUser();
-      if (faculty) {
-        logAuditAction({
-          faculty_id: faculty.id,
-          faculty_name: faculty.name,
-          tab: "scenarios",
-          action: "bulk_link_scenario_patient",
-          details: `Linked patients to ${linked} scenario${linked === 1 ? "" : "s"}`,
-          target_type: "scenario",
-          target_id: "",
-          metadata: { count: linked, mode: bulkLinkMode },
-        });
-      }
-    }
-
-    setBulkLinking(false);
-    setShowBulkLinkModal(false);
-  };
-
   const filteredStudents = students.filter(
     (student) =>
       student.name.toLowerCase().includes(studentSearchQuery.toLowerCase()) ||
@@ -963,7 +881,7 @@ export default function FacultyScenariosClient() {
               Generate Library
             </button>
             <button
-              onClick={openBulkLinkModal}
+              onClick={() => router.push("/faculty/scenarios/link")}
               className="group flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl border border-gray-300 bg-surface px-4 py-2.5 text-sm font-semibold text-gray-700 transition-all hover:border-brand-300 hover:bg-brand-50"
             >
               <FontAwesomeIcon
@@ -1150,151 +1068,6 @@ export default function FacultyScenariosClient() {
                   Delete
                 </button>
               </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Bulk Link Patients Modal */}
-      {showBulkLinkModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-surface rounded-xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-hairline">
-            <div className="p-4 border-b border-hairline flex items-center justify-between bg-subtle">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-brand-100 rounded-xl flex items-center justify-center">
-                  <FontAwesomeIcon icon={faHospitalUser} className="text-brand-600 w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-gray-900">Link patients to scenarios</h3>
-                  <p className="text-sm text-gray-500">Select scenarios, then assign patients in bulk</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowBulkLinkModal(false)}
-                disabled={bulkLinking}
-                className="p-2 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-40"
-              >
-                <FontAwesomeIcon icon={faTimes} className="w-5 h-5 text-gray-500" />
-              </button>
-            </div>
-
-            <div className="p-4 space-y-3 overflow-y-auto flex-1 custom-scrollbar">
-              {bulkLinkError && (
-                <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm border border-red-200">
-                  {bulkLinkError}
-                </div>
-              )}
-
-              <div className="flex gap-2">
-                {(
-                  [
-                    ["auto", "Auto-assign", "Distinct patients across the selection"],
-                    ["manual", "Pick per scenario", "Choose a patient for each"],
-                  ] as const
-                ).map(([mode, title, hint]) => (
-                  <button
-                    key={mode}
-                    type="button"
-                    onClick={() => setBulkLinkMode(mode)}
-                    className={`flex-1 rounded-xl border px-3 py-2.5 text-left transition-all ${
-                      bulkLinkMode === mode
-                        ? "border-brand-600 bg-brand-50 ring-1 ring-brand-600/20"
-                        : "border-gray-300 bg-surface hover:border-brand-300"
-                    }`}
-                  >
-                    <span className="block text-sm font-semibold text-gray-800">{title}</span>
-                    <span className="block text-xs text-gray-500">{hint}</span>
-                  </button>
-                ))}
-              </div>
-
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">
-                  {bulkLinkSelected.size} of {scenarios.length} selected
-                </span>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setBulkLinkSelected(
-                      bulkLinkSelected.size === scenarios.length
-                        ? new Set()
-                        : new Set(scenarios.map((s) => s.id)),
-                    )
-                  }
-                  className="text-sm font-medium text-brand-600 hover:text-brand-700"
-                >
-                  {bulkLinkSelected.size === scenarios.length ? "Clear all" : "Select all"}
-                </button>
-              </div>
-
-              <div className="border border-gray-200 rounded-xl divide-y divide-gray-100 max-h-[45vh] overflow-y-auto custom-scrollbar">
-                {scenarios.map((scenario) => {
-                  const checked = bulkLinkSelected.has(scenario.id);
-                  return (
-                    <div key={scenario.id} className="px-3 py-2.5">
-                      <label className="flex items-start gap-3 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={() => toggleBulkLinkScenario(scenario.id)}
-                          className="mt-0.5 w-4 h-4 accent-brand-600"
-                        />
-                        <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-medium text-gray-800 truncate">
-                            {scenario.title}
-                          </span>
-                          <span className="block text-xs text-gray-500">
-                            {scenario.patient_name
-                              ? `Currently: ${scenario.patient_name}`
-                              : "No linked patient"}
-                          </span>
-                        </span>
-                      </label>
-                      {checked && bulkLinkMode === "manual" && (
-                        <div className="mt-2 ml-7">
-                          <select
-                            value={bulkLinkAssignments[scenario.id] || ""}
-                            onChange={(e) =>
-                              setBulkLinkAssignments((prev) => ({
-                                ...prev,
-                                [scenario.id]: e.target.value,
-                              }))
-                            }
-                            className={selectClassName + " text-sm"}
-                          >
-                            <option value="">Select a patient…</option>
-                            {patients.map((p) => (
-                              <option key={p.id} value={p.id}>
-                                {p.name} — {p.diagnosis}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="p-4 border-t border-hairline bg-subtle flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setShowBulkLinkModal(false)}
-                disabled={bulkLinking}
-                className="px-5 py-2.5 bg-surface border border-gray-200 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-all disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleApplyBulkLink}
-                disabled={bulkLinking || bulkLinkSelected.size === 0}
-                className="px-5 py-2.5 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 transition-all disabled:opacity-50 flex items-center gap-2 shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
-              >
-                {bulkLinking && <FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" />}
-                Link {bulkLinkSelected.size > 0 ? `(${bulkLinkSelected.size})` : ""}
-              </button>
             </div>
           </div>
         </div>
