@@ -263,6 +263,12 @@ body {
   font-family: var(--font-space-grotesk), ui-sans-serif, system-ui, sans-serif;
 }
 
+/* Editorial display face for the analytics broadsheet. */
+.font-brico {
+  font-family: var(--font-bricolage), var(--font-space-grotesk), ui-sans-serif, sans-serif;
+  font-optical-sizing: auto;
+}
+
 h1,
 h2,
 h3 {
