@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -36,7 +37,6 @@ import {
   createScenario,
   updateScenario,
   deleteScenario,
-  generateAIScenario,
   generateScenarioBatch,
   ScenarioDraft,
   SimulationScenario,
@@ -46,27 +46,14 @@ import {
   logAuditAction,
   getCurrentFacultyUser,
   fetchFacultyPatients,
-  updateFacultyPatient,
   assignPatientRooms,
-  fetchRooms,
   FacultyPatient,
-  Room,
 } from "../../lib/api";
-import { roomStatus } from "../../lib/rooms";
 import { SkeletonInlineStatCard, SkeletonScenarioCard } from "../../components/skeletons";
 import PageHeader from "../../components/PageHeader";
 import StatTile from "../../components/StatTile";
 import Card from "../../components/Card";
 
-const emptyCreateForm = {
-  title: "",
-  description: "",
-  difficulty: "intermediate" as "beginner" | "intermediate" | "advanced",
-  category: "",
-  learningObjectives: "",
-  patientId: "",
-  roomId: "",
-};
 
 const SCENARIO_CATEGORIES = [
   "Cardiac Emergency",
@@ -217,6 +204,7 @@ function ActionsMenu({ actions }: { actions: MenuAction[] }) {
 }
 
 export default function FacultyScenariosClient() {
+  const router = useRouter();
   const [scenarios, setScenarios] = useState<SimulationScenario[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -224,19 +212,8 @@ export default function FacultyScenariosClient() {
   const [difficultyFilter, setDifficultyFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
 
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [createForm, setCreateForm] = useState(emptyCreateForm);
-  const [creating, setCreating] = useState(false);
-
-  // AI-assist inside the unified Create modal: the prompt fills the form fields.
-  const [aiPrompt, setAiPrompt] = useState("");
-  const [generating, setGenerating] = useState(false);
-  const [aiError, setAiError] = useState<string | null>(null);
-  const [aiPatientCase, setAiPatientCase] = useState<Record<string, unknown> | null>(null);
-  const [aiGenerated, setAiGenerated] = useState(false);
   const [patients, setPatients] = useState<FacultyPatient[]>([]);
   const [loadingPatients, setLoadingPatients] = useState(false);
-  const [rooms, setRooms] = useState<Room[]>([]);
 
   const [showBatchModal, setShowBatchModal] = useState(false);
   // The committed numeric count that generation uses, plus the raw field text so
@@ -362,122 +339,6 @@ export default function FacultyScenariosClient() {
     () => patients.find((p) => p.id === linkPatientId) || null,
     [patients, linkPatientId],
   );
-
-  // Live room occupancy + the currently-linked patient, for the Room picker.
-  const occupancyByRoom = useMemo(() => {
-    const tally = new Map<string, number>();
-    for (const p of patients) if (p.room_id) tally.set(p.room_id, (tally.get(p.room_id) ?? 0) + 1);
-    return tally;
-  }, [patients]);
-  const createPatient = useMemo(
-    () => patients.find((p) => p.id === createForm.patientId) ?? null,
-    [patients, createForm.patientId],
-  );
-
-  const handleCreateScenario = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!createForm.title.trim()) return;
-
-    setCreating(true);
-    const newScenario = await createScenario({
-      title: createForm.title,
-      description: createForm.description,
-      difficulty: createForm.difficulty,
-      category: createForm.category || "General",
-      patient_id: createForm.patientId || null,
-      learning_objectives: createForm.learningObjectives
-        .split("\n")
-        .map((o) => o.trim())
-        .filter(Boolean),
-      // Carry the AI draft through when the form was generated.
-      ...(aiGenerated ? { patient_case: aiPatientCase ?? {}, is_ai_generated: true } : {}),
-    });
-
-    if (newScenario) {
-      setScenarios([newScenario, ...scenarios]);
-      const faculty = getCurrentFacultyUser();
-      if (faculty) {
-        logAuditAction({
-          faculty_id: faculty.id,
-          faculty_name: faculty.name,
-          tab: "scenarios",
-          action: aiGenerated ? "ai_generate_scenario" : "create_scenario",
-          details: `${aiGenerated ? "AI generated and saved" : "Created"} scenario: ${newScenario.title}`,
-          target_type: "scenario",
-          target_id: newScenario.id,
-          metadata: { scenario_title: newScenario.title },
-        });
-      }
-    }
-
-    // Apply the chosen room to the linked patient (capacity-enforced by the API).
-    if (
-      newScenario &&
-      createForm.patientId &&
-      createForm.roomId &&
-      createPatient &&
-      createPatient.room_id !== createForm.roomId
-    ) {
-      const res = await updateFacultyPatient(createForm.patientId, {
-        name: createPatient.name,
-        age: createPatient.age,
-        gender: createPatient.gender,
-        diagnosis: createPatient.diagnosis,
-        admission_date: createPatient.admission_date,
-        vital_signs: createPatient.vital_signs,
-        labs: createPatient.labs,
-        room_id: createForm.roomId,
-      });
-      if (res.error) console.error("Room assignment failed:", res.error);
-      else void loadPatientsForSelector();
-    }
-
-    setCreating(false);
-    setShowCreateModal(false);
-    setCreateForm(emptyCreateForm);
-    setAiPrompt("");
-    setAiPatientCase(null);
-    setAiGenerated(false);
-    setAiError(null);
-  };
-
-  const openCreateModal = () => {
-    setCreateForm(emptyCreateForm);
-    setAiPrompt("");
-    setAiError(null);
-    setAiPatientCase(null);
-    setAiGenerated(false);
-    setShowCreateModal(true);
-    // Populate the Patient dropdown (the old Create modal never did this) and
-    // the Room dropdown.
-    if (patients.length === 0) void loadPatientsForSelector();
-    void fetchRooms().then(setRooms);
-  };
-
-  /** Generate with AI and write the result INTO the create form for editing. */
-  const handleGenerateIntoForm = async () => {
-    if (!aiPrompt.trim()) return;
-    setGenerating(true);
-    setAiError(null);
-
-    const preview = await generateAIScenario(aiPrompt, createForm.patientId || undefined);
-
-    if ("error" in preview) {
-      setAiError(preview.error);
-    } else {
-      setCreateForm((prev) => ({
-        ...prev,
-        title: preview.title ?? prev.title,
-        description: preview.description ?? prev.description,
-        difficulty: (preview.difficulty as typeof prev.difficulty) ?? prev.difficulty,
-        category: preview.category ?? prev.category,
-        learningObjectives: (preview.learning_objectives ?? []).join("\n"),
-      }));
-      setAiPatientCase((preview.patient_case as Record<string, unknown>) ?? null);
-      setAiGenerated(true);
-    }
-    setGenerating(false);
-  };
 
   const openBatchModal = () => {
     setBatchDrafts(null);
@@ -1085,7 +946,7 @@ export default function FacultyScenariosClient() {
           <div className="flex justify-end gap-3">
             {/* One entry: the manual form with an AI-generate assist inside it. */}
             <button
-              onClick={openCreateModal}
+              onClick={() => router.push("/faculty/scenarios/new")}
               className="flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_2px_8px_-1px_rgb(27_107_123_/_0.35)] transition-all hover:bg-brand-700 hover:shadow-[0_4px_14px_-2px_rgb(27_107_123_/_0.45)]"
             >
               <FontAwesomeIcon icon={faPlus} className="w-4 h-4" />
@@ -1435,235 +1296,6 @@ export default function FacultyScenariosClient() {
                 Link {bulkLinkSelected.size > 0 ? `(${bulkLinkSelected.size})` : ""}
               </button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Create Scenario Modal */}
-      {showCreateModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-surface rounded-xl w-full max-w-lg max-h-[85vh] overflow-hidden flex flex-col shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-hairline">
-            <div className="p-4 border-b border-hairline flex items-center justify-between bg-subtle">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-brand-600/10 rounded-lg flex items-center justify-center">
-                  <FontAwesomeIcon icon={faPlus} className="text-brand-600 w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-gray-900">Create Scenario</h3>
-                  <p className="text-sm text-gray-500">Build a custom clinical case</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowCreateModal(false)}
-                className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
-              >
-                <FontAwesomeIcon icon={faTimes} className="w-5 h-5 text-gray-500" />
-              </button>
-            </div>
-            <form onSubmit={handleCreateScenario} className="p-4 space-y-3 overflow-y-auto flex-1">
-              {/* AI assist: a prompt fills the fields below, which stay editable. */}
-              <div className="rounded-xl border border-brand-200 bg-brand-50/40 p-3 space-y-2">
-                <div className="flex items-center gap-2">
-                  <FontAwesomeIcon icon={faRobot} className="w-4 h-4 text-brand-600" />
-                  <span className="text-sm font-semibold text-gray-800">Generate with AI</span>
-                  {aiGenerated && (
-                    <span className="ml-auto text-xs font-medium text-brand-700">
-                      Draft filled in — edit below
-                    </span>
-                  )}
-                </div>
-                <p className="text-xs text-gray-500">
-                  Describe the case; AI fills the fields below (grounded on the linked patient, if
-                  set). Everything stays editable before you save.
-                </p>
-                <textarea
-                  value={aiPrompt}
-                  onChange={(e) => setAiPrompt(e.target.value)}
-                  placeholder="e.g. Acute MI in a 68-year-old with chest pain and diaphoresis"
-                  rows={2}
-                  className={inputClassName + " resize-none"}
-                />
-                {aiError && <p className="text-xs text-red-600">{aiError}</p>}
-                <button
-                  type="button"
-                  onClick={handleGenerateIntoForm}
-                  disabled={generating || !aiPrompt.trim()}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-brand-950 text-white text-sm font-semibold rounded-lg transition-all hover:bg-brand-900 disabled:opacity-50"
-                >
-                  <FontAwesomeIcon
-                    icon={generating ? faSpinner : faRobot}
-                    spin={generating}
-                    className="w-4 h-4 text-[#5eead4]"
-                  />
-                  {generating ? "Generating…" : "Generate"}
-                </button>
-              </div>
-
-              <div>
-                <label className={labelClassName}>Title</label>
-                <input
-                  required
-                  type="text"
-                  value={createForm.title}
-                  onChange={(e) => setCreateForm({ ...createForm, title: e.target.value })}
-                  placeholder="e.g. Acute MI Response"
-                  className={inputClassName}
-                />
-              </div>
-              <div>
-                <label className={labelClassName}>Description</label>
-                <textarea
-                  value={createForm.description}
-                  onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })}
-                  placeholder="Brief overview of the scenario..."
-                  rows={3}
-                  className={inputClassName + " resize-none"}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className={labelClassName}>Difficulty</label>
-                  <div className="relative">
-                    <select
-                      value={createForm.difficulty}
-                      onChange={(e) =>
-                        setCreateForm({
-                          ...createForm,
-                          difficulty: e.target.value as typeof createForm.difficulty,
-                        })
-                      }
-                      className={selectClassName + " pr-10"}
-                    >
-                      <option value="beginner">Beginner</option>
-                      <option value="intermediate">Intermediate</option>
-                      <option value="advanced">Advanced</option>
-                    </select>
-                    <FontAwesomeIcon
-                      icon={faChevronDown}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className={labelClassName}>Category</label>
-                  <div className="relative">
-                    <select
-                      value={createForm.category}
-                      onChange={(e) => setCreateForm({ ...createForm, category: e.target.value })}
-                      className={selectClassName + " pr-10"}
-                    >
-                      <option value="">Select category</option>
-                      <option value="Cardiac Emergency">Cardiac Emergency</option>
-                      <option value="Respiratory Emergency">Respiratory Emergency</option>
-                      <option value="Neurological Emergency">Neurological Emergency</option>
-                      <option value="Trauma">Trauma</option>
-                      <option value="Medical-Surgical">Medical-Surgical</option>
-                      <option value="Patient Education">Patient Education</option>
-                      <option value="Infection Management">Infection Management</option>
-                      <option value="Critical Care">Critical Care</option>
-                      <option value="Medication Safety">Medication Safety</option>
-                      <option value="General">General</option>
-                    </select>
-                    <FontAwesomeIcon
-                      icon={faChevronDown}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none"
-                    />
-                  </div>
-                </div>
-              </div>
-              <div>
-                <label className={labelClassName}>Patient</label>
-                <div className="relative">
-                  <select
-                    value={createForm.patientId}
-                    onChange={(e) => {
-                      const patientId = e.target.value;
-                      // Default the room to wherever the picked patient already is.
-                      const picked = patients.find((p) => p.id === patientId);
-                      setCreateForm({ ...createForm, patientId, roomId: picked?.room_id ?? "" });
-                    }}
-                    className={selectClassName + " pr-10"}
-                  >
-                    <option value="">No linked patient</option>
-                    {patients.map((patient) => (
-                      <option key={patient.id} value={patient.id}>
-                        {patient.name} — {patient.diagnosis}
-                      </option>
-                    ))}
-                  </select>
-                  <FontAwesomeIcon
-                    icon={faChevronDown}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none"
-                  />
-                </div>
-                <p className="text-xs text-gray-500 mt-1.5">
-                  Students only see patients linked to their assigned scenarios — link one so they
-                  can chart vitals and EHR records for this case.
-                </p>
-              </div>
-              <div>
-                <label className={labelClassName}>Room</label>
-                <div className="relative">
-                  <select
-                    value={createForm.roomId}
-                    onChange={(e) => setCreateForm({ ...createForm, roomId: e.target.value })}
-                    disabled={!createForm.patientId}
-                    className={selectClassName + " pr-10 disabled:opacity-60"}
-                  >
-                    <option value="">No room assigned</option>
-                    {rooms.map((room) => {
-                      const occ = occupancyByRoom.get(room.id) ?? 0;
-                      const isCurrent = createPatient?.room_id === room.id;
-                      const full = roomStatus(occ, room.capacity) === "full";
-                      return (
-                        <option key={room.id} value={room.id} disabled={full && !isCurrent}>
-                          {`${room.name} · Room ${room.room_number} (${occ}/${room.capacity})${full ? " — Full" : ""}`}
-                        </option>
-                      );
-                    })}
-                  </select>
-                  <FontAwesomeIcon
-                    icon={faChevronDown}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none"
-                  />
-                </div>
-                <p className="text-xs text-gray-500 mt-1.5">
-                  {createForm.patientId
-                    ? "Assigns the linked patient to a room. Full rooms can't be selected."
-                    : "Pick a patient first to set their room."}
-                </p>
-              </div>
-              <div>
-                <label className={labelClassName}>Learning Objectives</label>
-                <textarea
-                  value={createForm.learningObjectives}
-                  onChange={(e) =>
-                    setCreateForm({ ...createForm, learningObjectives: e.target.value })
-                  }
-                  placeholder="One objective per line&#10;e.g. Recognize signs of acute MI"
-                  rows={4}
-                  className={inputClassName + " resize-none"}
-                />
-                <p className="text-xs text-gray-500 mt-1.5">Enter one objective per line.</p>
-              </div>
-              <div className="flex justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowCreateModal(false)}
-                  className="px-5 py-2.5 bg-surface border border-gray-200 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-all"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={creating || !createForm.title.trim()}
-                  className="px-5 py-2.5 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 transition-all disabled:opacity-50 flex items-center gap-2 shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
-                >
-                  {creating && <FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" />}
-                  Create Scenario
-                </button>
-              </div>
-            </form>
           </div>
         </div>
       )}
