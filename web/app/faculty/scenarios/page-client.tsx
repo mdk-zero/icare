@@ -20,7 +20,6 @@ import {
   faGraduationCap,
   faHospitalUser,
   faNotesMedical,
-  faBolt,
   faExclamationTriangle,
   faUsers,
   faCheck,
@@ -38,7 +37,6 @@ import {
   updateScenario,
   deleteScenario,
   generateAIScenario,
-  suggestAIScenario,
   generateScenarioBatch,
   ScenarioDraft,
   SimulationScenario,
@@ -225,17 +223,12 @@ export default function FacultyScenariosClient() {
   const [createForm, setCreateForm] = useState(emptyCreateForm);
   const [creating, setCreating] = useState(false);
 
-  const [showAIModal, setShowAIModal] = useState(false);
+  // AI-assist inside the unified Create modal: the prompt fills the form fields.
   const [aiPrompt, setAiPrompt] = useState("");
-  const [selectedPatientId, setSelectedPatientId] = useState("");
-  const [patientSearchQuery, setPatientSearchQuery] = useState("");
   const [generating, setGenerating] = useState(false);
-  const [aiPreview, setAiPreview] = useState<Partial<SimulationScenario> | null>(null);
-  const [savingAIPreview, setSavingAIPreview] = useState(false);
-  const [suggestDifficulty, setSuggestDifficulty] = useState("");
-  const [suggestCategory, setSuggestCategory] = useState("");
-  const [suggesting, setSuggesting] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
+  const [aiPatientCase, setAiPatientCase] = useState<Record<string, unknown> | null>(null);
+  const [aiGenerated, setAiGenerated] = useState(false);
   const [patients, setPatients] = useState<FacultyPatient[]>([]);
   const [loadingPatients, setLoadingPatients] = useState(false);
 
@@ -347,21 +340,6 @@ export default function FacultyScenariosClient() {
     });
   }, [scenarios, searchQuery, difficultyFilter, categoryFilter]);
 
-  const filteredPatients = useMemo(() => {
-    const q = patientSearchQuery.toLowerCase();
-    return patients.filter(
-      (p) =>
-        p.name.toLowerCase().includes(q) ||
-        p.diagnosis.toLowerCase().includes(q) ||
-        (p.mimic_id || "").toLowerCase().includes(q) ||
-        p.room_number.toLowerCase().includes(q),
-    );
-  }, [patients, patientSearchQuery]);
-
-  const selectedPatient = useMemo(
-    () => patients.find((p) => p.id === selectedPatientId) || null,
-    [patients, selectedPatientId],
-  );
 
   const linkModalFilteredPatients = useMemo(() => {
     const q = linkPatientSearchQuery.toLowerCase();
@@ -394,6 +372,8 @@ export default function FacultyScenariosClient() {
         .split("\n")
         .map((o) => o.trim())
         .filter(Boolean),
+      // Carry the AI draft through when the form was generated.
+      ...(aiGenerated ? { patient_case: aiPatientCase ?? {}, is_ai_generated: true } : {}),
     });
 
     if (newScenario) {
@@ -404,8 +384,8 @@ export default function FacultyScenariosClient() {
           faculty_id: faculty.id,
           faculty_name: faculty.name,
           tab: "scenarios",
-          action: "create_scenario",
-          details: `Created scenario: ${newScenario.title}`,
+          action: aiGenerated ? "ai_generate_scenario" : "create_scenario",
+          details: `${aiGenerated ? "AI generated and saved" : "Created"} scenario: ${newScenario.title}`,
           target_type: "scenario",
           target_id: newScenario.id,
           metadata: { scenario_title: newScenario.title },
@@ -415,109 +395,46 @@ export default function FacultyScenariosClient() {
     setCreating(false);
     setShowCreateModal(false);
     setCreateForm(emptyCreateForm);
+    setAiPrompt("");
+    setAiPatientCase(null);
+    setAiGenerated(false);
+    setAiError(null);
   };
 
-  const handleGenerateAI = async () => {
+  const openCreateModal = () => {
+    setCreateForm(emptyCreateForm);
+    setAiPrompt("");
+    setAiError(null);
+    setAiPatientCase(null);
+    setAiGenerated(false);
+    setShowCreateModal(true);
+    // Populate the Patient dropdown (the old Create modal never did this).
+    if (patients.length === 0) void loadPatientsForSelector();
+  };
+
+  /** Generate with AI and write the result INTO the create form for editing. */
+  const handleGenerateIntoForm = async () => {
     if (!aiPrompt.trim()) return;
     setGenerating(true);
-    setAiPreview(null);
     setAiError(null);
 
-    const preview = await generateAIScenario(aiPrompt, selectedPatientId || undefined);
+    const preview = await generateAIScenario(aiPrompt, createForm.patientId || undefined);
 
     if ("error" in preview) {
       setAiError(preview.error);
     } else {
-      setAiPreview(preview);
+      setCreateForm((prev) => ({
+        ...prev,
+        title: preview.title ?? prev.title,
+        description: preview.description ?? prev.description,
+        difficulty: (preview.difficulty as typeof prev.difficulty) ?? prev.difficulty,
+        category: preview.category ?? prev.category,
+        learningObjectives: (preview.learning_objectives ?? []).join("\n"),
+      }));
+      setAiPatientCase((preview.patient_case as Record<string, unknown>) ?? null);
+      setAiGenerated(true);
     }
     setGenerating(false);
-  };
-
-  const handleSuggestAI = async () => {
-    setSuggesting(true);
-    setAiPreview(null);
-    setAiError(null);
-
-    const result = await suggestAIScenario(
-      suggestDifficulty || undefined,
-      suggestCategory || undefined,
-      selectedPatientId || undefined,
-    );
-
-    if ("error" in result) {
-      setAiError(result.error);
-    } else {
-      setAiPrompt(result.prompt);
-      setSelectedPatientId(result.patient_id);
-      setAiPreview(result.scenario);
-    }
-    setSuggesting(false);
-  };
-
-  const handleSaveAIPreview = async () => {
-    if (!aiPreview) return;
-    setSavingAIPreview(true);
-
-    const newScenario = await createScenario({
-      title: aiPreview.title,
-      description: aiPreview.description,
-      difficulty: aiPreview.difficulty,
-      category: aiPreview.category,
-      patient_case: aiPreview.patient_case,
-      patient_id: selectedPatientId || null,
-      learning_objectives: aiPreview.learning_objectives,
-      is_ai_generated: true,
-    });
-
-    if (newScenario) {
-      setScenarios([newScenario, ...scenarios]);
-      const faculty = getCurrentFacultyUser();
-      if (faculty) {
-        logAuditAction({
-          faculty_id: faculty.id,
-          faculty_name: faculty.name,
-          tab: "scenarios",
-          action: "ai_generate_scenario",
-          details: `AI generated and saved scenario: ${newScenario.title}`,
-          target_type: "scenario",
-          target_id: newScenario.id,
-          metadata: {
-            scenario_title: newScenario.title,
-            patient_id: selectedPatientId || null,
-          },
-        });
-      }
-    }
-
-    setSavingAIPreview(false);
-    setShowAIModal(false);
-    setAiPreview(null);
-    setAiPrompt("");
-    setSelectedPatientId("");
-    setPatientSearchQuery("");
-  };
-
-  const closeAIModal = () => {
-    setShowAIModal(false);
-    setAiPreview(null);
-    setAiPrompt("");
-    setSelectedPatientId("");
-    setPatientSearchQuery("");
-    setSuggestDifficulty("");
-    setSuggestCategory("");
-    setAiError(null);
-  };
-
-  const openAIModal = () => {
-    setAiPrompt("");
-    setSelectedPatientId("");
-    setPatientSearchQuery("");
-    setAiPreview(null);
-    setSuggestDifficulty("");
-    setSuggestCategory("");
-    setAiError(null);
-    setShowAIModal(true);
-    void loadPatientsForSelector();
   };
 
   const openBatchModal = () => {
@@ -1124,25 +1041,13 @@ export default function FacultyScenariosClient() {
             />
           </div>
           <div className="flex justify-end gap-3">
-            {/* Primary: the manual path. */}
+            {/* One entry: the manual form with an AI-generate assist inside it. */}
             <button
-              onClick={() => setShowCreateModal(true)}
+              onClick={openCreateModal}
               className="flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_2px_8px_-1px_rgb(27_107_123_/_0.35)] transition-all hover:bg-brand-700 hover:shadow-[0_4px_14px_-2px_rgb(27_107_123_/_0.45)]"
             >
               <FontAwesomeIcon icon={faPlus} className="w-4 h-4" />
-              Create
-            </button>
-            {/* AI actions wear the sidebar's dark panel + mint accent, so "the
-                machine did this" is legible at a glance without leaving the palette. */}
-            <button
-              onClick={openAIModal}
-              className="group flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl bg-brand-950 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_4px_14px_-3px_rgb(11_61_61_/_0.5)] ring-1 ring-white/10 transition-all hover:bg-brand-900 hover:shadow-[0_6px_18px_-3px_rgb(11_61_61_/_0.6)]"
-            >
-              <FontAwesomeIcon
-                icon={faRobot}
-                className="w-4 h-4 text-[#5eead4] transition-transform group-hover:scale-110"
-              />
-              AI Generate
+              Create Scenario
             </button>
             <button
               onClick={openBatchModal}
@@ -1514,6 +1419,44 @@ export default function FacultyScenariosClient() {
               </button>
             </div>
             <form onSubmit={handleCreateScenario} className="p-4 space-y-3 overflow-y-auto flex-1">
+              {/* AI assist: a prompt fills the fields below, which stay editable. */}
+              <div className="rounded-xl border border-brand-200 bg-brand-50/40 p-3 space-y-2">
+                <div className="flex items-center gap-2">
+                  <FontAwesomeIcon icon={faRobot} className="w-4 h-4 text-brand-600" />
+                  <span className="text-sm font-semibold text-gray-800">Generate with AI</span>
+                  {aiGenerated && (
+                    <span className="ml-auto text-xs font-medium text-brand-700">
+                      Draft filled in — edit below
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-gray-500">
+                  Describe the case; AI fills the fields below (grounded on the linked patient, if
+                  set). Everything stays editable before you save.
+                </p>
+                <textarea
+                  value={aiPrompt}
+                  onChange={(e) => setAiPrompt(e.target.value)}
+                  placeholder="e.g. Acute MI in a 68-year-old with chest pain and diaphoresis"
+                  rows={2}
+                  className={inputClassName + " resize-none"}
+                />
+                {aiError && <p className="text-xs text-red-600">{aiError}</p>}
+                <button
+                  type="button"
+                  onClick={handleGenerateIntoForm}
+                  disabled={generating || !aiPrompt.trim()}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-brand-950 text-white text-sm font-semibold rounded-lg transition-all hover:bg-brand-900 disabled:opacity-50"
+                >
+                  <FontAwesomeIcon
+                    icon={generating ? faSpinner : faRobot}
+                    spin={generating}
+                    className="w-4 h-4 text-[#5eead4]"
+                  />
+                  {generating ? "Generating…" : "Generate"}
+                </button>
+              </div>
+
               <div>
                 <label className={labelClassName}>Title</label>
                 <input
@@ -2128,363 +2071,6 @@ export default function FacultyScenariosClient() {
                     ) : (
                       `Save ${batchSelected.length} Scenario${batchSelected.length === 1 ? "" : "s"}`
                     )}
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* AI Generate Modal */}
-      {showAIModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-surface rounded-xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-hairline">
-            <div className="p-4 border-b border-hairline flex items-center justify-between bg-subtle">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-brand-100 rounded-xl flex items-center justify-center">
-                  <FontAwesomeIcon icon={faRobot} className="text-brand-600 w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-gray-900">AI Scenario Generator</h3>
-                  <p className="text-sm text-gray-500">Generate a case from a prompt or patient</p>
-                </div>
-              </div>
-              <button
-                onClick={closeAIModal}
-                className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
-              >
-                <FontAwesomeIcon icon={faTimes} className="w-5 h-5 text-gray-500" />
-              </button>
-            </div>
-            <div className="p-4 space-y-3 overflow-y-auto flex-1">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className={labelClassName}>Suggested Difficulty</label>
-                  <div className="relative">
-                    <select
-                      value={suggestDifficulty}
-                      onChange={(e) => setSuggestDifficulty(e.target.value)}
-                      className={selectClassName + " pr-10"}
-                    >
-                      <option value="">Any difficulty</option>
-                      <option value="beginner">Beginner</option>
-                      <option value="intermediate">Intermediate</option>
-                      <option value="advanced">Advanced</option>
-                    </select>
-                    <FontAwesomeIcon
-                      icon={faChevronDown}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className={labelClassName}>Suggested Category</label>
-                  <div className="relative">
-                    <select
-                      value={suggestCategory}
-                      onChange={(e) => setSuggestCategory(e.target.value)}
-                      className={selectClassName + " pr-10"}
-                    >
-                      <option value="">Any category</option>
-                      <option value="Cardiac Emergency">Cardiac Emergency</option>
-                      <option value="Respiratory Emergency">Respiratory Emergency</option>
-                      <option value="Neurological Emergency">Neurological Emergency</option>
-                      <option value="Trauma">Trauma</option>
-                      <option value="Medical-Surgical">Medical-Surgical</option>
-                      <option value="Patient Education">Patient Education</option>
-                      <option value="Infection Management">Infection Management</option>
-                      <option value="Critical Care">Critical Care</option>
-                      <option value="Medication Safety">Medication Safety</option>
-                      <option value="General">General</option>
-                    </select>
-                    <FontAwesomeIcon
-                      icon={faChevronDown}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className={labelClassName}>Prompt</label>
-                  <button
-                    type="button"
-                    onClick={handleSuggestAI}
-                    disabled={suggesting || patients.length === 0}
-                    className="text-sm flex items-center gap-1.5 px-3 py-1.5 bg-brand-50 text-brand-700 hover:bg-brand-100 rounded-lg font-medium transition-colors disabled:opacity-50"
-                  >
-                    {suggesting && (
-                      <FontAwesomeIcon icon={faSpinner} spin className="w-3.5 h-3.5" />
-                    )}
-                    <FontAwesomeIcon icon={faRobot} className="w-3.5 h-3.5" />
-                    {suggesting ? "Suggesting..." : "Suggest Scenario"}
-                  </button>
-                </div>
-                <textarea
-                  value={aiPrompt}
-                  onChange={(e) => setAiPrompt(e.target.value)}
-                  placeholder="Describe the clinical scenario you want to generate, or click Suggest Scenario to auto-fill..."
-                  rows={4}
-                  className={inputClassName + " resize-none"}
-                />
-                <p className="text-xs text-gray-500 mt-1.5">
-                  Suggest uses one AI request and picks a patient with abnormal labs when none is
-                  selected.
-                </p>
-                {aiError && (
-                  <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-xl flex items-start gap-2.5">
-                    <FontAwesomeIcon
-                      icon={faExclamationTriangle}
-                      className="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0"
-                    />
-                    <p className="text-sm text-red-700">{aiError}</p>
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <label className={labelClassName}>Base on MIMIC-IV Patient</label>
-                <p className="text-sm text-gray-500 mb-3">
-                  Click a row to select a patient, or choose to generate from the prompt only.
-                </p>
-
-                {/* Prompt-only option */}
-                <button
-                  onClick={() => setSelectedPatientId("")}
-                  className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-all mb-3 ${
-                    selectedPatientId === ""
-                      ? "border-brand-600 bg-brand-600/5"
-                      : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
-                  }`}
-                >
-                  <span className="text-sm font-medium text-gray-700">
-                    Generate from prompt only
-                  </span>
-                  {selectedPatientId === "" && (
-                    <div className="w-6 h-6 bg-brand-600 rounded-full flex items-center justify-center">
-                      <FontAwesomeIcon icon={faCheck} className="w-3.5 h-3.5 text-white" />
-                    </div>
-                  )}
-                </button>
-
-                {/* Selected patient badge */}
-                {selectedPatient && (
-                  <div className="mb-3 p-3 bg-brand-50 border border-brand-200 rounded-xl flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 bg-brand-100 rounded-full flex items-center justify-center text-brand-600">
-                        <FontAwesomeIcon icon={faHospitalUser} className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold text-gray-800">
-                          {selectedPatient.name}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          {selectedPatient.diagnosis} · {selectedPatient.mimic_id}
-                        </p>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => setSelectedPatientId("")}
-                      className="text-xs text-brand-700 hover:text-brand-900 font-medium"
-                    >
-                      Clear
-                    </button>
-                  </div>
-                )}
-
-                {/* Searchable patient table */}
-                <div className="border border-gray-200 rounded-xl overflow-hidden">
-                  <div className="p-3 border-b border-gray-200 bg-subtle">
-                    <div className="relative">
-                      <FontAwesomeIcon
-                        icon={faSearch}
-                        className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500"
-                      />
-                      <input
-                        type="text"
-                        value={patientSearchQuery}
-                        onChange={(e) => setPatientSearchQuery(e.target.value)}
-                        placeholder="Search patients by name, diagnosis, MIMIC ID, or room..."
-                        className={inputClassName + " pl-10"}
-                      />
-                    </div>
-                  </div>
-                  <div className="max-h-[220px] overflow-y-auto custom-scrollbar">
-                    {loadingPatients ? (
-                      <div className="p-8 text-center">
-                        <FontAwesomeIcon icon={faSpinner} spin className="w-6 h-6 text-brand-600" />
-                        <p className="text-sm text-gray-500 mt-2">Loading patients...</p>
-                      </div>
-                    ) : filteredPatients.length === 0 ? (
-                      <div className="p-6 text-center text-gray-500 text-sm">
-                        {patientSearchQuery
-                          ? "No patients match your search."
-                          : "No MIMIC-IV patients available."}
-                      </div>
-                    ) : (
-                      <table className="w-full">
-                        <thead className="bg-gray-50 sticky top-0">
-                          <tr>
-                            <th className="text-left py-2.5 px-4 text-xs font-semibold text-gray-600">
-                              Patient
-                            </th>
-                            <th className="text-left py-2.5 px-4 text-xs font-semibold text-gray-600">
-                              Diagnosis
-                            </th>
-                            <th className="text-left py-2.5 px-4 text-xs font-semibold text-gray-600">
-                              Room
-                            </th>
-                            <th className="text-left py-2.5 px-4 text-xs font-semibold text-gray-600">
-                              MIMIC ID
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
-                          {filteredPatients.map((patient) => (
-                            <tr
-                              key={patient.id}
-                              onClick={() => setSelectedPatientId(patient.id)}
-                              className={`cursor-pointer transition-colors ${
-                                selectedPatientId === patient.id
-                                  ? "bg-brand-600/5 hover:bg-brand-600/10"
-                                  : "hover:bg-gray-50"
-                              }`}
-                            >
-                              <td className="py-2.5 px-4">
-                                <div className="flex items-center gap-2">
-                                  <div className="w-7 h-7 bg-brand-600/10 rounded-full flex items-center justify-center text-brand-600 text-xs font-semibold">
-                                    {patient.name.charAt(0)}
-                                  </div>
-                                  <div>
-                                    <p className="text-sm font-medium text-gray-800">
-                                      {patient.name}
-                                    </p>
-                                    <p className="text-xs text-gray-500">
-                                      {patient.age}yo {patient.gender}
-                                    </p>
-                                  </div>
-                                </div>
-                              </td>
-                              <td className="py-2.5 px-4 text-sm text-gray-600">
-                                {patient.diagnosis}
-                              </td>
-                              <td className="py-2.5 px-4 text-sm text-gray-600">
-                                {patient.room_number}
-                              </td>
-                              <td className="py-2.5 px-4">
-                                <span className="text-xs font-mono text-gray-500">
-                                  {patient.mimic_id}
-                                </span>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* AI Preview */}
-              {aiPreview && (
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2 pb-2 border-b border-hairline">
-                    <FontAwesomeIcon icon={faRobot} className="text-brand-600" />
-                    <h4 className="font-bold text-gray-900">Generated Preview</h4>
-                  </div>
-                  <div className="space-y-3">
-                    <div>
-                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                        Title
-                      </p>
-                      <p className="text-sm font-medium text-gray-900">{aiPreview.title}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                        Description
-                      </p>
-                      <p className="text-sm text-gray-700">{aiPreview.description}</p>
-                    </div>
-                    <div className="flex gap-4">
-                      <div>
-                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                          Difficulty
-                        </p>
-                        <span
-                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border ${getDifficultyColor(aiPreview.difficulty || "intermediate")}`}
-                        >
-                          {aiPreview.difficulty}
-                        </span>
-                      </div>
-                      <div>
-                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                          Category
-                        </p>
-                        <p className="text-sm text-gray-700">{aiPreview.category}</p>
-                      </div>
-                    </div>
-                    {Array.isArray(aiPreview.learning_objectives) &&
-                      aiPreview.learning_objectives.length > 0 && (
-                        <div>
-                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                            Learning Objectives
-                          </p>
-                          <ul className="list-disc list-inside text-sm text-gray-700">
-                            {aiPreview.learning_objectives.map((obj, i) => (
-                              <li key={i}>{obj}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                  </div>
-                </div>
-              )}
-            </div>
-            <div className="p-4 border-t border-hairline bg-subtle flex justify-end gap-3">
-              {!aiPreview ? (
-                <>
-                  <button
-                    onClick={closeAIModal}
-                    className="px-5 py-2.5 bg-surface border border-gray-200 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-all"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleGenerateAI}
-                    disabled={generating || !aiPrompt.trim()}
-                    className="px-5 py-2.5 bg-gradient-to-r from-brand-600 to-brand-800 text-white rounded-lg font-medium hover:from-brand-700 hover:to-brand-900 transition-all disabled:opacity-50 flex items-center gap-2 shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
-                  >
-                    {generating && <FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" />}
-                    <FontAwesomeIcon icon={faBolt} className="w-4 h-4" />
-                    {generating ? "Generating..." : "Generate Scenario"}
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button
-                    onClick={() => setAiPreview(null)}
-                    className="px-5 py-2.5 bg-surface border border-gray-200 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-all"
-                  >
-                    Regenerate
-                  </button>
-                  <button
-                    onClick={closeAIModal}
-                    className="px-5 py-2.5 bg-surface border border-gray-200 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-all"
-                  >
-                    Discard
-                  </button>
-                  <button
-                    onClick={handleSaveAIPreview}
-                    disabled={savingAIPreview}
-                    className="px-5 py-2.5 bg-gradient-to-r from-brand-600 to-brand-800 text-white rounded-xl font-medium hover:from-brand-700 hover:to-brand-900 transition-all disabled:opacity-50 flex items-center gap-2"
-                  >
-                    {savingAIPreview && (
-                      <FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" />
-                    )}
-                    <FontAwesomeIcon icon={faPlus} className="w-4 h-4" />
-                    {savingAIPreview ? "Saving..." : "Save Scenario"}
                   </button>
                 </>
               )}
