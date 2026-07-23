@@ -26,6 +26,23 @@ export function SkeletonInlineStatCard() {
   );
 }
 
+/** Mirrors StatTile: left accent bar, h-10 icon, value + label row, caption. */
+export function SkeletonStatTile() {
+  return (
+    <div className="relative flex items-center gap-3.5 overflow-hidden rounded-xl border border-hairline bg-surface p-3.5 pl-4 shadow-tile animate-pulse">
+      <span className="absolute left-0 top-0 h-full w-[3px] bg-gray-100" aria-hidden />
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gray-100" />
+      <span className="min-w-0 flex-1 space-y-2">
+        <span className="flex items-baseline gap-2">
+          <span className="block h-6 w-10 rounded bg-gray-100" />
+          <span className="block h-3 w-20 rounded bg-gray-100" />
+        </span>
+        <span className="block h-2.5 w-24 rounded bg-gray-100" />
+      </span>
+    </div>
+  );
+}
+
 export function SkeletonTable({ rows = 5, cols = 4 }: { rows?: number; cols?: number }) {
   const widths = ["w-32", "w-48", "w-24", "w-28", "w-20"];
   return (
@@ -77,6 +94,35 @@ export function SkeletonSectionGrid({ cards = 6 }: { cards?: number }) {
             <div className="h-5 w-20 bg-gray-100 rounded-full" />
             <div className="h-5 w-16 bg-gray-100 rounded-full" />
             <div className="h-5 w-24 bg-gray-100 rounded-full" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Mirrors the faculty patients care-unit card: icon, title + count line, a
+ *  chevron, and a single status pill on the footer. */
+export function SkeletonUnitGrid({ cards = 6 }: { cards?: number }) {
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      {Array.from({ length: cards }).map((_, i) => (
+        <div
+          key={i}
+          className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04)] p-5 animate-pulse"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-11 h-11 bg-gray-100 rounded-xl shrink-0" />
+              <div className="space-y-2 min-w-0">
+                <div className="h-4 w-24 bg-gray-100 rounded" />
+                <div className="h-3 w-28 bg-gray-100 rounded" />
+              </div>
+            </div>
+            <div className="w-3.5 h-3.5 bg-gray-100 rounded mt-1" />
+          </div>
+          <div className="mt-4 pt-4 border-t border-gray-100">
+            <div className="h-6 w-24 bg-gray-100 rounded-full" />
           </div>
         </div>
       ))}

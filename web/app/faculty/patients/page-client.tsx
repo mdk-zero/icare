@@ -27,7 +27,7 @@ import {
   deleteFacultyPatient,
   FacultyPatient,
 } from "../../lib/api";
-import { SkeletonTable } from "../../components/skeletons";
+import { SkeletonUnitGrid, SkeletonStatTile } from "../../components/skeletons";
 import PageHeader from "../../components/PageHeader";
 import StatTile from "../../components/StatTile";
 
@@ -648,6 +648,15 @@ export default function FacultyPatientsClient() {
       />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+        {loading ? (
+          <>
+            <SkeletonStatTile />
+            <SkeletonStatTile />
+            <SkeletonStatTile />
+            <SkeletonStatTile />
+          </>
+        ) : (
+          <>
         <StatTile
           icon={<FontAwesomeIcon icon={faUsers} className="w-5 h-5" />}
           value={patients.length}
@@ -694,12 +703,14 @@ export default function FacultyPatientsClient() {
           onClick={() => toggleFilter("labs", "has")}
           className={filters.labs === "has" ? "ring-2 ring-purple-500/40" : ""}
         />
+          </>
+        )}
       </div>
 
       {/* Top level: search rooms/units and filter the population, all on one
           wrapping row. The patient search lives inside a unit (below), so it is
-          not shown here. */}
-      {!selectedGroup && (
+          not shown here. Hidden while the roster loads, alongside the skeleton. */}
+      {!loading && !selectedGroup && (
         <div className="flex flex-wrap items-center gap-2 mb-4">
           <div className="relative w-full sm:w-64">
             <FontAwesomeIcon
@@ -758,7 +769,7 @@ export default function FacultyPatientsClient() {
       )}
 
       {loading ? (
-        <SkeletonTable rows={5} cols={5} />
+        <SkeletonUnitGrid />
       ) : patients.length === 0 ? (
         <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] p-12 text-center">
           <FontAwesomeIcon icon={faUsers} className="w-12 h-12 text-gray-300 mx-auto mb-4" />
