@@ -248,6 +248,11 @@ export default function FacultyScenariosClient() {
   const [batchSelected, setBatchSelected] = useState<number[]>([]);
   const [batchGenerating, setBatchGenerating] = useState(false);
   const [batchProgress, setBatchProgress] = useState(0);
+  const [batchCancelling, setBatchCancelling] = useState(false);
+  // Refs, not state: the running generate loop reads these synchronously and a
+  // state update wouldn't reach its closure in time to stop the next sub-batch.
+  const batchCancelRef = useRef(false);
+  const batchAbortRef = useRef<AbortController | null>(null);
   const [batchSaving, setBatchSaving] = useState(false);
   const [batchSavedCount, setBatchSavedCount] = useState(0);
   const [batchError, setBatchError] = useState<string | null>(null);
@@ -509,6 +514,7 @@ export default function FacultyScenariosClient() {
     setBatchWarning(null);
     setBatchSavedCount(0);
     setBatchProgress(0);
+    setBatchCancelling(false);
     setShowBatchModal(true);
     if (patients.length === 0) void loadPatientsForSelector();
   };
@@ -522,6 +528,7 @@ export default function FacultyScenariosClient() {
     setBatchWarning(null);
     setBatchSavedCount(0);
     setBatchProgress(0);
+    setBatchCancelling(false);
   };
 
   const toggleBatchCategory = (category: string) => {
@@ -530,7 +537,17 @@ export default function FacultyScenariosClient() {
     );
   };
 
+  /** Stops the generate loop and aborts the request in flight, keeping whatever
+   *  sub-batches already came back. */
+  const cancelBatch = () => {
+    batchCancelRef.current = true;
+    batchAbortRef.current?.abort();
+    setBatchCancelling(true);
+  };
+
   const handleGenerateBatch = async () => {
+    batchCancelRef.current = false;
+    setBatchCancelling(false);
     setBatchGenerating(true);
     setBatchError(null);
     setBatchWarning(null);
@@ -545,15 +562,24 @@ export default function FacultyScenariosClient() {
     // limit), so a larger library is several sequential requests. Each carries
     // the titles produced so far as avoid_titles, so sub-batches don't collide.
     for (let remaining = total; remaining > 0; remaining -= MAX_PER_REQUEST) {
+      if (batchCancelRef.current) break;
       const chunkCount = Math.min(MAX_PER_REQUEST, remaining);
-      const result = await generateScenarioBatch({
-        count: chunkCount,
-        categories: batchCategories,
-        difficulty: batchDifficulty || undefined,
-        topic: batchTopic.trim() || undefined,
-        usePatients: batchUsePatients,
-        avoidTitles: collected.map((s) => s.title),
-      });
+      const controller = new AbortController();
+      batchAbortRef.current = controller;
+      const result = await generateScenarioBatch(
+        {
+          count: chunkCount,
+          categories: batchCategories,
+          difficulty: batchDifficulty || undefined,
+          topic: batchTopic.trim() || undefined,
+          usePatients: batchUsePatients,
+          avoidTitles: collected.map((s) => s.title),
+        },
+        controller.signal,
+      );
+
+      // A cancel lands here as an aborted-fetch error; treat it as a clean stop.
+      if (batchCancelRef.current) break;
 
       if ("error" in result) {
         // A first-request failure is fatal; a later one keeps what we have.
@@ -574,8 +600,15 @@ export default function FacultyScenariosClient() {
       if (result.scenarios.length < chunkCount) break;
     }
 
+    batchAbortRef.current = null;
+    const cancelled = batchCancelRef.current;
+    setBatchCancelling(false);
+
     if (collected.length === 0) {
-      setBatchError("The AI service didn't return any scenarios. Please try again.");
+      // A cancel with nothing in hand just returns to the form, no error.
+      if (!cancelled) {
+        setBatchError("The AI service didn't return any scenarios. Please try again.");
+      }
       setBatchGenerating(false);
       return;
     }
@@ -583,9 +616,11 @@ export default function FacultyScenariosClient() {
     setBatchDrafts(collected);
     setBatchSelected(collected.map((_, i) => i));
     setBatchWarning(
-      collected.length < total
-        ? `Generated ${collected.length} of ${total} — the AI service fell short. Keep these or try again for more.`
-        : (warnings[0] ?? null),
+      cancelled
+        ? `Stopped at ${collected.length} scenario${collected.length === 1 ? "" : "s"}. Keep these or generate more.`
+        : collected.length < total
+          ? `Generated ${collected.length} of ${total} — the AI service fell short. Keep these or try again for more.`
+          : (warnings[0] ?? null),
     );
     setBatchGenerating(false);
   };
@@ -1643,9 +1678,11 @@ export default function FacultyScenariosClient() {
                   {batchGenerating && (
                     <div className="p-4 rounded-xl border border-brand-200 bg-brand-50/50 text-sm text-brand-800 flex items-center gap-3">
                       <FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" />
-                      {batchCount > MAX_PER_REQUEST
-                        ? `Writing scenarios in batches of ${MAX_PER_REQUEST} — ${batchProgress} of ${batchCount} so far. This can take a few minutes.`
-                        : `Writing ${batchCount} scenarios — this takes up to a minute.`}
+                      {batchCancelling
+                        ? `Stopping — keeping the ${batchProgress} generated so far.`
+                        : batchCount > MAX_PER_REQUEST
+                          ? `Writing scenarios in batches of ${MAX_PER_REQUEST} — ${batchProgress} of ${batchCount} so far. This can take a few minutes.`
+                          : `Writing ${batchCount} scenarios — this takes up to a minute.`}
                     </div>
                   )}
                 </>
@@ -1752,24 +1789,35 @@ export default function FacultyScenariosClient() {
                 Cancel
               </button>
               {!batchDrafts ? (
-                <button
-                  type="button"
-                  onClick={handleGenerateBatch}
-                  disabled={batchGenerating}
-                  className="px-5 py-2.5 bg-gradient-to-r from-brand-600 to-brand-800 text-white rounded-lg font-medium hover:from-brand-700 hover:to-brand-900 transition-all disabled:opacity-50 flex items-center gap-2 shadow-lg shadow-[0_4px_14px_-2px_rgb(27_107_123_/_0.45)]"
-                >
-                  {batchGenerating ? (
-                    <>
-                      <FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" />
-                      Generating…
-                    </>
-                  ) : (
-                    <>
-                      <FontAwesomeIcon icon={faLayerGroup} className="w-4 h-4" />
-                      Generate {batchCount} Scenarios
-                    </>
-                  )}
-                </button>
+                batchGenerating ? (
+                  <button
+                    type="button"
+                    onClick={cancelBatch}
+                    disabled={batchCancelling}
+                    className="px-5 py-2.5 bg-surface border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-all disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {batchCancelling ? (
+                      <>
+                        <FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" />
+                        Stopping…
+                      </>
+                    ) : (
+                      <>
+                        <FontAwesomeIcon icon={faTimes} className="w-4 h-4" />
+                        Stop
+                      </>
+                    )}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleGenerateBatch}
+                    className="px-5 py-2.5 bg-gradient-to-r from-brand-600 to-brand-800 text-white rounded-lg font-medium hover:from-brand-700 hover:to-brand-900 transition-all flex items-center gap-2 shadow-lg shadow-[0_4px_14px_-2px_rgb(27_107_123_/_0.45)]"
+                  >
+                    <FontAwesomeIcon icon={faLayerGroup} className="w-4 h-4" />
+                    Generate {batchCount} Scenarios
+                  </button>
+                )
               ) : (
                 <>
                   <button

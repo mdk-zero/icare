@@ -1528,12 +1528,14 @@ export interface ScenarioDraft {
 /** Generates a library of scenarios in one request. Nothing is saved until createScenario(). */
 export async function generateScenarioBatch(
   options: ScenarioBatchOptions,
+  signal?: AbortSignal,
 ): Promise<{ scenarios: ScenarioDraft[]; warning?: string } | { error: string }> {
   try {
     const res = await fetch('/api/faculty/scenarios/generate-batch', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
+      signal,
       body: JSON.stringify({
         count: options.count,
         categories: options.categories,
