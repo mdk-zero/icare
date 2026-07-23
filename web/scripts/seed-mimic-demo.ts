@@ -28,12 +28,6 @@ function generateName(subjectId: number): string {
   return `${FIRST_NAMES[firstIndex]} ${LAST_NAMES[lastIndex]}`;
 }
 
-function generateRoom(subjectId: number): string {
-  const floor = (subjectId % 5) + 1;
-  const room = String(100 + (subjectId % 30)).padStart(3, '0');
-  return `Room ${floor}${room}`;
-}
-
 /**
  * Example clinical/teaching rooms for the admin Room Management page. The MIMIC
  * import only fills patients.room_number (free text); the `rooms` table is a
@@ -268,6 +262,7 @@ async function main() {
     name: string;
     age: number;
     gender: string;
+    room_id: string | null;
     room_number: string;
     diagnosis: string;
     admission_date: string;
@@ -276,6 +271,24 @@ async function main() {
     mimic_id: string;
     created_by: string | null;
   }[] = [];
+
+  // Seed the admin rooms first so each patient can be linked to a real room_id.
+  const { data: campus } = await supabase.from('campuses').select('id').limit(1).maybeSingle();
+  const roomRows = EXAMPLE_ROOMS.map((room) => ({ ...room, campus_id: campus?.id ?? null }));
+  console.log(`Seeding ${roomRows.length} example rooms...`);
+  const { error: roomsError } = await supabase
+    .from('rooms')
+    .upsert(roomRows, { onConflict: 'campus_id,room_number' });
+  if (roomsError) {
+    console.error('Failed to seed rooms:', roomsError.message);
+    process.exit(1);
+  }
+  const { data: seededRooms } = await supabase
+    .from('rooms')
+    .select('id, name, room_number')
+    .order('room_number');
+  const roomList = (seededRooms ?? []) as { id: string; name: string; room_number: string }[];
+  let roomCursor = 0;
 
   for (const [subjectIdStr, admission] of latestAdmissionBySubject.entries()) {
     const subjectId = Number(subjectIdStr);
@@ -318,8 +331,8 @@ async function main() {
       }
     }
 
-    const careunit = careunitByHadm.get(admission.hadm_id.trim());
-    const room_number = generateRoom(subjectId);
+    // Round-robin each patient onto a real room; room_number is the synced label.
+    const room = roomList.length > 0 ? roomList[roomCursor++ % roomList.length] : null;
 
     records.push({
       subject_id: subjectId,
@@ -327,7 +340,8 @@ async function main() {
       name: generateName(subjectId),
       age: demo?.age || 0,
       gender: demo?.gender || 'U',
-      room_number: careunit ? `${careunit} ${room_number}` : room_number,
+      room_id: room?.id ?? null,
+      room_number: room ? `${room.name} · Room ${room.room_number}` : '',
       diagnosis: diagnosisMap.get(admission.hadm_id.trim()) || 'Unknown',
       admission_date: new Date(admission.admittime).toISOString(),
       vital_signs,
@@ -348,20 +362,7 @@ async function main() {
     process.exit(1);
   }
 
-  console.log('MIMIC-IV Demo patients seeded successfully.');
-
-  // Seed the admin Room Management table (idempotent on campus + room number).
-  const { data: campus } = await supabase.from('campuses').select('id').limit(1).maybeSingle();
-  const roomRows = EXAMPLE_ROOMS.map((room) => ({ ...room, campus_id: campus?.id ?? null }));
-  console.log(`Seeding ${roomRows.length} example rooms...`);
-  const { error: roomsError } = await supabase
-    .from('rooms')
-    .upsert(roomRows, { onConflict: 'campus_id,room_number' });
-  if (roomsError) {
-    console.error('Failed to seed rooms:', roomsError.message);
-    process.exit(1);
-  }
-  console.log('Example rooms seeded.');
+  console.log('MIMIC-IV Demo patients seeded and linked to rooms successfully.');
 }
 
 main().catch((err) => {

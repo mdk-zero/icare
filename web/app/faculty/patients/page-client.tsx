@@ -25,7 +25,9 @@ import {
   createFacultyPatient,
   updateFacultyPatient,
   deleteFacultyPatient,
+  fetchRooms,
   FacultyPatient,
+  Room,
 } from "../../lib/api";
 import { SkeletonUnitGrid, SkeletonStatTile } from "../../components/skeletons";
 import PageHeader from "../../components/PageHeader";
@@ -38,10 +40,8 @@ const labelClassName = "block text-sm font-bold text-gray-800 mb-2";
 
 const vitalLabelClassName = "block text-xs font-bold text-gray-700 mb-1.5";
 
-/** Patients whose room_number is blank. */
+/** Patients not linked to any room. */
 const UNASSIGNED_KEY = "__unassigned__";
-/** Patients in a plain room ("Room 1115", "301-A") with no care unit named. */
-const GENERAL_KEY = "__general__";
 
 /**
  * Reference ranges used to flag a reading. Shared by the table chips and the
@@ -205,13 +205,14 @@ function matchesSearch(patient: FacultyPatient, query: string): boolean {
 }
 
 /**
- * Its own box, separate from the patient search. room_number holds both the
- * unit name and the room number as one string, so "CVICU", "cardiac", or the
- * bare "4108" all narrow it.
+ * Its own box, separate from the patient search. Matches the linked room's name
+ * and number (and the synced room_number label), so "skills", "101", or "ICU"
+ * all narrow it.
  */
 function matchesRoom(patient: FacultyPatient, roomQuery: string): boolean {
   if (!roomQuery) return true;
-  return (patient.room_number ?? "").toLowerCase().includes(roomQuery);
+  const hay = `${patient.room?.name ?? ""} ${patient.room?.room_number ?? ""} ${patient.room_number ?? ""}`;
+  return hay.toLowerCase().includes(roomQuery);
 }
 
 function FilterSelect({
@@ -257,48 +258,22 @@ function FilterSelect({
   );
 }
 
-interface RoomLocation {
-  /** Care unit, e.g. "Cardiac Vascular Intensive Care Unit (CVICU)". */
-  unit: string;
-  /** Room within that unit, e.g. "4108". */
-  room: string;
-}
-
-/**
- * room_number is one free-text field holding both parts, as MIMIC exports them:
- * "Cardiac Vascular Intensive Care Unit (CVICU) Room 4108". Everything before
- * the last "Room " is the unit; a value with no "Room " at all is taken as a
- * bare room number ("301-A").
- */
-function parseLocation(raw: string | null | undefined): RoomLocation {
-  const value = (raw ?? "").trim();
-  if (!value) return { unit: "", room: "" };
-  const marker = value.lastIndexOf("Room ");
-  if (marker === -1) return { unit: "", room: value };
-  return { unit: value.slice(0, marker).trim(), room: value.slice(marker + "Room ".length).trim() };
-}
-
-/** The parenthetical code is what staff actually say: CVICU, MICU/SICU. */
-function shortCode(unit: string): string {
-  const match = unit.match(/\(([^)]+)\)\s*$/);
-  return match ? match[1] : unit;
-}
-
 /** Rooms sort naturally by their leading number, not as strings. */
-function compareRooms(a: string, b: string): number {
+function compareRoomNumbers(a: string, b: string): number {
   const na = parseInt(a, 10);
   const nb = parseInt(b, 10);
   if (!Number.isNaN(na) && !Number.isNaN(nb) && na !== nb) return na - nb;
   return a.localeCompare(b);
 }
 
-interface UnitGroup {
+interface RoomGroup {
+  /** room_id, or UNASSIGNED_KEY for patients with no linked room. */
   key: string;
-  /** Short label shown on the card. */
-  label: string;
-  /** Full unit name, empty when it adds nothing to the label. */
-  fullName: string;
-  /** Patients left after the search filter. */
+  /** Room name shown on the card, or "Unassigned". */
+  name: string;
+  /** The room's number (e.g. "101"), empty for the unassigned bucket. */
+  roomNumber: string;
+  /** Patients left after the search + filters. */
   patients: FacultyPatient[];
   /** Patients before filtering, so a card can show "3 of 12". */
   total: number;
@@ -308,7 +283,7 @@ interface PatientForm {
   name: string;
   age: string;
   gender: string;
-  room_number: string;
+  room_id: string;
   diagnosis: string;
   admission_date: string;
   vital_signs: {
@@ -325,7 +300,7 @@ const emptyPatient: PatientForm = {
   name: "",
   age: "",
   gender: "",
-  room_number: "",
+  room_id: "",
   diagnosis: "",
   admission_date: new Date().toISOString().slice(0, 16),
   vital_signs: {
@@ -385,11 +360,12 @@ function VitalChips({ patient }: { patient: FacultyPatient }) {
 
 export default function FacultyPatientsClient() {
   const [patients, setPatients] = useState<FacultyPatient[]>([]);
+  const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [roomSearch, setRoomSearch] = useState("");
   const [filters, setFilters] = useState<Filters>(NO_FILTERS);
-  const [selectedUnit, setSelectedUnit] = useState<string | null>(null);
+  const [selectedRoomKey, setSelectedRoomKey] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingPatient, setEditingPatient] = useState<FacultyPatient | null>(null);
   const [form, setForm] = useState<PatientForm>(emptyPatient);
@@ -398,7 +374,7 @@ export default function FacultyPatientsClient() {
   const [error, setError] = useState<string | null>(null);
 
   // Fetched whole and filtered in the browser: grouping needs the unfiltered
-  // roster to show each unit's real size while a search is narrowing it.
+  // roster to show each room's real size while a search is narrowing it.
   const loadPatients = useCallback(async () => {
     const data = await fetchFacultyPatients();
     setPatients(data);
@@ -409,6 +385,8 @@ export default function FacultyPatientsClient() {
     // The roster is remote, so it can only be populated after mount.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadPatients();
+    // Rooms populate the assignment dropdown in the add/edit form.
+    void fetchRooms().then(setRooms);
   }, [loadPatients]);
 
   const query = search.trim().toLowerCase();
@@ -451,26 +429,19 @@ export default function FacultyPatientsClient() {
 
   const labsOnFile = useMemo(() => patients.filter(hasLabs).length, [patients]);
 
-  const unitGroups = useMemo<UnitGroup[]>(() => {
+  const roomGroups = useMemo<RoomGroup[]>(() => {
     const matching = new Set(filteredPatients.map((p) => p.id));
-    const byKey = new Map<string, UnitGroup>();
+    const byKey = new Map<string, RoomGroup>();
 
     for (const patient of patients) {
-      const { unit, room } = parseLocation(patient.room_number);
-      const key = !unit && !room ? UNASSIGNED_KEY : unit || GENERAL_KEY;
+      const key = patient.room_id ?? UNASSIGNED_KEY;
 
       let group = byKey.get(key);
       if (!group) {
-        const label =
-          key === UNASSIGNED_KEY
-            ? "Unassigned"
-            : key === GENERAL_KEY
-              ? "General Ward"
-              : shortCode(unit);
         group = {
           key,
-          label,
-          fullName: key === GENERAL_KEY || key === UNASSIGNED_KEY || label === unit ? "" : unit,
+          name: key === UNASSIGNED_KEY ? "Unassigned" : patient.room?.name ?? "Room",
+          roomNumber: key === UNASSIGNED_KEY ? "" : patient.room?.room_number ?? "",
           patients: [],
           total: 0,
         };
@@ -481,30 +452,27 @@ export default function FacultyPatientsClient() {
     }
 
     for (const group of byKey.values()) {
-      group.patients.sort((a, b) =>
-        compareRooms(parseLocation(a.room_number).room, parseLocation(b.room_number).room),
-      );
+      group.patients.sort((a, b) => a.name.localeCompare(b.name));
     }
 
-    // Named units first, then the catch-alls.
-    const rank = (key: string) =>
-      key === UNASSIGNED_KEY ? 2 : key === GENERAL_KEY ? 1 : 0;
+    // Real rooms by number, then the unassigned bucket last.
     return [...byKey.values()].sort((a, b) => {
-      const byRank = rank(a.key) - rank(b.key);
-      return byRank !== 0 ? byRank : a.label.localeCompare(b.label);
+      if (a.key === UNASSIGNED_KEY) return 1;
+      if (b.key === UNASSIGNED_KEY) return -1;
+      return compareRoomNumbers(a.roomNumber, b.roomNumber) || a.name.localeCompare(b.name);
     });
   }, [patients, filteredPatients]);
 
-  const selectedGroup = unitGroups.find((g) => g.key === selectedUnit) ?? null;
+  const selectedGroup = roomGroups.find((g) => g.key === selectedRoomKey) ?? null;
   const filtersActive =
     query !== "" || roomQuery !== "" || FILTER_KEYS.some((key) => filters[key] !== "all");
 
   // Narrowing to a handful of patients should not leave a screen of "0 patients"
   // cards to scroll past; the count of what was dropped keeps the omission visible.
   const visibleGroups = filtersActive
-    ? unitGroups.filter((group) => group.patients.length > 0)
-    : unitGroups;
-  const hiddenGroups = unitGroups.length - visibleGroups.length;
+    ? roomGroups.filter((group) => group.patients.length > 0)
+    : roomGroups;
+  const hiddenGroups = roomGroups.length - visibleGroups.length;
 
   const setFilter = (key: FilterKey, value: string) =>
     setFilters((prev) => ({ ...prev, [key]: value }));
@@ -521,12 +489,9 @@ export default function FacultyPatientsClient() {
 
   const openAddModal = () => {
     setEditingPatient(null);
-    // Drilled into a unit, a new patient almost certainly belongs to it.
-    const prefix =
-      selectedGroup && selectedGroup.key !== UNASSIGNED_KEY && selectedGroup.key !== GENERAL_KEY
-        ? `${selectedGroup.fullName || selectedGroup.label} Room `
-        : "";
-    setForm({ ...emptyPatient, room_number: prefix });
+    // Drilled into a real room, a new patient almost certainly belongs to it.
+    const room_id = selectedGroup && selectedGroup.key !== UNASSIGNED_KEY ? selectedGroup.key : "";
+    setForm({ ...emptyPatient, room_id });
     setError(null);
     setIsModalOpen(true);
   };
@@ -537,7 +502,7 @@ export default function FacultyPatientsClient() {
       name: patient.name,
       age: String(patient.age ?? ""),
       gender: patient.gender,
-      room_number: patient.room_number,
+      room_id: patient.room_id ?? "",
       diagnosis: patient.diagnosis,
       admission_date: patient.admission_date
         ? new Date(patient.admission_date).toISOString().slice(0, 16)
@@ -571,7 +536,8 @@ export default function FacultyPatientsClient() {
       name: form.name,
       age: parseInt(form.age, 10),
       gender: form.gender,
-      room_number: form.room_number,
+      // The server derives and stores the room_number label from this link.
+      room_id: form.room_id || null,
       diagnosis: form.diagnosis,
       admission_date: form.admission_date,
       vital_signs: {
@@ -644,7 +610,7 @@ export default function FacultyPatientsClient() {
           label: "MIMIC-IV Demo",
         }}
         title="Patient Records"
-        subtitle="Browse patients by care unit, then open a room's census"
+        subtitle="Browse patients by their assigned room, then open a room's census"
       />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
@@ -661,7 +627,7 @@ export default function FacultyPatientsClient() {
           icon={<FontAwesomeIcon icon={faUsers} className="w-5 h-5" />}
           value={patients.length}
           label="Total Patients"
-          caption={`${unitGroups.length} care unit${unitGroups.length === 1 ? "" : "s"}`}
+          caption={`${roomGroups.length} room${roomGroups.length === 1 ? "" : "s"}`}
           iconBg="bg-brand-600/10"
           iconColor="text-brand-600"
         />
@@ -707,9 +673,9 @@ export default function FacultyPatientsClient() {
         )}
       </div>
 
-      {/* Top level: search rooms/units and filter the population, all on one
-          wrapping row. The patient search lives inside a unit (below), so it is
-          not shown here. Hidden while the roster loads, alongside the skeleton. */}
+      {/* Top level: search rooms and filter the population, all on one wrapping
+          row. The patient search lives inside a room (below), so it is not shown
+          here. Hidden while the roster loads, alongside the skeleton. */}
       {!loading && !selectedGroup && (
         <div className="flex flex-wrap items-center gap-2 mb-4">
           <div className="relative w-full sm:w-64">
@@ -719,7 +685,7 @@ export default function FacultyPatientsClient() {
             />
             <input
               type="text"
-              placeholder="Search room or unit..."
+              placeholder="Search rooms..."
               value={roomSearch}
               onChange={(e) => setRoomSearch(e.target.value)}
               className={inputClassName + " pl-10"}
@@ -782,62 +748,54 @@ export default function FacultyPatientsClient() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {visibleGroups.map((group) => {
             const critical = group.patients.filter(isCritical).length;
-            const isCatchAll = group.key === GENERAL_KEY || group.key === UNASSIGNED_KEY;
-            const rooms = new Set(
-              group.patients.map((p) => parseLocation(p.room_number).room).filter(Boolean),
-            ).size;
+            const isUnassigned = group.key === UNASSIGNED_KEY;
             return (
               <button
                 key={group.key}
                 onClick={() => {
-                  setSelectedUnit(group.key);
-                  // Fresh patient search per unit; it only applies in here.
+                  setSelectedRoomKey(group.key);
+                  // Fresh patient search per room; it only applies in here.
                   setSearch("");
                 }}
-                // Flex column so the status badge sits on the card's floor:
-                // units without a full name would otherwise ride up.
+                // Flex column so the status badge sits on the card's floor.
                 className="group flex h-full flex-col text-left bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-brand-600/30 transition-all duration-200 p-5"
               >
                 {/* flex-1 so this absorbs the slack and the footer keeps its gap. */}
                 <div className="flex-1">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div
-                      className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${
-                        isCatchAll ? "bg-gray-100 text-gray-500" : "bg-brand-600/10 text-brand-600"
-                      }`}
-                    >
-                      <FontAwesomeIcon
-                        icon={group.key === UNASSIGNED_KEY ? faBedPulse : faHospital}
-                        className="w-5 h-5"
-                      />
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div
+                        className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${
+                          isUnassigned ? "bg-gray-100 text-gray-500" : "bg-brand-600/10 text-brand-600"
+                        }`}
+                      >
+                        <FontAwesomeIcon
+                          icon={isUnassigned ? faBedPulse : faHospital}
+                          className="w-5 h-5"
+                        />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-semibold text-gray-900 truncate">{group.name}</p>
+                        <p className="text-xs text-gray-500">
+                          {group.patients.length} patient{group.patients.length === 1 ? "" : "s"}
+                          {filtersActive && group.patients.length !== group.total && (
+                            <span className="text-gray-400"> of {group.total}</span>
+                          )}
+                          {group.roomNumber && (
+                            <span className="text-gray-400"> · Room {group.roomNumber}</span>
+                          )}
+                        </p>
+                      </div>
                     </div>
-                    <div className="min-w-0">
-                      <p className="font-semibold text-gray-900 truncate">{group.label}</p>
-                      <p className="text-xs text-gray-500">
-                        {group.patients.length} patient{group.patients.length === 1 ? "" : "s"}
-                        {filtersActive && group.patients.length !== group.total && (
-                          <span className="text-gray-400"> of {group.total}</span>
-                        )}
-                        {rooms > 0 && <span className="text-gray-400"> · {rooms} room{rooms === 1 ? "" : "s"}</span>}
-                      </p>
-                    </div>
+                    <FontAwesomeIcon
+                      icon={faChevronRight}
+                      className="w-3.5 h-3.5 mt-3.5 text-gray-300 group-hover:text-brand-600 group-hover:translate-x-0.5 transition-all shrink-0"
+                    />
                   </div>
-                  <FontAwesomeIcon
-                    icon={faChevronRight}
-                    className="w-3.5 h-3.5 mt-3.5 text-gray-300 group-hover:text-brand-600 group-hover:translate-x-0.5 transition-all shrink-0"
-                  />
-                </div>
-
-                {group.fullName && (
-                  <p className="mt-3 text-xs leading-snug text-gray-400 line-clamp-2">
-                    {group.fullName}
-                  </p>
-                )}
                 </div>
 
                 {/* A card only reaches here with at least one patient: empty
-                    units are dropped from visibleGroups. */}
+                    rooms are dropped from visibleGroups. */}
                 <div className="mt-4 pt-4 border-t border-gray-100 flex flex-wrap items-center gap-2">
                   {critical > 0 ? (
                     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700 border border-red-200">
@@ -879,8 +837,8 @@ export default function FacultyPatientsClient() {
           {hiddenGroups > 0 && (
             <p className="col-span-full text-center text-xs text-gray-400">
               {hiddenGroups === 1
-                ? "1 care unit hidden — no patients match"
-                : `${hiddenGroups} care units hidden — no patients match`}
+                ? "1 room hidden — no patients match"
+                : `${hiddenGroups} rooms hidden — no patients match`}
             </p>
           )}
         </div>
@@ -889,22 +847,22 @@ export default function FacultyPatientsClient() {
           <div className="flex flex-wrap items-center gap-3 mb-4">
             <button
               onClick={() => {
-                setSelectedUnit(null);
+                setSelectedRoomKey(null);
                 // Clear so a leftover patient query does not silently filter
-                // the unit grid, where its box is not shown.
+                // the room grid, where its box is not shown.
                 setSearch("");
               }}
               className="inline-flex items-center gap-2 px-3 py-2 bg-surface border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-all"
             >
               <FontAwesomeIcon icon={faArrowLeft} className="w-3.5 h-3.5" />
-              All units
+              All rooms
             </button>
             <div className="min-w-0">
               <h2 className="font-display text-lg font-bold text-gray-900 truncate">
-                {selectedGroup.label}
+                {selectedGroup.name}
               </h2>
-              {selectedGroup.fullName && (
-                <p className="text-xs text-gray-500 truncate">{selectedGroup.fullName}</p>
+              {selectedGroup.roomNumber && (
+                <p className="text-xs text-gray-500 truncate">Room {selectedGroup.roomNumber}</p>
               )}
             </div>
             <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-brand-600/10 text-brand-700 border border-brand-600/20">
@@ -916,11 +874,11 @@ export default function FacultyPatientsClient() {
               className="ml-auto inline-flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-[#145a68] text-white text-sm font-medium rounded-lg transition-colors"
             >
               <FontAwesomeIcon icon={faPlus} className="w-3.5 h-3.5" />
-              Add to {selectedGroup.label}
+              Add to {selectedGroup.name}
             </button>
           </div>
 
-          {/* Patient search, scoped to this unit's census. */}
+          {/* Patient search, scoped to this room's census. */}
           <div className="relative w-full sm:w-72 mb-4">
             <FontAwesomeIcon
               icon={faSearch}
@@ -953,7 +911,7 @@ export default function FacultyPatientsClient() {
                 <tbody className="divide-y divide-hairline">
                   {selectedGroup.patients.map((patient) => {
                     const critical = isCritical(patient);
-                    const { room } = parseLocation(patient.room_number);
+                    const room = patient.room?.room_number ?? "";
                     return (
                       <tr key={patient.id} className="hover:bg-subtle transition-colors">
                         <td className="py-3 px-4">
@@ -1027,8 +985,8 @@ export default function FacultyPatientsClient() {
                     <tr>
                       <td colSpan={5} className="py-12 text-center text-gray-400">
                         {filtersActive
-                          ? `No patients in ${selectedGroup.label} match the current filters`
-                          : "No patients in this unit"}
+                          ? `No patients in ${selectedGroup.name} match the current filters`
+                          : "No patients in this room"}
                       </td>
                     </tr>
                   )}
@@ -1111,17 +1069,22 @@ export default function FacultyPatientsClient() {
                 </div>
                 <div>
                   <label className={labelClassName}>
-                    Room Number
+                    Room
                   </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Medical Intensive Care Unit (MICU) Room 4103"
-                    value={form.room_number || ""}
-                    onChange={(e) => updateFormField("room_number", e.target.value)}
+                  <select
+                    value={form.room_id || ""}
+                    onChange={(e) => updateFormField("room_id", e.target.value)}
                     className={inputClassName}
-                  />
+                  >
+                    <option value="">No room assigned</option>
+                    {rooms.map((room) => (
+                      <option key={room.id} value={room.id}>
+                        {room.name} · Room {room.room_number}
+                      </option>
+                    ))}
+                  </select>
                   <p className="mt-1.5 text-xs text-gray-500">
-                    The care unit before “Room” is what groups this patient on the previous screen.
+                    Links the patient to a room in the system. Manage rooms in Admin → Rooms.
                   </p>
                 </div>
                 <div className="sm:col-span-2">
