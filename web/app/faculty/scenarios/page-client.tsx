@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { createPortal } from "react-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faRobot,
@@ -29,6 +30,7 @@ import {
   faPenToSquare,
   faTriangleExclamation,
 } from "@fortawesome/free-solid-svg-icons";
+import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import {
   fetchFacultyScenarios,
   createScenario,
@@ -86,6 +88,110 @@ const inputClassName =
   "w-full px-4 py-3 bg-surface border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 focus:bg-surface transition-all text-sm shadow-sm";
 
 const labelClassName = "block text-sm font-bold text-gray-800 mb-2";
+
+type MenuAction = { label: string; icon: IconDefinition; onClick: () => void };
+
+/**
+ * The per-card actions, collapsed behind one trigger. The menu renders in a
+ * portal because the card clips to its rounded corners (overflow-hidden), so an
+ * in-flow dropdown would be cut off; it is positioned from the trigger's rect
+ * and flips above when there is no room below. Scroll or resize closes it
+ * rather than chasing the trigger with a fixed element.
+ */
+function ActionsMenu({ actions }: { actions: MenuAction[] }) {
+  const [open, setOpen] = useState(false);
+  const [coords, setCoords] = useState<{ top: number; left: number; flip: boolean } | null>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  const place = useCallback(() => {
+    const el = triggerRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const menuHeight = 44 * actions.length + 8;
+    const flip = r.bottom + 6 + menuHeight > window.innerHeight && r.top - menuHeight > 0;
+    setCoords({ top: flip ? r.top - 6 : r.bottom + 6, left: r.right, flip });
+  }, [actions.length]);
+
+  useEffect(() => {
+    if (!open) return;
+    place();
+    const close = () => setOpen(false);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (triggerRef.current?.contains(t) || menuRef.current?.contains(t)) return;
+      setOpen(false);
+    };
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("mousedown", onDown);
+    return () => {
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("mousedown", onDown);
+    };
+  }, [open, place]);
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className="flex w-full items-center justify-center gap-2 rounded-lg border border-brand-600/20 py-2 text-sm font-medium text-brand-600 transition-colors hover:border-brand-600/40 hover:bg-brand-600/5"
+      >
+        Actions
+        <FontAwesomeIcon
+          icon={faChevronDown}
+          className={`w-3 h-3 transition-transform ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      {open &&
+        coords &&
+        createPortal(
+          <div
+            ref={menuRef}
+            role="menu"
+            style={{
+              position: "fixed",
+              top: coords.top,
+              left: coords.left,
+              transform: coords.flip ? "translate(-100%, -100%)" : "translateX(-100%)",
+            }}
+            className="z-50 min-w-44 overflow-hidden rounded-xl border border-hairline bg-surface py-1 shadow-[0_8px_30px_rgba(0,0,0,0.12)]"
+          >
+            {actions.map((action) => (
+              <button
+                key={action.label}
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setOpen(false);
+                  action.onClick();
+                }}
+                className="group flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-sm text-gray-700 transition-colors hover:bg-brand-600/5 hover:text-brand-700"
+              >
+                <FontAwesomeIcon
+                  icon={action.icon}
+                  className="w-4 h-4 text-gray-400 transition-colors group-hover:text-brand-600"
+                />
+                {action.label}
+              </button>
+            ))}
+          </div>,
+          document.body,
+        )}
+    </>
+  );
+}
 
 export default function FacultyScenariosClient() {
   const [scenarios, setScenarios] = useState<SimulationScenario[]>([]);
@@ -896,36 +1002,26 @@ export default function FacultyScenariosClient() {
                     {new Date(scenario.created_at).toLocaleDateString()}
                   </span>
                 </div>
-                <div className="grid grid-cols-2 gap-1">
-                  <button
-                    onClick={() => handleViewDetails(scenario)}
-                    className="flex items-center justify-center gap-1.5 text-sm text-brand-600 font-medium hover:text-brand-700 transition-colors py-2 rounded-lg hover:bg-brand-600/5"
-                  >
-                    <FontAwesomeIcon icon={faEye} className="w-4 h-4" />
-                    View
-                  </button>
-                  <button
-                    onClick={() => handleOpenEditModal(scenario)}
-                    className="flex items-center justify-center gap-1.5 text-sm text-brand-600 font-medium hover:text-brand-700 transition-colors py-2 rounded-lg hover:bg-brand-600/5"
-                  >
-                    <FontAwesomeIcon icon={faPenToSquare} className="w-4 h-4" />
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => handleOpenAssignModal(scenario)}
-                    className="flex items-center justify-center gap-1.5 text-sm text-brand-600 font-medium hover:text-brand-700 transition-colors py-2 rounded-lg hover:bg-brand-600/5"
-                  >
-                    <FontAwesomeIcon icon={faUserPlus} className="w-4 h-4" />
-                    Assign
-                  </button>
-                  <button
-                    onClick={() => handleOpenLinkPatientModal(scenario)}
-                    className="flex items-center justify-center gap-1.5 text-sm text-brand-600 font-medium hover:text-brand-700 transition-colors py-2 rounded-lg hover:bg-brand-600/5"
-                  >
-                    <FontAwesomeIcon icon={faHospitalUser} className="w-4 h-4" />
-                    {scenario.patient_name ? "Patient" : "Link"}
-                  </button>
-                </div>
+                <ActionsMenu
+                  actions={[
+                    { label: "View", icon: faEye, onClick: () => handleViewDetails(scenario) },
+                    {
+                      label: "Edit",
+                      icon: faPenToSquare,
+                      onClick: () => handleOpenEditModal(scenario),
+                    },
+                    {
+                      label: "Assign",
+                      icon: faUserPlus,
+                      onClick: () => handleOpenAssignModal(scenario),
+                    },
+                    {
+                      label: scenario.patient_name ? "Change patient" : "Link patient",
+                      icon: faHospitalUser,
+                      onClick: () => handleOpenLinkPatientModal(scenario),
+                    },
+                  ]}
+                />
               </div>
             </div>
           ))}
