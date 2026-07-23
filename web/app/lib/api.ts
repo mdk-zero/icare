@@ -1722,6 +1722,30 @@ export async function updateFacultyPatient(
   }
 }
 
+/**
+ * Places patients into rooms without exceeding capacity (used after saving a
+ * generated scenario library). mode 'fill' packs rooms; 'spread' balances them.
+ */
+export async function assignPatientRooms(
+  patientIds: string[],
+  mode: 'fill' | 'spread',
+): Promise<{ assigned: number; unassigned: number } | { error: string }> {
+  try {
+    const res = await fetch('/api/faculty/patients/assign-rooms', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ patient_ids: patientIds, mode }),
+    });
+    const json = (await res.json()) as { assigned?: number; unassigned?: number; error?: string };
+    if (!res.ok) return { error: json.error || 'Unable to assign rooms' };
+    return { assigned: json.assigned ?? 0, unassigned: json.unassigned ?? 0 };
+  } catch (err) {
+    console.error('assignPatientRooms() failed', err);
+    return { error: 'Unable to assign rooms. Please try again.' };
+  }
+}
+
 export async function deleteFacultyPatient(
   id: string,
 ): Promise<{ success?: boolean; error?: string }> {

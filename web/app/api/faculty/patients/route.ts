@@ -96,6 +96,34 @@ async function resolveRoom(
   return { room_id: roomId, room_number: `${room.name} · Room ${room.room_number}` };
 }
 
+/**
+ * Rooms are hard-capped: refuses a room already at capacity. excludePatientId
+ * skips the row being edited so re-saving a patient in its own full room is fine.
+ * Returns an error message when full, or null when there is space / no such room.
+ */
+async function roomCapacityError(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  roomId: string,
+  excludePatientId: string | null,
+): Promise<string | null> {
+  const { data: room } = await supabase
+    .from('rooms')
+    .select('name, capacity')
+    .eq('id', roomId)
+    .maybeSingle();
+  if (!room) return null; // unknown room — resolveRoom clears it, no capacity concern
+  let query = supabase
+    .from('patients')
+    .select('id', { count: 'exact', head: true })
+    .eq('room_id', roomId);
+  if (excludePatientId) query = query.neq('id', excludePatientId);
+  const { count } = await query;
+  if ((count ?? 0) >= room.capacity) {
+    return `${room.name} is full (${room.capacity}/${room.capacity}). Free a bed or pick another room.`;
+  }
+  return null;
+}
+
 function validateRequired(input: ReturnType<typeof sanitizePatientInput>): string | null {
   if (!input.name) return 'Patient name is required';
   if (!input.gender) return 'Gender is required';
@@ -174,6 +202,10 @@ export async function POST(request: NextRequest) {
     const nextSubjectId = minSubject?.subject_id ? minSubject.subject_id - 1 : -1;
 
     const { room_id, ...rest } = input;
+    if (room_id) {
+      const capacityError = await roomCapacityError(supabase, room_id, null);
+      if (capacityError) return NextResponse.json({ error: capacityError }, { status: 409 });
+    }
     const room = await resolveRoom(supabase, room_id);
 
     const { data: patient, error: insertError } = await supabase
@@ -236,6 +268,11 @@ export async function PUT(request: NextRequest) {
 
     if (!existing) {
       return NextResponse.json({ error: 'Patient not found' }, { status: 404 });
+    }
+
+    if (input.room_id) {
+      const capacityError = await roomCapacityError(supabase, input.room_id, id);
+      if (capacityError) return NextResponse.json({ error: capacityError }, { status: 409 });
     }
 
     const room = await resolveRoom(supabase, input.room_id);
