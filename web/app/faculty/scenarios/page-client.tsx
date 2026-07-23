@@ -239,7 +239,10 @@ export default function FacultyScenariosClient() {
   const [loadingPatients, setLoadingPatients] = useState(false);
 
   const [showBatchModal, setShowBatchModal] = useState(false);
+  // The committed numeric count that generation uses, plus the raw field text so
+  // it can be cleared and retyped freely without snapping back mid-edit.
   const [batchCount, setBatchCount] = useState(6);
+  const [batchCountInput, setBatchCountInput] = useState("6");
   const [batchCategories, setBatchCategories] = useState<string[]>([]);
   const [batchDifficulty, setBatchDifficulty] = useState("");
   const [batchTopic, setBatchTopic] = useState("");
@@ -1571,13 +1574,15 @@ export default function FacultyScenariosClient() {
                     <input
                       type="number"
                       min={1}
-                      value={batchCount}
+                      value={batchCountInput}
                       onChange={(e) => {
+                        // Show exactly what's typed (including empty); commit the
+                        // count only when it parses to a valid whole number ≥ 1.
+                        setBatchCountInput(e.target.value);
                         const n = parseInt(e.target.value, 10);
-                        // Ignore mid-edit blanks; keep the last valid count.
-                        if (Number.isNaN(n)) return;
-                        setBatchCount(Math.max(1, n));
+                        if (!Number.isNaN(n) && n >= 1) setBatchCount(n);
                       }}
+                      onBlur={() => setBatchCountInput(String(batchCount))}
                       disabled={batchGenerating}
                       aria-label="Number of scenarios to generate"
                       className={inputClassName}
