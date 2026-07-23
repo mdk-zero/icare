@@ -30,6 +30,7 @@ import {
   Room,
 } from "../../lib/api";
 import { SkeletonUnitGrid, SkeletonStatTile } from "../../components/skeletons";
+import { roomStatus, ROOM_STATUS_LABEL, ROOM_STATUS_TONE } from "../../lib/rooms";
 import PageHeader from "../../components/PageHeader";
 import StatTile from "../../components/StatTile";
 
@@ -429,6 +430,17 @@ export default function FacultyPatientsClient() {
 
   const labsOnFile = useMemo(() => patients.filter(hasLabs).length, [patients]);
 
+  // Room capacity: live occupancy per room (whole roster) + capacity lookup, for
+  // the card badges and the capacity-aware picker.
+  const roomById = useMemo(() => new Map(rooms.map((r) => [r.id, r])), [rooms]);
+  const occupancyByRoom = useMemo(() => {
+    const tally = new Map<string, number>();
+    for (const p of patients) {
+      if (p.room_id) tally.set(p.room_id, (tally.get(p.room_id) ?? 0) + 1);
+    }
+    return tally;
+  }, [patients]);
+
   const roomGroups = useMemo<RoomGroup[]>(() => {
     const matching = new Set(filteredPatients.map((p) => p.id));
     const byKey = new Map<string, RoomGroup>();
@@ -749,6 +761,10 @@ export default function FacultyPatientsClient() {
           {visibleGroups.map((group) => {
             const critical = group.patients.filter(isCritical).length;
             const isUnassigned = group.key === UNASSIGNED_KEY;
+            const room = isUnassigned ? undefined : roomById.get(group.key);
+            const capacity = room?.capacity ?? 0;
+            const occupied = occupancyByRoom.get(group.key) ?? 0;
+            const status = roomStatus(occupied, capacity);
             return (
               <button
                 key={group.key}
@@ -806,6 +822,13 @@ export default function FacultyPatientsClient() {
                     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700 border border-emerald-200">
                       <FontAwesomeIcon icon={faCircleCheck} className="w-3 h-3" />
                       All stable
+                    </span>
+                  )}
+                  {room && (
+                    <span
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${ROOM_STATUS_TONE[status]}`}
+                    >
+                      {ROOM_STATUS_LABEL[status]} · {occupied}/{capacity}
                     </span>
                   )}
                 </div>
@@ -1077,14 +1100,19 @@ export default function FacultyPatientsClient() {
                     className={inputClassName}
                   >
                     <option value="">No room assigned</option>
-                    {rooms.map((room) => (
-                      <option key={room.id} value={room.id}>
-                        {room.name} · Room {room.room_number}
-                      </option>
-                    ))}
+                    {rooms.map((room) => {
+                      const occ = occupancyByRoom.get(room.id) ?? 0;
+                      const isCurrent = editingPatient?.room_id === room.id;
+                      const full = roomStatus(occ, room.capacity) === "full";
+                      return (
+                        <option key={room.id} value={room.id} disabled={full && !isCurrent}>
+                          {`${room.name} · Room ${room.room_number} (${occ}/${room.capacity})${full ? " — Full" : ""}`}
+                        </option>
+                      );
+                    })}
                   </select>
                   <p className="mt-1.5 text-xs text-gray-500">
-                    Links the patient to a room in the system. Manage rooms in Admin → Rooms.
+                    Links the patient to a room in the system. Full rooms can&apos;t be selected.
                   </p>
                 </div>
                 <div className="sm:col-span-2">

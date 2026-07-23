@@ -285,10 +285,16 @@ async function main() {
   }
   const { data: seededRooms } = await supabase
     .from('rooms')
-    .select('id, name, room_number')
+    .select('id, name, room_number, capacity')
     .order('room_number');
-  const roomList = (seededRooms ?? []) as { id: string; name: string; room_number: string }[];
-  let roomCursor = 0;
+  const roomList = (seededRooms ?? []) as {
+    id: string;
+    name: string;
+    room_number: string;
+    capacity: number;
+  }[];
+  // Fill rooms to capacity in order; patients beyond total capacity stay unassigned.
+  const roomOccupancy = new Map<string, number>();
 
   for (const [subjectIdStr, admission] of latestAdmissionBySubject.entries()) {
     const subjectId = Number(subjectIdStr);
@@ -331,8 +337,9 @@ async function main() {
       }
     }
 
-    // Round-robin each patient onto a real room; room_number is the synced label.
-    const room = roomList.length > 0 ? roomList[roomCursor++ % roomList.length] : null;
+    // Place each patient into the first room with space; room_number is the synced label.
+    const room = roomList.find((r) => (roomOccupancy.get(r.id) ?? 0) < r.capacity) ?? null;
+    if (room) roomOccupancy.set(room.id, (roomOccupancy.get(room.id) ?? 0) + 1);
 
     records.push({
       subject_id: subjectId,
