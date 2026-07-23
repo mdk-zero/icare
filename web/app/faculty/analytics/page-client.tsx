@@ -9,12 +9,207 @@ import {
   faHeartbeat,
   faExclamationTriangle,
   faNotesMedical,
+  faDroplet,
+  faTemperatureHalf,
+  faCircleCheck,
 } from "@fortawesome/free-solid-svg-icons";
+import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import { fetchAnalyticsSummary, AnalyticsSummary } from "../../lib/api";
 import { SkeletonStatCard, SkeletonChartArea, SkeletonCompetencyGrid } from "../../components/skeletons";
 import PageHeader from "../../components/PageHeader";
 import Card from "../../components/Card";
 import StatTile from "../../components/StatTile";
+
+const BRAND = "#1B6B7B";
+
+/** Score trend over time — a line + area chart, the correct shape for a series. */
+function TrendLineChart({
+  data,
+}: {
+  data: { week_start: string; average_score: number; attempts: number }[];
+}) {
+  const W = 600;
+  const H = 190;
+  const padL = 26;
+  const padR = 12;
+  const padT = 12;
+  const padB = 12;
+  const plotW = W - padL - padR;
+  const plotH = H - padT - padB;
+  const n = data.length;
+  const x = (i: number) => padL + (n === 1 ? plotW / 2 : (i / (n - 1)) * plotW);
+  const y = (v: number) => padT + (1 - Math.min(Math.max(v, 0), 100) / 100) * plotH;
+  const line = data.map((d, i) => `${x(i)},${y(d.average_score)}`).join(" ");
+  const area =
+    n > 0
+      ? `M ${x(0)},${y(0)} ` +
+        data.map((d, i) => `L ${x(i)},${y(d.average_score)}`).join(" ") +
+        ` L ${x(n - 1)},${y(0)} Z`
+      : "";
+  const grid = [0, 25, 50, 75, 100];
+
+  return (
+    <div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full">
+        <defs>
+          <linearGradient id="trendArea" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={BRAND} stopOpacity="0.22" />
+            <stop offset="100%" stopColor={BRAND} stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        {grid.map((g) => (
+          <g key={g}>
+            <line x1={padL} y1={y(g)} x2={W - padR} y2={y(g)} stroke="#eef2f6" strokeWidth="1" />
+            <text x={padL - 5} y={y(g) + 3} textAnchor="end" fontSize="9" fill="#94a3b8">
+              {g}
+            </text>
+          </g>
+        ))}
+        {n > 1 && <path d={area} fill="url(#trendArea)" />}
+        {n > 1 && (
+          <polyline
+            points={line}
+            fill="none"
+            stroke={BRAND}
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        )}
+        {data.map((d, i) => (
+          <circle
+            key={d.week_start}
+            cx={x(i)}
+            cy={y(d.average_score)}
+            r="3.5"
+            fill="#fff"
+            stroke={BRAND}
+            strokeWidth="2"
+          >
+            <title>{`${d.average_score}% · ${d.attempts} attempt${d.attempts === 1 ? "" : "s"}`}</title>
+          </circle>
+        ))}
+      </svg>
+      <div className="flex justify-between mt-2 px-1">
+        {data.map((week) => (
+          <span key={week.week_start} className="text-[10px] text-gray-400">
+            {new Date(week.week_start).toLocaleDateString(undefined, {
+              month: "short",
+              day: "numeric",
+            })}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Safe vs at-risk split — a donut, the correct shape for a part-to-whole. */
+function RiskDonut({ safe, atRisk }: { safe: number; atRisk: number }) {
+  const total = safe + atRisk;
+  const r = 54;
+  const cx = 70;
+  const cy = 70;
+  const sw = 16;
+  const c = 2 * Math.PI * r;
+  const safeLen = total ? (safe / total) * c : 0;
+  const atRiskLen = total ? (atRisk / total) * c : 0;
+
+  return (
+    <div className="flex flex-col items-center gap-4">
+      <div className="relative w-[140px] h-[140px]">
+        <svg viewBox="0 0 140 140" className="w-full h-full -rotate-90">
+          <circle cx={cx} cy={cy} r={r} fill="none" stroke="#f1f5f9" strokeWidth={sw} />
+          {safeLen > 0 && (
+            <circle
+              cx={cx}
+              cy={cy}
+              r={r}
+              fill="none"
+              stroke="#10b981"
+              strokeWidth={sw}
+              strokeDasharray={`${safeLen} ${c}`}
+            />
+          )}
+          {atRiskLen > 0 && (
+            <circle
+              cx={cx}
+              cy={cy}
+              r={r}
+              fill="none"
+              stroke="#f43f5e"
+              strokeWidth={sw}
+              strokeDasharray={`${atRiskLen} ${c}`}
+              strokeDashoffset={-safeLen}
+            />
+          )}
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <span className="text-2xl font-bold text-gray-900">{total}</span>
+          <span className="text-[11px] text-gray-500">predicted</span>
+        </div>
+      </div>
+      <div className="flex items-center gap-6">
+        <span className="flex items-center gap-2 text-sm">
+          <span className="w-3 h-3 rounded-full bg-emerald-500" />
+          <span className="text-gray-600">Safe</span>
+          <span className="font-bold text-emerald-600">{safe}</span>
+        </span>
+        <span className="flex items-center gap-2 text-sm">
+          <span className="w-3 h-3 rounded-full bg-rose-500" />
+          <span className="text-gray-600">At risk</span>
+          <span className="font-bold text-rose-600">{atRisk}</span>
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/** Horizontal bars — the correct shape for comparing labelled magnitudes. */
+function HBars({
+  items,
+  max,
+  suffix = "",
+  tone = "brand",
+}: {
+  items: { key: string; label: string; value: number; icon?: IconDefinition }[];
+  max: number;
+  suffix?: string;
+  tone?: "brand" | "grade";
+}) {
+  const barColor = (v: number) => {
+    if (tone === "grade") {
+      if (v >= 75) return "bg-emerald-500";
+      if (v >= 50) return "bg-amber-500";
+      return "bg-rose-500";
+    }
+    return "bg-gradient-to-r from-brand-600 to-[#2a8a98]";
+  };
+  return (
+    <div className="space-y-3">
+      {items.map((item) => (
+        <div key={item.key} className="flex items-center gap-3">
+          <span className="flex w-40 shrink-0 items-center gap-2 text-sm text-gray-600 truncate">
+            {item.icon && (
+              <FontAwesomeIcon icon={item.icon} className="w-3.5 h-3.5 text-brand-600 shrink-0" />
+            )}
+            <span className="truncate">{item.label}</span>
+          </span>
+          <div className="h-2.5 flex-1 rounded-full bg-gray-100 overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all duration-500 ${barColor(item.value)}`}
+              style={{ width: `${max > 0 ? Math.max((item.value / max) * 100, item.value > 0 ? 4 : 0) : 0}%` }}
+            />
+          </div>
+          <span className="w-12 shrink-0 text-right text-sm font-semibold text-gray-800 tabular-nums">
+            {item.value}
+            {suffix}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export default function FacultyAnalyticsClient() {
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
@@ -38,13 +233,15 @@ export default function FacultyAnalyticsClient() {
             <div className="h-4 w-96 bg-gray-200 rounded" />
           </div>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
           {Array.from({ length: 4 }).map((_, i) => (
             <SkeletonStatCard key={i} />
           ))}
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <SkeletonChartArea />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+          <div className="lg:col-span-2">
+            <SkeletonChartArea />
+          </div>
           <SkeletonChartArea />
         </div>
         <SkeletonCompetencyGrid />
@@ -56,8 +253,10 @@ export default function FacultyAnalyticsClient() {
   const safe = summary?.risk_distribution?.safe ?? 0;
   const predicted = atRisk + safe;
   const trend = summary?.weekly_trend ?? [];
-  const maxAttempts = Math.max(1, ...trend.map((w) => w.attempts));
   const activity = summary?.clinical_activity;
+  const competencies = Object.entries(summary?.competency_breakdown ?? {}).sort(
+    (a, b) => b[1] - a[1],
+  );
 
   const statCards = [
     {
@@ -90,6 +289,16 @@ export default function FacultyAnalyticsClient() {
     },
   ];
 
+  const activityItems = [
+    { key: "vitals", label: "Vital Readings", value: activity?.vital_readings ?? 0, icon: faHeartbeat },
+    { key: "anomalies", label: "Anomalies Flagged", value: activity?.anomalies ?? 0, icon: faExclamationTriangle },
+    { key: "tpr", label: "TPR Entries", value: activity?.tpr_entries ?? 0, icon: faTemperatureHalf },
+    { key: "ivf", label: "IVF Records", value: activity?.ivf_records ?? 0, icon: faDroplet },
+    { key: "notes", label: "Progress Notes", value: activity?.progress_notes ?? 0, icon: faNotesMedical },
+    { key: "reviewed", label: "Notes Reviewed", value: activity?.notes_reviewed ?? 0, icon: faCircleCheck },
+  ];
+  const activityMax = Math.max(1, ...activityItems.map((a) => a.value));
+
   return (
     <div>
       <PageHeader
@@ -118,129 +327,66 @@ export default function FacultyAnalyticsClient() {
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
-        <Card padding="md">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Weekly Score Trend</h3>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+        <Card padding="md" className="lg:col-span-2">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">Weekly Score Trend</h3>
+            <span className="text-xs text-gray-400">avg quiz score, last {trend.length || 8} weeks</span>
+          </div>
           {trend.length === 0 ? (
-            <p className="text-gray-400 text-sm py-12 text-center">
+            <p className="text-gray-400 text-sm py-16 text-center">
               No submitted attempts in the last 8 weeks.
             </p>
           ) : (
-            <>
-              <div className="h-40 flex items-end justify-between gap-2 px-2">
-                {trend.map((week) => (
-                  <div key={week.week_start} className="flex-1 flex flex-col items-center gap-2 group">
-                    <div className="w-full relative">
-                      <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-brand-600 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
-                        {week.average_score}% · {week.attempts} attempt{week.attempts === 1 ? "" : "s"}
-                      </div>
-                      <div
-                        className="w-full bg-gradient-to-t from-brand-600 to-[#2a8a98] rounded-t transition-all duration-300 hover:opacity-80"
-                        style={{ height: `${Math.max(week.average_score, 4) * 1.4}px` }}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="flex justify-between mt-3 px-2">
-                {trend.map((week) => (
-                  <span key={week.week_start} className="text-[10px] text-gray-400">
-                    {new Date(week.week_start).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-                  </span>
-                ))}
-              </div>
-            </>
+            <TrendLineChart data={trend} />
           )}
         </Card>
 
         <Card padding="md">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">At-Risk Prediction Snapshot</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">At-Risk Prediction</h3>
           {predicted === 0 ? (
             <div className="py-10 text-center">
               <FontAwesomeIcon icon={faExclamationTriangle} className="w-8 h-8 text-gray-300 mb-3" />
               <p className="text-gray-500 text-sm">
-                No predictions yet — the ML prediction service (Random Forest / Logistic
-                Regression) populates this once deployed.
+                No predictions yet — the ML prediction service populates this once it runs.
               </p>
             </div>
           ) : (
-            <div className="space-y-4 py-4">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">Safe</span>
-                <span className="font-bold text-emerald-600">{safe}</span>
-              </div>
-              <div className="h-3 bg-gray-100 rounded-full overflow-hidden flex">
-                <div className="bg-emerald-500 h-full" style={{ width: `${(safe / predicted) * 100}%` }} />
-                <div className="bg-rose-500 h-full" style={{ width: `${(atRisk / predicted) * 100}%` }} />
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">At risk</span>
-                <span className="font-bold text-rose-600">{atRisk}</span>
-              </div>
+            <div className="py-2">
+              <RiskDonut safe={safe} atRisk={atRisk} />
             </div>
           )}
         </Card>
       </div>
 
-      <Card padding="md" className="mb-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Competency Breakdown</h3>
-        {Object.keys(summary?.competency_breakdown ?? {}).length === 0 ? (
-          <p className="text-gray-400 text-sm">
-            No validated competency scores yet — record them from each student&apos;s profile.
-          </p>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-            {Object.entries(summary!.competency_breakdown).map(([name, value]) => (
-              <div key={name} className="text-center">
-                <div className="relative w-20 h-20 mx-auto">
-                  <svg className="w-20 h-20 transform -rotate-90" viewBox="0 0 80 80">
-                    <circle cx="40" cy="40" r="32" fill="none" stroke="#f3f4f6" strokeWidth="8" />
-                    <circle
-                      cx="40"
-                      cy="40"
-                      r="32"
-                      fill="none"
-                      stroke="#1B6B7B"
-                      strokeWidth="8"
-                      strokeDasharray={`${(value / 100) * 201} 201`}
-                      strokeLinecap="round"
-                    />
-                  </svg>
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <span className="text-sm font-semibold text-gray-800">{value}%</span>
-                  </div>
-                </div>
-                <p className="text-xs text-gray-500 mt-2">{name}</p>
-              </div>
-            ))}
-          </div>
-        )}
-      </Card>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+        <Card padding="md">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Competency Breakdown</h3>
+          {competencies.length === 0 ? (
+            <p className="text-gray-400 text-sm py-12 text-center">
+              No validated competency scores yet — record them from each student&apos;s profile.
+            </p>
+          ) : (
+            <HBars
+              items={competencies.map(([name, value]) => ({ key: name, label: name, value }))}
+              max={100}
+              suffix="%"
+              tone="grade"
+            />
+          )}
+        </Card>
 
-      <Card padding="md">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Clinical Training Activity</h3>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-          {[
-            { icon: faHeartbeat, label: "Vital Readings", value: activity?.vital_readings ?? 0 },
-            { icon: faExclamationTriangle, label: "Anomalies Flagged", value: activity?.anomalies ?? 0 },
-            { icon: faNotesMedical, label: "TPR Entries", value: activity?.tpr_entries ?? 0 },
-            { icon: faNotesMedical, label: "IVF Records", value: activity?.ivf_records ?? 0 },
-            { icon: faNotesMedical, label: "Progress Notes", value: activity?.progress_notes ?? 0 },
-            { icon: faClipboardCheck, label: "Notes Reviewed", value: activity?.notes_reviewed ?? 0 },
-          ].map((item) => (
-            <div key={item.label} className="p-4 bg-gray-50 rounded-xl text-center">
-              <FontAwesomeIcon icon={item.icon} className="w-4 h-4 text-brand-600 mb-2" />
-              <p className="text-2xl font-bold text-gray-800">{item.value}</p>
-              <p className="text-xs text-gray-500 mt-1">{item.label}</p>
-            </div>
-          ))}
-        </div>
-        {summary?.etl?.last_run_at && (
-          <p className="text-xs text-gray-400 mt-4">
-            Warehouse last refreshed {new Date(summary.etl.last_run_at).toLocaleString()}
-          </p>
-        )}
-      </Card>
+        <Card padding="md">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Clinical Training Activity</h3>
+          <HBars items={activityItems} max={activityMax} />
+        </Card>
+      </div>
+
+      {summary?.etl?.last_run_at && (
+        <p className="text-xs text-gray-400">
+          Warehouse last refreshed {new Date(summary.etl.last_run_at).toLocaleString()}
+        </p>
+      )}
     </div>
   );
 }
