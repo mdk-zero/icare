@@ -10,7 +10,7 @@
 @theme inline {
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-  --font-display: var(--font-fraunces);
+  --font-display: var(--font-space-grotesk);
 }
 
 /*
@@ -258,10 +258,9 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-/* Page and section titles carry the display serif. */
+/* Page and section titles carry the display sans. */
 .font-display {
-  font-family: var(--font-fraunces), ui-serif, Georgia, serif;
-  font-optical-sizing: auto;
+  font-family: var(--font-space-grotesk), ui-sans-serif, system-ui, sans-serif;
 }
 
 h1,
