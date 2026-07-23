@@ -148,6 +148,7 @@ export async function POST(request: NextRequest) {
     difficulty?: unknown;
     topic?: unknown;
     use_patients?: unknown;
+    avoid_titles?: unknown;
   };
   try {
     body = await request.json();
@@ -185,9 +186,17 @@ export async function POST(request: NextRequest) {
       .select('title')
       .order('created_at', { ascending: false })
       .limit(40);
-    const existingTitles = (existing ?? [])
-      .map((s) => (s as { title: string }).title)
-      .filter(Boolean);
+    // Caller-supplied titles let a client generating a large library in several
+    // sub-batches feed each batch's titles into the next, so they don't repeat.
+    const avoidTitles = Array.isArray(body.avoid_titles)
+      ? (body.avoid_titles as unknown[]).filter(
+          (t): t is string => typeof t === 'string' && t.trim().length > 0,
+        )
+      : [];
+    const existingTitles = [
+      ...(existing ?? []).map((s) => (s as { title: string }).title).filter(Boolean),
+      ...avoidTitles,
+    ];
 
     const slots = planSlots(count, categories, difficulty, patients);
 

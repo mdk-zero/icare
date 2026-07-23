@@ -1510,6 +1510,8 @@ export interface ScenarioBatchOptions {
   topic?: string;
   /** Ground each scenario in a real MIMIC patient record. */
   usePatients?: boolean;
+  /** Titles to steer away from — used to chain sub-batches without repeats. */
+  avoidTitles?: string[];
 }
 
 /** An unsaved scenario returned by batch generation, ready for review. */
@@ -1538,6 +1540,7 @@ export async function generateScenarioBatch(
         difficulty: options.difficulty,
         topic: options.topic,
         use_patients: options.usePatients,
+        avoid_titles: options.avoidTitles,
       }),
     });
 

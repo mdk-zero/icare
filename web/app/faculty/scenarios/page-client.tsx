@@ -90,8 +90,10 @@ const inputClassName =
   "w-full px-4 py-3 bg-surface border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 focus:bg-surface transition-all text-sm shadow-sm";
 
 /** The batch route caps a single request at 12 (sequential, rate-limited AI
- *  generation); the input mirrors it so the UI can't promise more than it gets. */
-const MAX_BATCH_COUNT = 12;
+ *  generation, inside a 60s serverless timeout). Larger libraries are generated
+ *  by looping the route in sub-batches of this size, up to MAX_BATCH_COUNT. */
+const MAX_PER_REQUEST = 12;
+const MAX_BATCH_COUNT = 50;
 
 const labelClassName = "block text-sm font-bold text-gray-800 mb-2";
 
@@ -246,6 +248,7 @@ export default function FacultyScenariosClient() {
   const [batchDrafts, setBatchDrafts] = useState<ScenarioDraft[] | null>(null);
   const [batchSelected, setBatchSelected] = useState<number[]>([]);
   const [batchGenerating, setBatchGenerating] = useState(false);
+  const [batchProgress, setBatchProgress] = useState(0);
   const [batchSaving, setBatchSaving] = useState(false);
   const [batchSavedCount, setBatchSavedCount] = useState(0);
   const [batchError, setBatchError] = useState<string | null>(null);
@@ -506,6 +509,7 @@ export default function FacultyScenariosClient() {
     setBatchError(null);
     setBatchWarning(null);
     setBatchSavedCount(0);
+    setBatchProgress(0);
     setShowBatchModal(true);
     if (patients.length === 0) void loadPatientsForSelector();
   };
@@ -518,6 +522,7 @@ export default function FacultyScenariosClient() {
     setBatchError(null);
     setBatchWarning(null);
     setBatchSavedCount(0);
+    setBatchProgress(0);
   };
 
   const toggleBatchCategory = (category: string) => {
@@ -531,22 +536,58 @@ export default function FacultyScenariosClient() {
     setBatchError(null);
     setBatchWarning(null);
     setBatchDrafts(null);
+    setBatchProgress(0);
 
-    const result = await generateScenarioBatch({
-      count: batchCount,
-      categories: batchCategories,
-      difficulty: batchDifficulty || undefined,
-      topic: batchTopic.trim() || undefined,
-      usePatients: batchUsePatients,
-    });
+    const total = Math.max(1, Math.min(MAX_BATCH_COUNT, batchCount));
+    const collected: ScenarioDraft[] = [];
+    const warnings: string[] = [];
 
-    if ("error" in result) {
-      setBatchError(result.error);
-    } else {
-      setBatchDrafts(result.scenarios);
-      setBatchSelected(result.scenarios.map((_, i) => i));
-      setBatchWarning(result.warning ?? null);
+    // A single request tops out at the server's per-batch cap (60s serverless
+    // limit), so a larger library is several sequential requests. Each carries
+    // the titles produced so far as avoid_titles, so sub-batches don't collide.
+    for (let remaining = total; remaining > 0; remaining -= MAX_PER_REQUEST) {
+      const chunkCount = Math.min(MAX_PER_REQUEST, remaining);
+      const result = await generateScenarioBatch({
+        count: chunkCount,
+        categories: batchCategories,
+        difficulty: batchDifficulty || undefined,
+        topic: batchTopic.trim() || undefined,
+        usePatients: batchUsePatients,
+        avoidTitles: collected.map((s) => s.title),
+      });
+
+      if ("error" in result) {
+        // A first-request failure is fatal; a later one keeps what we have.
+        if (collected.length === 0) {
+          setBatchError(result.error);
+          setBatchGenerating(false);
+          return;
+        }
+        warnings.push(result.error);
+        break;
+      }
+
+      collected.push(...result.scenarios);
+      if (result.warning) warnings.push(result.warning);
+      setBatchProgress(collected.length);
+
+      // The model can return fewer than asked; stop rather than loop chasing the rest.
+      if (result.scenarios.length < chunkCount) break;
     }
+
+    if (collected.length === 0) {
+      setBatchError("The AI service didn't return any scenarios. Please try again.");
+      setBatchGenerating(false);
+      return;
+    }
+
+    setBatchDrafts(collected);
+    setBatchSelected(collected.map((_, i) => i));
+    setBatchWarning(
+      collected.length < total
+        ? `Generated ${collected.length} of ${total} — the AI service fell short. Keep these or try again for more.`
+        : (warnings[0] ?? null),
+    );
     setBatchGenerating(false);
   };
 
@@ -1509,7 +1550,7 @@ export default function FacultyScenariosClient() {
                       className={inputClassName}
                     />
                     <p className="text-xs text-gray-500 mt-1.5">
-                      {`Enter any number from 1 to ${MAX_BATCH_COUNT}.`}
+                      {`Enter any number from 1 to ${MAX_BATCH_COUNT}. More than ${MAX_PER_REQUEST} are generated in batches, so it takes longer.`}
                     </p>
                   </div>
 
@@ -1604,7 +1645,9 @@ export default function FacultyScenariosClient() {
                   {batchGenerating && (
                     <div className="p-4 rounded-xl border border-brand-200 bg-brand-50/50 text-sm text-brand-800 flex items-center gap-3">
                       <FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" />
-                      Writing {batchCount} scenarios — this takes up to a minute for larger batches.
+                      {batchCount > MAX_PER_REQUEST
+                        ? `Writing scenarios in batches of ${MAX_PER_REQUEST} — ${batchProgress} of ${batchCount} so far. This can take a few minutes.`
+                        : `Writing ${batchCount} scenarios — this takes up to a minute.`}
                     </div>
                   )}
                 </>
