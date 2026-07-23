@@ -66,6 +66,7 @@ export default function NewScenarioClient() {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [patientSearch, setPatientSearch] = useState("");
+  const [customCategory, setCustomCategory] = useState(false);
 
   const [aiPrompt, setAiPrompt] = useState("");
   const [generating, setGenerating] = useState(false);
@@ -135,6 +136,11 @@ export default function NewScenarioClient() {
       }));
       setAiPatientCase((preview.patient_case as Record<string, unknown>) ?? null);
       setAiGenerated(true);
+      // If the model produced a category outside the presets, show it as custom.
+      const cat = preview.category ?? "";
+      if (cat && !SCENARIO_CATEGORIES.includes(cat as (typeof SCENARIO_CATEGORIES)[number])) {
+        setCustomCategory(true);
+      }
     }
     setGenerating(false);
   };
@@ -314,24 +320,55 @@ export default function NewScenarioClient() {
               </div>
               <div>
                 <label className={labelClassName}>Category</label>
-                <div className="relative">
-                  <select
-                    value={form.category}
-                    onChange={(e) => setForm({ ...form, category: e.target.value })}
-                    className={selectClassName + " pr-10"}
-                  >
-                    <option value="">Select category</option>
-                    {SCENARIO_CATEGORIES.map((cat) => (
-                      <option key={cat} value={cat}>
-                        {cat}
-                      </option>
-                    ))}
-                  </select>
-                  <FontAwesomeIcon
-                    icon={faChevronDown}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none"
-                  />
-                </div>
+                {customCategory ? (
+                  <div>
+                    <input
+                      type="text"
+                      value={form.category}
+                      onChange={(e) => setForm({ ...form, category: e.target.value })}
+                      placeholder="New category name"
+                      maxLength={60}
+                      className={inputClassName}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCustomCategory(false);
+                        setForm((f) => ({ ...f, category: "" }));
+                      }}
+                      className="mt-1.5 text-xs font-medium text-brand-600 hover:text-brand-700"
+                    >
+                      Choose from a preset instead
+                    </button>
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <select
+                      value={form.category}
+                      onChange={(e) => {
+                        if (e.target.value === "__new__") {
+                          setCustomCategory(true);
+                          setForm((f) => ({ ...f, category: "" }));
+                        } else {
+                          setForm({ ...form, category: e.target.value });
+                        }
+                      }}
+                      className={selectClassName + " pr-10"}
+                    >
+                      <option value="">Select category</option>
+                      {SCENARIO_CATEGORIES.map((cat) => (
+                        <option key={cat} value={cat}>
+                          {cat}
+                        </option>
+                      ))}
+                      <option value="__new__">➕ Create new category…</option>
+                    </select>
+                    <FontAwesomeIcon
+                      icon={faChevronDown}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none"
+                    />
+                  </div>
+                )}
               </div>
             </div>
             <div>

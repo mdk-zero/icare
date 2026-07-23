@@ -3,18 +3,6 @@ import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 
 const validDifficulties = ['beginner', 'intermediate', 'advanced'] as const;
-const validCategories = [
-  'Cardiac Emergency',
-  'Respiratory Emergency',
-  'Neurological Emergency',
-  'Trauma',
-  'Medical-Surgical',
-  'Patient Education',
-  'Infection Management',
-  'Critical Care',
-  'Medication Safety',
-  'General',
-] as const;
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -77,10 +65,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   }
 
   if (category !== undefined) {
-    if (!validCategories.includes(category as typeof validCategories[number])) {
-      return NextResponse.json({ error: 'Invalid category' }, { status: 400 });
-    }
-    updateData.category = category;
+    // Free-form categories (preset or custom): trim, cap length, default.
+    updateData.category =
+      typeof category === 'string' && category.trim() ? category.trim().slice(0, 60) : 'General';
   }
 
   if (patient_case !== undefined) {

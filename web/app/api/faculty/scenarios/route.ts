@@ -3,18 +3,11 @@ import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 
 const validDifficulties = ['beginner', 'intermediate', 'advanced'] as const;
-const validCategories = [
-  'Cardiac Emergency',
-  'Respiratory Emergency',
-  'Neurological Emergency',
-  'Trauma',
-  'Medical-Surgical',
-  'Patient Education',
-  'Infection Management',
-  'Critical Care',
-  'Medication Safety',
-  'General',
-] as const;
+
+/** Categories are free-form (preset or custom): trim, cap length, default. */
+function cleanCategory(value: unknown): string {
+  return typeof value === 'string' && value.trim() ? value.trim().slice(0, 60) : 'General';
+}
 
 function forbiddenResponse() {
   return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -115,9 +108,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid difficulty' }, { status: 400 });
   }
 
-  if (!validCategories.includes(category as typeof validCategories[number])) {
-    return NextResponse.json({ error: 'Invalid category' }, { status: 400 });
-  }
 
   const sanitizedLearningObjectives = Array.isArray(learning_objectives)
     ? learning_objectives.filter((o): o is string => typeof o === 'string')
@@ -150,7 +140,7 @@ export async function POST(request: NextRequest) {
         title: title.trim(),
         description: typeof description === 'string' ? description.trim() : '',
         difficulty: difficulty as typeof validDifficulties[number],
-        category: category as typeof validCategories[number],
+        category: cleanCategory(category),
         patient_case: patient_case && typeof patient_case === 'object' ? patient_case : {},
         learning_objectives: sanitizedLearningObjectives,
         is_ai_generated: typeof is_ai_generated === 'boolean' ? is_ai_generated : false,
