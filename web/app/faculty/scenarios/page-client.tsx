@@ -1493,40 +1493,23 @@ export default function FacultyScenariosClient() {
                 <>
                   <div>
                     <label className={labelClassName}>How many scenarios?</label>
-                    <div className="flex items-stretch gap-2">
-                      {[3, 6, 9, 12].map((n) => (
-                        <button
-                          key={n}
-                          type="button"
-                          onClick={() => setBatchCount(n)}
-                          disabled={batchGenerating}
-                          className={`w-14 shrink-0 rounded-xl border py-2.5 text-sm font-semibold transition-all disabled:opacity-50 ${
-                            batchCount === n
-                              ? "bg-brand-600 text-white border-brand-600 shadow-sm"
-                              : "bg-surface text-gray-700 border-gray-300 hover:border-brand-300 hover:bg-brand-50"
-                          }`}
-                        >
-                          {n}
-                        </button>
-                      ))}
-                      <input
-                        type="number"
-                        min={1}
-                        max={MAX_BATCH_COUNT}
-                        value={batchCount}
-                        onChange={(e) => {
-                          const n = parseInt(e.target.value, 10);
-                          // Ignore mid-edit blanks; keep the last valid count.
-                          if (Number.isNaN(n)) return;
-                          setBatchCount(Math.max(1, Math.min(MAX_BATCH_COUNT, n)));
-                        }}
-                        disabled={batchGenerating}
-                        aria-label="Number of scenarios to generate"
-                        className={inputClassName + " flex-1 min-w-0"}
-                      />
-                    </div>
+                    <input
+                      type="number"
+                      min={1}
+                      max={MAX_BATCH_COUNT}
+                      value={batchCount}
+                      onChange={(e) => {
+                        const n = parseInt(e.target.value, 10);
+                        // Ignore mid-edit blanks; keep the last valid count.
+                        if (Number.isNaN(n)) return;
+                        setBatchCount(Math.max(1, Math.min(MAX_BATCH_COUNT, n)));
+                      }}
+                      disabled={batchGenerating}
+                      aria-label="Number of scenarios to generate"
+                      className={inputClassName}
+                    />
                     <p className="text-xs text-gray-500 mt-1.5">
-                      {`Pick a preset or enter any number from 1 to ${MAX_BATCH_COUNT}.`}
+                      {`Enter any number from 1 to ${MAX_BATCH_COUNT}.`}
                     </p>
                   </div>
 
