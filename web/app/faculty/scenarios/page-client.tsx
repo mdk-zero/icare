@@ -89,6 +89,10 @@ const emptyEditForm = {
 const inputClassName =
   "w-full px-4 py-3 bg-surface border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 focus:bg-surface transition-all text-sm shadow-sm";
 
+/** The batch route caps a single request at 12 (sequential, rate-limited AI
+ *  generation); the input mirrors it so the UI can't promise more than it gets. */
+const MAX_BATCH_COUNT = 12;
+
 const labelClassName = "block text-sm font-bold text-gray-800 mb-2";
 
 type MenuAction = {
@@ -1489,14 +1493,14 @@ export default function FacultyScenariosClient() {
                 <>
                   <div>
                     <label className={labelClassName}>How many scenarios?</label>
-                    <div className="flex gap-2">
+                    <div className="flex items-stretch gap-2">
                       {[3, 6, 9, 12].map((n) => (
                         <button
                           key={n}
                           type="button"
                           onClick={() => setBatchCount(n)}
                           disabled={batchGenerating}
-                          className={`flex-1 py-2.5 rounded-xl text-sm font-semibold border transition-all disabled:opacity-50 ${
+                          className={`w-14 shrink-0 rounded-xl border py-2.5 text-sm font-semibold transition-all disabled:opacity-50 ${
                             batchCount === n
                               ? "bg-brand-600 text-white border-brand-600 shadow-sm"
                               : "bg-surface text-gray-700 border-gray-300 hover:border-brand-300 hover:bg-brand-50"
@@ -1505,7 +1509,25 @@ export default function FacultyScenariosClient() {
                           {n}
                         </button>
                       ))}
+                      <input
+                        type="number"
+                        min={1}
+                        max={MAX_BATCH_COUNT}
+                        value={batchCount}
+                        onChange={(e) => {
+                          const n = parseInt(e.target.value, 10);
+                          // Ignore mid-edit blanks; keep the last valid count.
+                          if (Number.isNaN(n)) return;
+                          setBatchCount(Math.max(1, Math.min(MAX_BATCH_COUNT, n)));
+                        }}
+                        disabled={batchGenerating}
+                        aria-label="Number of scenarios to generate"
+                        className={inputClassName + " flex-1 min-w-0"}
+                      />
                     </div>
+                    <p className="text-xs text-gray-500 mt-1.5">
+                      {`Pick a preset or enter any number from 1 to ${MAX_BATCH_COUNT}.`}
+                    </p>
                   </div>
 
                   <div>
