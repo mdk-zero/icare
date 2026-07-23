@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Fraunces } from "next/font/google";
+import { Geist, Geist_Mono, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 import { THEME_INIT_SCRIPT } from "./lib/theme";
 
@@ -16,11 +16,11 @@ const geistMono = Geist_Mono({
 });
 
 /**
- * Display face for page and section titles. Replaces Rubik Mono One, which was
- * loaded on every route but never referenced anywhere in the app.
+ * Sans-serif display face for page and section titles. Replaces Fraunces (a
+ * serif), so titles no longer fall back to Georgia.
  */
-const fraunces = Fraunces({
-  variable: "--font-fraunces",
+const spaceGrotesk = Space_Grotesk({
+  variable: "--font-space-grotesk",
   subsets: ["latin"],
   display: "swap",
   weight: ["600", "700"],
@@ -40,7 +40,7 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${geistSans.variable} ${geistMono.variable} ${fraunces.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${spaceGrotesk.variable} h-full antialiased`}
     >
       <head>
         {/* Must run before first paint, or the page flashes light then snaps to dark. */}

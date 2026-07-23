@@ -6,12 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import { SkeletonSidebar } from "./skeletons";
-import {
-  faBars,
-  faBell,
-  faRightFromBracket,
-  faXmark,
-} from "@fortawesome/free-solid-svg-icons";
+import { faBars, faBell, faRightFromBracket, faXmark } from "@fortawesome/free-solid-svg-icons";
 import {
   getCurrentUser,
   getDisplayAvatarUrl,
@@ -68,8 +63,7 @@ const config = {
 /** The one accent. It marks the current location and nothing else. */
 const ACCENT = "#5eead4";
 
-const SIDEBAR_GRADIENT =
-  "linear-gradient(180deg, #0b3d3d 0%, #146464 50%, #0f5252 100%)";
+const SIDEBAR_GRADIENT = "linear-gradient(180deg, #0b3d3d 0%, #146464 50%, #0f5252 100%)";
 
 /** Cool light falling from the top-left, so the panel has a light source. */
 const SIDEBAR_GLOW: React.CSSProperties = {
@@ -136,12 +130,7 @@ function NavPendingBar() {
   );
 }
 
-export default function Shell({
-  role,
-  navItems,
-  isActive,
-  children,
-}: ShellProps) {
+export default function Shell({ role, navItems, isActive, children }: ShellProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -440,9 +429,6 @@ export default function Shell({
                 />
               </span>
               <span className="text-[13px] font-semibold leading-none">Log out</span>
-              <span className="ml-auto font-mono text-[9px] uppercase tracking-[0.14em] leading-none text-white/35 transition-colors duration-200 group-hover:text-rose-200/80">
-                End session
-              </span>
             </button>
           </div>
         </aside>
@@ -518,8 +504,8 @@ export default function Shell({
                   </span>
                 </div>
                 <p id="logout-desc" className="mt-4 text-sm leading-relaxed text-gray-600">
-                  You&apos;ll need to sign in again to get back into the{" "}
-                  {portalLabel.toLowerCase()}.
+                  You&apos;ll need to sign in again to get back into the {portalLabel.toLowerCase()}
+                  .
                 </p>
               </div>
 
@@ -550,10 +536,7 @@ export default function Shell({
                 onClick={() => setSidebarOpen(true)}
                 className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
               >
-                <FontAwesomeIcon
-                  icon={faBars}
-                  className="w-5 h-5 text-gray-600"
-                />
+                <FontAwesomeIcon icon={faBars} className="w-5 h-5 text-gray-600" />
               </button>
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 bg-gradient-to-br from-[#0b3d3d] to-[#146464] rounded-lg flex items-center justify-center p-1">
@@ -568,10 +551,7 @@ export default function Shell({
             <div className="flex items-center gap-2">
               {role !== "student" && (
                 <button className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
-                  <FontAwesomeIcon
-                    icon={faBell}
-                    className="w-5 h-5 text-gray-600"
-                  />
+                  <FontAwesomeIcon icon={faBell} className="w-5 h-5 text-gray-600" />
                 </button>
               )}
               <span className="px-2 py-1.5 bg-gradient-to-br from-[#0b3d3d] to-[#146464] text-white text-xs font-medium rounded-lg">
