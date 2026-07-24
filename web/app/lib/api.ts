@@ -1100,6 +1100,8 @@ export interface AuditLogInsert {
 // Warehouse-backed analytics (public.dw_analytics_summary via /api/analytics/summary)
 export interface AnalyticsSummary {
   etl: { last_run_at: string | null; rows_loaded: Record<string, number> } | null;
+  /** Sections represented in the current scope, with their student counts. */
+  sections: { id: string; name: string; students: number }[];
   cohort: {
     total_students: number;
     submitted_attempts: number;
@@ -1134,18 +1136,85 @@ export interface AnalyticsSummary {
   risk_distribution: Record<string, number>; // keys: 'safe' | 'at_risk'
 }
 
-export async function fetchAnalyticsSummary(): Promise<AnalyticsSummary | null> {
+/** Trend granularity the server derived from the requested range. */
+export type AnalyticsBucket = 'day' | 'week' | 'month' | 'year';
+
+export interface AnalyticsFilters {
+  /** Section ids; omitted/empty = every section the caller manages. */
+  sectionIds?: string[];
+  /** YYYY-MM-DD bounds. */
+  from?: string;
+  to?: string;
+}
+
+export async function fetchAnalyticsSummary(
+  filters: AnalyticsFilters = {},
+  signal?: AbortSignal,
+): Promise<{ summary: AnalyticsSummary | null; bucket: AnalyticsBucket }> {
+  const params = new URLSearchParams();
+  if (filters.sectionIds?.length) params.set('section_ids', filters.sectionIds.join(','));
+  if (filters.from) params.set('from', filters.from);
+  if (filters.to) params.set('to', filters.to);
+  const query = params.toString();
+
   try {
-    const res = await fetch('/api/analytics/summary', { credentials: 'include' });
+    const res = await fetch(`/api/analytics/summary${query ? `?${query}` : ''}`, {
+      credentials: 'include',
+      signal,
+    });
     if (!res.ok) {
       console.error('fetchAnalyticsSummary() failed', res.status);
-      return null;
+      return { summary: null, bucket: 'week' };
     }
-    const json = (await res.json()) as { summary: AnalyticsSummary };
-    return json.summary ?? null;
+    const json = (await res.json()) as { summary: AnalyticsSummary; bucket?: AnalyticsBucket };
+    return { summary: json.summary ?? null, bucket: json.bucket ?? 'week' };
   } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      return { summary: null, bucket: 'week' };
+    }
     console.error('fetchAnalyticsSummary() failed', err);
-    return null;
+    return { summary: null, bucket: 'week' };
+  }
+}
+
+/** Plain-language reading of the dashboard, for the same filters. */
+export interface AnalyticsNarrative {
+  headline: string;
+  overview: string;
+  highlights: string[];
+  watchouts: string[];
+  actions: string[];
+}
+
+export async function generateAnalyticsNarrative(
+  filters: AnalyticsFilters = {},
+  signal?: AbortSignal,
+): Promise<{ narrative?: AnalyticsNarrative; generated_at?: string; error?: string }> {
+  const params = new URLSearchParams();
+  if (filters.sectionIds?.length) params.set('section_ids', filters.sectionIds.join(','));
+  if (filters.from) params.set('from', filters.from);
+  if (filters.to) params.set('to', filters.to);
+  const query = params.toString();
+
+  try {
+    const res = await fetch(`/api/analytics/narrative${query ? `?${query}` : ''}`, {
+      method: 'POST',
+      credentials: 'include',
+      signal,
+    });
+    const json = (await res.json()) as {
+      narrative?: AnalyticsNarrative;
+      generated_at?: string;
+      error?: string;
+    };
+    if (!res.ok) {
+      return { error: json.error || 'Unable to generate summary' };
+    }
+    return { narrative: json.narrative, generated_at: json.generated_at };
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') return {};
+    console.error('generateAnalyticsNarrative() failed', err);
+    return { error: 'Unable to generate summary' };
   }
 }
 

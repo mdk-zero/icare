@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faChartBar,
@@ -9,24 +9,635 @@ import {
   faHeartbeat,
   faExclamationTriangle,
   faNotesMedical,
+  faDroplet,
+  faTemperatureHalf,
+  faCircleCheck,
+  faChevronDown,
+  faCheck,
+  faLayerGroup,
+  faWandMagicSparkles,
+  faArrowsRotate,
 } from "@fortawesome/free-solid-svg-icons";
-import { fetchAnalyticsSummary, AnalyticsSummary } from "../../lib/api";
+import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
+import {
+  fetchAnalyticsSummary,
+  fetchFacultySections,
+  generateAnalyticsNarrative,
+  AnalyticsSummary,
+  AnalyticsNarrative,
+  AnalyticsBucket,
+  Section,
+} from "../../lib/api";
 import { SkeletonStatCard, SkeletonChartArea, SkeletonCompetencyGrid } from "../../components/skeletons";
 import PageHeader from "../../components/PageHeader";
-import Card from "../../components/Card";
+import Card, { CardLabel } from "../../components/Card";
 import StatTile from "../../components/StatTile";
+
+const BRAND = "#1B6B7B";
+
+/* ---------------------------------------------------------------- dates */
+
+/** Local YYYY-MM-DD. `toISOString()` would shift the day in most timezones. */
+function isoDay(d: Date): string {
+  const m = `${d.getMonth() + 1}`.padStart(2, "0");
+  const day = `${d.getDate()}`.padStart(2, "0");
+  return `${d.getFullYear()}-${m}-${day}`;
+}
+
+/** Parsed as local midnight, so a bucket start never renders as the day before. */
+function parseDay(value: string): Date {
+  return new Date(`${value}T00:00:00`);
+}
+
+type PresetId = "7d" | "30d" | "3m" | "12m" | "ytd" | "custom";
+
+const PRESETS: { id: PresetId; label: string }[] = [
+  { id: "7d", label: "7 days" },
+  { id: "30d", label: "30 days" },
+  { id: "3m", label: "3 months" },
+  { id: "12m", label: "12 months" },
+  { id: "ytd", label: "This year" },
+  { id: "custom", label: "Custom" },
+];
+
+/** Ranges are inclusive of both ends, matching the SQL `>= from and <= to`. */
+function rangeForPreset(preset: Exclude<PresetId, "custom">): { from: string; to: string } {
+  const today = new Date();
+  const from = new Date(today);
+  switch (preset) {
+    case "7d":
+      from.setDate(from.getDate() - 6);
+      break;
+    case "30d":
+      from.setDate(from.getDate() - 29);
+      break;
+    case "3m":
+      from.setMonth(from.getMonth() - 3);
+      break;
+    case "12m":
+      from.setFullYear(from.getFullYear() - 1);
+      break;
+    case "ytd":
+      from.setMonth(0, 1);
+      break;
+  }
+  return { from: isoDay(from), to: isoDay(today) };
+}
+
+const BUCKET_LABEL: Record<AnalyticsBucket, string> = {
+  day: "daily",
+  week: "weekly",
+  month: "monthly",
+  year: "yearly",
+};
+
+/** X-axis tick text, tightened as the buckets get coarser. */
+function formatBucket(value: string, bucket: AnalyticsBucket): string {
+  const d = parseDay(value);
+  if (bucket === "year") return `${d.getFullYear()}`;
+  if (bucket === "month") return d.toLocaleDateString(undefined, { month: "short", year: "2-digit" });
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+function formatRange(from: string, to: string): string {
+  const a = parseDay(from);
+  const b = parseDay(to);
+  const sameYear = a.getFullYear() === b.getFullYear();
+  const left = a.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    ...(sameYear ? {} : { year: "numeric" }),
+  });
+  const right = b.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  return `${left} – ${right}`;
+}
+
+/* --------------------------------------------------------------- charts */
+
+/** Score trend over time — a line + area chart, the correct shape for a series. */
+function TrendLineChart({
+  data,
+  bucket,
+}: {
+  data: { week_start: string; average_score: number; attempts: number }[];
+  bucket: AnalyticsBucket;
+}) {
+  const W = 600;
+  const H = 210;
+  const padL = 26;
+  const padR = 12;
+  const padT = 12;
+  const padB = 32; // room for the x-axis ticks drawn inside the viewBox
+  const plotW = W - padL - padR;
+  const plotH = H - padT - padB;
+  const n = data.length;
+  const x = (i: number) => padL + (n === 1 ? plotW / 2 : (i / (n - 1)) * plotW);
+  const y = (v: number) => padT + (1 - Math.min(Math.max(v, 0), 100) / 100) * plotH;
+  const line = data.map((d, i) => `${x(i)},${y(d.average_score)}`).join(" ");
+  const area =
+    n > 0
+      ? `M ${x(0)},${y(0)} ` +
+        data.map((d, i) => `L ${x(i)},${y(d.average_score)}`).join(" ") +
+        ` L ${x(n - 1)},${y(0)} Z`
+      : "";
+  const grid = [0, 25, 50, 75, 100];
+  // A year of days would print 365 ticks over 600px; show at most ~8, always
+  // including the last so the range's end date is readable.
+  const tickStep = Math.max(1, Math.ceil(n / 8));
+  const isTick = (i: number) => i % tickStep === 0 || i === n - 1;
+
+  return (
+    <div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full">
+        <defs>
+          <linearGradient id="trendArea" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={BRAND} stopOpacity="0.22" />
+            <stop offset="100%" stopColor={BRAND} stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        {grid.map((g) => (
+          <g key={g}>
+            <line x1={padL} y1={y(g)} x2={W - padR} y2={y(g)} stroke="#eef2f6" strokeWidth="1" />
+            <text x={padL - 5} y={y(g) + 3} textAnchor="end" fontSize="9" fill="#94a3b8">
+              {g}
+            </text>
+          </g>
+        ))}
+        {n > 1 && <path d={area} fill="url(#trendArea)" />}
+        {n > 1 && (
+          <polyline
+            points={line}
+            fill="none"
+            stroke={BRAND}
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        )}
+        {data.map((d, i) => (
+          <circle
+            key={d.week_start}
+            cx={x(i)}
+            cy={y(d.average_score)}
+            r={n > 40 ? 2 : 3.5}
+            fill="#fff"
+            stroke={BRAND}
+            strokeWidth="2"
+          >
+            <title>
+              {`${formatBucket(d.week_start, bucket)} — ${d.average_score}% · ${d.attempts} attempt${
+                d.attempts === 1 ? "" : "s"
+              }`}
+            </title>
+          </circle>
+        ))}
+        {data.map((d, i) =>
+          isTick(i) ? (
+            <text
+              key={`t-${d.week_start}`}
+              x={x(i)}
+              y={H - 10}
+              // The end ticks would otherwise overhang the viewBox.
+              textAnchor={i === 0 && n > 1 ? "start" : i === n - 1 && n > 1 ? "end" : "middle"}
+              fontSize="9"
+              fill="#94a3b8"
+            >
+              {formatBucket(d.week_start, bucket)}
+            </text>
+          ) : null,
+        )}
+      </svg>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------- filters */
+
+/** Multi-select over the sections the faculty member manages. */
+function SectionPicker({
+  sections,
+  selected,
+  counts,
+  onChange,
+}: {
+  sections: Section[];
+  selected: string[];
+  counts: Record<string, number>;
+  onChange: (ids: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const boxRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (!boxRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  // Empty selection means "everything I manage" — the same thing the API does
+  // when no section_ids are sent.
+  const allSelected = selected.length === 0 || selected.length === sections.length;
+  const summary = allSelected
+    ? "All sections"
+    : selected.length === 1
+      ? (sections.find((s) => s.id === selected[0])?.name ?? "1 section")
+      : `${selected.length} sections`;
+
+  const toggle = (id: string) => {
+    const base = selected.length === 0 ? sections.map((s) => s.id) : selected;
+    const next = base.includes(id) ? base.filter((s) => s !== id) : [...base, id];
+    onChange(next);
+  };
+
+  return (
+    <div ref={boxRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        disabled={sections.length === 0}
+        className="flex items-center gap-2 rounded-lg border border-hairline bg-surface px-3 py-1.5 text-sm text-gray-700 transition-colors hover:border-brand-300 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        <FontAwesomeIcon icon={faLayerGroup} className="w-3.5 h-3.5 text-brand-600" />
+        <span className="font-medium">{summary}</span>
+        <FontAwesomeIcon icon={faChevronDown} className="w-3 h-3 text-gray-400" />
+      </button>
+
+      {open && (
+        <div className="absolute left-0 top-full z-30 mt-1.5 w-60 rounded-lg border border-hairline bg-surface p-1.5 shadow-overlay">
+          <button
+            type="button"
+            onClick={() => onChange([])}
+            className="flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-sm text-gray-700 hover:bg-subtle"
+          >
+            <span className="font-medium">All sections</span>
+            {allSelected && <FontAwesomeIcon icon={faCheck} className="w-3 h-3 text-brand-600" />}
+          </button>
+          <div className="my-1 h-px bg-hairline" />
+          {sections.map((section) => {
+            const on = selected.length === 0 || selected.includes(section.id);
+            return (
+              <button
+                key={section.id}
+                type="button"
+                onClick={() => toggle(section.id)}
+                className="flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-sm text-gray-700 hover:bg-subtle"
+              >
+                <span className="flex items-center gap-2 truncate">
+                  <span
+                    className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
+                      on ? "border-brand-600 bg-brand-600 text-white" : "border-gray-300"
+                    }`}
+                  >
+                    {on && <FontAwesomeIcon icon={faCheck} className="w-2.5 h-2.5" />}
+                  </span>
+                  <span className="truncate">{section.name}</span>
+                </span>
+                <span className="ml-2 shrink-0 text-xs text-gray-400 tabular-nums">
+                  {counts[section.id] ?? 0}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Safe vs at-risk split — a donut, the correct shape for a part-to-whole. */
+function RiskDonut({ safe, atRisk }: { safe: number; atRisk: number }) {
+  const total = safe + atRisk;
+  const r = 54;
+  const cx = 70;
+  const cy = 70;
+  const sw = 16;
+  const c = 2 * Math.PI * r;
+  const safeLen = total ? (safe / total) * c : 0;
+  const atRiskLen = total ? (atRisk / total) * c : 0;
+
+  return (
+    <div className="flex flex-col items-center gap-4">
+      <div className="relative w-[140px] h-[140px]">
+        <svg viewBox="0 0 140 140" className="w-full h-full -rotate-90">
+          <circle cx={cx} cy={cy} r={r} fill="none" stroke="#f1f5f9" strokeWidth={sw} />
+          {safeLen > 0 && (
+            <circle
+              cx={cx}
+              cy={cy}
+              r={r}
+              fill="none"
+              stroke="#10b981"
+              strokeWidth={sw}
+              strokeDasharray={`${safeLen} ${c}`}
+            />
+          )}
+          {atRiskLen > 0 && (
+            <circle
+              cx={cx}
+              cy={cy}
+              r={r}
+              fill="none"
+              stroke="#f43f5e"
+              strokeWidth={sw}
+              strokeDasharray={`${atRiskLen} ${c}`}
+              strokeDashoffset={-safeLen}
+            />
+          )}
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <span className="text-2xl font-bold text-gray-900">{total}</span>
+          <span className="text-[11px] text-gray-500">predicted</span>
+        </div>
+      </div>
+      <div className="flex items-center gap-6">
+        <span className="flex items-center gap-2 text-sm">
+          <span className="w-3 h-3 rounded-full bg-emerald-500" />
+          <span className="text-gray-600">Safe</span>
+          <span className="font-bold text-emerald-600">{safe}</span>
+        </span>
+        <span className="flex items-center gap-2 text-sm">
+          <span className="w-3 h-3 rounded-full bg-rose-500" />
+          <span className="text-gray-600">At risk</span>
+          <span className="font-bold text-rose-600">{atRisk}</span>
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/** Horizontal bars — the correct shape for comparing labelled magnitudes. */
+function HBars({
+  items,
+  max,
+  suffix = "",
+  tone = "brand",
+}: {
+  items: { key: string; label: string; value: number; icon?: IconDefinition }[];
+  max: number;
+  suffix?: string;
+  tone?: "brand" | "grade";
+}) {
+  const barColor = (v: number) => {
+    if (tone === "grade") {
+      if (v >= 75) return "bg-emerald-500";
+      if (v >= 50) return "bg-amber-500";
+      return "bg-rose-500";
+    }
+    return "bg-gradient-to-r from-brand-600 to-[#2a8a98]";
+  };
+  return (
+    <div className="space-y-3">
+      {items.map((item) => (
+        <div key={item.key} className="flex items-center gap-3">
+          <span className="flex w-40 shrink-0 items-center gap-2 text-sm text-gray-600 truncate">
+            {item.icon && (
+              <FontAwesomeIcon icon={item.icon} className="w-3.5 h-3.5 text-brand-600 shrink-0" />
+            )}
+            <span className="truncate">{item.label}</span>
+          </span>
+          <div className="h-2.5 flex-1 rounded-full bg-gray-100 overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all duration-500 ${barColor(item.value)}`}
+              style={{ width: `${max > 0 ? Math.max((item.value / max) * 100, item.value > 0 ? 4 : 0) : 0}%` }}
+            />
+          </div>
+          <span className="w-12 shrink-0 text-right text-sm font-semibold text-gray-800 tabular-nums">
+            {item.value}
+            {suffix}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Plain-language reading of whatever the filters currently select. */
+function NarrativeCard({
+  narrative,
+  generatedAt,
+  loading,
+  error,
+  stale,
+  onGenerate,
+}: {
+  narrative: AnalyticsNarrative | null;
+  generatedAt: string | null;
+  loading: boolean;
+  error: string | null;
+  stale: boolean;
+  onGenerate: () => void;
+}) {
+  const lists = narrative
+    ? [
+        { title: "Highlights", items: narrative.highlights, dot: "bg-emerald-500" },
+        { title: "Watch-outs", items: narrative.watchouts, dot: "bg-amber-500" },
+        { title: "Suggested Actions", items: narrative.actions, dot: "bg-brand-600" },
+      ].filter((l) => l.items.length > 0)
+    : [];
+
+  return (
+    <Card padding="md" className="mb-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <div className="rounded-lg bg-brand-600/10 p-2">
+            <FontAwesomeIcon icon={faWandMagicSparkles} className="h-4 w-4 text-brand-600" />
+          </div>
+          <div>
+            <h3 className="font-semibold text-gray-900">AI Summary</h3>
+            <p className="text-xs text-gray-400">
+              Reads the figures below for the sections and range you&apos;ve selected
+            </p>
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {stale && !loading && (
+            <span className="hidden rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-medium text-amber-700 sm:inline">
+              Filters changed
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={onGenerate}
+            disabled={loading}
+            className="flex items-center gap-2 rounded-lg bg-brand-600 px-3.5 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <FontAwesomeIcon
+              icon={faArrowsRotate}
+              className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`}
+            />
+            {loading ? "Reading…" : error ? "Retry" : narrative ? "Update" : "Generate"}
+          </button>
+        </div>
+      </div>
+
+      {error && (
+        <p className="mt-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
+          {error}
+        </p>
+      )}
+
+      {loading && (
+        <div className="mt-4 animate-pulse space-y-2">
+          <div className="h-5 w-2/3 rounded bg-gray-200" />
+          <div className="h-4 w-full rounded bg-gray-200" />
+          <div className="h-4 w-5/6 rounded bg-gray-200" />
+        </div>
+      )}
+
+      {!loading && narrative && (
+        <div className="mt-4 space-y-4">
+          {narrative.headline && (
+            <p className="font-display text-lg font-semibold leading-snug text-gray-900">
+              {narrative.headline}
+            </p>
+          )}
+          <p className="text-sm leading-relaxed text-gray-700">{narrative.overview}</p>
+
+          {lists.length > 0 && (
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+              {lists.map((list) => (
+                <div key={list.title} className="rounded-xl bg-subtle p-4">
+                  <p className="mb-2 text-sm font-semibold text-gray-900">{list.title}</p>
+                  <ul className="space-y-2">
+                    {list.items.map((item, idx) => (
+                      <li key={idx} className="flex items-start gap-2 text-sm text-gray-600">
+                        <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${list.dot}`} />
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {generatedAt && (
+            <p className="border-t border-hairline pt-3 text-xs text-gray-400">
+              AI-generated {new Date(generatedAt).toLocaleString()} — review before acting on it.
+            </p>
+          )}
+        </div>
+      )}
+
+      {!loading && !narrative && !error && (
+        <p className="mt-4 text-sm text-gray-400">
+          Generate a plain-language reading of the current selection.
+        </p>
+      )}
+    </Card>
+  );
+}
 
 export default function FacultyAnalyticsClient() {
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
+  const [bucket, setBucket] = useState<AnalyticsBucket>("week");
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const [sections, setSections] = useState<Section[]>([]);
+  const [sectionIds, setSectionIds] = useState<string[]>([]);
+  const [preset, setPreset] = useState<PresetId>("3m");
+  // Lazily initialised so `new Date()` never runs during a server render —
+  // the first paint is the skeleton, so there is nothing to mismatch.
+  const [range, setRange] = useState<{ from: string; to: string }>(() => rangeForPreset("3m"));
+  // What the custom date inputs show. Kept separate from `range` (the applied
+  // query) so a half-typed or inverted range doesn't fire a request, while the
+  // controlled inputs still track every keystroke.
+  const [draft, setDraft] = useState<{ from: string; to: string }>(() => rangeForPreset("3m"));
 
   useEffect(() => {
-    (async () => {
-      setLoading(true);
-      setSummary(await fetchAnalyticsSummary());
-      setLoading(false);
-    })();
+    (async () => setSections(await fetchFacultySections()))();
   }, []);
+
+  const { from, to } = range;
+  useEffect(() => {
+    const controller = new AbortController();
+    (async () => {
+      setRefreshing(true);
+      const result = await fetchAnalyticsSummary({ sectionIds, from, to }, controller.signal);
+      if (controller.signal.aborted) return;
+      setSummary(result.summary);
+      setBucket(result.bucket);
+      setLoading(false);
+      setRefreshing(false);
+    })();
+    return () => controller.abort();
+  }, [sectionIds, from, to]);
+
+  const applyPreset = useCallback((id: PresetId) => {
+    setPreset(id);
+    if (id === "custom") return;
+    const next = rangeForPreset(id);
+    setRange(next);
+    setDraft(next);
+  }, []);
+
+  const setCustom = (edge: "from" | "to", value: string) => {
+    const next = { ...draft, [edge]: value };
+    setDraft(next);
+    // Only a complete, ordered range becomes a query; the input still shows
+    // every keystroke.
+    if (next.from && next.to && next.from <= next.to) setRange(next);
+  };
+
+  const studentsBySection = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const s of summary?.sections ?? []) counts[s.id] = s.students;
+    return counts;
+  }, [summary]);
+
+  /* --- AI narrative -------------------------------------------------- */
+
+  const [narrative, setNarrative] = useState<AnalyticsNarrative | null>(null);
+  const [narrativeAt, setNarrativeAt] = useState<string | null>(null);
+  const [narrativeLoading, setNarrativeLoading] = useState(false);
+  const [narrativeError, setNarrativeError] = useState<string | null>(null);
+  // Which filter combination the current narrative describes, so a stale one
+  // is labelled rather than silently describing the wrong numbers.
+  const [narrativeKey, setNarrativeKey] = useState<string | null>(null);
+
+  const filterKey = `${[...sectionIds].sort().join(",")}|${from}|${to}`;
+
+  const runNarrative = useCallback(
+    async (key: string, ids: string[], start: string, end: string) => {
+      setNarrativeLoading(true);
+      setNarrativeError(null);
+      const result = await generateAnalyticsNarrative({ sectionIds: ids, from: start, to: end });
+      setNarrativeLoading(false);
+      if (result.error || !result.narrative) {
+        setNarrativeError(result.error ?? "Unable to generate summary");
+        return;
+      }
+      setNarrative(result.narrative);
+      setNarrativeAt(result.generated_at ?? null);
+      setNarrativeKey(key);
+    },
+    [],
+  );
+
+  // One automatic reading on arrival; after that the faculty member asks for
+  // it, so changing filters doesn't spend an AI call per click. It waits for
+  // the first summary because that request is what heals a cold warehouse —
+  // running earlier would narrate zeros. The ref makes every later pass a
+  // no-op.
+  const autoNarrative = useRef(false);
+  useEffect(() => {
+    if (loading || autoNarrative.current) return;
+    autoNarrative.current = true;
+    void (async () => {
+      await runNarrative(filterKey, sectionIds, from, to);
+    })();
+  }, [loading, runNarrative, filterKey, sectionIds, from, to]);
 
   if (loading) {
     return (
@@ -38,13 +649,15 @@ export default function FacultyAnalyticsClient() {
             <div className="h-4 w-96 bg-gray-200 rounded" />
           </div>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
           {Array.from({ length: 4 }).map((_, i) => (
             <SkeletonStatCard key={i} />
           ))}
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <SkeletonChartArea />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+          <div className="lg:col-span-2">
+            <SkeletonChartArea />
+          </div>
           <SkeletonChartArea />
         </div>
         <SkeletonCompetencyGrid />
@@ -56,8 +669,10 @@ export default function FacultyAnalyticsClient() {
   const safe = summary?.risk_distribution?.safe ?? 0;
   const predicted = atRisk + safe;
   const trend = summary?.weekly_trend ?? [];
-  const maxAttempts = Math.max(1, ...trend.map((w) => w.attempts));
   const activity = summary?.clinical_activity;
+  const competencies = Object.entries(summary?.competency_breakdown ?? {}).sort(
+    (a, b) => b[1] - a[1],
+  );
 
   const statCards = [
     {
@@ -77,7 +692,7 @@ export default function FacultyAnalyticsClient() {
     {
       icon: faUsers,
       value: `${summary?.cohort.active_students_30d ?? 0}/${summary?.cohort.total_students ?? 0}`,
-      label: "Active Students (30 days)",
+      label: "Active Students (in range)",
       iconBg: "bg-purple-50",
       iconColor: "text-purple-600",
     },
@@ -89,6 +704,16 @@ export default function FacultyAnalyticsClient() {
       iconColor: "text-amber-600",
     },
   ];
+
+  const activityItems = [
+    { key: "vitals", label: "Vital Readings", value: activity?.vital_readings ?? 0, icon: faHeartbeat },
+    { key: "anomalies", label: "Anomalies Flagged", value: activity?.anomalies ?? 0, icon: faExclamationTriangle },
+    { key: "tpr", label: "TPR Entries", value: activity?.tpr_entries ?? 0, icon: faTemperatureHalf },
+    { key: "ivf", label: "IVF Records", value: activity?.ivf_records ?? 0, icon: faDroplet },
+    { key: "notes", label: "Progress Notes", value: activity?.progress_notes ?? 0, icon: faNotesMedical },
+    { key: "reviewed", label: "Notes Reviewed", value: activity?.notes_reviewed ?? 0, icon: faCircleCheck },
+  ];
+  const activityMax = Math.max(1, ...activityItems.map((a) => a.value));
 
   return (
     <div>
@@ -105,142 +730,172 @@ export default function FacultyAnalyticsClient() {
         subtitle="Performance and clinical training data from the iCARE++ warehouse"
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-        {statCards.map((card) => (
-          <StatTile
-            key={card.label}
-            icon={<FontAwesomeIcon icon={card.icon} className="w-5 h-5" />}
-            value={card.value}
-            label={card.label}
-            iconBg={card.iconBg}
-            iconColor={card.iconColor}
-          />
-        ))}
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
-        <Card padding="md">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Weekly Score Trend</h3>
-          {trend.length === 0 ? (
-            <p className="text-gray-400 text-sm py-12 text-center">
-              No submitted attempts in the last 8 weeks.
-            </p>
-          ) : (
-            <>
-              <div className="h-40 flex items-end justify-between gap-2 px-2">
-                {trend.map((week) => (
-                  <div key={week.week_start} className="flex-1 flex flex-col items-center gap-2 group">
-                    <div className="w-full relative">
-                      <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-brand-600 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
-                        {week.average_score}% · {week.attempts} attempt{week.attempts === 1 ? "" : "s"}
-                      </div>
-                      <div
-                        className="w-full bg-gradient-to-t from-brand-600 to-[#2a8a98] rounded-t transition-all duration-300 hover:opacity-80"
-                        style={{ height: `${Math.max(week.average_score, 4) * 1.4}px` }}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="flex justify-between mt-3 px-2">
-                {trend.map((week) => (
-                  <span key={week.week_start} className="text-[10px] text-gray-400">
-                    {new Date(week.week_start).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-                  </span>
-                ))}
-              </div>
-            </>
-          )}
-        </Card>
-
-        <Card padding="md">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">At-Risk Prediction Snapshot</h3>
-          {predicted === 0 ? (
-            <div className="py-10 text-center">
-              <FontAwesomeIcon icon={faExclamationTriangle} className="w-8 h-8 text-gray-300 mb-3" />
-              <p className="text-gray-500 text-sm">
-                No predictions yet — the ML prediction service (Random Forest / Logistic
-                Regression) populates this once deployed.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-4 py-4">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">Safe</span>
-                <span className="font-bold text-emerald-600">{safe}</span>
-              </div>
-              <div className="h-3 bg-gray-100 rounded-full overflow-hidden flex">
-                <div className="bg-emerald-500 h-full" style={{ width: `${(safe / predicted) * 100}%` }} />
-                <div className="bg-rose-500 h-full" style={{ width: `${(atRisk / predicted) * 100}%` }} />
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">At risk</span>
-                <span className="font-bold text-rose-600">{atRisk}</span>
-              </div>
-            </div>
-          )}
-        </Card>
-      </div>
-
-      <Card padding="md" className="mb-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Competency Breakdown</h3>
-        {Object.keys(summary?.competency_breakdown ?? {}).length === 0 ? (
-          <p className="text-gray-400 text-sm">
-            No validated competency scores yet — record them from each student&apos;s profile.
-          </p>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-            {Object.entries(summary!.competency_breakdown).map(([name, value]) => (
-              <div key={name} className="text-center">
-                <div className="relative w-20 h-20 mx-auto">
-                  <svg className="w-20 h-20 transform -rotate-90" viewBox="0 0 80 80">
-                    <circle cx="40" cy="40" r="32" fill="none" stroke="#f3f4f6" strokeWidth="8" />
-                    <circle
-                      cx="40"
-                      cy="40"
-                      r="32"
-                      fill="none"
-                      stroke="#1B6B7B"
-                      strokeWidth="8"
-                      strokeDasharray={`${(value / 100) * 201} 201`}
-                      strokeLinecap="round"
-                    />
-                  </svg>
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <span className="text-sm font-semibold text-gray-800">{value}%</span>
-                  </div>
-                </div>
-                <p className="text-xs text-gray-500 mt-2">{name}</p>
-              </div>
-            ))}
+      <div className="mb-4 rounded-xl border border-hairline bg-surface shadow-tile">
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-3 px-4 py-3">
+          <div className="flex items-center gap-2.5">
+            <CardLabel>Sections</CardLabel>
+            <SectionPicker
+              sections={sections}
+              selected={sectionIds}
+              counts={studentsBySection}
+              onChange={setSectionIds}
+            />
           </div>
-        )}
-      </Card>
 
-      <Card padding="md">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Clinical Training Activity</h3>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-          {[
-            { icon: faHeartbeat, label: "Vital Readings", value: activity?.vital_readings ?? 0 },
-            { icon: faExclamationTriangle, label: "Anomalies Flagged", value: activity?.anomalies ?? 0 },
-            { icon: faNotesMedical, label: "TPR Entries", value: activity?.tpr_entries ?? 0 },
-            { icon: faNotesMedical, label: "IVF Records", value: activity?.ivf_records ?? 0 },
-            { icon: faNotesMedical, label: "Progress Notes", value: activity?.progress_notes ?? 0 },
-            { icon: faClipboardCheck, label: "Notes Reviewed", value: activity?.notes_reviewed ?? 0 },
-          ].map((item) => (
-            <div key={item.label} className="p-4 bg-gray-50 rounded-xl text-center">
-              <FontAwesomeIcon icon={item.icon} className="w-4 h-4 text-brand-600 mb-2" />
-              <p className="text-2xl font-bold text-gray-800">{item.value}</p>
-              <p className="text-xs text-gray-500 mt-1">{item.label}</p>
+          <span className="hidden h-6 w-px bg-hairline sm:block" />
+
+          <div className="flex items-center gap-2.5">
+            <CardLabel>Range</CardLabel>
+            <div className="flex flex-wrap items-center gap-1">
+              {PRESETS.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => applyPreset(p.id)}
+                  className={`rounded-lg px-2.5 py-1.5 text-sm transition-colors ${
+                    preset === p.id
+                      ? "bg-brand-600 text-white"
+                      : "text-gray-600 hover:bg-subtle hover:text-gray-900"
+                  }`}
+                >
+                  {p.label}
+                </button>
+              ))}
             </div>
+          </div>
+
+          {preset === "custom" && (
+            <div className="flex items-center gap-2">
+              <input
+                type="date"
+                value={draft.from}
+                max={draft.to || undefined}
+                onChange={(e) => setCustom("from", e.target.value)}
+                className="rounded-lg border border-hairline bg-surface px-2.5 py-1.5 text-sm text-gray-700"
+                aria-label="Range start"
+              />
+              <span className="text-gray-400">–</span>
+              <input
+                type="date"
+                value={draft.to}
+                min={draft.from || undefined}
+                onChange={(e) => setCustom("to", e.target.value)}
+                className="rounded-lg border border-hairline bg-surface px-2.5 py-1.5 text-sm text-gray-700"
+                aria-label="Range end"
+              />
+            </div>
+          )}
+
+          <div className="ml-auto flex items-center gap-2 text-xs text-gray-400">
+            {refreshing && (
+              <span className="h-3 w-3 animate-spin rounded-full border-2 border-brand-200 border-t-brand-600" />
+            )}
+            <span className="tabular-nums">{formatRange(from, to)}</span>
+          </div>
+        </div>
+
+        {sections.length === 0 && (
+          <p className="border-t border-hairline px-4 py-2.5 text-xs text-amber-700">
+            You don&apos;t manage any sections yet, so there is nothing to report on. An admin
+            assigns sections from Admin → Faculty.
+          </p>
+        )}
+      </div>
+
+      <NarrativeCard
+        narrative={narrative}
+        generatedAt={narrativeAt}
+        loading={narrativeLoading}
+        error={narrativeError}
+        stale={narrativeKey !== null && narrativeKey !== filterKey}
+        onGenerate={() => runNarrative(filterKey, sectionIds, from, to)}
+      />
+
+      {/* Refetches dim the panels in place rather than tearing the page down
+          to skeletons, so changing a filter doesn't make the layout jump. */}
+      <div className={`transition-opacity duration-200 ${refreshing ? "opacity-60" : ""}`}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+          {statCards.map((card) => (
+            <StatTile
+              key={card.label}
+              icon={<FontAwesomeIcon icon={card.icon} className="w-5 h-5" />}
+              value={card.value}
+              label={card.label}
+              iconBg={card.iconBg}
+              iconColor={card.iconColor}
+            />
           ))}
         </div>
-        {summary?.etl?.last_run_at && (
-          <p className="text-xs text-gray-400 mt-4">
-            Warehouse last refreshed {new Date(summary.etl.last_run_at).toLocaleString()}
-          </p>
-        )}
-      </Card>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4 items-stretch">
+          <Card padding="md" className="lg:col-span-2 flex flex-col">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Score Trend</h3>
+              <span className="text-xs text-gray-400">
+                avg quiz score, {BUCKET_LABEL[bucket]}
+              </span>
+            </div>
+            <div className="flex-1 flex flex-col justify-center">
+              {trend.length === 0 ? (
+                <p className="text-gray-400 text-sm py-16 text-center">
+                  No submitted attempts in {formatRange(from, to)}.
+                </p>
+              ) : (
+                <TrendLineChart data={trend} bucket={bucket} />
+              )}
+            </div>
+          </Card>
+
+          <Card padding="md" className="flex flex-col">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">At-Risk Prediction</h3>
+            <div className="flex-1 flex items-center justify-center">
+              {predicted === 0 ? (
+                <div className="text-center">
+                  <FontAwesomeIcon icon={faExclamationTriangle} className="w-8 h-8 text-gray-300 mb-3" />
+                  <p className="text-gray-500 text-sm">
+                    No predictions yet — the ML prediction service populates this once it runs.
+                  </p>
+                </div>
+              ) : (
+                <RiskDonut safe={safe} atRisk={atRisk} />
+              )}
+            </div>
+          </Card>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4 items-stretch">
+          <Card padding="md" className="flex flex-col">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Competency Breakdown</h3>
+            <div className="flex-1 flex flex-col justify-center">
+              {competencies.length === 0 ? (
+                <p className="text-gray-400 text-sm py-12 text-center">
+                  No validated competency scores yet — record them from each student&apos;s profile.
+                </p>
+              ) : (
+                <HBars
+                  items={competencies.map(([name, value]) => ({ key: name, label: name, value }))}
+                  max={100}
+                  suffix="%"
+                  tone="grade"
+                />
+              )}
+            </div>
+          </Card>
+
+          <Card padding="md" className="flex flex-col">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Clinical Training Activity</h3>
+            <div className="flex-1 flex flex-col justify-center">
+              <HBars items={activityItems} max={activityMax} />
+            </div>
+          </Card>
+        </div>
+      </div>
+
+      {summary?.etl?.last_run_at && (
+        <p className="text-xs text-gray-400">
+          Warehouse last refreshed {new Date(summary.etl.last_run_at).toLocaleString()}
+        </p>
+      )}
     </div>
   );
 }
