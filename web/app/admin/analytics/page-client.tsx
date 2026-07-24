@@ -25,7 +25,8 @@ export default function AdminAnalyticsClient() {
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    setSummary(await fetchAnalyticsSummary());
+    const { summary } = await fetchAnalyticsSummary();
+    setSummary(summary);
     setLoading(false);
   }, []);
 
