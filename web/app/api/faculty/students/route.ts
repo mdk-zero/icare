@@ -4,6 +4,7 @@ import { readSession } from '@/app/lib/auth/session';
 import { sendStudentInvitationEmail } from '@/app/lib/auth/email';
 import { generateRandomPassword, hashPassword } from '@/app/lib/auth/password';
 import { getFacultySectionIds } from '@/app/lib/roster';
+import { getLatestRiskByStudent, getLastActivityByStudent } from '@/app/lib/faculty-dashboard';
 
 function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -81,7 +82,21 @@ export async function GET() {
       return NextResponse.json({ error: 'Unable to fetch students' }, { status: 500 });
     }
 
-    return NextResponse.json({ students: (students ?? []).map(withSectionName) });
+    // risk_level and last_activity are what the roster and dashboard badge
+    // students with; without them every row reads "no prediction" and blank.
+    const ids = (students ?? []).map((s) => s.id);
+    const [risks, activity] = await Promise.all([
+      getLatestRiskByStudent(supabase, ids),
+      getLastActivityByStudent(supabase, ids),
+    ]);
+
+    return NextResponse.json({
+      students: (students ?? []).map((student) => ({
+        ...withSectionName(student),
+        risk_level: risks.get(student.id)?.risk ?? null,
+        last_activity: activity.get(student.id) ?? null,
+      })),
+    });
   } catch (err) {
     console.error('Fetch students failed', err);
     return NextResponse.json({ error: 'Unable to fetch students' }, { status: 500 });

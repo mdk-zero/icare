@@ -268,7 +268,6 @@ export default function StudentDetailClient() {
                 <h1 className="text-2xl font-bold text-gray-900">{student.name}</h1>
                 <p className="text-gray-500">{student.email}</p>
                 <div className="flex items-center gap-2">
-                  <p className="text-sm text-gray-400">{student.program} - Year {student.year}</p>
                   {student.section ? (
                     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-brand-600/10 text-brand-600 border border-brand-600/20">
                       Section {student.section}
@@ -284,15 +283,24 @@ export default function StudentDetailClient() {
             
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div className="text-center p-4 bg-gray-50 rounded-xl">
-                <p className="text-2xl font-bold text-gray-900">{student.average_score}%</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {student.average_score != null ? `${student.average_score}%` : "—"}
+                </p>
                 <p className="text-sm text-gray-500">Avg Score</p>
               </div>
               <div className="text-center p-4 bg-gray-50 rounded-xl">
-                <p className="text-2xl font-bold text-gray-900">{student.quiz_count}</p>
+                <p className="text-2xl font-bold text-gray-900">{student.quiz_count ?? 0}</p>
                 <p className="text-sm text-gray-500">Quizzes</p>
               </div>
               <div className="text-center p-4 bg-gray-50 rounded-xl">
-                <p className="text-2xl font-bold text-gray-900">{student.last_activity}</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {student.last_activity
+                    ? new Date(student.last_activity).toLocaleDateString(undefined, {
+                        month: "short",
+                        day: "numeric",
+                      })
+                    : "Never"}
+                </p>
                 <p className="text-sm text-gray-500">Last Active</p>
               </div>
               <div className="text-center p-4 bg-gray-50 rounded-xl">

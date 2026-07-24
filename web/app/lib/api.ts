@@ -950,16 +950,18 @@ export interface CreateStudentResponse {
 
 export interface FacultyStudent {
   id: string;
-  student_id: string;
   name: string;
   email: string;
+  picture_url?: string | null;
+  section_id?: string | null;
   section?: string | null;
-  program: string;
-  year: number;
-  average_score: number;
-  quiz_count: number;
-  risk_level?: 'low' | 'medium' | 'high';
-  last_activity: string;
+  /** Latest ML classification; null when the model has never scored them. */
+  risk_level?: 'safe' | 'at_risk' | null;
+  /** ISO timestamp of their most recent recorded activity, or null. */
+  last_activity?: string | null;
+  /** Detail endpoint only: averaged over submitted attempts, null if none. */
+  average_score?: number | null;
+  quiz_count?: number;
 }
 
 export interface SimulationScenario {
@@ -1350,102 +1352,24 @@ export async function runMlJob(
   }
 }
 
-// Mock Faculty Data
-const generateMockFacultyStudents = (): FacultyStudent[] => [
-  {
-    id: 'fs-001',
-    student_id: 'student-001',
-    name: 'Maria Cruz',
-    email: 'maria.cruz@student.edu',
-    program: 'Bachelor of Science in Nursing',
-    year: 2,
-    average_score: 82,
-    quiz_count: 12,
-    risk_level: 'low',
-    last_activity: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-  },
-  {
-    id: 'fs-002',
-    student_id: 'student-002',
-    name: 'Juan Reyes',
-    email: 'juan.reyes@student.edu',
-    program: 'Bachelor of Science in Nursing',
-    year: 2,
-    average_score: 65,
-    quiz_count: 8,
-    risk_level: 'high',
-    last_activity: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-  },
-  {
-    id: 'fs-003',
-    student_id: 'student-003',
-    name: 'Anna Santos',
-    email: 'anna.santos@student.edu',
-    program: 'Bachelor of Science in Nursing',
-    year: 2,
-    average_score: 75,
-    quiz_count: 10,
-    risk_level: 'medium',
-    last_activity: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
-  },
-  {
-    id: 'fs-004',
-    student_id: 'student-004',
-    name: 'Carlos Diaz',
-    email: 'carlos.diaz@student.edu',
-    program: 'Bachelor of Science in Nursing',
-    year: 2,
-    average_score: 88,
-    quiz_count: 15,
-    risk_level: 'low',
-    last_activity: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),
-  },
-];
-
 // Faculty API Functions
 export async function fetchFacultyDashboard(): Promise<{ stats: FacultyStats; recent_activities: AuditLog[] } | null> {
-  await new Promise(resolve => setTimeout(resolve, 300));
-  
-  const stats: FacultyStats = {
-    total_students: 48,
-    at_risk_students: 8,
-    active_alerts: 5,
-    completed_reviews: 32,
-    active_scenarios: 12,
-    pending_scenarios: 4,
-  };
-
-  const recentActivities: AuditLog[] = [
-    {
-      id: 'audit-001',
-      faculty_id: '',
-      faculty_name: 'Maria Cruz',
-      tab: 'overview',
-      action: 'Quiz Submitted',
-      details: 'Student completed Cardiac Assessment Basics',
-      created_at: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
-    },
-    {
-      id: 'audit-002',
-      faculty_id: '',
-      faculty_name: 'Dr. Juan Dela Cruz',
-      tab: 'scenarios',
-      action: 'Scenario Assigned',
-      details: 'Hypertension Crisis Response assigned to 5 students',
-      created_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-    },
-    {
-      id: 'audit-003',
-      faculty_id: '',
-      faculty_name: 'System',
-      tab: 'overview',
-      action: 'Alert Created',
-      details: 'At-risk alert for student Juan Reyes',
-      created_at: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
-    },
-  ];
-
-  return { stats, recent_activities: recentActivities };
+  try {
+    const res = await fetch('/api/faculty/dashboard', { credentials: 'include' });
+    const json = (await res.json()) as {
+      stats?: FacultyStats;
+      recent_activities?: AuditLog[];
+      error?: string;
+    };
+    if (!res.ok || !json.stats) {
+      console.error('fetchFacultyDashboard() failed', json.error ?? res.status);
+      return null;
+    }
+    return { stats: json.stats, recent_activities: json.recent_activities ?? [] };
+  } catch (err) {
+    console.error('fetchFacultyDashboard() failed', err);
+    return null;
+  }
 }
 
 export async function fetchFacultyStudents(riskLevel?: string, search?: string): Promise<FacultyStudent[]> {
@@ -1501,9 +1425,8 @@ export async function fetchFacultyStudentDetail(studentId: string): Promise<{ st
 }
 
 export async function fetchAtRiskStudents(): Promise<FacultyStudent[]> {
-  await new Promise(resolve => setTimeout(resolve, 200));
-  const students = generateMockFacultyStudents();
-  return students.filter(s => s.risk_level === 'high' || s.risk_level === 'medium');
+  const students = await fetchFacultyStudents();
+  return students.filter((s) => s.risk_level === 'at_risk');
 }
 
 export async function fetchFacultyScenarios(): Promise<SimulationScenario[]> {
@@ -1970,41 +1893,28 @@ export async function markAllNotificationsRead(): Promise<boolean> {
 }
 
 export async function fetchFacultyAlerts(status?: string): Promise<{ alerts: FacultyAlert[]; total: number; pending: number } | null> {
-  await new Promise(resolve => setTimeout(resolve, 200));
-  
-  const alerts: FacultyAlert[] = [
-    {
-      id: 'alert-001',
-      student_id: 'student-002',
-      student_name: 'Juan Reyes',
-      alert_type: 'Low Performance',
-      severity: 'high',
-      description: 'Average score below 70%, requires intervention',
-      status: 'pending',
-      created_at: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
-    },
-    {
-      id: 'alert-002',
-      student_id: 'student-003',
-      student_name: 'Anna Santos',
-      alert_type: 'Low Engagement',
-      severity: 'medium',
-      description: 'No activity in past 48 hours',
-      status: 'pending',
-      created_at: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),
-    },
-  ];
-
-  let filtered = alerts;
-  if (status && status !== 'all') {
-    filtered = alerts.filter(a => a.status === status);
+  try {
+    const query = status && status !== 'all' ? `?status=${encodeURIComponent(status)}` : '';
+    const res = await fetch(`/api/faculty/alerts${query}`, { credentials: 'include' });
+    const json = (await res.json()) as {
+      alerts?: FacultyAlert[];
+      total?: number;
+      pending?: number;
+      error?: string;
+    };
+    if (!res.ok) {
+      console.error('fetchFacultyAlerts() failed', json.error ?? res.status);
+      return null;
+    }
+    return {
+      alerts: json.alerts ?? [],
+      total: json.total ?? 0,
+      pending: json.pending ?? 0,
+    };
+  } catch (err) {
+    console.error('fetchFacultyAlerts() failed', err);
+    return null;
   }
-
-  return {
-    alerts: filtered,
-    total: alerts.length,
-    pending: alerts.filter(a => a.status === 'pending').length,
-  };
 }
 
 export async function updateAlertStatus(alertId: string, status: string): Promise<boolean> {

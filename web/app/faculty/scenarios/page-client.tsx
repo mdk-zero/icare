@@ -1891,16 +1891,18 @@ export default function FacultyScenariosClient() {
                             <td className="py-2.5 px-4">
                               <span
                                 className={`px-2 py-0.5 text-xs font-bold rounded-full ${
-                                  student.risk_level === "high"
+                                  student.risk_level === "at_risk"
                                     ? "bg-red-100 text-red-700"
-                                    : student.risk_level === "medium"
-                                      ? "bg-amber-100 text-amber-700"
-                                      : student.risk_level === "low"
-                                        ? "bg-emerald-100 text-emerald-700"
-                                        : "bg-gray-100 text-gray-700"
+                                    : student.risk_level === "safe"
+                                      ? "bg-emerald-100 text-emerald-700"
+                                      : "bg-gray-100 text-gray-700"
                                 }`}
                               >
-                                {student.risk_level ? student.risk_level : "Unknown"}
+                                {student.risk_level === "at_risk"
+                                  ? "At risk"
+                                  : student.risk_level === "safe"
+                                    ? "On track"
+                                    : "No prediction"}
                               </span>
                             </td>
                           </tr>

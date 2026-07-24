@@ -104,7 +104,7 @@ export default function FacultyReportsClient() {
       if (type === "student") {
         const rows = await fetchFacultyStudents();
         setTargets(
-          rows.map((s) => ({ id: s.student_id || s.id, label: s.name, sub: s.email })),
+          rows.map((s) => ({ id: s.id, label: s.name, sub: s.email })),
         );
       } else if (type === "section") {
         const rows = await fetchFacultySections();

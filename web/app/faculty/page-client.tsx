@@ -2,14 +2,13 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { 
-  fetchFacultyDashboard, 
-  fetchFacultyAlerts, 
-  fetchFacultyNotifications,
+import {
+  fetchFacultyDashboard,
+  fetchFacultyAlerts,
   fetchFacultyStudents,
-  FacultyStats, 
+  refreshCurrentUser,
+  FacultyStats,
   FacultyAlert,
-  FacultyNotification,
   AuditLog,
   FacultyStudent
 } from "../lib/api";
@@ -23,29 +22,61 @@ import { faHouse, faUsers, faTriangleExclamation, faBell, faCheckCircle } from "
 import PageHeader from "../components/PageHeader";
 import StatTile from "../components/StatTile";
 
-const RISK_STYLES: Record<string, { bar: string; badge: string }> = {
-  high: { bar: "bg-red-500", badge: "bg-red-100 text-red-700 border-red-200" },
-  medium: { bar: "bg-amber-500", badge: "bg-amber-100 text-amber-700 border-amber-200" },
-  low: { bar: "bg-emerald-500", badge: "bg-emerald-100 text-emerald-700 border-emerald-200" },
-  default: { bar: "bg-gray-300", badge: "bg-gray-100 text-gray-700 border-gray-200" },
+/**
+ * Keyed by the risk_level enum the ML service actually writes
+ * (public.risk_level = 'safe' | 'at_risk'); `default` covers students the
+ * model has never scored.
+ */
+const RISK_STYLES: Record<string, { bar: string; badge: string; label: string }> = {
+  at_risk: {
+    bar: "bg-red-500",
+    badge: "bg-red-100 text-red-700 border-red-200",
+    label: "At risk",
+  },
+  safe: {
+    bar: "bg-emerald-500",
+    badge: "bg-emerald-100 text-emerald-700 border-emerald-200",
+    label: "On track",
+  },
+  default: {
+    bar: "bg-gray-300",
+    badge: "bg-gray-100 text-gray-700 border-gray-200",
+    label: "No prediction",
+  },
 };
+
+/** "3h ago" for anything recent, an absolute date once it stops being useful. */
+function timeAgo(iso: string | null | undefined): string {
+  if (!iso) return "No activity yet";
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return "";
+  const minutes = Math.round((Date.now() - then) / 60000);
+  if (minutes < 1) return "Just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.round(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
 
 export default function FacultyDashboard() {
   const router = useRouter();
   const [stats, setStats] = useState<FacultyStats | null>(null);
   const [students, setStudents] = useState<FacultyStudent[]>([]);
   const [alerts, setAlerts] = useState<FacultyAlert[]>([]);
+  const [pendingAlerts, setPendingAlerts] = useState(0);
   const [activities, setActivities] = useState<AuditLog[]>([]);
+  const [firstName, setFirstName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const loadDashboardData = async () => {
-      setLoading(true);
-      
-      const [dashboardData, alertsData, studentsData] = await Promise.all([
+      const [dashboardData, alertsData, studentsData, user] = await Promise.all([
         fetchFacultyDashboard(),
         fetchFacultyAlerts(),
-        fetchFacultyStudents()
+        fetchFacultyStudents(),
+        refreshCurrentUser(),
       ]);
 
       if (dashboardData) {
@@ -54,11 +85,17 @@ export default function FacultyDashboard() {
       }
 
       if (alertsData) {
+        // The table shows the newest few; the badge must still count them all.
         setAlerts(alertsData.alerts.slice(0, 5));
+        setPendingAlerts(alertsData.pending);
       }
 
       if (studentsData) {
         setStudents(studentsData.slice(0, 5));
+      }
+
+      if (user?.name) {
+        setFirstName(user.name.split(" ")[0]);
       }
 
       setLoading(false);
@@ -67,7 +104,7 @@ export default function FacultyDashboard() {
     loadDashboardData();
   }, []);
 
-  const getRisk = (risk?: string) => RISK_STYLES[risk ?? "default"] ?? RISK_STYLES.default;
+  const getRisk = (risk?: string | null) => RISK_STYLES[risk ?? "default"] ?? RISK_STYLES.default;
 
   const getSeverityColor = (severity: string) => {
     switch (severity) {
@@ -182,8 +219,8 @@ export default function FacultyDashboard() {
           icon: <FontAwesomeIcon icon={faHouse} className="w-3.5 h-3.5" />,
           label: "Dashboard",
         }}
-        title="Welcome back, Faculty!"
-        subtitle="Here&apos;s what&apos;s happening with your students today."
+        title={firstName ? `Welcome back, ${firstName}!` : "Welcome back!"}
+        subtitle="Here's what's happening with your students today."
         action={{
           icon: <FontAwesomeIcon icon={faUsers} className="w-6 h-6" />,
           onClick: () => router.push('/faculty/students'),
@@ -261,11 +298,9 @@ export default function FacultyDashboard() {
                   </div>
                   <div className="flex flex-col items-end gap-1 shrink-0">
                     <span className={`px-2.5 py-1 rounded-full text-xs font-medium border ${risk.badge}`}>
-                      {student.risk_level
-                        ? student.risk_level.charAt(0).toUpperCase() + student.risk_level.slice(1)
-                        : 'Unknown'} Risk
+                      {risk.label}
                     </span>
-                    <span className="text-xs text-gray-400">{student.last_activity}</span>
+                    <span className="text-xs text-gray-400">{timeAgo(student.last_activity)}</span>
                   </div>
                 </div>
               );
@@ -296,7 +331,7 @@ export default function FacultyDashboard() {
                     <div className="flex-1 min-w-0 pb-0.5">
                       <p className="font-medium text-gray-900 text-sm">{activity.action}</p>
                       <p className="text-xs text-gray-500 truncate">{activity.details}</p>
-                      <p className="text-[11px] text-gray-400 mt-1">{activity.created_at}</p>
+                      <p className="text-[11px] text-gray-400 mt-1">{timeAgo(activity.created_at)}</p>
                     </div>
                   </li>
                 );
@@ -317,9 +352,9 @@ export default function FacultyDashboard() {
             <h2 className="text-lg font-semibold text-gray-900">Pending Alerts</h2>
             <p className="text-sm text-gray-500 mt-0.5">Alerts requiring your attention</p>
           </div>
-          {alerts.length > 0 && (
+          {pendingAlerts > 0 && (
             <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-600">
-              {alerts.length} pending
+              {pendingAlerts} pending
             </span>
           )}
         </div>
@@ -350,7 +385,7 @@ export default function FacultyDashboard() {
                     </span>
                   </td>
                   <td className="px-4 py-3.5">
-                    <p className="text-gray-500 text-sm">{alert.created_at}</p>
+                    <p className="text-gray-500 text-sm">{timeAgo(alert.created_at)}</p>
                   </td>
                   <td className="px-4 py-3.5">
                     <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${
@@ -362,7 +397,10 @@ export default function FacultyDashboard() {
                     </span>
                   </td>
                   <td className="px-5 py-3.5 text-right">
-                    <button className="text-sm text-brand-600 font-medium hover:text-brand-700 transition-colors">
+                    <button
+                      onClick={() => router.push(`/faculty/students/${alert.student_id}`)}
+                      className="text-sm text-brand-600 font-medium hover:text-brand-700 transition-colors"
+                    >
                       Review
                     </button>
                   </td>
