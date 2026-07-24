@@ -1177,6 +1177,47 @@ export async function fetchAnalyticsSummary(
   }
 }
 
+/** Plain-language reading of the dashboard, for the same filters. */
+export interface AnalyticsNarrative {
+  headline: string;
+  overview: string;
+  highlights: string[];
+  watchouts: string[];
+  actions: string[];
+}
+
+export async function generateAnalyticsNarrative(
+  filters: AnalyticsFilters = {},
+  signal?: AbortSignal,
+): Promise<{ narrative?: AnalyticsNarrative; generated_at?: string; error?: string }> {
+  const params = new URLSearchParams();
+  if (filters.sectionIds?.length) params.set('section_ids', filters.sectionIds.join(','));
+  if (filters.from) params.set('from', filters.from);
+  if (filters.to) params.set('to', filters.to);
+  const query = params.toString();
+
+  try {
+    const res = await fetch(`/api/analytics/narrative${query ? `?${query}` : ''}`, {
+      method: 'POST',
+      credentials: 'include',
+      signal,
+    });
+    const json = (await res.json()) as {
+      narrative?: AnalyticsNarrative;
+      generated_at?: string;
+      error?: string;
+    };
+    if (!res.ok) {
+      return { error: json.error || 'Unable to generate summary' };
+    }
+    return { narrative: json.narrative, generated_at: json.generated_at };
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') return {};
+    console.error('generateAnalyticsNarrative() failed', err);
+    return { error: 'Unable to generate summary' };
+  }
+}
+
 export async function runWarehouseEtl(): Promise<{ rows_loaded?: Record<string, number>; error?: string }> {
   try {
     const res = await fetch('/api/admin/etl', { method: 'POST', credentials: 'include' });

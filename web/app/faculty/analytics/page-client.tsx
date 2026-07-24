@@ -15,12 +15,16 @@ import {
   faChevronDown,
   faCheck,
   faLayerGroup,
+  faWandMagicSparkles,
+  faArrowsRotate,
 } from "@fortawesome/free-solid-svg-icons";
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import {
   fetchAnalyticsSummary,
   fetchFacultySections,
+  generateAnalyticsNarrative,
   AnalyticsSummary,
+  AnalyticsNarrative,
   AnalyticsBucket,
   Section,
 } from "../../lib/api";
@@ -417,6 +421,123 @@ function HBars({
   );
 }
 
+/** Plain-language reading of whatever the filters currently select. */
+function NarrativeCard({
+  narrative,
+  generatedAt,
+  loading,
+  error,
+  stale,
+  onGenerate,
+}: {
+  narrative: AnalyticsNarrative | null;
+  generatedAt: string | null;
+  loading: boolean;
+  error: string | null;
+  stale: boolean;
+  onGenerate: () => void;
+}) {
+  const lists = narrative
+    ? [
+        { title: "Highlights", items: narrative.highlights, dot: "bg-emerald-500" },
+        { title: "Watch-outs", items: narrative.watchouts, dot: "bg-amber-500" },
+        { title: "Suggested Actions", items: narrative.actions, dot: "bg-brand-600" },
+      ].filter((l) => l.items.length > 0)
+    : [];
+
+  return (
+    <Card padding="md" className="mb-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <div className="rounded-lg bg-brand-600/10 p-2">
+            <FontAwesomeIcon icon={faWandMagicSparkles} className="h-4 w-4 text-brand-600" />
+          </div>
+          <div>
+            <h3 className="font-semibold text-gray-900">AI Summary</h3>
+            <p className="text-xs text-gray-400">
+              Reads the figures below for the sections and range you&apos;ve selected
+            </p>
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {stale && !loading && (
+            <span className="hidden rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-medium text-amber-700 sm:inline">
+              Filters changed
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={onGenerate}
+            disabled={loading}
+            className="flex items-center gap-2 rounded-lg bg-brand-600 px-3.5 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <FontAwesomeIcon
+              icon={faArrowsRotate}
+              className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`}
+            />
+            {loading ? "Reading…" : error ? "Retry" : narrative ? "Update" : "Generate"}
+          </button>
+        </div>
+      </div>
+
+      {error && (
+        <p className="mt-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
+          {error}
+        </p>
+      )}
+
+      {loading && (
+        <div className="mt-4 animate-pulse space-y-2">
+          <div className="h-5 w-2/3 rounded bg-gray-200" />
+          <div className="h-4 w-full rounded bg-gray-200" />
+          <div className="h-4 w-5/6 rounded bg-gray-200" />
+        </div>
+      )}
+
+      {!loading && narrative && (
+        <div className="mt-4 space-y-4">
+          {narrative.headline && (
+            <p className="font-display text-lg font-semibold leading-snug text-gray-900">
+              {narrative.headline}
+            </p>
+          )}
+          <p className="text-sm leading-relaxed text-gray-700">{narrative.overview}</p>
+
+          {lists.length > 0 && (
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+              {lists.map((list) => (
+                <div key={list.title} className="rounded-xl bg-subtle p-4">
+                  <p className="mb-2 text-sm font-semibold text-gray-900">{list.title}</p>
+                  <ul className="space-y-2">
+                    {list.items.map((item, idx) => (
+                      <li key={idx} className="flex items-start gap-2 text-sm text-gray-600">
+                        <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${list.dot}`} />
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {generatedAt && (
+            <p className="border-t border-hairline pt-3 text-xs text-gray-400">
+              AI-generated {new Date(generatedAt).toLocaleString()} — review before acting on it.
+            </p>
+          )}
+        </div>
+      )}
+
+      {!loading && !narrative && !error && (
+        <p className="mt-4 text-sm text-gray-400">
+          Generate a plain-language reading of the current selection.
+        </p>
+      )}
+    </Card>
+  );
+}
+
 export default function FacultyAnalyticsClient() {
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
   const [bucket, setBucket] = useState<AnalyticsBucket>("week");
@@ -474,6 +595,49 @@ export default function FacultyAnalyticsClient() {
     for (const s of summary?.sections ?? []) counts[s.id] = s.students;
     return counts;
   }, [summary]);
+
+  /* --- AI narrative -------------------------------------------------- */
+
+  const [narrative, setNarrative] = useState<AnalyticsNarrative | null>(null);
+  const [narrativeAt, setNarrativeAt] = useState<string | null>(null);
+  const [narrativeLoading, setNarrativeLoading] = useState(false);
+  const [narrativeError, setNarrativeError] = useState<string | null>(null);
+  // Which filter combination the current narrative describes, so a stale one
+  // is labelled rather than silently describing the wrong numbers.
+  const [narrativeKey, setNarrativeKey] = useState<string | null>(null);
+
+  const filterKey = `${[...sectionIds].sort().join(",")}|${from}|${to}`;
+
+  const runNarrative = useCallback(
+    async (key: string, ids: string[], start: string, end: string) => {
+      setNarrativeLoading(true);
+      setNarrativeError(null);
+      const result = await generateAnalyticsNarrative({ sectionIds: ids, from: start, to: end });
+      setNarrativeLoading(false);
+      if (result.error || !result.narrative) {
+        setNarrativeError(result.error ?? "Unable to generate summary");
+        return;
+      }
+      setNarrative(result.narrative);
+      setNarrativeAt(result.generated_at ?? null);
+      setNarrativeKey(key);
+    },
+    [],
+  );
+
+  // One automatic reading on arrival; after that the faculty member asks for
+  // it, so changing filters doesn't spend an AI call per click. It waits for
+  // the first summary because that request is what heals a cold warehouse —
+  // running earlier would narrate zeros. The ref makes every later pass a
+  // no-op.
+  const autoNarrative = useRef(false);
+  useEffect(() => {
+    if (loading || autoNarrative.current) return;
+    autoNarrative.current = true;
+    void (async () => {
+      await runNarrative(filterKey, sectionIds, from, to);
+    })();
+  }, [loading, runNarrative, filterKey, sectionIds, from, to]);
 
   if (loading) {
     return (
@@ -637,6 +801,15 @@ export default function FacultyAnalyticsClient() {
           </p>
         )}
       </div>
+
+      <NarrativeCard
+        narrative={narrative}
+        generatedAt={narrativeAt}
+        loading={narrativeLoading}
+        error={narrativeError}
+        stale={narrativeKey !== null && narrativeKey !== filterKey}
+        onGenerate={() => runNarrative(filterKey, sectionIds, from, to)}
+      />
 
       {/* Refetches dim the panels in place rather than tearing the page down
           to skeletons, so changing a filter doesn't make the layout jump. */}
