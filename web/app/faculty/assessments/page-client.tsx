@@ -12,6 +12,7 @@ import {
   faPen,
   faGlobe,
   faEyeSlash,
+  faSearch,
 } from "@fortawesome/free-solid-svg-icons";
 import PageHeader from "../../components/PageHeader";
 import { SkeletonAssessmentCard } from "../../components/skeletons";
@@ -51,6 +52,18 @@ export default function FacultyAssessmentsClient() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const filteredAssessments = assessments.filter((a) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      a.title.toLowerCase().includes(q) ||
+      a.description.toLowerCase().includes(q) ||
+      a.category.toLowerCase().includes(q) ||
+      a.difficulty.toLowerCase().includes(q)
+    );
+  });
 
   // assign modal
   const [assignTarget, setAssignTarget] = useState<Assessment | null>(null);
@@ -170,10 +183,23 @@ export default function FacultyAssessmentsClient() {
         </div>
       )}
 
-      <div className="flex justify-end">
+      <div className="flex items-center justify-between gap-4">
+        <div className="relative flex-1">
+          <FontAwesomeIcon
+            icon={faSearch}
+            className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
+          />
+          <input
+            type="text"
+            placeholder="Search assessments by title, description, category..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-4 py-2.5 bg-surface border border-gray-400 rounded-xl text-sm text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 transition-all"
+          />
+        </div>
         <button
           onClick={() => router.push("/faculty/assessments/new")}
-          className="flex items-center gap-2 px-5 py-2.5 bg-brand-600 text-white rounded-lg hover:bg-[#155663] transition-colors text-sm font-medium shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
+          className="flex items-center gap-2 px-5 py-2.5 bg-brand-600 text-white rounded-lg hover:bg-[#155663] transition-colors text-sm font-medium shadow-[0_2px_6px_rgba(27,107,123,0.2)] shrink-0"
         >
           <FontAwesomeIcon icon={faPlus} className="w-3.5 h-3.5" />
           New Assessment
@@ -186,13 +212,13 @@ export default function FacultyAssessmentsClient() {
             <SkeletonAssessmentCard key={i} />
           ))}
         </div>
-      ) : assessments.length === 0 ? (
+      ) : filteredAssessments.length === 0 ? (
         <div className="bg-surface p-12 rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] text-center text-gray-500">
-          No assessments yet. Create your first quiz to start building the question bank.
+          {searchQuery ? "No assessments match your search." : "No assessments yet. Create your first quiz to start building the question bank."}
         </div>
       ) : (
         <div className="space-y-4">
-          {assessments.map((a) => (
+          {filteredAssessments.map((a) => (
             <div key={a.id} className="relative bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden">
               <span className={`absolute left-0 top-0 h-full w-0.5 ${
                 a.difficulty === "beginner" ? "bg-emerald-500" :
