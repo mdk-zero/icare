@@ -1,20 +1,23 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { Image } from 'expo-image';
 import { useTheme } from '@/hooks/useTheme';
 
 interface AvatarProps {
   name: string;
   size?: 'sm' | 'md' | 'lg';
-  imageUrl?: string;
+  /** Already-resolved URL — pass `resolveAvatarUrl()` output, not a bucket path. */
+  imageUrl?: string | null;
 }
 
-export function Avatar({ name, size = 'md' }: AvatarProps) {
-  const getInitials = (name: string) => {
-    const parts = name.split(' ');
-    if (parts.length >= 2) {
-      return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
-    }
-    return name.substring(0, 2).toUpperCase();
+export function Avatar({ name, size = 'md', imageUrl }: AvatarProps) {
+  /** First letter of the first name plus the last, matching the web avatar. */
+  const getInitials = (value: string) => {
+    const words = value.trim().split(/\s+/).filter((w) => /[\p{L}\p{N}]/u.test(w));
+    if (words.length === 0) return '?';
+    const letterOf = (w: string) => w.match(/[\p{L}\p{N}]/u)?.[0] ?? '';
+    const last = words.length > 1 ? letterOf(words[words.length - 1]) : '';
+    return (letterOf(words[0]) + last).toUpperCase() || '?';
   };
 
   const getSize = () => {
@@ -47,17 +50,14 @@ export function Avatar({ name, size = 'md' }: AvatarProps) {
   const { Palette } = useTheme();
   const styles = React.useMemo(() => createStyles(Palette), [Palette]);
 
+  const box = { width: dimension, height: dimension, borderRadius: dimension / 2 };
+
+  if (imageUrl) {
+    return <Image source={{ uri: imageUrl }} style={box} contentFit="cover" />;
+  }
+
   return (
-    <View
-      style={[
-        styles.avatar,
-        {
-          width: dimension,
-          height: dimension,
-          borderRadius: dimension / 2,
-        },
-      ]}
-    >
+    <View style={[styles.avatar, box]}>
       <Text style={[styles.initials, { fontSize: getFontSize() }]}>{getInitials(name)}</Text>
     </View>
   );

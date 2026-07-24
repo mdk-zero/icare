@@ -261,6 +261,18 @@ export default function ScenarioRunnerScreen() {
         </Card>
       )}
 
+      {/* The help flag belongs where the student is working, not buried in
+          settings — this is the ERD's assistance request. */}
+      {!done && (
+        <Pressable
+          style={({ pressed }) => [styles.assistButton, pressed && styles.patientLinkPressed]}
+          onPress={() => router.push('/assistance')}
+        >
+          <Ionicons name="hand-left-outline" size={16} color={Accent.amber.fg} />
+          <Text style={styles.assistText}>Request instructor assistance</Text>
+        </Pressable>
+      )}
+
       {scenario && scenario.learning_objectives.length > 0 && (
         <Card style={styles.blockCard}>
           <Text style={styles.blockLabel}>Learning Objectives</Text>
@@ -379,6 +391,17 @@ function createStyles(
   },
   patientLinkPressed: { opacity: 0.7 },
   patientLinkText: { fontSize: 13, fontWeight: '600', color: Palette.primary },
+  assistButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: Accent.amber.bg,
+    borderRadius: Radius.md,
+    paddingVertical: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  assistText: { fontSize: 13, fontWeight: '700', color: Accent.amber.fg },
   objectiveRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: Spacing.sm },
   objectiveIcon: { marginTop: 2, marginRight: Spacing.sm },
   objectiveText: { flex: 1, fontSize: 13, color: Palette.text, lineHeight: 19 },

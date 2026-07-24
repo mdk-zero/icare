@@ -29,6 +29,8 @@ interface AuthContextType {
     rememberMe?: boolean,
   ) => Promise<{ ok: boolean; needsRoleSelection?: boolean; error?: string }>;
   logout: () => Promise<void>;
+  /** Re-reads the session, e.g. after a password change or profile edit. */
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -131,6 +133,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   };
 
+  const refreshUser = useCallback(async () => {
+    try {
+      const sessionUser = await apiClient.fetchSession();
+      if (sessionUser) {
+        setUser(sessionUser);
+        AsyncStorage.setItem(USER_KEY, JSON.stringify(sessionUser)).catch(() => {});
+      }
+    } catch {
+      // Offline or transient: keep the identity we already have.
+    }
+  }, []);
+
   return (
     <AuthContext.Provider
       value={{
@@ -141,6 +155,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         login,
         loginWithGoogle,
         logout,
+        refreshUser,
       }}
     >
       {children}

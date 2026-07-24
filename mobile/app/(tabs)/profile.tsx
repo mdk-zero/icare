@@ -4,12 +4,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Image } from 'expo-image';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { SectionHeader } from '@/components/ui';
 import { useAuth } from '@/hooks/useAuth';
 import { useApiData, allCached } from '@/hooks/useApiData';
-import { fetchProgress, fetchRecommendations } from '@/lib/api';
+import { fetchProgress, fetchRecommendations, resolveAvatarUrl } from '@/lib/api';
 
 /** Teal ramp sampled from the pill logo's cap (same as login/header/tab bar/dashboard). */
 const Teal = {
@@ -19,9 +20,16 @@ const Teal = {
   light: '#35859B',
 };
 
+/**
+ * First letter of the first name plus the last — matches the web avatar, and
+ * keeps "Linux Mandrake S. Adona" at "LA" rather than the first two words.
+ */
 function getInitials(name?: string) {
-  if (!name) return 'S';
-  return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+  const words = (name ?? '').trim().split(/\s+/).filter((w) => /[\p{L}\p{N}]/u.test(w));
+  if (words.length === 0) return 'S';
+  const letterOf = (w: string) => w.match(/[\p{L}\p{N}]/u)?.[0] ?? '';
+  const last = words.length > 1 ? letterOf(words[words.length - 1]) : '';
+  return (letterOf(words[0]) + last).toUpperCase() || 'S';
 }
 
 function competencyAccent(Accent: ReturnType<typeof useTheme>['Accent'], score: number) {
@@ -41,6 +49,20 @@ export default function ProfileScreen() {
     allCached(fetchProgress(), fetchRecommendations()),
   );
   const [progress, recommendations] = data ?? [null, []];
+
+  // Uploaded avatars are stored as a bucket path and need signing before they
+  // can be displayed; Google URLs resolve to themselves.
+  const [avatarUrl, setAvatarUrl] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const url = await resolveAvatarUrl(user?.picture_url);
+      if (!cancelled) setAvatarUrl(url);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.picture_url]);
 
   const handleLogout = () => {
     Alert.alert('Logout', 'Are you sure you want to logout?', [
@@ -79,8 +101,8 @@ export default function ProfileScreen() {
   const quickLinks = [
     { label: 'Performance Analytics', icon: 'bar-chart' as const, accent: Accent.blue, onPress: () => router.push('/progress') },
     { label: 'Notifications', icon: 'notifications' as const, accent: Accent.amber, onPress: () => router.push('/notifications') },
-    { label: 'Clinical Guidelines', icon: 'book' as const, accent: Accent.green, onPress: undefined },
-    { label: 'Help & Support', icon: 'help-circle' as const, accent: Accent.violet, onPress: undefined },
+    { label: 'Recommended for You', icon: 'book' as const, accent: Accent.green, onPress: () => router.push('/recommendations') },
+    { label: 'Request Assistance', icon: 'hand-left' as const, accent: Accent.violet, onPress: () => router.push('/assistance') },
   ];
 
   return (
@@ -99,29 +121,34 @@ export default function ProfileScreen() {
         style={styles.headerCard}
       >
         <View style={styles.avatarRow}>
-          <LinearGradient
-            colors={[Teal.light, '#FFFFFF33', Teal.deep]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.avatarLarge}
-          >
-            <Text style={styles.avatarText}>{getInitials(user?.name)}</Text>
-          </LinearGradient>
-          <Pressable style={({ pressed }) => [styles.editButton, pressed && styles.pressedDim]}>
-            <Ionicons name="camera" size={14} color={Teal.primary} />
-          </Pressable>
+          {avatarUrl ? (
+            <Image source={{ uri: avatarUrl }} style={styles.avatarLarge} contentFit="cover" />
+          ) : (
+            <LinearGradient
+              colors={[Teal.light, '#FFFFFF33', Teal.deep]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.avatarLarge}
+            >
+              <Text style={styles.avatarText}>{getInitials(user?.name)}</Text>
+            </LinearGradient>
+          )}
         </View>
         <Text style={styles.name}>{user?.name || 'Student'}</Text>
         <Text style={styles.email}>{user?.email || 'student@icare.edu'}</Text>
         <View style={styles.badges}>
+          {/* Section comes from the session; the old cohort/student-ID badges
+              rendered hardcoded strings that were never on the server. */}
           <View style={styles.badge}>
             <Ionicons name="school-outline" size={12} color="#FFFFFF" />
-            <Text style={styles.badgeText}>{user?.cohort || 'BSN-2027'}</Text>
+            <Text style={styles.badgeText}>
+              {user?.section ? `Section ${user.section}` : 'No section assigned'}
+            </Text>
           </View>
           <View style={styles.badge}>
-            <Ionicons name="id-card-outline" size={12} color="#FFFFFF" />
+            <Ionicons name="person-outline" size={12} color="#FFFFFF" />
             <Text style={styles.badgeText}>
-              {user?.studentId || 'NS-2024-001'}
+              {user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : 'Student'}
             </Text>
           </View>
         </View>

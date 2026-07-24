@@ -33,6 +33,11 @@ function AuthStack() {
       <Stack.Screen name="notifications" options={{ title: 'Notifications' }} />
       <Stack.Screen name="recommendations" options={{ title: 'AI Recommendations' }} />
       <Stack.Screen name="progress" options={{ title: 'Performance' }} />
+      <Stack.Screen name="assistance" options={{ title: 'Request Assistance' }} />
+      <Stack.Screen
+        name="change-password"
+        options={{ title: 'Set a New Password', headerBackVisible: false }}
+      />
     </Stack>
   );
 }
@@ -44,7 +49,7 @@ function AuthStack() {
 const MIN_BOOT_DISPLAY_MS = 700;
 
 function AuthNavigator() {
-  const { isAuthenticated, isBootstrapping } = useAuth();
+  const { isAuthenticated, isBootstrapping, user } = useAuth();
   const router = useRouter();
   const [minDisplayElapsed, setMinDisplayElapsed] = useState(false);
 
@@ -54,14 +59,20 @@ function AuthNavigator() {
   }, []);
 
   const showBootLoader = isBootstrapping || !minDisplayElapsed;
+  // Accounts an admin provisioned carry a temporary password. The web app
+  // forces the change before anything else; mobile used to let them straight
+  // in and keep the temp password indefinitely.
+  const mustChangePassword = Boolean(user?.force_password_change);
 
   useEffect(() => {
     if (!showBootLoader) {
       if (!isAuthenticated) {
         router.replace('/login');
+      } else if (mustChangePassword) {
+        router.replace('/change-password');
       }
     }
-  }, [showBootLoader, isAuthenticated, router]);
+  }, [showBootLoader, isAuthenticated, mustChangePassword, router]);
 
   // Only gate on the initial session restore; a login attempt in progress
   // must not unmount the login screen (it would wipe form and error state).
