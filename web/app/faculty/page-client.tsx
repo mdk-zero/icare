@@ -21,6 +21,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faHouse, faUsers, faTriangleExclamation, faBell, faCheckCircle } from "@fortawesome/free-solid-svg-icons";
 import PageHeader from "../components/PageHeader";
 import StatTile from "../components/StatTile";
+import Avatar from "../components/Avatar";
 
 /**
  * Keyed by the risk_level enum the ML service actually writes
@@ -289,9 +290,7 @@ export default function FacultyDashboard() {
                   onClick={() => router.push(`/faculty/students/${student.id}`)}
                 >
                   <span className={`absolute left-0 top-0 h-full w-1 ${risk.bar}`} aria-hidden />
-                  <div className="w-10 h-10 shrink-0 bg-gradient-to-br from-brand-600 to-brand-700 rounded-full flex items-center justify-center text-white font-semibold text-sm">
-                    {student.name.split(' ').map(n => n[0]).join('')}
-                  </div>
+                  <Avatar name={student.name} src={student.picture_url} size="md" tone="solid" />
                   <div className="min-w-0 flex-1">
                     <p className="font-medium text-gray-900 truncate">{student.name}</p>
                     <p className="text-sm text-gray-500 truncate">{student.email}</p>

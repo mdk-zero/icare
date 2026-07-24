@@ -40,6 +40,7 @@ import {
 import PageHeader from "../../components/PageHeader";
 import StatTile from "../../components/StatTile";
 import Card from "../../components/Card";
+import Avatar from "../../components/Avatar";
 import { SkeletonSectionGrid, SkeletonTable } from "../../components/skeletons";
 
 /** Minimal CSV parser: quoted fields, "" escapes, \r\n or \n row breaks. */
@@ -1118,9 +1119,7 @@ export default function FacultyStudentsClient() {
                       >
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-brand-600/10 rounded-full flex items-center justify-center text-brand-600 font-semibold">
-                              {user.name?.charAt(0) || "?"}
-                            </div>
+                            <Avatar name={user.name} src={user.picture_url} size="md" />
                             <p className="font-semibold text-gray-800">{user.name}</p>
                           </div>
                         </td>

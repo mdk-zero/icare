@@ -22,11 +22,13 @@ import {
 import PageHeader from "../../components/PageHeader";
 import StatTile from "../../components/StatTile";
 import { fetchSections, Section } from "../../lib/api";
+import Avatar from "../../components/Avatar";
 
 interface StudentPerformance {
   id: string;
   name: string;
   email: string;
+  picture_url: string | null;
   quizzes_completed: number;
   average_score: number | null;
   at_risk: boolean;
@@ -1053,15 +1055,12 @@ export default function StudentManagementClient() {
                     >
                       <td className="px-4 py-4 sm:px-6">
                         <div className="flex items-center gap-3">
-                          <span
-                            className={`flex h-10 w-10 items-center justify-center rounded-full font-semibold ${
-                              student.at_risk
-                                ? "bg-rose-50 text-rose-600"
-                                : "bg-brand-600/10 text-brand-600"
-                            }`}
-                          >
-                            {student.name.charAt(0)}
-                          </span>
+                          <Avatar
+                            name={student.name}
+                            src={student.picture_url}
+                            size="md"
+                            tone={student.at_risk ? "risk" : "brand"}
+                          />
                           <div className="min-w-0">
                             <p className="truncate font-semibold text-gray-800">{student.name}</p>
                             <p className="truncate text-sm text-gray-500">{student.email}</p>

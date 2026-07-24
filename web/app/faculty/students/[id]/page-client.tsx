@@ -20,6 +20,7 @@ import {
 } from "../../../lib/api";
 import { SkeletonProfileHeader, SkeletonRiskPredictionCard, SkeletonTabContent } from "../../../components/skeletons";
 import Card from "../../../components/Card";
+import Avatar from "../../../components/Avatar";
 
 interface PerformanceHistory {
   quiz_title: string;
@@ -261,9 +262,7 @@ export default function StudentDetailClient() {
         <div className="lg:col-span-2">
           <Card padding="sm">
             <div className="flex items-center gap-4 mb-6">
-              <div className="w-16 h-16 bg-gradient-to-br from-brand-600 to-brand-700 rounded-full flex items-center justify-center text-white font-bold text-xl">
-                {student.name.split(' ').map(n => n[0]).join('')}
-              </div>
+              <Avatar name={student.name} src={student.picture_url} size="xl" tone="solid" />
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">{student.name}</h1>
                 <p className="text-gray-500">{student.email}</p>

@@ -53,6 +53,7 @@ import { SkeletonInlineStatCard, SkeletonScenarioCard } from "../../components/s
 import PageHeader from "../../components/PageHeader";
 import StatTile from "../../components/StatTile";
 import Card from "../../components/Card";
+import Avatar from "../../components/Avatar";
 
 
 const SCENARIO_CATEGORIES = [
@@ -1881,9 +1882,7 @@ export default function FacultyScenariosClient() {
                             </td>
                             <td className="py-2.5 px-4 text-sm text-gray-800">
                               <div className="flex items-center gap-2">
-                                <div className="w-7 h-7 bg-brand-600/10 rounded-full flex items-center justify-center text-brand-600 text-xs font-bold">
-                                  {student.name.charAt(0)}
-                                </div>
+                                <Avatar name={student.name} src={student.picture_url} size="xs" />
                                 {student.name}
                               </div>
                             </td>

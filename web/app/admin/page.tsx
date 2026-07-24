@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { getSupabaseAdmin } from "@/app/lib/supabase/server";
+import Avatar from "@/app/components/Avatar";
 
 export const metadata: Metadata = {
   title: "Overview | iCARE++",
@@ -13,6 +14,7 @@ interface AtRiskRow {
   id: string;
   name: string;
   email: string;
+  picture_url: string | null;
   average_score: number | null;
   quizzes_completed: number;
 }
@@ -45,7 +47,7 @@ async function loadDashboard() {
 
   const [usersRes, attemptsRes, predictionsRes, roomsRes, roomAssignRes, activityRes] =
     await Promise.all([
-      supabase.from("users").select("id, name, email, role"),
+      supabase.from("users").select("id, name, email, role, picture_url"),
       supabase
         .from("assessment_attempts")
         .select("student_id, score, submitted_at")
@@ -98,6 +100,7 @@ async function loadDashboard() {
         id: s.id,
         name: s.name,
         email: s.email,
+        picture_url: s.picture_url,
         average_score: t && t.count > 0 ? Math.round(t.sum / t.count) : null,
         quizzes_completed: t?.count ?? 0,
       };
@@ -460,9 +463,7 @@ export default async function AdminDashboard() {
                 className="flex items-center justify-between p-5 hover:bg-gray-50 transition-colors"
               >
                 <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-rose-50 rounded-full flex items-center justify-center text-rose-600 font-bold text-lg">
-                    {student.name.charAt(0)}
-                  </div>
+                  <Avatar name={student.name} src={student.picture_url} size="lg" tone="risk" />
                   <div>
                     <p className="font-semibold text-gray-800">{student.name}</p>
                     <p className="text-sm text-gray-500">{student.email}</p>

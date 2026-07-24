@@ -10,6 +10,7 @@ import {
   type RiskPrediction,
   type ScenarioPerformance,
 } from "../../../lib/api";
+import Avatar from "../../../components/Avatar";
 
 interface AttemptRow {
   id: string;
@@ -23,6 +24,7 @@ interface StudentData {
   id: string;
   name: string;
   email: string;
+  picture_url: string | null;
   created_at: string;
   last_login_at: string | null;
   quizzes_completed: number;
@@ -163,9 +165,7 @@ export default function StudentDetailClient() {
         <div className="lg:col-span-2">
           <div className="bg-surface rounded-xl p-6 border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)]">
             <div className="flex items-center gap-4 mb-6">
-              <div className="w-16 h-16 bg-gradient-to-br from-brand-600 to-brand-700 rounded-full flex items-center justify-center text-white font-bold text-xl">
-                {student.name.split(" ").map((n) => n[0]).join("")}
-              </div>
+              <Avatar name={student.name} src={student.picture_url} size="xl" tone="solid" />
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">{student.name}</h1>
                 <p className="text-gray-500">{student.email}</p>
