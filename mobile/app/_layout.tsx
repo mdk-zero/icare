@@ -6,6 +6,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AuthProvider, useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/hooks/useTheme';
+import { ThemePreferenceProvider } from '@/hooks/useThemePreference';
 import { BootLoader } from '@/components/ui/BootLoader';
 
 function AuthStack() {
@@ -85,17 +86,27 @@ function AuthNavigator() {
   return <AuthStack />;
 }
 
-export default function RootLayout() {
+// Consumes useTheme, so it must render inside ThemePreferenceProvider for the
+// nav theme and status bar to follow an explicit Light/Dark override.
+function ThemedApp() {
   const { scheme, isDark } = useTheme();
 
   return (
+    <ThemeProvider value={isDark ? DarkTheme : DefaultTheme}>
+      <StatusBar style={isDark ? 'light' : 'dark'} key={scheme} />
+      <AuthNavigator />
+    </ThemeProvider>
+  );
+}
+
+export default function RootLayout() {
+  return (
     <SafeAreaProvider>
-      <AuthProvider>
-        <ThemeProvider value={isDark ? DarkTheme : DefaultTheme}>
-          <StatusBar style={isDark ? 'light' : 'dark'} key={scheme} />
-          <AuthNavigator />
-        </ThemeProvider>
-      </AuthProvider>
+      <ThemePreferenceProvider>
+        <AuthProvider>
+          <ThemedApp />
+        </AuthProvider>
+      </ThemePreferenceProvider>
     </SafeAreaProvider>
   );
 }

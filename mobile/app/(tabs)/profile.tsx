@@ -11,6 +11,8 @@ import { SectionHeader } from '@/components/ui';
 import { useAuth } from '@/hooks/useAuth';
 import { useApiData, allCached } from '@/hooks/useApiData';
 import { fetchProgress, fetchRecommendations, resolveAvatarUrl } from '@/lib/api';
+import { clearCache } from '@/lib/client';
+import { ThemePreference, useThemePreference } from '@/hooks/useThemePreference';
 
 /** Teal ramp sampled from the pill logo's cap (same as login/header/tab bar/dashboard). */
 const Teal = {
@@ -38,11 +40,18 @@ function competencyAccent(Accent: ReturnType<typeof useTheme>['Accent'], score: 
   return { ...Accent.red, label: 'Needs Work' };
 }
 
+const THEME_OPTIONS: { value: ThemePreference; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+  { value: 'system', label: 'System', icon: 'phone-portrait-outline' },
+  { value: 'light', label: 'Light', icon: 'sunny-outline' },
+  { value: 'dark', label: 'Dark', icon: 'moon-outline' },
+];
+
 export default function ProfileScreen() {
   // content starts below the floating header, then scrolls beneath it
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, logout } = useAuth();
+  const { preference, setPreference } = useThemePreference();
   const { Palette, Accent, Shadow, Type } = useTheme();
   const styles = React.useMemo(() => createStyles(Palette, Accent, Shadow, Type), [Palette, Accent, Shadow, Type]);
   const { data, refreshing, refresh } = useApiData(() =>
@@ -63,6 +72,28 @@ export default function ProfileScreen() {
       cancelled = true;
     };
   }, [user?.picture_url]);
+
+  const handleClearCache = () => {
+    Alert.alert(
+      'Clear cached data',
+      'Offline copies of your data will be removed from this device. Anything not yet synced stays queued, and you remain signed in.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await clearCache();
+              Alert.alert('Cache cleared', 'Pull to refresh on any screen to load the latest data.');
+            } catch {
+              Alert.alert('Error', 'Could not clear the cached data. Please try again.');
+            }
+          },
+        },
+      ],
+    );
+  };
 
   const handleLogout = () => {
     Alert.alert('Logout', 'Are you sure you want to logout?', [
@@ -273,6 +304,64 @@ export default function ProfileScreen() {
               <Ionicons name="chevron-forward" size={17} color={Palette.textFaint} />
             </Pressable>
           ))}
+        </View>
+      </View>
+
+      <View style={styles.section}>
+        <SectionHeader title="Settings" />
+        <View style={styles.listCard}>
+          <View style={styles.settingBlock}>
+            <View style={styles.settingHeader}>
+              <View style={[styles.linkIconContainer, { backgroundColor: Accent.slate.bg }]}>
+                <Ionicons name="contrast-outline" size={17} color={Accent.slate.fg} />
+              </View>
+              <View style={styles.settingTextWrap}>
+                <Text style={styles.linkText}>Appearance</Text>
+                <Text style={styles.settingSubtext}>Match your device, or pin light or dark</Text>
+              </View>
+            </View>
+            <View style={styles.segment}>
+              {THEME_OPTIONS.map((opt) => {
+                const active = preference === opt.value;
+                return (
+                  <Pressable
+                    key={opt.value}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
+                    style={({ pressed }) => [
+                      styles.segmentItem,
+                      active && styles.segmentItemActive,
+                      pressed && styles.pressedDim,
+                    ]}
+                    onPress={() => setPreference(opt.value)}
+                  >
+                    <Ionicons
+                      name={opt.icon}
+                      size={14}
+                      color={active ? Palette.primary : Palette.textSecondary}
+                    />
+                    <Text style={[styles.segmentText, active && styles.segmentTextActive]}>
+                      {opt.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+
+          <Pressable
+            style={({ pressed }) => [styles.linkItem, styles.rowBorder, pressed && styles.pressedDim]}
+            onPress={handleClearCache}
+          >
+            <View style={[styles.linkIconContainer, { backgroundColor: Accent.amber.bg }]}>
+              <Ionicons name="trash-outline" size={17} color={Accent.amber.fg} />
+            </View>
+            <View style={styles.settingTextWrap}>
+              <Text style={styles.linkText}>Clear cached data</Text>
+              <Text style={styles.settingSubtext}>Remove offline copies stored on this device</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={17} color={Palette.textFaint} />
+          </Pressable>
         </View>
       </View>
 
@@ -536,6 +625,52 @@ function createStyles(
     fontSize: 14,
     fontWeight: '500',
     color: Palette.ink,
+  },
+  settingBlock: {
+    paddingVertical: Spacing.md + 2,
+  },
+  settingHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: Spacing.md,
+  },
+  settingTextWrap: {
+    flex: 1,
+  },
+  settingSubtext: {
+    fontSize: 11.5,
+    color: Palette.textSecondary,
+    marginTop: 2,
+  },
+  segment: {
+    flexDirection: 'row',
+    gap: 4,
+    backgroundColor: Palette.surfaceMuted,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Palette.border,
+    padding: 4,
+  },
+  segmentItem: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    paddingVertical: 8,
+    borderRadius: Radius.sm,
+  },
+  segmentItemActive: {
+    backgroundColor: Palette.primaryTint,
+  },
+  segmentText: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: Palette.textSecondary,
+  },
+  segmentTextActive: {
+    color: Palette.primary,
+    fontWeight: '700',
   },
   logoutButton: {
     flexDirection: 'row',
