@@ -20,26 +20,49 @@ const FILTERS: { key: Filter; label: string }[] = [
   { key: "all", label: "All" },
 ];
 
-function categoryColor(category: string) {
+function categoryChip(category: string) {
   switch (category) {
-    case "assessment":
-      return "bg-blue-100 text-blue-700";
-    case "intervention":
-      return "bg-purple-100 text-purple-700";
-    case "medication":
-      return "bg-red-100 text-red-700";
-    case "communication":
-      return "bg-green-100 text-green-700";
-    case "documentation":
-      return "bg-amber-100 text-amber-700";
-    default:
-      return "bg-gray-100 text-gray-700";
+    case "assessment": return "bg-blue-500/10 text-blue-600 dark:text-blue-300";
+    case "intervention": return "bg-violet-500/10 text-violet-600 dark:text-violet-300";
+    case "medication": return "bg-rose-500/10 text-rose-600 dark:text-rose-300";
+    case "communication": return "bg-emerald-500/10 text-emerald-600 dark:text-emerald-300";
+    case "documentation": return "bg-amber-500/10 text-amber-600 dark:text-amber-300";
+    default: return "bg-foreground/10 text-foreground/60";
   }
 }
 
 function isAwaiting(a: ScenarioAssignment) {
   return Boolean(a.submitted_at) && a.status !== "completed";
 }
+
+/** Circular percentage gauge in brand teal. */
+function ScoreRing({ value, tone }: { value: number; tone: "brand" | "emerald" }) {
+  const r = 30;
+  const circ = 2 * Math.PI * r;
+  const clamped = Math.min(100, Math.max(0, value));
+  const offset = circ - (clamped / 100) * circ;
+  return (
+    <div className="relative h-[78px] w-[78px] shrink-0">
+      <svg viewBox="0 0 78 78" className="h-full w-full -rotate-90">
+        <circle cx="39" cy="39" r={r} fill="none" strokeWidth="6" className="stroke-hairline" />
+        <circle
+          cx="39" cy="39" r={r} fill="none" strokeWidth="6" strokeLinecap="round"
+          strokeDasharray={circ} strokeDashoffset={offset}
+          className={`transition-[stroke-dashoffset] duration-700 ease-out ${tone === "emerald" ? "stroke-emerald-500" : "stroke-brand-600"}`}
+        />
+      </svg>
+      <span className="absolute inset-0 flex items-center justify-center font-display text-xl font-bold tabular-nums text-foreground">
+        {clamped}%
+      </span>
+    </div>
+  );
+}
+
+const CheckIcon = ({ className = "h-4 w-4" }: { className?: string }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+  </svg>
+);
 
 export default function FacultyScenarioReviewClient() {
   const router = useRouter();
@@ -91,21 +114,19 @@ export default function FacultyScenarioReviewClient() {
   const totalPoints = tasks.reduce((sum, t) => sum + t.points, 0);
   const earnedPoints = tasks.filter((t) => t.is_completed).reduce((sum, t) => sum + t.points, 0);
   const projectedScore = totalPoints > 0 ? Math.round((earnedPoints / totalPoints) * 100) : 0;
+  const doneCount = tasks.filter((t) => t.is_completed).length;
 
   const handleToggle = async (task: FacultyScenarioTask) => {
     if (finalized || task.verification !== "faculty" || !selectedId) return;
     const next = !task.is_completed;
     setBusyTaskId(task.id);
-    // Optimistic update.
     setTasks((prev) =>
       prev.map((t) =>
         t.id === task.id ? { ...t, is_completed: next, completed_via: next ? "faculty" : null } : t,
       ),
     );
     const ok = await setFacultyTaskChecked(selectedId, task.id, next);
-    if (!ok) {
-      await loadTasks(selectedId); // revert to server truth
-    }
+    if (!ok) await loadTasks(selectedId);
     setBusyTaskId(null);
   };
 
@@ -117,12 +138,7 @@ export default function FacultyScenarioReviewClient() {
       setAssignments((prev) =>
         prev.map((a) =>
           a.id === selectedId
-            ? {
-                ...a,
-                status: "completed",
-                score: result.score,
-                completed_at: new Date().toISOString(),
-              }
+            ? { ...a, status: "completed", score: result.score, completed_at: new Date().toISOString() }
             : a,
         ),
       );
@@ -134,209 +150,288 @@ export default function FacultyScenarioReviewClient() {
   const awaitingCount = assignments.filter(isAwaiting).length;
 
   return (
-    <div className="-m-3 lg:-m-5 min-h-full bg-gray-50">
-      <header className="bg-surface border-b border-gray-200 sticky top-0 z-10">
-        <div className="px-4 py-4 flex items-center gap-4">
+    <div className="relative -m-3 min-h-full bg-canvas lg:-m-5">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 h-48 bg-gradient-to-b from-brand-500/[0.07] to-transparent"
+      />
+
+      {/* Header */}
+      <header className="sticky top-0 z-20 border-b border-hairline bg-surface/85 backdrop-blur-md">
+        <div className="flex items-center gap-3.5 px-4 py-3.5 sm:px-6">
           <button
             onClick={() => router.push("/faculty/scenarios")}
-            className="p-2 hover:bg-gray-100 rounded-xl transition-colors"
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-foreground/55 transition-colors hover:bg-subtle hover:text-foreground"
             aria-label="Back to scenarios"
           >
-            <svg
-              className="w-5 h-5 text-gray-600"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M15 19l-7-7 7-7"
-              />
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
           </button>
-          <div>
-            <h1 className="text-lg font-bold text-gray-900">Review Submissions</h1>
-            <p className="text-sm text-gray-500">
-              Verify hands-on tasks and finalize scenario scores
-              {awaitingCount > 0 ? ` · ${awaitingCount} awaiting review` : ""}
-            </p>
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-600 text-white shadow-tile">
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7l2 2 4-4" />
+            </svg>
           </div>
+          <div className="min-w-0">
+            <h1 className="font-display text-lg font-bold tracking-tight text-foreground">Review Submissions</h1>
+            <p className="truncate text-sm text-foreground/55">Verify hands-on tasks &amp; finalize scenario scores</p>
+          </div>
+          {awaitingCount > 0 && (
+            <span className="ml-auto shrink-0 rounded-full bg-brand-500/12 px-3.5 py-1.5 text-sm font-semibold tabular-nums text-brand-700 dark:text-brand-300">
+              {awaitingCount} awaiting
+            </span>
+          )}
         </div>
       </header>
 
-      <main className="px-4 py-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Assignment list */}
-        <div className="lg:col-span-1 space-y-4">
-          <div className="flex flex-wrap gap-2">
-            {FILTERS.map((f) => (
-              <button
-                key={f.key}
-                onClick={() => setFilter(f.key)}
-                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                  filter === f.key
-                    ? "bg-brand-600 text-white"
-                    : "bg-surface text-gray-600 border border-gray-200 hover:bg-gray-100"
-                }`}
-              >
-                {f.label}
-              </button>
-            ))}
+      <main className="grid gap-5 px-4 py-5 sm:px-6 lg:grid-cols-[350px_minmax(0,1fr)] lg:py-6">
+        {/* Queue */}
+        <div className="lg:sticky lg:top-[84px] lg:self-start">
+          <div className="mb-3 flex flex-wrap gap-1.5">
+            {FILTERS.map((f) => {
+              const active = filter === f.key;
+              return (
+                <button
+                  key={f.key}
+                  onClick={() => setFilter(f.key)}
+                  className={`rounded-full px-3 py-1.5 text-sm font-medium transition-all ${
+                    active
+                      ? "bg-brand-600 text-white shadow-tile"
+                      : "border border-hairline bg-surface text-foreground/60 hover:border-brand-500/40 hover:text-foreground"
+                  }`}
+                >
+                  {f.label}
+                </button>
+              );
+            })}
           </div>
 
           <div className="space-y-2">
-            {loading && <p className="text-sm text-gray-500 px-1">Loading…</p>}
+            {loading &&
+              [0, 1, 2, 3].map((i) => (
+                <div key={i} className="h-[70px] animate-pulse rounded-2xl border border-hairline bg-subtle" />
+              ))}
+
             {!loading && visible.length === 0 && (
-              <p className="text-sm text-gray-500 px-1">Nothing here right now.</p>
-            )}
-            {visible.map((a) => (
-              <button
-                key={a.id}
-                onClick={() => selectAssignment(a.id)}
-                className={`w-full text-left p-4 rounded-xl border transition-colors ${
-                  selectedId === a.id
-                    ? "border-brand-600 bg-brand-600/5"
-                    : "border-gray-200 bg-surface hover:border-gray-300"
-                }`}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <p className="font-medium text-gray-900 truncate">{a.student_name}</p>
-                  {a.status === "completed" ? (
-                    <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-700 shrink-0">
-                      {a.score ?? 0}%
-                    </span>
-                  ) : isAwaiting(a) ? (
-                    <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-700 shrink-0">
-                      Awaiting review
-                    </span>
-                  ) : (
-                    <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-gray-100 text-gray-600 shrink-0">
-                      {a.status.replace("_", " ")}
-                    </span>
-                  )}
+              <div className="rounded-2xl border border-dashed border-hairline bg-surface px-4 py-10 text-center">
+                <div className="mx-auto mb-3 grid h-11 w-11 place-items-center rounded-full bg-subtle text-foreground/40">
+                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
+                      d="M5 13l4 4L19 7" />
+                  </svg>
                 </div>
-                <p className="text-sm text-gray-500 truncate mt-0.5">{a.scenario_title}</p>
-              </button>
-            ))}
+                <p className="text-sm font-medium text-foreground/70">All clear</p>
+                <p className="mt-0.5 text-xs text-foreground/45">Nothing in this view right now.</p>
+              </div>
+            )}
+
+            {!loading &&
+              visible.map((a, i) => {
+                const active = selectedId === a.id;
+                return (
+                  <button
+                    key={a.id}
+                    onClick={() => selectAssignment(a.id)}
+                    style={{ animationDelay: `${Math.min(i, 8) * 35}ms` }}
+                    className={`w-full animate-rise rounded-2xl border p-4 text-left transition-all ${
+                      active
+                        ? "border-brand-500/60 bg-brand-500/[0.06] shadow-tile"
+                        : "border-hairline bg-surface hover:border-brand-500/40 hover:shadow-tile"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="truncate font-semibold text-foreground">{a.student_name}</p>
+                      {a.status === "completed" ? (
+                        <span className="shrink-0 rounded-full bg-emerald-500/12 px-2 py-0.5 text-xs font-semibold tabular-nums text-emerald-600 dark:text-emerald-300">
+                          {a.score ?? 0}%
+                        </span>
+                      ) : isAwaiting(a) ? (
+                        <span className="flex shrink-0 items-center gap-1 rounded-full bg-brand-500/12 px-2 py-0.5 text-xs font-semibold text-brand-700 dark:text-brand-300">
+                          <span className="h-1.5 w-1.5 rounded-full bg-brand-500" />
+                          Awaiting
+                        </span>
+                      ) : (
+                        <span className="shrink-0 rounded-full bg-foreground/8 px-2 py-0.5 text-xs font-medium capitalize text-foreground/55">
+                          {a.status.replace("_", " ")}
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-1 truncate text-sm text-foreground/55">{a.scenario_title}</p>
+                  </button>
+                );
+              })}
           </div>
         </div>
 
-        {/* Task detail */}
-        <div className="lg:col-span-2">
+        {/* Detail */}
+        <div>
           {!selected ? (
-            <div className="bg-surface rounded-2xl border border-gray-100 p-10 text-center text-gray-500">
-              Select a submission to review its tasks.
+            <div className="flex min-h-[360px] flex-col items-center justify-center rounded-3xl border border-dashed border-hairline bg-surface/60 px-6 py-16 text-center">
+              <div className="mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-brand-500/10 text-brand-600 dark:text-brand-300">
+                <svg className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6}
+                    d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
+              </div>
+              <p className="font-display text-lg font-semibold text-foreground">Pick a submission</p>
+              <p className="mt-1 max-w-xs text-sm text-foreground/50">
+                Choose a student from the queue to verify their hands-on tasks and lock in a score.
+              </p>
             </div>
           ) : (
-            <div className="bg-surface rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-              <div className="p-6 border-b border-gray-100 flex items-start justify-between gap-4">
-                <div>
-                  <h2 className="font-semibold text-gray-900">{selected.student_name}</h2>
-                  <p className="text-sm text-gray-500">{selected.scenario_title}</p>
+            <div className="overflow-hidden rounded-3xl border border-hairline bg-surface shadow-tile">
+              {/* Detail header */}
+              <div className="flex items-center justify-between gap-4 border-b border-hairline bg-subtle/60 px-5 py-5 sm:px-6">
+                <div className="min-w-0">
+                  <h2 className="truncate font-display text-xl font-bold tracking-tight text-foreground">
+                    {selected.student_name}
+                  </h2>
+                  <p className="truncate text-sm text-foreground/55">{selected.scenario_title}</p>
+                  <div className="mt-2.5 flex items-center gap-2 text-xs font-medium">
+                    <span className="rounded-full bg-foreground/8 px-2.5 py-1 tabular-nums text-foreground/60">
+                      {doneCount}/{tasks.length} done
+                    </span>
+                    <span className="rounded-full bg-foreground/8 px-2.5 py-1 tabular-nums text-foreground/60">
+                      {earnedPoints}/{totalPoints} pts
+                    </span>
+                    {finalized && (
+                      <span className="flex items-center gap-1 rounded-full bg-emerald-500/12 px-2.5 py-1 text-emerald-600 dark:text-emerald-300">
+                        <CheckIcon className="h-3 w-3" /> Finalized
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-2xl font-bold text-brand-600">
-                    {finalized ? (selected.score ?? 0) : projectedScore}%
-                  </p>
-                  <p className="text-xs text-gray-500">{finalized ? "Final score" : "Projected"}</p>
+                <div className="flex flex-col items-center gap-1">
+                  <ScoreRing value={finalized ? (selected.score ?? 0) : projectedScore} tone={finalized ? "emerald" : "brand"} />
+                  <span className="text-[11px] font-medium uppercase tracking-wide text-foreground/45">
+                    {finalized ? "Final" : "Projected"}
+                  </span>
                 </div>
               </div>
 
-              <div className="p-6 space-y-3">
-                {tasksLoading && <p className="text-sm text-gray-500">Loading tasks…</p>}
+              {/* Tasks */}
+              <div className="space-y-2.5 px-4 py-5 sm:px-6">
+                {tasksLoading &&
+                  [0, 1, 2, 3].map((i) => (
+                    <div key={i} className="h-[76px] animate-pulse rounded-xl border border-hairline bg-subtle" />
+                  ))}
+
                 {!tasksLoading && tasks.length === 0 && (
-                  <p className="text-sm text-gray-500">This scenario has no tasks.</p>
+                  <p className="py-6 text-center text-sm text-foreground/50">This scenario has no tasks.</p>
                 )}
-                {tasks.map((task) => {
-                  const isFaculty = task.verification === "faculty";
-                  const interactive = isFaculty && !finalized;
-                  return (
-                    <div
-                      key={task.id}
-                      className={`p-4 rounded-xl border-2 transition-all ${
-                        task.is_completed ? "border-green-500 bg-green-50" : "border-gray-200"
-                      } ${interactive ? "cursor-pointer hover:border-gray-300" : ""}`}
-                      onClick={() => interactive && handleToggle(task)}
-                    >
-                      <div className="flex items-start gap-4">
-                        <div
-                          className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 ${
-                            task.is_completed
-                              ? "border-green-500 bg-green-500 text-white"
-                              : "border-gray-300"
-                          } ${busyTaskId === task.id ? "opacity-50" : ""}`}
-                        >
-                          {task.is_completed && (
-                            <svg
-                              className="w-4 h-4"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              stroke="currentColor"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M5 13l4 4L19 7"
-                              />
-                            </svg>
-                          )}
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 flex-wrap mb-1">
-                            <p
-                              className={`font-medium ${task.is_completed ? "text-green-800" : "text-gray-800"}`}
-                            >
-                              {task.title}
-                            </p>
-                            <span
-                              className={`px-2 py-0.5 text-xs font-medium rounded-full ${categoryColor(task.category)}`}
-                            >
-                              {task.category}
-                            </span>
-                            <span
-                              className={`px-2 py-0.5 text-xs font-medium rounded-full ${
-                                isFaculty
-                                  ? "bg-violet-100 text-violet-700"
-                                  : "bg-sky-100 text-sky-700"
-                              }`}
-                            >
-                              {isFaculty ? "Faculty-verified" : "Auto"}
-                            </span>
+
+                {!tasksLoading &&
+                  tasks.map((task, i) => {
+                    const isFaculty = task.verification === "faculty";
+                    const interactive = isFaculty && !finalized;
+                    const done = task.is_completed;
+                    return (
+                      <div
+                        key={task.id}
+                        onClick={() => interactive && handleToggle(task)}
+                        style={{ animationDelay: `${Math.min(i, 10) * 30}ms` }}
+                        className={`group relative animate-rise overflow-hidden rounded-xl border py-3.5 pl-5 pr-4 transition-all ${
+                          done
+                            ? "border-emerald-500/40 bg-emerald-500/[0.06]"
+                            : "border-hairline bg-surface"
+                        } ${interactive ? "cursor-pointer hover:border-brand-500/50 hover:shadow-tile" : ""}`}
+                      >
+                        <span
+                          className={`absolute inset-y-0 left-0 w-1 ${
+                            done ? "bg-emerald-500/70" : isFaculty ? "bg-violet-400/70" : "bg-brand-500/70"
+                          }`}
+                        />
+                        <div className="flex items-start gap-3.5">
+                          {/* Checkbox */}
+                          <div
+                            className={`mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-md border-2 transition-all ${
+                              busyTaskId === task.id ? "opacity-50" : ""
+                            } ${
+                              done
+                                ? isFaculty
+                                  ? "border-emerald-500 bg-emerald-500 text-white"
+                                  : "border-brand-600 bg-brand-600 text-white"
+                                : isFaculty
+                                  ? interactive
+                                    ? "border-foreground/25 text-transparent group-hover:border-emerald-500"
+                                    : "border-foreground/20 text-transparent"
+                                  : "border-dashed border-brand-500/40 text-transparent"
+                            }`}
+                          >
+                            {done ? (
+                              <CheckIcon />
+                            ) : !isFaculty ? (
+                              <span className="h-1.5 w-1.5 rounded-full bg-brand-500/60" />
+                            ) : null}
                           </div>
-                          <p className="text-sm text-gray-500">{task.description}</p>
-                          <p className="text-xs text-gray-400 mt-1">
-                            {task.points} points
-                            {task.is_completed
-                              ? task.completed_via === "system"
-                                ? " · auto-completed"
-                                : " · verified by faculty"
-                              : isFaculty
-                                ? " · check when performed"
-                                : " · completes from the student's charting"}
-                          </p>
+
+                          <div className="min-w-0 flex-1">
+                            <div className="mb-1 flex flex-wrap items-center gap-2">
+                              <p className={`font-semibold ${done ? "text-foreground" : "text-foreground/90"}`}>
+                                {task.title}
+                              </p>
+                              <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize ${categoryChip(task.category)}`}>
+                                {task.category}
+                              </span>
+                              <span
+                                className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                                  isFaculty
+                                    ? "bg-violet-500/12 text-violet-600 dark:text-violet-300"
+                                    : "bg-brand-500/12 text-brand-700 dark:text-brand-300"
+                                }`}
+                              >
+                                {isFaculty ? "Faculty-verified" : "Auto"}
+                              </span>
+                            </div>
+                            <p className="text-sm text-foreground/55">{task.description}</p>
+                            <p className="mt-1 text-xs text-foreground/40">
+                              {task.is_completed
+                                ? task.completed_via === "system"
+                                  ? "Auto-completed from the student's charting"
+                                  : "Verified by faculty"
+                                : isFaculty
+                                  ? interactive
+                                    ? "Tap to mark verified"
+                                    : "Awaiting verification"
+                                  : "Completes from the student's charting"}
+                            </p>
+                          </div>
+
+                          <span className="shrink-0 font-display text-sm font-bold tabular-nums text-foreground/70">
+                            {task.points}
+                            <span className="text-foreground/35"> pt</span>
+                          </span>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
               </div>
 
-              <div className="p-6 border-t border-gray-100 flex items-center justify-between gap-4">
-                <p className="text-sm text-gray-500">
+              {/* Finalize bar */}
+              <div className="flex flex-col gap-3 border-t border-hairline bg-subtle/60 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+                <p className="text-sm text-foreground/55">
                   {finalized
-                    ? "This assignment is finalized."
+                    ? "This assignment is finalized and locked."
                     : selected.submitted_at
-                      ? "Student has submitted. Verify the hands-on tasks, then finalize."
-                      : "Student has not submitted yet — you can still finalize when ready."}
+                      ? "Student submitted — verify the hands-on tasks, then finalize."
+                      : "Not submitted yet — you can still finalize when ready."}
                 </p>
                 <button
                   onClick={handleFinalize}
                   disabled={finalized || finalizing || tasksLoading}
-                  className="px-5 py-2.5 bg-brand-600 text-white rounded-xl font-medium hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                  className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white shadow-tile transition-all hover:bg-brand-700 hover:shadow-tile-hover disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-brand-600"
                 >
-                  {finalized ? "Finalized" : finalizing ? "Finalizing…" : "Finalize & lock score"}
+                  {finalized ? (
+                    <>
+                      <CheckIcon className="h-4 w-4" /> Finalized
+                    </>
+                  ) : finalizing ? (
+                    "Finalizing…"
+                  ) : (
+                    "Finalize & lock score"
+                  )}
                 </button>
               </div>
             </div>
