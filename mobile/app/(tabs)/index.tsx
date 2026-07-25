@@ -265,25 +265,6 @@ export default function DashboardScreen() {
         ))}
       </Animated.View>
 
-      {/* Quick Actions */}
-      <Animated.View entering={FadeInDown.duration(220).delay(120)} style={styles.section}>
-        <SectionHeader title="Quick Actions" />
-        <View style={styles.quickActions}>
-          {quickActions.map((action) => (
-            <Pressable
-              key={action.label}
-              style={({ pressed }) => [styles.quickAction, pressed && styles.pressedDim]}
-              onPress={() => router.push(action.href as any)}
-            >
-              <View style={[styles.quickActionIcon, { backgroundColor: action.accent.bg }]}>
-                <FontAwesome6 name={action.icon} size={19} solid color={action.accent.fg} />
-              </View>
-              <Text style={styles.quickActionText}>{action.label}</Text>
-            </Pressable>
-          ))}
-        </View>
-      </Animated.View>
-
       {/* Scenarios */}
       <Animated.View entering={FadeInDown.duration(220).delay(160)} style={styles.section}>
         <SectionHeader

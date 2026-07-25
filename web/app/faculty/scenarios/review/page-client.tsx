@@ -22,12 +22,18 @@ const FILTERS: { key: Filter; label: string }[] = [
 
 function categoryChip(category: string) {
   switch (category) {
-    case "assessment": return "bg-blue-500/10 text-blue-600 dark:text-blue-300";
-    case "intervention": return "bg-violet-500/10 text-violet-600 dark:text-violet-300";
-    case "medication": return "bg-rose-500/10 text-rose-600 dark:text-rose-300";
-    case "communication": return "bg-emerald-500/10 text-emerald-600 dark:text-emerald-300";
-    case "documentation": return "bg-amber-500/10 text-amber-600 dark:text-amber-300";
-    default: return "bg-foreground/10 text-foreground/60";
+    case "assessment":
+      return "bg-blue-500/10 text-blue-600 dark:text-blue-300";
+    case "intervention":
+      return "bg-violet-500/10 text-violet-600 dark:text-violet-300";
+    case "medication":
+      return "bg-rose-500/10 text-rose-600 dark:text-rose-300";
+    case "communication":
+      return "bg-emerald-500/10 text-emerald-600 dark:text-emerald-300";
+    case "documentation":
+      return "bg-amber-500/10 text-amber-600 dark:text-amber-300";
+    default:
+      return "bg-foreground/10 text-foreground/60";
   }
 }
 
@@ -46,8 +52,14 @@ function ScoreRing({ value, tone }: { value: number; tone: "brand" | "emerald" }
       <svg viewBox="0 0 78 78" className="h-full w-full -rotate-90">
         <circle cx="39" cy="39" r={r} fill="none" strokeWidth="6" className="stroke-hairline" />
         <circle
-          cx="39" cy="39" r={r} fill="none" strokeWidth="6" strokeLinecap="round"
-          strokeDasharray={circ} strokeDashoffset={offset}
+          cx="39"
+          cy="39"
+          r={r}
+          fill="none"
+          strokeWidth="6"
+          strokeLinecap="round"
+          strokeDasharray={circ}
+          strokeDashoffset={offset}
           className={`transition-[stroke-dashoffset] duration-700 ease-out ${tone === "emerald" ? "stroke-emerald-500" : "stroke-brand-600"}`}
         />
       </svg>
@@ -138,7 +150,12 @@ export default function FacultyScenarioReviewClient() {
       setAssignments((prev) =>
         prev.map((a) =>
           a.id === selectedId
-            ? { ...a, status: "completed", score: result.score, completed_at: new Date().toISOString() }
+            ? {
+                ...a,
+                status: "completed",
+                score: result.score,
+                completed_at: new Date().toISOString(),
+              }
             : a,
         ),
       );
@@ -165,18 +182,31 @@ export default function FacultyScenarioReviewClient() {
             aria-label="Back to scenarios"
           >
             <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M15 19l-7-7 7-7"
+              />
             </svg>
           </button>
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-600 text-white shadow-tile">
             <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7l2 2 4-4" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7l2 2 4-4"
+              />
             </svg>
           </div>
           <div className="min-w-0">
-            <h1 className="font-display text-lg font-bold tracking-tight text-foreground">Review Submissions</h1>
-            <p className="truncate text-sm text-foreground/55">Verify hands-on tasks &amp; finalize scenario scores</p>
+            <h1 className="font-display text-lg font-bold tracking-tight text-foreground">
+              Review Submissions
+            </h1>
+            <p className="truncate text-sm text-foreground/55">
+              Verify hands-on tasks &amp; finalize scenario scores
+            </p>
           </div>
           {awaitingCount > 0 && (
             <span className="ml-auto shrink-0 rounded-full bg-brand-500/12 px-3.5 py-1.5 text-sm font-semibold tabular-nums text-brand-700 dark:text-brand-300">
@@ -186,7 +216,7 @@ export default function FacultyScenarioReviewClient() {
         </div>
       </header>
 
-      <main className="grid gap-5 px-4 py-5 sm:px-6 lg:grid-cols-[350px_minmax(0,1fr)] lg:py-6">
+      <main className="grid gap-5 px-4 py-5 sm:px-6 lg:grid-cols-[350px_minmax(0,1fr)] lg:py-8">
         {/* Queue */}
         <div className="lg:sticky lg:top-[84px] lg:self-start">
           <div className="mb-3 flex flex-wrap gap-1.5">
@@ -211,15 +241,22 @@ export default function FacultyScenarioReviewClient() {
           <div className="space-y-2">
             {loading &&
               [0, 1, 2, 3].map((i) => (
-                <div key={i} className="h-[70px] animate-pulse rounded-2xl border border-hairline bg-subtle" />
+                <div
+                  key={i}
+                  className="h-[70px] animate-pulse rounded-2xl border border-hairline bg-subtle"
+                />
               ))}
 
             {!loading && visible.length === 0 && (
               <div className="rounded-2xl border border-dashed border-hairline bg-surface px-4 py-10 text-center">
                 <div className="mx-auto mb-3 grid h-11 w-11 place-items-center rounded-full bg-subtle text-foreground/40">
                   <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
-                      d="M5 13l4 4L19 7" />
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={1.8}
+                      d="M5 13l4 4L19 7"
+                    />
                   </svg>
                 </div>
                 <p className="text-sm font-medium text-foreground/70">All clear</p>
@@ -271,11 +308,17 @@ export default function FacultyScenarioReviewClient() {
             <div className="flex min-h-[360px] flex-col items-center justify-center rounded-3xl border border-dashed border-hairline bg-surface/60 px-6 py-16 text-center">
               <div className="mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-brand-500/10 text-brand-600 dark:text-brand-300">
                 <svg className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6}
-                    d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={1.6}
+                    d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+                  />
                 </svg>
               </div>
-              <p className="font-display text-lg font-semibold text-foreground">Pick a submission</p>
+              <p className="font-display text-lg font-semibold text-foreground">
+                Pick a submission
+              </p>
               <p className="mt-1 max-w-xs text-sm text-foreground/50">
                 Choose a student from the queue to verify their hands-on tasks and lock in a score.
               </p>
@@ -304,7 +347,10 @@ export default function FacultyScenarioReviewClient() {
                   </div>
                 </div>
                 <div className="flex flex-col items-center gap-1">
-                  <ScoreRing value={finalized ? (selected.score ?? 0) : projectedScore} tone={finalized ? "emerald" : "brand"} />
+                  <ScoreRing
+                    value={finalized ? (selected.score ?? 0) : projectedScore}
+                    tone={finalized ? "emerald" : "brand"}
+                  />
                   <span className="text-[11px] font-medium uppercase tracking-wide text-foreground/45">
                     {finalized ? "Final" : "Projected"}
                   </span>
@@ -315,11 +361,16 @@ export default function FacultyScenarioReviewClient() {
               <div className="space-y-2.5 px-4 py-5 sm:px-6">
                 {tasksLoading &&
                   [0, 1, 2, 3].map((i) => (
-                    <div key={i} className="h-[76px] animate-pulse rounded-xl border border-hairline bg-subtle" />
+                    <div
+                      key={i}
+                      className="h-[76px] animate-pulse rounded-xl border border-hairline bg-subtle"
+                    />
                   ))}
 
                 {!tasksLoading && tasks.length === 0 && (
-                  <p className="py-6 text-center text-sm text-foreground/50">This scenario has no tasks.</p>
+                  <p className="py-6 text-center text-sm text-foreground/50">
+                    This scenario has no tasks.
+                  </p>
                 )}
 
                 {!tasksLoading &&
@@ -340,7 +391,11 @@ export default function FacultyScenarioReviewClient() {
                       >
                         <span
                           className={`absolute inset-y-0 left-0 w-1 ${
-                            done ? "bg-emerald-500/70" : isFaculty ? "bg-violet-400/70" : "bg-brand-500/70"
+                            done
+                              ? "bg-emerald-500/70"
+                              : isFaculty
+                                ? "bg-violet-400/70"
+                                : "bg-brand-500/70"
                           }`}
                         />
                         <div className="flex items-start gap-3.5">
@@ -369,10 +424,14 @@ export default function FacultyScenarioReviewClient() {
 
                           <div className="min-w-0 flex-1">
                             <div className="mb-1 flex flex-wrap items-center gap-2">
-                              <p className={`font-semibold ${done ? "text-foreground" : "text-foreground/90"}`}>
+                              <p
+                                className={`font-semibold ${done ? "text-foreground" : "text-foreground/90"}`}
+                              >
                                 {task.title}
                               </p>
-                              <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize ${categoryChip(task.category)}`}>
+                              <span
+                                className={`rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize ${categoryChip(task.category)}`}
+                              >
                                 {task.category}
                               </span>
                               <span
