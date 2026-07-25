@@ -322,14 +322,50 @@ export async function fetchScenario(id: string): Promise<CachedResult<Scenario>>
   return { ...result, data: result.data.scenario };
 }
 
-export async function completeScenarioAssignment(
+export interface ScenarioTask {
+  id: string;
+  title: string;
+  description: string;
+  category: 'assessment' | 'intervention' | 'medication' | 'communication' | 'documentation';
+  points: number;
+  verification: 'system' | 'faculty';
+  system_trigger: 'vitals' | 'charting' | null;
+  sort_order: number;
+  is_completed: boolean;
+  completed_via: 'system' | 'faculty' | null;
+  completed_at: string | null;
+}
+
+export interface ScenarioTasksResult {
+  tasks: ScenarioTask[];
+  assignment: {
+    id: string;
+    status: ScenarioAssignment['status'];
+    submitted_at: string | null;
+    completed_at: string | null;
+    score: number | null;
+    time_taken: number | null;
+  };
+}
+
+/** Tasks for a scenario plus their completion state on this student's assignment. */
+export async function fetchScenarioTasks(
   assignmentId: string,
-  score: number,
+): Promise<CachedResult<ScenarioTasksResult>> {
+  return cachedGet<ScenarioTasksResult>(`/api/student/scenarios/${assignmentId}/tasks`);
+}
+
+/**
+ * Hand the assignment in for faculty review. System tasks auto-complete as the
+ * student works; faculty verify the hands-on tasks and finalize the score.
+ */
+export async function submitScenarioAssignment(
+  assignmentId: string,
   timeTakenSeconds: number,
 ): Promise<ScenarioAssignment> {
   const result = await api<{ assignment: ScenarioAssignment }>(
-    `/api/student/scenarios/${assignmentId}/complete`,
-    { method: 'POST', body: { score, time_taken: timeTakenSeconds } },
+    `/api/student/scenarios/${assignmentId}/submit`,
+    { method: 'POST', body: { time_taken: timeTakenSeconds } },
   );
   return result.assignment;
 }

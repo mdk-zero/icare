@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ScrollView, View, Text, StyleSheet, Alert, Pressable } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { ScrollView, View, Text, StyleSheet, Alert, Pressable, RefreshControl } from 'react-native';
+import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Card, Badge, PrimaryButton, SkeletonScreen, EmptyState } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
@@ -9,24 +9,12 @@ import { useApiData, allCached } from '@/hooks/useApiData';
 import {
   fetchScenarioAssignments,
   fetchScenario,
-  completeScenarioAssignment,
+  fetchScenarioTasks,
+  submitScenarioAssignment,
   Scenario,
-  ScenarioAssignment,
+  ScenarioTask,
 } from '@/lib/api';
 import { isNetworkError } from '@/lib/client';
-
-// Same clinical checklist the web scenario runner uses; the earned share of
-// points becomes the submitted score.
-const CHECKLIST = [
-  { id: 't1', title: 'Assess Patient Vital Signs', description: 'Measure heart rate, blood pressure, temperature, and respiratory rate', points: 10 },
-  { id: 't2', title: 'Review Medical History', description: "Check patient's allergies, current medications, and past conditions", points: 10 },
-  { id: 't3', title: 'Perform Physical Examination', description: 'Conduct head-to-toe physical assessment', points: 15 },
-  { id: 't4', title: 'Administer Medication', description: 'Give prescribed medication with proper technique', points: 15 },
-  { id: 't5', title: 'Develop Care Plan', description: 'Create nursing care plan based on patient needs', points: 15 },
-  { id: 't6', title: 'Document Assessment', description: 'Accurately document all findings in patient chart', points: 10 },
-  { id: 't7', title: 'Communicate with Patient', description: 'Explain procedure and provide health education', points: 10 },
-  { id: 't8', title: 'Notify Healthcare Team', description: 'Report significant findings to physician', points: 15 },
-];
 
 const DIFFICULTY_VARIANT: Record<Scenario['difficulty'], 'success' | 'warning' | 'danger'> = {
   beginner: 'success',
@@ -71,10 +59,21 @@ export default function ScenarioRunnerScreen() {
   const { Palette, Accent, Type } = useTheme();
   const styles = useMemo(() => createStyles(Palette, Accent, Type), [Palette, Accent, Type]);
 
-  const { data, loading, error } = useApiData(() =>
-    allCached(fetchScenarioAssignments()),
+  const { data, loading, error, refreshing, refresh, reload } = useApiData(() =>
+    allCached(fetchScenarioAssignments(), fetchScenarioTasks(assignmentId)),
   );
   const assignment = (data?.[0] ?? []).find((a) => a.id === assignmentId) ?? null;
+  const taskResult = data?.[1] ?? null;
+  const tasks = useMemo(() => taskResult?.tasks ?? [], [taskResult]);
+  const taskAssignment = taskResult?.assignment ?? null;
+
+  // Coming back from recording vitals / charting should reflect the tasks that
+  // auto-completed while the student was away.
+  useFocusEffect(
+    React.useCallback(() => {
+      reload();
+    }, [reload]),
+  );
 
   const [scenario, setScenario] = useState<Scenario | null>(null);
   const [scenarioError, setScenarioError] = useState<string | null>(null);
@@ -94,41 +93,37 @@ export default function ScenarioRunnerScreen() {
     };
   }, [assignment?.scenario_id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const [checked, setChecked] = useState<string[]>([]);
   const [elapsed, setElapsed] = useState(0);
   const [submitting, setSubmitting] = useState(false);
-  const [result, setResult] = useState<ScenarioAssignment | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const done = result ?? (assignment?.status === 'completed' ? assignment : null);
+  const status = taskAssignment?.status ?? assignment?.status ?? 'pending';
+  const submittedAt = taskAssignment?.submitted_at ?? null;
+  const isCompleted = status === 'completed';
+  const isSubmitted = !isCompleted && Boolean(submittedAt);
+  const isActive = !isCompleted && !isSubmitted;
 
   useEffect(() => {
-    if (done) return;
+    if (!isActive) return;
     timerRef.current = setInterval(() => setElapsed((s) => s + 1), 1000);
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [done !== null]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isActive]);
 
-  const totalPoints = useMemo(() => CHECKLIST.reduce((sum, t) => sum + t.points, 0), []);
-  const earnedPoints = CHECKLIST.filter((t) => checked.includes(t.id)).reduce(
-    (sum, t) => sum + t.points,
-    0,
-  );
+  const completedCount = tasks.filter((t) => t.is_completed).length;
+  const totalCount = tasks.length;
+  const totalPoints = tasks.reduce((sum, t) => sum + t.points, 0);
+  const earnedPoints = tasks.filter((t) => t.is_completed).reduce((sum, t) => sum + t.points, 0);
+  const autoPending = tasks.filter((t) => t.verification === 'system' && !t.is_completed).length;
 
-  const toggle = (taskId: string) => {
-    if (done) return;
-    setChecked((prev) =>
-      prev.includes(taskId) ? prev.filter((t) => t !== taskId) : [...prev, taskId],
-    );
-  };
-
-  const handleComplete = () => {
+  const handleSubmit = () => {
     if (!assignment) return;
-    const score = Math.round((earnedPoints / totalPoints) * 100);
     Alert.alert(
-      'Complete Scenario',
-      `Submit with ${checked.length}/${CHECKLIST.length} tasks done (score ${score}%)?`,
+      'Submit for Review',
+      autoPending > 0
+        ? `${autoPending} automatic task${autoPending === 1 ? '' : 's'} (record vitals / chart) ${autoPending === 1 ? 'is' : 'are'} still not done. Submit anyway? Your instructor verifies the hands-on tasks and finalizes your score.`
+        : 'Submit your work for faculty review? Your instructor verifies the remaining hands-on tasks and finalizes your score.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -136,8 +131,8 @@ export default function ScenarioRunnerScreen() {
           onPress: async () => {
             setSubmitting(true);
             try {
-              const updated = await completeScenarioAssignment(assignment.id, score, elapsed);
-              setResult(updated);
+              await submitScenarioAssignment(assignment.id, elapsed);
+              await reload();
             } catch (err) {
               Alert.alert(
                 'Submission failed',
@@ -169,14 +164,20 @@ export default function ScenarioRunnerScreen() {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={refresh} colors={[Palette.primary]} tintColor={Palette.primary} />
+      }
+    >
       <View style={styles.header}>
         <Badge
-          label={done ? 'Completed' : assignment.status === 'overdue' ? 'Overdue' : assignment.status === 'in_progress' ? 'In Progress' : 'Pending'}
-          variant={done ? 'success' : assignment.status === 'overdue' ? 'danger' : assignment.status === 'in_progress' ? 'warning' : 'default'}
+          label={isCompleted ? 'Completed' : isSubmitted ? 'Awaiting Review' : assignment.status === 'overdue' ? 'Overdue' : assignment.status === 'in_progress' ? 'In Progress' : 'Pending'}
+          variant={isCompleted ? 'success' : isSubmitted ? 'info' : assignment.status === 'overdue' ? 'danger' : assignment.status === 'in_progress' ? 'warning' : 'default'}
         />
         {scenario && <Badge label={scenario.difficulty} variant={DIFFICULTY_VARIANT[scenario.difficulty]} />}
-        {assignment.required && !done && <Badge label="Required" variant="danger" />}
+        {assignment.required && isActive && <Badge label="Required" variant="danger" />}
       </View>
 
       <Text style={styles.title}>{assignment.scenario_title}</Text>
@@ -186,26 +187,36 @@ export default function ScenarioRunnerScreen() {
           : 'No deadline'}
       </Text>
 
-      {done ? (
+      {isCompleted ? (
         <Card style={styles.resultCard}>
           <Text style={styles.blockLabel}>Result</Text>
           <View style={styles.resultRow}>
             <View style={styles.resultStat}>
-              <Text style={styles.resultValue}>{done.score ?? '—'}%</Text>
+              <Text style={styles.resultValue}>{taskAssignment?.score ?? '—'}%</Text>
               <Text style={styles.resultLabel}>Score</Text>
             </View>
             <View style={styles.resultStat}>
-              <Text style={styles.resultValue}>{formatTime(done.time_taken ?? 0)}</Text>
+              <Text style={styles.resultValue}>{formatTime(taskAssignment?.time_taken ?? 0)}</Text>
               <Text style={styles.resultLabel}>Time</Text>
             </View>
             <View style={styles.resultStat}>
               <Text style={styles.resultValue}>
-                {done.completed_at
-                  ? new Date(done.completed_at).toLocaleDateString([], { month: 'short', day: 'numeric' })
+                {taskAssignment?.completed_at
+                  ? new Date(taskAssignment.completed_at).toLocaleDateString([], { month: 'short', day: 'numeric' })
                   : '—'}
               </Text>
-              <Text style={styles.resultLabel}>Completed</Text>
+              <Text style={styles.resultLabel}>Finalized</Text>
             </View>
+          </View>
+        </Card>
+      ) : isSubmitted ? (
+        <Card style={styles.reviewCard}>
+          <Ionicons name="hourglass-outline" size={20} color={Accent.blue.fg} />
+          <View style={styles.reviewText}>
+            <Text style={styles.reviewTitle}>Submitted for review</Text>
+            <Text style={styles.reviewBody}>
+              Your instructor is verifying the hands-on tasks. Your score is finalized once they confirm.
+            </Text>
           </View>
         </Card>
       ) : (
@@ -216,11 +227,11 @@ export default function ScenarioRunnerScreen() {
               <Text style={styles.timerText}>{formatTime(elapsed)}</Text>
             </View>
             <Text style={styles.timerProgress}>
-              {checked.length}/{CHECKLIST.length} tasks · {earnedPoints}/{totalPoints} pts
+              {completedCount}/{totalCount} tasks · {earnedPoints}/{totalPoints} pts
             </Text>
           </View>
           <View style={styles.progressTrack}>
-            <View style={[styles.progressFill, { width: `${(checked.length / CHECKLIST.length) * 100}%` }]} />
+            <View style={[styles.progressFill, { width: `${totalCount ? (completedCount / totalCount) * 100 : 0}%` }]} />
           </View>
         </Card>
       )}
@@ -240,7 +251,7 @@ export default function ScenarioRunnerScreen() {
         <Card style={styles.blockCard}>
           <Text style={styles.blockLabel}>Assigned Patient</Text>
           <Text style={styles.patientLinkHint}>
-            This scenario is linked to a patient — chart your vitals and EHR records there.
+            Recording vitals or charting here automatically checks off the matching tasks below.
           </Text>
           <View style={styles.patientLinkRow}>
             <Pressable
@@ -263,7 +274,7 @@ export default function ScenarioRunnerScreen() {
 
       {/* The help flag belongs where the student is working, not buried in
           settings — this is the ERD's assistance request. */}
-      {!done && (
+      {isActive && (
         <Pressable
           style={({ pressed }) => [styles.assistButton, pressed && styles.patientLinkPressed]}
           onPress={() => router.push('/assistance')}
@@ -287,43 +298,56 @@ export default function ScenarioRunnerScreen() {
 
       <Card style={styles.blockCard}>
         <Text style={styles.blockLabel}>Clinical Tasks</Text>
-        {CHECKLIST.map((task) => {
-          const isChecked = done ? true : checked.includes(task.id);
-          return (
-            <Pressable
-              key={task.id}
-              style={({ pressed }) => [styles.checkRow, pressed && !done && styles.checkRowPressed]}
-              onPress={() => toggle(task.id)}
-              disabled={!!done}
-            >
-              <Ionicons
-                name={isChecked ? 'checkbox' : 'square-outline'}
-                size={22}
-                color={isChecked ? Accent.green.fg : Palette.textMuted}
-              />
-              <View style={styles.checkText}>
-                <Text style={[styles.checkTitle, isChecked && !done && styles.checkTitleDone]}>
+        {totalCount === 0 && (
+          <Text style={styles.emptyTasks}>No tasks have been set for this scenario yet.</Text>
+        )}
+        {tasks.map((task: ScenarioTask) => (
+          <View key={task.id} style={styles.checkRow}>
+            <Ionicons
+              name={task.is_completed ? 'checkmark-circle' : 'ellipse-outline'}
+              size={22}
+              color={task.is_completed ? Accent.green.fg : Palette.textMuted}
+            />
+            <View style={styles.checkText}>
+              <View style={styles.checkTitleRow}>
+                <Text style={[styles.checkTitle, task.is_completed && styles.checkTitleDone]}>
                   {task.title}
                 </Text>
-                <Text style={styles.checkDescription}>{task.description}</Text>
+                <Badge
+                  label={task.verification === 'system' ? 'Auto' : 'Faculty'}
+                  variant={task.verification === 'system' ? 'info' : 'default'}
+                  size="sm"
+                />
               </View>
-              <Text style={styles.checkPoints}>{task.points} pts</Text>
-            </Pressable>
-          );
-        })}
+              <Text style={styles.checkDescription}>{task.description}</Text>
+              {task.is_completed ? (
+                <Text style={styles.doneHint}>
+                  {task.completed_via === 'system' ? 'Auto-completed' : 'Verified by faculty'}
+                </Text>
+              ) : task.verification === 'system' ? (
+                <Text style={styles.autoHint}>
+                  {task.system_trigger === 'vitals'
+                    ? 'Completes when you record vitals for this patient'
+                    : 'Completes when you chart in the patient record'}
+                </Text>
+              ) : (
+                <Text style={styles.facultyHint}>Your instructor verifies this</Text>
+              )}
+            </View>
+            <Text style={styles.checkPoints}>{task.points} pts</Text>
+          </View>
+        ))}
       </Card>
 
-      {!done && (
+      {isActive && (
         <PrimaryButton
-          title={submitting ? 'Submitting…' : 'Complete Scenario'}
-          onPress={handleComplete}
+          title={submitting ? 'Submitting…' : 'Submit for Review'}
+          onPress={handleSubmit}
           size="lg"
           disabled={submitting}
         />
       )}
-      {done && result && (
-        <PrimaryButton title="Back to Tasks" onPress={() => router.back()} size="lg" />
-      )}
+      {!isActive && <PrimaryButton title="Back to Tasks" onPress={() => router.back()} size="lg" />}
     </ScrollView>
   );
 }
@@ -357,6 +381,15 @@ function createStyles(
     overflow: 'hidden',
   },
   progressFill: { height: 6, borderRadius: 3, backgroundColor: Palette.primary },
+  reviewCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Spacing.md,
+    marginBottom: Spacing.lg,
+  },
+  reviewText: { flex: 1 },
+  reviewTitle: { fontSize: 15, fontWeight: '700', color: Palette.ink, marginBottom: 2 },
+  reviewBody: { fontSize: 13, color: Palette.textSecondary, lineHeight: 19 },
   resultCard: { marginBottom: Spacing.lg },
   resultRow: { flexDirection: 'row', justifyContent: 'space-around' },
   resultStat: { alignItems: 'center' },
@@ -405,6 +438,7 @@ function createStyles(
   objectiveRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: Spacing.sm },
   objectiveIcon: { marginTop: 2, marginRight: Spacing.sm },
   objectiveText: { flex: 1, fontSize: 13, color: Palette.text, lineHeight: 19 },
+  emptyTasks: { fontSize: 13, color: Palette.textMuted, paddingVertical: Spacing.sm },
   checkRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -413,11 +447,14 @@ function createStyles(
     borderBottomColor: Palette.borderLight,
     gap: Spacing.md,
   },
-  checkRowPressed: { opacity: 0.7 },
   checkText: { flex: 1 },
+  checkTitleRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, flexWrap: 'wrap' },
   checkTitle: { ...Type.itemTitle },
   checkTitleDone: { color: Accent.green.fg },
   checkDescription: { fontSize: 12, color: Palette.textSecondary, marginTop: 2, lineHeight: 17 },
+  autoHint: { fontSize: 11, color: Accent.blue.fg, marginTop: 4 },
+  facultyHint: { fontSize: 11, color: Palette.textMuted, marginTop: 4 },
+  doneHint: { fontSize: 11, color: Accent.green.fg, marginTop: 4, fontWeight: '600' },
   checkPoints: {
     fontSize: 11,
     fontWeight: '700',
