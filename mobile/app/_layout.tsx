@@ -30,6 +30,8 @@ function AuthStack() {
       <Stack.Screen name="tasks/quizzes/index" options={{ title: 'Quizzes' }} />
       <Stack.Screen name="tasks/quizzes/[id]" options={{ title: 'Quiz' }} />
       <Stack.Screen name="ehr/[id]" options={{ title: 'Patient Record' }} />
+      <Stack.Screen name="ehr/[id]/tpr" options={{ title: 'TPR Sheet' }} />
+      <Stack.Screen name="ehr/[id]/ivf" options={{ title: 'IVF Sheet' }} />
       <Stack.Screen name="notifications" options={{ title: 'Notifications' }} />
       <Stack.Screen name="recommendations" options={{ title: 'AI Recommendations' }} />
       <Stack.Screen name="progress" options={{ title: 'Performance' }} />
