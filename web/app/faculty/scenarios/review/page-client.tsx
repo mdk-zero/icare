@@ -22,12 +22,18 @@ const FILTERS: { key: Filter; label: string }[] = [
 
 function categoryColor(category: string) {
   switch (category) {
-    case "assessment": return "bg-blue-100 text-blue-700";
-    case "intervention": return "bg-purple-100 text-purple-700";
-    case "medication": return "bg-red-100 text-red-700";
-    case "communication": return "bg-green-100 text-green-700";
-    case "documentation": return "bg-amber-100 text-amber-700";
-    default: return "bg-gray-100 text-gray-700";
+    case "assessment":
+      return "bg-blue-100 text-blue-700";
+    case "intervention":
+      return "bg-purple-100 text-purple-700";
+    case "medication":
+      return "bg-red-100 text-red-700";
+    case "communication":
+      return "bg-green-100 text-green-700";
+    case "documentation":
+      return "bg-amber-100 text-amber-700";
+    default:
+      return "bg-gray-100 text-gray-700";
   }
 }
 
@@ -93,9 +99,7 @@ export default function FacultyScenarioReviewClient() {
     // Optimistic update.
     setTasks((prev) =>
       prev.map((t) =>
-        t.id === task.id
-          ? { ...t, is_completed: next, completed_via: next ? "faculty" : null }
-          : t,
+        t.id === task.id ? { ...t, is_completed: next, completed_via: next ? "faculty" : null } : t,
       ),
     );
     const ok = await setFacultyTaskChecked(selectedId, task.id, next);
@@ -113,7 +117,12 @@ export default function FacultyScenarioReviewClient() {
       setAssignments((prev) =>
         prev.map((a) =>
           a.id === selectedId
-            ? { ...a, status: "completed", score: result.score, completed_at: new Date().toISOString() }
+            ? {
+                ...a,
+                status: "completed",
+                score: result.score,
+                completed_at: new Date().toISOString(),
+              }
             : a,
         ),
       );
@@ -127,14 +136,24 @@ export default function FacultyScenarioReviewClient() {
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-surface border-b border-gray-200 sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center gap-4">
+        <div className="px-4 py-4 flex items-center gap-4">
           <button
             onClick={() => router.push("/faculty/scenarios")}
             className="p-2 hover:bg-gray-100 rounded-xl transition-colors"
             aria-label="Back to scenarios"
           >
-            <svg className="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            <svg
+              className="w-5 h-5 text-gray-600"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M15 19l-7-7 7-7"
+              />
             </svg>
           </button>
           <div>
@@ -147,7 +166,7 @@ export default function FacultyScenarioReviewClient() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 py-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <main className="px-4 py-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Assignment list */}
         <div className="lg:col-span-1 space-y-4">
           <div className="flex flex-wrap gap-2">
@@ -217,7 +236,9 @@ export default function FacultyScenarioReviewClient() {
                   <p className="text-sm text-gray-500">{selected.scenario_title}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-2xl font-bold text-brand-600">{finalized ? selected.score ?? 0 : projectedScore}%</p>
+                  <p className="text-2xl font-bold text-brand-600">
+                    {finalized ? (selected.score ?? 0) : projectedScore}%
+                  </p>
                   <p className="text-xs text-gray-500">{finalized ? "Final score" : "Projected"}</p>
                 </div>
               </div>
@@ -247,22 +268,38 @@ export default function FacultyScenarioReviewClient() {
                           } ${busyTaskId === task.id ? "opacity-50" : ""}`}
                         >
                           {task.is_completed && (
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            <svg
+                              className="w-4 h-4"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M5 13l4 4L19 7"
+                              />
                             </svg>
                           )}
                         </div>
                         <div className="flex-1">
                           <div className="flex items-center gap-2 flex-wrap mb-1">
-                            <p className={`font-medium ${task.is_completed ? "text-green-800" : "text-gray-800"}`}>
+                            <p
+                              className={`font-medium ${task.is_completed ? "text-green-800" : "text-gray-800"}`}
+                            >
                               {task.title}
                             </p>
-                            <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${categoryColor(task.category)}`}>
+                            <span
+                              className={`px-2 py-0.5 text-xs font-medium rounded-full ${categoryColor(task.category)}`}
+                            >
                               {task.category}
                             </span>
                             <span
                               className={`px-2 py-0.5 text-xs font-medium rounded-full ${
-                                isFaculty ? "bg-violet-100 text-violet-700" : "bg-sky-100 text-sky-700"
+                                isFaculty
+                                  ? "bg-violet-100 text-violet-700"
+                                  : "bg-sky-100 text-sky-700"
                               }`}
                             >
                               {isFaculty ? "Faculty-verified" : "Auto"}
