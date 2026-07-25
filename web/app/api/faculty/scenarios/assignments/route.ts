@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
 
     const { data: assignments, error: assignmentsError } = await supabase
       .from('scenario_assignments')
-      .select('id, scenario_id, student_id, assigned_at, deadline, status, required, score, completed_at, time_taken')
+      .select('id, scenario_id, student_id, assigned_at, deadline, status, required, score, completed_at, time_taken, submitted_at, finalized_by')
       .in('student_id', studentIds)
       .order('assigned_at', { ascending: false })
       .limit(2000);
@@ -94,6 +94,8 @@ export async function GET(request: NextRequest) {
       score: a.score,
       completed_at: a.completed_at,
       time_taken: a.time_taken,
+      submitted_at: a.submitted_at,
+      finalized_by: a.finalized_by,
     }));
 
     return NextResponse.json({ assignments: formatted });
