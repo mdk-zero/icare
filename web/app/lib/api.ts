@@ -2128,43 +2128,62 @@ export async function fetchStudentScenarioAssignments(_studentId: string): Promi
   }
 }
 
-export async function submitScenarioPerformance(
-  assignmentId: string,
-  completedTasks: string[],
-  timeTaken: number
-): Promise<ScenarioPerformance | null> {
-  try {
-    // Derive a simple score from completed tasks (placeholder scoring).
-    const totalTasks = 8;
-    const score = Math.round((completedTasks.length / totalTasks) * 100);
+export interface StudentScenarioTasksResult {
+  tasks: FacultyScenarioTask[];
+  assignment: {
+    id: string;
+    status: string;
+    submitted_at: string | null;
+    completed_at: string | null;
+    score: number | null;
+    time_taken: number | null;
+  };
+}
 
-    const res = await fetch(`/api/student/scenarios/${assignmentId}/complete`, {
+/** A student's own scenario tasks with their live completion state. */
+export async function fetchStudentScenarioTasks(
+  assignmentId: string,
+): Promise<StudentScenarioTasksResult | null> {
+  try {
+    const res = await fetch(`/api/student/scenarios/${assignmentId}/tasks`, {
+      credentials: 'include',
+    });
+    const json = (await res.json()) as {
+      tasks?: FacultyScenarioTask[];
+      assignment?: StudentScenarioTasksResult['assignment'];
+      error?: string;
+    };
+    if (!res.ok || !json.assignment) {
+      console.error('fetchStudentScenarioTasks() failed', json.error);
+      return null;
+    }
+    return { tasks: json.tasks ?? [], assignment: json.assignment };
+  } catch (err) {
+    console.error('fetchStudentScenarioTasks() failed', err);
+    return null;
+  }
+}
+
+/** Hand the assignment in for faculty review — faculty verify and score it. */
+export async function submitScenarioForReview(
+  assignmentId: string,
+  timeTaken: number,
+): Promise<ScenarioAssignment | null> {
+  try {
+    const res = await fetch(`/api/student/scenarios/${assignmentId}/submit`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({ score, time_taken: timeTaken }),
+      body: JSON.stringify({ time_taken: timeTaken }),
     });
     const json = (await res.json()) as { assignment?: ScenarioAssignment; error?: string };
     if (!res.ok || !json.assignment) {
-      console.error('submitScenarioPerformance() failed', json.error);
+      console.error('submitScenarioForReview() failed', json.error);
       return null;
     }
-
-    return {
-      id: json.assignment.id,
-      student_id: json.assignment.student_id,
-      student_name: json.assignment.student_name,
-      scenario_id: json.assignment.scenario_id,
-      scenario_title: json.assignment.scenario_title,
-      score: json.assignment.score ?? 0,
-      max_score: 100,
-      time_taken: json.assignment.time_taken ?? 0,
-      completed_tasks: completedTasks,
-      total_tasks: totalTasks,
-      completed_at: json.assignment.completed_at ?? new Date().toISOString(),
-    };
+    return json.assignment;
   } catch (err) {
-    console.error('submitScenarioPerformance() failed', err);
+    console.error('submitScenarioForReview() failed', err);
     return null;
   }
 }
