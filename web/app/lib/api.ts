@@ -992,6 +992,8 @@ export interface ScenarioAssignment {
   score?: number;
   completed_at?: string;
   time_taken?: number;
+  submitted_at?: string | null;
+  finalized_by?: string | null;
 }
 
 export interface ScenarioPerformance {
@@ -1997,6 +1999,92 @@ export async function fetchScenarioAssignments(scenarioId?: string): Promise<Sce
   } catch (err) {
     console.error('fetchScenarioAssignments() failed', err);
     return [];
+  }
+}
+
+export interface FacultyScenarioTask {
+  id: string;
+  title: string;
+  description: string;
+  category: 'assessment' | 'intervention' | 'medication' | 'communication' | 'documentation';
+  points: number;
+  verification: 'system' | 'faculty';
+  system_trigger: 'vitals' | 'charting' | null;
+  sort_order: number;
+  is_completed: boolean;
+  completed_via: 'system' | 'faculty' | null;
+  completed_at: string | null;
+}
+
+/** A student assignment's scenario tasks with their completion state (faculty view). */
+export async function fetchFacultyAssignmentTasks(
+  assignmentId: string,
+): Promise<{ tasks: FacultyScenarioTask[]; status: string } | null> {
+  try {
+    const res = await fetch(`/api/faculty/scenarios/assignments/${assignmentId}/tasks`, {
+      credentials: 'include',
+    });
+    const json = (await res.json()) as { tasks?: FacultyScenarioTask[]; status?: string; error?: string };
+    if (!res.ok) {
+      console.error('fetchFacultyAssignmentTasks() failed', json.error);
+      return null;
+    }
+    return { tasks: json.tasks ?? [], status: json.status ?? 'pending' };
+  } catch (err) {
+    console.error('fetchFacultyAssignmentTasks() failed', err);
+    return null;
+  }
+}
+
+/** Check off (or undo) a faculty-verified task for a student's assignment. */
+export async function setFacultyTaskChecked(
+  assignmentId: string,
+  taskId: string,
+  checked: boolean,
+): Promise<boolean> {
+  try {
+    const base = `/api/faculty/scenarios/assignments/${assignmentId}/tasks`;
+    const res = checked
+      ? await fetch(base, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ task_id: taskId }),
+        })
+      : await fetch(`${base}?task_id=${encodeURIComponent(taskId)}`, {
+          method: 'DELETE',
+          credentials: 'include',
+        });
+    if (!res.ok) {
+      const j = (await res.json().catch(() => ({}))) as { error?: string };
+      console.error('setFacultyTaskChecked() failed', j.error);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('setFacultyTaskChecked() failed', err);
+    return false;
+  }
+}
+
+/** Lock the assignment and score it from the share of task points completed. */
+export async function finalizeScenarioAssignment(
+  assignmentId: string,
+): Promise<{ assignment: ScenarioAssignment; score: number } | null> {
+  try {
+    const res = await fetch(`/api/faculty/scenarios/assignments/${assignmentId}/finalize`, {
+      method: 'POST',
+      credentials: 'include',
+    });
+    const json = (await res.json()) as { assignment?: ScenarioAssignment; score?: number; error?: string };
+    if (!res.ok || !json.assignment) {
+      console.error('finalizeScenarioAssignment() failed', json.error);
+      return null;
+    }
+    return { assignment: json.assignment, score: json.score ?? json.assignment.score ?? 0 };
+  } catch (err) {
+    console.error('finalizeScenarioAssignment() failed', err);
+    return null;
   }
 }
 
