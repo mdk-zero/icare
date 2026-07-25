@@ -310,7 +310,21 @@ export default function ProfileScreen() {
       <View style={styles.section}>
         <SectionHeader title="Settings" />
         <View style={styles.listCard}>
-          <View style={styles.settingBlock}>
+          <Pressable
+            style={({ pressed }) => [styles.linkItem, pressed && styles.pressedDim]}
+            onPress={() => router.push('/account')}
+          >
+            <View style={[styles.linkIconContainer, { backgroundColor: Accent.teal.bg }]}>
+              <Ionicons name="person-circle-outline" size={17} color={Accent.teal.fg} />
+            </View>
+            <View style={styles.settingTextWrap}>
+              <Text style={styles.linkText}>Account</Text>
+              <Text style={styles.settingSubtext}>Name, details, and password</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={17} color={Palette.textFaint} />
+          </Pressable>
+
+          <View style={[styles.settingBlock, styles.rowBorder]}>
             <View style={styles.settingHeader}>
               <View style={[styles.linkIconContainer, { backgroundColor: Accent.slate.bg }]}>
                 <Ionicons name="contrast-outline" size={17} color={Accent.slate.fg} />

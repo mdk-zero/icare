@@ -584,8 +584,8 @@ export async function updateProfile(name: string): Promise<User> {
 /**
  * First-login password change for accounts an admin provisioned with a
  * temporary password. The server skips OTP verification while
- * `force_password_change` is set, so this is a single call; the voluntary
- * change flow is OTP-gated over email and is not implemented here yet.
+ * `force_password_change` is set, so this is a single call. Voluntary changes
+ * go through {@link requestPasswordChange} / {@link confirmPasswordChange}.
  */
 export async function completeForcedPasswordChange(
   newPassword: string,
@@ -593,6 +593,41 @@ export async function completeForcedPasswordChange(
   return api('/api/users/change-password', {
     method: 'POST',
     body: { newPassword },
+  });
+}
+
+export interface PasswordChangeChallenge {
+  requiresOtp?: boolean;
+  message?: string;
+  /** Present only when email delivery is skipped (development). */
+  devOtp?: string;
+  success?: boolean;
+}
+
+/**
+ * Step 1 of a voluntary password change: verify the current password (when the
+ * account has one) and email a one-time code. Pass an empty `currentPassword`
+ * for accounts that sign in with Google and have no password yet.
+ */
+export async function requestPasswordChange(
+  currentPassword: string,
+  newPassword: string,
+): Promise<PasswordChangeChallenge> {
+  return api('/api/users/change-password', {
+    method: 'POST',
+    body: { currentPassword, newPassword },
+  });
+}
+
+/** Step 2: confirm the emailed code and set the new password. */
+export async function confirmPasswordChange(
+  currentPassword: string,
+  newPassword: string,
+  otp: string,
+): Promise<{ success: boolean }> {
+  return api('/api/users/change-password', {
+    method: 'POST',
+    body: { currentPassword, newPassword, otp },
   });
 }
 
