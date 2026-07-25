@@ -110,16 +110,16 @@ export default function EHRDetailScreen() {
       }
     >
       <View style={styles.patientHeader}>
-        <View style={[styles.avatarContainer, { backgroundColor: Accent.teal.bg }]}>
-          <Ionicons name="person" size={30} color={Accent.teal.fg} />
+        <View style={[styles.patientAvatar, { backgroundColor: Palette.primary }]}>
+          <Ionicons name="person" size={28} color="#fff" />
         </View>
-        <Text style={styles.patientName}>{patient.name}</Text>
-        <View style={styles.patientMeta}>
-          <Text style={styles.metaText}>
-            {patient.age !== null ? `${patient.age} years` : 'Age —'} • {patient.gender ?? '—'}
+        <View style={styles.patientInfo}>
+          <Text style={styles.patientName}>{patient.name}</Text>
+          <Text style={styles.patientMeta}>
+            {patient.room_number ? `Room ${patient.room_number}` : 'No room'} •{' '}
+            {patient.age !== null ? `${patient.age} yrs` : 'Age —'} • {patient.gender ?? '—'}
           </Text>
         </View>
-        <Badge label={patient.room_number ? `Room ${patient.room_number}` : 'No room'} variant="info" />
       </View>
 
       <Card style={styles.infoCard}>
@@ -293,18 +293,17 @@ function createStyles(
   content: { padding: Spacing.lg, paddingBottom: 32 },
   errorContainer: { flex: 1, justifyContent: 'center', backgroundColor: Palette.background },
   pressed: { opacity: 0.85, transform: [{ scale: 0.99 }] },
-  patientHeader: { alignItems: 'center', marginBottom: Spacing.xxl },
-  avatarContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+  patientHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.xxl },
+  patientAvatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: Spacing.md,
   },
-  patientName: { ...Type.screenTitle },
-  patientMeta: { flexDirection: 'row', marginTop: 6, marginBottom: Spacing.md },
-  metaText: { fontSize: 14, color: Palette.textSecondary },
+  patientInfo: { marginLeft: 14, flex: 1 },
+  patientName: { fontSize: 20, fontWeight: '700', color: Palette.ink },
+  patientMeta: { fontSize: 14, color: Palette.textSecondary, marginTop: 2 },
   infoCard: { marginBottom: Spacing.xxl },
   infoRow: {
     flexDirection: 'row',
