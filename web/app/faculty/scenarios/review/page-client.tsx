@@ -134,7 +134,7 @@ export default function FacultyScenarioReviewClient() {
   const awaitingCount = assignments.filter(isAwaiting).length;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="-m-3 lg:-m-5 min-h-full bg-gray-50">
       <header className="bg-surface border-b border-gray-200 sticky top-0 z-10">
         <div className="px-4 py-4 flex items-center gap-4">
           <button
