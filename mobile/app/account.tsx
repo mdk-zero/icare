@@ -116,10 +116,8 @@ export default function AccountScreen() {
             <Ionicons name="lock-closed-outline" size={17} color={Accent.violet.fg} />
           </View>
           <View style={styles.linkTextWrap}>
-            <Text style={styles.linkTitle}>
-              {user?.has_password === false ? 'Set a password' : 'Change password'}
-            </Text>
-            <Text style={styles.linkSub}>Confirmed with a code sent to your email</Text>
+            <Text style={styles.linkTitle}>Change password</Text>
+            <Text style={styles.linkSub}>Verified with a code sent to your email</Text>
           </View>
           <Ionicons name="chevron-forward" size={17} color={Palette.textFaint} />
         </Pressable>
