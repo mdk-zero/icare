@@ -1,0 +1,12 @@
+# Keep the build context small — fly deploy uploads this directory.
+.venv
+data
+eval
+training
+**/__pycache__
+*.pyc
+.env
+.env.*
+.git
+.gitignore
+README.md

@@ -1,0 +1,30 @@
+# Fly.io config for the iCARE++ ML service.
+# Deploy from the ml/ directory:  fly deploy
+#
+# NOTE: this service runs an in-process nightly scheduler (app/main.py),
+# so the machine must stay up. Keep auto_stop_machines = false and exactly
+# ONE machine — two machines would run the nightly job twice.
+
+app = "icare-ml"                # must be globally unique; change if taken
+primary_region = "sin"          # set to the region nearest your Supabase project
+
+[build]
+  dockerfile = "Dockerfile"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_start_machines = true
+  auto_stop_machines = false    # keep running so the 03:00 scheduler fires
+  min_machines_running = 1      # exactly one instance owns the nightly job
+
+  [[http_service.checks]]
+    method = "GET"
+    path = "/health"
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "15s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"              # bump to "1gb" if sklearn/pandas OOMs on big cohorts
