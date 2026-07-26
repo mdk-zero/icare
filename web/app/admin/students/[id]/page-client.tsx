@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faChevronLeft, faBolt } from "@fortawesome/free-solid-svg-icons";
 import {
   fetchLatestPrediction,
   fetchStudentScenarioHistory,
@@ -154,9 +156,7 @@ export default function StudentDetailClient() {
           onClick={() => router.push("/admin/student-management")}
           className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
         >
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
+          <FontAwesomeIcon icon={faChevronLeft} className="w-5 h-5" />
           Back to Students
         </button>
       </div>
@@ -206,9 +206,7 @@ export default function StudentDetailClient() {
         <div className="bg-surface rounded-xl p-6 border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)]">
           <div className="flex items-center gap-2 mb-4">
             <div className="p-2 bg-purple-100 rounded-lg">
-              <svg className="w-5 h-5 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
+              <FontAwesomeIcon icon={faBolt} className="w-5 h-5 text-purple-600" />
             </div>
             <h3 className="font-semibold text-gray-900">ML Risk Prediction</h3>
           </div>

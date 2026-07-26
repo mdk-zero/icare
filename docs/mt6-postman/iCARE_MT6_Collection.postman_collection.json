@@ -1,0 +1,484 @@
+{
+  "info": {
+    "_postman_id": "a9f4c2e1-77b3-4c8e-9d21-icarecoll0002",
+    "name": "iCARE Capstone API",
+    "description": "Postman collection for the iCARE++ nursing-education capstone. The API under test is our OWN backend: the Next.js app in web/, backed by Supabase (Postgres). This is what the Expo mobile app actually calls.\n\nAuth is bearer-token: POST /api/auth/login returns a `sessionToken`; every other request sends `Authorization: Bearer {{token}}`. The Login request's test script saves that token into the environment automatically, so run Login first.\n\nSetup:\n1. Start the backend:  cd web && npm run dev   (listens on http://localhost:3000)\n2. Select the 'iCARE - Local (web)' environment.\n3. In Login, replace the password with your seeded student password (SEED_STUDENT_PASSWORD), then Send.\n\nRun order (Collection Runner): Login captures {{token}}; List Patients captures {{patientId}}; Get Notifications captures {{notificationId}} — so the requests that depend on those run cleanly afterward.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      { "key": "token", "value": "{{token}}", "type": "string" }
+    ]
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "description": "Sign-in and session restore. Bearer-token based; login hands back the token every other request reuses.",
+      "item": [
+        {
+          "name": "Login",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"student@icare.edu\",\n  \"password\": \"REPLACE_WITH_SEED_STUDENT_PASSWORD\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "login"]
+            },
+            "description": "Authenticates a student and returns { user, sessionToken }. The test script stores sessionToken into the {{token}} environment variable so the rest of the collection is authenticated. This is the first call the Expo app makes; the returned role decides whether the student or faculty UI loads."
+          },
+          "response": [
+            {
+              "name": "Successful login",
+              "originalRequest": {
+                "method": "POST",
+                "header": [ { "key": "Content-Type", "value": "application/json" } ],
+                "body": { "mode": "raw", "raw": "{\n  \"email\": \"student@icare.edu\",\n  \"password\": \"********\"\n}" },
+                "url": {
+                  "raw": "{{base_url}}/api/auth/login",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "auth", "login"]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [ { "key": "Content-Type", "value": "application/json" } ],
+              "cookie": [],
+              "body": "{\n  \"user\": {\n    \"id\": \"b3f1c2a4-5d6e-4f70-8a91-2c3d4e5f6a7b\",\n    \"email\": \"student@icare.edu\",\n    \"name\": \"Demo Student\",\n    \"role\": \"student\",\n    \"pictureUrl\": null,\n    \"forcePasswordChange\": false\n  },\n  \"sessionToken\": \"eyJhbGciOiJIUzI1NiJ9.eyJ1aWQiOiJiM2YxYzJhNC....signature\"\n}"
+            },
+            {
+              "name": "Invalid credentials",
+              "originalRequest": {
+                "method": "POST",
+                "header": [ { "key": "Content-Type", "value": "application/json" } ],
+                "body": { "mode": "raw", "raw": "{\n  \"email\": \"student@icare.edu\",\n  \"password\": \"wrong\"\n}" },
+                "url": {
+                  "raw": "{{base_url}}/api/auth/login",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "auth", "login"]
+                }
+              },
+              "status": "Unauthorized",
+              "code": 401,
+              "_postman_previewlanguage": "json",
+              "header": [ { "key": "Content-Type", "value": "application/json" } ],
+              "cookie": [],
+              "body": "{\n  \"error\": \"Invalid email or password\"\n}"
+            }
+          ],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response returns a user and a sessionToken', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('user');",
+                  "    pm.expect(body).to.have.property('sessionToken');",
+                  "});",
+                  "",
+                  "// Save the bearer token so the rest of the collection is authenticated",
+                  "if (pm.response.code === 200) {",
+                  "    pm.environment.set('token', pm.response.json().sessionToken);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Session",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/auth/session",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "session"]
+            },
+            "description": "Returns { user } for the current bearer token (or { user: null } if unauthenticated). The app calls this on launch to restore a remembered session without re-prompting for a password."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Returns a user object for a valid token', function () {",
+                  "    pm.expect(pm.response.json()).to.have.property('user');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Patients",
+      "description": "The patient roster. Students only see patients from scenarios assigned to them; faculty/admin see everyone.",
+      "item": [
+        {
+          "name": "List Patients",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/patients",
+              "host": ["{{base_url}}"],
+              "path": ["api", "patients"]
+            },
+            "description": "Returns { patients: [...] } scoped to the logged-in user. This populates the mobile patient-list screen after login. The test script saves the first patient's id into {{patientId}} so vitals/EHR requests can reference a patient this student is actually allowed to chart on."
+          },
+          "response": [
+            {
+              "name": "Patient roster",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/api/patients",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "patients"]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [ { "key": "Content-Type", "value": "application/json" } ],
+              "cookie": [],
+              "body": "{\n  \"patients\": [\n    {\n      \"id\": \"a1b2c3d4-0001-4a1b-9c2d-000000000001\",\n      \"name\": \"Ana Reyes\",\n      \"age\": 54,\n      \"gender\": \"F\",\n      \"room_number\": \"301-A\",\n      \"diagnosis\": \"Type 2 Diabetes Mellitus\",\n      \"admission_date\": \"2026-07-20\",\n      \"mimic_id\": \"10006\"\n    }\n  ]\n}"
+            }
+          ],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has a patients array', function () {",
+                  "    pm.expect(pm.response.json().patients).to.be.an('array');",
+                  "});",
+                  "",
+                  "// Capture a patient this student can chart on, for later requests",
+                  "const patients = pm.response.json().patients;",
+                  "if (patients && patients.length > 0) {",
+                  "    pm.environment.set('patientId', patients[0].id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Search Patients",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/patients?search=diabetes",
+              "host": ["{{base_url}}"],
+              "path": ["api", "patients"],
+              "query": [
+                { "key": "search", "value": "diabetes" }
+              ]
+            },
+            "description": "Same roster filtered by a case-insensitive search over name / diagnosis / mimic_id. Backs the search box on the mobile patient list."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Vitals",
+      "description": "Reading and encoding vital signs — the student's core charting workflow. Writes are validated and flagged for anomalies server-side.",
+      "item": [
+        {
+          "name": "Get Patient Vitals",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/student/vitals?patient_id={{patientId}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "student", "vitals"],
+              "query": [
+                { "key": "patient_id", "value": "{{patientId}}" }
+              ]
+            },
+            "description": "Returns { readings: [...] } the student has recorded, newest first, optionally filtered by patient. Drives the vitals trend view."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has a readings array', function () {",
+                  "    pm.expect(pm.response.json().readings).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Encode Vitals",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patient_id\": \"{{patientId}}\",\n  \"heart_rate\": 88,\n  \"bp_systolic\": 120,\n  \"bp_diastolic\": 80,\n  \"temperature_c\": 37.0,\n  \"respiratory_rate\": 18,\n  \"oxygen_saturation\": 98,\n  \"pain_score\": 2,\n  \"notes\": \"Patient resting comfortably.\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/student/vitals",
+              "host": ["{{base_url}}"],
+              "path": ["api", "student", "vitals"]
+            },
+            "description": "Records a new vital-signs reading (201) and returns { reading, is_anomaly, anomaly_reasons }; out-of-range values notify roster faculty. Note: a student may only chart on patients from an assigned scenario, so charting on an unassigned patient returns a handled 403 — that still demonstrates the endpoint."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "EHR",
+      "description": "Simulated documentation: TPR sheet, IVF sheet, and progress notes. One endpoint serves all three via a `type` field.",
+      "item": [
+        {
+          "name": "Get Progress Notes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/student/ehr?type=note&patient_id={{patientId}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "student", "ehr"],
+              "query": [
+                { "key": "type", "value": "note" },
+                { "key": "patient_id", "value": "{{patientId}}" }
+              ]
+            },
+            "description": "Returns { records: [...] } for the given record type (tpr | ivf | note). Backs the EHR list/detail screens; here it fetches the student's progress notes for a patient."
+          },
+          "response": []
+        },
+        {
+          "name": "Add Progress Note",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"note\",\n  \"patient_id\": \"{{patientId}}\",\n  \"content\": \"0800 - Patient alert and oriented x3. Tolerating oral intake. No acute distress.\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/student/ehr",
+              "host": ["{{base_url}}"],
+              "path": ["api", "student", "ehr"]
+            },
+            "description": "Creates a progress note (201) and returns { record }. Same assignment rule as vitals: charting on an unassigned patient returns a handled 403."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Notifications",
+      "description": "In-app alerts (faculty feedback, assistance replies, anomaly notices). Demonstrates GET + PATCH.",
+      "item": [
+        {
+          "name": "Get Notifications",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/notifications",
+              "host": ["{{base_url}}"],
+              "path": ["api", "notifications"]
+            },
+            "description": "Returns { notifications: [...], unread } for the current user, newest first. Feeds the bell icon and its unread badge. The test saves the first notification id into {{notificationId}} for the mark-read request."
+          },
+          "response": [
+            {
+              "name": "Notifications with unread count",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/api/notifications",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "notifications"]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [ { "key": "Content-Type", "value": "application/json" } ],
+              "cookie": [],
+              "body": "{\n  \"notifications\": [\n    {\n      \"id\": \"c9d8e7f6-0002-4b2c-8d3e-000000000002\",\n      \"type\": \"assistance_reply\",\n      \"title\": \"Faculty replied to your request\",\n      \"body\": \"Check the IV site and re-take the BP.\",\n      \"data\": { \"request_id\": \"...\" },\n      \"read_at\": null,\n      \"created_at\": \"2026-07-24T02:15:00.000Z\"\n    }\n  ],\n  \"unread\": 1\n}"
+            }
+          ],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has notifications array and an unread count', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.notifications).to.be.an('array');",
+                  "    pm.expect(body).to.have.property('unread');",
+                  "});",
+                  "",
+                  "const notes = pm.response.json().notifications;",
+                  "if (notes && notes.length > 0) {",
+                  "    pm.environment.set('notificationId', notes[0].id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Mark Notification Read",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"{{notificationId}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/notifications",
+              "host": ["{{base_url}}"],
+              "path": ["api", "notifications"]
+            },
+            "description": "Marks one notification read by id (or all with { \"all\": true }) and returns { success: true }. Called when the student opens a notification so the unread badge clears."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Profile & Progress",
+      "description": "The student's own account and performance history.",
+      "item": [
+        {
+          "name": "Get Profile",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/users/profile",
+              "host": ["{{base_url}}"],
+              "path": ["api", "users", "profile"]
+            },
+            "description": "Returns { user } for the signed-in account. Backs the profile screen.",
+            "auth": { "type": "bearer", "bearer": [ { "key": "token", "value": "{{token}}", "type": "string" } ] }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Profile has a role of student', function () {",
+                  "    pm.expect(pm.response.json().user.role).to.eql('student');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Profile Name",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Demo Student\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/users/profile",
+              "host": ["{{base_url}}"],
+              "path": ["api", "users", "profile"]
+            },
+            "description": "Updates the display name (returns the updated { user }). Powers the 'edit profile' action."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Progress",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/student/progress",
+              "host": ["{{base_url}}"],
+              "path": ["api", "student", "progress"]
+            },
+            "description": "Returns { attempts, competency_scores } — submitted quiz attempts and faculty-validated competency scores. Backs the mobile Progress screen."
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "event": [],
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:3000" }
+  ]
+}

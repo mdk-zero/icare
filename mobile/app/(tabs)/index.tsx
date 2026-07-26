@@ -16,7 +16,7 @@ import Svg, { Path, Circle } from "react-native-svg";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { Radius, Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
-import { SectionHeader, SkeletonScreen } from "@/components/ui";
+import { SectionHeader, SkeletonScreen, SyncStatus } from "@/components/ui";
 import { useAuth } from "@/hooks/useAuth";
 import { useApiData, allCached } from "@/hooks/useApiData";
 import {
@@ -182,6 +182,9 @@ export default function DashboardScreen() {
         />
       }
     >
+      {/* Offline / queued-write state; renders nothing when there is nothing to say. */}
+      <SyncStatus onSynced={refresh} />
+
       {/* Greeting */}
       <Animated.View entering={FadeInDown.duration(220)} style={styles.greetingRow}>
         <View style={styles.greetingText}>
@@ -260,25 +263,6 @@ export default function DashboardScreen() {
             <Text style={styles.statLabel}>{stat.label}</Text>
           </Pressable>
         ))}
-      </Animated.View>
-
-      {/* Quick Actions */}
-      <Animated.View entering={FadeInDown.duration(220).delay(120)} style={styles.section}>
-        <SectionHeader title="Quick Actions" />
-        <View style={styles.quickActions}>
-          {quickActions.map((action) => (
-            <Pressable
-              key={action.label}
-              style={({ pressed }) => [styles.quickAction, pressed && styles.pressedDim]}
-              onPress={() => router.push(action.href as any)}
-            >
-              <View style={[styles.quickActionIcon, { backgroundColor: action.accent.bg }]}>
-                <FontAwesome6 name={action.icon} size={19} solid color={action.accent.fg} />
-              </View>
-              <Text style={styles.quickActionText}>{action.label}</Text>
-            </Pressable>
-          ))}
-        </View>
       </Animated.View>
 
       {/* Scenarios */}

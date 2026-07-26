@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faEnvelope } from "@fortawesome/free-solid-svg-icons";
 import {
   getCurrentUser,
   getDisplayAvatarUrl,
@@ -114,9 +116,7 @@ export default function ProfileEditor({
   const hasPassword = user.has_password ?? false;
   const providerLabel = hasPassword ? "Email account" : "Google account";
   const providerIcon = hasPassword ? (
-    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-    </svg>
+    <FontAwesomeIcon icon={faEnvelope} className="w-3 h-3" />
   ) : (
     <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
       <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { seedScenarioTasks } from '@/app/lib/scenario-default-tasks';
 
 const validDifficulties = ['beginner', 'intermediate', 'advanced'] as const;
 
@@ -152,6 +153,10 @@ export async function POST(request: NextRequest) {
       console.error('Failed to create scenario', error);
       return NextResponse.json({ error: 'Unable to create scenario' }, { status: 500 });
     }
+
+    // Give the new scenario the default classified task list so it works
+    // immediately; faculty can tailor it afterwards.
+    await seedScenarioTasks(supabase, scenario.id);
 
     return NextResponse.json({ scenario }, { status: 201 });
   } catch (err) {
