@@ -3,6 +3,7 @@ import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { logAudit } from '@/app/lib/audit';
 import { isPatientAssigned } from '@/app/lib/assigned-patients';
+import { autoCompleteScenarioTasks } from '@/app/lib/scenario-tasks';
 
 // Simulated EHR documentation (manuscript F4): TPR sheet, IVF sheet,
 // progress notes. One route handles all three record types.
@@ -156,6 +157,9 @@ export async function POST(request: NextRequest) {
       { action: `ehr.${type}.create`, entityType: TABLES[type], entityId: record.id, details: { patient_id } },
       request,
     );
+
+    // Charting any TPR/IVF/note auto-checks the scenario's system 'charting' task.
+    await autoCompleteScenarioTasks(supabase, session.uid, patient_id, 'charting');
 
     return NextResponse.json({ record }, { status: 201 });
   } catch (err) {

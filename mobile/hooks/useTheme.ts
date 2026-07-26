@@ -1,14 +1,17 @@
 import { useMemo } from 'react';
 import { Palettes, Accents, Shadows, getType, Radius, Spacing, ColorScheme } from '@/constants/theme';
 import { useColorScheme } from './use-color-scheme';
+import { useThemePreference } from './useThemePreference';
 
 /**
- * Live, scheme-aware design tokens. Re-renders automatically when the user
- * flips their device between light and dark mode (react-native's
- * useColorScheme subscribes to Appearance changes under the hood).
+ * Live, scheme-aware design tokens. Follows the device light/dark setting by
+ * default (react-native's useColorScheme subscribes to Appearance changes),
+ * but an explicit Light/Dark choice in Settings overrides it.
  */
 export function useTheme() {
-  const scheme: ColorScheme = useColorScheme() ?? 'light';
+  const system: ColorScheme = useColorScheme() ?? 'light';
+  const { preference } = useThemePreference();
+  const scheme: ColorScheme = preference === 'system' ? system : preference;
 
   return useMemo(() => {
     const Palette = Palettes[scheme];

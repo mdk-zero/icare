@@ -27,9 +27,10 @@ export interface User {
   name: string;
   role: 'student' | 'faculty' | 'admin';
   picture_url?: string | null;
+  has_password?: boolean;
   force_password_change?: boolean;
-  cohort?: string;
-  studentId?: string;
+  /** Section name from `/api/auth/session`; null when unassigned. */
+  section?: string | null;
 }
 
 export async function login(email: string, password: string, rememberMe: boolean = true): Promise<User> {
@@ -321,14 +322,50 @@ export async function fetchScenario(id: string): Promise<CachedResult<Scenario>>
   return { ...result, data: result.data.scenario };
 }
 
-export async function completeScenarioAssignment(
+export interface ScenarioTask {
+  id: string;
+  title: string;
+  description: string;
+  category: 'assessment' | 'intervention' | 'medication' | 'communication' | 'documentation';
+  points: number;
+  verification: 'system' | 'faculty';
+  system_trigger: 'vitals' | 'charting' | null;
+  sort_order: number;
+  is_completed: boolean;
+  completed_via: 'system' | 'faculty' | null;
+  completed_at: string | null;
+}
+
+export interface ScenarioTasksResult {
+  tasks: ScenarioTask[];
+  assignment: {
+    id: string;
+    status: ScenarioAssignment['status'];
+    submitted_at: string | null;
+    completed_at: string | null;
+    score: number | null;
+    time_taken: number | null;
+  };
+}
+
+/** Tasks for a scenario plus their completion state on this student's assignment. */
+export async function fetchScenarioTasks(
   assignmentId: string,
-  score: number,
+): Promise<CachedResult<ScenarioTasksResult>> {
+  return cachedGet<ScenarioTasksResult>(`/api/student/scenarios/${assignmentId}/tasks`);
+}
+
+/**
+ * Hand the assignment in for faculty review. System tasks auto-complete as the
+ * student works; faculty verify the hands-on tasks and finalize the score.
+ */
+export async function submitScenarioAssignment(
+  assignmentId: string,
   timeTakenSeconds: number,
 ): Promise<ScenarioAssignment> {
   const result = await api<{ assignment: ScenarioAssignment }>(
-    `/api/student/scenarios/${assignmentId}/complete`,
-    { method: 'POST', body: { score, time_taken: timeTakenSeconds } },
+    `/api/student/scenarios/${assignmentId}/submit`,
+    { method: 'POST', body: { time_taken: timeTakenSeconds } },
   );
   return result.assignment;
 }
@@ -514,4 +551,102 @@ export interface Progress {
 
 export async function fetchProgress(): Promise<CachedResult<Progress>> {
   return cachedGet<Progress>('/api/student/progress');
+}
+
+// ---------------------------------------------------------------
+// Assistance requests (ERD entity; raises the faculty help flag)
+// ---------------------------------------------------------------
+
+export interface AssistanceRequest {
+  id: string;
+  message: string;
+  status: 'open' | 'acknowledged' | 'resolved';
+  created_at: string;
+  resolved_at?: string | null;
+  patient_id: string | null;
+  room_id: string | null;
+  patients?: { name: string; room_number: string | null } | null;
+}
+
+export async function fetchAssistanceRequests(): Promise<CachedResult<AssistanceRequest[]>> {
+  const result = await cachedGet<{ requests: AssistanceRequest[] }>('/api/student/assistance');
+  return { ...result, data: result.data.requests ?? [] };
+}
+
+/**
+ * Queues offline like the other clinical writes — a student who cannot reach
+ * the server is exactly the one who may need help, so the call is kept rather
+ * than dropped.
+ */
+export async function requestAssistance(
+  message: string,
+  patientId?: string | null,
+): Promise<{ queued: boolean; request: AssistanceRequest | null }> {
+  const body = { message, patient_id: patientId ?? null };
+  try {
+    const result = await api<{ request: AssistanceRequest }>('/api/student/assistance', {
+      method: 'POST',
+      body,
+    });
+    return { queued: false, request: result.request };
+  } catch (err) {
+    if (!isNetworkError(err)) throw err;
+    await enqueueWrite({
+      label: 'Assistance request',
+      path: '/api/student/assistance',
+      method: 'POST',
+      body,
+    });
+    return { queued: true, request: null };
+  }
+}
+
+export async function resolveAssistanceRequest(id: string): Promise<void> {
+  await api('/api/student/assistance', { method: 'PATCH', body: { id, status: 'resolved' } });
+}
+
+// ---------------------------------------------------------------
+// Profile
+// ---------------------------------------------------------------
+
+export async function updateProfile(name: string): Promise<User> {
+  const result = await api<{ user: User }>('/api/users/profile', {
+    method: 'PATCH',
+    body: { name },
+  });
+  return result.user;
+}
+
+/**
+ * First-login password change for accounts an admin provisioned with a
+ * temporary password. The server skips OTP verification while
+ * `force_password_change` is set, so this is a single call. Voluntary changes
+ * reuse the emailed-code reset flow above
+ * ({@link requestPasswordReset} / {@link checkPasswordResetCode} / {@link resetPassword}).
+ */
+export async function completeForcedPasswordChange(
+  newPassword: string,
+): Promise<{ success: boolean }> {
+  return api('/api/users/change-password', {
+    method: 'POST',
+    body: { newPassword },
+  });
+}
+
+/**
+ * Uploaded avatars are stored as a bucket path rather than a URL, so they only
+ * become loadable after being exchanged for a signed URL. Google pictures are
+ * already absolute and pass straight through.
+ */
+export async function resolveAvatarUrl(pictureUrl: string | null | undefined): Promise<string | null> {
+  if (!pictureUrl) return null;
+  if (!pictureUrl.startsWith('avatars/')) return pictureUrl;
+  try {
+    const result = await api<{ signedUrl: string }>(
+      `/api/users/avatar-url?path=${encodeURIComponent(pictureUrl)}`,
+    );
+    return result.signedUrl ?? null;
+  } catch {
+    return null;
+  }
 }

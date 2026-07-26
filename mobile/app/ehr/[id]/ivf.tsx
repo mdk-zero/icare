@@ -134,7 +134,7 @@ export default function IVFSheetScreen() {
         <Text style={styles.sheetTitle}>IVF Sheet</Text>
         <Text style={styles.sheetSubtitle}>IV Fluid Infusion Record</Text>
         <View style={styles.sheetDate}>
-          <Ionicons name="calendar" size={16} color="#64748b" />
+          <Ionicons name="calendar" size={16} color={Accent.slate.fg} />
           <Text style={styles.sheetDateText}>
             {new Date().toLocaleDateString('en-US', {
               weekday: 'long',
@@ -148,7 +148,7 @@ export default function IVFSheetScreen() {
 
       <Card style={styles.formCard}>
         <Text style={styles.sectionTitle}>
-          <Ionicons name="water" size={18} color="#0891b2" /> New Infusion
+          <Ionicons name="water" size={18} color={Accent.cyan.fg} /> New Infusion
         </Text>
 
         <View style={styles.inputSection}>
@@ -158,7 +158,7 @@ export default function IVFSheetScreen() {
             value={solution}
             onChangeText={setSolution}
             placeholder="e.g., PNSS 1L, D5LR 500ml"
-            placeholderTextColor="#94a3b8"
+            placeholderTextColor={Palette.textMuted}
           />
         </View>
 
@@ -171,7 +171,7 @@ export default function IVFSheetScreen() {
               onChangeText={setVolume}
               keyboardType="number-pad"
               placeholder="1000"
-              placeholderTextColor="#94a3b8"
+              placeholderTextColor={Palette.textMuted}
             />
           </View>
           <View style={[styles.inputHalf, { marginLeft: 8 }]}>
@@ -182,7 +182,7 @@ export default function IVFSheetScreen() {
               onChangeText={setRate}
               keyboardType="number-pad"
               placeholder="120"
-              placeholderTextColor="#94a3b8"
+              placeholderTextColor={Palette.textMuted}
             />
           </View>
         </View>
@@ -194,7 +194,7 @@ export default function IVFSheetScreen() {
             value={site}
             onChangeText={setSite}
             placeholder="e.g., Left metacarpal vein"
-            placeholderTextColor="#94a3b8"
+            placeholderTextColor={Palette.textMuted}
           />
         </View>
 
@@ -205,7 +205,7 @@ export default function IVFSheetScreen() {
             value={remarks}
             onChangeText={setRemarks}
             placeholder="Optional clinical notes..."
-            placeholderTextColor="#94a3b8"
+            placeholderTextColor={Palette.textMuted}
             multiline
           />
         </View>
@@ -240,20 +240,20 @@ export default function IVFSheetScreen() {
               <Text style={styles.historySolution}>{record.solution}</Text>
               <View style={styles.historyValues}>
                 <View style={styles.historyValue}>
-                  <Ionicons name="flask-outline" size={13} color="#0891b2" />
+                  <Ionicons name="flask-outline" size={13} color={Accent.cyan.fg} />
                   <Text style={styles.historyValueText}>
                     {record.volume_ml != null ? `${record.volume_ml} ml` : '— ml'}
                   </Text>
                 </View>
                 <View style={styles.historyValue}>
-                  <Ionicons name="speedometer-outline" size={13} color="#7c3aed" />
+                  <Ionicons name="speedometer-outline" size={13} color={Accent.violet.fg} />
                   <Text style={styles.historyValueText}>
                     {record.rate_ml_hr != null ? `${record.rate_ml_hr} ml/hr` : '— ml/hr'}
                   </Text>
                 </View>
                 {record.site ? (
                   <View style={styles.historyValue}>
-                    <Ionicons name="locate-outline" size={13} color="#64748b" />
+                    <Ionicons name="locate-outline" size={13} color={Accent.slate.fg} />
                     <Text style={styles.historyValueText}>{record.site}</Text>
                   </View>
                 ) : null}

@@ -4,6 +4,7 @@ import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { logAudit } from '@/app/lib/audit';
 import { evaluateVitals, VITAL_RULES, type VitalSignsInput } from '@/app/lib/vitals/rules';
 import { isPatientAssigned } from '@/app/lib/assigned-patients';
+import { autoCompleteScenarioTasks } from '@/app/lib/scenario-tasks';
 
 export async function GET(request: NextRequest) {
   const session = await readSession();
@@ -148,6 +149,9 @@ export async function POST(request: NextRequest) {
     if (evaluation.is_anomaly) {
       await notifyRosterFaculty(session.uid, patient.name, reading.id, patient_id, evaluation.reasons.length);
     }
+
+    // Recording vitals auto-checks the scenario's system 'vitals' task.
+    await autoCompleteScenarioTasks(supabase, session.uid, patient_id, 'vitals');
 
     return NextResponse.json(
       { reading, is_anomaly: evaluation.is_anomaly, anomaly_reasons: evaluation.reasons },

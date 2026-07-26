@@ -12,7 +12,7 @@ export default function TPRSheetScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
   const patientId = id as string;
-  const { Palette, Shadow, Type } = useTheme();
+  const { Palette, Accent, Shadow, Type } = useTheme();
   const styles = React.useMemo(() => createStyles(Palette, Shadow, Type), [Palette, Shadow, Type]);
   const primaryColor = Palette.primary;
 
@@ -115,7 +115,7 @@ export default function TPRSheetScreen() {
         <Text style={styles.sheetTitle}>TPR Sheet</Text>
         <Text style={styles.sheetSubtitle}>Temperature, Pulse & Respiration Record</Text>
         <View style={styles.sheetDate}>
-          <Ionicons name="calendar" size={16} color="#64748b" />
+          <Ionicons name="calendar" size={16} color={Accent.slate.fg} />
           <Text style={styles.sheetDateText}>
             {new Date().toLocaleDateString('en-US', {
               weekday: 'long',
@@ -130,7 +130,7 @@ export default function TPRSheetScreen() {
       <Card style={styles.formCard}>
         <View style={styles.inputSection}>
           <Text style={styles.inputLabel}>
-            <Ionicons name="thermometer" size={16} color="#d97706" /> Temperature (°C)
+            <Ionicons name="thermometer" size={16} color={Accent.amber.fg} /> Temperature (°C)
           </Text>
           <TextInput
             style={styles.input}
@@ -138,13 +138,13 @@ export default function TPRSheetScreen() {
             onChangeText={setTemperature}
             keyboardType="decimal-pad"
             placeholder="36.0 - 38.0"
-            placeholderTextColor="#94a3b8"
+            placeholderTextColor={Palette.textMuted}
           />
         </View>
 
         <View style={styles.inputSection}>
           <Text style={styles.inputLabel}>
-            <Ionicons name="heart" size={16} color="#dc2626" /> Pulse (bpm)
+            <Ionicons name="heart" size={16} color={Accent.red.fg} /> Pulse (bpm)
           </Text>
           <TextInput
             style={styles.input}
@@ -152,13 +152,13 @@ export default function TPRSheetScreen() {
             onChangeText={setPulse}
             keyboardType="number-pad"
             placeholder="60 - 100"
-            placeholderTextColor="#94a3b8"
+            placeholderTextColor={Palette.textMuted}
           />
         </View>
 
         <View style={styles.inputSection}>
           <Text style={styles.inputLabel}>
-            <Ionicons name="analytics" size={16} color="#7c3aed" /> Respiration (/min)
+            <Ionicons name="analytics" size={16} color={Accent.violet.fg} /> Respiration (/min)
           </Text>
           <TextInput
             style={styles.input}
@@ -166,20 +166,20 @@ export default function TPRSheetScreen() {
             onChangeText={setRespiration}
             keyboardType="number-pad"
             placeholder="12 - 20"
-            placeholderTextColor="#94a3b8"
+            placeholderTextColor={Palette.textMuted}
           />
         </View>
 
         <View style={styles.inputSection}>
           <Text style={styles.inputLabel}>
-            <Ionicons name="create" size={16} color="#64748b" /> Remarks
+            <Ionicons name="create" size={16} color={Accent.slate.fg} /> Remarks
           </Text>
           <TextInput
             style={[styles.input, styles.remarksInput]}
             value={remarks}
             onChangeText={setRemarks}
             placeholder="Optional observations"
-            placeholderTextColor="#94a3b8"
+            placeholderTextColor={Palette.textMuted}
           />
         </View>
       </Card>
@@ -187,18 +187,18 @@ export default function TPRSheetScreen() {
       <View style={styles.referenceSection}>
         <Text style={styles.referenceTitle}>Normal Ranges</Text>
         <View style={styles.referenceGrid}>
-          <View style={[styles.referenceItem, { backgroundColor: '#fef3c7' }]}>
-            <Ionicons name="thermometer" size={20} color="#d97706" />
+          <View style={[styles.referenceItem, { backgroundColor: Accent.amber.bg }]}>
+            <Ionicons name="thermometer" size={20} color={Accent.amber.fg} />
             <Text style={styles.referenceLabel}>Temperature</Text>
             <Text style={styles.referenceValue}>36.0 - 38.0°C</Text>
           </View>
-          <View style={[styles.referenceItem, { backgroundColor: '#fee2e2' }]}>
-            <Ionicons name="heart" size={20} color="#dc2626" />
+          <View style={[styles.referenceItem, { backgroundColor: Accent.red.bg }]}>
+            <Ionicons name="heart" size={20} color={Accent.red.fg} />
             <Text style={styles.referenceLabel}>Pulse</Text>
             <Text style={styles.referenceValue}>60 - 100 bpm</Text>
           </View>
-          <View style={[styles.referenceItem, { backgroundColor: '#ede9fe' }]}>
-            <Ionicons name="analytics" size={20} color="#7c3aed" />
+          <View style={[styles.referenceItem, { backgroundColor: Accent.violet.bg }]}>
+            <Ionicons name="analytics" size={20} color={Accent.violet.fg} />
             <Text style={styles.referenceLabel}>Respiration</Text>
             <Text style={styles.referenceValue}>12 - 20 /min</Text>
           </View>
@@ -240,17 +240,17 @@ export default function TPRSheetScreen() {
               </View>
               <View style={styles.historyValues}>
                 <View style={styles.historyValue}>
-                  <Ionicons name="thermometer" size={14} color="#d97706" />
+                  <Ionicons name="thermometer" size={14} color={Accent.amber.fg} />
                   <Text style={styles.historyValueText}>
                     {record.temperature_c != null ? `${record.temperature_c}°C` : '—'}
                   </Text>
                 </View>
                 <View style={styles.historyValue}>
-                  <Ionicons name="heart" size={14} color="#dc2626" />
+                  <Ionicons name="heart" size={14} color={Accent.red.fg} />
                   <Text style={styles.historyValueText}>{record.pulse ?? '—'}</Text>
                 </View>
                 <View style={styles.historyValue}>
-                  <Ionicons name="analytics" size={14} color="#7c3aed" />
+                  <Ionicons name="analytics" size={14} color={Accent.violet.fg} />
                   <Text style={styles.historyValueText}>{record.respiration ?? '—'}</Text>
                 </View>
               </View>
