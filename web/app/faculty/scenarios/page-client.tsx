@@ -806,21 +806,21 @@ export default function FacultyScenariosClient() {
 
       {/* Filters */}
       <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 mb-4">
-        <div className="relative w-full lg:w-96">
-          <FontAwesomeIcon
-            icon={faSearch}
-            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500"
-          />
-          <input
-            type="text"
-            placeholder="Search scenarios..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className={inputClassName + " pl-10"}
-          />
-        </div>
         <div className="flex items-center gap-3 w-full lg:w-auto">
-          <div className="relative flex-1 lg:flex-none">
+          <div className="relative w-full lg:w-96">
+            <FontAwesomeIcon
+              icon={faSearch}
+              className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500"
+            />
+            <input
+              type="text"
+              placeholder="Search scenarios..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className={inputClassName + " pl-10"}
+            />
+          </div>
+          <div className="relative w-full lg:w-44 shrink-0">
             <FontAwesomeIcon
               icon={faFilter}
               className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500"
@@ -828,7 +828,7 @@ export default function FacultyScenariosClient() {
             <select
               value={difficultyFilter}
               onChange={(e) => setDifficultyFilter(e.target.value)}
-              className={selectClassName + " pl-10 pr-10 w-full lg:w-44"}
+              className={selectClassName + " pl-10 pr-10 w-full"}
             >
               <option value="all">All Difficulties</option>
               <option value="beginner">Beginner</option>
@@ -840,7 +840,7 @@ export default function FacultyScenariosClient() {
               className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none"
             />
           </div>
-          <div className="relative flex-1 lg:flex-none">
+          <div className="relative w-full lg:w-48 shrink-0">
             <FontAwesomeIcon
               icon={faHospitalUser}
               className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500"
@@ -848,7 +848,7 @@ export default function FacultyScenariosClient() {
             <select
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
-              className={selectClassName + " pl-10 pr-10 w-full lg:w-48"}
+              className={selectClassName + " pl-10 pr-10 w-full"}
             >
               <option value="all">All Categories</option>
               {categories.map((cat) => (
@@ -862,46 +862,35 @@ export default function FacultyScenariosClient() {
               className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none"
             />
           </div>
-          <div className="flex justify-end gap-3">
-            {/* One entry: the manual form with an AI-generate assist inside it. */}
-            <button
-              onClick={() => router.push("/faculty/scenarios/new")}
-              className="flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_2px_8px_-1px_rgb(27_107_123_/_0.35)] transition-all hover:bg-brand-700 hover:shadow-[0_4px_14px_-2px_rgb(27_107_123_/_0.45)]"
-            >
-              <FontAwesomeIcon icon={faPlus} className="w-4 h-4" />
-              Create Scenario
-            </button>
-            <button
-              onClick={openBatchModal}
-              className="group flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl border border-brand-700/25 bg-surface px-4 py-2.5 text-sm font-semibold text-brand-800 transition-all hover:border-brand-700/40 hover:bg-brand-50"
-            >
-              <FontAwesomeIcon
-                icon={faLayerGroup}
-                className="w-4 h-4 text-brand-600 transition-transform group-hover:scale-110"
-              />
-              Generate Library
-            </button>
-            <button
-              onClick={() => router.push("/faculty/scenarios/link")}
-              className="group flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl border border-gray-300 bg-surface px-4 py-2.5 text-sm font-semibold text-gray-700 transition-all hover:border-brand-300 hover:bg-brand-50"
-            >
-              <FontAwesomeIcon
-                icon={faHospitalUser}
-                className="w-4 h-4 text-brand-600 transition-transform group-hover:scale-110"
-              />
-              Link patients
-            </button>
-            <button
-              onClick={() => router.push("/faculty/scenarios/review")}
-              className="group flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl border border-gray-300 bg-surface px-4 py-2.5 text-sm font-semibold text-gray-700 transition-all hover:border-brand-300 hover:bg-brand-50"
-            >
-              <FontAwesomeIcon
-                icon={faListCheck}
-                className="w-4 h-4 text-brand-600 transition-transform group-hover:scale-110"
-              />
-              Review submissions
-            </button>
-          </div>
+        </div>
+        <div className="flex justify-end gap-3 w-full lg:w-auto">
+          <button
+            onClick={() => router.push("/faculty/scenarios/new")}
+            className="flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_2px_8px_-1px_rgb(27_107_123_/_0.35)] transition-all hover:bg-brand-700 hover:shadow-[0_4px_14px_-2px_rgb(27_107_123_/_0.45)]"
+          >
+            <FontAwesomeIcon icon={faPlus} className="w-4 h-4" />
+            Create Scenario
+          </button>
+          <button
+            onClick={openBatchModal}
+            className="group flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl border border-brand-700/25 bg-surface px-4 py-2.5 text-sm font-semibold text-brand-800 transition-all hover:border-brand-700/40 hover:bg-brand-50"
+          >
+            <FontAwesomeIcon
+              icon={faLayerGroup}
+              className="w-4 h-4 text-brand-600 transition-transform group-hover:scale-110"
+            />
+            Generate Library
+          </button>
+          <button
+            onClick={() => router.push("/faculty/scenarios/link")}
+            className="group flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl border border-gray-300 bg-surface px-4 py-2.5 text-sm font-semibold text-gray-700 transition-all hover:border-brand-300 hover:bg-brand-50"
+          >
+            <FontAwesomeIcon
+              icon={faHospitalUser}
+              className="w-4 h-4 text-brand-600 transition-transform group-hover:scale-110"
+            />
+            Link patients
+          </button>
         </div>
       </div>
 

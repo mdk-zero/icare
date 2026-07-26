@@ -222,11 +222,6 @@ export default function FacultyDashboard() {
         }}
         title={firstName ? `Welcome back, ${firstName}!` : "Welcome back!"}
         subtitle="Here's what's happening with your students today."
-        action={{
-          icon: <FontAwesomeIcon icon={faUsers} className="w-6 h-6" />,
-          onClick: () => router.push('/faculty/students'),
-          label: "View Students",
-        }}
       />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -237,7 +232,6 @@ export default function FacultyDashboard() {
           value={total}
           label="Total Students"
           caption="Enrolled under you"
-          onClick={() => router.push('/faculty/students')}
         />
         <StatTile
           icon={<FontAwesomeIcon icon={faTriangleExclamation} className="w-5 h-5" />}
@@ -246,7 +240,6 @@ export default function FacultyDashboard() {
           value={atRisk}
           label="At-Risk Students"
           caption={total > 0 ? `${Math.round((atRisk / total) * 100)}% of total` : "No students yet"}
-          onClick={() => router.push('/faculty/students')}
         />
         <StatTile
           icon={<FontAwesomeIcon icon={faBell} className="w-5 h-5" />}
@@ -286,8 +279,7 @@ export default function FacultyDashboard() {
               return (
                 <div
                   key={student.id}
-                  className="relative flex items-center gap-3 p-4 pl-5 hover:bg-subtle transition-colors cursor-pointer"
-                  onClick={() => router.push(`/faculty/students/${student.id}`)}
+                  className="relative flex items-center gap-3 p-4 pl-5"
                 >
                   <span className={`absolute left-0 top-0 h-full w-1 ${risk.bar}`} aria-hidden />
                   <Avatar name={student.name} src={student.picture_url} size="md" tone="solid" />
