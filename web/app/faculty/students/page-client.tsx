@@ -20,6 +20,7 @@ import {
   faEllipsisVertical,
   faLayerGroup,
   faChevronRight,
+  faChevronDown,
   faArrowLeft,
 } from "@fortawesome/free-solid-svg-icons";
 import {
@@ -666,20 +667,6 @@ export default function FacultyStudentsClient() {
         }}
         title="My Students"
         subtitle="Manage and monitor students under your supervision"
-        action={{
-          icon: (
-            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 6v6m0 0v6m0-6h6m-6 0H6"
-              />
-            </svg>
-          ),
-          onClick: openCreateModal,
-          label: "Register Student",
-        }}
       />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
@@ -698,7 +685,6 @@ export default function FacultyStudentsClient() {
           caption={pctOfRoster(atRiskCount)}
           iconBg="bg-red-50"
           iconColor="text-red-600"
-          onClick={() => setRiskFilter("at_risk")}
         />
         <StatTile
           icon={<FontAwesomeIcon icon={faCircleCheck} className="w-5 h-5" />}
@@ -707,7 +693,6 @@ export default function FacultyStudentsClient() {
           caption={pctOfRoster(safeCount)}
           iconBg="bg-emerald-50"
           iconColor="text-emerald-600"
-          onClick={() => setRiskFilter("safe")}
         />
         <StatTile
           icon={<FontAwesomeIcon icon={faHourglassHalf} className="w-5 h-5" />}
@@ -716,12 +701,42 @@ export default function FacultyStudentsClient() {
           caption="Awaiting ML assessment"
           iconBg="bg-gray-100"
           iconColor="text-gray-600"
-          onClick={() => setRiskFilter("none")}
         />
       </div>
 
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-4">
+      <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 mb-4">
+        <div className="flex items-center gap-3 w-full lg:w-auto">
+          <div className="relative w-full lg:w-96">
+            <input
+              type="text"
+              placeholder="Search students..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10 pr-4 py-2.5 bg-surface border border-gray-200 rounded-xl text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-600/50 focus:border-brand-600 transition-all w-full"
+            />
+            <FontAwesomeIcon
+              icon={faMagnifyingGlass}
+              className="w-5 h-5 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2"
+            />
+          </div>
+          <div className="relative w-full lg:w-auto shrink-0">
+            <select
+              value={riskFilter}
+              onChange={(e) => setRiskFilter(e.target.value)}
+              className="px-4 py-2.5 bg-surface border border-gray-200 rounded-xl text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-600/50 focus:border-brand-600 transition-all cursor-pointer pr-10 appearance-none"
+            >
+              <option value="all">All Risk Levels</option>
+              <option value="at_risk">At Risk</option>
+              <option value="safe">Safe</option>
+              <option value="none">Not Scored</option>
+            </select>
+            <FontAwesomeIcon
+              icon={faChevronDown}
+              className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none"
+            />
+          </div>
+        </div>
+        <div className="flex items-center gap-3 w-full lg:w-auto">
           <button
             onClick={openCreateModal}
             className="px-4 py-2.5 bg-brand-600 text-white font-medium rounded-lg hover:bg-brand-700 transition-all flex items-center gap-2 shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
@@ -739,29 +754,6 @@ export default function FacultyStudentsClient() {
             <FontAwesomeIcon icon={faFileCsv} className="w-5 h-5" />
             Import CSV
           </button>
-          <div className="relative">
-            <input
-              type="text"
-              placeholder="Search students..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 pr-4 py-2.5 bg-surface border border-gray-200 rounded-xl text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-600/50 focus:border-brand-600 transition-all w-64"
-            />
-            <FontAwesomeIcon
-              icon={faMagnifyingGlass}
-              className="w-5 h-5 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2"
-            />
-          </div>
-          <select
-            value={riskFilter}
-            onChange={(e) => setRiskFilter(e.target.value)}
-            className="px-4 py-2.5 bg-surface border border-gray-200 rounded-xl text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-600/50 focus:border-brand-600 transition-all cursor-pointer"
-          >
-            <option value="all">All Risk Levels</option>
-            <option value="at_risk">At Risk</option>
-            <option value="safe">Safe</option>
-            <option value="none">Not Scored</option>
-          </select>
         </div>
       </div>
 
