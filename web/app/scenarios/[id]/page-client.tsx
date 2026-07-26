@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faChevronLeft, faCheck } from "@fortawesome/free-solid-svg-icons";
 import {
   SimulationScenario,
   ScenarioAssignment,
@@ -154,9 +156,7 @@ export default function ScenarioRunnerClient() {
               className="p-2 hover:bg-gray-100 rounded-xl transition-colors"
               aria-label="Back to dashboard"
             >
-              <svg className="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
+              <FontAwesomeIcon icon={faChevronLeft} className="w-5 h-5 text-gray-600" />
             </button>
             <div>
               <h1 className="text-lg font-bold text-gray-900">{scenario.title}</h1>
@@ -234,9 +234,7 @@ export default function ScenarioRunnerClient() {
                             }`}
                           >
                             {task.is_completed && (
-                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                              </svg>
+                              <FontAwesomeIcon icon={faCheck} className="w-4 h-4" />
                             )}
                           </div>
                           <div className="flex-1">
@@ -353,9 +351,7 @@ export default function ScenarioRunnerClient() {
                 {isCompleted ? (
                   <div className="text-center">
                     <div className="w-14 h-14 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                      <svg className="w-7 h-7 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
+                      <FontAwesomeIcon icon={faCheck} className="w-7 h-7 text-green-600" />
                     </div>
                     <p className="text-sm text-gray-500 mb-4">Your instructor finalized this scenario.</p>
                     <button

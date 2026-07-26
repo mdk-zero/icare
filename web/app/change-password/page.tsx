@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faLock, faCircleExclamation, faCircleNotch } from "@fortawesome/free-solid-svg-icons";
 import { getCurrentUser, refreshCurrentUser, User } from "../lib/api";
 
 function useAuthUser(): User | null {
@@ -84,9 +86,7 @@ export default function ChangePasswordPage() {
       <div className="w-full max-w-md bg-surface rounded-2xl shadow-xl border border-hairline p-8">
         <div className="text-center mb-6">
           <div className="w-12 h-12 bg-brand-600/10 rounded-xl flex items-center justify-center mx-auto mb-4">
-            <svg className="w-6 h-6 text-brand-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-            </svg>
+            <FontAwesomeIcon icon={faLock} className="w-6 h-6 text-brand-600" />
           </div>
           <h1 className="text-2xl font-semibold text-gray-900 mb-2">Update your password</h1>
           <p className="text-sm text-gray-500">
@@ -96,9 +96,7 @@ export default function ChangePasswordPage() {
 
         {error && (
           <div className="mb-5 p-3.5 bg-red-50 border border-red-100 rounded-xl text-red-700 text-sm flex items-start gap-3">
-            <svg className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-            </svg>
+            <FontAwesomeIcon icon={faCircleExclamation} className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
             <span>{error}</span>
           </div>
         )}
@@ -159,10 +157,7 @@ export default function ChangePasswordPage() {
           >
             {isSubmitting ? (
               <>
-                <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                </svg>
+                <FontAwesomeIcon icon={faCircleNotch} className="animate-spin h-5 w-5" />
                 Updating...
               </>
             ) : (
