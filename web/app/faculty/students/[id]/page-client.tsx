@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faChevronLeft, faBolt, faWandMagicSparkles } from "@fortawesome/free-solid-svg-icons";
 import {
   fetchFacultyStudentDetail,
   fetchLatestPrediction,
@@ -251,9 +253,7 @@ export default function StudentDetailClient() {
           onClick={() => router.push('/faculty/students')}
           className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
         >
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
+          <FontAwesomeIcon icon={faChevronLeft} className="w-5 h-5" />
           Back to Students
         </button>
       </div>
@@ -316,9 +316,7 @@ export default function StudentDetailClient() {
         <Card padding="sm">
           <div className="flex items-center gap-2 mb-4">
             <div className="p-2 bg-purple-100 rounded-lg">
-              <svg className="w-5 h-5 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
+              <FontAwesomeIcon icon={faBolt} className="w-5 h-5 text-purple-600" />
             </div>
             <h3 className="font-semibold text-gray-900">At-Risk Prediction</h3>
           </div>
@@ -387,9 +385,7 @@ export default function StudentDetailClient() {
           <div className="flex items-center justify-between gap-3 mb-1">
             <div className="flex items-center gap-2">
               <div className="p-2 bg-brand-600/10 rounded-lg">
-                <svg className="w-5 h-5 text-brand-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
-                </svg>
+                <FontAwesomeIcon icon={faWandMagicSparkles} className="w-5 h-5 text-brand-600" />
               </div>
               <div>
                 <h3 className="font-semibold text-gray-900">AI Performance Summary</h3>

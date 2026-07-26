@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faUsers, faPlus, faPencil, faTrash } from "@fortawesome/free-solid-svg-icons";
 import PageHeader from "../../components/PageHeader";
 
 interface UserAccount {
@@ -135,9 +137,7 @@ export default function UsersClient() {
       <PageHeader
         badge={{
           icon: (
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-            </svg>
+            <FontAwesomeIcon icon={faUsers} className="w-3.5 h-3.5" />
           ),
           label: "User Management",
         }}
@@ -180,9 +180,7 @@ export default function UsersClient() {
           >
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-brand-600/10 rounded-xl flex items-center justify-center">
-                <svg className="w-5 h-5 text-brand-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                </svg>
+                <FontAwesomeIcon icon={faUsers} className="w-5 h-5 text-brand-600" />
               </div>
               <div>
                 <p className="text-2xl font-bold text-gray-800">{stat.count}</p>
@@ -208,9 +206,7 @@ export default function UsersClient() {
           onClick={() => setShowAddModal(true)}
           className="flex items-center gap-2 px-4 py-2.5 bg-brand-600 text-white font-medium rounded-xl hover:bg-brand-700 hover:shadow-lg transition-all duration-300 ml-auto"
         >
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
+          <FontAwesomeIcon icon={faPlus} className="w-5 h-5" />
           Add User
         </button>
       </div>
@@ -271,9 +267,7 @@ export default function UsersClient() {
                           title="Edit"
                           className="p-2 text-gray-400 hover:text-brand-600 hover:bg-brand-600/10 rounded-lg transition-colors"
                         >
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                          </svg>
+                          <FontAwesomeIcon icon={faPencil} className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => handleDeleteUser(user)}
@@ -281,9 +275,7 @@ export default function UsersClient() {
                           title="Delete"
                           className="p-2 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
                         >
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
+                          <FontAwesomeIcon icon={faTrash} className="w-4 h-4" />
                         </button>
                       </div>
                     </td>

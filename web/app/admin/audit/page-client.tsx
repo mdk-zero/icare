@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faClock, faMagnifyingGlass } from "@fortawesome/free-solid-svg-icons";
 import PageHeader from "../../components/PageHeader";
 
 interface AuditRow {
@@ -131,9 +133,7 @@ export default function AdminAuditClient() {
       <PageHeader
         badge={{
           icon: (
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
+            <FontAwesomeIcon icon={faClock} className="w-3.5 h-3.5" />
           ),
           label: "Activity Log",
         }}
@@ -152,9 +152,7 @@ export default function AdminAuditClient() {
               setPage(0);
             }}
           >
-            <svg className="w-5 h-5 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
+            <FontAwesomeIcon icon={faMagnifyingGlass} className="w-5 h-5 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
               type="text"
               placeholder="Search actions… (press Enter)"

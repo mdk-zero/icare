@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faUsers, faPlus } from "@fortawesome/free-solid-svg-icons";
 import PageHeader from "../../components/PageHeader";
 
 interface SectionRef {
@@ -134,21 +136,13 @@ export default function FacultyClient() {
     <div>
       <PageHeader
         badge={{
-          icon: (
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-          ),
+          icon: <FontAwesomeIcon icon={faUsers} className="w-3.5 h-3.5" />,
           label: "Faculty Management",
         }}
         title="Faculty Management"
         subtitle="Manage faculty accounts and their handled sections"
         action={{
-          icon: (
-            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-            </svg>
-          ),
+          icon: <FontAwesomeIcon icon={faPlus} className="w-6 h-6" />,
           onClick: () => setShowAddModal(true),
           label: "Add Faculty",
         }}
@@ -188,9 +182,7 @@ export default function FacultyClient() {
           >
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 bg-brand-600/10 rounded-xl flex items-center justify-center">
-                <svg className="w-6 h-6 text-brand-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
+                <FontAwesomeIcon icon={faUsers} className="w-6 h-6 text-brand-600" />
               </div>
               <div>
                 <p className="text-3xl font-bold text-gray-800">{stat.count}</p>

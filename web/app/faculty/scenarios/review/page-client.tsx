@@ -2,6 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faCheck,
+  faChevronLeft,
+  faClipboardCheck,
+  faClipboardList,
+} from "@fortawesome/free-solid-svg-icons";
 import {
   ScenarioAssignment,
   FacultyScenarioTask,
@@ -71,9 +78,7 @@ function ScoreRing({ value, tone }: { value: number; tone: "brand" | "emerald" }
 }
 
 const CheckIcon = ({ className = "h-4 w-4" }: { className?: string }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-  </svg>
+  <FontAwesomeIcon icon={faCheck} className={className} />
 );
 
 export default function FacultyScenarioReviewClient() {
@@ -181,24 +186,10 @@ export default function FacultyScenarioReviewClient() {
             className="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-foreground/55 transition-colors hover:bg-subtle hover:text-foreground"
             aria-label="Back to scenarios"
           >
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M15 19l-7-7 7-7"
-              />
-            </svg>
+            <FontAwesomeIcon icon={faChevronLeft} className="h-5 w-5" />
           </button>
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-600 text-white shadow-tile">
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7l2 2 4-4"
-              />
-            </svg>
+            <FontAwesomeIcon icon={faClipboardCheck} className="h-5 w-5" />
           </div>
           <div className="min-w-0">
             <h1 className="font-display text-lg font-bold tracking-tight text-foreground">
@@ -250,14 +241,7 @@ export default function FacultyScenarioReviewClient() {
             {!loading && visible.length === 0 && (
               <div className="rounded-2xl border border-dashed border-hairline bg-surface px-4 py-10 text-center">
                 <div className="mx-auto mb-3 grid h-11 w-11 place-items-center rounded-full bg-subtle text-foreground/40">
-                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={1.8}
-                      d="M5 13l4 4L19 7"
-                    />
-                  </svg>
+                  <FontAwesomeIcon icon={faCheck} className="h-5 w-5" />
                 </div>
                 <p className="text-sm font-medium text-foreground/70">All clear</p>
                 <p className="mt-0.5 text-xs text-foreground/45">Nothing in this view right now.</p>
@@ -307,14 +291,7 @@ export default function FacultyScenarioReviewClient() {
           {!selected ? (
             <div className="flex min-h-[360px] flex-col items-center justify-center rounded-3xl border border-dashed border-hairline bg-surface/60 px-6 py-16 text-center">
               <div className="mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-brand-500/10 text-brand-600 dark:text-brand-300">
-                <svg className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={1.6}
-                    d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
-                  />
-                </svg>
+                <FontAwesomeIcon icon={faClipboardList} className="h-7 w-7" />
               </div>
               <p className="font-display text-lg font-semibold text-foreground">
                 Pick a submission
