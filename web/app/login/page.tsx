@@ -2,9 +2,9 @@
 
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useState, useEffect, useCallback, useRef, useLayoutEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Image from "next/image";
-import { GoogleLogin, type CredentialResponse } from "@react-oauth/google";
+import GoogleSignInButton from "../components/GoogleSignInButton";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faCircleExclamation,
@@ -29,14 +29,6 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [googleMounted, setGoogleMounted] = useState(false);
-  const googleButtonRef = useRef<HTMLDivElement>(null);
-  const [googleButtonWidth, setGoogleButtonWidth] = useState(0);
-
-  useEffect(() => {
-    setGoogleMounted(true);
-  }, []);
-
   const redirectAfterAuth = useCallback(
     (user: User) => {
       if (user.force_password_change) {
@@ -49,17 +41,6 @@ export default function LoginPage() {
     },
     [router],
   );
-
-  useLayoutEffect(() => {
-    const updateWidth = () => {
-      if (googleButtonRef.current) {
-        setGoogleButtonWidth(googleButtonRef.current.offsetWidth);
-      }
-    };
-    updateWidth();
-    window.addEventListener("resize", updateWidth);
-    return () => window.removeEventListener("resize", updateWidth);
-  }, []);
 
   useEffect(() => {
     if (isAuthenticated()) {
@@ -100,7 +81,7 @@ export default function LoginPage() {
     }
   };
 
-  const handleGoogleSuccess = async (response: CredentialResponse) => {
+  const handleGoogleSuccess = async (response: { credential: string }) => {
     if (!response.credential) {
       setError("Google sign-in did not return a credential");
       return;
@@ -379,7 +360,7 @@ export default function LoginPage() {
               </div>
 
               {/* Google button */}
-              <div ref={googleButtonRef} className="w-full flex justify-center overflow-hidden">
+              <div className="w-full flex justify-center overflow-hidden">
                 {isGoogleLoading ? (
                   <div className="w-full h-[44px] border border-gray-200 rounded-xl flex items-center justify-center gap-2.5 text-gray-500 bg-subtle text-sm">
                     <FontAwesomeIcon
@@ -388,20 +369,12 @@ export default function LoginPage() {
                     />
                     Signing in with Google...
                   </div>
-                ) : googleMounted ? (
-                  <GoogleLogin
+                ) : (
+                  <GoogleSignInButton
                     onSuccess={handleGoogleSuccess}
                     onError={handleGoogleError}
-                    theme="outline"
-                    size="large"
-                    shape="rectangular"
-                    text="continue_with"
-                    logo_alignment="left"
-                    useOneTap={false}
-                    width={googleButtonWidth || 400}
+                    width={400}
                   />
-                ) : (
-                  <div className="w-full h-[44px] border border-gray-200 rounded-xl bg-subtle" />
                 )}
               </div>
 
