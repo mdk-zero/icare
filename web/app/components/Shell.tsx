@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import { SkeletonSidebar } from "./skeletons";
+import LiveClock from "./LiveClock";
 import { faBars, faBell, faRightFromBracket, faXmark } from "@fortawesome/free-solid-svg-icons";
 import {
   getCurrentUser,
@@ -285,6 +286,7 @@ export default function Shell({ role, navItems, isActive, children }: ShellProps
                 </>
               )}
             </Link>
+            <LiveClock className="hidden md:block shrink-0 rounded-md bg-white/[0.07] px-2 py-1 font-mono text-[11px] font-semibold leading-none tracking-tight text-white/75 ring-1 ring-white/10" />
             <button
               onClick={() => setSidebarOpen(false)}
               aria-label="Close navigation"
@@ -549,6 +551,7 @@ export default function Shell({ role, navItems, isActive, children }: ShellProps
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <LiveClock className="font-mono text-xs font-semibold text-gray-600" />
               {role !== "student" && (
                 <button className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
                   <FontAwesomeIcon icon={faBell} className="w-5 h-5 text-gray-600" />

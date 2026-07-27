@@ -181,9 +181,27 @@ function HeaderPulse({ width }: { width: number }) {
   );
 }
 
+function formatNow(): string {
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+}
+
+/** Live HH:MM:SS wall clock. Each tick re-reads the clock, so a throttled
+ * interval (backgrounded app) never accumulates drift — it just resyncs. */
+function useWallClock(): string {
+  const [time, setTime] = useState(formatNow);
+  useEffect(() => {
+    const id = setInterval(() => setTime(formatNow()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  return time;
+}
+
 function AppHeader({ notificationCount }: { notificationCount: number }) {
   const router = useRouter();
   const { width } = useWindowDimensions();
+  const time = useWallClock();
   return (
     <View style={styles.headerShadowWrap}>
       <LinearGradient
@@ -203,25 +221,36 @@ function AppHeader({ notificationCount }: { notificationCount: number }) {
               </View>
               <Text style={styles.headerTagline}>CLINICAL COMPANION</Text>
             </View>
-            <Pressable
-              style={({ pressed }) => [
-                styles.notificationButton,
-                pressed && styles.notificationButtonPressed,
-              ]}
-              onPress={() => router.push("/notifications")}
-              hitSlop={8}
-            >
-              <View style={styles.notificationIconBox}>
-                <FontAwesome6 name="bell" size={17} color="#FFFFFF" />
+            <View style={styles.headerRight}>
+              <View style={styles.clockPill}>
+                <Text
+                  style={styles.clockText}
+                  accessibilityLabel={`Current time ${time}`}
+                  allowFontScaling={false}
+                >
+                  {time}
+                </Text>
               </View>
-              {notificationCount > 0 && (
-                <View style={styles.notificationBadge}>
-                  <Text style={styles.notificationBadgeText}>
-                    {notificationCount > 9 ? "9+" : notificationCount}
-                  </Text>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.notificationButton,
+                  pressed && styles.notificationButtonPressed,
+                ]}
+                onPress={() => router.push("/notifications")}
+                hitSlop={8}
+              >
+                <View style={styles.notificationIconBox}>
+                  <FontAwesome6 name="bell" size={17} color="#FFFFFF" />
                 </View>
-              )}
-            </Pressable>
+                {notificationCount > 0 && (
+                  <View style={styles.notificationBadge}>
+                    <Text style={styles.notificationBadgeText}>
+                      {notificationCount > 9 ? "9+" : notificationCount}
+                    </Text>
+                  </View>
+                )}
+              </Pressable>
+            </View>
           </View>
         </SafeAreaView>
       </LinearGradient>
@@ -329,6 +358,28 @@ const styles = StyleSheet.create({
     letterSpacing: 2.6,
     marginTop: 2,
     marginLeft: 4,
+  },
+  headerRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  clockPill: {
+    paddingHorizontal: 10,
+    height: 38,
+    justifyContent: "center",
+    borderRadius: 12,
+    backgroundColor: "rgba(255, 255, 255, 0.14)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.22)",
+  },
+  clockText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#FFFFFF",
+    letterSpacing: 0.6,
+    // fixed-width digits, so the pill doesn't jitter as the seconds tick
+    fontVariant: ["tabular-nums"],
   },
   notificationButton: {
     position: "relative",
