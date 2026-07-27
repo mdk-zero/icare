@@ -18,14 +18,8 @@ export async function POST(request: Request) {
 
   try {
     const row = await findUserByEmail(email.trim().toLowerCase());
-    if (!row) {
+    if (!row || !row.password_hash) {
       return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 });
-    }
-    if (!row.password_hash) {
-      return NextResponse.json(
-        { error: 'This account uses Google Sign-In. Please sign in with Google.', code: 'google_account' },
-        { status: 401 },
-      );
     }
 
     const ok = await verifyPassword(password, row.password_hash);

@@ -105,16 +105,15 @@ export interface AttemptResult {
 }
 
 // Authentication Functions
-export async function login(email: string, password: string): Promise<{ user: User; sessionToken: string; error?: undefined } | { user?: undefined; sessionToken?: undefined; error: string } | null> {
+export async function login(email: string, password: string): Promise<{ user: User; sessionToken: string } | null> {
   try {
     const res = await fetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
     });
-    const body = await res.json().catch(() => ({}));
-    if (!res.ok) return { error: body.error ?? 'Invalid email or password' };
-    const { user, sessionToken } = body as { user: User; sessionToken: string };
+    if (!res.ok) return null;
+    const { user, sessionToken } = (await res.json()) as { user: User; sessionToken: string };
     mirrorToStorage(user);
     return { user, sessionToken };
   } catch (err) {

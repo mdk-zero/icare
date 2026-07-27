@@ -59,7 +59,7 @@ export default function LoginPage() {
     try {
       const result = await login(email, password);
 
-      if (result?.user) {
+      if (result) {
         if (result.user.role === "faculty") {
           void logAuditAction({
             faculty_id: result.user.id,
@@ -72,7 +72,7 @@ export default function LoginPage() {
         }
         redirectAfterAuth(result.user);
       } else {
-        setError(result?.error ?? "Connection error. Please make sure the backend is running.");
+        setError("Invalid email or password");
       }
     } catch {
       setError("Connection error. Please make sure the backend is running.");
