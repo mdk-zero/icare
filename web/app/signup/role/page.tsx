@@ -9,6 +9,9 @@ import {
   faGear,
   faCircleExclamation,
   faChevronRight,
+  faBolt,
+  faChartColumn,
+  faHeart,
 } from "@fortawesome/free-solid-svg-icons";
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import { getPendingGoogleProfile, registerGoogle, GooglePendingProfile, User } from "../../lib/api";
@@ -34,15 +37,6 @@ const roles: {
     icon: faGear,
   },
 ];
-
-function MedicalCross({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <rect x="16" y="4" width="8" height="32" rx="2" fill="currentColor" />
-      <rect x="4" y="16" width="32" height="8" rx="2" fill="currentColor" />
-    </svg>
-  );
-}
 
 export default function SelectRolePage() {
   const router = useRouter();
@@ -90,41 +84,87 @@ export default function SelectRolePage() {
 
   return (
     <div className="min-h-screen flex">
-      {/* Left panel — brand */}
+      {/* Left panel — logo & description (mirrors login) */}
       <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-gradient-to-br from-[#0D7377] via-[#0A5C5F] to-[#084A4D]">
-        <div className="absolute inset-0 opacity-[0.05]">
+        <div className="absolute inset-0 opacity-[0.07] [mask-image:linear-gradient(135deg,transparent_15%,black_70%)]">
           <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
             <defs>
-              <pattern id="crossPatternRole" width="80" height="80" patternUnits="userSpaceOnUse">
-                <path d="M36 28h8v12h12v8h-12v12h-8v-12h-12v-8h12z" fill="#ffffff" />
+              <pattern id="gridMinor" width="28" height="28" patternUnits="userSpaceOnUse">
+                <path d="M28 0H0v28" fill="none" stroke="#ffffff" strokeWidth="0.5" />
+              </pattern>
+              <pattern id="gridMajor" width="140" height="140" patternUnits="userSpaceOnUse">
+                <path d="M140 0H0v140" fill="none" stroke="#ffffff" strokeWidth="1" />
               </pattern>
             </defs>
-            <rect width="100%" height="100%" fill="url(#crossPatternRole)" />
+            <rect width="100%" height="100%" fill="url(#gridMinor)" />
+            <rect width="100%" height="100%" fill="url(#gridMajor)" />
           </svg>
         </div>
 
-        <MedicalCross className="absolute top-[12%] left-[10%] w-16 h-16 text-white/8 animate-float-slow" />
-        <MedicalCross className="absolute top-[30%] right-[12%] w-10 h-10 text-white/10 animate-float-medium" />
-        <MedicalCross className="absolute bottom-[20%] left-[15%] w-12 h-12 text-white/6 animate-float-slow" />
-        <MedicalCross className="absolute bottom-[38%] right-[8%] w-8 h-8 text-white/8 animate-float-medium" />
-
         <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-white/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3" />
-        <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-white/5 rounded-full blur-3xl translate-y-1/3 -translate-x-1/4" />
+        <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-[#7DD3D8]/10 rounded-full blur-3xl translate-y-1/3 -translate-x-1/4" />
 
-        <div className="relative z-10 flex flex-col justify-center items-center w-full px-14 xl:px-20 text-white">
-          <div className="mb-8 p-6 bg-white/10 backdrop-blur-md rounded-3xl border border-white/10 shadow-2xl shadow-black/10">
-            <Image
-              src={logo_white}
-              alt="iCare++ Logo"
-              className="h-24 w-auto drop-shadow-md"
-              priority
-            />
+        <div className="relative z-10 flex flex-col w-full px-14 xl:px-20 py-10 xl:py-14 text-white">
+          <div className="flex-1 flex flex-col justify-center max-w-xl py-10">
+            <div className="mb-12 opacity-0 animate-fade-in-up">
+              <Image
+                src={logo_white}
+                alt="iCare++ Logo"
+                className="h-14 w-auto drop-shadow-md"
+                priority
+              />
+            </div>
+
+            <p className="opacity-0 animate-fade-in-up [animation-delay:100ms] text-[11px] font-semibold uppercase tracking-[0.28em] text-[#7DD3D8] mb-4">
+              Clinical Competency Platform
+            </p>
+            <h2 className="opacity-0 animate-fade-in-up [animation-delay:200ms] text-4xl xl:text-[2.75rem] font-semibold tracking-tight leading-[1.12] mb-5">
+              Sharpen clinical judgment,
+              <br />
+              one scenario at a time.
+            </h2>
+            <p className="opacity-0 animate-fade-in-up [animation-delay:300ms] text-base text-white/70 leading-relaxed mb-10">
+              A scalable machine learning–driven clinical competency assessment and adaptive
+              learning system for nursing students.
+            </p>
+
+            <ul className="space-y-5">
+              {[
+                {
+                  title: "Adaptive learning paths",
+                  description: "Scenarios that adjust to each student's performance",
+                  delay: "400ms",
+                  icon: faBolt,
+                },
+                {
+                  title: "ML-driven assessment",
+                  description: "Objective, consistent competency scoring on every attempt",
+                  delay: "500ms",
+                  icon: faChartColumn,
+                },
+                {
+                  title: "Realistic simulation",
+                  description: "EHR charts, live vitals, and patient encounters",
+                  delay: "600ms",
+                  icon: faHeart,
+                },
+              ].map((feature) => (
+                <li
+                  key={feature.title}
+                  className="opacity-0 animate-fade-in-up flex items-start gap-4"
+                  style={{ animationDelay: feature.delay }}
+                >
+                  <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-white/10 border border-white/10 backdrop-blur-md flex items-center justify-center text-[#7DD3D8]">
+                    <FontAwesomeIcon icon={feature.icon} className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-white leading-tight mb-0.5">{feature.title}</p>
+                    <p className="text-sm text-white/60 leading-relaxed">{feature.description}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
           </div>
-
-          <p className="text-lg xl:text-xl text-white/85 text-center max-w-md leading-relaxed">
-            A Scalable Machine Learning-Driven Clinical Competency Assessment and Adaptive Learning
-            System for Nursing Students
-          </p>
         </div>
       </div>
 
