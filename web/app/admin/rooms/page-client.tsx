@@ -15,6 +15,7 @@ import {
   faBuilding,
 } from "@fortawesome/free-solid-svg-icons";
 import PageHeader from "../../components/PageHeader";
+import { roomStatus, ROOM_STATUS_LABEL, ROOM_STATUS_TONE } from "../../lib/rooms";
 import {
   fetchRooms,
   fetchRoomDetail,
@@ -188,8 +189,11 @@ export default function RoomsClient() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredRooms.map((room) => {
+            // Beds are filled by patients — `capacity` is the patient ceiling
+            // enforced when a patient is linked to a room.
             const utilization =
-              room.capacity > 0 ? (room.students_assigned / room.capacity) * 100 : 0;
+              room.capacity > 0 ? (room.patients_assigned / room.capacity) * 100 : 0;
+            const status = roomStatus(room.patients_assigned, room.capacity);
             const isHigh = utilization >= 90;
             const isLow = utilization < 50;
             return (
@@ -215,9 +219,16 @@ export default function RoomsClient() {
                 </div>
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-500">Capacity</span>
+                    <span className="flex items-center gap-2 text-sm text-gray-500">
+                      Beds
+                      <span
+                        className={`rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${ROOM_STATUS_TONE[status]}`}
+                      >
+                        {ROOM_STATUS_LABEL[status]}
+                      </span>
+                    </span>
                     <span className="text-sm font-medium text-gray-800">
-                      {room.students_assigned} / {room.capacity}
+                      {room.patients_assigned} / {room.capacity} patients
                     </span>
                   </div>
                   <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
@@ -244,6 +255,14 @@ export default function RoomsClient() {
                       }`}
                     >
                       {Math.round(utilization)}%
+                    </span>
+                  </div>
+                  {/* Rostered students are a separate headcount, so they are
+                      reported plainly rather than against the bed ceiling. */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-gray-400">Students rostered</span>
+                    <span className="text-xs font-medium text-gray-600">
+                      {room.students_assigned}
                     </span>
                   </div>
                 </div>

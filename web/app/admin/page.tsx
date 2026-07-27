@@ -71,7 +71,8 @@ async function loadDashboard() {
         .select("student_id, risk, predicted_at")
         .order("predicted_at", { ascending: false }),
       supabase.from("rooms").select("id, name, capacity, status").order("name"),
-      supabase.from("room_assignments").select("room_id"),
+      // Beds are filled by patients; `capacity` is the patient ceiling.
+      supabase.from("patients").select("room_id").not("room_id", "is", null),
       supabase
         .from("audit_logs")
         .select("action, created_at, actor:users(name)")
@@ -130,8 +131,8 @@ async function loadDashboard() {
   }
 
   const occupancy = new Map<string, number>();
-  for (const ra of roomAssignRes.data ?? []) {
-    occupancy.set(ra.room_id, (occupancy.get(ra.room_id) ?? 0) + 1);
+  for (const p of roomAssignRes.data ?? []) {
+    if (p.room_id) occupancy.set(p.room_id, (occupancy.get(p.room_id) ?? 0) + 1);
   }
 
   return {
@@ -143,7 +144,7 @@ async function loadDashboard() {
     scoredStudentCount: scoredStudents.length,
     atRiskStudents,
     weeklyAttempts,
-    rooms: rooms.map((r) => ({ ...r, students_assigned: occupancy.get(r.id) ?? 0 })),
+    rooms: rooms.map((r) => ({ ...r, patients_assigned: occupancy.get(r.id) ?? 0 })),
     activity: (activityRes.data ?? []) as unknown as ActivityRow[],
   };
 }
@@ -266,7 +267,7 @@ export default async function AdminDashboard() {
             <h3 className="text-lg font-semibold text-gray-900">Room Capacity</h3>
             <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">Occupancy</span>
           </div>
-          <p className="text-xs text-gray-500 mb-4">Current student occupancy per room</p>
+          <p className="text-xs text-gray-500 mb-4">Patients occupying each room</p>
           {rooms.length === 0 ? (
             <p className="text-sm text-gray-400 py-6 text-center">
               No rooms yet — create them in <Link href="/admin/rooms" className="text-brand-600 hover:underline">Rooms</Link>.
@@ -274,7 +275,7 @@ export default async function AdminDashboard() {
           ) : (
             <div className="space-y-4">
               {rooms.slice(0, 6).map((room) => {
-                const percentage = room.capacity > 0 ? (room.students_assigned / room.capacity) * 100 : 0;
+                const percentage = room.capacity > 0 ? (room.patients_assigned / room.capacity) * 100 : 0;
                 const isFull = percentage >= 90;
                 return (
                   <div key={room.id}>
@@ -284,7 +285,7 @@ export default async function AdminDashboard() {
                         {room.status !== "active" && <span className="text-gray-400 text-xs"> · {room.status}</span>}
                       </span>
                       <span className={`text-sm font-medium ${isFull ? "text-rose-600" : "text-gray-500"}`}>
-                        {room.students_assigned}/{room.capacity}
+                        {room.patients_assigned}/{room.capacity}
                       </span>
                     </div>
                     <div className="h-3 bg-gray-100 rounded-full overflow-hidden">

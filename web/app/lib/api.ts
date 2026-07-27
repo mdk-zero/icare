@@ -586,7 +586,10 @@ export interface Room {
   description: string | null;
   created_at: string;
   updated_at: string;
+  /** Students rostered to the room; not measured against `capacity`. */
   students_assigned: number;
+  /** Patients occupying the room — this is what `capacity` limits. */
+  patients_assigned: number;
 }
 
 export interface RoomAssignment {

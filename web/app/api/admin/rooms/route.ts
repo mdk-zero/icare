@@ -14,26 +14,39 @@ export async function GET() {
 
   try {
     const supabase = getSupabaseAdmin();
-    const [{ data: rooms, error: roomsError }, { data: assignments, error: asgError }] =
-      await Promise.all([
-        supabase.from('rooms').select('*').order('room_number'),
-        supabase.from('room_assignments').select('room_id').is('ends_at', null),
-      ]);
+    // A room's occupancy is its patients — that is what `capacity` gates in
+    // /api/faculty/patients. Students rostered to a room are a separate count
+    // and are deliberately not measured against the same ceiling.
+    const [
+      { data: rooms, error: roomsError },
+      { data: assignments, error: asgError },
+      { data: roomedPatients, error: patientsError },
+    ] = await Promise.all([
+      supabase.from('rooms').select('*').order('room_number'),
+      supabase.from('room_assignments').select('room_id').is('ends_at', null),
+      supabase.from('patients').select('room_id').not('room_id', 'is', null),
+    ]);
 
-    if (roomsError || asgError) {
-      console.error('Failed to fetch rooms', roomsError ?? asgError);
+    if (roomsError || asgError || patientsError) {
+      console.error('Failed to fetch rooms', roomsError ?? asgError ?? patientsError);
       return NextResponse.json({ error: 'Unable to fetch rooms' }, { status: 500 });
     }
 
-    const occupancy = new Map<string, number>();
+    const students = new Map<string, number>();
     for (const { room_id } of assignments ?? []) {
-      occupancy.set(room_id, (occupancy.get(room_id) ?? 0) + 1);
+      students.set(room_id, (students.get(room_id) ?? 0) + 1);
+    }
+
+    const patients = new Map<string, number>();
+    for (const { room_id } of roomedPatients ?? []) {
+      if (room_id) patients.set(room_id, (patients.get(room_id) ?? 0) + 1);
     }
 
     return NextResponse.json({
       rooms: (rooms ?? []).map((room) => ({
         ...room,
-        students_assigned: occupancy.get(room.id) ?? 0,
+        students_assigned: students.get(room.id) ?? 0,
+        patients_assigned: patients.get(room.id) ?? 0,
       })),
     });
   } catch (err) {
