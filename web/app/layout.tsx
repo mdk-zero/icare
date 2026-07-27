@@ -27,8 +27,9 @@ const spaceGrotesk = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: "Login | iCARE++",
-  description: "Welcome back!",
+  title: "iCARE++ | Clinical Competency Platform",
+  description:
+    "A scalable machine learning-driven clinical competency assessment and adaptive learning system for nursing students.",
 };
 
 export default function RootLayout({
