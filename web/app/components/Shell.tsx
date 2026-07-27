@@ -420,9 +420,12 @@ export default function Shell({ role, navItems, isActive, children }: ShellProps
               aria-hidden
               className="mb-3 h-px bg-gradient-to-r from-transparent via-white/15 to-transparent"
             />
+            {/* Hover tint is a literal rose-100: the `rose-50` token retint to
+                near-black in dark mode would blacken the label and icon here,
+                since this sidebar is dark in both schemes. */}
             <button
               onClick={() => setShowLogoutConfirm(true)}
-              className="group w-full flex items-center gap-2.5 rounded-xl px-2.5 py-2.5 bg-white/[0.04] ring-1 ring-white/10 text-white/70 hover:bg-rose-500/[0.16] hover:ring-rose-300/30 hover:text-rose-50 transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-rose-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0f5252]"
+              className="group w-full flex items-center gap-2.5 rounded-xl px-2.5 py-2.5 bg-white/[0.04] ring-1 ring-white/10 text-white/70 hover:bg-rose-500/[0.16] hover:ring-rose-300/30 hover:text-[#ffe4e6] transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-rose-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0f5252]"
             >
               <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white/[0.07] transition-colors duration-200 group-hover:bg-rose-400/25">
                 <FontAwesomeIcon
