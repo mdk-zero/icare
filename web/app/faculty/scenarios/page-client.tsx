@@ -55,7 +55,6 @@ import StatTile from "../../components/StatTile";
 import Card from "../../components/Card";
 import Avatar from "../../components/Avatar";
 
-
 const SCENARIO_CATEGORIES = [
   "Cardiac Emergency",
   "Respiratory Emergency",
@@ -263,7 +262,6 @@ export default function FacultyScenariosClient() {
   const [linkPatientSearchQuery, setLinkPatientSearchQuery] = useState("");
   const [savingPatientLink, setSavingPatientLink] = useState(false);
 
-
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<SimulationScenario | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -317,7 +315,6 @@ export default function FacultyScenariosClient() {
       return matchesSearch && matchesDifficulty && matchesCategory;
     });
   }, [scenarios, searchQuery, difficultyFilter, categoryFilter]);
-
 
   const linkModalFilteredPatients = useMemo(() => {
     const q = linkPatientSearchQuery.toLowerCase();
@@ -865,13 +862,6 @@ export default function FacultyScenariosClient() {
         </div>
         <div className="flex justify-end gap-3 w-full lg:w-auto">
           <button
-            onClick={() => router.push("/faculty/scenarios/new")}
-            className="flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_2px_8px_-1px_rgb(27_107_123_/_0.35)] transition-all hover:bg-brand-700 hover:shadow-[0_4px_14px_-2px_rgb(27_107_123_/_0.45)]"
-          >
-            <FontAwesomeIcon icon={faPlus} className="w-4 h-4" />
-            Create Scenario
-          </button>
-          <button
             onClick={openBatchModal}
             className="group flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl border border-brand-700/25 bg-surface px-4 py-2.5 text-sm font-semibold text-brand-800 transition-all hover:border-brand-700/40 hover:bg-brand-50"
           >
@@ -900,6 +890,13 @@ export default function FacultyScenariosClient() {
               className="w-4 h-4 text-brand-600 transition-transform group-hover:scale-110"
             />
             Review submissions
+          </button>
+          <button
+            onClick={() => router.push("/faculty/scenarios/new")}
+            className="flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_2px_8px_-1px_rgb(27_107_123_/_0.35)] transition-all hover:bg-brand-700 hover:shadow-[0_4px_14px_-2px_rgb(27_107_123_/_0.45)]"
+          >
+            <FontAwesomeIcon icon={faPlus} className="w-4 h-4" />
+            Create Scenario
           </button>
         </div>
       </div>
@@ -1195,9 +1192,7 @@ export default function FacultyScenariosClient() {
                 <label className={labelClassName}>Learning Objectives</label>
                 <textarea
                   value={editForm.learningObjectives}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, learningObjectives: e.target.value })
-                  }
+                  onChange={(e) => setEditForm({ ...editForm, learningObjectives: e.target.value })}
                   rows={4}
                   className={inputClassName + " resize-none"}
                 />
@@ -1375,7 +1370,9 @@ export default function FacultyScenariosClient() {
                                 : "border-gray-300 bg-surface hover:border-brand-300"
                             }`}
                           >
-                            <span className="block text-sm font-semibold text-gray-800">{title}</span>
+                            <span className="block text-sm font-semibold text-gray-800">
+                              {title}
+                            </span>
                             <span className="block text-xs text-gray-500">{hint}</span>
                           </button>
                         ))}
@@ -1972,8 +1969,8 @@ export default function FacultyScenariosClient() {
 
             <div className="p-4 space-y-3 overflow-y-auto flex-1">
               <p className="text-sm text-gray-500">
-                Students only see patients linked to their assigned scenarios — pick one so it
-                shows up for anyone already assigned this scenario.
+                Students only see patients linked to their assigned scenarios — pick one so it shows
+                up for anyone already assigned this scenario.
               </p>
 
               <button
