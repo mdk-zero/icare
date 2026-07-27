@@ -448,7 +448,7 @@ export function SkeletonSidebar() {
   return (
     <div className="h-screen bg-canvas flex overflow-hidden animate-pulse">
       <div
-        className="w-60 flex flex-col shrink-0"
+        className="w-64 flex flex-col shrink-0"
         style={{ background: 'linear-gradient(180deg, #0b3d3d 0%, #146464 50%, #0f5252 100%)' }}
       >
         {/* Brand */}
