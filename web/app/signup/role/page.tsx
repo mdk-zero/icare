@@ -4,7 +4,6 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import { getPendingGoogleProfile, registerGoogle, GooglePendingProfile, User } from "../../lib/api";
-import logo from "../../../public/logo-no-bg.png";
 import logo_white from "../../../public/logo-white-no-bg.png";
 
 const roles: {
@@ -27,21 +26,19 @@ const roles: {
   },
 ];
 
-function MedicalCross({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <rect x="16" y="4" width="8" height="32" rx="2" fill="currentColor" />
-      <rect x="4" y="16" width="32" height="8" rx="2" fill="currentColor" />
-    </svg>
-  );
-}
-
 export default function SelectRolePage() {
   const router = useRouter();
   const [profile, setProfile] = useState<GooglePendingProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, []);
 
   useEffect(() => {
     async function load() {
@@ -74,74 +71,79 @@ export default function SelectRolePage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-canvas">
-        <div className="w-8 h-8 border-4 border-brand-600 border-t-transparent rounded-full animate-spin" />
+      <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-gradient-to-r from-[#0D7377] via-30% via-[#0A4A4D] to-[#050c0d]">
+        <div className="w-8 h-8 border-4 border-[#7DD3D8] border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex">
-      {/* Left panel — brand */}
-      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-gradient-to-br from-[#0D7377] via-[#0A5C5F] to-[#084A4D]">
-        <div className="absolute inset-0 opacity-[0.05]">
-          <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
-            <defs>
-              <pattern id="crossPatternRole" width="80" height="80" patternUnits="userSpaceOnUse">
-                <path d="M36 28h8v12h12v8h-12v12h-8v-12h-12v-8h12z" fill="#ffffff" />
-              </pattern>
-            </defs>
-            <rect width="100%" height="100%" fill="url(#crossPatternRole)" />
-          </svg>
-        </div>
+    <div className="min-h-screen flex relative overflow-hidden bg-gradient-to-r from-[#0D7377] via-30% via-[#0A4A4D] to-[#050c0d]">
+      {/* ───────── Shared abstract layer ───────── */}
+      <div className="absolute inset-0 opacity-[0.07] [mask-image:linear-gradient(90deg,black_0%,black_60%,transparent_100%)] pointer-events-none">
+        <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <pattern id="roleGridMinor" width="28" height="28" patternUnits="userSpaceOnUse">
+              <path d="M28 0H0v28" fill="none" stroke="#ffffff" strokeWidth="0.5" />
+            </pattern>
+            <pattern id="roleGridMajor" width="140" height="140" patternUnits="userSpaceOnUse">
+              <path d="M140 0H0v140" fill="none" stroke="#ffffff" strokeWidth="1" />
+            </pattern>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#roleGridMinor)" />
+          <rect width="100%" height="100%" fill="url(#roleGridMajor)" />
+        </svg>
+      </div>
 
-        <MedicalCross className="absolute top-[12%] left-[10%] w-16 h-16 text-white/8 animate-float-slow" />
-        <MedicalCross className="absolute top-[30%] right-[12%] w-10 h-10 text-white/10 animate-float-medium" />
-        <MedicalCross className="absolute bottom-[20%] left-[15%] w-12 h-12 text-white/6 animate-float-slow" />
-        <MedicalCross className="absolute bottom-[38%] right-[8%] w-8 h-8 text-white/8 animate-float-medium" />
+      <div className="absolute top-0 left-0 w-[500px] h-[500px] bg-white/[0.05] rounded-full blur-3xl -translate-y-1/3 -translate-x-1/4 animate-float-slow pointer-events-none" />
+      <div className="absolute top-1/3 left-1/3 w-[350px] h-[350px] bg-[#7DD3D8]/10 rounded-full blur-3xl animate-float-medium pointer-events-none" />
+      <div
+        className="absolute bottom-0 right-[15%] w-[450px] h-[450px] bg-brand-900/30 rounded-full blur-3xl animate-float-slow pointer-events-none"
+        style={{ animationDelay: "-3s" }}
+      />
+      <div className="absolute bottom-[10%] right-0 w-[350px] h-[350px] bg-black/20 rounded-full blur-3xl translate-x-1/4 pointer-events-none" />
 
-        <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-white/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3" />
-        <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-white/5 rounded-full blur-3xl translate-y-1/3 -translate-x-1/4" />
+      {/* ───────── Left panel — brand story ───────── */}
+      <div className="hidden lg:flex lg:w-1/2 relative">
+        <div className="relative z-10 flex flex-col w-full px-14 xl:px-20 py-10 xl:py-14 text-white">
+          <div className="flex-1 flex flex-col justify-center max-w-xl py-10 -mt-8">
+            <div className="mb-12 opacity-0 animate-fade-in-up">
+              <Image src={logo_white} alt="iCare++ Logo" className="h-14 w-auto drop-shadow-md" priority />
+            </div>
 
-        <div className="relative z-10 flex flex-col justify-center items-center w-full px-14 xl:px-20 text-white">
-          <div className="mb-8 p-6 bg-white/10 backdrop-blur-md rounded-3xl border border-white/10 shadow-2xl shadow-black/10">
-            <Image
-              src={logo_white}
-              alt="iCare++ Logo"
-              className="h-24 w-auto drop-shadow-md"
-              priority
-            />
+            <p className="opacity-0 animate-fade-in-up [animation-delay:100ms] text-[11px] font-semibold uppercase tracking-[0.28em] text-[#7DD3D8] mb-4">
+              Clinical Competency Platform
+            </p>
+            <h2 className="opacity-0 animate-fade-in-up [animation-delay:200ms] text-4xl xl:text-[2.75rem] font-semibold tracking-tight leading-[1.12] mb-5">
+              One last step to
+              <br />
+              get you started.
+            </h2>
+            <p className="opacity-0 animate-fade-in-up [animation-delay:300ms] text-base text-white/70 leading-relaxed mb-10">
+              A scalable machine learning–driven clinical competency assessment and adaptive
+              learning system for nursing students.
+            </p>
           </div>
-
-          <p className="text-lg xl:text-xl text-white/85 text-center max-w-md leading-relaxed">
-            A Scalable Machine Learning-Driven Clinical Competency Assessment and Adaptive Learning
-            System for Nursing Students
-          </p>
         </div>
       </div>
 
-      {/* Right panel — role selection */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center px-5 sm:px-8 py-12 bg-canvas relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-full h-full opacity-40">
-          <div className="absolute top-[-10%] right-[-10%] w-[350px] h-[350px] bg-[#7DD3D8]/20 rounded-full blur-3xl" />
-          <div className="absolute bottom-[-10%] left-[-10%] w-[300px] h-[300px] bg-brand-600/10 rounded-full blur-3xl" />
-        </div>
-
-        <div className="relative z-10 w-full max-w-[520px] animate-fade-in-up">
+      {/* ───────── Right panel — glass role selection card ───────── */}
+      <div className="w-full lg:w-1/2 flex items-center justify-center px-5 sm:px-8 py-12 relative">
+        <div className="relative z-10 w-full max-w-[460px] -mt-8 animate-fade-in-up">
           {/* Mobile header */}
           <div className="lg:hidden flex flex-col items-center mb-6">
-            <div className="p-3.5 bg-brand-50 rounded-2xl shadow-md mb-3">
-              <Image src={logo} alt="iCare++ Logo" className="h-12 w-auto" priority />
+            <div className="p-3.5 bg-white/10 border border-white/10 backdrop-blur-md rounded-2xl mb-3">
+              <Image src={logo_white} alt="iCare++ Logo" className="h-12 w-auto" priority />
             </div>
-            <h2 className="text-2xl font-semibold text-brand-800">iCARE++</h2>
           </div>
 
-          <div className="bg-surface rounded-3xl border border-hairline shadow-xl shadow-brand-600/[0.05] p-7 sm:p-9">
+          {/* Role selection card */}
+          <div className="bg-white/[0.06] backdrop-blur-2xl rounded-3xl border border-white/30 shadow-2xl shadow-black/40 p-5 sm:p-8">
             <div className="mb-6">
-              <h1 className="text-xl font-semibold text-gray-900 mb-1 tracking-tight">
+              <h1 className="text-3xl font-semibold text-white mb-1 tracking-tight">
                 Select your role
               </h1>
-              <p className="text-sm text-gray-500">
+              <p className="text-sm text-white/50">
                 {profile
                   ? `Welcome, ${profile.name}. Choose how you will use iCARE++.`
                   : "Choose how you will use iCARE++."}
@@ -149,12 +151,8 @@ export default function SelectRolePage() {
             </div>
 
             {error && (
-              <div className="flex items-start gap-3 p-3.5 mb-5 bg-red-50 border border-red-100 rounded-xl text-red-700 text-sm animate-shake">
-                <svg
-                  className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5"
-                  fill="currentColor"
-                  viewBox="0 0 20 20"
-                >
+              <div className="flex items-start gap-3 p-3.5 mb-5 bg-red-500/10 border border-red-500/20 rounded-xl text-red-300 text-sm animate-shake">
+                <svg className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
                   <path
                     fillRule="evenodd"
                     d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
@@ -172,57 +170,47 @@ export default function SelectRolePage() {
                   type="button"
                   onClick={() => handleSelect(role.id)}
                   disabled={isSubmitting}
-                  className="w-full flex items-start gap-4 p-4 rounded-xl border border-gray-200 bg-subtle hover:border-brand-600 hover:bg-brand-50 transition-all disabled:opacity-60 text-left group"
+                  className="w-full flex items-start gap-4 p-4 rounded-xl border border-white/10 bg-white/5 hover:border-[#7DD3D8]/50 hover:bg-white/[0.08] transition-all disabled:opacity-60 text-left group"
                 >
-                  <div className="w-11 h-11 rounded-xl bg-brand-600/10 flex items-center justify-center flex-shrink-0 group-hover:bg-brand-600/20 transition-colors">
-                    <svg
-                      className="w-6 h-6 text-brand-600"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={1.5}
-                        d={role.icon}
-                      />
+                  <div className="w-11 h-11 rounded-xl bg-white/10 border border-white/10 flex items-center justify-center flex-shrink-0 group-hover:bg-[#7DD3D8]/20 transition-colors">
+                    <svg className="w-6 h-6 text-[#7DD3D8]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d={role.icon} />
                     </svg>
                   </div>
                   <div className="flex-1">
-                    <p className="font-semibold text-gray-900">{role.label}</p>
-                    <p className="text-sm text-gray-500">{role.description}</p>
+                    <p className="font-semibold text-white">{role.label}</p>
+                    <p className="text-sm text-white/50">{role.description}</p>
                   </div>
                   <svg
-                    className="w-5 h-5 text-gray-400 self-center group-hover:text-brand-600 transition-colors"
+                    className="w-5 h-5 text-white/35 self-center group-hover:text-[#7DD3D8] transition-colors"
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
                   >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M9 5l7 7-7 7"
-                    />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
                 </button>
               ))}
             </div>
 
             <div className="mt-6 text-center">
-              <p className="text-sm text-gray-500">
+              <p className="text-sm text-white/50">
                 Not the right account?{" "}
                 <button
                   type="button"
                   onClick={() => router.push("/login")}
-                  className="text-brand-600 hover:text-brand-700 font-medium transition-colors"
+                  className="text-[#7DD3D8] hover:text-white font-medium transition-colors"
                 >
                   Go back
                 </button>
               </p>
             </div>
           </div>
+
+          {/* Footer */}
+          <p className="text-center text-xs text-white/30 mt-5">
+            &copy; 2026 iCARE++. All rights reserved.
+          </p>
         </div>
       </div>
     </div>

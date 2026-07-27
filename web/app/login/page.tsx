@@ -6,7 +6,6 @@ import { useState, useEffect, useCallback, useRef, useLayoutEffect } from "react
 import Image from "next/image";
 import { GoogleOAuthProvider, GoogleLogin, type CredentialResponse } from "@react-oauth/google";
 import { login, isAuthenticated, getCurrentUser, User, logAuditAction } from "../lib/api";
-import logo from "../../public/logo-no-bg.png";
 import logo_white from "../../public/logo-white-no-bg.png";
 
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? "";
@@ -25,6 +24,13 @@ export default function LoginPage() {
 
   useEffect(() => {
     setGoogleMounted(true);
+  }, []);
+
+  useEffect(() => {
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = "";
+    };
   }, []);
 
   const redirectAfterAuth = useCallback(
@@ -145,32 +151,35 @@ export default function LoginPage() {
 
   return (
     <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
-      <div className="min-h-screen flex">
-        {/* Left panel — logo & description */}
-        <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-gradient-to-br from-[#0D7377] via-[#0A5C5F] to-[#084A4D]">
-          {/* ECG graph-paper grid, fading toward the top-left */}
-          <div className="absolute inset-0 opacity-[0.07] [mask-image:linear-gradient(135deg,transparent_15%,black_70%)]">
-            <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
-              <defs>
-                <pattern id="gridMinor" width="28" height="28" patternUnits="userSpaceOnUse">
-                  <path d="M28 0H0v28" fill="none" stroke="#ffffff" strokeWidth="0.5" />
-                </pattern>
-                <pattern id="gridMajor" width="140" height="140" patternUnits="userSpaceOnUse">
-                  <path d="M140 0H0v140" fill="none" stroke="#ffffff" strokeWidth="1" />
-                </pattern>
-              </defs>
-              <rect width="100%" height="100%" fill="url(#gridMinor)" />
-              <rect width="100%" height="100%" fill="url(#gridMajor)" />
-            </svg>
-          </div>
+      <div className="min-h-screen flex relative overflow-hidden bg-gradient-to-r from-[#0D7377] via-30% via-[#0A4A4D] to-[#050c0d]">
+        {/* ───────── Shared abstract layer, spans the full screen ───────── */}
+        <div className="absolute inset-0 opacity-[0.07] [mask-image:linear-gradient(90deg,black_0%,black_60%,transparent_100%)] pointer-events-none">
+          <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <pattern id="loginGridMinor" width="28" height="28" patternUnits="userSpaceOnUse">
+                <path d="M28 0H0v28" fill="none" stroke="#ffffff" strokeWidth="0.5" />
+              </pattern>
+              <pattern id="loginGridMajor" width="140" height="140" patternUnits="userSpaceOnUse">
+                <path d="M140 0H0v140" fill="none" stroke="#ffffff" strokeWidth="1" />
+              </pattern>
+            </defs>
+            <rect width="100%" height="100%" fill="url(#loginGridMinor)" />
+            <rect width="100%" height="100%" fill="url(#loginGridMajor)" />
+          </svg>
+        </div>
 
-          <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-white/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3" />
-          <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-[#7DD3D8]/10 rounded-full blur-3xl translate-y-1/3 -translate-x-1/4" />
+        <div className="absolute top-0 left-0 w-[500px] h-[500px] bg-white/[0.05] rounded-full blur-3xl -translate-y-1/3 -translate-x-1/4 animate-float-slow pointer-events-none" />
+        <div className="absolute top-1/3 left-1/3 w-[350px] h-[350px] bg-[#7DD3D8]/10 rounded-full blur-3xl animate-float-medium pointer-events-none" />
+        <div
+          className="absolute bottom-0 right-[15%] w-[450px] h-[450px] bg-brand-900/30 rounded-full blur-3xl animate-float-slow pointer-events-none"
+          style={{ animationDelay: "-3s" }}
+        />
+        <div className="absolute bottom-[10%] right-0 w-[350px] h-[350px] bg-black/20 rounded-full blur-3xl translate-x-1/4 pointer-events-none" />
 
+        {/* ───────── Left panel — brand story ───────── */}
+        <div className="hidden lg:flex lg:w-1/2 relative">
           <div className="relative z-10 flex flex-col w-full px-14 xl:px-20 py-10 xl:py-14 text-white">
-            {/* Story */}
             <div className="flex-1 flex flex-col justify-center max-w-xl py-10">
-              {/* Brand */}
               <div className="mb-12 opacity-0 animate-fade-in-up">
                 <Image
                   src={logo_white}
@@ -260,34 +269,33 @@ export default function LoginPage() {
             </div>
           </div>
         </div>
-        {/* Right panel — cards */}
-        <div className="w-full lg:w-1/2 flex items-center justify-center px-5 sm:px-8 py-12 bg-canvas relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-full h-full opacity-40">
-            <div className="absolute top-[-10%] right-[-10%] w-[350px] h-[350px] bg-[#7DD3D8]/20 rounded-full blur-3xl" />
-            <div className="absolute bottom-[-10%] left-[-10%] w-[300px] h-[300px] bg-brand-600/10 rounded-full blur-3xl" />
-          </div>
-          <div className="relative z-10 w-full max-w-[520px] animate-fade-in-up">
+
+        {/* ───────── Right panel — glass form card, floating on the dark side ───────── */}
+        <div className="w-full lg:w-1/2 flex items-center justify-center px-5 sm:px-8 py-12 relative">
+          <div className="relative z-10 w-full max-w-[460px] mt-17 animate-fade-in-up">
             {/* Mobile header */}
             <div className="lg:hidden flex flex-col items-center mb-6">
-              <div className="p-3.5 rounded-2xl mb-3">
-                <Image src={logo} alt="iCare++ Logo" className="h-12 w-auto" priority />
+              <div className="p-3.5 bg-white/10 border border-white/10 backdrop-blur-md rounded-2xl mb-3">
+                <Image src={logo_white} alt="iCare++ Logo" className="h-12 w-auto" priority />
               </div>
             </div>
+
             {/* Login card */}
-            <div className="bg-surface rounded-3xl border border-hairline shadow-xl shadow-brand-600/[0.05] p-7 sm:p-9">
+            <div className="bg-white/[0.06] backdrop-blur-2xl rounded-3xl border border-white/30 shadow-2xl shadow-black/40 p-7 sm:p-8">
               <div className="mb-6">
-                <h1 className="text-3xl font-semibold text-gray-900 mb-1 tracking-tight">
+                <h1 className="text-3xl font-semibold text-white mb-1 tracking-tight">
                   Welcome back, caregiver
                 </h1>
-                <p className="text-sm text-gray-500">
+                <p className="text-sm text-white/50">
                   Sign in to continue your journey in nursing excellence
                 </p>
               </div>
+
               {/* Error banner */}
               {error && (
-                <div className="flex items-start gap-3 p-3.5 mb-5 bg-red-50 border border-red-100 rounded-xl text-red-700 text-sm animate-shake">
+                <div className="flex items-start gap-3 p-3.5 mb-5 bg-red-500/10 border border-red-500/20 rounded-xl text-red-300 text-sm animate-shake">
                   <svg
-                    className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5"
+                    className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5"
                     fill="currentColor"
                     viewBox="0 0 20 20"
                   >
@@ -300,18 +308,16 @@ export default function LoginPage() {
                   <span>{error}</span>
                 </div>
               )}
+
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <label
-                    htmlFor="email"
-                    className="block text-sm font-medium text-gray-700 mb-1.5"
-                  >
-                    Email Address <span className="text-red-500">*</span>
+                  <label htmlFor="email" className="block text-sm font-medium text-white/70 mb-1.5">
+                    Email Address <span className="text-red-400">*</span>
                   </label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                       <svg
-                        className="h-5 w-5 text-gray-400"
+                        className="h-5 w-5 text-white/35"
                         fill="none"
                         viewBox="0 0 24 24"
                         stroke="currentColor"
@@ -320,7 +326,7 @@ export default function LoginPage() {
                           strokeLinecap="round"
                           strokeLinejoin="round"
                           strokeWidth={1.5}
-                          d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207"
+                          d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
                         />
                       </svg>
                     </div>
@@ -330,7 +336,7 @@ export default function LoginPage() {
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       required
-                      className="w-full pl-11 pr-4 py-3 bg-subtle border border-gray-200 rounded-xl text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600 transition-all"
+                      className="w-full pl-11 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-[#7DD3D8]/30 focus:border-[#7DD3D8]/50 transition-all"
                       placeholder="name@icare.edu"
                     />
                   </div>
@@ -339,14 +345,14 @@ export default function LoginPage() {
                 <div>
                   <label
                     htmlFor="password"
-                    className="block text-sm font-medium text-gray-700 mb-1.5"
+                    className="block text-sm font-medium text-white/70 mb-1.5"
                   >
-                    Password <span className="text-red-500">*</span>
+                    Password <span className="text-red-400">*</span>
                   </label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                       <svg
-                        className="h-5 w-5 text-gray-400"
+                        className="h-5 w-5 text-white/35"
                         fill="none"
                         viewBox="0 0 24 24"
                         stroke="currentColor"
@@ -365,13 +371,13 @@ export default function LoginPage() {
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       required
-                      className="w-full pl-11 pr-11 py-3 bg-subtle border border-gray-200 rounded-xl text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600 transition-all"
+                      className="w-full pl-11 pr-11 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-[#7DD3D8]/30 focus:border-[#7DD3D8]/50 transition-all"
                       placeholder="Enter your password"
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-gray-400 hover:text-gray-500 transition-colors"
+                      className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-white/35 hover:text-white/60 transition-colors"
                     >
                       {showPassword ? (
                         <svg
@@ -416,15 +422,15 @@ export default function LoginPage() {
                   <label className="flex items-center cursor-pointer group">
                     <input
                       type="checkbox"
-                      className="w-4 h-4 rounded border-gray-300 text-brand-600 focus:ring-brand-600/30 cursor-pointer"
+                      className="w-4 h-4 rounded border-white/20 bg-white/5 text-brand-400 focus:ring-[#7DD3D8]/30 cursor-pointer"
                     />
-                    <span className="ml-2 text-sm text-gray-500 group-hover:text-gray-600 transition-colors">
+                    <span className="ml-2 text-sm text-white/50 group-hover:text-white/70 transition-colors">
                       Remember me
                     </span>
                   </label>
                   <Link
                     href="/forgot-password"
-                    className="text-sm text-brand-600 hover:text-brand-700 font-medium transition-colors"
+                    className="text-sm text-[#7DD3D8] hover:text-white font-medium transition-colors"
                   >
                     Forgot password?
                   </Link>
@@ -433,7 +439,7 @@ export default function LoginPage() {
                 <button
                   type="submit"
                   disabled={isLoading || isGoogleLoading}
-                  className="w-full bg-brand-600 hover:bg-brand-700 text-white py-3 px-6 rounded-xl font-medium transition-all duration-200 shadow-lg shadow-brand-600/20 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
+                  className="w-full bg-[#2B9095] hover:bg-[#19797D] text-white border border-white/20 py-3 px-6 rounded-xl font-semibold transition-all duration-200 shadow-lg shadow-black/20 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
                 >
                   {isLoading ? (
                     <>
@@ -461,23 +467,20 @@ export default function LoginPage() {
               </form>
 
               {/* Divider */}
-              <div className="relative my-6">
-                <div className="absolute inset-0 flex items-center" aria-hidden="true">
-                  <div className="w-full h-px bg-gradient-to-r from-transparent via-gray-300 to-transparent" />
-                </div>
-                <div className="relative flex justify-center text-xs">
-                  <span className="px-4 bg-surface text-gray-400 uppercase tracking-wider font-medium text-[10px]">
-                    or continue with
-                  </span>
-                </div>
+              <div className="flex items-center gap-4 my-6">
+                <div className="flex-1 h-px bg-gradient-to-r from-transparent to-white/15" />
+                <span className="text-white/40 uppercase tracking-wider font-medium text-[10px] whitespace-nowrap">
+                  or continue with
+                </span>
+                <div className="flex-1 h-px bg-gradient-to-l from-transparent to-white/15" />
               </div>
 
               {/* Google button */}
               <div ref={googleButtonRef} className="w-full flex justify-center overflow-hidden">
                 {isGoogleLoading ? (
-                  <div className="w-full h-[44px] border border-gray-200 rounded-xl flex items-center justify-center gap-2.5 text-gray-500 bg-subtle text-sm">
+                  <div className="w-full h-[44px] border border-white/10 rounded-xl flex items-center justify-center gap-2.5 text-white/60 bg-white/5 text-sm">
                     <svg
-                      className="animate-spin h-4 w-4 text-brand-600"
+                      className="animate-spin h-4 w-4 text-[#7DD3D8]"
                       fill="none"
                       viewBox="0 0 24 24"
                     >
@@ -510,16 +513,16 @@ export default function LoginPage() {
                     width={googleButtonWidth || 400}
                   />
                 ) : (
-                  <div className="w-full h-[44px] border border-gray-200 rounded-xl bg-subtle" />
+                  <div className="w-full h-[44px] border border-white/10 rounded-xl bg-white/5" />
                 )}
               </div>
 
               <div className="mt-6 text-center">
-                <p className="text-sm text-gray-500">
+                <p className="text-sm text-white/50">
                   Don&apos;t have an account?{" "}
                   <Link
                     href="/signup"
-                    className="text-brand-600 hover:text-brand-700 font-medium transition-colors"
+                    className="text-[#7DD3D8] hover:text-white font-medium transition-colors"
                   >
                     Sign up
                   </Link>
@@ -528,7 +531,7 @@ export default function LoginPage() {
             </div>
 
             {/* Footer */}
-            <p className="text-center text-xs text-gray-400 mt-5">
+            <p className="text-center text-xs text-white/30 mt-5">
               &copy; 2026 iCARE++. All rights reserved.
             </p>
           </div>
