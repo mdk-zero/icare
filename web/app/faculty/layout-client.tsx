@@ -14,6 +14,7 @@ import {
   faUsers,
 } from "@fortawesome/free-solid-svg-icons";
 import Shell, { NavItem } from "../components/Shell";
+import ToastContainer from "../components/Toast";
 
 interface User {
   id: string;
@@ -79,6 +80,7 @@ export default function ClientFacultyLayout({
       isActive={(item) => isActive(item, pathname)}
     >
       {children}
+      <ToastContainer />
     </Shell>
   );
 }

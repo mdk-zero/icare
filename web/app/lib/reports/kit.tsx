@@ -38,6 +38,7 @@ export const styles = StyleSheet.create({
     borderBottomColor: '#e5e7eb',
     paddingVertical: 4,
     alignItems: 'center',
+    overflow: 'hidden',
   },
   headRow: { backgroundColor: '#f3f4f6', fontFamily: 'Helvetica-Bold' },
   cellWide: { flex: 3, paddingHorizontal: 4 },

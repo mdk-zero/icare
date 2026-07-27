@@ -264,7 +264,7 @@ export default function NewScenarioClient() {
               type="button"
               onClick={handleGenerate}
               disabled={generating || !aiPrompt.trim()}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-brand-950 text-white text-sm font-semibold rounded-lg transition-all hover:bg-brand-900 disabled:opacity-50"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-lg transition-all disabled:opacity-50"
             >
               <FontAwesomeIcon
                 icon={generating ? faSpinner : faRobot}

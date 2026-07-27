@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useState, useEffect, useCallback, useRef, useLayoutEffect } from "react";
 import Image from "next/image";
-import { GoogleOAuthProvider, GoogleLogin, type CredentialResponse } from "@react-oauth/google";
+import { GoogleLogin, type CredentialResponse } from "@react-oauth/google";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faCircleExclamation,
@@ -20,8 +20,6 @@ import {
 import { login, isAuthenticated, getCurrentUser, User, logAuditAction } from "../lib/api";
 import logo from "../../public/logo-no-bg.png";
 import logo_white from "../../public/logo-white-no-bg.png";
-
-const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? "";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -156,8 +154,7 @@ export default function LoginPage() {
   };
 
   return (
-    <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
-      <div className="min-h-screen flex">
+    <div className="min-h-screen flex">
         {/* Left panel — logo & description */}
         <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-gradient-to-br from-[#0D7377] via-[#0A5C5F] to-[#084A4D]">
           {/* ECG graph-paper grid, fading toward the top-left */}
@@ -427,7 +424,6 @@ export default function LoginPage() {
             </p>
           </div>
         </div>
-      </div>
-    </GoogleOAuthProvider>
+    </div>
   );
 }

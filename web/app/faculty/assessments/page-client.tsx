@@ -17,6 +17,8 @@ import {
 import PageHeader from "../../components/PageHeader";
 import { SkeletonAssessmentCard } from "../../components/skeletons";
 import { fetchSections, type Section } from "../../lib/api";
+import { toast } from "../../components/Toast";
+import ConfirmModal from "../../components/ConfirmModal";
 
 const inputClassName =
   "w-full px-4 py-3 bg-surface border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 focus:bg-surface transition-all text-sm shadow-sm";
@@ -51,8 +53,8 @@ export default function FacultyAssessmentsClient() {
   const [sections, setSections] = useState<Section[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState<Assessment | null>(null);
 
   const filteredAssessments = assessments.filter((a) => {
     if (!searchQuery.trim()) return true;
@@ -69,11 +71,6 @@ export default function FacultyAssessmentsClient() {
   const [assignTarget, setAssignTarget] = useState<Assessment | null>(null);
   const [selectedStudents, setSelectedStudents] = useState<Set<string>>(new Set());
   const [assignDeadline, setAssignDeadline] = useState("");
-
-  const flash = (text: string) => {
-    setMessage(text);
-    setTimeout(() => setMessage(null), 4000);
-  };
 
   const loadAssessments = useCallback(async () => {
     const res = await fetch("/api/faculty/assessments", { credentials: "include" });
@@ -109,17 +106,14 @@ export default function FacultyAssessmentsClient() {
     setBusy(false);
     if (!res.ok) {
       const j = (await res.json()) as { error?: string };
-      flash(j.error ?? "Failed to update");
+      toast(j.error ?? "Failed to update");
       return;
     }
-    flash(a.is_published ? "Assessment unpublished" : "Assessment published");
+    toast(a.is_published ? "Assessment unpublished" : "Assessment published");
     loadAssessments();
   };
 
-  const deleteAssessment = async (a: Assessment) => {
-    if (!window.confirm(`Delete "${a.title}" and all its questions? This cannot be undone.`)) {
-      return;
-    }
+  const confirmAndDelete = async (a: Assessment) => {
     setBusy(true);
     const res = await fetch(`/api/faculty/assessments/${a.id}`, {
       method: "DELETE",
@@ -127,10 +121,10 @@ export default function FacultyAssessmentsClient() {
     });
     setBusy(false);
     if (!res.ok) {
-      flash("Failed to delete assessment");
+      toast("Failed to delete assessment");
       return;
     }
-    flash("Assessment deleted");
+    toast("Assessment deleted");
     loadAssessments();
   };
 
@@ -144,7 +138,7 @@ export default function FacultyAssessmentsClient() {
 
   const submitAssign = async () => {
     if (!assignTarget || selectedStudents.size === 0) {
-      flash("Select at least one student");
+      toast("Select at least one student");
       return;
     }
     setBusy(true);
@@ -160,11 +154,11 @@ export default function FacultyAssessmentsClient() {
     setBusy(false);
     if (!res.ok) {
       const j = (await res.json()) as { error?: string };
-      flash(j.error ?? "Failed to assign");
+      toast(j.error ?? "Failed to assign");
       return;
     }
     setAssignTarget(null);
-    flash(`Assigned to ${selectedStudents.size} student${selectedStudents.size === 1 ? "" : "s"}`);
+    toast(`Assigned to ${selectedStudents.size} student${selectedStudents.size === 1 ? "" : "s"}`);
     loadAssessments();
   };
 
@@ -176,12 +170,6 @@ export default function FacultyAssessmentsClient() {
         title="Question Bank"
         subtitle="Create quizzes, manage questions, and assign them to your students"
       />
-
-      {message && (
-        <div className="bg-brand-600/10 border border-brand-600/30 text-[#155663] px-4 py-3 rounded-xl text-sm">
-          {message}
-        </div>
-      )}
 
       <div className="flex items-center justify-between gap-4">
         <div className="relative flex-1">
@@ -298,7 +286,7 @@ export default function FacultyAssessmentsClient() {
                       <FontAwesomeIcon icon={faPen} className="w-4 h-4" />
                     </button>
                     <button
-                      onClick={() => deleteAssessment(a)}
+                      onClick={() => setConfirmDelete(a)}
                       title="Delete"
                       className="p-2.5 rounded-lg border border-red-200 text-red-500 hover:bg-red-50"
                     >
@@ -396,6 +384,17 @@ export default function FacultyAssessmentsClient() {
             </div>
           </div>
         </div>
+      )}
+
+      {confirmDelete && (
+        <ConfirmModal
+          config={{
+            title: "Delete Assessment",
+            message: `Delete "${confirmDelete.title}" and all its questions? This cannot be undone.`,
+            onConfirm: () => confirmAndDelete(confirmDelete),
+          }}
+          onClose={() => setConfirmDelete(null)}
+        />
       )}
     </div>
   );
