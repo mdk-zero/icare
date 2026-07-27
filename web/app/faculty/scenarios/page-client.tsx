@@ -891,6 +891,16 @@ export default function FacultyScenariosClient() {
             />
             Link patients
           </button>
+          <button
+            onClick={() => router.push("/faculty/scenarios/review")}
+            className="group flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl border border-gray-300 bg-surface px-4 py-2.5 text-sm font-semibold text-gray-700 transition-all hover:border-brand-300 hover:bg-brand-50"
+          >
+            <FontAwesomeIcon
+              icon={faListCheck}
+              className="w-4 h-4 text-brand-600 transition-transform group-hover:scale-110"
+            />
+            Review submissions
+          </button>
         </div>
       </div>
 
