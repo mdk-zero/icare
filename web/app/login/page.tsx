@@ -251,7 +251,7 @@ export default function LoginPage() {
         <div className="relative z-10 w-full max-w-[460px] mt-17 animate-fade-in-up">
           {/* Mobile header */}
           <div className="lg:hidden flex flex-col items-center mb-6">
-            <div className="p-3.5 bg-white/10 border border-white/10 backdrop-blur-md rounded-2xl mb-3">
+            <div className="mb-3">
               <Image src={logo_white} alt="iCare++ Logo" className="h-12 w-auto" priority />
             </div>
           </div>

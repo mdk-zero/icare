@@ -29,11 +29,11 @@ import {
   fetchRooms,
   FacultyPatient,
   Room,
-} from "../../lib/api";
-import { SkeletonUnitGrid, SkeletonStatTile } from "../../components/skeletons";
-import { roomStatus, ROOM_STATUS_LABEL, ROOM_STATUS_TONE } from "../../lib/rooms";
-import PageHeader from "../../components/PageHeader";
-import StatTile from "../../components/StatTile";
+} from "../lib/api";
+import { SkeletonUnitGrid, SkeletonStatTile } from "./skeletons";
+import { roomStatus, ROOM_STATUS_LABEL, ROOM_STATUS_TONE } from "../lib/rooms";
+import PageHeader from "./PageHeader";
+import StatTile from "./StatTile";
 
 const inputClassName =
   "w-full px-4 py-3 bg-surface border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 focus:bg-surface transition-all text-sm shadow-sm";
@@ -360,7 +360,7 @@ function VitalChips({ patient }: { patient: FacultyPatient }) {
   );
 }
 
-export default function FacultyPatientsClient() {
+export default function PatientsManager() {
   const [patients, setPatients] = useState<FacultyPatient[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
