@@ -4,10 +4,8 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
-  faArrowLeft,
   faSpinner,
 } from "@fortawesome/free-solid-svg-icons";
-import PageHeader from "../../../components/PageHeader";
 import { fetchSections, type Section } from "../../../lib/api";
 
 const inputClassName =
@@ -91,18 +89,16 @@ export default function AssessmentNewClient() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <button
-          onClick={() => router.push("/faculty/assessments")}
-          className="p-2 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50"
-        >
-          <FontAwesomeIcon icon={faArrowLeft} className="w-4 h-4" />
-        </button>
-        <PageHeader
-          title="New Assessment"
-          subtitle="Create a new quiz and add questions"
-        />
-      </div>
+      <header className="animate-rise relative overflow-hidden bg-surface rounded-2xl border border-hairline shadow-tile p-5 sm:p-6 mb-6">
+        <div aria-hidden className="pointer-events-none absolute inset-0" style={{ backgroundImage: "radial-gradient(70% 130% at 100% 0%, rgb(27 107 123 / 0.07) 0%, transparent 70%)" }} />
+        <span aria-hidden className="absolute left-0 top-0 h-full w-[3px] bg-gradient-to-b from-brand-400 via-brand-600 to-brand-800" />
+        <div className="relative">
+          <h1 className="font-display text-[32px] sm:text-[38px] font-bold leading-[1.08] tracking-[-0.02em] text-gray-900">
+            New Assessment
+          </h1>
+          <p className="mt-2 text-sm text-gray-500">Create a new quiz and add questions</p>
+        </div>
+      </header>
 
       {error && (
         <div className="bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-xl text-sm">
