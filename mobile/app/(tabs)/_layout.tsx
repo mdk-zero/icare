@@ -184,7 +184,10 @@ function HeaderPulse({ width }: { width: number }) {
 function formatNow(): string {
   const now = new Date();
   const pad = (n: number) => String(n).padStart(2, "0");
-  return `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+  const hours = now.getHours();
+  // 0 → 12 AM, 12 → 12 PM. Hours stay padded so the pill keeps a fixed width.
+  const hour12 = hours % 12 || 12;
+  return `${pad(hour12)}:${pad(now.getMinutes())}:${pad(now.getSeconds())} ${hours < 12 ? "AM" : "PM"}`;
 }
 
 /** Live HH:MM:SS wall clock. Each tick re-reads the clock, so a throttled
@@ -223,6 +226,7 @@ function AppHeader({ notificationCount }: { notificationCount: number }) {
             </View>
             <View style={styles.headerRight}>
               <View style={styles.clockPill}>
+                <FontAwesome6 name="clock" size={12} color="rgba(255, 255, 255, 0.85)" />
                 <Text
                   style={styles.clockText}
                   accessibilityLabel={`Current time ${time}`}
@@ -365,6 +369,9 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   clockPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
     paddingHorizontal: 10,
     height: 38,
     justifyContent: "center",
