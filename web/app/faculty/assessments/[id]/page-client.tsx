@@ -17,6 +17,8 @@ import {
   faFileImport,
 } from "@fortawesome/free-solid-svg-icons";
 import { SkeletonQuestionCard } from "../../../components/skeletons";
+import { toast } from "../../../components/Toast";
+import ConfirmModal from "../../../components/ConfirmModal";
 
 const inputClassName =
   "w-full px-4 py-3 bg-surface border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 focus:bg-surface transition-all text-sm shadow-sm";
@@ -146,7 +148,7 @@ export default function AssessmentQuestionsClient({
   const [assessment, setAssessment] = useState<AssessmentDetail | null>(null);
   const [questions, setQuestions] = useState<AssessmentQuestion[]>([]);
   const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState<string | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{ title: string; message: string; action: () => void } | null>(null);
 
   const [questionBuilders, setQuestionBuilders] = useState<
     Record<string, QuestionFormData>
@@ -183,7 +185,7 @@ export default function AssessmentQuestionsClient({
 
   const handleSaveDetails = async () => {
     if (!detailForm.title.trim()) {
-      flash("Title is required");
+      toast("Title is required");
       return;
     }
     setSavingDetails(true);
@@ -201,7 +203,7 @@ export default function AssessmentQuestionsClient({
     });
     setSavingDetails(false);
     if (!res.ok) {
-      flash("Failed to save details");
+      toast("Failed to save details");
       return;
     }
     setAssessment((prev) =>
@@ -215,12 +217,7 @@ export default function AssessmentQuestionsClient({
       } : prev
     );
     setEditingDetails(false);
-    flash("Assessment details updated");
-  };
-
-  const flash = (text: string) => {
-    setMessage(text);
-    setTimeout(() => setMessage(null), 4000);
+    toast("Assessment details updated");
   };
 
   const loadData = useCallback(async () => {
@@ -351,11 +348,11 @@ export default function AssessmentQuestionsClient({
 
     const filledOptions = form.options.filter((o) => o.trim().length > 0);
     if (!form.content.trim() || filledOptions.length < 2) {
-      flash("Question needs content and at least two options");
+      toast("Question needs content and at least two options");
       return;
     }
     if (form.correct_index >= filledOptions.length) {
-      flash("Mark one of the filled options as correct");
+      toast("Mark one of the filled options as correct");
       return;
     }
 
@@ -390,7 +387,7 @@ export default function AssessmentQuestionsClient({
 
     if (!res.ok) {
       const j = (await res.json()) as { error?: string };
-      flash(j.error ?? "Failed to save question");
+      toast(j.error ?? "Failed to save question");
       return;
     }
 
@@ -418,7 +415,7 @@ export default function AssessmentQuestionsClient({
     }
     markClean(qId);
     setEditingQuestions((prev) => { const next = new Set(prev); next.delete(qId); return next; });
-    flash(isNew ? "Question added" : "Question updated");
+    toast(isNew ? "Question added" : "Question updated");
   };
 
   const handleDeleteQuestion = async (qId: string) => {
@@ -430,23 +427,28 @@ export default function AssessmentQuestionsClient({
       });
       return;
     }
-    if (!window.confirm("Delete this question?")) return;
-    setSavingQuestions((prev) => ({ ...prev, [qId]: true }));
-    const res = await fetch(`/api/faculty/questions/${qId}`, {
-      method: "DELETE",
-      credentials: "include",
+    setConfirmAction({
+      title: "Delete Question",
+      message: "Delete this question?",
+      action: async () => {
+        setSavingQuestions((prev) => ({ ...prev, [qId]: true }));
+        const res = await fetch(`/api/faculty/questions/${qId}`, {
+          method: "DELETE",
+          credentials: "include",
+        });
+        setSavingQuestions((prev) => ({ ...prev, [qId]: false }));
+        if (!res.ok) {
+          toast("Failed to delete question");
+          return;
+        }
+        setQuestions((prev) => prev.filter((q) => q.id !== qId));
+        setQuestionBuilders((prev) => {
+          const { [qId]: _, ...rest } = prev;
+          return rest;
+        });
+        toast("Question deleted");
+      },
     });
-    setSavingQuestions((prev) => ({ ...prev, [qId]: false }));
-    if (!res.ok) {
-      flash("Failed to delete question");
-      return;
-    }
-    setQuestions((prev) => prev.filter((q) => q.id !== qId));
-    setQuestionBuilders((prev) => {
-      const { [qId]: _, ...rest } = prev;
-      return rest;
-    });
-    flash("Question deleted");
   };
 
   const handleDuplicateQuestion = (qId: string) => {
@@ -545,16 +547,16 @@ export default function AssessmentQuestionsClient({
         error?: string;
       };
       if (!res.ok || !json.questions) {
-        flash(json.error ?? "Failed to generate questions");
+        toast(json.error ?? "Failed to generate questions");
         return;
       }
       appendDraftQuestions(json.questions);
       setShowAIPanel(false);
-      flash(
+      toast(
         `Generated ${json.questions.length} draft question${json.questions.length !== 1 ? "s" : ""} — review and save each one`,
       );
     } catch {
-      flash("Failed to generate questions");
+      toast("Failed to generate questions");
     } finally {
       setAiGenerating(false);
     }
@@ -576,7 +578,7 @@ export default function AssessmentQuestionsClient({
     const text = await file.text();
     const rows = parseCsv(text);
     if (rows.length < 2) {
-      flash("CSV needs a header row and at least one question row");
+      toast("CSV needs a header row and at least one question row");
       return;
     }
 
@@ -584,7 +586,7 @@ export default function AssessmentQuestionsClient({
     const col = (name: string) => header.indexOf(name);
     const contentCol = col("content");
     if (contentCol === -1) {
-      flash('CSV header must include a "content" column — download the template for the format');
+      toast('CSV header must include a "content" column — download the template for the format');
       return;
     }
     const cell = (row: string[], idx: number) => (idx >= 0 ? (row[idx] ?? "").trim() : "");
@@ -644,7 +646,7 @@ export default function AssessmentQuestionsClient({
     }
 
     appendDraftQuestions(drafts);
-    flash(
+    toast(
       drafts.length === 0
         ? "No valid questions found in the CSV — download the template for the format"
         : `Imported ${drafts.length} draft question${drafts.length !== 1 ? "s" : ""}${skipped > 0 ? ` (${skipped} row${skipped !== 1 ? "s" : ""} skipped)` : ""} — review and save`,
@@ -656,7 +658,7 @@ export default function AssessmentQuestionsClient({
   const handleSaveAll = async () => {
     const unsaved = questions.filter((q) => q.id.startsWith("new_"));
     if (unsaved.length === 0) {
-      flash("No unsaved questions");
+      toast("No unsaved questions");
       return;
     }
     setSavingAll(true);
@@ -664,19 +666,19 @@ export default function AssessmentQuestionsClient({
       await handleSaveQuestion(q.id);
     }
     setSavingAll(false);
-    flash("All questions saved");
+    toast("All questions saved");
   };
 
   // ---------- criteria CRUD ----------
 
   const addCriteria = async () => {
     if (!newCriterionName.trim() || !newCriterionWeight || !newCriterionCompetency) {
-      flash("Fill in all criteria fields");
+      toast("Fill in all criteria fields");
       return;
     }
     const weight = Number(newCriterionWeight);
     if (isNaN(weight) || weight <= 0 || weight > 100) {
-      flash("Weight must be between 1 and 100");
+      toast("Weight must be between 1 and 100");
       return;
     }
     const res = await fetch(`/api/faculty/assessments/${assessmentId}/criteria`, {
@@ -692,7 +694,7 @@ export default function AssessmentQuestionsClient({
     });
     if (!res.ok) {
       const j = (await res.json()) as { error?: string };
-      flash(j.error ?? "Failed to add criteria");
+      toast(j.error ?? "Failed to add criteria");
       return;
     }
     const j = (await res.json()) as { criteria: AssessmentCriteria };
@@ -703,16 +705,21 @@ export default function AssessmentQuestionsClient({
   };
 
   const deleteCriteria = async (id: string) => {
-    if (!window.confirm("Remove this criteria?")) return;
-    const res = await fetch(`/api/faculty/assessment-criteria/${id}`, {
-      method: "DELETE",
-      credentials: "include",
+    setConfirmAction({
+      title: "Remove Criteria",
+      message: "Remove this criteria?",
+      action: async () => {
+        const res = await fetch(`/api/faculty/assessment-criteria/${id}`, {
+          method: "DELETE",
+          credentials: "include",
+        });
+        if (!res.ok) {
+          toast("Failed to delete criteria");
+          return;
+        }
+        setCriteria((prev) => prev.filter((c) => c.id !== id));
+      },
     });
-    if (!res.ok) {
-      flash("Failed to delete criteria");
-      return;
-    }
-    setCriteria((prev) => prev.filter((c) => c.id !== id));
   };
 
   const totalWeight = criteria.reduce((sum, c) => sum + c.weight, 0);
@@ -756,107 +763,111 @@ export default function AssessmentQuestionsClient({
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-start gap-4">
-        <button
-          onClick={() => router.push("/faculty/assessments")}
-          className="p-2 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 shrink-0"
-        >
-          <FontAwesomeIcon icon={faArrowLeft} className="w-4 h-4" />
-        </button>
-        <div className="flex-1 min-w-0">
-          {editingDetails ? (
-            <div className="space-y-3">
-              <input
-                value={detailForm.title}
-                onChange={(e) => setDetailForm((f) => ({ ...f, title: e.target.value }))}
-                placeholder="Title"
-                className={inputClassName}
-              />
-              <textarea
-                value={detailForm.description}
-                onChange={(e) => setDetailForm((f) => ({ ...f, description: e.target.value }))}
-                rows={2}
-                placeholder="Description"
-                className={inputClassName}
-              />
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <select
-                  value={detailForm.difficulty}
-                  onChange={(e) => setDetailForm((f) => ({ ...f, difficulty: e.target.value }))}
-                  className={inputClassName}
-                >
-                  <option value="beginner">Beginner</option>
-                  <option value="intermediate">Intermediate</option>
-                  <option value="advanced">Advanced</option>
-                </select>
-                <select
-                  value={detailForm.category}
-                  onChange={(e) => setDetailForm((f) => ({ ...f, category: e.target.value }))}
-                  className={inputClassName}
-                >
-                  {CATEGORIES.map((c) => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
-                </select>
+      <header className="relative overflow-hidden bg-surface rounded-2xl border border-hairline shadow-tile p-4 sm:p-5">
+        <div aria-hidden className="pointer-events-none absolute inset-0" style={{ backgroundImage: "radial-gradient(70% 130% at 100% 0%, rgb(27 107 123 / 0.07) 0%, transparent 70%)" }} />
+        <span aria-hidden className="absolute left-0 top-0 h-full w-[3px] bg-gradient-to-b from-brand-400 via-brand-600 to-brand-800" />
+        <div className="relative flex items-start gap-4">
+          <button
+            onClick={() => router.push("/faculty/assessments")}
+            className="p-2 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 shrink-0"
+          >
+            <FontAwesomeIcon icon={faArrowLeft} className="w-4 h-4" />
+          </button>
+          <div className="flex-1 min-w-0">
+            {editingDetails ? (
+              <div className="space-y-3">
                 <input
-                  type="number"
-                  min={1}
-                  value={detailForm.time_limit_minutes}
-                  onChange={(e) => setDetailForm((f) => ({ ...f, time_limit_minutes: e.target.value }))}
-                  placeholder="Time limit (min)"
+                  value={detailForm.title}
+                  onChange={(e) => setDetailForm((f) => ({ ...f, title: e.target.value }))}
+                  placeholder="Title"
                   className={inputClassName}
                 />
+                <textarea
+                  value={detailForm.description}
+                  onChange={(e) => setDetailForm((f) => ({ ...f, description: e.target.value }))}
+                  rows={2}
+                  placeholder="Description"
+                  className={inputClassName}
+                />
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <select
+                    value={detailForm.difficulty}
+                    onChange={(e) => setDetailForm((f) => ({ ...f, difficulty: e.target.value }))}
+                    className={inputClassName}
+                  >
+                    <option value="beginner">Beginner</option>
+                    <option value="intermediate">Intermediate</option>
+                    <option value="advanced">Advanced</option>
+                  </select>
+                  <select
+                    value={detailForm.category}
+                    onChange={(e) => setDetailForm((f) => ({ ...f, category: e.target.value }))}
+                    className={inputClassName}
+                  >
+                    {CATEGORIES.map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                  <input
+                    type="number"
+                    min={1}
+                    value={detailForm.time_limit_minutes}
+                    onChange={(e) => setDetailForm((f) => ({ ...f, time_limit_minutes: e.target.value }))}
+                    placeholder="Time limit (min)"
+                    className={inputClassName}
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleSaveDetails}
+                    disabled={savingDetails}
+                    className="flex items-center gap-2 px-5 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-[#155663] disabled:opacity-60 transition-colors"
+                  >
+                    {savingDetails ? (
+                      <><FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" /> Saving…</>
+                    ) : (
+                      <><FontAwesomeIcon icon={faCheck} className="w-4 h-4" /> Save</>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => setEditingDetails(false)}
+                    className="px-5 py-2 rounded-lg border border-gray-200 text-gray-600 text-sm hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={handleSaveDetails}
-                  disabled={savingDetails}
-                  className="flex items-center gap-2 px-5 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-[#155663] disabled:opacity-60 transition-colors"
-                >
-                  {savingDetails ? (
-                    <><FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" /> Saving…</>
-                  ) : (
-                    <><FontAwesomeIcon icon={faCheck} className="w-4 h-4" /> Save</>
+            ) : (
+              <div className="flex items-center gap-3">
+                <div className="flex-1 min-w-0">
+                  <h1 className="font-display text-[26px] sm:text-[31px] font-semibold leading-[1.08] tracking-[-0.015em] text-gray-900 truncate">{assessment.title}</h1>
+                  <p className="text-sm text-gray-500">
+                    <span className="px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">{assessment.category}</span>{" "}
+                    <span className={`px-1.5 py-0.5 rounded text-xs ${
+                      assessment.difficulty === "beginner" ? "bg-green-100 text-green-700" :
+                      assessment.difficulty === "intermediate" ? "bg-yellow-100 text-yellow-700" :
+                      "bg-red-100 text-red-700"
+                    }`}>{assessment.difficulty}</span>{" "}
+                    {assessment.question_count} question{assessment.question_count !== 1 ? "s" : ""}
+                    {assessment.time_limit_seconds &&
+                      ` · ${Math.round(assessment.time_limit_seconds / 60)} min limit`}
+                  </p>
+                  {assessment.description && (
+                    <p className="text-sm text-gray-600 mt-1">{assessment.description}</p>
                   )}
-                </button>
+                </div>
                 <button
-                  onClick={() => setEditingDetails(false)}
-                  className="px-5 py-2 rounded-lg border border-gray-200 text-gray-600 text-sm hover:bg-gray-50 transition-colors"
+                  onClick={() => setEditingDetails(true)}
+                  title="Edit details"
+                  className="p-2 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 shrink-0"
                 >
-                  Cancel
+                  <FontAwesomeIcon icon={faPen} className="w-4 h-4" />
                 </button>
               </div>
-            </div>
-          ) : (
-            <div className="flex items-center gap-3">
-              <div className="flex-1 min-w-0">
-                <h1 className="text-xl font-bold text-gray-900 truncate">{assessment.title}</h1>
-                <p className="text-sm text-gray-500">
-                  <span className="px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">{assessment.category}</span>{" "}
-                  <span className={`px-1.5 py-0.5 rounded text-xs ${
-                    assessment.difficulty === "beginner" ? "bg-green-100 text-green-700" :
-                    assessment.difficulty === "intermediate" ? "bg-yellow-100 text-yellow-700" :
-                    "bg-red-100 text-red-700"
-                  }`}>{assessment.difficulty}</span>{" "}
-                  {assessment.question_count} question{assessment.question_count !== 1 ? "s" : ""}
-                  {assessment.time_limit_seconds &&
-                    ` · ${Math.round(assessment.time_limit_seconds / 60)} min limit`}
-                </p>
-                {assessment.description && (
-                  <p className="text-sm text-gray-600 mt-1">{assessment.description}</p>
-                )}
-              </div>
-              <button
-                onClick={() => setEditingDetails(true)}
-                title="Edit details"
-                className="p-2 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 shrink-0"
-              >
-                <FontAwesomeIcon icon={faPen} className="w-4 h-4" />
-              </button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
-      </div>
+      </header>
 
       {/* Criteria section */}
       <div className="bg-surface rounded-xl border border-gray-200 shadow-sm">
@@ -962,19 +973,17 @@ export default function AssessmentQuestionsClient({
         )}
       </div>
 
-      {message && (
-        <div className="bg-brand-600/10 border border-brand-600/30 text-[#155663] px-4 py-3 rounded-xl text-sm">
-          {message}
-        </div>
-      )}
-
       {/* Question builder */}
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="font-semibold text-gray-800">
-            Questions ({questions.length})
-          </h2>
-        </div>
+        <header className="relative overflow-hidden bg-surface rounded-2xl border border-hairline shadow-tile p-4 sm:p-5">
+          <div aria-hidden className="pointer-events-none absolute inset-0" style={{ backgroundImage: "radial-gradient(70% 130% at 100% 0%, rgb(27 107 123 / 0.07) 0%, transparent 70%)" }} />
+          <span aria-hidden className="absolute left-0 top-0 h-full w-[3px] bg-gradient-to-b from-brand-400 via-brand-600 to-brand-800" />
+          <div className="relative">
+            <h2 className="font-display text-lg sm:text-xl font-bold text-gray-900">
+              Questions ({questions.length})
+            </h2>
+          </div>
+        </header>
 
         {questions.length === 0 ? (
           <div className="bg-surface p-8 rounded-xl border border-dashed border-gray-300 text-center text-gray-400 text-sm">
@@ -1331,6 +1340,17 @@ export default function AssessmentQuestionsClient({
           />
         </div>
       </div>
+
+      {confirmAction && (
+        <ConfirmModal
+          config={{
+            title: confirmAction.title,
+            message: confirmAction.message,
+            onConfirm: confirmAction.action,
+          }}
+          onClose={() => setConfirmAction(null)}
+        />
+      )}
     </div>
   );
 }
