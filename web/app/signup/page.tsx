@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -19,7 +19,6 @@ import {
   faHeart,
 } from "@fortawesome/free-solid-svg-icons";
 import { register, User } from "../lib/api";
-import logo from "../../public/logo-no-bg.png";
 import logo_white from "../../public/logo-white-no-bg.png";
 
 export default function SignUpPage() {
@@ -32,6 +31,13 @@ export default function SignUpPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,11 +65,7 @@ export default function SignUpPage() {
 
       localStorage.setItem("icare_user", JSON.stringify(result.user));
       localStorage.setItem("icare_token", "logged_in");
-      router.push(
-        result.user.role === "faculty"
-          ? "/faculty"
-          : "/admin",
-      );
+      router.push(result.user.role === "faculty" ? "/faculty" : "/admin");
     } catch {
       setError("Connection error. Please try again.");
       setIsLoading(false);
@@ -71,45 +73,46 @@ export default function SignUpPage() {
   };
 
   return (
-    <div className="min-h-screen flex">
-      {/* Left panel — logo & description (mirrors login) */}
-      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-gradient-to-br from-[#0D7377] via-[#0A5C5F] to-[#084A4D]">
-        <div className="absolute inset-0 opacity-[0.07] [mask-image:linear-gradient(135deg,transparent_15%,black_70%)]">
-          <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
-            <defs>
-              <pattern id="gridMinor" width="28" height="28" patternUnits="userSpaceOnUse">
-                <path d="M28 0H0v28" fill="none" stroke="#ffffff" strokeWidth="0.5" />
-              </pattern>
-              <pattern id="gridMajor" width="140" height="140" patternUnits="userSpaceOnUse">
-                <path d="M140 0H0v140" fill="none" stroke="#ffffff" strokeWidth="1" />
-              </pattern>
-            </defs>
-            <rect width="100%" height="100%" fill="url(#gridMinor)" />
-            <rect width="100%" height="100%" fill="url(#gridMajor)" />
-          </svg>
-        </div>
+    <div className="min-h-screen flex relative overflow-hidden bg-gradient-to-r from-[#0D7377] via-30% via-[#0A4A4D] to-[#050c0d]">
+      {/* ───────── Shared abstract layer, spans the full screen ───────── */}
+      <div className="absolute inset-0 opacity-[0.07] [mask-image:linear-gradient(90deg,black_0%,black_60%,transparent_100%)] pointer-events-none">
+        <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <pattern id="signupGridMinor" width="28" height="28" patternUnits="userSpaceOnUse">
+              <path d="M28 0H0v28" fill="none" stroke="#ffffff" strokeWidth="0.5" />
+            </pattern>
+            <pattern id="signupGridMajor" width="140" height="140" patternUnits="userSpaceOnUse">
+              <path d="M140 0H0v140" fill="none" stroke="#ffffff" strokeWidth="1" />
+            </pattern>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#signupGridMinor)" />
+          <rect width="100%" height="100%" fill="url(#signupGridMajor)" />
+        </svg>
+      </div>
 
-        <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-white/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3" />
-        <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-[#7DD3D8]/10 rounded-full blur-3xl translate-y-1/3 -translate-x-1/4" />
+      <div className="absolute top-0 left-0 w-[500px] h-[500px] bg-white/[0.05] rounded-full blur-3xl -translate-y-1/3 -translate-x-1/4 animate-float-slow pointer-events-none" />
+      <div className="absolute top-1/3 left-1/3 w-[350px] h-[350px] bg-[#7DD3D8]/10 rounded-full blur-3xl animate-float-medium pointer-events-none" />
+      <div
+        className="absolute bottom-0 right-[15%] w-[450px] h-[450px] bg-brand-900/30 rounded-full blur-3xl animate-float-slow pointer-events-none"
+        style={{ animationDelay: "-3s" }}
+      />
+      <div className="absolute bottom-[10%] right-0 w-[350px] h-[350px] bg-black/20 rounded-full blur-3xl translate-x-1/4 pointer-events-none" />
 
+      {/* ───────── Left panel — brand story ───────── */}
+      <div className="hidden lg:flex lg:w-1/2 relative">
         <div className="relative z-10 flex flex-col w-full px-14 xl:px-20 py-10 xl:py-14 text-white">
-          <div className="flex-1 flex flex-col justify-center max-w-xl py-10">
+          <div className="flex-1 flex flex-col justify-center max-w-xl py-10 -mt-20">
             <div className="mb-12 opacity-0 animate-fade-in-up">
-              <Image
-                src={logo_white}
-                alt="iCare++ Logo"
-                className="h-14 w-auto drop-shadow-md"
-                priority
-              />
+              <Image src={logo_white} alt="iCare++ Logo" className="h-14 w-auto drop-shadow-md" priority />
             </div>
 
             <p className="opacity-0 animate-fade-in-up [animation-delay:100ms] text-[11px] font-semibold uppercase tracking-[0.28em] text-[#7DD3D8] mb-4">
               Clinical Competency Platform
             </p>
             <h2 className="opacity-0 animate-fade-in-up [animation-delay:200ms] text-4xl xl:text-[2.75rem] font-semibold tracking-tight leading-[1.12] mb-5">
-              Sharpen clinical judgment,
+              Join the future of
               <br />
-              one scenario at a time.
+              nursing education.
             </h2>
             <p className="opacity-0 animate-fade-in-up [animation-delay:300ms] text-base text-white/70 leading-relaxed mb-10">
               A scalable machine learning–driven clinical competency assessment and adaptive
@@ -156,34 +159,30 @@ export default function SignUpPage() {
         </div>
       </div>
 
-      {/* Right panel — sign up form */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center px-5 sm:px-8 py-12 bg-canvas relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-full h-full opacity-40">
-          <div className="absolute top-[-10%] right-[-10%] w-[350px] h-[350px] bg-[#7DD3D8]/20 rounded-full blur-3xl" />
-          <div className="absolute bottom-[-10%] left-[-10%] w-[300px] h-[300px] bg-brand-600/10 rounded-full blur-3xl" />
-        </div>
-
-        <div className="relative z-10 w-full max-w-[520px] animate-fade-in-up">
+      {/* ───────── Right panel — glass form card ───────── */}
+      <div className="w-full lg:w-1/2 flex items-center justify-center px-5 sm:px-8 py-12 relative">
+        <div className="relative z-10 w-full max-w-[460px] -mt-8 animate-fade-in-up">
           {/* Mobile header */}
           <div className="lg:hidden flex flex-col items-center mb-6">
-            <div className="p-3.5 bg-brand-50 rounded-2xl shadow-md mb-3">
-              <Image src={logo} alt="iCare++ Logo" className="h-12 w-auto" priority />
+            <div className="p-3.5 bg-white/10 border border-white/10 backdrop-blur-md rounded-2xl mb-3">
+              <Image src={logo_white} alt="iCare++ Logo" className="h-12 w-auto" priority />
             </div>
           </div>
 
-          <div className="bg-surface rounded-3xl border border-hairline shadow-xl shadow-brand-600/[0.05] p-7 sm:p-9">
+          {/* Sign up card */}
+          <div className="bg-white/[0.06] backdrop-blur-2xl rounded-3xl border border-white/30 shadow-2xl shadow-black/40 p-5 sm:p-8">
             <div className="mb-6">
-              <h1 className="text-xl font-semibold text-gray-900 mb-1 tracking-tight">
+              <h1 className="text-3xl font-semibold text-white mb-1 tracking-tight">
                 Create your account
               </h1>
-              <p className="text-sm text-gray-500">Join iCARE++ for nursing education</p>
+              <p className="text-sm text-white/50">Join iCARE++ for nursing education</p>
             </div>
 
             {error && (
-              <div className="flex items-start gap-3 p-3.5 mb-5 bg-red-50 border border-red-100 rounded-xl text-red-700 text-sm animate-shake">
+              <div className="flex items-start gap-3 p-3.5 mb-5 bg-red-500/10 border border-red-500/20 rounded-xl text-red-300 text-sm animate-shake">
                 <FontAwesomeIcon
                   icon={faCircleExclamation}
-                  className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5"
+                  className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5"
                 />
                 <span>{error}</span>
               </div>
@@ -191,12 +190,12 @@ export default function SignUpPage() {
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Full Name <span className="text-red-500">*</span>
+                <label htmlFor="name" className="block text-sm font-medium text-white/70 mb-1.5">
+                  Full Name <span className="text-red-400">*</span>
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <FontAwesomeIcon icon={faUser} className="h-5 w-5 text-gray-400" />
+                    <FontAwesomeIcon icon={faUser} className="h-5 w-5 text-white/35" />
                   </div>
                   <input
                     type="text"
@@ -204,19 +203,19 @@ export default function SignUpPage() {
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     required
-                    className="w-full pl-11 pr-4 py-3 bg-subtle border border-gray-200 rounded-xl text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600 transition-all"
+                    className="w-full pl-11 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-[#7DD3D8]/30 focus:border-[#7DD3D8]/50 transition-all"
                     placeholder="Maria Cruz"
                   />
                 </div>
               </div>
 
               <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Email Address <span className="text-red-500">*</span>
+                <label htmlFor="email" className="block text-sm font-medium text-white/70 mb-1.5">
+                  Email Address <span className="text-red-400">*</span>
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <FontAwesomeIcon icon={faEnvelope} className="h-5 w-5 text-gray-400" />
+                    <FontAwesomeIcon icon={faEnvelope} className="h-5 w-5 text-white/35" />
                   </div>
                   <input
                     type="email"
@@ -224,46 +223,43 @@ export default function SignUpPage() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
-                    className="w-full pl-11 pr-4 py-3 bg-subtle border border-gray-200 rounded-xl text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600 transition-all"
+                    className="w-full pl-11 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-[#7DD3D8]/30 focus:border-[#7DD3D8]/50 transition-all"
                     placeholder="name@icare.edu"
                   />
                 </div>
               </div>
 
               <div>
-                <label htmlFor="role" className="block text-sm font-medium text-gray-700 mb-1.5">
-                  I am a <span className="text-red-500">*</span>
+                <label htmlFor="role" className="block text-sm font-medium text-white/70 mb-1.5">
+                  I am a <span className="text-red-400">*</span>
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <FontAwesomeIcon icon={faUser} className="h-5 w-5 text-gray-400" />
+                    <FontAwesomeIcon icon={faUser} className="h-5 w-5 text-white/35" />
                   </div>
                   <select
                     id="role"
                     value={role}
                     onChange={(e) => setRole(e.target.value as User["role"])}
                     required
-                    className="w-full pl-11 pr-4 py-3 bg-subtle border border-gray-200 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600 transition-all appearance-none"
+                    className="w-full pl-11 pr-10 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#7DD3D8]/30 focus:border-[#7DD3D8]/50 transition-all appearance-none [&>option]:bg-[#0A4A4D] [&>option]:text-white"
                   >
                     <option value="faculty">Faculty</option>
                     <option value="admin">Administrator</option>
                   </select>
                   <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
-                    <FontAwesomeIcon icon={faChevronDown} className="h-4 w-4 text-gray-400" />
+                    <FontAwesomeIcon icon={faChevronDown} className="h-4 w-4 text-white/35" />
                   </div>
                 </div>
               </div>
 
               <div>
-                <label
-                  htmlFor="password"
-                  className="block text-sm font-medium text-gray-700 mb-1.5"
-                >
-                  Password <span className="text-red-500">*</span>
+                <label htmlFor="password" className="block text-sm font-medium text-white/70 mb-1.5">
+                  Password <span className="text-red-400">*</span>
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <FontAwesomeIcon icon={faLock} className="h-5 w-5 text-gray-400" />
+                    <FontAwesomeIcon icon={faLock} className="h-5 w-5 text-white/35" />
                   </div>
                   <input
                     type={showPassword ? "text" : "password"}
@@ -272,13 +268,13 @@ export default function SignUpPage() {
                     onChange={(e) => setPassword(e.target.value)}
                     required
                     minLength={8}
-                    className="w-full pl-11 pr-11 py-3 bg-subtle border border-gray-200 rounded-xl text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600 transition-all"
+                    className="w-full pl-11 pr-11 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-[#7DD3D8]/30 focus:border-[#7DD3D8]/50 transition-all"
                     placeholder="At least 8 characters"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-gray-400 hover:text-gray-500 transition-colors"
+                    className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-white/35 hover:text-white/60 transition-colors"
                   >
                     {showPassword ? (
                       <FontAwesomeIcon icon={faEyeSlash} className="h-5 w-5" />
@@ -290,11 +286,8 @@ export default function SignUpPage() {
               </div>
 
               <div>
-                <label
-                  htmlFor="confirmPassword"
-                  className="block text-sm font-medium text-gray-700 mb-1.5"
-                >
-                  Confirm Password <span className="text-red-500">*</span>
+                <label htmlFor="confirmPassword" className="block text-sm font-medium text-white/70 mb-1.5">
+                  Confirm Password <span className="text-red-400">*</span>
                 </label>
                 <input
                   type={showPassword ? "text" : "password"}
@@ -303,7 +296,7 @@ export default function SignUpPage() {
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   required
                   minLength={8}
-                  className="w-full px-4 py-3 bg-subtle border border-gray-200 rounded-xl text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600 transition-all"
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-[#7DD3D8]/30 focus:border-[#7DD3D8]/50 transition-all"
                   placeholder="Re-enter your password"
                 />
               </div>
@@ -311,7 +304,7 @@ export default function SignUpPage() {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full bg-brand-600 hover:bg-brand-700 text-white py-3 px-6 rounded-xl font-medium transition-all duration-200 shadow-lg shadow-brand-600/20 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
+                className="w-full bg-[#2B9095] hover:bg-[#19797D] text-white border border-white/20 py-3 px-6 rounded-xl font-semibold transition-all duration-200 shadow-lg shadow-black/20 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
               >
                 {isLoading ? (
                   <>
@@ -325,17 +318,19 @@ export default function SignUpPage() {
             </form>
 
             <div className="mt-6 text-center">
-              <p className="text-sm text-gray-500">
+              <p className="text-sm text-white/50">
                 Already have an account?{" "}
-                <Link
-                  href="/login"
-                  className="text-brand-600 hover:text-brand-700 font-medium transition-colors"
-                >
+                <Link href="/login" className="text-[#7DD3D8] hover:text-white font-medium transition-colors">
                   Sign in
                 </Link>
               </p>
             </div>
           </div>
+
+          {/* Footer */}
+          <p className="text-center text-xs text-white/30 mt-5">
+            &copy; 2026 iCARE++. All rights reserved.
+          </p>
         </div>
       </div>
     </div>
