@@ -298,6 +298,12 @@ h3 {
   border-radius: 4px;
 }
 
+/* In-page anchors glide instead of jumping. The reduced-motion block below
+   already forces this back to `auto`, so it stays opt-out for free. */
+html {
+  scroll-behavior: smooth;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

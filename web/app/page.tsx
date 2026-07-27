@@ -497,13 +497,50 @@ const testimonials = [
   },
 ];
 
+/** Curated subset of the page's anchors — every section carries an id, but a
+ *  navbar that lists all nine stops being navigation. */
+const SECTION_LINKS = [
+  { id: "overview", label: "Overview" },
+  { id: "features", label: "Features" },
+  { id: "who-its-for", label: "Who It's For" },
+  { id: "how-it-works", label: "How It Works" },
+  { id: "faq", label: "FAQ" },
+] as const;
+
 export default function LandingPage() {
   const [scrolled, setScrolled] = useState(false);
+  const [activeSection, setActiveSection] = useState<string | null>(null);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  // Highlight whichever linked section is currently under the navbar. The top
+  // margin matches the bar's height so a section counts as "current" the moment
+  // it clears it, and the -55% bottom keeps only one entry active at a time.
+  useEffect(() => {
+    const targets = SECTION_LINKS.map(({ id }) => document.getElementById(id)).filter(
+      (el): el is HTMLElement => el !== null,
+    );
+    if (targets.length === 0) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries.filter((e) => e.isIntersecting);
+        if (visible.length === 0) return;
+        // Nearest to the top wins when two are on screen together.
+        const top = visible.reduce((a, b) =>
+          a.boundingClientRect.top <= b.boundingClientRect.top ? a : b,
+        );
+        setActiveSection(top.target.id);
+      },
+      { rootMargin: "-64px 0px -55% 0px", threshold: 0 },
+    );
+
+    targets.forEach((el) => observer.observe(el));
+    return () => observer.disconnect();
   }, []);
 
   return (
@@ -515,8 +552,8 @@ export default function LandingPage() {
             : "bg-white/10 backdrop-blur-md border-b border-white/10"
           }`}
       >
-        <div className="max-w-7xl mx-auto px-5 sm:px-8 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2.5">
+        <div className="max-w-7xl mx-auto px-5 sm:px-8 h-16 flex items-center justify-between gap-4">
+          <Link href="/" className="flex items-center gap-2.5 shrink-0">
             <Image
               src={scrolled ? logo : logo_white}
               alt="iCARE++"
@@ -524,7 +561,34 @@ export default function LandingPage() {
               priority
             />
           </Link>
-          <div className="flex items-center gap-3">
+
+          {/* Section links. Hidden on small screens, where the CTAs alone
+              already fill the bar. */}
+          <div className="hidden md:flex items-center gap-1">
+            {SECTION_LINKS.map((item) => {
+              const active = activeSection === item.id;
+              return (
+                <a
+                  key={item.id}
+                  href={`#${item.id}`}
+                  aria-current={active ? "true" : undefined}
+                  className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-300 ${
+                    scrolled
+                      ? active
+                        ? "text-brand-600 bg-brand-600/10"
+                        : "text-gray-600 hover:text-brand-600 hover:bg-brand-600/5"
+                      : active
+                        ? "text-white bg-white/15"
+                        : "text-white/80 hover:text-white hover:bg-white/10"
+                  }`}
+                >
+                  {item.label}
+                </a>
+              );
+            })}
+          </div>
+
+          <div className="flex items-center gap-3 shrink-0">
             <Link
               href="/login"
               className={`text-sm font-medium transition-colors duration-500 px-4 py-2 ${scrolled
@@ -706,7 +770,7 @@ export default function LandingPage() {
       </section>
 
       {/* ───────── Platform Overview ───────── */}
-      <section className="py-24 sm:py-32 bg-gradient-to-b from-canvas to-surface relative overflow-hidden">
+      <section id="overview" className="scroll-mt-20 py-24 sm:py-32 bg-gradient-to-b from-canvas to-surface relative overflow-hidden">
         <div className="absolute inset-0 opacity-[0.04] pointer-events-none">
           <svg className="w-full h-full" viewBox="0 0 1200 400" preserveAspectRatio="none">
             <path d="M0,200 L120,200 L140,160 L155,230 L170,200 L340,200 L360,140 L375,250 L390,200 L560,200 L580,170 L595,225 L610,200 L780,200 L800,130 L815,260 L830,200 L1000,200 L1020,175 L1035,220 L1050,200 L1200,200" fill="none" stroke="var(--color-brand-600)" strokeWidth="2" vectorEffect="non-scaling-stroke" />
@@ -743,7 +807,7 @@ export default function LandingPage() {
       </section>
 
       {/* ───────── Core Modules: 3-card grid + side panel (like the product grid + specials box) ───────── */}
-      <section className="py-24 sm:py-32 bg-surface">
+      <section id="features" className="scroll-mt-20 py-24 sm:py-32 bg-surface">
         <div className="max-w-7xl mx-auto px-5 sm:px-8">
           <RevealSection>
             <div className="text-center max-w-2xl mx-auto mb-16">
@@ -816,7 +880,7 @@ export default function LandingPage() {
       </section>
 
       {/* ───────── Product Tour ───────── */}
-      <section className="py-24 sm:py-32 bg-gradient-to-b from-surface to-brand-50 relative overflow-hidden">
+      <section id="modules" className="scroll-mt-20 py-24 sm:py-32 bg-gradient-to-b from-surface to-brand-50 relative overflow-hidden">
         <div className="absolute top-12 left-12 opacity-[0.04] pointer-events-none">
           <svg width="40" height="40" viewBox="0 0 40 40" fill="none" stroke="var(--color-brand-600)" strokeWidth="1.5">
             <path d="M20 4v32M4 20h32" strokeLinecap="round" />
@@ -892,7 +956,7 @@ export default function LandingPage() {
       </section>
 
       {/* ───────── Who It's For ───────── */}
-      <section className="py-24 sm:py-32 bg-gradient-to-b from-brand-50 to-surface relative overflow-hidden">
+      <section id="who-its-for" className="scroll-mt-20 py-24 sm:py-32 bg-gradient-to-b from-brand-50 to-surface relative overflow-hidden">
         <div className="absolute inset-0 opacity-[0.03] pointer-events-none">
           <svg className="w-full h-full" viewBox="0 0 1200 400" preserveAspectRatio="none">
             <path d="M0,300 L100,300 L120,270 L135,320 L150,300 L250,300 L270,260 L285,330 L300,300 L400,300 L420,275 L435,315 L450,300 L550,300 L570,250 L585,340 L600,300 L700,300 L720,280 L735,320 L750,300 L850,300 L870,255 L885,335 L900,300 L1050,300 L1070,275 L1085,320 L1100,300 L1200,300" fill="none" stroke="var(--color-brand-600)" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
@@ -972,7 +1036,7 @@ export default function LandingPage() {
       </section>
 
       {/* ───────── Why iCARE++ ───────── */}
-      <section className="py-24 sm:py-32 bg-gradient-to-b from-surface to-brand-50 relative overflow-hidden">
+      <section id="why" className="scroll-mt-20 py-24 sm:py-32 bg-gradient-to-b from-surface to-brand-50 relative overflow-hidden">
         <div className="absolute bottom-[-10%] right-[-5%] w-[300px] h-[300px] bg-brand-200/25 rounded-full blur-3xl" />
         <div className="absolute bottom-8 right-12 opacity-[0.05] pointer-events-none">
           <svg width="36" height="36" viewBox="0 0 36 36" fill="none" stroke="var(--color-brand-600)" strokeWidth="1.5">
@@ -1062,7 +1126,7 @@ export default function LandingPage() {
       </section>
 
       {/* ───────── Testimonials ───────── */}
-      <section className="py-24 sm:py-32 bg-gradient-to-b from-brand-50 to-surface relative overflow-hidden">
+      <section id="testimonials" className="scroll-mt-20 py-24 sm:py-32 bg-gradient-to-b from-brand-50 to-surface relative overflow-hidden">
         <div className="absolute inset-0 opacity-[0.03] pointer-events-none">
           <svg className="w-full h-full" viewBox="0 0 1200 300" preserveAspectRatio="none">
             <path d="M0,150 L80,150 L95,120 L110,170 L125,150 L210,150 L225,130 L240,160 L255,150 L340,150 L355,125 L370,165 L385,150 L470,150 L485,140 L500,155 L515,150 L600,150 L615,120 L630,170 L645,150 L730,150 L745,135 L760,160 L775,150 L860,150 L875,115 L890,175 L905,150 L1000,150 L1015,130 L1030,165 L1045,150 L1200,150" fill="none" stroke="var(--color-brand-600)" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
@@ -1130,7 +1194,7 @@ export default function LandingPage() {
       </section>
 
       {/* ───────── How It Works ───────── */}
-      <section className="py-24 sm:py-32 bg-gradient-to-b from-surface to-brand-50 relative overflow-hidden">
+      <section id="how-it-works" className="scroll-mt-20 py-24 sm:py-32 bg-gradient-to-b from-surface to-brand-50 relative overflow-hidden">
         <div className="absolute inset-0 opacity-[0.025] pointer-events-none">
           <svg className="w-full h-full" viewBox="0 0 1200 300" preserveAspectRatio="none">
             <path d="M0,200 L100,200 L115,170 L130,220 L145,200 L240,200 L255,180 L270,215 L285,200 L380,200 L395,160 L410,230 L425,200 L520,200 L535,185 L550,210 L565,200 L660,200 L675,155 L690,235 L705,200 L800,200 L815,175 L830,215 L845,200 L940,200 L955,190 L970,205 L985,200 L1100,200 L1115,165 L1130,225 L1145,200 L1200,200" fill="none" stroke="var(--color-brand-600)" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
@@ -1188,7 +1252,7 @@ export default function LandingPage() {
       </section>
 
       {/* ───────── FAQ ───────── */}
-      <section className="py-24 sm:py-32 bg-gradient-to-b from-brand-50 to-surface relative overflow-hidden">
+      <section id="faq" className="scroll-mt-20 py-24 sm:py-32 bg-gradient-to-b from-brand-50 to-surface relative overflow-hidden">
         <div className="absolute inset-0 opacity-[0.025] pointer-events-none">
           <svg className="w-full h-full" viewBox="0 0 1200 200" preserveAspectRatio="none">
             <path d="M0,100 L100,100 L115,75 L130,120 L145,100 L240,100 L255,85 L270,110 L285,100 L380,100 L395,65 L410,130 L425,100 L520,100 L535,90 L550,108 L565,100 L660,100 L675,70 L690,125 L705,100 L800,100 L815,80 L830,115 L845,100 L940,100 L955,95 L970,105 L985,100 L1100,100 L1115,75 L1130,120 L1145,100 L1200,100" fill="none" stroke="var(--color-brand-600)" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
@@ -1228,7 +1292,7 @@ export default function LandingPage() {
       </section>
 
       {/* ───────── Our Story ───────── */}
-      <section className="relative py-24 sm:py-32 overflow-hidden bg-gradient-to-br from-[#0D7377] via-[#0A5C5F] to-[#084A4D]">
+      <section id="story" className="scroll-mt-20 relative py-24 sm:py-32 overflow-hidden bg-gradient-to-br from-[#0D7377] via-[#0A5C5F] to-[#084A4D]">
         <div className="absolute inset-0 opacity-[0.05]">
           <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
             <defs>
