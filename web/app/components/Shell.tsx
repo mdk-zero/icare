@@ -141,6 +141,7 @@ export default function Shell({ role, navItems, isActive, children }: ShellProps
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [isDesktop, setIsDesktop] = useState(true);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const { logo, logoIsWordmark, portalLabel, mobileRoleLabel, profileHref, homeHref } =
     config[role];
@@ -211,6 +212,22 @@ export default function Shell({ role, navItems, isActive, children }: ShellProps
       mounted = false;
     };
   }, [router, role]);
+
+  useEffect(() => {
+    const fetchCount = async () => {
+      try {
+        const res = await fetch('/api/notifications', { credentials: 'include' });
+        if (res.ok) {
+          const data = await res.json() as { unread: number };
+          setUnreadCount(data.unread ?? 0);
+        }
+      } catch { /* ignore */ }
+    };
+    fetchCount();
+    const onFocus = () => fetchCount();
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, []);
 
   const handleLogout = () => {
     if (user?.role === "faculty") {
@@ -328,9 +345,14 @@ export default function Shell({ role, navItems, isActive, children }: ShellProps
                 href="/faculty/notifications"
                 onClick={() => setSidebarOpen(false)}
                 aria-label="Notifications"
-                className="w-9 h-9 shrink-0 rounded-xl flex items-center justify-center bg-white/[0.05] ring-1 ring-white/10 text-white/65 hover:text-white hover:bg-white/[0.11] hover:ring-white/20 transition-all outline-none focus-visible:ring-2 focus-visible:ring-[#5eead4]/70"
+                className="relative w-9 h-9 shrink-0 rounded-xl flex items-center justify-center bg-white/[0.05] ring-1 ring-white/10 text-white/65 hover:text-white hover:bg-white/[0.11] hover:ring-white/20 transition-all outline-none focus-visible:ring-2 focus-visible:ring-[#5eead4]/70"
               >
                 <FontAwesomeIcon icon={faBell} className="w-3.5 h-3.5" />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 flex min-w-[16px] h-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white ring-2 ring-[#0b3d3d]">
+                    {unreadCount > 99 ? "99+" : unreadCount}
+                  </span>
+                )}
               </Link>
             )}
           </div>
@@ -555,10 +577,16 @@ export default function Shell({ role, navItems, isActive, children }: ShellProps
             </div>
             <div className="flex items-center gap-2">
               <LiveClock className="inline-flex items-center gap-1.5 font-mono text-xs font-semibold text-gray-600" />
-              {role !== "student" && (
-                <button className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
+              {role === "faculty" && (
+                <Link
+                  href="/faculty/notifications"
+                  className="relative p-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                >
                   <FontAwesomeIcon icon={faBell} className="w-5 h-5 text-gray-600" />
-                </button>
+                  {unreadCount > 0 && (
+                    <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-red-500 ring-2 ring-white" />
+                  )}
+                </Link>
               )}
               <span className="px-2 py-1.5 bg-gradient-to-br from-[#0b3d3d] to-[#146464] text-white text-xs font-medium rounded-lg">
                 {mobileRoleLabel}
