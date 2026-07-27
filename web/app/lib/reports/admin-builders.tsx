@@ -258,7 +258,7 @@ export async function buildAdminRoomReport(
 
     const csv = toCsvBlocks([
       { title: 'All Rooms Report', head: [], rows: [] },
-      { title: description, head: ['Room', 'Number', 'Capacity', 'Occupied', 'Status'], rows: rows as CsvCell[] },
+      { title: description, head: ['Room', 'Number', 'Capacity', 'Occupied', 'Status'], rows: rows as CsvCell[][] },
     ]);
 
     return { subject: 'all-rooms', pdf, csv };
@@ -564,12 +564,12 @@ export async function buildAdminSummaryReport(
     {
       title: 'Faculty',
       head: ['Name', 'Email', 'Joined', 'Last login'],
-      rows: facultyRows as CsvCell[],
+      rows: facultyRows as CsvCell[][],
     },
     {
       title: 'Rooms',
       head: ['Room', 'Number', 'Capacity', 'Occupied', 'Status'],
-      rows: roomRows as CsvCell[],
+      rows: roomRows as CsvCell[][],
     },
   ]);
 
