@@ -17,6 +17,7 @@ import {
   faLayerGroup,
   faWandMagicSparkles,
   faArrowsRotate,
+  faChevronUp,
 } from "@fortawesome/free-solid-svg-icons";
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import {
@@ -114,7 +115,7 @@ function formatRange(from: string, to: string): string {
 
 /* --------------------------------------------------------------- charts */
 
-/** Score trend over time — a line + area chart, the correct shape for a series. */
+/** Score trend over time — a smooth spline + area chart. */
 function TrendLineChart({
   data,
   bucket,
@@ -123,71 +124,87 @@ function TrendLineChart({
   bucket: AnalyticsBucket;
 }) {
   const W = 600;
-  const H = 210;
-  const padL = 26;
-  const padR = 12;
-  const padT = 12;
-  const padB = 32; // room for the x-axis ticks drawn inside the viewBox
+  const H = 220;
+  const padL = 32;
+  const padR = 16;
+  const padT = 16;
+  const padB = 36;
   const plotW = W - padL - padR;
   const plotH = H - padT - padB;
   const n = data.length;
   const x = (i: number) => padL + (n === 1 ? plotW / 2 : (i / (n - 1)) * plotW);
   const y = (v: number) => padT + (1 - Math.min(Math.max(v, 0), 100) / 100) * plotH;
-  const line = data.map((d, i) => `${x(i)},${y(d.average_score)}`).join(" ");
-  const area =
-    n > 0
-      ? `M ${x(0)},${y(0)} ` +
-        data.map((d, i) => `L ${x(i)},${y(d.average_score)}`).join(" ") +
-        ` L ${x(n - 1)},${y(0)} Z`
-      : "";
+  const pts = data.map((d, i) => ({ x: x(i), y: y(d.average_score) }));
   const grid = [0, 25, 50, 75, 100];
-  // A year of days would print 365 ticks over 600px; show at most ~8, always
-  // including the last so the range's end date is readable.
   const tickStep = Math.max(1, Math.ceil(n / 8));
   const isTick = (i: number) => i % tickStep === 0 || i === n - 1;
 
+  // Catmull-Rom → cubic bezier for a smooth curve without overshoot
+  const smoothPath = (points: { x: number; y: number }[]): string => {
+    if (points.length < 2) return "";
+    if (points.length === 2)
+      return `M ${points[0].x},${points[0].y} L ${points[1].x},${points[1].y}`;
+    let d = `M ${points[0].x},${points[0].y}`;
+    for (let i = 1; i < points.length - 1; i++) {
+      const p0 = points[i - 1];
+      const p1 = points[i];
+      const p2 = points[i + 1];
+      const cp1x = p1.x + (p2.x - p0.x) / 6;
+      const cp1y = p1.y + (p2.y - p0.y) / 6;
+      const cp2x = p2.x - (p2.x - p0.x) / 6;
+      const cp2y = p2.y - (p2.y - p0.y) / 6;
+      d += ` C ${cp1x},${cp1y} ${cp2x},${cp2y} ${p2.x},${p2.y}`;
+    }
+    return d;
+  };
+
+  const lineD = smoothPath(pts);
+  const areaD =
+    n > 1
+      ? lineD + ` L ${pts[n - 1].x},${padT + plotH} L ${pts[0].x},${padT + plotH} Z`
+      : "";
+
   return (
-    <div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full">
+    <div className="relative">
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full overflow-visible">
         <defs>
           <linearGradient id="trendArea" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={BRAND} stopOpacity="0.22" />
-            <stop offset="100%" stopColor={BRAND} stopOpacity="0" />
+            <stop offset="0%" stopColor={BRAND} stopOpacity="0.25" />
+            <stop offset="100%" stopColor={BRAND} stopOpacity="0.02" />
           </linearGradient>
+          <filter id="glow">
+            <feGaussianBlur stdDeviation="2" result="blur" />
+            <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
         </defs>
         {grid.map((g) => (
           <g key={g}>
-            <line x1={padL} y1={y(g)} x2={W - padR} y2={y(g)} stroke="#eef2f6" strokeWidth="1" />
-            <text x={padL - 5} y={y(g) + 3} textAnchor="end" fontSize="9" fill="#94a3b8">
+            <line x1={padL} y1={y(g)} x2={W - padR} y2={y(g)} stroke="#e2e8f0" strokeWidth="1" strokeDasharray="3 3" />
+            <text x={padL - 6} y={y(g) + 3} textAnchor="end" fontSize="10" fill="#94a3b8" className="tabular-nums">
               {g}
             </text>
           </g>
         ))}
-        {n > 1 && <path d={area} fill="url(#trendArea)" />}
+        {n > 1 && <path d={areaD} fill="url(#trendArea)" />}
         {n > 1 && (
-          <polyline
-            points={line}
-            fill="none"
-            stroke={BRAND}
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
+          <path d={lineD} fill="none" stroke={BRAND} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
         )}
+        {/* Glow layer under dots */}
+        {n <= 40 && data.map((d, i) => (
+          <circle key={`g-${d.week_start}`} cx={pts[i].x} cy={pts[i].y} r={5} fill={BRAND} opacity="0.15" filter="url(#glow)" />
+        ))}
         {data.map((d, i) => (
           <circle
             key={d.week_start}
-            cx={x(i)}
-            cy={y(d.average_score)}
-            r={n > 40 ? 2 : 3.5}
+            cx={pts[i].x}
+            cy={pts[i].y}
+            r={n > 40 ? 2 : 4}
             fill="#fff"
             stroke={BRAND}
-            strokeWidth="2"
+            strokeWidth="2.5"
           >
             <title>
-              {`${formatBucket(d.week_start, bucket)} — ${d.average_score}% · ${d.attempts} attempt${
-                d.attempts === 1 ? "" : "s"
-              }`}
+              {`${formatBucket(d.week_start, bucket)} — ${d.average_score}% · ${d.attempts} attempt${d.attempts === 1 ? "" : "s"}`}
             </title>
           </circle>
         ))}
@@ -195,11 +212,10 @@ function TrendLineChart({
           isTick(i) ? (
             <text
               key={`t-${d.week_start}`}
-              x={x(i)}
-              y={H - 10}
-              // The end ticks would otherwise overhang the viewBox.
+              x={pts[i].x}
+              y={H - 8}
               textAnchor={i === 0 && n > 1 ? "start" : i === n - 1 && n > 1 ? "end" : "middle"}
-              fontSize="9"
+              fontSize="10"
               fill="#94a3b8"
             >
               {formatBucket(d.week_start, bucket)}
@@ -317,13 +333,16 @@ function SectionPicker({
 /** Safe vs at-risk split — a donut, the correct shape for a part-to-whole. */
 function RiskDonut({ safe, atRisk }: { safe: number; atRisk: number }) {
   const total = safe + atRisk;
-  const r = 54;
+  const r = 48;
   const cx = 70;
   const cy = 70;
-  const sw = 16;
+  const sw = 20;
+  const gap = 4;
   const c = 2 * Math.PI * r;
-  const safeLen = total ? (safe / total) * c : 0;
-  const atRiskLen = total ? (atRisk / total) * c : 0;
+  const totalLen = c - gap * 2;
+  const safeLen = total ? (safe / total) * totalLen : 0;
+  const atRiskLen = total ? (atRisk / total) * totalLen : 0;
+  const offset = -gap;
 
   return (
     <div className="flex flex-col items-center gap-4">
@@ -336,9 +355,11 @@ function RiskDonut({ safe, atRisk }: { safe: number; atRisk: number }) {
               cy={cy}
               r={r}
               fill="none"
-              stroke="#10b981"
+              stroke="url(#safeGrad)"
               strokeWidth={sw}
-              strokeDasharray={`${safeLen} ${c}`}
+              strokeDasharray={`${safeLen} ${c - safeLen}`}
+              strokeDashoffset={offset}
+              strokeLinecap="round"
             />
           )}
           {atRiskLen > 0 && (
@@ -347,28 +368,39 @@ function RiskDonut({ safe, atRisk }: { safe: number; atRisk: number }) {
               cy={cy}
               r={r}
               fill="none"
-              stroke="#f43f5e"
+              stroke="url(#riskGrad)"
               strokeWidth={sw}
-              strokeDasharray={`${atRiskLen} ${c}`}
-              strokeDashoffset={-safeLen}
+              strokeDasharray={`${atRiskLen} ${c - atRiskLen}`}
+              strokeDashoffset={safeLen > 0 ? -(safeLen + gap * 2) : offset}
+              strokeLinecap="round"
             />
           )}
+          <defs>
+            <linearGradient id="safeGrad" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stopColor="#34d399" />
+              <stop offset="100%" stopColor="#10b981" />
+            </linearGradient>
+            <linearGradient id="riskGrad" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stopColor="#fb7185" />
+              <stop offset="100%" stopColor="#f43f5e" />
+            </linearGradient>
+          </defs>
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-2xl font-bold text-gray-900">{total}</span>
-          <span className="text-[11px] text-gray-500">predicted</span>
+          <span className="text-3xl font-bold text-gray-900">{total}</span>
+          <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wider">predicted</span>
         </div>
       </div>
-      <div className="flex items-center gap-6">
+      <div className="flex items-center gap-5">
         <span className="flex items-center gap-2 text-sm">
-          <span className="w-3 h-3 rounded-full bg-emerald-500" />
-          <span className="text-gray-600">Safe</span>
-          <span className="font-bold text-emerald-600">{safe}</span>
+          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-emerald-100" />
+          <span className="text-gray-500">Safe</span>
+          <span className="font-bold text-gray-900">{safe}</span>
         </span>
         <span className="flex items-center gap-2 text-sm">
-          <span className="w-3 h-3 rounded-full bg-rose-500" />
-          <span className="text-gray-600">At risk</span>
-          <span className="font-bold text-rose-600">{atRisk}</span>
+          <span className="w-2.5 h-2.5 rounded-full bg-rose-500 ring-2 ring-rose-100" />
+          <span className="text-gray-500">At risk</span>
+          <span className="font-bold text-gray-900">{atRisk}</span>
         </span>
       </div>
     </div>
@@ -396,22 +428,24 @@ function HBars({
     return "bg-gradient-to-r from-brand-600 to-[#2a8a98]";
   };
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {items.map((item) => (
         <div key={item.key} className="flex items-center gap-3">
-          <span className="flex w-40 shrink-0 items-center gap-2 text-sm text-gray-600 truncate">
+          <span className="flex w-36 shrink-0 items-center gap-2 text-sm text-gray-600 truncate">
             {item.icon && (
-              <FontAwesomeIcon icon={item.icon} className="w-3.5 h-3.5 text-brand-600 shrink-0" />
+              <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-brand-600/10">
+                <FontAwesomeIcon icon={item.icon} className="w-3 h-3 text-brand-600 shrink-0" />
+              </span>
             )}
             <span className="truncate">{item.label}</span>
           </span>
-          <div className="h-2.5 flex-1 rounded-full bg-gray-100 overflow-hidden">
+          <div className="h-3 flex-1 rounded-full bg-gray-100 overflow-hidden ring-1 ring-gray-200/50">
             <div
-              className={`h-full rounded-full transition-all duration-500 ${barColor(item.value)}`}
+              className={`h-full rounded-full transition-all duration-700 ease-out ${barColor(item.value)}`}
               style={{ width: `${max > 0 ? Math.max((item.value / max) * 100, item.value > 0 ? 4 : 0) : 0}%` }}
             />
           </div>
-          <span className="w-12 shrink-0 text-right text-sm font-semibold text-gray-800 tabular-nums">
+          <span className="w-14 shrink-0 text-right text-sm font-bold text-gray-800 tabular-nums">
             {item.value}
             {suffix}
           </span>
@@ -428,6 +462,8 @@ function NarrativeCard({
   loading,
   error,
   stale,
+  show,
+  onToggle,
   onGenerate,
 }: {
   narrative: AnalyticsNarrative | null;
@@ -435,6 +471,8 @@ function NarrativeCard({
   loading: boolean;
   error: string | null;
   stale: boolean;
+  show: boolean;
+  onToggle: () => void;
   onGenerate: () => void;
 }) {
   const lists = narrative
@@ -467,6 +505,17 @@ function NarrativeCard({
           )}
           <button
             type="button"
+            onClick={onToggle}
+            title={show ? "Collapse" : "Expand"}
+            className={`flex items-center justify-center rounded-lg border bg-surface px-3 py-2 text-gray-500 transition-colors hover:bg-gray-50 ${show ? "border-gray-300" : "border-brand-600/40 text-brand-600"}`}
+          >
+            <FontAwesomeIcon
+              icon={faChevronUp}
+              className={`h-4 w-4 transition-transform ${show ? "" : "rotate-180"}`}
+            />
+          </button>
+          <button
+            type="button"
             onClick={onGenerate}
             disabled={loading}
             className="flex items-center gap-2 rounded-lg bg-brand-600 px-3.5 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
@@ -480,60 +529,66 @@ function NarrativeCard({
         </div>
       </div>
 
-      {error && (
-        <p className="mt-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
-          {error}
-        </p>
-      )}
-
-      {loading && (
-        <div className="mt-4 animate-pulse space-y-2">
-          <div className="h-5 w-2/3 rounded bg-gray-200" />
-          <div className="h-4 w-full rounded bg-gray-200" />
-          <div className="h-4 w-5/6 rounded bg-gray-200" />
-        </div>
-      )}
-
-      {!loading && narrative && (
-        <div className="mt-4 space-y-4">
-          {narrative.headline && (
-            <p className="font-display text-lg font-semibold leading-snug text-gray-900">
-              {narrative.headline}
+      {!show && narrative ? (
+        <p className="mt-4 text-sm text-gray-400">AI summary hidden.</p>
+      ) : show ? (
+        <>
+          {error && (
+            <p className="mt-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
+              {error}
             </p>
           )}
-          <p className="text-sm leading-relaxed text-gray-700">{narrative.overview}</p>
 
-          {lists.length > 0 && (
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-              {lists.map((list) => (
-                <div key={list.title} className="rounded-xl bg-subtle p-4">
-                  <p className="mb-2 text-sm font-semibold text-gray-900">{list.title}</p>
-                  <ul className="space-y-2">
-                    {list.items.map((item, idx) => (
-                      <li key={idx} className="flex items-start gap-2 text-sm text-gray-600">
-                        <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${list.dot}`} />
-                        {item}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
+          {loading && (
+            <div className="mt-4 animate-pulse space-y-2">
+              <div className="h-5 w-2/3 rounded bg-gray-200" />
+              <div className="h-4 w-full rounded bg-gray-200" />
+              <div className="h-4 w-5/6 rounded bg-gray-200" />
             </div>
           )}
 
-          {generatedAt && (
-            <p className="border-t border-hairline pt-3 text-xs text-gray-400">
-              AI-generated {new Date(generatedAt).toLocaleString()} — review before acting on it.
+          {!loading && narrative && (
+            <div className="mt-4 space-y-4">
+              {narrative.headline && (
+                <p className="font-display text-lg font-semibold leading-snug text-gray-900">
+                  {narrative.headline}
+                </p>
+              )}
+              <p className="text-sm leading-relaxed text-gray-700">{narrative.overview}</p>
+
+              {lists.length > 0 && (
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                  {lists.map((list) => (
+                    <div key={list.title} className="rounded-xl bg-subtle p-4">
+                      <p className="mb-2 text-sm font-semibold text-gray-900">{list.title}</p>
+                      <ul className="space-y-2">
+                        {list.items.map((item, idx) => (
+                          <li key={idx} className="flex items-start gap-2 text-sm text-gray-600">
+                            <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${list.dot}`} />
+                            {item}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {generatedAt && (
+                <p className="border-t border-hairline pt-3 text-xs text-gray-400">
+                  AI-generated {new Date(generatedAt).toLocaleString()} — review before acting on it.
+                </p>
+              )}
+            </div>
+          )}
+
+          {!loading && !narrative && !error && (
+            <p className="mt-4 text-sm text-gray-400">
+              Generate a plain-language reading of the current selection.
             </p>
           )}
-        </div>
-      )}
-
-      {!loading && !narrative && !error && (
-        <p className="mt-4 text-sm text-gray-400">
-          Generate a plain-language reading of the current selection.
-        </p>
-      )}
+        </>
+      ) : null}
     </Card>
   );
 }
@@ -598,6 +653,7 @@ export default function FacultyAnalyticsClient() {
 
   /* --- AI narrative -------------------------------------------------- */
 
+  const [showNarrative, setShowNarrative] = useState(true);
   const [narrative, setNarrative] = useState<AnalyticsNarrative | null>(null);
   const [narrativeAt, setNarrativeAt] = useState<string | null>(null);
   const [narrativeLoading, setNarrativeLoading] = useState(false);
@@ -806,6 +862,8 @@ export default function FacultyAnalyticsClient() {
         loading={narrativeLoading}
         error={narrativeError}
         stale={narrativeKey !== null && narrativeKey !== filterKey}
+        show={showNarrative}
+        onToggle={() => setShowNarrative((v) => !v)}
         onGenerate={() => runNarrative(filterKey, sectionIds, from, to)}
       />
 
@@ -827,9 +885,14 @@ export default function FacultyAnalyticsClient() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4 items-stretch">
           <Card padding="md" className="lg:col-span-2 flex flex-col">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900">Score Trend</h3>
-              <span className="text-xs text-gray-400">
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center gap-2.5">
+                <div className="rounded-lg bg-brand-600/10 p-1.5">
+                  <FontAwesomeIcon icon={faChartBar} className="h-3.5 w-3.5 text-brand-600" />
+                </div>
+                <h3 className="font-semibold text-gray-900">Score Trend</h3>
+              </div>
+              <span className="font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-slate-400">
                 avg quiz score, {BUCKET_LABEL[bucket]}
               </span>
             </div>
@@ -845,7 +908,12 @@ export default function FacultyAnalyticsClient() {
           </Card>
 
           <Card padding="md" className="flex flex-col">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">At-Risk Prediction</h3>
+            <div className="flex items-center gap-2.5 mb-5">
+              <div className="rounded-lg bg-rose-500/10 p-1.5">
+                <FontAwesomeIcon icon={faExclamationTriangle} className="h-3.5 w-3.5 text-rose-500" />
+              </div>
+              <h3 className="font-semibold text-gray-900">At-Risk Prediction</h3>
+            </div>
             <div className="flex-1 flex items-center justify-center">
               {predicted === 0 ? (
                 <div className="text-center">
@@ -863,7 +931,12 @@ export default function FacultyAnalyticsClient() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4 items-stretch">
           <Card padding="md" className="flex flex-col">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Competency Breakdown</h3>
+            <div className="flex items-center gap-2.5 mb-5">
+              <div className="rounded-lg bg-brand-600/10 p-1.5">
+                <FontAwesomeIcon icon={faLayerGroup} className="h-3.5 w-3.5 text-brand-600" />
+              </div>
+              <h3 className="font-semibold text-gray-900">Competency Breakdown</h3>
+            </div>
             <div className="flex-1 flex flex-col justify-center">
               {competencies.length === 0 ? (
                 <p className="text-gray-400 text-sm py-12 text-center">
@@ -881,7 +954,12 @@ export default function FacultyAnalyticsClient() {
           </Card>
 
           <Card padding="md" className="flex flex-col">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Clinical Training Activity</h3>
+            <div className="flex items-center gap-2.5 mb-5">
+              <div className="rounded-lg bg-brand-600/10 p-1.5">
+                <FontAwesomeIcon icon={faHeartbeat} className="h-3.5 w-3.5 text-brand-600" />
+              </div>
+              <h3 className="font-semibold text-gray-900">Clinical Training Activity</h3>
+            </div>
             <div className="flex-1 flex flex-col justify-center">
               <HBars items={activityItems} max={activityMax} />
             </div>
