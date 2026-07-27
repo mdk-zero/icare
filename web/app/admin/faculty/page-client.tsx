@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faUsers, faPlus } from "@fortawesome/free-solid-svg-icons";
+import { faUsers, faPlus, faChevronDown } from "@fortawesome/free-solid-svg-icons";
 import PageHeader from "../../components/PageHeader";
 
 interface SectionRef {
@@ -44,6 +44,12 @@ export default function FacultyClient() {
 
   const [selectedFaculty, setSelectedFaculty] = useState<Faculty | null>(null);
   const [selectedSections, setSelectedSections] = useState<string[]>([]);
+  const [filterSection, setFilterSection] = useState("");
+  const filteredFaculty = faculty.filter((f) => {
+    if (filterSection === "__none__") return f.sections.length === 0;
+    if (filterSection && !f.sections.some((s) => s.id === filterSection)) return false;
+    return true;
+  });
 
   const flash = (text: string) => {
     setMessage(text);
@@ -193,6 +199,32 @@ export default function FacultyClient() {
         ))}
       </div>
 
+      <div className="flex items-center gap-3 mb-3">
+        <div className="relative">
+          <select
+            value={filterSection}
+            onChange={(e) => setFilterSection(e.target.value)}
+            className="appearance-none px-4 py-2 pr-10 border border-gray-200 rounded-xl text-sm text-gray-700 bg-surface focus:outline-none focus:ring-2 focus:ring-brand-600 focus:border-brand-600"
+          >
+            <option value="">All Sections</option>
+            <option value="__none__">No Section</option>
+            {sections.map((s) => (
+              <option key={s.id} value={s.id}>Section {s.name}</option>
+            ))}
+          </select>
+          <FontAwesomeIcon icon={faChevronDown} className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+        </div>
+
+        {filterSection && (
+          <button
+            onClick={() => setFilterSection("")}
+            className="text-xs text-brand-600 font-medium hover:underline ml-auto"
+          >
+            Clear filter
+          </button>
+        )}
+      </div>
+
       <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -203,23 +235,26 @@ export default function FacultyClient() {
                 <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Students</th>
                 <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Joined</th>
                 <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Last Login</th>
-                <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-hairline">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="py-12 text-center text-gray-400">Loading faculty…</td>
+                  <td colSpan={5} className="py-12 text-center text-gray-400">Loading faculty…</td>
                 </tr>
-              ) : faculty.length === 0 ? (
+              ) : filteredFaculty.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-12 text-center text-gray-400">
-                    No faculty accounts yet — add one to get started
+                  <td colSpan={5} className="py-12 text-center text-gray-400">
+                    {filterSection ? "No faculty match the selected filter" : "No faculty accounts yet — add one to get started"}
                   </td>
                 </tr>
               ) : (
-                faculty.map((member) => (
-                  <tr key={member.id} className="hover:bg-subtle transition-colors">
+                filteredFaculty.map((member) => (
+                  <tr
+                    key={member.id}
+                    onClick={() => openAssignModal(member)}
+                    className="hover:bg-subtle hover:-translate-y-0.5 transition-all duration-200 cursor-pointer"
+                  >
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 bg-brand-600/10 rounded-full flex items-center justify-center text-brand-600 font-semibold">
@@ -252,14 +287,6 @@ export default function FacultyClient() {
                     </td>
                     <td className="py-3 px-4 text-gray-600">{formatDate(member.created_at)}</td>
                     <td className="py-3 px-4 text-gray-600">{formatDate(member.last_login_at)}</td>
-                    <td className="py-3 px-4">
-                      <button
-                        onClick={() => openAssignModal(member)}
-                        className="text-brand-600 font-medium hover:text-brand-700 transition-colors"
-                      >
-                        Assign Sections
-                      </button>
-                    </td>
                   </tr>
                 ))
               )}
