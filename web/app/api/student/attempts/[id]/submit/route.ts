@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { logAudit } from '@/app/lib/audit';
+import { deriveCompetencyScoresForAttempt } from '@/app/lib/competency';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -164,6 +165,16 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
             weighted_score: cb.weighted_score,
           })),
         );
+
+        // Roll the breakdown up into per-competency standing. Awaited so the
+        // scores exist by the time the student is redirected to their results,
+        // but never allowed to fail the submission — the attempt is already
+        // graded and saved, and the backfill can recover a missed roll-up.
+        try {
+          await deriveCompetencyScoresForAttempt(supabase, attemptId);
+        } catch (err) {
+          console.error('Competency derivation failed for attempt', attemptId, err);
+        }
       }
     }
     const timeTaken = Math.max(

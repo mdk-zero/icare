@@ -50,7 +50,14 @@ def main() -> None:
         print("building live feature frame...")
         features = build_student_features(db)
 
-        validated = db.select("competency_scores", "student_id,score")
+        # Faculty validations only. Assessment-derived competency scores are
+        # computed from the same attempts that produce the features, so folding
+        # them in here would train the model on its own inputs.
+        validated = db.select(
+            "competency_scores",
+            "student_id,score",
+            [("source", "eq", "faculty_validation")],
+        )
         scores_by_student: dict[str, list[float]] = {}
         for row in validated:
             scores_by_student.setdefault(row["student_id"], []).append(float(row["score"]))

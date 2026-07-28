@@ -3,7 +3,20 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faChevronLeft, faBolt, faWandMagicSparkles } from "@fortawesome/free-solid-svg-icons";
+import {
+  faChevronLeft,
+  faBolt,
+  faWandMagicSparkles,
+  faCircleCheck,
+  faClipboardCheck,
+} from "@fortawesome/free-solid-svg-icons";
+import {
+  resolveCompetencies,
+  COMPETENCY_LEVEL_LABEL,
+  COMPETENCY_LEVEL_TONE,
+  COMPETENCY_LEVEL_BAR,
+  type ResolvedCompetency,
+} from "../../../lib/competency";
 import {
   fetchFacultyStudentDetail,
   fetchLatestPrediction,
@@ -50,7 +63,7 @@ export default function StudentDetailClient() {
   const [student, setStudent] = useState<FacultyStudent | null>(null);
   const [performanceHistory, setPerformanceHistory] = useState<PerformanceHistory[]>([]);
   const [scenarioHistory, setScenarioHistory] = useState<ScenarioPerformanceRecord[]>([]);
-  const [competencies, setCompetencies] = useState<Record<string, number>>({});
+  const [competencies, setCompetencies] = useState<ResolvedCompetency[]>([]);
   const [competencyAreas, setCompetencyAreas] = useState<CompetencyArea[]>([]);
   const [scoreHistory, setScoreHistory] = useState<CompetencyScore[]>([]);
   const [validateForm, setValidateForm] = useState({ competency_id: "", score: "", remarks: "" });
@@ -102,13 +115,9 @@ export default function StudentDetailClient() {
     ]);
     setCompetencyAreas(areas);
     setScoreHistory(scores);
-    // Scores come newest-first; keep the latest per competency for the bars.
-    const latest: Record<string, number> = {};
-    for (const record of scores) {
-      const name = record.competency_areas?.name ?? record.competency_id;
-      if (!(name in latest)) latest[name] = record.score;
-    }
-    setCompetencies(latest);
+    // A faculty validation outranks a quiz result; assessment-derived scores
+    // fill every competency nobody has reviewed by hand.
+    setCompetencies(resolveCompetencies(scores));
   };
 
   const loadStudentData = async () => {
@@ -198,11 +207,7 @@ export default function StudentDetailClient() {
     return 'text-red-600';
   };
 
-  const getCompetencyColor = (score: number) => {
-    if (score >= 80) return 'bg-emerald-500';
-    if (score >= 60) return 'bg-amber-500';
-    return 'bg-red-500';
-  };
+  const needsImprovement = competencies.filter((c) => c.level === 'needs_improvement');
 
   if (loading) {
     return (
@@ -516,27 +521,64 @@ export default function StudentDetailClient() {
 
           {activeTab === 'competencies' && (
             <div className="space-y-6">
-              {Object.keys(competencies).length === 0 ? (
+              {competencies.length === 0 ? (
                 <p className="text-gray-500 text-center py-4">
-                  No validated competency scores yet. Record the first one below.
+                  No competency data yet. Scores appear automatically once this student submits an
+                  assessment whose criteria are mapped to competency areas — or record one by hand
+                  below.
                 </p>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {Object.entries(competencies).map(([key, value]) => (
-                    <div key={key} className="p-3 bg-gray-50 rounded-lg">
-                      <div className="flex items-center justify-between mb-2 gap-2">
-                        <span className="font-medium text-gray-900">{key}</span>
-                        <span className={`font-bold ${getScoreColor(value)}`}>{value}%</span>
-                      </div>
-                      <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full transition-all ${getCompetencyColor(value)}`}
-                          style={{ width: `${value}%` }}
-                        />
-                      </div>
+                <>
+                  {needsImprovement.length > 0 && (
+                    <div className="rounded-xl border border-rose-200 bg-rose-50 p-4">
+                      <p className="text-sm font-semibold text-rose-800">
+                        Needs improvement ({needsImprovement.length})
+                      </p>
+                      <p className="mt-1 text-sm text-rose-700">
+                        {needsImprovement.map((c) => c.name).join(" · ")}
+                      </p>
                     </div>
-                  ))}
-                </div>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {competencies.map((c) => (
+                      <div key={c.competency_id} className="p-3 bg-gray-50 rounded-lg">
+                        <div className="flex items-start justify-between mb-2 gap-2">
+                          <span className="font-medium text-gray-900">{c.name}</span>
+                          <span className={`font-bold shrink-0 ${getScoreColor(c.score)}`}>
+                            {Math.round(c.score)}%
+                          </span>
+                        </div>
+                        <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all ${COMPETENCY_LEVEL_BAR[c.level]}`}
+                            style={{ width: `${Math.min(100, Math.max(0, c.score))}%` }}
+                          />
+                        </div>
+                        <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                          <span
+                            className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${COMPETENCY_LEVEL_TONE[c.level]}`}
+                          >
+                            {COMPETENCY_LEVEL_LABEL[c.level]}
+                          </span>
+                          {/* Where the number came from — faculty judgement or
+                              the student's own quiz performance. */}
+                          <span className="inline-flex items-center gap-1 text-[11px] text-gray-500">
+                            <FontAwesomeIcon
+                              icon={
+                                c.source === "faculty_validation" ? faCircleCheck : faClipboardCheck
+                              }
+                              className="w-3 h-3"
+                            />
+                            {c.source === "faculty_validation"
+                              ? "Faculty validated"
+                              : `From assessments${c.attempts > 0 ? ` (${c.attempts})` : ""}`}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
               )}
 
               <div className="p-5 bg-brand-600/5 border border-brand-600/20 rounded-xl">

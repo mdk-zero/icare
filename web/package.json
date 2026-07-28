@@ -9,7 +9,8 @@
     "lint": "eslint",
     "db:seed": "tsx scripts/seed.ts",
     "db:seed:mimic-demo": "tsx scripts/seed-mimic-demo.ts",
-    "db:link-students": "tsx scripts/link-existing-students-to-faculty.ts"
+    "db:link-students": "tsx scripts/link-existing-students-to-faculty.ts",
+    "db:backfill-competencies": "tsx scripts/backfill-competency-scores.ts"
   },
   "dependencies": {
     "@fortawesome/fontawesome-svg-core": "^7.2.0",
