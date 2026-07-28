@@ -1012,7 +1012,7 @@ export default function AssessmentQuestionsClient({
                             updateBuilderField(q.id, "question_type", e.target.value)
                           }
                           disabled={!isEditing}
-                          className="text-xs border border-gray-300 rounded-lg px-2 py-1 text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-600/30 disabled:opacity-70 disabled:cursor-not-allowed"
+                          className="text-xs border border-gray-300 rounded-lg px-2 py-1 text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-600/30 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           <option value="multiple_choice">Multiple choice</option>
                           <option value="true_false">True / False</option>
@@ -1047,14 +1047,14 @@ export default function AssessmentQuestionsClient({
                       disabled={!isEditing}
                       placeholder="Question text"
                       rows={isEditing ? 2 : 1}
-                      className={`${inputClassName} disabled:opacity-70 disabled:cursor-not-allowed disabled:bg-gray-50 text-sm`}
+                      className={`${inputClassName} disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-50 text-sm`}
                     />
 
                     {/* Options */}
                     {form.question_type === "multiple_choice" && (
                       <div className="space-y-1.5">
                         {form.options.slice(0, isEditing ? undefined : 4).map((opt, idx) => (
-                          <div key={idx} className={`flex items-center gap-2 ${!isEditing ? "opacity-80" : ""}`}>
+                          <div key={idx} className={`flex items-center gap-2 ${!isEditing ? "opacity-60" : ""}`}>
                             <button
                               onClick={() => isEditing && setBuilderCorrect(q.id, idx)}
                               title={idx === form.correct_index ? "Correct answer" : "Mark as correct"}
@@ -1072,7 +1072,7 @@ export default function AssessmentQuestionsClient({
                               onChange={(e) => isEditing && updateBuilderOption(q.id, idx, e.target.value)}
                               placeholder={`Option ${idx + 1}`}
                               disabled={!isEditing}
-                              className="flex-1 px-3 py-1.5 bg-surface border border-gray-400 rounded-lg text-sm text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 disabled:opacity-70 disabled:cursor-not-allowed disabled:bg-gray-50 transition-all"
+                              className="flex-1 px-3 py-1.5 bg-surface border border-gray-400 rounded-lg text-sm text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-50 transition-all"
                             />
                             {isEditing && form.options.length > 2 && (
                               <button
@@ -1102,7 +1102,7 @@ export default function AssessmentQuestionsClient({
                     {form.question_type === "true_false" && (
                       <div className="space-y-1.5">
                         {["True", "False"].map((label, idx) => (
-                          <div key={idx} className={`flex items-center gap-2 ${!isEditing ? "opacity-80" : ""}`}>
+                          <div key={idx} className={`flex items-center gap-2 ${!isEditing ? "opacity-60" : ""}`}>
                             <button
                               onClick={() => isEditing && setBuilderCorrect(q.id, idx)}
                               className={`shrink-0 ${!isEditing ? "cursor-default" : ""}`}
@@ -1114,7 +1114,7 @@ export default function AssessmentQuestionsClient({
                                 <div className="w-4 h-4 rounded-full border-2 border-gray-300" />
                               )}
                             </button>
-                              <span className={`text-sm ${isEditing ? "text-gray-700" : "text-gray-500"}`}>{label}</span>
+                            <span className={`text-sm ${isEditing ? "text-gray-700" : "text-gray-400"}`}>{label}</span>
                           </div>
                         ))}
                       </div>
@@ -1122,7 +1122,7 @@ export default function AssessmentQuestionsClient({
 
                     {/* Short answer */}
                     {form.question_type === "short_answer" && (
-                      <p className={`text-xs italic ${isEditing ? "text-gray-500" : "text-gray-500"}`}>
+                      <p className={`text-xs italic ${isEditing ? "text-gray-400" : "text-gray-300"}`}>
                         Students will type a free-text response.
                       </p>
                     )}
@@ -1141,7 +1141,7 @@ export default function AssessmentQuestionsClient({
                             isEditing && updateBuilderField(q.id, "points", Math.max(1, Number(e.target.value)))
                           }
                           disabled={!isEditing}
-                          className="w-14 px-2 py-1 border border-gray-300 rounded-lg text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-600/30 disabled:opacity-70 disabled:cursor-not-allowed disabled:bg-gray-50"
+                          className="w-14 px-2 py-1 border border-gray-300 rounded-lg text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-600/30 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-50"
                         />
                       </div>
                       <div className="flex items-center gap-1.5">
@@ -1152,7 +1152,7 @@ export default function AssessmentQuestionsClient({
                             isEditing && updateBuilderField(q.id, "competency_ids", e.target.value ? [e.target.value] : [])
                           }
                           disabled={!isEditing}
-                          className="px-2 py-1 border border-gray-300 rounded-lg text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-600/30 disabled:opacity-70 disabled:cursor-not-allowed disabled:bg-gray-50"
+                          className="px-2 py-1 border border-gray-300 rounded-lg text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-600/30 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-50"
                         >
                           <option value="">None</option>
                           {competencyAreas.map((ca) => (
