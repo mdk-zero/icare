@@ -1,0 +1,55 @@
+# Render Blueprint for the iCARE++ ML service (ml/).
+#
+# Render reads this from the repository root, which is why it lives here rather
+# than in ml/ — `rootDir` is what points it at the service.
+#
+# Apply it from the Render dashboard: New → Blueprint → pick this repo. The
+# three `sync: false` variables are deliberately not in this file; Render will
+# prompt for them on first apply and keep them out of git.
+#
+# The free plan sleeps a service after ~15 minutes without inbound traffic, so
+# the in-process nightly scheduler cannot be relied on — a sleeping process
+# runs nothing. ML_SCHEDULE_ENABLED is therefore false here, and the nightly
+# run is driven from outside by .github/workflows/ml-nightly.yml, whose request
+# also wakes the service. Moving to a paid instance is the one change needed to
+# go back to the in-process scheduler: flip this to true and disable the
+# workflow, or the jobs would run twice.
+
+services:
+  - type: web
+    name: icare-ml
+    runtime: docker
+    plan: free
+    # Match the region to the Supabase project, not to your users: every
+    # request this service makes is a PostgREST round trip.
+    region: singapore
+    rootDir: ml
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    # Off by default so a push to main can't redeploy the service mid-demo.
+    autoDeploy: false
+
+    envVars:
+      # Prompted on first apply, then stored by Render. The service role key
+      # bypasses RLS, so it must never be committed.
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      # Must equal ML_SERVICE_SECRET in the web app's environment; it is the
+      # only thing standing between the public internet and this service.
+      - key: ML_SERVICE_SECRET
+        sync: false
+
+      # See the note above: the scheduler cannot survive the free plan's sleep.
+      - key: ML_SCHEDULE_ENABLED
+        value: "false"
+
+      # Left at the values app/config.py already defaults to, stated here so
+      # they are visible and tunable without a redeploy.
+      - key: ML_RISK_THRESHOLD
+        value: "0.5"
+      - key: ML_PRIMARY_MODEL_KIND
+        value: random_forest
+      - key: ML_RECOMMEND_K
+        value: "5"
