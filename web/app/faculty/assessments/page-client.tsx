@@ -301,7 +301,7 @@ export default function FacultyAssessmentsClient() {
                   <button
                     onClick={() => router.push(`/faculty/assessments/${a.id}`)}
                     title="Manage questions"
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-brand-600/10 text-[#155663] hover:bg-brand-600/20 text-sm font-medium"
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-brand-600/10 text-brand-700 dark:text-brand-200 hover:bg-brand-600/20 text-sm font-medium"
                   >
                     <FontAwesomeIcon icon={faListCheck} className="w-3.5 h-3.5" />
                     Questions
