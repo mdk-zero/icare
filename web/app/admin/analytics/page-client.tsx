@@ -215,7 +215,7 @@ export default function AdminAnalyticsClient() {
                         <FontAwesomeIcon icon={faChartPie} className="w-4 h-4 text-brand-600" />
                         <h4 className="text-sm font-semibold text-gray-700">Score Distribution</h4>
                       </div>
-                      <div className="space-y-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         {Object.entries(summary.competency_breakdown).map(([range, count]) => {
                           const total = Object.values(summary.competency_breakdown).reduce((a, b) => a + b, 0);
                           const pct = total > 0 ? Math.round((count / total) * 100) : 0;
@@ -226,15 +226,15 @@ export default function AdminAnalyticsClient() {
                                 ? "bg-brand-600"
                                 : "bg-rose-400";
                           return (
-                            <div key={range} className="flex items-center gap-3">
-                              <span className="text-xs font-medium text-gray-600 w-16 shrink-0">{range}</span>
-                              <div className="flex-1 h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                            <div key={range} className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
+                              <span className="text-sm font-semibold text-gray-800 w-14 shrink-0 text-center">{range}</span>
+                              <div className="flex-1 h-3 bg-gray-200 rounded-full overflow-hidden">
                                 <div
                                   className={`h-full ${barColor} rounded-full transition-all duration-500`}
                                   style={{ width: `${pct}%` }}
                                 />
                               </div>
-                              <span className="text-xs font-medium text-gray-800 w-8 text-right">{count}</span>
+                              <span className="text-xs font-medium text-gray-600 w-10 text-right">{count} ({pct}%)</span>
                             </div>
                           );
                         })}
@@ -403,6 +403,100 @@ export default function AdminAnalyticsClient() {
               )}
             </div>
           </div>
+
+          {/* Competency Performance Ranking */}
+          {(summary?.competency_detail ?? []).length > 0 && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+              <div className="bg-surface p-6 rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)]">
+                <h3 className="text-lg font-semibold text-gray-900 mb-5">Competency Performance</h3>
+                <div className="space-y-3">
+                  {[...summary!.competency_detail]
+                    .sort((a, b) => b.average_score - a.average_score)
+                    .map((comp, i) => (
+                      <div key={comp.name} className="flex items-center gap-3">
+                        <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
+                          i === 0 ? "bg-amber-100 text-amber-700" :
+                          i === 1 ? "bg-gray-100 text-gray-600" :
+                          i === 2 ? "bg-orange-100 text-orange-700" :
+                          "bg-gray-50 text-gray-500"
+                        }`}>
+                          {i + 1}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-sm font-medium text-gray-800 truncate">{comp.name}</span>
+                            <span className="text-sm font-bold text-gray-700 ml-2 shrink-0">{comp.average_score}%</span>
+                          </div>
+                          <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all duration-500 ${
+                                comp.average_score >= 80 ? "bg-emerald-500" :
+                                comp.average_score >= 60 ? "bg-brand-600" :
+                                "bg-rose-400"
+                              }`}
+                              style={{ width: `${Math.min(comp.average_score, 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0 ml-2">
+                          <p className="text-xs text-gray-500">{comp.students} students</p>
+                          <p className="text-xs text-gray-400">{comp.ratings} ratings</p>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+
+              {/* Completion Overview */}
+              <div className="bg-surface p-6 rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)]">
+                <h3 className="text-lg font-semibold text-gray-900 mb-5">Completion Overview</h3>
+                <div className="flex flex-col h-full">
+                  <div className="flex items-center justify-center flex-1">
+                    <div className="text-center">
+                      <div className="relative w-40 h-40 mx-auto mb-4">
+                        <svg className="w-40 h-40 -rotate-90" viewBox="0 0 120 120">
+                          <circle cx="60" cy="60" r="54" fill="none" stroke="#e5e7eb" strokeWidth="8" />
+                          <circle
+                            cx="60" cy="60" r="54" fill="none"
+                            stroke="url(#completionGradient)"
+                            strokeWidth="8"
+                            strokeLinecap="round"
+                            strokeDasharray={`${Math.min(
+                              ((summary?.cohort.submitted_attempts ?? 0) /
+                                Math.max(summary?.cohort.total_students ?? 1, 1)) * 339.292,
+                              339.292
+                            )} 339.292`}
+                          />
+                          <defs>
+                            <linearGradient id="completionGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                              <stop offset="0%" stopColor="#155663" />
+                              <stop offset="100%" stopColor="#2a8a98" />
+                            </linearGradient>
+                          </defs>
+                        </svg>
+                        <div className="absolute inset-0 flex flex-col items-center justify-center">
+                          <p className="text-3xl font-bold text-gray-900">
+                            {summary?.cohort.total_students ?? 0}
+                          </p>
+                          <p className="text-xs text-gray-500">Students</p>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div className="p-3 bg-emerald-50 rounded-lg">
+                          <p className="text-lg font-bold text-emerald-700">{summary?.cohort.submitted_attempts ?? 0}</p>
+                          <p className="text-xs text-emerald-600">Attempts</p>
+                        </div>
+                        <div className="p-3 bg-brand-50 rounded-lg">
+                          <p className="text-lg font-bold text-brand-700">{summary?.cohort.active_students_30d ?? 0}</p>
+                          <p className="text-xs text-brand-600">Active</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden">
             <div className="p-6 border-b border-hairline">
