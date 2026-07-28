@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faChartBar,
+  faChartPie,
   faUsers,
   faDoorOpen,
   faExclamationTriangle,
@@ -13,6 +14,8 @@ import {
   faHeartbeat,
   faNotesMedical,
   faClipboardCheck,
+  faCircleCheck,
+  faGraduationCap,
 } from "@fortawesome/free-solid-svg-icons";
 import { fetchAnalyticsSummary, runWarehouseEtl, runMlJob, AnalyticsSummary } from "../../lib/api";
 
@@ -154,8 +157,9 @@ export default function AdminAnalyticsClient() {
             ))}
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-            <div className="bg-surface p-6 rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)]">
+          {/* Second row: Quiz Performance (spans 2 cols on lg) + Room Utilization */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+            <div className="lg:col-span-2 bg-surface p-6 rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)]">
               <h3 className="text-lg font-semibold text-gray-900 mb-6">Weekly Quiz Performance</h3>
               {trend.length === 0 ? (
                 <p className="text-gray-400 text-sm py-12 text-center">
@@ -163,16 +167,16 @@ export default function AdminAnalyticsClient() {
                 </p>
               ) : (
                 <>
-                  <div className="h-48 flex items-end justify-between gap-3 px-2">
+                  <div className="h-64 flex items-end justify-between gap-2 sm:gap-3 px-2">
                     {trend.map((week) => (
                       <div key={week.week_start} className="flex-1 flex flex-col items-center gap-2 group">
                         <div className="w-full relative">
-                          <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-brand-600 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
+                          <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-brand-600 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 shadow-lg">
                             {week.average_score}% · {week.attempts} attempt{week.attempts === 1 ? "" : "s"}
                           </div>
                           <div
                             className="w-full bg-gradient-to-t from-brand-600 to-[#2a8a98] rounded-t-lg transition-all duration-500 hover:opacity-80"
-                            style={{ height: `${Math.max(week.average_score, 4) * 1.7}px` }}
+                            style={{ height: `${Math.max(week.average_score, 4) * 2.2}px` }}
                           />
                         </div>
                         <span className="text-xs text-gray-500 font-medium">
@@ -181,44 +185,84 @@ export default function AdminAnalyticsClient() {
                       </div>
                     ))}
                   </div>
-                  <div className="flex items-center justify-between mt-4 pt-4 border-t border-hairline">
+                  <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-hairline">
                     <div>
                       <p className="text-2xl font-bold text-gray-800">
                         {summary?.cohort.submitted_attempts ?? 0}
                       </p>
-                      <p className="text-sm text-gray-500">Total Submitted Attempts</p>
+                      <p className="text-sm text-gray-500">Total Attempts</p>
                     </div>
-                    <div className="text-right">
-                      <p className="text-lg font-bold text-brand-600">
+                    <div className="text-center">
+                      <p className="text-2xl font-bold text-brand-600">
                         {summary?.cohort.active_students_30d ?? 0}
                       </p>
-                      <p className="text-sm text-gray-500">active students (30d)</p>
+                      <p className="text-sm text-gray-500">Active (30d)</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-2xl font-bold text-gray-800">
+                        {trend.length > 0
+                          ? `${Math.round(trend.reduce((s, w) => s + w.average_score, 0) / trend.length)}%`
+                          : "—"}
+                      </p>
+                      <p className="text-sm text-gray-500">8-Week Avg</p>
                     </div>
                   </div>
+
+                  {/* Score Distribution */}
+                  {summary?.competency_breakdown && Object.keys(summary.competency_breakdown).length > 0 && (
+                    <div className="mt-6 pt-4 border-t border-hairline">
+                      <div className="flex items-center gap-2 mb-4">
+                        <FontAwesomeIcon icon={faChartPie} className="w-4 h-4 text-brand-600" />
+                        <h4 className="text-sm font-semibold text-gray-700">Score Distribution</h4>
+                      </div>
+                      <div className="space-y-2">
+                        {Object.entries(summary.competency_breakdown).map(([range, count]) => {
+                          const total = Object.values(summary.competency_breakdown).reduce((a, b) => a + b, 0);
+                          const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+                          const barColor =
+                            parseInt(range) >= 80
+                              ? "bg-emerald-500"
+                              : parseInt(range) >= 60
+                                ? "bg-brand-600"
+                                : "bg-rose-400";
+                          return (
+                            <div key={range} className="flex items-center gap-3">
+                              <span className="text-xs font-medium text-gray-600 w-16 shrink-0">{range}</span>
+                              <div className="flex-1 h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                                <div
+                                  className={`h-full ${barColor} rounded-full transition-all duration-500`}
+                                  style={{ width: `${pct}%` }}
+                                />
+                              </div>
+                              <span className="text-xs font-medium text-gray-800 w-8 text-right">{count}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </>
               )}
             </div>
 
-            <div className="bg-surface p-6 rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)]">
+            <div className="bg-surface p-6 rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] flex flex-col">
               <h3 className="text-lg font-semibold text-gray-900 mb-6">Room Utilization</h3>
               {(summary?.room_utilization ?? []).length === 0 ? (
-                <p className="text-gray-400 text-sm py-12 text-center">
-                  No rooms configured yet — add them under Rooms.
-                </p>
+                <p className="text-gray-400 text-sm py-12 text-center">No rooms configured yet.</p>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-4 flex-1">
                   {summary!.room_utilization.map((room) => (
                     <div
                       key={room.room_number}
                       className="flex items-center gap-4 p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors"
                     >
-                      <div className="flex-1">
+                      <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm font-medium text-gray-800">
-                            {room.name} · Room {room.room_number}
+                          <span className="text-sm font-medium text-gray-800 truncate">
+                            {room.name}
                           </span>
                           <span
-                            className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                            className={`text-xs font-medium px-2 py-0.5 rounded-full shrink-0 ${
                               room.status === "active"
                                 ? "bg-green-100 text-green-700"
                                 : room.status === "maintenance"
@@ -236,12 +280,12 @@ export default function AdminAnalyticsClient() {
                               style={{ width: `${Math.min(room.utilization_pct, 100)}%` }}
                             />
                           </div>
-                          <span className="text-sm font-bold text-gray-800 w-10">
+                          <span className="text-sm font-bold text-gray-800 w-10 shrink-0">
                             {room.utilization_pct}%
                           </span>
                         </div>
                       </div>
-                      <div className="text-right">
+                      <div className="text-right shrink-0">
                         <p className="text-xs text-gray-500">
                           {room.assigned}/{room.capacity}
                         </p>
@@ -249,28 +293,114 @@ export default function AdminAnalyticsClient() {
                       </div>
                     </div>
                   ))}
+                  {/* Risk Summary at bottom of Room Utilization card */}
+                  {(summary?.risk_distribution?.at_risk ?? 0) > 0 && (
+                    <div className="mt-auto pt-4 border-t border-hairline">
+                      <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Risk Summary</h4>
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden">
+                          <div className="flex h-full">
+                            <div
+                              className="bg-emerald-500 h-full transition-all"
+                              style={{
+                                width: `${summary?.risk_distribution ? Math.round(
+                                  ((summary.risk_distribution.safe ?? 0) /
+                                    ((summary.risk_distribution.safe ?? 0) + (summary.risk_distribution.at_risk ?? 0))) * 100
+                                ) : 0}%`,
+                              }}
+                            />
+                            <div
+                              className="bg-rose-400 h-full transition-all"
+                              style={{
+                                width: `${summary?.risk_distribution ? Math.round(
+                                  ((summary.risk_distribution.at_risk ?? 0) /
+                                    ((summary.risk_distribution.safe ?? 0) + (summary.risk_distribution.at_risk ?? 0))) * 100
+                                ) : 0}%`,
+                              }}
+                            />
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs shrink-0">
+                          <span className="flex items-center gap-1">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                            {summary?.risk_distribution?.safe ?? 0}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <span className="w-2 h-2 rounded-full bg-rose-400" />
+                            {summary?.risk_distribution?.at_risk ?? 0}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
           </div>
 
-          <div className="bg-surface p-6 rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] mb-8">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Clinical Training Activity</h3>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-              {[
-                { icon: faHeartbeat, label: "Vital Readings", value: activity?.vital_readings ?? 0 },
-                { icon: faExclamationTriangle, label: "Anomalies Flagged", value: activity?.anomalies ?? 0 },
-                { icon: faNotesMedical, label: "TPR Entries", value: activity?.tpr_entries ?? 0 },
-                { icon: faNotesMedical, label: "IVF Records", value: activity?.ivf_records ?? 0 },
-                { icon: faNotesMedical, label: "Progress Notes", value: activity?.progress_notes ?? 0 },
-                { icon: faClipboardCheck, label: "Notes Reviewed", value: activity?.notes_reviewed ?? 0 },
-              ].map((item) => (
-                <div key={item.label} className="p-3 bg-gray-50 rounded-lg text-center">
-                  <FontAwesomeIcon icon={item.icon} className="w-4 h-4 text-brand-600 mb-2" />
-                  <p className="text-2xl font-bold text-gray-800">{item.value}</p>
-                  <p className="text-xs text-gray-500 mt-1">{item.label}</p>
+          {/* Third row: Clinical Activity + Section Performance split */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+            <div className="lg:col-span-2 bg-surface p-6 rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)]">
+              <h3 className="text-lg font-semibold text-gray-900 mb-5">Clinical Training Activity</h3>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                {[
+                  { icon: faHeartbeat, label: "Vital Readings", value: activity?.vital_readings ?? 0, color: "text-rose-600", bg: "bg-rose-50" },
+                  { icon: faExclamationTriangle, label: "Anomalies", value: activity?.anomalies ?? 0, color: "text-amber-600", bg: "bg-amber-50" },
+                  { icon: faNotesMedical, label: "TPR Entries", value: activity?.tpr_entries ?? 0, color: "text-blue-600", bg: "bg-blue-50" },
+                  { icon: faNotesMedical, label: "IVF Records", value: activity?.ivf_records ?? 0, color: "text-purple-600", bg: "bg-purple-50" },
+                  { icon: faNotesMedical, label: "Progress Notes", value: activity?.progress_notes ?? 0, color: "text-cyan-600", bg: "bg-cyan-50" },
+                  { icon: faClipboardCheck, label: "Notes Reviewed", value: activity?.notes_reviewed ?? 0, color: "text-emerald-600", bg: "bg-emerald-50" },
+                ].map((item) => (
+                  <div key={item.label} className={`${item.bg} rounded-xl p-4`}>
+                    <div className="flex items-center gap-3">
+                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${item.bg} border border-white/50`}>
+                        <FontAwesomeIcon icon={item.icon} className={`w-4 h-4 ${item.color}`} />
+                      </div>
+                      <div>
+                        <p className="text-xl font-bold text-gray-800">{item.value}</p>
+                        <p className="text-xs text-gray-500">{item.label}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Section Performance */}
+            <div className="bg-surface p-6 rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)]">
+              <h3 className="text-lg font-semibold text-gray-900 mb-5">
+                <FontAwesomeIcon icon={faGraduationCap} className="w-4 h-4 text-brand-600 mr-2" />
+                Section Summary
+              </h3>
+              {(summary?.sections ?? []).length === 0 ? (
+                <p className="text-gray-400 text-sm py-8 text-center">No sections configured.</p>
+              ) : (
+                <div className="space-y-3">
+                  {summary!.sections.map((sec) => (
+                    <div key={sec.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                      <span className="text-sm font-medium text-gray-800 truncate">{sec.name}</span>
+                      <span className="flex items-center gap-1.5 text-sm text-gray-600 shrink-0 ml-3">
+                        <FontAwesomeIcon icon={faUsers} className="w-3 h-3 text-gray-400" />
+                        {sec.students}
+                      </span>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              )}
+              {summary?.cohort.average_score != null && (
+                <div className="mt-4 pt-4 border-t border-hairline">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-gray-700">Overall Average</span>
+                    <span className="text-sm font-bold text-brand-600">{summary.cohort.average_score}%</span>
+                  </div>
+                  <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-brand-600 to-[#2a8a98] rounded-full"
+                      style={{ width: `${Math.min(summary.cohort.average_score, 100)}%` }}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
