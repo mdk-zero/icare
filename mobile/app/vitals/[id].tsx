@@ -204,7 +204,7 @@ export default function VitalDetailScreen() {
 
       <View style={styles.alertSection}>
         <View style={styles.alertHeader}>
-          <Ionicons name="pulse" size={20} color={Accent.amber.fg} />
+          <Ionicons name="pulse" size={20} color={Palette.textSecondary} />
           <Text style={styles.alertTitle}>Anomaly Detection</Text>
         </View>
         <Text style={styles.alertDesc}>
@@ -476,12 +476,15 @@ function createStyles(
     marginLeft: 4,
   },
   alertSection: {
-    backgroundColor: Accent.amber.bg,
+    // A reference legend, not a live alert -- it reads as a peer of the other
+    // cards so the amber/red tones stay meaningful for actual anomalies.
+    backgroundColor: Palette.surface,
     borderRadius: Radius.lg,
     padding: Spacing.lg,
     marginBottom: Spacing.lg,
     borderWidth: 1,
-    borderColor: Accent.amber.border,
+    borderColor: Palette.border,
+    ...Shadow.card,
   },
   alertHeader: {
     flexDirection: 'row',
@@ -507,9 +510,12 @@ function createStyles(
   ruleItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    // Chips sit on alertSection's amber fill, so they stay neutral: a second
-    // saturated layer under the four accent dots made the card shout.
-    backgroundColor: Palette.surface,
+    // Inset against the card behind them; the dots carry the only color here.
+    // surfaceMuted alone is ~1.05:1 against surface, so the outline is what
+    // actually makes these read as chips -- same trick the cards use.
+    backgroundColor: Palette.surfaceMuted,
+    borderWidth: 1,
+    borderColor: Palette.border,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 8,
