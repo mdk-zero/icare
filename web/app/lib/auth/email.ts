@@ -15,7 +15,6 @@ type SmtpConfig = {
   pass: string;
   fromAddress: string;
   fromName: string;
-  sendInDev: boolean;
 };
 
 let transporter: Transporter | null = null;
@@ -48,7 +47,6 @@ function getSmtpConfig(): SmtpConfig {
     pass: process.env.SMTP_PASS!,
     fromAddress: process.env.SMTP_FROM_EMAIL!,
     fromName: process.env.SMTP_FROM_NAME || "iCARE++",
-    sendInDev: process.env.SMTP_SEND_IN_DEV === "true",
   };
 }
 
@@ -90,8 +88,23 @@ function htmlEscape(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
+function isSmtpConfigured(): boolean {
+  return Boolean(
+    process.env.SMTP_HOST &&
+      process.env.SMTP_PORT &&
+      process.env.SMTP_USER &&
+      process.env.SMTP_PASS &&
+      process.env.SMTP_FROM_EMAIL,
+  );
+}
+
 function shouldSkipSending(): boolean {
-  return process.env.NODE_ENV === "development" && !getSmtpConfig().sendInDev;
+  if (process.env.NODE_ENV !== "development") return false;
+  // A machine with no SMTP set up is exactly what the dev skip is for, so the
+  // decision must not route through getSmtpConfig() -- that throws on missing
+  // SMTP_*, turning "skip quietly" into a 500 before the skip is ever checked.
+  if (!isSmtpConfigured()) return true;
+  return process.env.SMTP_SEND_IN_DEV !== "true";
 }
 
 async function sendEmail(options: {
@@ -252,6 +265,13 @@ export async function sendPasswordResetOtp(
 ): Promise<void> {
   if (!otp || otp.length < 4) {
     throw new Error("A valid OTP is required");
+  }
+
+  // Matches sendPasswordChangeOtp: when dev mode skips delivery, the code has
+  // to surface somewhere or the reset flow is untestable without live SMTP.
+  if (shouldSkipSending()) {
+    console.log(`[DEV] Password reset OTP for ${email}: ${otp}`);
+    return;
   }
 
   await sendEmail({
