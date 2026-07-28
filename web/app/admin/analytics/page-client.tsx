@@ -158,7 +158,7 @@ export default function AdminAnalyticsClient() {
 
           {/* Second row: Quiz Performance (spans 2 cols on lg) + Room Utilization */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-            <div className="lg:col-span-2 bg-surface p-6 rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)]">
+            <div className="lg:col-span-2 bg-surface p-6 rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] flex flex-col h-full">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Weekly Quiz Performance</h3>
               {trend.length === 0 ? (
                 <p className="text-gray-400 text-sm py-12 text-center">
@@ -166,19 +166,19 @@ export default function AdminAnalyticsClient() {
                 </p>
               ) : (
                 <>
-                  <div className="h-48 flex items-end justify-between gap-2 sm:gap-3 px-2">
+                  <div className="flex-1 min-h-0 flex items-end justify-between gap-2 sm:gap-3 px-2 pb-1">
                     {trend.map((week) => (
-                      <div key={week.week_start} className="flex-1 flex flex-col items-center gap-2 group">
-                        <div className="w-full relative">
-                          <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-brand-600 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 shadow-lg">
+                      <div key={week.week_start} className="flex-1 flex flex-col items-center gap-1 group h-full justify-end">
+                        <div className="w-full relative flex flex-col justify-end flex-1">
+                          <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-brand-600 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 shadow-lg">
                             {week.average_score}% · {week.attempts} attempt{week.attempts === 1 ? "" : "s"}
                           </div>
                           <div
                             className="w-full bg-gradient-to-t from-brand-600 to-[#2a8a98] rounded-t-lg transition-all duration-500 hover:opacity-80"
-                            style={{ height: `${Math.max(week.average_score, 4) * 2.2}px` }}
+                            style={{ height: `${week.average_score}%` }}
                           />
                         </div>
-                        <span className="text-xs text-gray-500 font-medium">
+                        <span className="text-xs text-gray-500 font-medium shrink-0">
                           {new Date(week.week_start).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
                         </span>
                       </div>
