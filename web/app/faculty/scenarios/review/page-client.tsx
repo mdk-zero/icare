@@ -17,6 +17,7 @@ import {
   setFacultyTaskChecked,
   finalizeScenarioAssignment,
 } from "../../../lib/api";
+import { toast } from "../../../components/Toast";
 
 type Filter = "awaiting" | "in_progress" | "completed" | "all";
 
@@ -165,6 +166,7 @@ export default function FacultyScenarioReviewClient() {
         ),
       );
       await loadTasks(selectedId);
+      toast("Assignment finalized");
     }
     setFinalizing(false);
   };
