@@ -189,14 +189,14 @@ export default function VitalDetailScreen() {
           <Text style={styles.patientName}>{patient.name}</Text>
           <View style={styles.patientMeta}>
             <View style={styles.metaRow}>
-              <Ionicons name="calendar-outline" size={14} color="#64748b" />
+              <Ionicons name="calendar-outline" size={14} color={Palette.textSecondary} />
               <Text style={styles.metaText}>
                 {patient.age !== null ? `${patient.age} years` : 'Age —'} • {patient.gender ?? '—'}
               </Text>
             </View>
           </View>
           <View style={styles.roomRow}>
-            <Ionicons name="bed-outline" size={14} color="#94a3b8" />
+            <Ionicons name="bed-outline" size={14} color={Palette.textMuted} />
             <Text style={styles.roomText}>{patient.room_number ? `Room ${patient.room_number}` : 'No room'}</Text>
           </View>
         </View>
@@ -204,7 +204,7 @@ export default function VitalDetailScreen() {
 
       <View style={styles.alertSection}>
         <View style={styles.alertHeader}>
-          <Ionicons name="pulse" size={20} color="#d97706" />
+          <Ionicons name="pulse" size={20} color={Accent.amber.fg} />
           <Text style={styles.alertTitle}>Anomaly Detection</Text>
         </View>
         <Text style={styles.alertDesc}>
@@ -212,19 +212,19 @@ export default function VitalDetailScreen() {
         </Text>
         <View style={styles.rulesGrid}>
           <View style={styles.ruleItem}>
-            <View style={[styles.ruleDot, { backgroundColor: '#dc2626' }]} />
+            <View style={[styles.ruleDot, { backgroundColor: Accent.red.fg }]} />
             <Text style={styles.ruleText}>HR: 60-100 bpm</Text>
           </View>
           <View style={styles.ruleItem}>
-            <View style={[styles.ruleDot, { backgroundColor: '#7c3aed' }]} />
+            <View style={[styles.ruleDot, { backgroundColor: Accent.violet.fg }]} />
             <Text style={styles.ruleText}>BP: 90-140/60-90</Text>
           </View>
           <View style={styles.ruleItem}>
-            <View style={[styles.ruleDot, { backgroundColor: '#d97706' }]} />
+            <View style={[styles.ruleDot, { backgroundColor: Accent.amber.fg }]} />
             <Text style={styles.ruleText}>Temp: 36.1-37.5°C</Text>
           </View>
           <View style={styles.ruleItem}>
-            <View style={[styles.ruleDot, { backgroundColor: '#0891b2' }]} />
+            <View style={[styles.ruleDot, { backgroundColor: Accent.cyan.fg }]} />
             <Text style={styles.ruleText}>SpO2: ≥95%</Text>
           </View>
         </View>
@@ -242,7 +242,7 @@ export default function VitalDetailScreen() {
                 onChangeText={setHeartRate}
                 keyboardType="number-pad"
                 placeholder="60-100"
-                placeholderTextColor="#94a3b8"
+                placeholderTextColor={Palette.textMuted}
               />
             </View>
             <View style={styles.formField}>
@@ -253,7 +253,7 @@ export default function VitalDetailScreen() {
                 onChangeText={setTemperature}
                 keyboardType="decimal-pad"
                 placeholder="36.5"
-                placeholderTextColor="#94a3b8"
+                placeholderTextColor={Palette.textMuted}
               />
             </View>
           </View>
@@ -266,7 +266,7 @@ export default function VitalDetailScreen() {
                 onChangeText={setBpSystolic}
                 keyboardType="number-pad"
                 placeholder="120"
-                placeholderTextColor="#94a3b8"
+                placeholderTextColor={Palette.textMuted}
               />
             </View>
             <View style={styles.formField}>
@@ -277,7 +277,7 @@ export default function VitalDetailScreen() {
                 onChangeText={setBpDiastolic}
                 keyboardType="number-pad"
                 placeholder="80"
-                placeholderTextColor="#94a3b8"
+                placeholderTextColor={Palette.textMuted}
               />
             </View>
           </View>
@@ -290,7 +290,7 @@ export default function VitalDetailScreen() {
                 onChangeText={setRespiration}
                 keyboardType="number-pad"
                 placeholder="12-20"
-                placeholderTextColor="#94a3b8"
+                placeholderTextColor={Palette.textMuted}
               />
             </View>
             <View style={styles.formField}>
@@ -301,7 +301,7 @@ export default function VitalDetailScreen() {
                 onChangeText={setSpo2}
                 keyboardType="number-pad"
                 placeholder="95-100"
-                placeholderTextColor="#94a3b8"
+                placeholderTextColor={Palette.textMuted}
               />
             </View>
           </View>
@@ -314,7 +314,7 @@ export default function VitalDetailScreen() {
                 onChangeText={setPainScore}
                 keyboardType="number-pad"
                 placeholder="0"
-                placeholderTextColor="#94a3b8"
+                placeholderTextColor={Palette.textMuted}
               />
             </View>
             <View style={styles.formField}>
@@ -324,7 +324,7 @@ export default function VitalDetailScreen() {
                 value={notes}
                 onChangeText={setNotes}
                 placeholder="Optional"
-                placeholderTextColor="#94a3b8"
+                placeholderTextColor={Palette.textMuted}
               />
             </View>
           </View>
@@ -346,7 +346,7 @@ export default function VitalDetailScreen() {
             <VitalsRow reading={latest} styles={styles} />
             {latest.is_anomaly && (
               <View style={styles.anomalyAlert}>
-                <Ionicons name="warning" size={16} color="#dc2626" />
+                <Ionicons name="warning" size={16} color={Accent.red.fg} />
                 <View style={styles.anomalyContent}>
                   <Text style={styles.anomalyTitle}>Anomaly Detected</Text>
                   {latest.anomaly_reasons.map((reason, idx) => (
@@ -356,7 +356,7 @@ export default function VitalDetailScreen() {
               </View>
             )}
             <View style={styles.timestampRow}>
-              <Ionicons name="time-outline" size={12} color="#94a3b8" />
+              <Ionicons name="time-outline" size={12} color={Palette.textMuted} />
               <Text style={styles.timestamp}>
                 {new Date(latest.recorded_at).toLocaleString([], {
                   month: 'short',
@@ -383,7 +383,7 @@ export default function VitalDetailScreen() {
             >
               <View style={styles.historyHeader}>
                 <View style={styles.historyTimeRow}>
-                  <Ionicons name="time-outline" size={12} color="#64748b" />
+                  <Ionicons name="time-outline" size={12} color={Palette.textSecondary} />
                   <Text style={styles.historyTime}>
                     {new Date(reading.recorded_at).toLocaleString([], {
                       month: 'short',
@@ -491,12 +491,12 @@ function createStyles(
   alertTitle: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#92400e',
+    color: Palette.ink,
     marginLeft: 8,
   },
   alertDesc: {
     fontSize: 13,
-    color: '#92400e',
+    color: Palette.text,
     marginBottom: 12,
   },
   rulesGrid: {
@@ -507,7 +507,9 @@ function createStyles(
   ruleItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fffbeb',
+    // Chips sit on alertSection's amber fill, so they stay neutral: a second
+    // saturated layer under the four accent dots made the card shout.
+    backgroundColor: Palette.surface,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 8,
@@ -520,7 +522,7 @@ function createStyles(
   },
   ruleText: {
     fontSize: 11,
-    color: '#92400e',
+    color: Palette.text,
     fontWeight: '500',
   },
   section: {
@@ -557,7 +559,7 @@ function createStyles(
     borderRadius: Radius.md,
     padding: 12,
     fontSize: 16,
-    color: '#1E293B',
+    color: Palette.ink,
     borderWidth: 1,
     borderColor: Palette.border,
   },
@@ -660,7 +662,7 @@ function createStyles(
   historyVitalValue: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#1E293B',
+    color: Palette.ink,
   },
   emptyHistory: {
     fontSize: 13,
