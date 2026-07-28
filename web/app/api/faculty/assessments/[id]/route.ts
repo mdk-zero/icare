@@ -24,7 +24,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
     const { data: assessment, error } = await supabase
       .from('assessments')
       .select(
-        'id, created_by, title, description, difficulty, category, time_limit_seconds, is_published, is_ai_generated, target_sections, created_at, updated_at, questions(id, position, content, options, correct_index, question_type, points, explanation, difficulty, question_competencies(competency_id))',
+        'id, created_by, title, description, difficulty, category, time_limit_seconds, is_published, is_ai_generated, target_sections, total_questions, max_attempts, created_at, updated_at, questions(id, position, content, options, correct_index, question_type, points, explanation, difficulty, criteria_id, question_competencies(competency_id))',
       )
       .eq('id', id)
       .single();
@@ -44,6 +44,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
         points: q.points ?? 1,
         explanation: q.explanation,
         difficulty: q.difficulty,
+        criteria_id: q.criteria_id ?? null,
         competency_ids: (
           (q as unknown as { question_competencies: { competency_id: string }[] })
             .question_competencies ?? []
@@ -51,8 +52,14 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
       }))
       .sort((a, b) => a.position - b.position);
 
+    // Sent with every load so the editor can show what is standing between
+    // this assessment and being publishable, instead of only finding out when
+    // the publish button is pressed.
+    const blockers = await assessmentPublishBlockers(supabase, id);
+
     return NextResponse.json({
       assessment: { ...assessment, questions },
+      blockers,
     });
   } catch (err) {
     console.error('Fetch assessment failed', err);
