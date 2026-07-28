@@ -55,6 +55,7 @@ export default function FacultyAssessmentsClient() {
   const [busy, setBusy] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [confirmDelete, setConfirmDelete] = useState<Assessment | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const filteredAssessments = assessments.filter((a) => {
     if (!searchQuery.trim()) return true;
@@ -115,16 +116,18 @@ export default function FacultyAssessmentsClient() {
 
   const confirmAndDelete = async (a: Assessment) => {
     setBusy(true);
+    setDeleteError(null);
     const res = await fetch(`/api/faculty/assessments/${a.id}`, {
       method: "DELETE",
       credentials: "include",
     });
     setBusy(false);
     if (!res.ok) {
-      toast("Failed to delete assessment");
+      setDeleteError("Failed to delete assessment. Please try again.");
       return;
     }
     toast("Assessment deleted");
+    setConfirmDelete(null);
     loadAssessments();
   };
 
@@ -395,10 +398,17 @@ export default function FacultyAssessmentsClient() {
         <ConfirmModal
           config={{
             title: "Delete Assessment",
-            message: `Delete "${confirmDelete.title}" and all its questions? This cannot be undone.`,
+            message: (
+              <>
+                <span className="font-medium text-gray-700">{confirmDelete.title}</span> will be
+                permanently removed. This can&apos;t be undone.
+              </>
+            ),
+            loading: busy,
+            error: deleteError,
             onConfirm: () => confirmAndDelete(confirmDelete),
           }}
-          onClose={() => setConfirmDelete(null)}
+          onClose={() => { if (!busy) setConfirmDelete(null); }}
         />
       )}
     </div>

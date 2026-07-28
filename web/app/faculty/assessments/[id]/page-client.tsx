@@ -148,7 +148,7 @@ export default function AssessmentQuestionsClient({
   const [assessment, setAssessment] = useState<AssessmentDetail | null>(null);
   const [questions, setQuestions] = useState<AssessmentQuestion[]>([]);
   const [loading, setLoading] = useState(true);
-  const [confirmAction, setConfirmAction] = useState<{ title: string; message: string; action: () => void } | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{ title: string; message: string; action: () => void; loading?: boolean; error?: string | null } | null>(null);
 
   const [questionBuilders, setQuestionBuilders] = useState<
     Record<string, QuestionFormData>
@@ -429,16 +429,15 @@ export default function AssessmentQuestionsClient({
     }
     setConfirmAction({
       title: "Delete Question",
-      message: "Delete this question?",
+      message: "Delete this question permanently? This can't be undone.",
       action: async () => {
-        setSavingQuestions((prev) => ({ ...prev, [qId]: true }));
+        setConfirmAction((prev) => prev ? { ...prev, loading: true, error: null } : null);
         const res = await fetch(`/api/faculty/questions/${qId}`, {
           method: "DELETE",
           credentials: "include",
         });
-        setSavingQuestions((prev) => ({ ...prev, [qId]: false }));
         if (!res.ok) {
-          toast("Failed to delete question");
+          setConfirmAction((prev) => prev ? { ...prev, loading: false, error: "Failed to delete question. Please try again." } : null);
           return;
         }
         setQuestions((prev) => prev.filter((q) => q.id !== qId));
@@ -446,6 +445,7 @@ export default function AssessmentQuestionsClient({
           const { [qId]: _, ...rest } = prev;
           return rest;
         });
+        setConfirmAction(null);
         toast("Question deleted");
       },
     });
@@ -707,17 +707,20 @@ export default function AssessmentQuestionsClient({
   const deleteCriteria = async (id: string) => {
     setConfirmAction({
       title: "Remove Criteria",
-      message: "Remove this criteria?",
+      message: "Remove this criteria permanently? This can't be undone.",
       action: async () => {
+        setConfirmAction((prev) => prev ? { ...prev, loading: true, error: null } : null);
         const res = await fetch(`/api/faculty/assessment-criteria/${id}`, {
           method: "DELETE",
           credentials: "include",
         });
         if (!res.ok) {
-          toast("Failed to delete criteria");
+          setConfirmAction((prev) => prev ? { ...prev, loading: false, error: "Failed to remove criteria. Please try again." } : null);
           return;
         }
         setCriteria((prev) => prev.filter((c) => c.id !== id));
+        setConfirmAction(null);
+        toast("Criteria removed");
       },
     });
   };
@@ -1311,9 +1314,11 @@ export default function AssessmentQuestionsClient({
           config={{
             title: confirmAction.title,
             message: confirmAction.message,
+            loading: confirmAction.loading,
+            error: confirmAction.error,
             onConfirm: confirmAction.action,
           }}
-          onClose={() => setConfirmAction(null)}
+          onClose={() => { if (!confirmAction.loading) setConfirmAction(null); }}
         />
       )}
     </div>
