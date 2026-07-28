@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, Fragment } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { toast } from "../../components/Toast";
 import {
   faNotesMedical,
   faCheckCircle,
@@ -239,6 +240,7 @@ export default function FacultyEhrClient() {
       setError(result.error);
       return;
     }
+    toast("Note reviewed");
     if (selectedPatient) {
       loadRecords(selectedPatient.id, tab);
     }
@@ -248,15 +250,20 @@ export default function FacultyEhrClient() {
     if (selectedIds.size === 0) return;
     setReviewingAll(true);
     setError(null);
+    const reviewed: string[] = [];
     for (const id of selectedIds) {
       const result = await reviewProgressNote(id);
       if (result.error) {
         setError(result.error);
         break;
       }
+      reviewed.push(id);
     }
     setReviewingAll(false);
     setSelectedIds(new Set());
+    if (reviewed.length > 0) {
+      toast(`${reviewed.length} note${reviewed.length === 1 ? "" : "s"} reviewed`);
+    }
     if (selectedPatient) {
       loadRecords(selectedPatient.id, tab);
     }

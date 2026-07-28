@@ -24,6 +24,7 @@ import {
   faArrowLeft,
   faGraduationCap,
 } from "@fortawesome/free-solid-svg-icons";
+import { toast } from "../../components/Toast";
 import {
   fetchFacultyStudents,
   createFacultyStudent,
@@ -409,15 +410,9 @@ export default function FacultyStudentsClient() {
       }
 
       if (data?.warning) {
-        setMessage({
-          type: "warning",
-          text: `${data.student.name} has been created. ${data.warning}`,
-        });
+        toast(`${data.student.name} has been created. ${data.warning}`);
       } else {
-        setMessage({
-          type: "success",
-          text: `${data!.student.name} has been invited successfully!`,
-        });
+        toast(`${data!.student.name} has been invited successfully!`);
       }
 
       setCreatedPassword(data?.password ?? null);
@@ -480,7 +475,7 @@ export default function FacultyStudentsClient() {
         return;
       }
 
-      setMessage({ type: "success", text: `${data!.name} has been updated successfully!` });
+      toast(`${data!.name} has been updated successfully!`);
       setShowUpdateModal(false);
       setUpdatingStudent(null);
       loadStudentUsers();
@@ -517,10 +512,7 @@ export default function FacultyStudentsClient() {
         return;
       }
 
-      setMessage({
-        type: "success",
-        text: `${deletingStudent.name} has been deleted successfully!`,
-      });
+      toast(`${deletingStudent.name} has been deleted successfully!`);
       setShowDeleteModal(false);
       setDeletingStudent(null);
       loadStudentUsers();

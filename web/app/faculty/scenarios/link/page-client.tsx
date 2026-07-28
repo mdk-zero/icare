@@ -21,6 +21,7 @@ import {
   FacultyPatient,
 } from "../../../lib/api";
 import PageHeader from "../../../components/PageHeader";
+import { toast } from "../../../components/Toast";
 
 const inputClassName =
   "w-full px-4 py-3 bg-surface border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 focus:bg-surface transition-all text-sm shadow-sm";
@@ -148,6 +149,7 @@ export default function LinkPatientsClient() {
           metadata: { count: linked, mode },
         });
       }
+      toast(`Linked patients to ${linked} scenario${linked === 1 ? "" : "s"}`);
     }
 
     router.push("/faculty/scenarios");

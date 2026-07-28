@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
+import { toast } from "../../components/Toast";
 import {
   faFileLines,
   faSpinner,
@@ -176,6 +177,7 @@ export default function FacultyReportsClient() {
       const disposition = res.headers.get("Content-Disposition") ?? "";
       const match = disposition.match(/filename="([^"]+)"/);
       link.download = match?.[1] ?? `icare-${kind}-report.${format}`;
+      toast(`Report downloaded — ${link.download}`);
       document.body.appendChild(link);
       link.click();
       link.remove();

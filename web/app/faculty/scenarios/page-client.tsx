@@ -30,6 +30,7 @@ import {
   faTrash,
   faTriangleExclamation,
 } from "@fortawesome/free-solid-svg-icons";
+import { toast } from "../../components/Toast";
 import {
   fetchFacultyScenarios,
   createScenario,
@@ -384,6 +385,7 @@ export default function FacultyScenariosClient() {
           metadata: { count: saved, requested: batchCount, topic: batchTopic.trim() || null },
         });
       }
+      toast(`Saved ${saved} scenario${saved === 1 ? "" : "s"}`);
     }
 
     setBatchSaving(false);
@@ -444,6 +446,7 @@ export default function FacultyScenariosClient() {
           metadata: { scenario_title: updated.title },
         });
       }
+      toast("Scenario updated");
     }
 
     setSaving(false);
@@ -530,6 +533,7 @@ export default function FacultyScenariosClient() {
           },
         });
       }
+      toast(`Assigned to ${selectedStudents.length} student${selectedStudents.length === 1 ? "" : "s"}`);
     }
 
     setAssigning(false);
@@ -579,6 +583,7 @@ export default function FacultyScenariosClient() {
           metadata: { scenario_title: linkPatientTarget.title, patient_id: linkPatientId || null },
         });
       }
+      toast(linkPatientId ? "Patient linked" : "Patient unlinked");
     }
 
     setSavingPatientLink(false);
@@ -624,6 +629,7 @@ export default function FacultyScenariosClient() {
         target_id: deleteTarget.id,
         metadata: { scenario_title: deleteTarget.title },
       });
+      toast("Scenario deleted");
     }
 
     setDeleting(false);

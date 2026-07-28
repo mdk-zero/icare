@@ -35,18 +35,22 @@ export default function FacultyNotificationsClient() {
     setLoading(false);
   };
 
+  const refreshUnread = () => window.dispatchEvent(new Event('unread-changed'));
+
   const handleMarkAsRead = async (id: string) => {
     await markNotificationRead(id);
     setNotifications(notifications.map(n =>
       n.id === id ? { ...n, is_read: true } : n
     ));
     setUnreadCount(Math.max(0, unreadCount - 1));
+    refreshUnread();
   };
 
   const handleMarkAllAsRead = async () => {
     await markAllNotificationsRead();
     setNotifications(notifications.map(n => ({ ...n, is_read: true })));
     setUnreadCount(0);
+    refreshUnread();
   };
 
   const getNotificationIcon = (type: string): IconDefinition => {

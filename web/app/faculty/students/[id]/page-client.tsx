@@ -10,6 +10,7 @@ import {
   faCircleCheck,
   faClipboardCheck,
 } from "@fortawesome/free-solid-svg-icons";
+import { toast } from "../../../components/Toast";
 import {
   resolveCompetencies,
   COMPETENCY_LEVEL_LABEL,
@@ -189,6 +190,7 @@ export default function StudentDetailClient() {
       return;
     }
     setValidateForm({ competency_id: "", score: "", remarks: "" });
+    toast("Competency score recorded");
     await loadCompetencyData();
   };
 

@@ -224,9 +224,13 @@ export default function Shell({ role, navItems, isActive, children }: ShellProps
       } catch { /* ignore */ }
     };
     fetchCount();
-    const onFocus = () => fetchCount();
-    window.addEventListener('focus', onFocus);
-    return () => window.removeEventListener('focus', onFocus);
+    const onRefresh = () => fetchCount();
+    window.addEventListener('focus', onRefresh);
+    window.addEventListener('unread-changed', onRefresh);
+    return () => {
+      window.removeEventListener('focus', onRefresh);
+      window.removeEventListener('unread-changed', onRefresh);
+    };
   }, []);
 
   const handleLogout = () => {
