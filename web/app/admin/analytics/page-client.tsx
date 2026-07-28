@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faChartBar,
-  faChartPie,
   faUsers,
   faDoorOpen,
   faExclamationTriangle,
@@ -248,44 +247,6 @@ export default function AdminAnalyticsClient() {
                     </div>
                   </div>
 
-                  {/* Score Distribution */}
-                  {summary?.competency_breakdown && Object.keys(summary.competency_breakdown).length > 0 && (
-                    <div className="mt-6 pt-4 border-t border-hairline">
-                      <div className="flex items-center gap-2 mb-4">
-                        <FontAwesomeIcon icon={faChartPie} className="w-4 h-4 text-brand-600" />
-                        <h4 className="text-sm font-semibold text-gray-700">Score Distribution</h4>
-                      </div>
-                      <div className="space-y-2">
-                        {Object.entries(summary.competency_breakdown).map(([name, value]) => {
-                          const total = Object.values(summary.competency_breakdown).reduce((a, b) => a + b, 0);
-                          const pct = total > 0 ? Math.round((value / total) * 100) : 0;
-                          const avgScore = typeof value === 'number' && !isNaN(value) ? value : 0;
-                          const barColor =
-                            avgScore >= 80
-                              ? "bg-emerald-500"
-                              : avgScore >= 60
-                                ? "bg-brand-600"
-                                : "bg-rose-400";
-                          return (
-                            <div key={name} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center justify-between mb-1">
-                                  <span className="text-sm font-medium text-gray-800 truncate">{name}</span>
-                                  <span className="text-xs font-semibold text-gray-600 shrink-0 ml-2">{avgScore} ({pct}%)</span>
-                                </div>
-                                <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                                  <div
-                                    className={`h-full ${barColor} rounded-full transition-all duration-500`}
-                                    style={{ width: `${Math.min(pct, 100)}%` }}
-                                  />
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
                 </>
               )}
             </div>
