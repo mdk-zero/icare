@@ -1,0 +1,6 @@
+# Shell scripts must keep LF endings. Checked out with CRLF (the Git for
+# Windows default) bash fails on the shebang with a bare `\r: command not found`.
+*.sh text eol=lf
+
+# Same reasoning for the env templates start.sh sources.
+.env.example text eol=lf
