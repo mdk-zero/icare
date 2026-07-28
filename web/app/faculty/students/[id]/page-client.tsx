@@ -351,7 +351,7 @@ export default function StudentDetailClient() {
                   </div>
                   <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
                     <div
-                      className={`h-full rounded-full ${riskPrediction.risk === 'at_risk' ? 'bg-red-500' : 'bg-emerald-500'}`}
+                      className={`h-full rounded-full ${riskPrediction.risk === 'at_risk' ? 'bg-red-600' : 'bg-emerald-600'}`}
                       style={{ width: `${Math.round(riskPrediction.probability * 100)}%` }}
                     />
                   </div>
@@ -364,7 +364,7 @@ export default function StudentDetailClient() {
                     {riskPrediction.explanations.map((exp) => (
                       <div key={exp.feature} className="flex items-center justify-between text-xs">
                         <div className="flex items-center gap-2">
-                          <div className={`w-2 h-2 rounded-full ${exp.direction === 'increases_risk' ? 'bg-red-500' : 'bg-emerald-500'}`} />
+                          <div className={`w-2 h-2 rounded-full ${exp.direction === 'increases_risk' ? 'bg-red-600' : 'bg-emerald-600'}`} />
                           <span className="text-gray-600">{featureLabel(exp.feature)}</span>
                         </div>
                         <span className="text-gray-500">
@@ -431,8 +431,8 @@ export default function StudentDetailClient() {
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 {[
-                  { title: "Strengths", items: aiSummary.strengths, dot: "bg-emerald-500" },
-                  { title: "Areas for Improvement", items: aiSummary.areas_for_improvement, dot: "bg-amber-500" },
+                  { title: "Strengths", items: aiSummary.strengths, dot: "bg-emerald-600" },
+                  { title: "Areas for Improvement", items: aiSummary.areas_for_improvement, dot: "bg-amber-600" },
                   { title: "Recommendations", items: aiSummary.recommendations, dot: "bg-brand-600" },
                 ].map((section) => (
                   <div key={section.title} className="p-4 bg-gray-50 rounded-xl">

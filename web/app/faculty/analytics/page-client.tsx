@@ -393,12 +393,12 @@ function RiskDonut({ safe, atRisk }: { safe: number; atRisk: number }) {
       </div>
       <div className="flex items-center gap-5">
         <span className="flex items-center gap-2 text-sm">
-          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-emerald-100" />
+          <span className="w-2.5 h-2.5 rounded-full bg-emerald-600 ring-2 ring-emerald-100" />
           <span className="text-gray-500">Safe</span>
           <span className="font-bold text-gray-900">{safe}</span>
         </span>
         <span className="flex items-center gap-2 text-sm">
-          <span className="w-2.5 h-2.5 rounded-full bg-rose-500 ring-2 ring-rose-100" />
+          <span className="w-2.5 h-2.5 rounded-full bg-rose-600 ring-2 ring-rose-100" />
           <span className="text-gray-500">At risk</span>
           <span className="font-bold text-gray-900">{atRisk}</span>
         </span>
@@ -421,11 +421,11 @@ function HBars({
 }) {
   const barColor = (v: number) => {
     if (tone === "grade") {
-      if (v >= 75) return "bg-emerald-500";
-      if (v >= 50) return "bg-amber-500";
-      return "bg-rose-500";
+      if (v >= 75) return "bg-emerald-600";
+      if (v >= 50) return "bg-amber-600";
+      return "bg-rose-600";
     }
-    return "bg-gradient-to-r from-brand-600 to-[#2a8a98]";
+    return "bg-gradient-to-r from-brand-600 to-brand-500";
   };
   return (
     <div className="space-y-4">
@@ -477,8 +477,8 @@ function NarrativeCard({
 }) {
   const lists = narrative
     ? [
-        { title: "Highlights", items: narrative.highlights, dot: "bg-emerald-500" },
-        { title: "Watch-outs", items: narrative.watchouts, dot: "bg-amber-500" },
+        { title: "Highlights", items: narrative.highlights, dot: "bg-emerald-600" },
+        { title: "Watch-outs", items: narrative.watchouts, dot: "bg-amber-600" },
         { title: "Suggested Actions", items: narrative.actions, dot: "bg-brand-600" },
       ].filter((l) => l.items.length > 0)
     : [];
@@ -909,8 +909,8 @@ export default function FacultyAnalyticsClient() {
 
           <Card padding="md" className="flex flex-col">
             <div className="flex items-center gap-2.5 mb-5">
-              <div className="rounded-lg bg-rose-500/10 p-1.5">
-                <FontAwesomeIcon icon={faExclamationTriangle} className="h-3.5 w-3.5 text-rose-500" />
+              <div className="rounded-lg bg-rose-600/10 p-1.5">
+                <FontAwesomeIcon icon={faExclamationTriangle} className="h-3.5 w-3.5 text-rose-600" />
               </div>
               <h3 className="font-semibold text-gray-900">At-Risk Prediction</h3>
             </div>

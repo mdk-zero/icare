@@ -1020,7 +1020,7 @@ export default function AssessmentQuestionsClient({
                   <button
                     onClick={handleSaveDetails}
                     disabled={savingDetails}
-                    className="flex items-center gap-2 px-5 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-[#155663] disabled:opacity-60 transition-colors"
+                    className="flex items-center gap-2 px-5 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 disabled:opacity-60 transition-colors"
                   >
                     {savingDetails ? (
                       <><FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" /> Saving…</>
@@ -1044,7 +1044,7 @@ export default function AssessmentQuestionsClient({
                     <span className="px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">{assessment.category}</span>{" "}
                     <span className={`px-1.5 py-0.5 rounded text-xs ${
                       assessment.difficulty === "beginner" ? "bg-green-100 text-green-700" :
-                      assessment.difficulty === "intermediate" ? "bg-yellow-100 text-yellow-700" :
+                      assessment.difficulty === "intermediate" ? "bg-amber-100 text-amber-700" :
                       "bg-red-100 text-red-700"
                     }`}>{assessment.difficulty}</span>{" "}
                     {assessment.question_count} question{assessment.question_count !== 1 ? "s" : ""}
@@ -1086,7 +1086,7 @@ export default function AssessmentQuestionsClient({
           <div className="min-w-0">
             <p
               className={`text-sm font-semibold ${
-                blockers.length === 0 ? "text-green-800" : "text-amber-900"
+                blockers.length === 0 ? "text-green-800" : "text-amber-800"
               }`}
             >
               {blockers.length === 0
@@ -1105,8 +1105,8 @@ export default function AssessmentQuestionsClient({
             ) : (
               <ul className="mt-1.5 space-y-1">
                 {blockers.map((b) => (
-                  <li key={b.code + b.message} className="text-xs text-amber-900 flex gap-1.5">
-                    <span aria-hidden className="text-amber-500">•</span>
+                  <li key={b.code + b.message} className="text-xs text-amber-800 flex gap-1.5">
+                    <span aria-hidden className="text-amber-600">•</span>
                     <span>{b.message}</span>
                   </li>
                 ))}
@@ -1182,7 +1182,7 @@ export default function AssessmentQuestionsClient({
                       </span>
                       <button
                         onClick={() => deleteCriteria(c.id)}
-                        className="p-1 text-gray-400 hover:text-red-500"
+                        className="p-1 text-gray-400 hover:text-red-600"
                       >
                         <FontAwesomeIcon icon={faTimes} className="w-3.5 h-3.5" />
                       </button>
@@ -1194,10 +1194,10 @@ export default function AssessmentQuestionsClient({
                   <span className="flex-1">Total</span>
                   <span className="w-40" />
                   <span className="w-16 text-right">{questions.length - questionsByCriterion.unassigned.length}</span>
-                  <span className={`w-16 text-right ${servedTotal !== null && criteria.reduce((s, c) => s + Math.min(c.min_questions, questionsByCriterion.map.get(c.id)?.length ?? 0), 0) > servedTotal ? "text-red-500" : ""}`}>
+                  <span className={`w-16 text-right ${servedTotal !== null && criteria.reduce((s, c) => s + Math.min(c.min_questions, questionsByCriterion.map.get(c.id)?.length ?? 0), 0) > servedTotal ? "text-red-600" : ""}`}>
                     {criteria.reduce((s, c) => s + Math.min(c.min_questions, questionsByCriterion.map.get(c.id)?.length ?? 0), 0)}
                   </span>
-                  <span className={`w-16 text-right ${totalWeight === 100 ? "text-green-600" : "text-red-500"}`}>
+                  <span className={`w-16 text-right ${totalWeight === 100 ? "text-green-600" : "text-red-600"}`}>
                     {totalWeight}%
                   </span>
                   <span className="w-6" />
@@ -1244,14 +1244,14 @@ export default function AssessmentQuestionsClient({
               />
               <button
                 onClick={addCriteria}
-                className="px-4 py-3 bg-brand-600 text-white rounded-xl text-sm font-medium hover:bg-[#155663] transition-colors"
+                className="px-4 py-3 bg-brand-600 text-white rounded-xl text-sm font-medium hover:bg-brand-700 transition-colors"
               >
                 Add Criteria
               </button>
             </div>
 
             {totalWeight !== 100 && criteria.length > 0 && (
-              <p className="text-xs text-red-500">
+              <p className="text-xs text-red-600">
                 Weights total {totalWeight}% — they should sum to 100%
               </p>
             )}
@@ -1286,14 +1286,14 @@ export default function AssessmentQuestionsClient({
                   <div
                     key={entry.id}
                     className={`md:col-span-2 flex items-center gap-2 pt-2 pb-1 border-b ${
-                      c ? "border-gray-200" : "border-amber-300"
+                      c ? "border-gray-200" : "border-amber-200"
                     }`}
                   >
                     <FontAwesomeIcon
                       icon={c ? faLayerGroup : faTriangleExclamation}
                       className={`w-3.5 h-3.5 ${c ? "text-brand-600" : "text-amber-600"}`}
                     />
-                    <span className={`text-sm font-semibold ${c ? "text-gray-800" : "text-amber-900"}`}>
+                    <span className={`text-sm font-semibold ${c ? "text-gray-800" : "text-amber-800"}`}>
                       {c ? c.name : "Unassigned"}
                     </span>
                     <span className="text-xs text-gray-500">
@@ -1353,7 +1353,7 @@ export default function AssessmentQuestionsClient({
                             );
                           }}
                           disabled={savingQuestions[q.id]}
-                          className="flex items-center gap-1 px-2.5 py-1 bg-brand-600 text-white rounded-lg text-xs font-medium hover:bg-[#155663] disabled:opacity-60 transition-colors shrink-0"
+                          className="flex items-center gap-1 px-2.5 py-1 bg-brand-600 text-white rounded-lg text-xs font-medium hover:bg-brand-700 disabled:opacity-60 transition-colors shrink-0"
                         >
                           {savingQuestions[q.id] ? (
                             <FontAwesomeIcon icon={faSpinner} spin className="w-3 h-3" />
@@ -1402,7 +1402,7 @@ export default function AssessmentQuestionsClient({
                             {isEditing && form.options.length > 2 && (
                               <button
                                 onClick={() => removeBuilderOption(q.id, idx)}
-                                className="text-gray-400 hover:text-red-500 shrink-0"
+                                className="text-gray-400 hover:text-red-600 shrink-0"
                               >
                                 <FontAwesomeIcon icon={faTimes} className="w-3.5 h-3.5" />
                               </button>
@@ -1487,7 +1487,7 @@ export default function AssessmentQuestionsClient({
                           className={`px-2 py-1 border rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-brand-600/30 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-50 ${
                             form.criteria_id
                               ? "border-gray-300 text-gray-700"
-                              : "border-amber-300 text-amber-800 bg-amber-50"
+                              : "border-amber-200 text-amber-800 bg-amber-50"
                           }`}
                         >
                           <option value="">Unassigned</option>
@@ -1529,7 +1529,7 @@ export default function AssessmentQuestionsClient({
                         title={isEditing ? "Done editing" : "Edit question"}
                         className={`p-1.5 rounded-lg border transition-colors ${
                           isEditing
-                            ? "bg-brand-600 text-white border-brand-600 hover:bg-[#155663]"
+                            ? "bg-brand-600 text-white border-brand-600 hover:bg-brand-700"
                             : "border-gray-200 text-gray-500 hover:bg-gray-50"
                         }`}
                       >
@@ -1538,7 +1538,7 @@ export default function AssessmentQuestionsClient({
                       <button
                         onClick={() => handleDeleteQuestion(q.id)}
                         title="Delete"
-                        className="p-1.5 rounded-lg border border-red-200 text-red-500 hover:bg-red-50"
+                        className="p-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50"
                       >
                         <FontAwesomeIcon icon={faTrash} className="w-3.5 h-3.5" />
                       </button>
@@ -1587,7 +1587,7 @@ export default function AssessmentQuestionsClient({
               <button
                 onClick={handleGenerateAI}
                 disabled={aiGenerating}
-                className="flex items-center justify-center gap-2 px-6 py-3 bg-brand-600 text-white rounded-xl text-sm font-medium hover:bg-[#155663] disabled:opacity-60 transition-colors"
+                className="flex items-center justify-center gap-2 px-6 py-3 bg-brand-600 text-white rounded-xl text-sm font-medium hover:bg-brand-700 disabled:opacity-60 transition-colors"
               >
                 {aiGenerating ? (
                   <><FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" /> Generating…</>
@@ -1605,7 +1605,7 @@ export default function AssessmentQuestionsClient({
         <div className="flex items-center justify-center gap-3 pt-2 flex-wrap">
           <button
             onClick={handleAddQuestion}
-            className="flex items-center gap-2 px-6 py-3 bg-brand-600 text-white rounded-xl text-sm font-medium hover:bg-[#155663] transition-colors"
+            className="flex items-center gap-2 px-6 py-3 bg-brand-600 text-white rounded-xl text-sm font-medium hover:bg-brand-700 transition-colors"
           >
             <FontAwesomeIcon icon={faPlus} className="w-4 h-4" />
             Add Question
@@ -1614,7 +1614,7 @@ export default function AssessmentQuestionsClient({
             <button
               onClick={handleSaveAll}
               disabled={savingAll}
-              className="flex items-center gap-2 px-6 py-3 bg-brand-600 text-white rounded-xl text-sm font-medium hover:bg-[#155663] disabled:opacity-60 transition-colors"
+              className="flex items-center gap-2 px-6 py-3 bg-brand-600 text-white rounded-xl text-sm font-medium hover:bg-brand-700 disabled:opacity-60 transition-colors"
             >
               {savingAll ? (
                 <><FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" /> Saving All…</>

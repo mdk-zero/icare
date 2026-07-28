@@ -467,9 +467,9 @@ export default function FacultyScenariosClient() {
   };
 
   const difficultyBar: Record<string, string> = {
-    advanced: "bg-rose-500",
-    intermediate: "bg-amber-500",
-    beginner: "bg-emerald-500",
+    advanced: "bg-rose-600",
+    intermediate: "bg-amber-600",
+    beginner: "bg-emerald-600",
   };
 
   const getDifficultyIcon = (difficulty: string) => {
@@ -1552,7 +1552,7 @@ export default function FacultyScenariosClient() {
                       {selectedScenario.patient_case.vitals && (
                         <div>
                           <p className="text-sm font-bold text-gray-600 mb-2 flex items-center gap-2">
-                            <FontAwesomeIcon icon={faHeartbeat} className="w-4 h-4 text-red-500" />
+                            <FontAwesomeIcon icon={faHeartbeat} className="w-4 h-4 text-red-600" />
                             Vital Signs
                           </p>
                           <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
@@ -1913,7 +1913,7 @@ export default function FacultyScenariosClient() {
                   </div>
                   <button
                     onClick={() => setLinkPatientId("")}
-                    className="text-xs text-teal-700 hover:text-teal-900 font-medium"
+                    className="text-xs text-teal-700 hover:text-teal-800 font-medium"
                   >
                     Clear
                   </button>

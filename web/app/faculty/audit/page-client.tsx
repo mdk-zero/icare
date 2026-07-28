@@ -55,10 +55,10 @@ export default function FacultyAuditClient() {
     if (t === 'notifications') return 'bg-amber-50 text-amber-700';
     if (t === 'settings') return 'bg-gray-50 text-gray-700';
     if (t === 'overview') return 'bg-emerald-50 text-emerald-700';
-    if (t === 'analytics') return 'bg-indigo-50 text-indigo-700';
+    if (t === 'analytics') return 'bg-blue-50 text-blue-700';
     if (t === 'patients') return 'bg-rose-50 text-rose-700';
-    if (t === 'audit') return 'bg-cyan-50 text-cyan-700';
-    if (t === 'authentication') return 'bg-orange-50 text-orange-700';
+    if (t === 'audit') return 'bg-teal-50 text-teal-700';
+    if (t === 'authentication') return 'bg-amber-50 text-amber-700';
     return 'bg-gray-50 text-gray-700';
   };
 

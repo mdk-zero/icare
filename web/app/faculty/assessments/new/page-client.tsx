@@ -223,7 +223,7 @@ export default function AssessmentNewClient() {
           <button
             onClick={handleCreate}
             disabled={busy}
-            className="flex items-center gap-2 px-6 py-2 bg-brand-600 text-white rounded-lg text-sm hover:bg-[#155663] disabled:opacity-60"
+            className="flex items-center gap-2 px-6 py-2 bg-brand-600 text-white rounded-lg text-sm hover:bg-brand-700 disabled:opacity-60"
           >
             {busy ? (
               <><FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" /> Creating…</>

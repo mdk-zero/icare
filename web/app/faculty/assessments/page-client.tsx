@@ -259,9 +259,8 @@ export default function FacultyAssessmentsClient() {
                   <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">
                     {a.category}
                   </span>
-                  {/* amber, not yellow: there is no yellow in the dark ramp at
-                      all, so bg-yellow-100/text-yellow-700 stayed a pale
-                      light-mode chip on a dark card. */}
+                  {/* amber, not the yellow ramp: globals.css rethemes no step
+                      of yellow, so that chip stayed light-mode on a dark card. */}
                   <span className={`px-2 py-0.5 rounded text-xs ${
                     a.difficulty === "beginner"
                       ? "bg-green-100 text-green-700"

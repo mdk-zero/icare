@@ -783,7 +783,7 @@ export default function FacultyStudentsClient() {
             >
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Student Name <span className="text-red-500">*</span>
+                  Student Name <span className="text-red-600">*</span>
                 </label>
                 <div className="space-y-3">
                   <div>
@@ -837,7 +837,7 @@ export default function FacultyStudentsClient() {
                   htmlFor="new-student-email"
                   className="block text-sm font-semibold text-gray-700 mb-2"
                 >
-                  Student Email <span className="text-red-500">*</span>
+                  Student Email <span className="text-red-600">*</span>
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
@@ -858,7 +858,7 @@ export default function FacultyStudentsClient() {
                   htmlFor="new-student-section"
                   className="block text-sm font-semibold text-gray-700 mb-2"
                 >
-                  Section <span className="text-red-500">*</span>
+                  Section <span className="text-red-600">*</span>
                 </label>
                 <select
                   id="new-student-section"
@@ -1513,7 +1513,7 @@ export default function FacultyStudentsClient() {
             <form onSubmit={handleUpdateStudent} className="p-5 space-y-4">
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Student Name <span className="text-red-500">*</span>
+                  Student Name <span className="text-red-600">*</span>
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
@@ -1533,7 +1533,7 @@ export default function FacultyStudentsClient() {
                   htmlFor="update-student-email"
                   className="block text-sm font-semibold text-gray-700 mb-2"
                 >
-                  Student Email <span className="text-red-500">*</span>
+                  Student Email <span className="text-red-600">*</span>
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
