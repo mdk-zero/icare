@@ -6,7 +6,7 @@ import { Card, PrimaryButton, SkeletonScreen, EmptyState } from '@/components/ui
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { startAttempt, submitAttempt, StartedAttempt, AttemptResult } from '@/lib/api';
-import { isNetworkError } from '@/lib/client';
+import { ApiError, isNetworkError } from '@/lib/client';
 
 function formatClock(seconds: number) {
   const mins = Math.floor(seconds / 60);
@@ -23,6 +23,8 @@ export default function QuizInterfaceScreen() {
 
   const [started, setStarted] = useState<StartedAttempt | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  /** The quiz was refused rather than broken — out of attempts, not offline. */
+  const [loadBlocked, setLoadBlocked] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   // question_id -> selected option index (null = unanswered)
   const [answers, setAnswers] = useState<Record<string, number>>({});
@@ -42,6 +44,8 @@ export default function QuizInterfaceScreen() {
       })
       .catch((err) => {
         if (cancelled) return;
+        // A 409 carries the server's own sentence about why there are no
+        // attempts left; showing it verbatim beats a generic failure.
         setLoadError(
           isNetworkError(err)
             ? 'Quizzes need a connection to start — try again when you are back online.'
@@ -49,6 +53,7 @@ export default function QuizInterfaceScreen() {
               ? err.message
               : 'Unable to start the quiz',
         );
+        setLoadBlocked(err instanceof ApiError && err.status === 409);
       });
     return () => {
       cancelled = true;
@@ -129,7 +134,15 @@ export default function QuizInterfaceScreen() {
   if (loadError) {
     return (
       <View style={styles.errorContainer}>
-        <EmptyState icon="cloud-offline-outline" message={loadError} />
+        <EmptyState
+          icon={loadBlocked ? 'lock-closed-outline' : 'cloud-offline-outline'}
+          message={loadError}
+        />
+        {loadBlocked && (
+          <View style={styles.blockedActions}>
+            <PrimaryButton title="Back to quizzes" onPress={() => router.back()} variant="outline" />
+          </View>
+        )}
       </View>
     );
   }
@@ -286,6 +299,7 @@ function createStyles(
   container: { flex: 1, backgroundColor: Palette.background },
   content: { padding: Spacing.lg, paddingBottom: 32 },
   errorContainer: { flex: 1, justifyContent: 'center', backgroundColor: Palette.background },
+  blockedActions: { paddingHorizontal: Spacing.xxl, marginTop: Spacing.lg },
   progressBar: { flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.xxl },
   progressTrack: { flex: 1, height: 8, backgroundColor: Palette.border, borderRadius: 4, marginRight: Spacing.md, overflow: 'hidden' },
   progressFill: { height: '100%', backgroundColor: Palette.primary, borderRadius: 4 },
