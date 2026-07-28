@@ -35,7 +35,12 @@ interface Assessment {
   time_limit_seconds: number | null;
   is_published: boolean;
   target_sections: string[] | null;
+  /** Size of the question bank. */
   question_count: number;
+  /** How many of the bank one attempt serves; null serves all of it. */
+  total_questions: number | null;
+  /** Tries a student gets; null is unlimited. */
+  max_attempts: number | null;
   student_count: number;
   created_at: string;
 }
@@ -184,7 +189,7 @@ export default function FacultyAssessmentsClient() {
           { label: "Published", value: assessments.filter((a) => a.is_published).length, color: "text-green-700" },
           { label: "Draft", value: assessments.filter((a) => !a.is_published).length, color: "text-gray-500" },
         ].map((stat) => (
-          <div key={stat.label} className="bg-surface rounded-xl border border-hairline p-4 shadow-[0_1px_3px_0_rgba(0,0,0,0.04)]">
+          <div key={stat.label} className="bg-surface rounded-xl border border-hairline p-4 shadow-tile">
             <p className="text-sm text-gray-500">{stat.label}</p>
             <p className={`text-2xl font-semibold ${stat.color} mt-0.5`}>{stat.value}</p>
           </div>
@@ -207,7 +212,7 @@ export default function FacultyAssessmentsClient() {
         </div>
         <button
           onClick={() => router.push("/faculty/assessments/new")}
-          className="flex items-center gap-2 px-5 py-2.5 bg-brand-600 text-white rounded-lg hover:bg-[#155663] transition-colors text-sm font-medium shadow-[0_2px_6px_rgba(27,107,123,0.2)] shrink-0"
+          className="flex items-center gap-2 px-5 py-2.5 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors text-sm font-medium shadow-[0_2px_6px_rgba(27,107,123,0.2)] shrink-0"
         >
           <FontAwesomeIcon icon={faPlus} className="w-3.5 h-3.5" />
           New Assessment
@@ -221,17 +226,20 @@ export default function FacultyAssessmentsClient() {
           ))}
         </div>
       ) : filteredAssessments.length === 0 ? (
-        <div className="bg-surface p-12 rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] text-center text-gray-500">
+        <div className="bg-surface p-12 rounded-xl border border-hairline shadow-tile text-center text-gray-500">
           {searchQuery ? "No assessments match your search." : "No assessments yet. Create your first quiz to start building the question bank."}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredAssessments.map((a) => (
-            <div key={a.id} className="relative bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden flex flex-col">
+            <div key={a.id} className="relative bg-surface rounded-xl border border-hairline shadow-tile overflow-hidden flex flex-col">
+              {/* -600 not -500: the dark theme rethemes 50/100/200/600/700/800
+                  of the tinted ramps, so a 500 would keep its light-mode
+                  saturation on a dark surface. */}
               <span className={`absolute left-0 top-0 h-full w-0.5 ${
-                a.difficulty === "beginner" ? "bg-emerald-500" :
-                a.difficulty === "intermediate" ? "bg-amber-500" :
-                a.difficulty === "advanced" ? "bg-rose-500" : "bg-gray-500"
+                a.difficulty === "beginner" ? "bg-emerald-600" :
+                a.difficulty === "intermediate" ? "bg-amber-600" :
+                a.difficulty === "advanced" ? "bg-rose-600" : "bg-gray-600"
               }`} aria-hidden />
               <div className="p-4 flex-1">
                 <div className="flex items-center gap-2 flex-wrap mb-1">
@@ -251,20 +259,35 @@ export default function FacultyAssessmentsClient() {
                   <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">
                     {a.category}
                   </span>
+                  {/* amber, not yellow: there is no yellow in the dark ramp at
+                      all, so bg-yellow-100/text-yellow-700 stayed a pale
+                      light-mode chip on a dark card. */}
                   <span className={`px-2 py-0.5 rounded text-xs ${
                     a.difficulty === "beginner"
                       ? "bg-green-100 text-green-700"
                       : a.difficulty === "intermediate"
-                        ? "bg-yellow-100 text-yellow-700"
+                        ? "bg-amber-100 text-amber-700"
                         : "bg-red-100 text-red-700"
                   }`}>
                     {a.difficulty}
                   </span>
-                  <span className="text-xs">{a.question_count} questions</span>
+                  {/* Bank size, and the paper drawn from it when they differ —
+                      the surplus is held back for later attempts. */}
+                  <span className="text-xs">
+                    {a.question_count} question{a.question_count === 1 ? "" : "s"}
+                    {a.total_questions !== null && a.total_questions < a.question_count && (
+                      <span className="text-gray-500"> · serves {a.total_questions}</span>
+                    )}
+                  </span>
                   <span className="text-xs">{a.student_count} assigned</span>
                   {a.time_limit_seconds && (
                     <span className="text-xs">{Math.round(a.time_limit_seconds / 60)} min</span>
                   )}
+                  <span className="text-xs">
+                    {a.max_attempts === null
+                      ? "Unlimited tries"
+                      : `${a.max_attempts} ${a.max_attempts === 1 ? "try" : "tries"}`}
+                  </span>
                 </div>
               </div>
               <div className="px-4 py-3 bg-subtle border-t border-hairline">
@@ -300,7 +323,7 @@ export default function FacultyAssessmentsClient() {
                   <button
                     onClick={() => setConfirmDelete(a)}
                     title="Delete"
-                    className="p-2 rounded-lg border border-red-200 text-red-500 hover:bg-red-50"
+                    className="p-2 rounded-lg border border-red-200 text-red-600 hover:bg-red-50"
                   >
                     <FontAwesomeIcon icon={faTrash} className="w-3.5 h-3.5" />
                   </button>
@@ -321,8 +344,8 @@ export default function FacultyAssessmentsClient() {
 
       {/* ---------- assign modal ---------- */}
       {assignTarget && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-surface rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] w-full max-w-lg p-4 space-y-2 max-h-[90vh] overflow-y-auto border border-hairline">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-surface rounded-xl shadow-overlay w-full max-w-lg p-4 space-y-2 max-h-[90vh] overflow-y-auto border border-hairline">
             <div className="flex items-center justify-between">
               <h3 className="font-semibold text-gray-800">
                 Assign &ldquo;{assignTarget.title}&rdquo;
@@ -405,7 +428,7 @@ export default function FacultyAssessmentsClient() {
               <button
                 onClick={submitAssign}
                 disabled={busy || selectedStudents.size === 0}
-                className="px-6 py-2 bg-brand-600 text-white rounded-lg text-sm hover:bg-[#155663] disabled:opacity-60"
+                className="px-6 py-2 bg-brand-600 text-white rounded-lg text-sm hover:bg-brand-700 disabled:opacity-60"
               >
                 {busy ? "Assigning…" : "Assign"}
               </button>

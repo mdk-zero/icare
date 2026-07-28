@@ -29,7 +29,7 @@ export async function GET() {
     const { data, error } = await supabase
       .from('assessments')
       .select(
-        'id, created_by, title, description, difficulty, category, time_limit_seconds, is_published, is_ai_generated, target_sections, created_at, updated_at, questions(count), assessment_assignments(count)',
+        'id, created_by, title, description, difficulty, category, time_limit_seconds, is_published, is_ai_generated, target_sections, total_questions, max_attempts, created_at, updated_at, questions(count), assessment_assignments(count)',
       )
       .order('created_at', { ascending: false })
       .limit(500);
@@ -50,6 +50,10 @@ export async function GET() {
       is_published: a.is_published,
       is_ai_generated: a.is_ai_generated,
       target_sections: a.target_sections,
+      // null total_questions serves the whole bank; null max_attempts is
+      // unlimited retakes.
+      total_questions: a.total_questions,
+      max_attempts: a.max_attempts,
       created_at: a.created_at,
       updated_at: a.updated_at,
       question_count: Number(
