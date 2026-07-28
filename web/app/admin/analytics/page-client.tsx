@@ -159,14 +159,14 @@ export default function AdminAnalyticsClient() {
           {/* Second row: Quiz Performance (spans 2 cols on lg) + Room Utilization */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
             <div className="lg:col-span-2 bg-surface p-6 rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)]">
-              <h3 className="text-lg font-semibold text-gray-900 mb-6">Weekly Quiz Performance</h3>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Weekly Quiz Performance</h3>
               {trend.length === 0 ? (
                 <p className="text-gray-400 text-sm py-12 text-center">
                   No submitted attempts in the last 8 weeks.
                 </p>
               ) : (
                 <>
-                  <div className="h-64 flex items-end justify-between gap-2 sm:gap-3 px-2">
+                  <div className="h-48 flex items-end justify-between gap-2 sm:gap-3 px-2">
                     {trend.map((week) => (
                       <div key={week.week_start} className="flex-1 flex flex-col items-center gap-2 group">
                         <div className="w-full relative">
@@ -184,7 +184,7 @@ export default function AdminAnalyticsClient() {
                       </div>
                     ))}
                   </div>
-                  <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-hairline">
+                  <div className="grid grid-cols-3 gap-4 mt-3 pt-3 border-t border-hairline">
                     <div>
                       <p className="text-2xl font-bold text-gray-800">
                         {summary?.cohort.submitted_attempts ?? 0}
@@ -208,7 +208,7 @@ export default function AdminAnalyticsClient() {
                   </div>
 
                   {/* Weekly Breakdown mini-table */}
-                  <div className="mt-5 pt-4 border-t border-hairline">
+                  <div className="mt-4 pt-3 border-t border-hairline">
                     <div className="flex items-center gap-2 mb-3">
                       <FontAwesomeIcon icon={faChartBar} className="w-4 h-4 text-brand-600" />
                       <h4 className="text-sm font-semibold text-gray-700">Weekly Breakdown</h4>
