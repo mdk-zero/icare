@@ -349,26 +349,26 @@ export default function AdminAnalyticsClient() {
             <div className="lg:col-span-2 bg-surface p-6 rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)]">
               <h3 className="text-lg font-semibold text-gray-900 mb-5">Clinical Training Activity</h3>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                {[
-                  { icon: faHeartbeat, label: "Vital Readings", value: activity?.vital_readings ?? 0, color: "text-rose-600", bg: "bg-rose-50" },
-                  { icon: faExclamationTriangle, label: "Anomalies", value: activity?.anomalies ?? 0, color: "text-amber-600", bg: "bg-amber-50" },
-                  { icon: faNotesMedical, label: "TPR Entries", value: activity?.tpr_entries ?? 0, color: "text-blue-600", bg: "bg-blue-50" },
-                  { icon: faNotesMedical, label: "IVF Records", value: activity?.ivf_records ?? 0, color: "text-purple-600", bg: "bg-purple-50" },
-                  { icon: faNotesMedical, label: "Progress Notes", value: activity?.progress_notes ?? 0, color: "text-cyan-600", bg: "bg-cyan-50" },
-                  { icon: faClipboardCheck, label: "Notes Reviewed", value: activity?.notes_reviewed ?? 0, color: "text-emerald-600", bg: "bg-emerald-50" },
-                ].map((item) => (
-                  <div key={item.label} className={`${item.bg} rounded-xl p-4`}>
-                    <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${item.bg} border border-white/50`}>
-                        <FontAwesomeIcon icon={item.icon} className={`w-4 h-4 ${item.color}`} />
-                      </div>
-                      <div>
-                        <p className="text-xl font-bold text-gray-800">{item.value}</p>
-                        <p className="text-xs text-gray-500">{item.label}</p>
+                  {[
+                    { icon: faHeartbeat, label: "Vital Readings", value: activity?.vital_readings ?? 0 },
+                    { icon: faExclamationTriangle, label: "Anomalies", value: activity?.anomalies ?? 0 },
+                    { icon: faNotesMedical, label: "TPR Entries", value: activity?.tpr_entries ?? 0 },
+                    { icon: faNotesMedical, label: "IVF Records", value: activity?.ivf_records ?? 0 },
+                    { icon: faNotesMedical, label: "Progress Notes", value: activity?.progress_notes ?? 0 },
+                    { icon: faClipboardCheck, label: "Notes Reviewed", value: activity?.notes_reviewed ?? 0 },
+                  ].map((item) => (
+                    <div key={item.label} className="bg-brand-600/5 rounded-xl p-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-brand-600/10 border border-white/50">
+                          <FontAwesomeIcon icon={item.icon} className="w-4 h-4 text-brand-600" />
+                        </div>
+                        <div>
+                          <p className="text-xl font-bold text-gray-800">{item.value}</p>
+                          <p className="text-xs text-gray-500">{item.label}</p>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
               </div>
             </div>
 
