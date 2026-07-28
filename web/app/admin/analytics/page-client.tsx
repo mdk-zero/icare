@@ -208,6 +208,46 @@ export default function AdminAnalyticsClient() {
                     </div>
                   </div>
 
+                  {/* Weekly Breakdown mini-table */}
+                  <div className="mt-5 pt-4 border-t border-hairline">
+                    <div className="flex items-center gap-2 mb-3">
+                      <FontAwesomeIcon icon={faChartBar} className="w-4 h-4 text-brand-600" />
+                      <h4 className="text-sm font-semibold text-gray-700">Weekly Breakdown</h4>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      {(() => {
+                        const sorted = [...trend].sort((a, b) => new Date(b.week_start).getTime() - new Date(a.week_start).getTime());
+                        const best = sorted.reduce((max, w) => w.average_score > max.average_score ? w : max, sorted[0]);
+                        const worst = sorted.reduce((min, w) => w.average_score < min.average_score ? w : min, sorted[0]);
+                        const totalAttempts = sorted.reduce((s, w) => s + w.attempts, 0);
+                        const avgAttempts = Math.round(totalAttempts / sorted.length);
+                        const trendDir = sorted.length > 1
+                          ? sorted[0].average_score > sorted[sorted.length - 1].average_score
+                            ? "Improving"
+                            : sorted[0].average_score < sorted[sorted.length - 1].average_score
+                              ? "Declining"
+                              : "Stable"
+                          : "—";
+                        return [
+                          { label: "Best Week", value: `${best.average_score}%`, sub: new Date(best.week_start).toLocaleDateString(undefined, { month: "short", day: "numeric" }) },
+                          { label: "Lowest Week", value: `${worst.average_score}%`, sub: new Date(worst.week_start).toLocaleDateString(undefined, { month: "short", day: "numeric" }) },
+                          { label: "Avg Attempts/Week", value: `${avgAttempts}`, sub: `${sorted.length} weeks` },
+                          { label: "Trend", value: trendDir, sub: trendDir === "Improving" ? "↑" : trendDir === "Declining" ? "↓" : "→" },
+                        ].map((item) => (
+                          <div key={item.label} className="p-3 bg-gray-50 rounded-lg">
+                            <p className="text-xs text-gray-500 mb-0.5">{item.label}</p>
+                            <p className={`text-lg font-bold ${
+                              item.label === "Trend" && item.value === "Improving" ? "text-emerald-600" :
+                              item.label === "Trend" && item.value === "Declining" ? "text-rose-600" :
+                              "text-gray-800"
+                            }`}>{item.value}</p>
+                            <p className="text-xs text-gray-400">{item.sub}</p>
+                          </div>
+                        ));
+                      })()}
+                    </div>
+                  </div>
+
                   {/* Score Distribution */}
                   {summary?.competency_breakdown && Object.keys(summary.competency_breakdown).length > 0 && (
                     <div className="mt-6 pt-4 border-t border-hairline">
