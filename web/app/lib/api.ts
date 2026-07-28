@@ -64,6 +64,12 @@ export interface StudentAssessment {
   best_score: number | null;
   attempt_count: number;
   last_submitted_at: string | null;
+  /** Tries allowed; null is unlimited. */
+  max_attempts: number | null;
+  /** Attempts that have run their course — submitted or expired. */
+  attempts_used: number;
+  /** null when unlimited; 0 means the quiz can no longer be started. */
+  attempts_remaining: number | null;
 }
 
 export interface AttemptQuestion {

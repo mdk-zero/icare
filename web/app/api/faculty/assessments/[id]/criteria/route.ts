@@ -18,7 +18,7 @@ export async function GET(
     const supabase = getSupabaseAdmin();
     const { data, error } = await supabase
       .from('assessment_criteria')
-      .select('id, assessment_id, name, weight, competency_id, sort_order, created_at')
+      .select('id, assessment_id, name, weight, competency_id, sort_order, min_questions, created_at')
       .eq('assessment_id', id)
       .order('sort_order', { ascending: true });
 
@@ -53,11 +53,12 @@ export async function POST(
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { name, weight, competency_id, sort_order } = body as {
+  const { name, weight, competency_id, sort_order, min_questions } = body as {
     name?: unknown;
     weight?: unknown;
     competency_id?: unknown;
     sort_order?: unknown;
+    min_questions?: unknown;
   };
 
   if (typeof name !== 'string' || name.trim().length === 0) {
@@ -70,6 +71,14 @@ export async function POST(
 
   if (typeof competency_id !== 'string' || competency_id.trim().length === 0) {
     return NextResponse.json({ error: 'Competency is required' }, { status: 400 });
+  }
+
+  const minQuestions = min_questions === undefined ? 1 : Number(min_questions);
+  if (!Number.isInteger(minQuestions) || minQuestions < 0) {
+    return NextResponse.json(
+      { error: 'Minimum questions must be zero or a positive whole number' },
+      { status: 400 },
+    );
   }
 
   try {
@@ -85,8 +94,9 @@ export async function POST(
         weight,
         competency_id,
         sort_order: sortOrder,
+        min_questions: minQuestions,
       })
-      .select('id, assessment_id, name, weight, competency_id, sort_order, created_at')
+      .select('id, assessment_id, name, weight, competency_id, sort_order, min_questions, created_at')
       .single();
 
     if (error) {

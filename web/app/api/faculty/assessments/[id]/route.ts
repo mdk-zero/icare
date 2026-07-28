@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { logAudit } from '@/app/lib/audit';
+import { assessmentPublishBlockers } from '@/app/lib/assessment-validation';
 
 const validDifficulties = ['beginner', 'intermediate', 'advanced'] as const;
 
@@ -23,7 +24,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
     const { data: assessment, error } = await supabase
       .from('assessments')
       .select(
-        'id, created_by, title, description, difficulty, category, time_limit_seconds, is_published, is_ai_generated, target_sections, created_at, updated_at, questions(id, position, content, options, correct_index, question_type, points, explanation, difficulty, question_competencies(competency_id))',
+        'id, created_by, title, description, difficulty, category, time_limit_seconds, is_published, is_ai_generated, target_sections, total_questions, max_attempts, created_at, updated_at, questions(id, position, content, options, correct_index, question_type, points, explanation, difficulty, criteria_id, question_competencies(competency_id))',
       )
       .eq('id', id)
       .single();
@@ -43,6 +44,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
         points: q.points ?? 1,
         explanation: q.explanation,
         difficulty: q.difficulty,
+        criteria_id: q.criteria_id ?? null,
         competency_ids: (
           (q as unknown as { question_competencies: { competency_id: string }[] })
             .question_competencies ?? []
@@ -50,8 +52,14 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
       }))
       .sort((a, b) => a.position - b.position);
 
+    // Sent with every load so the editor can show what is standing between
+    // this assessment and being publishable, instead of only finding out when
+    // the publish button is pressed.
+    const blockers = await assessmentPublishBlockers(supabase, id);
+
     return NextResponse.json({
       assessment: { ...assessment, questions },
+      blockers,
     });
   } catch (err) {
     console.error('Fetch assessment failed', err);
@@ -75,16 +83,27 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const { title, description, difficulty, category, time_limit_seconds, is_published, target_sections } =
-    body as {
-      title?: unknown;
-      description?: unknown;
-      difficulty?: unknown;
-      category?: unknown;
-      time_limit_seconds?: unknown;
-      is_published?: unknown;
-      target_sections?: unknown;
-    };
+  const {
+    title,
+    description,
+    difficulty,
+    category,
+    time_limit_seconds,
+    is_published,
+    target_sections,
+    total_questions,
+    max_attempts,
+  } = body as {
+    title?: unknown;
+    description?: unknown;
+    difficulty?: unknown;
+    category?: unknown;
+    time_limit_seconds?: unknown;
+    is_published?: unknown;
+    target_sections?: unknown;
+    total_questions?: unknown;
+    max_attempts?: unknown;
+  };
 
   const updates: Record<string, unknown> = {};
   if (title !== undefined) {
@@ -122,6 +141,22 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     }
     updates.target_sections = target_sections.length > 0 ? target_sections : null;
   }
+  // null on either of these is meaningful: total_questions null serves the whole
+  // bank, max_attempts null means unlimited retakes.
+  if (total_questions !== undefined) {
+    const n = total_questions === null ? null : Number(total_questions);
+    if (n !== null && (!Number.isInteger(n) || n <= 0)) {
+      return NextResponse.json({ error: 'Questions per attempt must be a positive whole number' }, { status: 400 });
+    }
+    updates.total_questions = n;
+  }
+  if (max_attempts !== undefined) {
+    const n = max_attempts === null ? null : Number(max_attempts);
+    if (n !== null && (!Number.isInteger(n) || n <= 0)) {
+      return NextResponse.json({ error: 'Attempts allowed must be a positive whole number' }, { status: 400 });
+    }
+    updates.max_attempts = n;
+  }
 
   if (Object.keys(updates).length === 0) {
     return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 });
@@ -130,17 +165,21 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
     const supabase = getSupabaseAdmin();
 
-    // Publishing requires at least one question.
+    // Publishing is where a half-configured assessment has to be caught: past
+    // this point selection is promising students a fixed paper size with every
+    // criterion represented, and a gap shows up as a silent 0% rather than an
+    // error. Applied on the incoming state, so a PATCH that publishes and sets
+    // total_questions in one call is judged on what it is about to become.
     if (updates.is_published === true) {
-      const { count } = await supabase
-        .from('questions')
-        .select('id', { count: 'exact', head: true })
-        .eq('assessment_id', id);
-      if (!count) {
-        return NextResponse.json(
-          { error: 'Cannot publish an assessment with no questions' },
-          { status: 400 },
-        );
+      const blockers = await assessmentPublishBlockers(
+        supabase,
+        id,
+        'total_questions' in updates
+          ? { total_questions: updates.total_questions as number | null }
+          : undefined,
+      );
+      if (blockers.length > 0) {
+        return NextResponse.json({ error: blockers[0].message, blockers }, { status: 400 });
       }
     }
 

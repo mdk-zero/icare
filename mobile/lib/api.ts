@@ -232,6 +232,12 @@ export interface StudentAssessment {
   best_score: number | null;
   attempt_count: number;
   last_submitted_at: string | null;
+  /** Tries allowed; null is unlimited. */
+  max_attempts: number | null;
+  /** Attempts that have run their course — submitted or expired. */
+  attempts_used: number;
+  /** null when unlimited; 0 means the quiz can no longer be started. */
+  attempts_remaining: number | null;
 }
 
 export async function fetchAssessments(): Promise<CachedResult<StudentAssessment[]>> {
@@ -250,6 +256,11 @@ export interface StartedAttempt {
   attempt: { id: string; started_at: string };
   assessment: { id: string; title: string; time_limit_seconds: number | null };
   questions: AttemptQuestion[];
+  /** True when an unfinished attempt was handed back rather than a new one dealt. */
+  resumed?: boolean;
+  attempt_number?: number;
+  max_attempts?: number | null;
+  attempts_remaining?: number | null;
 }
 
 export async function startAttempt(assessmentId: string): Promise<StartedAttempt> {

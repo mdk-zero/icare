@@ -72,6 +72,7 @@ export default function FacultyAssessmentsClient() {
   const [assignTarget, setAssignTarget] = useState<Assessment | null>(null);
   const [selectedStudents, setSelectedStudents] = useState<Set<string>>(new Set());
   const [assignDeadline, setAssignDeadline] = useState("");
+  const [assignMaxAttempts, setAssignMaxAttempts] = useState("");
 
   const loadAssessments = useCallback(async () => {
     const res = await fetch("/api/faculty/assessments", { credentials: "include" });
@@ -137,6 +138,7 @@ export default function FacultyAssessmentsClient() {
     setAssignTarget(a);
     setSelectedStudents(new Set());
     setAssignDeadline("");
+    setAssignMaxAttempts("");
   };
 
   const submitAssign = async () => {
@@ -152,6 +154,7 @@ export default function FacultyAssessmentsClient() {
       body: JSON.stringify({
         student_ids: Array.from(selectedStudents),
         deadline: assignDeadline || null,
+        max_attempts: assignMaxAttempts ? Number(assignMaxAttempts) : null,
       }),
     });
     setBusy(false);
@@ -331,14 +334,31 @@ export default function FacultyAssessmentsClient() {
                 <FontAwesomeIcon icon={faTimes} className="w-4 h-4" />
               </button>
             </div>
-            <div>
-              <label className={labelClassName}>Deadline (optional)</label>
-              <input
-                type="datetime-local"
-                value={assignDeadline}
-                onChange={(e) => setAssignDeadline(e.target.value)}
-                className={inputClassName}
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className={labelClassName}>Deadline (optional)</label>
+                <input
+                  type="datetime-local"
+                  value={assignDeadline}
+                  onChange={(e) => setAssignDeadline(e.target.value)}
+                  className={inputClassName}
+                />
+              </div>
+              <div>
+                <label className={labelClassName}>Attempts for these students</label>
+                <input
+                  type="number"
+                  min={1}
+                  value={assignMaxAttempts}
+                  onChange={(e) => setAssignMaxAttempts(e.target.value)}
+                  placeholder="Use the quiz default"
+                  className={inputClassName}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Overrides the quiz&apos;s own limit for the students selected below. Leave blank to
+                  use it. Re-assigning without a value clears any override.
+                </p>
+              </div>
             </div>
             <div>
               <label className={labelClassName}>

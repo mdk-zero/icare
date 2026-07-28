@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -15,6 +15,7 @@ import {
   faChevronDown,
   faWandMagicSparkles,
   faFileImport,
+  faTriangleExclamation,
 } from "@fortawesome/free-solid-svg-icons";
 import { SkeletonQuestionCard } from "../../../components/skeletons";
 import { toast } from "../../../components/Toast";
@@ -32,6 +33,10 @@ interface AssessmentDetail {
   category: string;
   time_limit_seconds: number | null;
   question_count: number;
+  /** How many questions one attempt serves; null serves the whole bank. */
+  total_questions: number | null;
+  /** Retakes allowed; null is unlimited. */
+  max_attempts: number | null;
 }
 
 interface AssessmentQuestion {
@@ -44,6 +49,8 @@ interface AssessmentQuestion {
   points: number;
   explanation: string;
   competency_ids: string[];
+  /** The criterion that owns this question. Unassigned questions are never served. */
+  criteria_id: string | null;
 }
 
 type QuestionFormData = {
@@ -54,6 +61,7 @@ type QuestionFormData = {
   points: number;
   explanation: string;
   competency_ids: string[];
+  criteria_id: string | null;
 };
 
 interface AssessmentCriteria {
@@ -63,6 +71,14 @@ interface AssessmentCriteria {
   weight: number;
   competency_id: string;
   sort_order: number;
+  /** Questions from this criterion that every attempt must include. */
+  min_questions: number;
+}
+
+/** Mirrors PublishBlocker in app/lib/assessment-validation.ts. */
+interface PublishBlocker {
+  code: string;
+  message: string;
 }
 
 interface CompetencyArea {
@@ -79,6 +95,7 @@ const emptyQuestionForm: QuestionFormData = {
   points: 1,
   explanation: "",
   competency_ids: [],
+  criteria_id: null,
 };
 
 /** Minimal CSV parser: quoted fields, "" escapes, \r\n or \n row breaks. */
@@ -177,10 +194,12 @@ export default function AssessmentQuestionsClient({
   const [newCriterionName, setNewCriterionName] = useState("");
   const [newCriterionWeight, setNewCriterionWeight] = useState("");
   const [newCriterionCompetency, setNewCriterionCompetency] = useState("");
+  const [newCriterionMin, setNewCriterionMin] = useState("1");
+  const [blockers, setBlockers] = useState<PublishBlocker[]>([]);
 
   // inline detail editing
   const [editingDetails, setEditingDetails] = useState(false);
-  const [detailForm, setDetailForm] = useState({ title: "", description: "", difficulty: "beginner", category: "General", time_limit_minutes: "" });
+  const [detailForm, setDetailForm] = useState({ title: "", description: "", difficulty: "beginner", category: "General", time_limit_minutes: "", total_questions: "", max_attempts: "" });
   const [savingDetails, setSavingDetails] = useState(false);
 
   const handleSaveDetails = async () => {
@@ -188,6 +207,11 @@ export default function AssessmentQuestionsClient({
       toast("Title is required");
       return;
     }
+    // Blank means "no limit" for both of these, which is a real setting rather
+    // than a missing one: no cap on retakes, and serve the whole bank.
+    const totalQuestions = detailForm.total_questions ? Number(detailForm.total_questions) : null;
+    const maxAttempts = detailForm.max_attempts ? Number(detailForm.max_attempts) : null;
+
     setSavingDetails(true);
     const res = await fetch(`/api/faculty/assessments/${assessmentId}`, {
       method: "PATCH",
@@ -199,11 +223,14 @@ export default function AssessmentQuestionsClient({
         difficulty: detailForm.difficulty,
         category: detailForm.category,
         time_limit_seconds: detailForm.time_limit_minutes ? Number(detailForm.time_limit_minutes) * 60 : null,
+        total_questions: totalQuestions,
+        max_attempts: maxAttempts,
       }),
     });
     setSavingDetails(false);
     if (!res.ok) {
-      toast("Failed to save details");
+      const j = (await res.json().catch(() => null)) as { error?: string } | null;
+      toast(j?.error ?? "Failed to save details");
       return;
     }
     setAssessment((prev) =>
@@ -214,10 +241,14 @@ export default function AssessmentQuestionsClient({
         difficulty: detailForm.difficulty as "beginner" | "intermediate" | "advanced",
         category: detailForm.category,
         time_limit_seconds: detailForm.time_limit_minutes ? Number(detailForm.time_limit_minutes) * 60 : null,
+        total_questions: totalQuestions,
+        max_attempts: maxAttempts,
       } : prev
     );
     setEditingDetails(false);
     toast("Assessment details updated");
+    // The paper size feeds publish validation, so re-read what still blocks it.
+    loadData();
   };
 
   const loadData = useCallback(async () => {
@@ -235,7 +266,8 @@ export default function AssessmentQuestionsClient({
 
       if (assessRes.ok) {
         const json = (await assessRes.json()) as {
-          assessment: { questions: AssessmentQuestion[]; title: string; description: string; difficulty: string; category: string; time_limit_seconds: number | null; question_count: number };
+          assessment: { questions: AssessmentQuestion[]; title: string; description: string; difficulty: string; category: string; time_limit_seconds: number | null; question_count: number; total_questions: number | null; max_attempts: number | null };
+          blockers?: PublishBlocker[];
         };
         const a = json.assessment;
         setAssessment({
@@ -246,6 +278,8 @@ export default function AssessmentQuestionsClient({
           category: a.category,
           time_limit_seconds: a.time_limit_seconds,
           question_count: a.question_count ?? json.assessment.questions.length,
+          total_questions: a.total_questions ?? null,
+          max_attempts: a.max_attempts ?? null,
         });
         setDetailForm({
           title: a.title,
@@ -253,7 +287,10 @@ export default function AssessmentQuestionsClient({
           difficulty: a.difficulty,
           category: a.category,
           time_limit_minutes: a.time_limit_seconds ? String(Math.round(a.time_limit_seconds / 60)) : "",
+          total_questions: a.total_questions ? String(a.total_questions) : "",
+          max_attempts: a.max_attempts ? String(a.max_attempts) : "",
         });
+        setBlockers(json.blockers ?? []);
         const loaded = json.assessment.questions ?? [];
         setQuestions(loaded);
         const builders: Record<string, QuestionFormData> = {};
@@ -266,6 +303,7 @@ export default function AssessmentQuestionsClient({
             points: q.points || 1,
             explanation: q.explanation,
             competency_ids: [...q.competency_ids],
+            criteria_id: q.criteria_id ?? null,
           };
         }
         setQuestionBuilders(builders);
@@ -290,6 +328,25 @@ export default function AssessmentQuestionsClient({
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  /**
+   * Re-read just what stands between this assessment and being publishable.
+   * Coverage shifts on almost every edit — assigning a question, changing a
+   * minimum, adding a criterion — and finding out at the publish button is too
+   * late to be useful.
+   */
+  const refreshBlockers = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/faculty/assessments/${assessmentId}`, {
+        credentials: "include",
+      });
+      if (!res.ok) return;
+      const json = (await res.json()) as { blockers?: PublishBlocker[] };
+      setBlockers(json.blockers ?? []);
+    } catch {
+      // Advisory only — a failed refresh must not interrupt editing.
+    }
+  }, [assessmentId]);
 
   const updateBuilderField = (
     qId: string,
@@ -366,6 +423,7 @@ export default function AssessmentQuestionsClient({
       points: form.points,
       explanation: form.explanation,
       competency_ids: form.competency_ids,
+      criteria_id: form.criteria_id,
     };
 
     const isNew = qId.startsWith("new_");
@@ -416,6 +474,8 @@ export default function AssessmentQuestionsClient({
     markClean(qId);
     setEditingQuestions((prev) => { const next = new Set(prev); next.delete(qId); return next; });
     toast(isNew ? "Question added" : "Question updated");
+    // Assigning or unassigning a question changes what a criterion can cover.
+    refreshBlockers();
   };
 
   const handleDeleteQuestion = async (qId: string) => {
@@ -468,6 +528,7 @@ export default function AssessmentQuestionsClient({
         points: form.points,
         explanation: form.explanation,
         competency_ids: [...form.competency_ids],
+        criteria_id: form.criteria_id,
       };
       const copy = [...prev];
       copy.splice(idx + 1, 0, newQ);
@@ -492,6 +553,7 @@ export default function AssessmentQuestionsClient({
       points: 1,
       explanation: "",
       competency_ids: [],
+      criteria_id: null,
     };
     setQuestions((prev) => [...prev, newQ]);
     setQuestionBuilders((prev) => ({
@@ -499,6 +561,24 @@ export default function AssessmentQuestionsClient({
       [newId]: { ...emptyQuestionForm, options: ["", ""] },
     }));
   };
+
+  /**
+   * The criterion a competency implies, when it implies exactly one.
+   *
+   * Imported and generated questions arrive tagged with a competency, not a
+   * criterion. Where a single criterion uses that competency the mapping is
+   * unambiguous and worth making automatically; where several do, guessing is
+   * what produced the double-counting this whole change removes, so the
+   * question is left unassigned for someone to place.
+   */
+  const criterionForCompetency = useCallback(
+    (competencyId: string | undefined): string | null => {
+      if (!competencyId) return null;
+      const matches = criteria.filter((c) => c.competency_id === competencyId);
+      return matches.length === 1 ? matches[0].id : null;
+    },
+    [criteria],
+  );
 
   /** Appends draft questions to the builder as unsaved `new_` entries. */
   const appendDraftQuestions = (forms: QuestionFormData[]) => {
@@ -550,7 +630,14 @@ export default function AssessmentQuestionsClient({
         toast(json.error ?? "Failed to generate questions");
         return;
       }
-      appendDraftQuestions(json.questions);
+      // The generator tags questions by competency; place the ones whose
+      // competency points at exactly one criterion.
+      appendDraftQuestions(
+        json.questions.map((q) => ({
+          ...q,
+          criteria_id: q.criteria_id ?? criterionForCompetency(q.competency_ids?.[0]),
+        })),
+      );
       setShowAIPanel(false);
       toast(
         `Generated ${json.questions.length} draft question${json.questions.length !== 1 ? "s" : ""} — review and save each one`,
@@ -642,6 +729,7 @@ export default function AssessmentQuestionsClient({
         points,
         explanation,
         competency_ids: competencyId ? [competencyId] : [],
+        criteria_id: criterionForCompetency(competencyId),
       });
     }
 
@@ -690,6 +778,7 @@ export default function AssessmentQuestionsClient({
         weight,
         competency_id: newCriterionCompetency,
         sort_order: criteria.length,
+        min_questions: Number(newCriterionMin) || 0,
       }),
     });
     if (!res.ok) {
@@ -702,12 +791,43 @@ export default function AssessmentQuestionsClient({
     setNewCriterionName("");
     setNewCriterionWeight("");
     setNewCriterionCompetency("");
+    setNewCriterionMin("1");
+    refreshBlockers();
+  };
+
+  /** Persist a criterion's minimum; the field is the only inline-editable one. */
+  const updateCriterionMin = async (id: string, value: number) => {
+    const previous = criteria.find((c) => c.id === id)?.min_questions ?? 1;
+    setCriteria((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, min_questions: value } : c)),
+    );
+    const res = await fetch(`/api/faculty/assessment-criteria/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ min_questions: value }),
+    });
+    if (!res.ok) {
+      setCriteria((prev) =>
+        prev.map((c) => (c.id === id ? { ...c, min_questions: previous } : c)),
+      );
+      const j = (await res.json().catch(() => null)) as { error?: string } | null;
+      toast(j?.error ?? "Failed to update minimum");
+      return;
+    }
+    refreshBlockers();
   };
 
   const deleteCriteria = async (id: string) => {
+    // The questions survive but come back unassigned, and an unassigned
+    // question is never served — worth saying before, not after.
+    const owned = questions.filter((q) => q.criteria_id === id).length;
     setConfirmAction({
       title: "Remove Criteria",
-      message: "Remove this criteria permanently? This can't be undone.",
+      message:
+        owned > 0
+          ? `Remove this criteria permanently? Its ${owned} question${owned === 1 ? "" : "s"} will become unassigned and won't be served until you give ${owned === 1 ? "it" : "them"} a new criteria.`
+          : "Remove this criteria permanently? This can't be undone.",
       action: async () => {
         setConfirmAction((prev) => prev ? { ...prev, loading: true, error: null } : null);
         const res = await fetch(`/api/faculty/assessment-criteria/${id}`, {
@@ -721,11 +841,64 @@ export default function AssessmentQuestionsClient({
         setCriteria((prev) => prev.filter((c) => c.id !== id));
         setConfirmAction(null);
         toast("Criteria removed");
+        // The server nulled criteria_id on its questions; re-read rather than
+        // guess which ones.
+        loadData();
       },
     });
   };
 
   const totalWeight = criteria.reduce((sum, c) => sum + c.weight, 0);
+
+  /** Questions each criterion owns, plus the ones nothing owns. */
+  const questionsByCriterion = useMemo(() => {
+    const map = new Map<string, AssessmentQuestion[]>();
+    for (const c of criteria) map.set(c.id, []);
+    const unassigned: AssessmentQuestion[] = [];
+    for (const q of questions) {
+      const bucket = q.criteria_id ? map.get(q.criteria_id) : undefined;
+      if (bucket) bucket.push(q);
+      else unassigned.push(q);
+    }
+    return { map, unassigned };
+  }, [criteria, questions]);
+
+  const servedTotal = assessment?.total_questions ?? null;
+
+  /**
+   * The question list, grouped under its criteria.
+   *
+   * Flattened with header entries rather than nested lists so the existing
+   * two-column grid still lines the cards up; a header just spans both columns.
+   * Numbering stays global so a question keeps the same label wherever it sits.
+   */
+  const questionList = useMemo(() => {
+    const indexOf = new Map(questions.map((q, i) => [q.id, i]));
+    type Entry =
+      | { kind: "header"; id: string; criterion: AssessmentCriteria | null; count: number }
+      | { kind: "question"; id: string; question: AssessmentQuestion; index: number };
+
+    const entries: Entry[] = [];
+    for (const c of criteria) {
+      const owned = questionsByCriterion.map.get(c.id) ?? [];
+      entries.push({ kind: "header", id: `h_${c.id}`, criterion: c, count: owned.length });
+      for (const q of owned) {
+        entries.push({ kind: "question", id: q.id, question: q, index: indexOf.get(q.id) ?? 0 });
+      }
+    }
+    if (questionsByCriterion.unassigned.length > 0 || criteria.length === 0) {
+      entries.push({
+        kind: "header",
+        id: "h_unassigned",
+        criterion: null,
+        count: questionsByCriterion.unassigned.length,
+      });
+      for (const q of questionsByCriterion.unassigned) {
+        entries.push({ kind: "question", id: q.id, question: q, index: indexOf.get(q.id) ?? 0 });
+      }
+    }
+    return entries;
+  }, [criteria, questions, questionsByCriterion]);
 
   if (loading) {
     return (
@@ -818,7 +991,31 @@ export default function AssessmentQuestionsClient({
                     placeholder="Time limit (min)"
                     className={inputClassName}
                   />
+                  <input
+                    type="number"
+                    min={1}
+                    value={detailForm.total_questions}
+                    onChange={(e) => setDetailForm((f) => ({ ...f, total_questions: e.target.value }))}
+                    placeholder="Questions per attempt"
+                    title="How many questions each attempt serves. Leave blank to serve every question."
+                    className={inputClassName}
+                  />
+                  <input
+                    type="number"
+                    min={1}
+                    value={detailForm.max_attempts}
+                    onChange={(e) => setDetailForm((f) => ({ ...f, max_attempts: e.target.value }))}
+                    placeholder="Attempts allowed"
+                    title="How many times a student may sit this quiz. Leave blank for unlimited."
+                    className={inputClassName}
+                  />
                 </div>
+                <p className="text-xs text-gray-500">
+                  Leave <span className="font-medium">Questions per attempt</span> blank to serve every
+                  question, and <span className="font-medium">Attempts allowed</span> blank for unlimited
+                  retakes. Holding questions back is what lets a retake show a student ones they
+                  haven&apos;t seen.
+                </p>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={handleSaveDetails}
@@ -871,6 +1068,54 @@ export default function AssessmentQuestionsClient({
         </div>
       </header>
 
+      {/* Publish readiness — what selection needs before students can sit this */}
+      <div
+        className={`rounded-xl border p-4 ${
+          blockers.length === 0
+            ? "bg-green-50 border-green-200"
+            : "bg-amber-50 border-amber-200"
+        }`}
+      >
+        <div className="flex items-start gap-3">
+          <FontAwesomeIcon
+            icon={blockers.length === 0 ? faCheck : faTriangleExclamation}
+            className={`w-4 h-4 mt-0.5 shrink-0 ${
+              blockers.length === 0 ? "text-green-600" : "text-amber-600"
+            }`}
+          />
+          <div className="min-w-0">
+            <p
+              className={`text-sm font-semibold ${
+                blockers.length === 0 ? "text-green-800" : "text-amber-900"
+              }`}
+            >
+              {blockers.length === 0
+                ? "Ready to publish"
+                : `${blockers.length} thing${blockers.length === 1 ? "" : "s"} to fix before publishing`}
+            </p>
+            {blockers.length === 0 ? (
+              <p className="text-xs text-green-700 mt-1">
+                Each attempt serves{" "}
+                {servedTotal ?? questions.length - questionsByCriterion.unassigned.length} question
+                {(servedTotal ?? questions.length) === 1 ? "" : "s"} across {criteria.length} criteria
+                {assessment.max_attempts
+                  ? `, up to ${assessment.max_attempts} attempt${assessment.max_attempts === 1 ? "" : "s"} per student.`
+                  : ", with unlimited retakes."}
+              </p>
+            ) : (
+              <ul className="mt-1.5 space-y-1">
+                {blockers.map((b) => (
+                  <li key={b.code + b.message} className="text-xs text-amber-900 flex gap-1.5">
+                    <span aria-hidden className="text-amber-500">•</span>
+                    <span>{b.message}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* Criteria section */}
       <div className="bg-surface rounded-xl border border-gray-200 shadow-sm">
         <button
@@ -895,18 +1140,43 @@ export default function AssessmentQuestionsClient({
           <div className="px-4 pb-4 space-y-2 border-t border-gray-100 pt-3">
             {criteria.length > 0 && (
               <div className="space-y-2">
+                <div className="flex items-center gap-3 px-3 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                  <span className="w-6" />
+                  <span className="flex-1">Criteria</span>
+                  <span className="w-40">Competency</span>
+                  <span className="w-16 text-right" title="Questions assigned to this criteria">Pool</span>
+                  <span className="w-16 text-right" title="Questions from this criteria every attempt must include">Min</span>
+                  <span className="w-16 text-right">Weight</span>
+                  <span className="w-6" />
+                </div>
                 {criteria.map((c, i) => {
                   const comp = competencyAreas.find((x) => x.id === c.competency_id);
+                  const pool = questionsByCriterion.map.get(c.id)?.length ?? 0;
+                  const starved = pool < c.min_questions;
                   return (
                     <div
                       key={c.id}
-                      className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg"
+                      className={`flex items-center gap-3 p-3 rounded-lg ${starved ? "bg-red-50 ring-1 ring-red-200" : "bg-gray-50"}`}
                     >
                       <span className="text-sm font-medium text-gray-500 w-6">{i + 1}.</span>
                       <span className="text-sm text-gray-800 flex-1">{c.name}</span>
                       <span className="text-xs text-gray-500 w-40 truncate">
                         {comp?.name ?? c.competency_id.slice(0, 8)}
                       </span>
+                      <span
+                        className={`text-sm w-16 text-right font-semibold ${starved ? "text-red-600" : "text-gray-700"}`}
+                        title={starved ? `Only ${pool} question(s) for a minimum of ${c.min_questions}` : undefined}
+                      >
+                        {pool}
+                      </span>
+                      <input
+                        type="number"
+                        min={0}
+                        value={c.min_questions}
+                        onChange={(e) => updateCriterionMin(c.id, Math.max(0, Number(e.target.value) || 0))}
+                        title="Minimum questions per attempt"
+                        className="w-16 px-2 py-1 text-sm text-right border border-gray-300 rounded-lg text-gray-800 focus:outline-none focus:ring-2 focus:ring-brand-600/30"
+                      />
                       <span className="text-sm font-semibold text-brand-600 w-16 text-right">
                         {c.weight}%
                       </span>
@@ -923,14 +1193,19 @@ export default function AssessmentQuestionsClient({
                   <span className="w-6" />
                   <span className="flex-1">Total</span>
                   <span className="w-40" />
+                  <span className="w-16 text-right">{questions.length - questionsByCriterion.unassigned.length}</span>
+                  <span className={`w-16 text-right ${servedTotal !== null && criteria.reduce((s, c) => s + Math.min(c.min_questions, questionsByCriterion.map.get(c.id)?.length ?? 0), 0) > servedTotal ? "text-red-500" : ""}`}>
+                    {criteria.reduce((s, c) => s + Math.min(c.min_questions, questionsByCriterion.map.get(c.id)?.length ?? 0), 0)}
+                  </span>
                   <span className={`w-16 text-right ${totalWeight === 100 ? "text-green-600" : "text-red-500"}`}>
                     {totalWeight}%
                   </span>
+                  <span className="w-6" />
                 </div>
               </div>
             )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
               <input
                 value={newCriterionName}
                 onChange={(e) => setNewCriterionName(e.target.value)}
@@ -958,6 +1233,15 @@ export default function AssessmentQuestionsClient({
                   </option>
                 ))}
               </select>
+              <input
+                type="number"
+                min={0}
+                value={newCriterionMin}
+                onChange={(e) => setNewCriterionMin(e.target.value)}
+                placeholder="Min questions"
+                title="Minimum questions per attempt"
+                className={inputClassName}
+              />
               <button
                 onClick={addCriteria}
                 className="px-4 py-3 bg-brand-600 text-white rounded-xl text-sm font-medium hover:bg-[#155663] transition-colors"
@@ -993,7 +1277,45 @@ export default function AssessmentQuestionsClient({
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {questions.map((q, i) => {
+            {questionList.map((entry) => {
+              if (entry.kind === "header") {
+                const c = entry.criterion;
+                const min = c?.min_questions ?? 0;
+                const short = c ? entry.count < min : false;
+                return (
+                  <div
+                    key={entry.id}
+                    className={`md:col-span-2 flex items-center gap-2 pt-2 pb-1 border-b ${
+                      c ? "border-gray-200" : "border-amber-300"
+                    }`}
+                  >
+                    <FontAwesomeIcon
+                      icon={c ? faLayerGroup : faTriangleExclamation}
+                      className={`w-3.5 h-3.5 ${c ? "text-brand-600" : "text-amber-600"}`}
+                    />
+                    <span className={`text-sm font-semibold ${c ? "text-gray-800" : "text-amber-900"}`}>
+                      {c ? c.name : "Unassigned"}
+                    </span>
+                    <span className="text-xs text-gray-500">
+                      {entry.count} question{entry.count === 1 ? "" : "s"}
+                      {c && ` · min ${min} · weight ${c.weight}%`}
+                    </span>
+                    {short && (
+                      <span className="text-xs font-medium text-red-600">
+                        needs {min - entry.count} more
+                      </span>
+                    )}
+                    {!c && (
+                      <span className="text-xs text-amber-800">
+                        never served — give each one a criteria
+                      </span>
+                    )}
+                  </div>
+                );
+              }
+
+              const q = entry.question;
+              const i = entry.index;
               const form = questionBuilders[q.id];
               if (!form) return null;
               const isEditing = editingQuestions.has(q.id);
@@ -1146,6 +1468,33 @@ export default function AssessmentQuestionsClient({
                           disabled={!isEditing}
                           className="w-14 px-2 py-1 border border-gray-300 rounded-lg text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-600/30 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-50"
                         />
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <label className={`text-xs font-medium ${isEditing ? "text-gray-600" : "text-gray-400"}`}>Criteria</label>
+                        <select
+                          value={form.criteria_id ?? ""}
+                          onChange={(e) => {
+                            if (!isEditing) return;
+                            const next = e.target.value || null;
+                            updateBuilderField(q.id, "criteria_id", next);
+                            // Keep the competency tag in step with the criteria
+                            // that now owns the question — it is what the ML
+                            // recommender reads.
+                            const owner = criteria.find((c) => c.id === next);
+                            if (owner) updateBuilderField(q.id, "competency_ids", [owner.competency_id]);
+                          }}
+                          disabled={!isEditing}
+                          className={`px-2 py-1 border rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-brand-600/30 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-50 ${
+                            form.criteria_id
+                              ? "border-gray-300 text-gray-700"
+                              : "border-amber-300 text-amber-800 bg-amber-50"
+                          }`}
+                        >
+                          <option value="">Unassigned</option>
+                          {criteria.map((c) => (
+                            <option key={c.id} value={c.id}>{c.name}</option>
+                          ))}
+                        </select>
                       </div>
                       <div className="flex items-center gap-1.5">
                         <label className={`text-xs font-medium ${isEditing ? "text-gray-600" : "text-gray-400"}`}>Comp.</label>
