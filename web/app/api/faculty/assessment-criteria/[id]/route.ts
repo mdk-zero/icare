@@ -21,11 +21,12 @@ export async function PATCH(
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { name, weight, competency_id, sort_order } = body as {
+  const { name, weight, competency_id, sort_order, min_questions } = body as {
     name?: unknown;
     weight?: unknown;
     competency_id?: unknown;
     sort_order?: unknown;
+    min_questions?: unknown;
   };
 
   const update: Record<string, unknown> = {};
@@ -58,6 +59,17 @@ export async function PATCH(
     update.sort_order = sort_order;
   }
 
+  if (min_questions !== undefined) {
+    const n = Number(min_questions);
+    if (!Number.isInteger(n) || n < 0) {
+      return NextResponse.json(
+        { error: 'Minimum questions must be zero or a positive whole number' },
+        { status: 400 },
+      );
+    }
+    update.min_questions = n;
+  }
+
   if (Object.keys(update).length === 0) {
     return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
   }
@@ -68,7 +80,7 @@ export async function PATCH(
       .from('assessment_criteria')
       .update(update)
       .eq('id', id)
-      .select('id, assessment_id, name, weight, competency_id, sort_order, created_at')
+      .select('id, assessment_id, name, weight, competency_id, sort_order, min_questions, created_at')
       .single();
 
     if (error) {

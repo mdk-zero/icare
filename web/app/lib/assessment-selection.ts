@@ -87,6 +87,49 @@ interface CriterionRow {
 
 type Rng = () => number;
 
+/**
+ * Re-read the paper an attempt was already served, in its served order.
+ *
+ * Resuming has to hand back exactly the same questions in the same order —
+ * re-running selection would deal a different paper to a student who is
+ * halfway through one.
+ */
+export async function loadServedQuestions(
+  supabase: SupabaseClient,
+  attemptId: string,
+): Promise<SelectedQuestion[]> {
+  const { data: served } = await supabase
+    .from('attempt_questions')
+    .select('question_id, criteria_id, position')
+    .eq('attempt_id', attemptId)
+    .order('position', { ascending: true });
+
+  if (!served || served.length === 0) return [];
+
+  const { data: questions } = await supabase
+    .from('questions')
+    .select('id, content, options')
+    .in(
+      'id',
+      served.map((s) => s.question_id),
+    );
+
+  const byId = new Map((questions ?? []).map((q) => [q.id, q]));
+  return served
+    .map((row, index) => {
+      const question = byId.get(row.question_id);
+      if (!question) return null;
+      return {
+        id: question.id,
+        criteria_id: row.criteria_id,
+        content: question.content,
+        options: Array.isArray(question.options) ? (question.options as string[]) : [],
+        position: index,
+      } satisfies SelectedQuestion;
+    })
+    .filter((q): q is SelectedQuestion => q !== null);
+}
+
 // ---------------------------------------------------------------
 // Pure helpers — no I/O, so they can be reasoned about and exercised directly
 // ---------------------------------------------------------------

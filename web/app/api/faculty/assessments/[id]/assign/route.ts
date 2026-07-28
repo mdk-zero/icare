@@ -23,10 +23,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const { student_ids, deadline, required } = body as {
+  const { student_ids, deadline, required, max_attempts } = body as {
     student_ids?: unknown;
     deadline?: unknown;
     required?: unknown;
+    max_attempts?: unknown;
   };
 
   const studentIds = Array.isArray(student_ids)
@@ -39,6 +40,14 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     typeof deadline === 'string' && deadline.length > 0 ? new Date(deadline) : null;
   if (deadlineValue && Number.isNaN(deadlineValue.getTime())) {
     return NextResponse.json({ error: 'Invalid deadline' }, { status: 400 });
+  }
+  const attemptsOverride =
+    max_attempts === undefined || max_attempts === null ? null : Number(max_attempts);
+  if (attemptsOverride !== null && (!Number.isInteger(attemptsOverride) || attemptsOverride <= 0)) {
+    return NextResponse.json(
+      { error: 'Attempts allowed must be a positive whole number' },
+      { status: 400 },
+    );
   }
 
   try {
@@ -59,6 +68,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       assigned_by: session.uid,
       deadline: deadlineValue ? deadlineValue.toISOString() : null,
       required: typeof required === 'boolean' ? required : true,
+      // Overrides the assessment's own limit for these students; null falls
+      // back to it.
+      max_attempts: attemptsOverride,
     }));
 
     const { data: assignments, error } = await supabase

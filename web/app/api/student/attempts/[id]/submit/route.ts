@@ -65,14 +65,55 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Attempt already submitted' }, { status: 409 });
     }
 
-    const { data: questions, error: qError } = await supabase
-      .from('questions')
-      .select('id, correct_index, explanation, position')
-      .eq('assessment_id', attempt.assessment_id);
+    // Grade against the paper this attempt was actually served, not the whole
+    // bank: a 20-question paper drawn from a 50-question bank would otherwise
+    // cap the student at 40%.
+    const { data: servedRows } = await supabase
+      .from('attempt_questions')
+      .select('question_id, criteria_id, position')
+      .eq('attempt_id', attemptId)
+      .order('position', { ascending: true });
 
-    if (qError || !questions || questions.length === 0) {
+    let served: { question_id: string; criteria_id: string | null; position: number }[];
+    if (servedRows && servedRows.length > 0) {
+      served = servedRows;
+    } else {
+      // Attempts that predate the served set were handed the entire bank.
+      const { data: bank } = await supabase
+        .from('questions')
+        .select('id, criteria_id, position')
+        .eq('assessment_id', attempt.assessment_id)
+        .order('position', { ascending: true });
+      served = (bank ?? []).map((q) => ({
+        question_id: q.id,
+        criteria_id: q.criteria_id,
+        position: q.position,
+      }));
+    }
+
+    if (served.length === 0) {
       return NextResponse.json({ error: 'Unable to grade attempt' }, { status: 500 });
     }
+
+    const { data: questionRows, error: qError } = await supabase
+      .from('questions')
+      .select('id, correct_index, explanation')
+      .in(
+        'id',
+        served.map((s) => s.question_id),
+      );
+
+    if (qError || !questionRows || questionRows.length === 0) {
+      return NextResponse.json({ error: 'Unable to grade attempt' }, { status: 500 });
+    }
+
+    const questionById = new Map(questionRows.map((q) => [q.id, q]));
+    const questions = served
+      .map((s) => {
+        const q = questionById.get(s.question_id);
+        return q ? { ...q, position: s.position, criteria_id: s.criteria_id } : null;
+      })
+      .filter((q): q is NonNullable<typeof q> => q !== null);
 
     const answerByQuestion = new Map(answers.map((a) => [a.question_id, a]));
     const graded = questions.map((q) => {
@@ -108,35 +149,25 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       weighted_score: number;
     }[] = [];
 
-    const [criteriaResult, qCompResult] = await Promise.all([
-      supabase
-        .from('assessment_criteria')
-        .select('id, name, weight, competency_id')
-        .eq('assessment_id', attempt.assessment_id)
-        .order('sort_order', { ascending: true }),
-      supabase
-        .from('question_competencies')
-        .select('question_id, competency_id'),
-    ]);
+    // Criteria own their questions outright now. Matching on a shared
+    // competency, as this used to, let a question tagged with two competencies
+    // count toward every criterion sharing them — one assessment had three
+    // criteria all scoring against all ten questions.
+    const { data: criteriaRows } = await supabase
+      .from('assessment_criteria')
+      .select('id, name, weight, competency_id')
+      .eq('assessment_id', attempt.assessment_id)
+      .order('sort_order', { ascending: true });
 
-    const assessmentCriteria = criteriaResult.data ?? [];
-    const questionCompetencies = qCompResult.data ?? [];
+    const assessmentCriteria = criteriaRows ?? [];
 
     if (assessmentCriteria.length > 0) {
-      const compByQuestion = new Map<string, string[]>();
-      for (const qc of questionCompetencies) {
-        const existing = compByQuestion.get(qc.question_id) ?? [];
-        existing.push(qc.competency_id);
-        compByQuestion.set(qc.question_id, existing);
-      }
+      const correctByQuestion = new Map(graded.map((g) => [g.question_id, g.is_correct]));
 
       criteriaBreakdown = assessmentCriteria.map((c) => {
-        const qIds = questions
-          .filter((q) => (compByQuestion.get(q.id) ?? []).includes(c.competency_id))
-          .map((q) => q.id);
-
-        const total = qIds.length;
-        const correct = graded.filter((g) => qIds.includes(g.question_id) && g.is_correct).length;
+        const mine = served.filter((s) => s.criteria_id === c.id);
+        const total = mine.length;
+        const correct = mine.filter((s) => correctByQuestion.get(s.question_id)).length;
         const pct = total > 0 ? Math.round((correct / total) * 10000) / 100 : 0;
 
         return {
