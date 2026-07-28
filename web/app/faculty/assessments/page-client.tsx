@@ -171,6 +171,20 @@ export default function FacultyAssessmentsClient() {
         subtitle="Create quizzes, manage questions, and assign them to your students"
       />
 
+      {/* Stats */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {[
+          { label: "Total Assessments", value: assessments.length, color: "text-gray-800" },
+          { label: "Published", value: assessments.filter((a) => a.is_published).length, color: "text-green-700" },
+          { label: "Draft", value: assessments.filter((a) => !a.is_published).length, color: "text-gray-500" },
+        ].map((stat) => (
+          <div key={stat.label} className="bg-surface rounded-xl border border-hairline p-4 shadow-[0_1px_3px_0_rgba(0,0,0,0.04)]">
+            <p className="text-sm text-gray-500">{stat.label}</p>
+            <p className={`text-2xl font-semibold ${stat.color} mt-0.5`}>{stat.value}</p>
+          </div>
+        ))}
+      </div>
+
       <div className="flex items-center justify-between gap-4">
         <div className="relative flex-1">
           <FontAwesomeIcon
@@ -195,8 +209,8 @@ export default function FacultyAssessmentsClient() {
       </div>
 
       {loading ? (
-        <div className="space-y-4">
-          {Array.from({ length: 3 }).map((_, i) => (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {Array.from({ length: 6 }).map((_, i) => (
             <SkeletonAssessmentCard key={i} />
           ))}
         </div>
@@ -205,102 +219,93 @@ export default function FacultyAssessmentsClient() {
           {searchQuery ? "No assessments match your search." : "No assessments yet. Create your first quiz to start building the question bank."}
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredAssessments.map((a) => (
-            <div key={a.id} className="relative bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden">
+            <div key={a.id} className="relative bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden flex flex-col">
               <span className={`absolute left-0 top-0 h-full w-0.5 ${
                 a.difficulty === "beginner" ? "bg-emerald-500" :
                 a.difficulty === "intermediate" ? "bg-amber-500" :
                 a.difficulty === "advanced" ? "bg-rose-500" : "bg-gray-500"
               }`} aria-hidden />
-              <div className="p-6">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap mb-1">
-                      <h3 className="font-semibold text-gray-800">{a.title}</h3>
-                      <span
-                        className={`px-2 py-0.5 text-xs rounded-full ${
-                          a.is_published
-                            ? "bg-green-100 text-green-700"
-                            : "bg-gray-100 text-gray-500"
-                        }`}
-                      >
-                        {a.is_published ? "Published" : "Draft"}
-                      </span>
-                    </div>
-                    {a.description && (
-                      <p className="text-sm text-gray-500 mb-2">{a.description}</p>
-                    )}
-                    <div className="flex items-center gap-3 text-sm text-gray-400 flex-wrap">
-                      <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded">
-                        {a.category}
-                      </span>
-                      <span
-                        className={`px-2 py-0.5 rounded ${
-                          a.difficulty === "beginner"
-                            ? "bg-green-100 text-green-700"
-                            : a.difficulty === "intermediate"
-                              ? "bg-yellow-100 text-yellow-700"
-                              : "bg-red-100 text-red-700"
-                        }`}
-                      >
-                        {a.difficulty}
-                      </span>
-                      <span>{a.question_count} questions</span>
-                      <span>{a.student_count} assigned</span>
-                      {a.time_limit_seconds && (
-                        <span>{Math.round(a.time_limit_seconds / 60)} min limit</span>
-                      )}
-                      {a.target_sections && a.target_sections.length > 0 && (
-                        <span className="text-xs text-gray-500">
-                          Sections: {a.target_sections.join(", ")}
-                        </span>
-                      )}
-                    </div>
+              <div className="p-4 flex-1">
+                <div className="flex items-center gap-2 flex-wrap mb-1">
+                  <h3 className="font-semibold text-gray-800 truncate">{a.title}</h3>
+                  <span className={`px-2 py-0.5 text-xs rounded-full shrink-0 ${
+                    a.is_published
+                      ? "bg-green-100 text-green-700"
+                      : "bg-gray-100 text-gray-500"
+                  }`}>
+                    {a.is_published ? "Published" : "Draft"}
+                  </span>
+                </div>
+                {a.description && (
+                  <p className="text-sm text-gray-500 mb-3 line-clamp-2">{a.description}</p>
+                )}
+                <div className="flex items-center gap-2 text-sm text-gray-400 flex-wrap">
+                  <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">
+                    {a.category}
+                  </span>
+                  <span className={`px-2 py-0.5 rounded text-xs ${
+                    a.difficulty === "beginner"
+                      ? "bg-green-100 text-green-700"
+                      : a.difficulty === "intermediate"
+                        ? "bg-yellow-100 text-yellow-700"
+                        : "bg-red-100 text-red-700"
+                  }`}>
+                    {a.difficulty}
+                  </span>
+                  <span className="text-xs">{a.question_count} questions</span>
+                  <span className="text-xs">{a.student_count} assigned</span>
+                  {a.time_limit_seconds && (
+                    <span className="text-xs">{Math.round(a.time_limit_seconds / 60)} min</span>
+                  )}
+                </div>
+              </div>
+              <div className="px-4 py-3 bg-subtle border-t border-hairline">
+                {a.target_sections && a.target_sections.length > 0 && (
+                  <div className="text-xs text-gray-500 mb-2 truncate">
+                    Sections: {a.target_sections.join(", ")}
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <button
-                      onClick={() => openAssignModal(a)}
-                      disabled={!a.is_published}
-                      title={a.is_published ? "Assign to students" : "Publish first to assign"}
-                      className="p-2.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40"
-                    >
-                      <FontAwesomeIcon icon={faUserPlus} className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => togglePublish(a)}
-                      disabled={busy}
-                      title={a.is_published ? "Unpublish" : "Publish"}
-                      className="p-2.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"
-                    >
-                      <FontAwesomeIcon
-                        icon={a.is_published ? faEyeSlash : faGlobe}
-                        className="w-4 h-4"
-                      />
-                    </button>
-                    <button
-                      onClick={() => router.push(`/faculty/assessments/${a.id}`)}
-                      title="Edit details"
-                      className="p-2.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"
-                    >
-                      <FontAwesomeIcon icon={faPen} className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => setConfirmDelete(a)}
-                      title="Delete"
-                      className="p-2.5 rounded-lg border border-red-200 text-red-500 hover:bg-red-50"
-                    >
-                      <FontAwesomeIcon icon={faTrash} className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => router.push(`/faculty/assessments/${a.id}`)}
-                      title="Manage questions"
-                      className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-brand-600/10 text-[#155663] hover:bg-brand-600/20 text-sm font-medium"
-                    >
-                      <FontAwesomeIcon icon={faListCheck} className="w-4 h-4" />
-                      Questions
-                    </button>
-                  </div>
+                )}
+                <div className="flex items-center justify-end gap-1.5">
+                  <button
+                    onClick={() => openAssignModal(a)}
+                    disabled={!a.is_published}
+                    title={a.is_published ? "Assign to students" : "Publish first to assign"}
+                    className="p-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+                  >
+                    <FontAwesomeIcon icon={faUserPlus} className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => togglePublish(a)}
+                    disabled={busy}
+                    title={a.is_published ? "Unpublish" : "Publish"}
+                    className="p-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"
+                  >
+                    <FontAwesomeIcon icon={a.is_published ? faEyeSlash : faGlobe} className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => router.push(`/faculty/assessments/${a.id}`)}
+                    title="Edit details"
+                    className="p-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"
+                  >
+                    <FontAwesomeIcon icon={faPen} className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => setConfirmDelete(a)}
+                    title="Delete"
+                    className="p-2 rounded-lg border border-red-200 text-red-500 hover:bg-red-50"
+                  >
+                    <FontAwesomeIcon icon={faTrash} className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => router.push(`/faculty/assessments/${a.id}`)}
+                    title="Manage questions"
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-brand-600/10 text-[#155663] hover:bg-brand-600/20 text-sm font-medium"
+                  >
+                    <FontAwesomeIcon icon={faListCheck} className="w-3.5 h-3.5" />
+                    Questions
+                  </button>
                 </div>
               </div>
             </div>

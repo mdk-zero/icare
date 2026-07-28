@@ -382,29 +382,27 @@ export function SkeletonEhrTable() {
 
 export function SkeletonAssessmentCard() {
   return (
-    <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04)] overflow-hidden animate-pulse">
+    <div className="relative bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04)] overflow-hidden flex flex-col animate-pulse">
       <span className="absolute left-0 top-0 h-full w-0.5 bg-gray-200" aria-hidden />
-      <div className="p-6">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1 space-y-3">
-            <div className="flex items-center gap-2">
-              <div className="h-5 w-40 bg-gray-100 rounded" />
-              <div className="h-5 w-16 bg-gray-100 rounded-full" />
-            </div>
-            <div className="h-4 w-3/4 bg-gray-100 rounded" />
-            <div className="flex items-center gap-3">
-              <div className="h-5 w-20 bg-gray-100 rounded" />
-              <div className="h-5 w-16 bg-gray-100 rounded" />
-              <div className="h-4 w-24 bg-gray-100 rounded" />
-            </div>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <div className="w-9 h-9 bg-gray-100 rounded-lg" />
-            <div className="w-9 h-9 bg-gray-100 rounded-lg" />
-            <div className="w-9 h-9 bg-gray-100 rounded-lg" />
-            <div className="h-9 w-24 bg-gray-100 rounded-lg" />
-          </div>
+      <div className="p-4 flex-1 space-y-3">
+        <div className="flex items-center gap-2">
+          <div className="h-5 w-36 bg-gray-100 rounded" />
+          <div className="h-5 w-16 bg-gray-100 rounded-full shrink-0" />
         </div>
+        <div className="h-4 w-full bg-gray-100 rounded" />
+        <div className="h-4 w-2/3 bg-gray-100 rounded" />
+        <div className="flex items-center gap-2">
+          <div className="h-5 w-16 bg-gray-100 rounded" />
+          <div className="h-5 w-14 bg-gray-100 rounded" />
+          <div className="h-4 w-20 bg-gray-100 rounded" />
+        </div>
+      </div>
+      <div className="px-4 py-3 bg-subtle border-t border-hairline flex justify-end gap-1.5">
+        <div className="w-8 h-8 bg-gray-100 rounded-lg" />
+        <div className="w-8 h-8 bg-gray-100 rounded-lg" />
+        <div className="w-8 h-8 bg-gray-100 rounded-lg" />
+        <div className="w-8 h-8 bg-gray-100 rounded-lg" />
+        <div className="h-8 w-20 bg-gray-100 rounded-lg" />
       </div>
     </div>
   );
