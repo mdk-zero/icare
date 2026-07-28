@@ -410,32 +410,31 @@ export function SkeletonAssessmentCard() {
 
 export function SkeletonQuestionCard() {
   return (
-    <div className="bg-surface rounded-xl border border-gray-200 shadow-sm animate-pulse">
-      <div className="p-4 space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-7 h-7 bg-gray-100 rounded-full" />
-            <div className="h-8 w-32 bg-gray-100 rounded-lg" />
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="h-8 w-20 bg-gray-100 rounded-lg" />
-            <div className="h-8 w-8 bg-gray-100 rounded-lg" />
-          </div>
+    <div className="bg-surface rounded-xl border border-gray-200 shadow-sm animate-pulse flex flex-col">
+      <div className="p-4 flex-1 space-y-3">
+        <div className="flex items-center gap-2">
+          <div className="w-6 h-6 bg-gray-100 rounded-full shrink-0" />
+          <div className="h-6 w-28 bg-gray-100 rounded-lg" />
         </div>
-        <div className="h-16 w-full bg-gray-100 rounded-xl" />
-        <div className="space-y-2">
-          <div className="flex items-center gap-3">
-            <div className="w-5 h-5 bg-gray-100 rounded-full" />
-            <div className="h-10 flex-1 bg-gray-100 rounded-xl" />
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="w-5 h-5 bg-gray-100 rounded-full" />
-            <div className="h-10 flex-1 bg-gray-100 rounded-xl" />
-          </div>
+        <div className="h-12 w-full bg-gray-100 rounded-xl" />
+        <div className="space-y-1.5">
+          {[0, 1].map((j) => (
+            <div key={j} className="flex items-center gap-2">
+              <div className="w-4 h-4 bg-gray-100 rounded-full shrink-0" />
+              <div className="h-8 flex-1 bg-gray-100 rounded-lg" />
+            </div>
+          ))}
         </div>
-        <div className="flex items-center gap-3 pt-2 border-t border-gray-100">
-          <div className="h-5 w-16 bg-gray-100 rounded" />
-          <div className="h-8 w-32 bg-gray-100 rounded-lg" />
+      </div>
+      <div className="px-4 py-3 bg-subtle border-t border-hairline flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="h-5 w-14 bg-gray-100 rounded" />
+          <div className="h-6 w-20 bg-gray-100 rounded-lg" />
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div className="w-7 h-7 bg-gray-100 rounded-lg" />
+          <div className="w-7 h-7 bg-gray-100 rounded-lg" />
+          <div className="w-7 h-7 bg-gray-100 rounded-lg" />
         </div>
       </div>
     </div>

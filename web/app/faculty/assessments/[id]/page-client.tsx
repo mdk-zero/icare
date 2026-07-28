@@ -737,8 +737,7 @@ export default function AssessmentQuestionsClient({
         <div className="bg-surface rounded-xl border border-gray-200 shadow-sm animate-pulse p-4">
           <div className="h-8 w-48 bg-gray-100 rounded" />
         </div>
-        <div className="space-y-4">
-          <div className="h-5 w-32 bg-gray-100 rounded animate-pulse" />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <SkeletonQuestionCard />
           <SkeletonQuestionCard />
         </div>
@@ -990,7 +989,7 @@ export default function AssessmentQuestionsClient({
             No questions yet. Click &quot;Add Question&quot; to start building.
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {questions.map((q, i) => {
               const form = questionBuilders[q.id];
               if (!form) return null;
@@ -998,143 +997,100 @@ export default function AssessmentQuestionsClient({
               return (
                 <div
                   key={q.id}
-                  className={`bg-surface rounded-xl border shadow-sm ${isEditing ? "border-brand-600/40 ring-1 ring-brand-600/20" : "border-gray-200"}`}
+                  className={`bg-surface rounded-xl border shadow-sm flex flex-col ${isEditing ? "border-brand-600/40 ring-1 ring-brand-600/20" : "border-gray-200"}`}
                 >
-                  <div className="p-4 space-y-2">
+                  <div className="p-4 flex-1 space-y-2">
                     {/* Question header */}
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-3">
-                        <span className="text-sm font-bold text-gray-500 bg-gray-100 w-7 h-7 rounded-full flex items-center justify-center">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-sm font-bold text-gray-500 bg-gray-100 w-6 h-6 rounded-full flex items-center justify-center shrink-0">
                           {i + 1}
                         </span>
                         <select
                           value={form.question_type}
                           onChange={(e) =>
-                            updateBuilderField(
-                              q.id,
-                              "question_type",
-                              e.target.value,
-                            )
+                            updateBuilderField(q.id, "question_type", e.target.value)
                           }
                           disabled={!isEditing}
-                          className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-600/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="text-xs border border-gray-300 rounded-lg px-2 py-1 text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-600/30 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           <option value="multiple_choice">Multiple choice</option>
                           <option value="true_false">True / False</option>
                           <option value="short_answer">Short answer</option>
                         </select>
-                        {isEditing && dirtyQuestions.has(q.id) && (
-                          <button
-                            onClick={() => {
-                              setSavingQuestions((prev) => ({ ...prev, [q.id]: true }));
-                              handleSaveQuestion(q.id).finally(() =>
-                                setSavingQuestions((prev) => ({ ...prev, [q.id]: false }))
-                              );
-                            }}
-                            disabled={savingQuestions[q.id]}
-                            className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-600 text-white rounded-lg text-xs font-medium hover:bg-[#155663] disabled:opacity-60 transition-colors"
-                          >
-                            {savingQuestions[q.id] ? (
-                              <FontAwesomeIcon icon={faSpinner} spin className="w-3.5 h-3.5" />
-                            ) : (
-                              <FontAwesomeIcon icon={faCheck} className="w-3.5 h-3.5" />
-                            )}
-                            Save Changes
-                          </button>
-                        )}
                       </div>
-                      <div className="flex items-center gap-2">
+                      {isEditing && dirtyQuestions.has(q.id) && (
                         <button
-                          onClick={() => handleDuplicateQuestion(q.id)}
-                          title="Duplicate"
-                          className="px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 text-xs font-medium"
+                          onClick={() => {
+                            setSavingQuestions((prev) => ({ ...prev, [q.id]: true }));
+                            handleSaveQuestion(q.id).finally(() =>
+                              setSavingQuestions((prev) => ({ ...prev, [q.id]: false }))
+                            );
+                          }}
+                          disabled={savingQuestions[q.id]}
+                          className="flex items-center gap-1 px-2.5 py-1 bg-brand-600 text-white rounded-lg text-xs font-medium hover:bg-[#155663] disabled:opacity-60 transition-colors shrink-0"
                         >
-                          Duplicate
+                          {savingQuestions[q.id] ? (
+                            <FontAwesomeIcon icon={faSpinner} spin className="w-3 h-3" />
+                          ) : (
+                            <FontAwesomeIcon icon={faCheck} className="w-3 h-3" />
+                          )}
+                          Save
                         </button>
-                        <button
-                          onClick={() => toggleEdit(q.id)}
-                          title={isEditing ? "Done editing" : "Edit question"}
-                          className={`p-2 rounded-lg border transition-colors ${
-                            isEditing
-                              ? "bg-brand-600 text-white border-brand-600 hover:bg-[#155663]"
-                              : "border-gray-200 text-gray-500 hover:bg-gray-50"
-                          }`}
-                        >
-                          <FontAwesomeIcon icon={faPen} className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteQuestion(q.id)}
-                          title="Delete"
-                          className="p-2 rounded-lg border border-red-200 text-red-500 hover:bg-red-50"
-                        >
-                          <FontAwesomeIcon icon={faTrash} className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
+                      )}
                     </div>
 
                     {/* Question text */}
                     <textarea
                       value={form.content}
-                      onChange={(e) =>
-                        updateBuilderField(q.id, "content", e.target.value)
-                      }
+                      onChange={(e) => updateBuilderField(q.id, "content", e.target.value)}
                       disabled={!isEditing}
                       placeholder="Question text"
-                      rows={2}
-                      className={`${inputClassName} disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-50`}
+                      rows={isEditing ? 2 : 1}
+                      className={`${inputClassName} disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-50 text-sm`}
                     />
 
                     {/* Options */}
                     {form.question_type === "multiple_choice" && (
-                      <div className="space-y-2">
-                        {form.options.map((opt, idx) => (
-                          <div key={idx} className={`flex items-center gap-3 ${!isEditing ? "opacity-60" : ""}`}>
+                      <div className="space-y-1.5">
+                        {form.options.slice(0, isEditing ? undefined : 4).map((opt, idx) => (
+                          <div key={idx} className={`flex items-center gap-2 ${!isEditing ? "opacity-60" : ""}`}>
                             <button
                               onClick={() => isEditing && setBuilderCorrect(q.id, idx)}
-                              title={
-                                idx === form.correct_index
-                                  ? "Correct answer"
-                                  : "Mark as correct"
-                              }
+                              title={idx === form.correct_index ? "Correct answer" : "Mark as correct"}
                               className={`shrink-0 ${!isEditing ? "cursor-default" : ""}`}
                               tabIndex={isEditing ? 0 : -1}
                             >
                               {idx === form.correct_index ? (
-                                <FontAwesomeIcon
-                                  icon={faCheck}
-                                  className="w-5 h-5 text-green-600"
-                                />
+                                <FontAwesomeIcon icon={faCheck} className="w-4 h-4 text-green-600" />
                               ) : (
-                                <div className="w-5 h-5 rounded-full border-2 border-gray-300" />
+                                <div className="w-4 h-4 rounded-full border-2 border-gray-300" />
                               )}
                             </button>
                             <input
                               value={opt}
-                              onChange={(e) =>
-                                isEditing && updateBuilderOption(q.id, idx, e.target.value)
-                              }
+                              onChange={(e) => isEditing && updateBuilderOption(q.id, idx, e.target.value)}
                               placeholder={`Option ${idx + 1}`}
                               disabled={!isEditing}
-                              className={`${inputClassName} disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-50`}
+                              className="flex-1 px-3 py-1.5 bg-surface border border-gray-400 rounded-lg text-sm text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-50 transition-all"
                             />
-                            {form.options.length > 2 && (
+                            {isEditing && form.options.length > 2 && (
                               <button
-                                onClick={() => isEditing && removeBuilderOption(q.id, idx)}
-                                disabled={!isEditing}
-                                className="text-gray-400 hover:text-red-500 shrink-0 disabled:opacity-30"
+                                onClick={() => removeBuilderOption(q.id, idx)}
+                                className="text-gray-400 hover:text-red-500 shrink-0"
                               >
-                                <FontAwesomeIcon
-                                  icon={faTimes}
-                                  className="w-4 h-4"
-                                />
+                                <FontAwesomeIcon icon={faTimes} className="w-3.5 h-3.5" />
                               </button>
                             )}
                           </div>
                         ))}
+                        {!isEditing && form.options.length > 4 && (
+                          <p className="text-xs text-gray-400">+{form.options.length - 4} more options</p>
+                        )}
                         {isEditing && (
                           <button
                             onClick={() => addBuilderOption(q.id)}
-                            className="text-sm text-brand-600 font-medium hover:underline"
+                            className="text-xs text-brand-600 font-medium hover:underline"
                           >
                             + Add option
                           </button>
@@ -1144,26 +1100,21 @@ export default function AssessmentQuestionsClient({
 
                     {/* True / False */}
                     {form.question_type === "true_false" && (
-                      <div className="space-y-2">
+                      <div className="space-y-1.5">
                         {["True", "False"].map((label, idx) => (
-                          <div key={idx} className={`flex items-center gap-3 ${!isEditing ? "opacity-60" : ""}`}>
+                          <div key={idx} className={`flex items-center gap-2 ${!isEditing ? "opacity-60" : ""}`}>
                             <button
                               onClick={() => isEditing && setBuilderCorrect(q.id, idx)}
                               className={`shrink-0 ${!isEditing ? "cursor-default" : ""}`}
                               tabIndex={isEditing ? 0 : -1}
                             >
                               {idx === form.correct_index ? (
-                                <FontAwesomeIcon
-                                  icon={faCheck}
-                                  className="w-5 h-5 text-green-600"
-                                />
+                                <FontAwesomeIcon icon={faCheck} className="w-4 h-4 text-green-600" />
                               ) : (
-                                <div className="w-5 h-5 rounded-full border-2 border-gray-300" />
+                                <div className="w-4 h-4 rounded-full border-2 border-gray-300" />
                               )}
                             </button>
-                            <span className={`text-sm ${isEditing ? "text-gray-700" : "text-gray-400"}`}>
-                              {label}
-                            </span>
+                            <span className={`text-sm ${isEditing ? "text-gray-700" : "text-gray-400"}`}>{label}</span>
                           </div>
                         ))}
                       </div>
@@ -1171,60 +1122,74 @@ export default function AssessmentQuestionsClient({
 
                     {/* Short answer */}
                     {form.question_type === "short_answer" && (
-                      <p className={`text-sm italic ${isEditing ? "text-gray-400" : "text-gray-300"}`}>
-                        Students will type a free-text response. Correct answer
-                        matching is configured in the answer key.
+                      <p className={`text-xs italic ${isEditing ? "text-gray-400" : "text-gray-300"}`}>
+                        Students will type a free-text response.
                       </p>
                     )}
+                  </div>
 
-                    {/* Answer key row */}
-                    <div className={`flex items-center gap-3 pt-2 border-t ${isEditing ? "border-gray-100" : "border-gray-50"} flex-wrap`}>
-                      <div className="flex items-center gap-2">
-                        <label className={`text-sm font-medium ${isEditing ? "text-gray-600" : "text-gray-400"}`}>
-                          Points
-                        </label>
+                  {/* Bottom bar — points, competency, actions */}
+                  <div className="px-4 py-3 bg-subtle border-t border-hairline flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <div className="flex items-center gap-1.5">
+                        <label className={`text-xs font-medium ${isEditing ? "text-gray-600" : "text-gray-400"}`}>Points</label>
                         <input
                           type="number"
                           min={1}
                           value={form.points}
                           onChange={(e) =>
-                            isEditing &&
-                            updateBuilderField(
-                              q.id,
-                              "points",
-                              Math.max(1, Number(e.target.value)),
-                            )
+                            isEditing && updateBuilderField(q.id, "points", Math.max(1, Number(e.target.value)))
                           }
                           disabled={!isEditing}
-                          className="w-20 px-3 py-1.5 border border-gray-300 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-600/30 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-50"
+                          className="w-14 px-2 py-1 border border-gray-300 rounded-lg text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-600/30 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-50"
                         />
                       </div>
-                      <div className="flex items-center gap-2">
-                        <label className={`text-sm font-medium ${isEditing ? "text-gray-600" : "text-gray-400"}`}>
-                          Competency
-                        </label>
+                      <div className="flex items-center gap-1.5">
+                        <label className={`text-xs font-medium ${isEditing ? "text-gray-600" : "text-gray-400"}`}>Comp.</label>
                         <select
                           value={form.competency_ids[0] ?? ""}
                           onChange={(e) =>
-                            isEditing &&
-                            updateBuilderField(q.id, "competency_ids", e.target.value ? [e.target.value] : [])
+                            isEditing && updateBuilderField(q.id, "competency_ids", e.target.value ? [e.target.value] : [])
                           }
                           disabled={!isEditing}
-                          className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-600/30 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-50"
+                          className="px-2 py-1 border border-gray-300 rounded-lg text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-600/30 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-50"
                         >
-                          <option value="">No competency</option>
+                          <option value="">None</option>
                           {competencyAreas.map((ca) => (
-                            <option key={ca.id} value={ca.id}>
-                              {ca.name}
-                            </option>
+                            <option key={ca.id} value={ca.id}>{ca.name}</option>
                           ))}
                         </select>
                       </div>
                       {form.explanation && (
-                        <span className={`text-xs ${isEditing ? "text-gray-400" : "text-gray-300"}`}>
-                          Has answer explanation
-                        </span>
+                        <span className="text-xs text-gray-400">Has explanation</span>
                       )}
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => handleDuplicateQuestion(q.id)}
+                        title="Duplicate"
+                        className="p-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50"
+                      >
+                        <FontAwesomeIcon icon={faLayerGroup} className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => toggleEdit(q.id)}
+                        title={isEditing ? "Done editing" : "Edit question"}
+                        className={`p-1.5 rounded-lg border transition-colors ${
+                          isEditing
+                            ? "bg-brand-600 text-white border-brand-600 hover:bg-[#155663]"
+                            : "border-gray-200 text-gray-500 hover:bg-gray-50"
+                        }`}
+                      >
+                        <FontAwesomeIcon icon={faPen} className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteQuestion(q.id)}
+                        title="Delete"
+                        className="p-1.5 rounded-lg border border-red-200 text-red-500 hover:bg-red-50"
+                      >
+                        <FontAwesomeIcon icon={faTrash} className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   </div>
                 </div>
