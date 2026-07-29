@@ -111,9 +111,35 @@ export async function POST(request: NextRequest) {
   if (timeLimit !== null && (!Number.isInteger(timeLimit) || timeLimit <= 0)) {
     return NextResponse.json({ error: 'Invalid time limit' }, { status: 400 });
   }
+  // Section names, not ids. Empty means every section sees it.
+  if (target_sections !== undefined && target_sections !== null) {
+    if (!Array.isArray(target_sections) || target_sections.some((s) => typeof s !== 'string')) {
+      return NextResponse.json({ error: 'Invalid target_sections' }, { status: 400 });
+    }
+  }
+  const targetSectionNames = Array.isArray(target_sections)
+    ? [...new Set((target_sections as string[]).map((s) => s.trim()).filter(Boolean))]
+    : [];
 
   try {
     const supabase = getSupabaseAdmin();
+
+    // A name that matches no section would hide the assessment from everyone.
+    if (targetSectionNames.length > 0) {
+      const { data: known } = await supabase
+        .from('sections')
+        .select('name')
+        .in('name', targetSectionNames);
+      const knownNames = new Set((known ?? []).map((s) => s.name));
+      const unknown = targetSectionNames.filter((name) => !knownNames.has(name));
+      if (unknown.length > 0) {
+        return NextResponse.json(
+          { error: `Unknown section: ${unknown.join(', ')}` },
+          { status: 400 },
+        );
+      }
+    }
+
     const { data: assessment, error } = await supabase
       .from('assessments')
       .insert({
@@ -123,7 +149,7 @@ export async function POST(request: NextRequest) {
         difficulty: difficulty as (typeof validDifficulties)[number],
         category: category as (typeof validCategories)[number],
         time_limit_seconds: timeLimit,
-        target_sections: Array.isArray(target_sections) ? target_sections : null,
+        target_sections: targetSectionNames.length > 0 ? targetSectionNames : null,
       })
       .select()
       .single();

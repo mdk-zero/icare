@@ -20,6 +20,7 @@ import {
 import { SkeletonQuestionCard } from "../../../components/skeletons";
 import { toast } from "../../../components/Toast";
 import ConfirmModal from "../../../components/ConfirmModal";
+import { fetchSections, type Section } from "../../../lib/api";
 
 const inputClassName =
   "w-full px-4 py-3 bg-surface border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 focus:bg-surface transition-all text-sm shadow-sm";
@@ -37,6 +38,8 @@ interface AssessmentDetail {
   total_questions: number | null;
   /** Retakes allowed; null is unlimited. */
   max_attempts: number | null;
+  /** Section names this is published to; null/empty reaches every section. */
+  target_sections: string[] | null;
 }
 
 interface AssessmentQuestion {
@@ -199,8 +202,23 @@ export default function AssessmentQuestionsClient({
 
   // inline detail editing
   const [editingDetails, setEditingDetails] = useState(false);
-  const [detailForm, setDetailForm] = useState({ title: "", description: "", difficulty: "beginner", category: "General", time_limit_minutes: "", total_questions: "", max_attempts: "" });
+  const [detailForm, setDetailForm] = useState({ title: "", description: "", difficulty: "beginner", category: "General", time_limit_minutes: "", total_questions: "", max_attempts: "", target_sections: [] as string[] });
   const [savingDetails, setSavingDetails] = useState(false);
+  const [sections, setSections] = useState<Section[]>([]);
+
+  const toggleTargetSection = (name: string) =>
+    setDetailForm((f) => ({
+      ...f,
+      target_sections: f.target_sections.includes(name)
+        ? f.target_sections.filter((s) => s !== name)
+        : [...f.target_sections, name],
+    }));
+
+  /** Targeted names with no section behind them any more (deleted section). */
+  const staleTargetSections =
+    sections.length === 0
+      ? []
+      : detailForm.target_sections.filter((name) => !sections.some((s) => s.name === name));
 
   const handleSaveDetails = async () => {
     if (!detailForm.title.trim()) {
@@ -225,6 +243,9 @@ export default function AssessmentQuestionsClient({
         time_limit_seconds: detailForm.time_limit_minutes ? Number(detailForm.time_limit_minutes) * 60 : null,
         total_questions: totalQuestions,
         max_attempts: maxAttempts,
+        // Sent every save, so unchecking every section puts the quiz back in
+        // front of all of them.
+        target_sections: detailForm.target_sections,
       }),
     });
     setSavingDetails(false);
@@ -243,6 +264,7 @@ export default function AssessmentQuestionsClient({
         time_limit_seconds: detailForm.time_limit_minutes ? Number(detailForm.time_limit_minutes) * 60 : null,
         total_questions: totalQuestions,
         max_attempts: maxAttempts,
+        target_sections: detailForm.target_sections.length > 0 ? detailForm.target_sections : null,
       } : prev
     );
     setEditingDetails(false);
@@ -266,7 +288,7 @@ export default function AssessmentQuestionsClient({
 
       if (assessRes.ok) {
         const json = (await assessRes.json()) as {
-          assessment: { questions: AssessmentQuestion[]; title: string; description: string; difficulty: string; category: string; time_limit_seconds: number | null; question_count: number; total_questions: number | null; max_attempts: number | null };
+          assessment: { questions: AssessmentQuestion[]; title: string; description: string; difficulty: string; category: string; time_limit_seconds: number | null; question_count: number; total_questions: number | null; max_attempts: number | null; target_sections: string[] | null };
           blockers?: PublishBlocker[];
         };
         const a = json.assessment;
@@ -280,6 +302,7 @@ export default function AssessmentQuestionsClient({
           question_count: a.question_count ?? json.assessment.questions.length,
           total_questions: a.total_questions ?? null,
           max_attempts: a.max_attempts ?? null,
+          target_sections: a.target_sections ?? null,
         });
         setDetailForm({
           title: a.title,
@@ -289,6 +312,7 @@ export default function AssessmentQuestionsClient({
           time_limit_minutes: a.time_limit_seconds ? String(Math.round(a.time_limit_seconds / 60)) : "",
           total_questions: a.total_questions ? String(a.total_questions) : "",
           max_attempts: a.max_attempts ? String(a.max_attempts) : "",
+          target_sections: a.target_sections ?? [],
         });
         setBlockers(json.blockers ?? []);
         const loaded = json.assessment.questions ?? [];
@@ -328,6 +352,10 @@ export default function AssessmentQuestionsClient({
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    fetchSections().then(setSections);
+  }, []);
 
   /**
    * Re-read just what stands between this assessment and being publishable.
@@ -1016,6 +1044,62 @@ export default function AssessmentQuestionsClient({
                   retakes. Holding questions back is what lets a retake show a student ones they
                   haven&apos;t seen.
                 </p>
+                <div>
+                  <label className={labelClassName}>Published to sections</label>
+                  {sections.length === 0 ? (
+                    <p className="text-sm text-gray-500">
+                      No sections exist yet — this assessment reaches every student.
+                    </p>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      {sections.map((s) => {
+                        const checked = detailForm.target_sections.includes(s.name);
+                        return (
+                          <label
+                            key={s.id}
+                            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm cursor-pointer transition-colors ${
+                              checked
+                                ? "border-brand-600 bg-brand-600/10 text-brand-700 dark:text-white"
+                                : "border-gray-200 text-gray-600 hover:bg-gray-50"
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => toggleTargetSection(s.name)}
+                              className="w-4 h-4 accent-brand-600"
+                            />
+                            Section {s.name}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {/* Deleting a section leaves its name behind here, and a name
+                      with no section left to match hides the quiz from a
+                      cohort that no longer exists. Surfaced so it can be
+                      dropped — it has no checkbox to untick. */}
+                  {staleTargetSections.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {staleTargetSections.map((name) => (
+                        <button
+                          key={name}
+                          onClick={() => toggleTargetSection(name)}
+                          className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-amber-200 bg-amber-50 text-amber-800 text-sm hover:bg-amber-100"
+                          title="This section no longer exists — remove it"
+                        >
+                          Section {name}
+                          <span className="text-xs">(deleted)</span>
+                          <FontAwesomeIcon icon={faTimes} className="w-3 h-3" />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <p className="text-xs text-gray-500 mt-1.5">
+                    Change these any time — students outside the checked sections stop seeing the
+                    quiz. Leave every box unchecked to publish to all sections.
+                  </p>
+                </div>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={handleSaveDetails}
@@ -1054,6 +1138,20 @@ export default function AssessmentQuestionsClient({
                   {assessment.description && (
                     <p className="text-sm text-gray-600 mt-1">{assessment.description}</p>
                   )}
+                  <p className="text-xs text-gray-500 mt-1.5">
+                    {assessment.target_sections && assessment.target_sections.length > 0 ? (
+                      <>
+                        Published to{" "}
+                        <span className="font-medium text-gray-600">
+                          {assessment.target_sections
+                            .map((name) => `Section ${name}`)
+                            .join(", ")}
+                        </span>
+                      </>
+                    ) : (
+                      "Published to all sections"
+                    )}
+                  </p>
                 </div>
                 <button
                   onClick={() => setEditingDetails(true)}

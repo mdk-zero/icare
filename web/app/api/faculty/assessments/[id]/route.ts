@@ -135,11 +135,19 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     }
     updates.is_published = is_published;
   }
+  // Section names, not ids — checked against the sections table below, since a
+  // name that matches nothing hides the assessment from everyone instead of
+  // failing loudly.
+  let targetSectionNames: string[] | null | undefined;
   if (target_sections !== undefined) {
-    if (!Array.isArray(target_sections)) {
+    if (!Array.isArray(target_sections) || target_sections.some((s) => typeof s !== 'string')) {
       return NextResponse.json({ error: 'Invalid target_sections' }, { status: 400 });
     }
-    updates.target_sections = target_sections.length > 0 ? target_sections : null;
+    const names = [
+      ...new Set((target_sections as string[]).map((s) => s.trim()).filter(Boolean)),
+    ];
+    targetSectionNames = names.length > 0 ? names : null;
+    updates.target_sections = targetSectionNames;
   }
   // null on either of these is meaningful: total_questions null serves the whole
   // bank, max_attempts null means unlimited retakes.
@@ -164,6 +172,21 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
   try {
     const supabase = getSupabaseAdmin();
+
+    if (targetSectionNames) {
+      const { data: known } = await supabase
+        .from('sections')
+        .select('name')
+        .in('name', targetSectionNames);
+      const knownNames = new Set((known ?? []).map((s) => s.name));
+      const unknown = targetSectionNames.filter((name) => !knownNames.has(name));
+      if (unknown.length > 0) {
+        return NextResponse.json(
+          { error: `Unknown section: ${unknown.join(', ')}` },
+          { status: 400 },
+        );
+      }
+    }
 
     // Publishing is where a half-configured assessment has to be caught: past
     // this point selection is promising students a fixed paper size with every

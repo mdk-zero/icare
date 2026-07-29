@@ -179,7 +179,7 @@ export default function AssessmentNewClient() {
           />
         </div>
         <div>
-          <label className={labelClassName}>Visible to sections</label>
+          <label className={labelClassName}>Published to sections</label>
           {sections.length === 0 ? (
             <p className="text-sm text-gray-500">
               No sections exist yet — this assessment will be visible to all students.
@@ -210,7 +210,8 @@ export default function AssessmentNewClient() {
             </div>
           )}
           <p className="text-xs text-gray-400 mt-1">
-            Leave all unchecked to make visible to all sections.
+            Leave all unchecked to publish to all sections. You can change this later from the
+            assessment&apos;s details.
           </p>
         </div>
         <div className="flex justify-end gap-2 pt-2">
