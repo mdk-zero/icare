@@ -907,14 +907,7 @@ export default function AssessmentQuestionsClient({
       | { kind: "question"; id: string; question: AssessmentQuestion; index: number };
 
     const entries: Entry[] = [];
-    for (const c of criteria) {
-      const owned = questionsByCriterion.map.get(c.id) ?? [];
-      entries.push({ kind: "header", id: `h_${c.id}`, criterion: c, count: owned.length });
-      for (const q of owned) {
-        entries.push({ kind: "question", id: q.id, question: q, index: indexOf.get(q.id) ?? 0 });
-      }
-    }
-    if (questionsByCriterion.unassigned.length > 0 || criteria.length === 0) {
+    if (questionsByCriterion.unassigned.length > 0) {
       entries.push({
         kind: "header",
         id: "h_unassigned",
@@ -922,6 +915,13 @@ export default function AssessmentQuestionsClient({
         count: questionsByCriterion.unassigned.length,
       });
       for (const q of questionsByCriterion.unassigned) {
+        entries.push({ kind: "question", id: q.id, question: q, index: indexOf.get(q.id) ?? 0 });
+      }
+    }
+    for (const c of criteria) {
+      const owned = questionsByCriterion.map.get(c.id) ?? [];
+      entries.push({ kind: "header", id: `h_${c.id}`, criterion: c, count: owned.length });
+      for (const q of owned) {
         entries.push({ kind: "question", id: q.id, question: q, index: indexOf.get(q.id) ?? 0 });
       }
     }
@@ -1167,16 +1167,6 @@ export default function AssessmentQuestionsClient({
                       </span>
                     )}
                   </div>
-                  {blockers.length > 0 && (
-                    <div className="mt-2 space-y-1">
-                      {blockers.map((b) => (
-                        <p key={b.code + b.message} className="text-xs text-amber-700 flex items-center gap-1.5">
-                          <span className="w-1 h-1 rounded-full bg-amber-500 shrink-0" />
-                          {b.message}
-                        </p>
-                      ))}
-                    </div>
-                  )}
                 </div>
                 <button
                   onClick={() => setEditingDetails(true)}
@@ -1190,6 +1180,25 @@ export default function AssessmentQuestionsClient({
           </div>
         </div>
       </header>
+
+      {blockers.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+          <div className="flex items-start gap-3">
+            <FontAwesomeIcon icon={faTriangleExclamation} className="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
+            <div className="min-w-0 space-y-1.5">
+              <p className="text-sm font-semibold text-amber-800">
+                Fix these before students can take this quiz
+              </p>
+              {blockers.map((b) => (
+                <p key={b.code + b.message} className="text-xs text-amber-700 flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                  {b.message}
+                </p>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Criteria section */}
       <div className="bg-surface rounded-xl border border-gray-200 shadow-sm">
