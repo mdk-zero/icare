@@ -55,9 +55,22 @@ interface DraftRow {
   key: number;
   name: string;
   email: string;
-  status: "ready" | "creating" | "created" | "failed";
+  /**
+   * "no-email" is the case the roster used to hide: the account exists but the
+   * invitation bounced, so the temporary password has to be handed over by
+   * hand. Reporting it as "created" left the student locked out with nobody
+   * aware of it.
+   */
+  status: "ready" | "creating" | "created" | "no-email" | "failed";
   message?: string;
 }
+
+/** Provisioned rows must not be re-sent: the account exists, so a retry 409s. */
+const isProvisioned = (status: DraftRow["status"]) =>
+  status === "created" || status === "no-email";
+
+/** The account was made; `warning` is set when the invitation did not go out. */
+type EnrollOutcome = { ok: true; warning?: string } | { ok: false; error: string };
 
 let rowKey = 0;
 const emptyRow = (): DraftRow => ({ key: rowKey++, name: "", email: "", status: "ready" });
@@ -76,7 +89,7 @@ function EnrollSectionModal({
   onClose: () => void;
   sections: Section[];
   presetSectionId: string | null;
-  onEnroll: (name: string, email: string, sectionId: string) => Promise<string | null>;
+  onEnroll: (name: string, email: string, sectionId: string) => Promise<EnrollOutcome>;
   onFinished: (created: number) => void;
 }) {
   // The parent mounts this only while open and keys it on the section, so state
@@ -88,7 +101,11 @@ function EnrollSectionModal({
   const [formError, setFormError] = useState<string | null>(null);
 
   const filled = rows.filter((r) => r.name.trim() || r.email.trim());
-  const createdCount = rows.filter((r) => r.status === "created").length;
+  // Enrolment and invitation can diverge, so the summary counts them apart --
+  // claiming "each student receives an email" when one bounced is how a locked
+  // out student goes unnoticed.
+  const provisionedCount = rows.filter((r) => isProvisioned(r.status)).length;
+  const invitedCount = rows.filter((r) => r.status === "created").length;
 
   const update = (key: number, patch: Partial<DraftRow>) =>
     setRows((prev) => prev.map((r) => (r.key === key ? { ...r, ...patch } : r)));
@@ -119,13 +136,19 @@ function EnrollSectionModal({
 
     let created = 0;
     for (const row of filled) {
-      if (row.status === "created") continue;
+      if (isProvisioned(row.status)) continue;
       update(row.key, { status: "creating", message: undefined });
-      const error = await onEnroll(row.name.trim(), row.email.trim(), sectionId);
-      if (error) {
-        update(row.key, { status: "failed", message: error });
+      const outcome = await onEnroll(row.name.trim(), row.email.trim(), sectionId);
+      if (!outcome.ok) {
+        update(row.key, { status: "failed", message: outcome.error });
+        continue;
+      }
+      // Provisioned either way, so it still counts and must not be retried --
+      // only the invitation differs.
+      created++;
+      if (outcome.warning) {
+        update(row.key, { status: "no-email", message: outcome.warning });
       } else {
-        created++;
         update(row.key, { status: "created", message: "Invitation sent" });
       }
     }
@@ -216,7 +239,7 @@ function EnrollSectionModal({
                     type="text"
                     value={row.name}
                     onChange={(e) => update(row.key, { name: e.target.value })}
-                    disabled={submitting || row.status === "created"}
+                    disabled={submitting || isProvisioned(row.status)}
                     placeholder="Full name"
                     className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-surface px-3 py-2 text-sm text-gray-800 placeholder:text-gray-400 focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30 disabled:opacity-60"
                   />
@@ -224,7 +247,7 @@ function EnrollSectionModal({
                     type="text"
                     value={row.email}
                     onChange={(e) => update(row.key, { email: e.target.value })}
-                    disabled={submitting || row.status === "created"}
+                    disabled={submitting || isProvisioned(row.status)}
                     placeholder="name@batstate-u.edu.ph"
                     className="min-w-0 flex-[1.3] rounded-lg border border-gray-200 bg-surface px-3 py-2 text-sm text-gray-800 placeholder:text-gray-400 focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30 disabled:opacity-60"
                   />
@@ -234,6 +257,13 @@ function EnrollSectionModal({
                     )}
                     {row.status === "created" && (
                       <FontAwesomeIcon icon={faCircleCheck} className="h-3.5 w-3.5 text-emerald-600" />
+                    )}
+                    {row.status === "no-email" && (
+                      <FontAwesomeIcon
+                        icon={faTriangleExclamation}
+                        title={row.message}
+                        className="h-3.5 w-3.5 text-amber-600"
+                      />
                     )}
                     {row.status === "failed" && (
                       <FontAwesomeIcon
@@ -269,6 +299,26 @@ function EnrollSectionModal({
               </ul>
             )}
 
+            {/* Enrolled but not invited: the account is usable only once
+                someone passes on the temporary password shown below. */}
+            {rows.some((r) => r.status === "no-email") && (
+              <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+                <p className="text-xs font-medium text-amber-800">
+                  Enrolled, but the invitation email did not go out. Share the temporary
+                  password below with these students yourself:
+                </p>
+                <ul className="mt-1 space-y-1">
+                  {rows
+                    .filter((r) => r.status === "no-email")
+                    .map((r) => (
+                      <li key={r.key} className="text-xs text-amber-700">
+                        {r.email || "(blank)"}
+                      </li>
+                    ))}
+                </ul>
+              </div>
+            )}
+
             {!submitting && !finished && (
               <button
                 type="button"
@@ -289,8 +339,10 @@ function EnrollSectionModal({
 
           {finished && (
             <p className="rounded-lg border border-emerald-200 bg-emerald-50 p-2.5 text-sm text-emerald-700">
-              Enrolled {createdCount} of {filled.length} into {sectionName}. Each student receives an
-              email with a temporary password.
+              Enrolled {provisionedCount} of {filled.length} into {sectionName}.{" "}
+              {invitedCount === provisionedCount
+                ? "Each student receives an email with a temporary password."
+                : `${invitedCount} of them received an invitation email — hand the temporary password to the rest yourself.`}
             </p>
           )}
         </form>
@@ -713,7 +765,7 @@ export default function StudentManagementClient() {
 
   /** Provisions one account into a section; returns an error message or null. */
   const handleEnroll = useCallback(
-    async (name: string, email: string, sectionId: string): Promise<string | null> => {
+    async (name: string, email: string, sectionId: string): Promise<EnrollOutcome> => {
       const res = await fetch("/api/admin/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -723,13 +775,17 @@ export default function StudentManagementClient() {
       const json = (await res.json()) as {
         user?: { id: string; name: string; email: string };
         password?: string;
+        warning?: string;
         error?: string;
       };
-      if (!res.ok || !json.user) return json.error ?? "Failed to enroll student";
+      if (!res.ok || !json.user) return { ok: false, error: json.error ?? "Failed to enroll student" };
       if (json.password) {
         setPasswords((prev) => [...prev, { email: json.user!.email, password: json.password! }]);
       }
-      return null;
+      // The route sets `warning` when the account was created but the
+      // invitation could not be mailed. Dropping it here was what made a
+      // silent delivery failure read as "Invitation sent".
+      return { ok: true, warning: json.warning };
     },
     [],
   );
