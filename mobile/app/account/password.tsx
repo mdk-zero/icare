@@ -26,7 +26,7 @@ const MIN_LENGTH = 8;
  */
 export default function ChangePasswordFlowScreen() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, isBootstrapping } = useAuth();
   const email = user?.email ?? '';
   const { Palette, Accent, Shadow, Type } = useTheme();
   const styles = React.useMemo(
@@ -66,10 +66,25 @@ export default function ChangePasswordFlowScreen() {
     }
   }, [email]);
 
-  // Email the code as soon as the screen opens.
+  // Email the code as soon as the screen opens -- but exactly once, which is
+  // the ref's job and not the dependency array's. `email` is '' until useAuth
+  // finishes bootstrapping and can flip back to '' on a token refresh or an
+  // offline/online cycle, and every one of those transitions rebuilds sendCode
+  // and re-runs this effect. Without the ref each of them mails the same
+  // person another code, for as long as the screen stays open. Sending again
+  // is the Resend button's job.
+  const autoSent = React.useRef(false);
   React.useEffect(() => {
+    // Waiting for bootstrap is what keeps the empty-email failure below from
+    // firing on every cold start, before useAuth has restored the session.
+    if (autoSent.current || isBootstrapping) return;
+    autoSent.current = true;
+    if (!email) {
+      setError('This account has no email on file, so a code cannot be sent.');
+      return;
+    }
     void sendCode();
-  }, [sendCode]);
+  }, [isBootstrapping, email, sendCode]);
 
   const handleVerify = async () => {
     if (otp.length < 6 || busy) return;

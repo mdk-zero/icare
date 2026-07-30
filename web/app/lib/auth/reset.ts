@@ -47,6 +47,34 @@ export async function storePasswordResetOtp(
   if (error) throw error;
 }
 
+/**
+ * True if this user was already issued a code within `withinMs`.
+ *
+ * The in-memory limiter in rate-limit.ts cannot carry this: its Map lives in
+ * one server instance, so on a multi-instance deploy a client that re-requests
+ * in a loop is spread across instances and each one sees a fresh count. This
+ * reads the row that was actually written, so the cooldown holds everywhere.
+ */
+export async function hasRecentPasswordResetOtp(
+  userId: string,
+  withinMs: number,
+): Promise<boolean> {
+  const supabase = getSupabaseAdmin();
+  const since = new Date(Date.now() - withinMs).toISOString();
+
+  const { data, error } = await supabase
+    .from('password_resets')
+    .select('id')
+    .eq('user_id', userId)
+    .is('used_at', null)
+    .gt('created_at', since)
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  return Boolean(data);
+}
+
 export async function verifyPasswordResetOtp(
   userId: string,
   plainOtp: string,
