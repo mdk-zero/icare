@@ -45,35 +45,35 @@ interface AssessmentSeed {
 }
 
 const assessments: AssessmentSeed[] = [
-  {
-    title: 'Vital Signs Fundamentals',
-    description:
-      'Assess knowledge of normal vital sign ranges, proper measurement techniques, and interpretation of abnormal findings in adult patients.',
-    difficulty: 'beginner',
-    category: 'Medical-Surgical',
-    time_limit_seconds: 900,
-    criteria: [
-      {
-        name: 'Accuracy of Vital Signs Interpretation',
-        weight: 30,
-        competency_id: COMPETENCIES.SAFE_QUALITY_CARE,
-      },
-      {
-        name: 'Proper Measurement Technique',
-        weight: 20,
-        competency_id: COMPETENCIES.SAFE_QUALITY_CARE,
-      },
-      {
-        name: 'Identification of Abnormal Findings',
-        weight: 25,
-        competency_id: COMPETENCIES.RECORDS_MANAGEMENT,
-      },
-      {
-        name: 'Clinical Decision Making',
-        weight: 25,
-        competency_id: COMPETENCIES.SAFE_QUALITY_CARE,
-      },
-    ],
+    {
+      title: 'Vital Signs Fundamentals',
+      description:
+        'Assess knowledge of normal vital sign ranges, proper measurement techniques, and interpretation of abnormal findings in adult patients.',
+      difficulty: 'beginner',
+      category: 'Medical-Surgical',
+      time_limit_seconds: 900,
+      criteria: [
+        {
+          name: 'Accuracy of Vital Signs Interpretation',
+          weight: 30,
+          competency_id: COMPETENCIES.SAFE_QUALITY_CARE,
+        },
+        {
+          name: 'Proper Measurement Technique',
+          weight: 20,
+          competency_id: COMPETENCIES.SAFE_QUALITY_CARE,
+        },
+        {
+          name: 'Identification of Abnormal Findings',
+          weight: 25,
+          competency_id: COMPETENCIES.RECORDS_MANAGEMENT,
+        },
+        {
+          name: 'Clinical Decision Making',
+          weight: 25,
+          competency_id: COMPETENCIES.SAFE_QUALITY_CARE,
+        },
+      ],
     questions: [
       {
         content: 'What is the normal adult resting heart rate range?',
@@ -157,7 +157,7 @@ const assessments: AssessmentSeed[] = [
         question_type: 'multiple_choice',
         points: 1,
         explanation: 'Normal blood pressure is systolic < 120 mmHg and diastolic < 80 mmHg.',
-        competency_ids: [COMPETENCIES.SAFE_QUALITY_CARE, COMPETENCIES.RECORDS_MANAGEMENT],
+        competency_ids: [COMPETENCIES.SAFE_QUALITY_CARE],
       },
       {
         content:
@@ -210,37 +210,37 @@ const assessments: AssessmentSeed[] = [
     difficulty: 'advanced',
     category: 'Cardiac Emergency',
     time_limit_seconds: 1200,
-    criteria: [
-      {
-        name: 'ACLS Algorithm Knowledge',
-        weight: 25,
-        competency_id: COMPETENCIES.SAFE_QUALITY_CARE,
-      },
-      {
-        name: 'ECG Rhythm Interpretation',
-        weight: 20,
-        competency_id: COMPETENCIES.SAFE_QUALITY_CARE,
-      },
-      {
-        name: 'Emergency Pharmacology',
-        weight: 20,
-        competency_id: COMPETENCIES.PHARMACOLOGY,
-      },
-      {
-        name: 'Team Dynamics During Code',
-        weight: 15,
-        competency_id: COMPETENCIES.COLLABORATION_TEAMWORK,
-      },
-      {
-        name: 'Post-Resuscitation Care',
-        weight: 20,
-        competency_id: COMPETENCIES.SAFE_QUALITY_CARE,
-      },
-    ],
-    questions: [
-      {
-        content:
-          'A patient is in ventricular fibrillation. What is the priority intervention?',
+      criteria: [
+        {
+          name: 'ACLS Algorithm Knowledge',
+          weight: 25,
+          competency_id: COMPETENCIES.SAFE_QUALITY_CARE,
+        },
+        {
+          name: 'ECG Rhythm Interpretation',
+          weight: 20,
+          competency_id: COMPETENCIES.SAFE_QUALITY_CARE,
+        },
+        {
+          name: 'Emergency Pharmacology',
+          weight: 20,
+          competency_id: COMPETENCIES.PHARMACOLOGY,
+        },
+        {
+          name: 'Team Dynamics During Code',
+          weight: 15,
+          competency_id: COMPETENCIES.COLLABORATION_TEAMWORK,
+        },
+        {
+          name: 'Post-Resuscitation Care',
+          weight: 20,
+          competency_id: COMPETENCIES.SAFE_QUALITY_CARE,
+        },
+      ],
+      questions: [
+        {
+          content:
+            'A patient is in ventricular fibrillation. What is the priority intervention?',
         options: [
           'Administer amiodarone',
           'Perform immediate defibrillation',
@@ -301,7 +301,7 @@ const assessments: AssessmentSeed[] = [
         points: 2,
         explanation:
           'Amiodarone is the first-line antiarrhythmic for shock-refractory VF/pulseless VT per ACLS.',
-        competency_ids: [COMPETENCIES.SAFE_QUALITY_CARE, COMPETENCIES.PHARMACOLOGY],
+        competency_ids: [COMPETENCIES.SAFE_QUALITY_CARE],
       },
       {
         content:
@@ -745,7 +745,7 @@ const assessments: AssessmentSeed[] = [
         points: 2,
         explanation:
           'Certified medical interpreters ensure accurate communication and patient safety.',
-        competency_ids: [COMPETENCIES.COMMUNICATION, COMPETENCIES.ETHICO_MORAL, COMPETENCIES.COLLABORATION_TEAMWORK],
+        competency_ids: [COMPETENCIES.COMMUNICATION, COMPETENCIES.ETHICO_MORAL],
       },
       {
         content:
@@ -927,7 +927,7 @@ async function main() {
       continue;
     }
 
-    // 2. Create criteria
+    // 2. Create criteria and capture IDs
     const criteriaRows = a.criteria.map((c, i) => ({
       assessment_id: assessment.id,
       name: c.name,
@@ -936,15 +936,19 @@ async function main() {
       sort_order: i,
     }));
 
-    const { error: cErr } = await supabase
+    const { data: createdCriteria, error: cErr } = await supabase
       .from('assessment_criteria')
-      .insert(criteriaRows);
+      .insert(criteriaRows)
+      .select('id');
 
-    if (cErr) {
+    if (cErr || !createdCriteria) {
       console.error(`  ✗ "${a.title}" — criteria failed:`, cErr);
+      continue;
     }
 
-    // 3. Create questions
+    // Distribute questions across criteria round-robin so every criterion
+    // owns at least one question and no question is left unassigned.
+    // 3. Create questions with criteria_id
     const questionRows = a.questions.map((q, i) => ({
       assessment_id: assessment.id,
       position: i + 1,
@@ -954,6 +958,7 @@ async function main() {
       question_type: q.question_type,
       points: q.points,
       explanation: q.explanation,
+      criteria_id: createdCriteria[i % createdCriteria.length].id,
     }));
 
     const { data: createdQuestions, error: qErr } = await supabase
