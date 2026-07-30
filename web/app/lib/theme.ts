@@ -2,6 +2,9 @@ export type ThemePreference = "system" | "light" | "dark";
 
 export const THEME_STORAGE_KEY = "icare_theme";
 
+/** Same-tab preference changes; `storage` only fires in *other* tabs. */
+export const THEME_CHANGE_EVENT = "icare:themechange";
+
 export const THEME_OPTIONS: ThemePreference[] = ["system", "light", "dark"];
 
 function isThemePreference(value: unknown): value is ThemePreference {
@@ -36,16 +39,29 @@ export function setStoredTheme(preference: ThemePreference): void {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(THEME_STORAGE_KEY, preference);
   applyTheme(preference);
-  // Notifies every mounted useTheme() in this tab; `storage` only fires cross-tab.
-  window.dispatchEvent(new CustomEvent("icare:themechange", { detail: preference }));
+  window.dispatchEvent(new CustomEvent(THEME_CHANGE_EVENT, { detail: preference }));
 }
 
 /**
  * Runs before first paint, inlined into <head>. Without it the document paints
  * light and then snaps to dark once React hydrates.
  *
+ * It also owns the live OS listener, rather than a mounted component doing it:
+ * registered here it survives client-side navigation, applies on every route,
+ * and repaints even before React has hydrated.
+ *
  * Kept dependency-free and self-contained because it is stringified verbatim.
  */
-export const THEME_INIT_SCRIPT = `(function(){try{var p=localStorage.getItem(${JSON.stringify(
-  THEME_STORAGE_KEY,
-)});if(p!=='light'&&p!=='dark'&&p!=='system')p='system';var d=p==='dark'||(p==='system'&&window.matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.classList.toggle('dark',d);document.documentElement.dataset.theme=p;}catch(e){}})();`;
+export const THEME_INIT_SCRIPT = `(function(){
+var KEY=${JSON.stringify(THEME_STORAGE_KEY)};
+function read(){var p;try{p=localStorage.getItem(KEY)}catch(e){}
+return p==='light'||p==='dark'||p==='system'?p:'system'}
+function apply(){var p=read();
+var d=p==='dark'||(p==='system'&&mq.matches);
+document.documentElement.classList.toggle('dark',d);
+document.documentElement.dataset.theme=p}
+var mq;try{mq=window.matchMedia('(prefers-color-scheme: dark)');apply();
+mq.addEventListener('change',apply);
+window.addEventListener('storage',function(e){if(!e.key||e.key===KEY)apply()});
+window.addEventListener(${JSON.stringify(THEME_CHANGE_EVENT)},apply)}catch(e){}
+})();`;

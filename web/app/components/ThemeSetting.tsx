@@ -8,6 +8,8 @@ import {
   getStoredTheme,
   setStoredTheme,
   resolveTheme,
+  THEME_CHANGE_EVENT,
+  THEME_STORAGE_KEY,
   type ThemePreference,
 } from "../lib/theme";
 
@@ -69,17 +71,30 @@ export default function ThemeSetting({ className = "" }: { className?: string })
     // can't be read until after mount without causing a hydration mismatch.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
-    const stored = getStoredTheme();
-    setPreference(stored);
-    setResolved(resolveTheme(stored));
-  }, []);
 
-  // Following the OS means reacting when the OS flips.
-  useEffect(() => {
+    // The document itself is repainted by the listeners in THEME_INIT_SCRIPT;
+    // these only keep this panel's radio and "Now …" label in step with the OS
+    // flipping, another tab changing the preference, or another instance of
+    // this panel.
+    const sync = () => {
+      const stored = getStoredTheme();
+      setPreference(stored);
+      setResolved(resolveTheme(stored));
+    };
+    sync();
+
     const media = window.matchMedia("(prefers-color-scheme: dark)");
-    const sync = () => setResolved(resolveTheme(getStoredTheme()));
+    const onStorage = (event: StorageEvent) => {
+      if (!event.key || event.key === THEME_STORAGE_KEY) sync();
+    };
     media.addEventListener("change", sync);
-    return () => media.removeEventListener("change", sync);
+    window.addEventListener("storage", onStorage);
+    window.addEventListener(THEME_CHANGE_EVENT, sync);
+    return () => {
+      media.removeEventListener("change", sync);
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener(THEME_CHANGE_EVENT, sync);
+    };
   }, []);
 
   const choose = (value: ThemePreference) => {
