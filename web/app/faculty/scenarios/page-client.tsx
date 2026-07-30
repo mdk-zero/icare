@@ -68,15 +68,6 @@ const SCENARIO_CATEGORIES = [
   "General",
 ] as const;
 
-const emptyEditForm = {
-  title: "",
-  description: "",
-  difficulty: "intermediate" as "beginner" | "intermediate" | "advanced",
-  category: "General",
-  learningObjectives: "",
-  patientId: "",
-};
-
 const inputClassName =
   "w-full px-4 py-3 bg-surface border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 focus:bg-surface transition-all text-sm shadow-sm";
 
@@ -123,11 +114,6 @@ export default function FacultyScenariosClient() {
   const [batchSavedCount, setBatchSavedCount] = useState(0);
   const [batchError, setBatchError] = useState<string | null>(null);
   const [batchWarning, setBatchWarning] = useState<string | null>(null);
-
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [editTarget, setEditTarget] = useState<SimulationScenario | null>(null);
-  const [editForm, setEditForm] = useState(emptyEditForm);
-  const [saving, setSaving] = useState(false);
 
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedScenario, setSelectedScenario] = useState<SimulationScenario | null>(null);
@@ -394,65 +380,6 @@ export default function FacultyScenariosClient() {
     setBatchSelected([]);
   };
 
-  const handleOpenEditModal = (scenario: SimulationScenario) => {
-    setEditTarget(scenario);
-    setEditForm({
-      title: scenario.title,
-      description: scenario.description,
-      difficulty: scenario.difficulty as typeof emptyEditForm.difficulty,
-      category: scenario.category,
-      learningObjectives: (scenario.learning_objectives ?? []).join("\n"),
-      patientId: scenario.patient_id ?? "",
-    });
-    setShowEditModal(true);
-    if (patients.length === 0) void loadPatientsForSelector();
-  };
-
-  const closeEditModal = () => {
-    setShowEditModal(false);
-    setEditTarget(null);
-    setEditForm(emptyEditForm);
-  };
-
-  const handleSaveEdit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editTarget || !editForm.title.trim()) return;
-
-    setSaving(true);
-    const updated = await updateScenario(editTarget.id, {
-      title: editForm.title,
-      description: editForm.description,
-      difficulty: editForm.difficulty,
-      category: editForm.category || "General",
-      patient_id: editForm.patientId || null,
-      learning_objectives: editForm.learningObjectives
-        .split("\n")
-        .map((o) => o.trim())
-        .filter(Boolean),
-    });
-
-    if (updated) {
-      await loadScenarios();
-      const faculty = getCurrentFacultyUser();
-      if (faculty) {
-        logAuditAction({
-          faculty_id: faculty.id,
-          faculty_name: faculty.name,
-          tab: "scenarios",
-          action: "update_scenario",
-          details: `Updated scenario: ${updated.title}`,
-          target_type: "scenario",
-          target_id: editTarget.id,
-          metadata: { scenario_title: updated.title },
-        });
-      }
-      toast("Scenario updated");
-    }
-
-    setSaving(false);
-    closeEditModal();
-  };
-
   const getDifficultyColor = (difficulty: string) => {
     switch (difficulty) {
       case "advanced":
@@ -467,9 +394,9 @@ export default function FacultyScenariosClient() {
   };
 
   const difficultyBar: Record<string, string> = {
-    advanced: "bg-rose-500",
-    intermediate: "bg-amber-500",
-    beginner: "bg-emerald-500",
+    advanced: "bg-rose-600",
+    intermediate: "bg-amber-600",
+    beginner: "bg-emerald-600",
   };
 
   const getDifficultyIcon = (difficulty: string) => {
@@ -880,7 +807,7 @@ export default function FacultyScenariosClient() {
                     {
                       label: "Edit",
                       icon: faPenToSquare,
-                      onClick: () => handleOpenEditModal(scenario),
+                      onClick: () => router.push(`/faculty/scenarios/${scenario.id}/edit`),
                     },
                     {
                       label: "Assign",
@@ -965,146 +892,6 @@ export default function FacultyScenariosClient() {
                 </button>
               </div>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Edit Scenario Modal */}
-      {showEditModal && editTarget && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-surface rounded-xl w-full max-w-3xl max-h-[85vh] overflow-hidden flex flex-col shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-hairline">
-            <div className="p-4 border-b border-hairline flex items-center justify-between bg-subtle">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-brand-600/10 rounded-lg flex items-center justify-center">
-                  <FontAwesomeIcon icon={faPenToSquare} className="text-brand-600 w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-gray-900">Edit Scenario</h3>
-                  <p className="text-sm text-gray-500 line-clamp-1">{editTarget.title}</p>
-                </div>
-              </div>
-              <button
-                onClick={closeEditModal}
-                className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
-              >
-                <FontAwesomeIcon icon={faTimes} className="w-5 h-5 text-gray-500" />
-              </button>
-            </div>
-            <form onSubmit={handleSaveEdit} className="p-4 space-y-3 overflow-y-auto flex-1">
-              <div>
-                <label className={labelClassName}>Title</label>
-                <input
-                  required
-                  type="text"
-                  value={editForm.title}
-                  onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
-                  className={inputClassName}
-                />
-              </div>
-              <div>
-                <label className={labelClassName}>Description</label>
-                <textarea
-                  value={editForm.description}
-                  onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-                  rows={3}
-                  className={inputClassName + " resize-none"}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className={labelClassName}>Difficulty</label>
-                  <div className="relative">
-                    <select
-                      value={editForm.difficulty}
-                      onChange={(e) =>
-                        setEditForm({
-                          ...editForm,
-                          difficulty: e.target.value as typeof editForm.difficulty,
-                        })
-                      }
-                      className={selectClassName + " pr-10"}
-                    >
-                      <option value="beginner">Beginner</option>
-                      <option value="intermediate">Intermediate</option>
-                      <option value="advanced">Advanced</option>
-                    </select>
-                    <FontAwesomeIcon
-                      icon={faChevronDown}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className={labelClassName}>Category</label>
-                  <div className="relative">
-                    <select
-                      value={editForm.category}
-                      onChange={(e) => setEditForm({ ...editForm, category: e.target.value })}
-                      className={selectClassName + " pr-10"}
-                    >
-                      {SCENARIO_CATEGORIES.map((cat) => (
-                        <option key={cat} value={cat}>
-                          {cat}
-                        </option>
-                      ))}
-                    </select>
-                    <FontAwesomeIcon
-                      icon={faChevronDown}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none"
-                    />
-                  </div>
-                </div>
-              </div>
-              <div>
-                <label className={labelClassName}>Patient</label>
-                <div className="relative">
-                  <select
-                    value={editForm.patientId}
-                    onChange={(e) => setEditForm({ ...editForm, patientId: e.target.value })}
-                    className={selectClassName + " pr-10"}
-                  >
-                    <option value="">No linked patient</option>
-                    {patients.map((patient) => (
-                      <option key={patient.id} value={patient.id}>
-                        {patient.name} — {patient.diagnosis}
-                        {patient.room_number ? ` (Room ${patient.room_number})` : ""}
-                      </option>
-                    ))}
-                  </select>
-                  <FontAwesomeIcon
-                    icon={faChevronDown}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className={labelClassName}>Learning Objectives</label>
-                <textarea
-                  value={editForm.learningObjectives}
-                  onChange={(e) => setEditForm({ ...editForm, learningObjectives: e.target.value })}
-                  rows={4}
-                  className={inputClassName + " resize-none"}
-                />
-                <p className="text-xs text-gray-500 mt-1.5">Enter one objective per line.</p>
-              </div>
-              <div className="flex justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={closeEditModal}
-                  className="px-5 py-2.5 bg-surface border border-gray-200 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-all"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={saving || !editForm.title.trim()}
-                  className="px-5 py-2.5 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 transition-all disabled:opacity-50 flex items-center gap-2 shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
-                >
-                  {saving && <FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" />}
-                  Save Changes
-                </button>
-              </div>
-            </form>
           </div>
         </div>
       )}
@@ -1552,7 +1339,7 @@ export default function FacultyScenariosClient() {
                       {selectedScenario.patient_case.vitals && (
                         <div>
                           <p className="text-sm font-bold text-gray-600 mb-2 flex items-center gap-2">
-                            <FontAwesomeIcon icon={faHeartbeat} className="w-4 h-4 text-red-500" />
+                            <FontAwesomeIcon icon={faHeartbeat} className="w-4 h-4 text-red-600" />
                             Vital Signs
                           </p>
                           <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
@@ -1913,7 +1700,7 @@ export default function FacultyScenariosClient() {
                   </div>
                   <button
                     onClick={() => setLinkPatientId("")}
-                    className="text-xs text-teal-700 hover:text-teal-900 font-medium"
+                    className="text-xs text-teal-700 hover:text-teal-800 font-medium"
                   >
                     Clear
                   </button>

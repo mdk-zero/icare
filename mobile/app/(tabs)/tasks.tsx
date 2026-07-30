@@ -5,9 +5,31 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
-import { ScreenHeader, SectionHeader, EmptyState, SkeletonScreen } from '@/components/ui';
+import { ScreenHeader, SectionHeader, EmptyState, SkeletonScreen, SkeletonBlock } from '@/components/ui';
 import { useApiData } from '@/hooks/useApiData';
-import { fetchScenarioAssignments, ScenarioAssignment } from '@/lib/api';
+import { fetchScenarioAssignments, fetchAiTips, ScenarioAssignment, AiTip } from '@/lib/api';
+
+function TipCard({ tip }: { tip: AiTip }) {
+  const { Palette, Accent, Shadow, Type } = useTheme();
+  const styles = React.useMemo(() => createStyles(Palette, Accent, Shadow, Type), [Palette, Accent, Shadow, Type]);
+
+  return (
+    <View style={styles.tipCard}>
+      <View style={[styles.tipIconBox, { backgroundColor: Accent.blue.bg }]}>
+        <Ionicons name="bulb" size={14} color={Accent.blue.fg} />
+      </View>
+      <View style={styles.tipBody}>
+        <Text style={styles.tipTitle}>{tip.title}</Text>
+        {tip.scenario_title ? (
+          <Text style={styles.tipScenario} numberOfLines={1}>
+            {tip.scenario_title}
+          </Text>
+        ) : null}
+        <Text style={styles.tipText}>{tip.tip}</Text>
+      </View>
+    </View>
+  );
+}
 
 function TaskCard({ task, onPress }: { task: ScenarioAssignment; onPress: () => void }) {
   const { Palette, Accent, Shadow, Type } = useTheme();
@@ -101,6 +123,8 @@ export default function TasksScreen() {
   const { Palette, Accent, Shadow, Type } = useTheme();
   const styles = React.useMemo(() => createStyles(Palette, Accent, Shadow, Type), [Palette, Accent, Shadow, Type]);
   const { data, loading, refreshing, error, refresh, reload } = useApiData(fetchScenarioAssignments);
+  // Loaded separately so a slow generation never holds up the task list.
+  const tips = useApiData(fetchAiTips);
 
   // Re-pull when returning from the scenario runner so completions show up.
   useFocusEffect(
@@ -109,6 +133,12 @@ export default function TasksScreen() {
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [reload]),
   );
+
+  const refreshTips = tips.refresh;
+  const handleRefresh = React.useCallback(() => {
+    refresh();
+    refreshTips();
+  }, [refresh, refreshTips]);
 
   if (loading && !data) {
     return <SkeletonScreen topOffset={insets.top + 88} />;
@@ -120,11 +150,10 @@ export default function TasksScreen() {
   const completedTasks = assignments.filter((t) => t.status === 'completed');
   const remaining = pendingTasks.length + inProgressTasks.length;
 
-  const quickLinks = [
-    { label: 'Quizzes', icon: 'document-text' as const, accent: Accent.violet, href: '/tasks/quizzes' },
-    { label: 'AI Tips', icon: 'bulb' as const, accent: Accent.blue, href: '/recommendations' },
-    { label: 'Alerts', icon: 'notifications' as const, accent: Accent.amber, href: '/notifications' },
-  ];
+  const tipList = tips.data?.tips ?? [];
+  // Nothing assigned means the server returns no tips; hide the section rather
+  // than showing an empty box under an already-empty task list.
+  const showTips = tips.loading || tipList.length > 0 || Boolean(tips.error);
 
   return (
     <ScrollView
@@ -132,7 +161,12 @@ export default function TasksScreen() {
       contentContainerStyle={[styles.content, { paddingTop: insets.top + 88 }]}
       showsVerticalScrollIndicator={false}
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={refresh} colors={[Palette.primary]} tintColor={Palette.primary} />
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={handleRefresh}
+          colors={[Palette.primary]}
+          tintColor={Palette.primary}
+        />
       }
     >
       <ScreenHeader
@@ -144,20 +178,38 @@ export default function TasksScreen() {
 
       {error && !data ? <EmptyState icon="cloud-offline-outline" message={error} /> : null}
 
-      <View style={styles.quickLinks}>
-        {quickLinks.map((link) => (
-          <Pressable
-            key={link.label}
-            style={({ pressed }) => [styles.quickLink, pressed && styles.pressedCard]}
-            onPress={() => router.push(link.href as any)}
-          >
-            <View style={[styles.quickLinkIcon, { backgroundColor: link.accent.bg }]}>
-              <Ionicons name={link.icon} size={19} color={link.accent.fg} />
+      <Pressable
+        style={({ pressed }) => [styles.quickLink, pressed && styles.pressedCard]}
+        onPress={() => router.push('/tasks/quizzes')}
+      >
+        <View style={[styles.quickLinkIcon, { backgroundColor: Accent.violet.bg }]}>
+          <Ionicons name="document-text" size={19} color={Accent.violet.fg} />
+        </View>
+        <View style={styles.quickLinkText}>
+          <Text style={styles.quickLinkTitle}>Quizzes</Text>
+          <Text style={styles.quickLinkSubtitle}>Assessments and knowledge checks</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={17} color={Palette.textFaint} />
+      </Pressable>
+
+      {showTips ? (
+        <View style={styles.section}>
+          <SectionHeader title="AI Study Tips" subtitle="Generated from your assigned scenarios" />
+          {tips.loading && tipList.length === 0 ? (
+            <View style={styles.tipCard}>
+              <View style={styles.tipBody}>
+                <SkeletonBlock width="55%" height={13} />
+                <SkeletonBlock width="100%" height={11} style={styles.tipSkeletonLine} />
+                <SkeletonBlock width="80%" height={11} style={styles.tipSkeletonLine} />
+              </View>
             </View>
-            <Text style={styles.quickLinkText}>{link.label}</Text>
-          </Pressable>
-        ))}
-      </View>
+          ) : tipList.length > 0 ? (
+            tipList.map((tip, index) => <TipCard key={`${tip.title}-${index}`} tip={tip} />)
+          ) : (
+            <EmptyState icon="cloud-offline-outline" message={tips.error ?? 'No tips available right now.'} />
+          )}
+        </View>
+      ) : null}
 
       <View style={styles.section}>
         <SectionHeader title="In Progress" count={inProgressTasks.length} />
@@ -215,17 +267,13 @@ function createStyles(
     opacity: 0.85,
     transform: [{ scale: 0.99 }],
   },
-  quickLinks: {
-    flexDirection: 'row',
-    marginBottom: Spacing.xxl,
-    gap: Spacing.md,
-  },
   quickLink: {
-    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: Palette.surface,
     borderRadius: Radius.lg,
-    paddingVertical: Spacing.md,
-    alignItems: 'center',
+    padding: Spacing.lg,
+    marginBottom: Spacing.xxl,
     borderWidth: 1,
     borderColor: Palette.border,
     ...Shadow.card,
@@ -236,12 +284,53 @@ function createStyles(
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 6,
+    marginRight: Spacing.md,
   },
   quickLinkText: {
+    flex: 1,
+  },
+  quickLinkTitle: Type.itemTitle,
+  quickLinkSubtitle: {
     fontSize: 12,
+    color: Palette.textSecondary,
+    marginTop: 2,
+  },
+  tipCard: {
+    flexDirection: 'row',
+    backgroundColor: Palette.surface,
+    borderRadius: Radius.lg,
+    padding: Spacing.lg,
+    marginBottom: Spacing.sm + 2,
+    borderWidth: 1,
+    borderColor: Palette.border,
+    ...Shadow.card,
+  },
+  tipIconBox: {
+    width: 28,
+    height: 28,
+    borderRadius: Radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: Spacing.md,
+  },
+  tipBody: {
+    flex: 1,
+  },
+  tipTitle: Type.itemTitle,
+  tipScenario: {
+    fontSize: 11,
     fontWeight: '600',
-    color: Palette.text,
+    color: Palette.textMuted,
+    marginTop: 2,
+  },
+  tipText: {
+    fontSize: 13,
+    color: Palette.textSecondary,
+    lineHeight: 19,
+    marginTop: 6,
+  },
+  tipSkeletonLine: {
+    marginTop: 8,
   },
   section: {
     marginBottom: Spacing.xxl,

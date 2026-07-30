@@ -30,12 +30,12 @@ import Avatar from "../components/Avatar";
  */
 const RISK_STYLES: Record<string, { bar: string; badge: string; label: string }> = {
   at_risk: {
-    bar: "bg-red-500",
+    bar: "bg-red-600",
     badge: "bg-red-100 text-red-700 border-red-200",
     label: "At risk",
   },
   safe: {
-    bar: "bg-emerald-500",
+    bar: "bg-emerald-600",
     badge: "bg-emerald-100 text-emerald-700 border-emerald-200",
     label: "On track",
   },
@@ -120,7 +120,7 @@ export default function FacultyDashboard() {
     if (type.toLowerCase().includes('alert')) {
       return {
         path: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z',
-        dot: 'bg-red-500',
+        dot: 'bg-red-600',
         ring: 'ring-red-100',
       };
     } else if (type.toLowerCase().includes('scenario')) {
@@ -132,7 +132,7 @@ export default function FacultyDashboard() {
     }
     return {
       path: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4',
-      dot: 'bg-emerald-500',
+      dot: 'bg-emerald-600',
       ring: 'ring-emerald-100',
     };
   };

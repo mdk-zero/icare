@@ -39,12 +39,22 @@ function QuizCard({
   const DIFFICULTY_ACCENT = difficultyAccent(Accent);
   const difficulty = DIFFICULTY_ACCENT[quiz.difficulty] ?? Accent.slate;
   const attempted = quiz.attempt_count > 0;
+  const exhausted = quiz.attempts_remaining === 0;
   const dueSoon = quiz.assignment?.deadline
     ? new Date(quiz.assignment.deadline).toLocaleDateString([], { month: 'short', day: 'numeric' })
     : null;
 
   return (
-    <Pressable style={({ pressed }) => [styles.quizCard, pressed && styles.pressed]} onPress={onPress}>
+    <Pressable
+      style={({ pressed }) => [
+        styles.quizCard,
+        exhausted && styles.quizCardExhausted,
+        pressed && !exhausted && styles.pressed,
+      ]}
+      onPress={onPress}
+      // Tapping through would only reach a 409; say so here instead.
+      disabled={exhausted}
+    >
       <View style={styles.quizHeader}>
         <View style={[styles.quizIcon, { backgroundColor: attempted ? Accent.green.bg : difficulty.bg }]}>
           <Ionicons
@@ -97,15 +107,35 @@ function QuizCard({
             <Text style={styles.footerText}>Due {dueSoon}</Text>
           </View>
         )}
-        {attempted && (
+        {quiz.max_attempts !== null ? (
+          <View style={styles.footerItem}>
+            <Ionicons
+              name={exhausted ? 'lock-closed-outline' : 'repeat-outline'}
+              size={13}
+              color={exhausted ? Accent.red.fg : Palette.textMuted}
+            />
+            <Text style={[styles.footerText, exhausted && { color: Accent.red.fg }]}>
+              {quiz.attempts_used} of {quiz.max_attempts} {quiz.max_attempts === 1 ? 'try' : 'tries'} used
+            </Text>
+          </View>
+        ) : attempted ? (
           <View style={styles.footerItem}>
             <Ionicons name="repeat-outline" size={13} color={Palette.textMuted} />
             <Text style={styles.footerText}>
               {quiz.attempt_count} {quiz.attempt_count === 1 ? 'attempt' : 'attempts'}
             </Text>
           </View>
-        )}
+        ) : null}
       </View>
+
+      {exhausted && (
+        <View style={[styles.exhaustedNote, { backgroundColor: Accent.red.bg }]}>
+          <Ionicons name="information-circle-outline" size={13} color={Accent.red.fg} />
+          <Text style={[styles.exhaustedText, { color: Accent.red.fg }]}>
+            No attempts left — ask your instructor if you need another.
+          </Text>
+        </View>
+      )}
     </Pressable>
   );
 }
@@ -239,6 +269,23 @@ function createStyles(
     borderWidth: 1,
     borderColor: Palette.border,
     ...Shadow.card,
+  },
+  quizCardExhausted: {
+    opacity: 0.7,
+  },
+  exhaustedNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: Spacing.md,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: Radius.sm,
+  },
+  exhaustedText: {
+    fontSize: 11,
+    fontWeight: '600',
+    flex: 1,
   },
   quizHeader: {
     flexDirection: 'row',

@@ -9,10 +9,24 @@
       "distribution": "internal"
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://www.i-care.dev",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "392070605495-ai3ll4fg4pfe97t7ofvfnb7iole18ljd.apps.googleusercontent.com"
+      }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://www.i-care.dev",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "392070605495-ai3ll4fg4pfe97t7ofvfnb7iole18ljd.apps.googleusercontent.com"
+      }
     }
   },
   "submit": {

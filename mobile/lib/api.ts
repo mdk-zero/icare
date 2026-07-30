@@ -232,6 +232,12 @@ export interface StudentAssessment {
   best_score: number | null;
   attempt_count: number;
   last_submitted_at: string | null;
+  /** Tries allowed; null is unlimited. */
+  max_attempts: number | null;
+  /** Attempts that have run their course — submitted or expired. */
+  attempts_used: number;
+  /** null when unlimited; 0 means the quiz can no longer be started. */
+  attempts_remaining: number | null;
 }
 
 export async function fetchAssessments(): Promise<CachedResult<StudentAssessment[]>> {
@@ -250,6 +256,11 @@ export interface StartedAttempt {
   attempt: { id: string; started_at: string };
   assessment: { id: string; title: string; time_limit_seconds: number | null };
   questions: AttemptQuestion[];
+  /** True when an unfinished attempt was handed back rather than a new one dealt. */
+  resumed?: boolean;
+  attempt_number?: number;
+  max_attempts?: number | null;
+  attempts_remaining?: number | null;
 }
 
 export async function startAttempt(assessmentId: string): Promise<StartedAttempt> {
@@ -368,6 +379,34 @@ export async function submitScenarioAssignment(
     { method: 'POST', body: { time_taken: timeTakenSeconds } },
   );
   return result.assignment;
+}
+
+// ---------------------------------------------------------------
+// AI study tips (LLM, generated from the student's open scenarios)
+// ---------------------------------------------------------------
+
+export interface AiTip {
+  title: string;
+  tip: string;
+  /** The open scenario this tip is about, or null when it spans several. */
+  scenario_title: string | null;
+}
+
+export interface AiTipsResult {
+  tips: AiTip[];
+  generated_at: string | null;
+  /** True when generation failed and the server fell back to older tips. */
+  stale?: boolean;
+}
+
+/**
+ * Tips are generated server-side and cached there against the student's
+ * assignment state, so calling this on every mount costs a row read, not an
+ * LLM call, until the assignments actually change.
+ */
+export async function fetchAiTips(): Promise<CachedResult<AiTipsResult>> {
+  const result = await cachedGet<AiTipsResult>('/api/student/tips');
+  return { ...result, data: { ...result.data, tips: result.data.tips ?? [] } };
 }
 
 // ---------------------------------------------------------------

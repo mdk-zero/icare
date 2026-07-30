@@ -34,6 +34,9 @@ import { SkeletonUnitGrid, SkeletonStatTile } from "./skeletons";
 import { roomStatus, ROOM_STATUS_LABEL, ROOM_STATUS_TONE } from "../lib/rooms";
 import PageHeader from "./PageHeader";
 import StatTile from "./StatTile";
+import ConfirmModal from "./ConfirmModal";
+import type { ConfirmConfig } from "./ConfirmModal";
+import { toast } from "./Toast";
 
 const inputClassName =
   "w-full px-4 py-3 bg-surface border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 focus:bg-surface transition-all text-sm shadow-sm";
@@ -373,6 +376,7 @@ export default function PatientsManager() {
   const [form, setForm] = useState<PatientForm>(emptyPatient);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<ConfirmConfig | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Fetched whole and filtered in the browser: grouping needs the unfiltered
@@ -583,18 +587,34 @@ export default function PatientsManager() {
     await loadPatients();
     setSaving(false);
     closeModal();
+    toast(editingPatient ? "Patient record updated successfully" : "Patient created successfully");
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this patient record?")) return;
     setDeletingId(id);
+    setConfirmDelete((prev) => (prev ? { ...prev, loading: true, error: null } : null));
     const result = await deleteFacultyPatient(id);
     if (result.error) {
-      alert(result.error);
-    } else {
-      await loadPatients();
+      setConfirmDelete((prev) => (prev ? { ...prev, loading: false, error: result.error } : null));
+      setDeletingId(null);
+      return;
     }
+    await loadPatients();
     setDeletingId(null);
+    setConfirmDelete(null);
+    toast("Patient record deleted successfully");
+  };
+
+  const openDeleteConfirm = (patient: FacultyPatient) => {
+    setConfirmDelete({
+      title: "Delete Patient",
+      message: `Are you sure you want to delete "${patient.name}"? This action cannot be undone.`,
+      confirmLabel: "Delete",
+      danger: true,
+      loading: false,
+      error: null,
+      onConfirm: () => handleDelete(patient.id),
+    });
   };
 
   const updateFormField = (field: keyof PatientForm, value: string) => {
@@ -987,7 +1007,7 @@ export default function PatientsManager() {
                               <FontAwesomeIcon icon={faPen} className="w-4 h-4" />
                             </button>
                             <button
-                              onClick={() => handleDelete(patient.id)}
+                              onClick={() => openDeleteConfirm(patient)}
                               disabled={deletingId === patient.id}
                               className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
                               title="Delete patient"
@@ -1058,6 +1078,7 @@ export default function PatientsManager() {
                   <input
                     required
                     type="text"
+                    placeholder="e.g. Juan Dela Cruz"
                     value={form.name || ""}
                     onChange={(e) => updateFormField("name", e.target.value)}
                     className={inputClassName}
@@ -1084,6 +1105,7 @@ export default function PatientsManager() {
                     type="number"
                     min={0}
                     max={150}
+                    placeholder="e.g. 35"
                     value={form.age ?? ""}
                     onChange={(e) => updateFormField("age", e.target.value)}
                     className={inputClassName}
@@ -1121,6 +1143,7 @@ export default function PatientsManager() {
                   <input
                     required
                     type="text"
+                    placeholder="e.g. Community-acquired pneumonia"
                     value={form.diagnosis || ""}
                     onChange={(e) => updateFormField("diagnosis", e.target.value)}
                     className={inputClassName}
@@ -1152,6 +1175,7 @@ export default function PatientsManager() {
                     </label>
                     <input
                       type="number"
+                      placeholder="e.g. 72"
                       value={form.vital_signs?.heart_rate ?? ""}
                       onChange={(e) => updateVitalField("heart_rate", e.target.value)}
                       className={inputClassName}
@@ -1163,7 +1187,7 @@ export default function PatientsManager() {
                     </label>
                     <input
                       type="text"
-                      placeholder="120/80"
+                      placeholder="e.g. 120/80"
                       value={form.vital_signs?.blood_pressure || ""}
                       onChange={(e) => updateVitalField("blood_pressure", e.target.value)}
                       className={inputClassName}
@@ -1176,6 +1200,7 @@ export default function PatientsManager() {
                     <input
                       type="number"
                       step="0.1"
+                      placeholder="e.g. 37.0"
                       value={form.vital_signs?.temperature ?? ""}
                       onChange={(e) => updateVitalField("temperature", e.target.value)}
                       className={inputClassName}
@@ -1187,6 +1212,7 @@ export default function PatientsManager() {
                     </label>
                     <input
                       type="number"
+                      placeholder="e.g. 16"
                       value={form.vital_signs?.respiratory_rate ?? ""}
                       onChange={(e) => updateVitalField("respiratory_rate", e.target.value)}
                       className={inputClassName}
@@ -1200,6 +1226,7 @@ export default function PatientsManager() {
                       type="number"
                       min={0}
                       max={100}
+                      placeholder="e.g. 98"
                       value={form.vital_signs?.oxygen_saturation ?? ""}
                       onChange={(e) => updateVitalField("oxygen_saturation", e.target.value)}
                       className={inputClassName}
@@ -1223,13 +1250,19 @@ export default function PatientsManager() {
                 >
                   {saving && <FontAwesomeIcon icon={faSpinner} className="w-4 h-4 animate-spin" />}
                   <FontAwesomeIcon icon={faSave} className="w-4 h-4" />
-                  {saving ? "Saving..." : "Save Patient"}
+                  {saving ? "Admitting..." : "Admit Patient"}
                 </button>
               </div>
             </form>
           </div>
         </div>
       </div>
+      )}
+      {confirmDelete && (
+        <ConfirmModal
+          config={confirmDelete}
+          onClose={() => { if (!confirmDelete.loading) { setConfirmDelete(null); setDeletingId(null); } }}
+        />
       )}
     </div>
   );

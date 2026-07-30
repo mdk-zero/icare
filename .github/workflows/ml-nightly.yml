@@ -1,0 +1,66 @@
+# Nightly ML run, driven from outside the service.
+#
+# ml/app/main.py can schedule this itself, but only while the process is alive,
+# and Render's free plan sleeps a service after ~15 minutes without traffic —
+# a sleeping process runs nothing. This workflow replaces that scheduler and,
+# as a side effect, its request is what wakes the service up.
+#
+# Requires two repository secrets (Settings → Secrets and variables → Actions):
+#   ML_SERVICE_URL      e.g. https://icare-ml.onrender.com  (no trailing slash)
+#   ML_SERVICE_SECRET   the same value the service and the web app hold
+#
+# If you move to a paid Render instance and re-enable ML_SCHEDULE_ENABLED,
+# disable this workflow — otherwise both fire and the jobs run twice.
+
+name: ML nightly
+
+on:
+  schedule:
+    # 19:00 UTC = 03:00 the next day in UTC+8, matching the ML_SCHEDULE_TIME
+    # default the in-process scheduler used. GitHub cron is UTC only.
+    - cron: "0 19 * * *"
+  workflow_dispatch:
+
+# A run that overlaps the previous one would double-write predictions.
+concurrency:
+  group: ml-nightly
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wake the service
+        # A sleeping free instance takes up to a minute to come back, and the
+        # job requests themselves are slow — waking first keeps a cold start
+        # from being misread as a failure.
+        run: |
+          for attempt in $(seq 1 10); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 60 \
+              "${{ secrets.ML_SERVICE_URL }}/health" || true)
+            if [ "$code" = "200" ]; then
+              echo "awake after ${attempt} attempt(s)"
+              exit 0
+            fi
+            echo "attempt ${attempt}: got '${code}', retrying"
+            sleep 15
+          done
+          echo "service did not become healthy"
+          exit 1
+
+      - name: Score at-risk students
+        run: |
+          curl -sS --fail-with-body --max-time 600 \
+            -X POST "${{ secrets.ML_SERVICE_URL }}/predict/at-risk" \
+            -H 'Content-Type: application/json' \
+            -H "X-ICARE-ML-KEY: ${{ secrets.ML_SERVICE_SECRET }}" \
+            -d '{}' | tee /dev/stderr
+
+      - name: Refresh recommendations
+        # Runs after prediction so the recommender sees the fresh risk scores.
+        run: |
+          curl -sS --fail-with-body --max-time 600 \
+            -X POST "${{ secrets.ML_SERVICE_URL }}/recommend/refresh" \
+            -H 'Content-Type: application/json' \
+            -H "X-ICARE-ML-KEY: ${{ secrets.ML_SERVICE_SECRET }}" \
+            -d '{}' | tee /dev/stderr

@@ -23,16 +23,25 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const { content, options, correct_index, explanation, competency_ids, question_type, points } =
-    body as {
-      content?: unknown;
-      options?: unknown;
-      correct_index?: unknown;
-      explanation?: unknown;
-      competency_ids?: unknown;
-      question_type?: unknown;
-      points?: unknown;
-    };
+  const {
+    content,
+    options,
+    correct_index,
+    explanation,
+    competency_ids,
+    question_type,
+    points,
+    criteria_id,
+  } = body as {
+    content?: unknown;
+    options?: unknown;
+    correct_index?: unknown;
+    explanation?: unknown;
+    competency_ids?: unknown;
+    question_type?: unknown;
+    points?: unknown;
+    criteria_id?: unknown;
+  };
 
   if (typeof content !== 'string' || content.trim().length === 0) {
     return NextResponse.json({ error: 'Question content is required' }, { status: 400 });
@@ -67,6 +76,24 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Assessment not found' }, { status: 404 });
     }
 
+    // The FK can only prove the criterion exists, not that it belongs to this
+    // assessment — that needs a composite key. Checked here instead.
+    const criteriaId = typeof criteria_id === 'string' && criteria_id ? criteria_id : null;
+    if (criteriaId) {
+      const { data: criterion } = await supabase
+        .from('assessment_criteria')
+        .select('id')
+        .eq('id', criteriaId)
+        .eq('assessment_id', assessmentId)
+        .maybeSingle();
+      if (!criterion) {
+        return NextResponse.json(
+          { error: 'That criterion belongs to a different assessment' },
+          { status: 400 },
+        );
+      }
+    }
+
     const { count } = await supabase
       .from('questions')
       .select('id', { count: 'exact', head: true })
@@ -83,6 +110,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         question_type: typeof question_type === 'string' ? question_type : 'multiple_choice',
         points: typeof points === 'number' ? points : 1,
         explanation: typeof explanation === 'string' ? explanation.trim() : '',
+        criteria_id: criteriaId,
       })
       .select()
       .single();

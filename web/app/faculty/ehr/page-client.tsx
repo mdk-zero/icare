@@ -559,7 +559,7 @@ export default function FacultyEhrClient() {
                 <button
                   onClick={handleBulkReview}
                   disabled={reviewingAll}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-brand-600 hover:bg-[#145a68] rounded-lg transition-colors disabled:opacity-60"
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-brand-600 hover:bg-brand-700 rounded-lg transition-colors disabled:opacity-60"
                 >
                   {reviewingAll ? (
                     <FontAwesomeIcon icon={faSpinner} spin className="w-3.5 h-3.5" />

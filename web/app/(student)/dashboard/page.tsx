@@ -434,14 +434,34 @@ export default function StudentDashboard() {
                         Best: {quiz.best_score}%
                       </span>
                     )}
+                    {quiz.max_attempts !== null && (
+                      <span
+                        className={`text-sm font-medium ${
+                          quiz.attempts_remaining === 0 ? "text-red-600" : "text-gray-400"
+                        }`}
+                      >
+                        {quiz.attempts_used} of {quiz.max_attempts}{" "}
+                        {quiz.max_attempts === 1 ? "try" : "tries"} used
+                      </span>
+                    )}
                   </div>
                 </div>
-                <button
-                  onClick={() => router.push(`/quizzes/${quiz.id}`)}
-                  className="px-6 py-2 bg-brand-600 text-white rounded-lg hover:bg-[#155663] transition-colors shrink-0"
-                >
-                  {quiz.attempt_count > 0 ? "Retake Quiz" : "Start Quiz"}
-                </button>
+                {/* Starting would only reach a 409, so say why here instead. */}
+                {quiz.attempts_remaining === 0 ? (
+                  <span
+                    title="Ask your instructor if you need another attempt."
+                    className="px-6 py-2 bg-gray-100 text-gray-500 rounded-lg shrink-0 cursor-not-allowed select-none"
+                  >
+                    No attempts left
+                  </span>
+                ) : (
+                  <button
+                    onClick={() => router.push(`/quizzes/${quiz.id}`)}
+                    className="px-6 py-2 bg-brand-600 text-white rounded-lg hover:bg-[#155663] transition-colors shrink-0"
+                  >
+                    {quiz.attempt_count > 0 ? "Retake Quiz" : "Start Quiz"}
+                  </button>
+                )}
               </div>
             </div>
           ))}

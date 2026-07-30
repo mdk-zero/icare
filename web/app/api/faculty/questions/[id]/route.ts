@@ -23,17 +23,27 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const { content, options, correct_index, explanation, position, competency_ids, question_type, points } =
-    body as {
-      content?: unknown;
-      options?: unknown;
-      correct_index?: unknown;
-      explanation?: unknown;
-      position?: unknown;
-      competency_ids?: unknown;
-      question_type?: unknown;
-      points?: unknown;
-    };
+  const {
+    content,
+    options,
+    correct_index,
+    explanation,
+    position,
+    competency_ids,
+    question_type,
+    points,
+    criteria_id,
+  } = body as {
+    content?: unknown;
+    options?: unknown;
+    correct_index?: unknown;
+    explanation?: unknown;
+    position?: unknown;
+    competency_ids?: unknown;
+    question_type?: unknown;
+    points?: unknown;
+    criteria_id?: unknown;
+  };
 
   const updates: Record<string, unknown> = {};
   let sanitizedOptions: string[] | null = null;
@@ -88,16 +98,41 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
     const supabase = getSupabaseAdmin();
 
+    const { data: current } = await supabase
+      .from('questions')
+      .select('assessment_id, options, correct_index')
+      .eq('id', id)
+      .single();
+    if (!current) {
+      return NextResponse.json({ error: 'Question not found' }, { status: 404 });
+    }
+
+    // null unassigns the question, which is allowed — publish validation is
+    // what refuses to ship an assessment with unassigned questions.
+    if (criteria_id !== undefined) {
+      const criteriaId = typeof criteria_id === 'string' && criteria_id ? criteria_id : null;
+      if (criteriaId) {
+        // The FK proves the criterion exists, not that it belongs to this
+        // question's assessment. Checked here instead.
+        const { data: criterion } = await supabase
+          .from('assessment_criteria')
+          .select('id')
+          .eq('id', criteriaId)
+          .eq('assessment_id', current.assessment_id)
+          .maybeSingle();
+        if (!criterion) {
+          return NextResponse.json(
+            { error: 'That criterion belongs to a different assessment' },
+            { status: 400 },
+          );
+        }
+      }
+      updates.criteria_id = criteriaId;
+    }
+
     if (Object.keys(updates).length > 0) {
       // Keep correct_index within the (possibly updated) options bounds.
-      const { data: existing } = await supabase
-        .from('questions')
-        .select('options, correct_index')
-        .eq('id', id)
-        .single();
-      if (!existing) {
-        return NextResponse.json({ error: 'Question not found' }, { status: 404 });
-      }
+      const existing = current;
       const finalOptions =
         sanitizedOptions ?? ((existing.options as string[] | null) ?? []);
       const finalCorrect = Number(

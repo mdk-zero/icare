@@ -18,12 +18,15 @@ import {
   faWandMagicSparkles,
   faArrowsRotate,
   faChevronUp,
+  faBrain,
+  faSpinner,
 } from "@fortawesome/free-solid-svg-icons";
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import {
   fetchAnalyticsSummary,
   fetchFacultySections,
   generateAnalyticsNarrative,
+  runFacultyMlJob,
   AnalyticsSummary,
   AnalyticsNarrative,
   AnalyticsBucket,
@@ -393,12 +396,12 @@ function RiskDonut({ safe, atRisk }: { safe: number; atRisk: number }) {
       </div>
       <div className="flex items-center gap-5">
         <span className="flex items-center gap-2 text-sm">
-          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-emerald-100" />
+          <span className="w-2.5 h-2.5 rounded-full bg-emerald-600 ring-2 ring-emerald-100" />
           <span className="text-gray-500">Safe</span>
           <span className="font-bold text-gray-900">{safe}</span>
         </span>
         <span className="flex items-center gap-2 text-sm">
-          <span className="w-2.5 h-2.5 rounded-full bg-rose-500 ring-2 ring-rose-100" />
+          <span className="w-2.5 h-2.5 rounded-full bg-rose-600 ring-2 ring-rose-100" />
           <span className="text-gray-500">At risk</span>
           <span className="font-bold text-gray-900">{atRisk}</span>
         </span>
@@ -421,11 +424,11 @@ function HBars({
 }) {
   const barColor = (v: number) => {
     if (tone === "grade") {
-      if (v >= 75) return "bg-emerald-500";
-      if (v >= 50) return "bg-amber-500";
-      return "bg-rose-500";
+      if (v >= 75) return "bg-emerald-600";
+      if (v >= 50) return "bg-amber-600";
+      return "bg-rose-600";
     }
-    return "bg-gradient-to-r from-brand-600 to-[#2a8a98]";
+    return "bg-gradient-to-r from-brand-600 to-brand-500";
   };
   return (
     <div className="space-y-4">
@@ -477,8 +480,8 @@ function NarrativeCard({
 }) {
   const lists = narrative
     ? [
-        { title: "Highlights", items: narrative.highlights, dot: "bg-emerald-500" },
-        { title: "Watch-outs", items: narrative.watchouts, dot: "bg-amber-500" },
+        { title: "Highlights", items: narrative.highlights, dot: "bg-emerald-600" },
+        { title: "Watch-outs", items: narrative.watchouts, dot: "bg-amber-600" },
         { title: "Suggested Actions", items: narrative.actions, dot: "bg-brand-600" },
       ].filter((l) => l.items.length > 0)
     : [];
@@ -599,6 +602,11 @@ export default function FacultyAnalyticsClient() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
+  // On-demand ML runs, scoped by the server to this faculty member's sections.
+  const [runningMl, setRunningMl] = useState(false);
+  const [mlStatus, setMlStatus] = useState<string | null>(null);
+  const [mlError, setMlError] = useState<string | null>(null);
+
   const [sections, setSections] = useState<Section[]>([]);
   const [sectionIds, setSectionIds] = useState<string[]>([]);
   const [preset, setPreset] = useState<PresetId>("3m");
@@ -628,6 +636,39 @@ export default function FacultyAnalyticsClient() {
     })();
     return () => controller.abort();
   }, [sectionIds, from, to]);
+
+  /**
+   * Runs both jobs, prediction first so the recommender sees fresh risk
+   * scores. Stops at the first failure rather than reporting a half-run.
+   */
+  const handleRunMl = async () => {
+    setRunningMl(true);
+    setMlError(null);
+    setMlStatus(null);
+
+    const predictions = await runFacultyMlJob("predict");
+    if (predictions.error) {
+      setMlError(predictions.error);
+      setRunningMl(false);
+      return;
+    }
+    const recommendations = await runFacultyMlJob("recommend");
+    if (recommendations.error) {
+      setMlError(recommendations.error);
+      setRunningMl(false);
+      return;
+    }
+
+    const scored = Number(predictions.result?.scored ?? 0);
+    const atRisk = Number(predictions.result?.at_risk ?? 0);
+    const recs = Number(recommendations.result?.recommendations ?? 0);
+    setMlStatus(
+      `Scored ${scored} of your students (${atRisk} at risk) and wrote ${recs} recommendation${
+        recs === 1 ? "" : "s"
+      }. Predictions reach these charts after the warehouse is refreshed.`,
+    );
+    setRunningMl(false);
+  };
 
   const applyPreset = useCallback((id: PresetId) => {
     setPreset(id);
@@ -840,13 +881,43 @@ export default function FacultyAnalyticsClient() {
             </div>
           )}
 
-          <div className="ml-auto flex items-center gap-2 text-xs text-gray-400">
-            {refreshing && (
-              <span className="h-3 w-3 animate-spin rounded-full border-2 border-brand-200 border-t-brand-600" />
-            )}
-            <span className="tabular-nums">{formatRange(from, to)}</span>
+          <div className="ml-auto flex items-center gap-3">
+            <button
+              type="button"
+              onClick={handleRunMl}
+              disabled={runningMl || sections.length === 0}
+              title={
+                sections.length === 0
+                  ? "You need at least one section before ML jobs have anyone to run against"
+                  : "Score your students for risk and refresh their quiz recommendations"
+              }
+              className="flex items-center gap-2 rounded-lg border border-brand-600/30 bg-surface px-3 py-1.5 text-sm font-medium text-brand-600 transition-colors hover:bg-brand-600/5 disabled:opacity-50"
+            >
+              <FontAwesomeIcon
+                icon={runningMl ? faSpinner : faBrain}
+                spin={runningMl}
+                className="h-3.5 w-3.5"
+              />
+              {runningMl ? "Running…" : "Run ML Jobs"}
+            </button>
+            <div className="flex items-center gap-2 text-xs text-gray-400">
+              {refreshing && (
+                <span className="h-3 w-3 animate-spin rounded-full border-2 border-brand-200 border-t-brand-600" />
+              )}
+              <span className="tabular-nums">{formatRange(from, to)}</span>
+            </div>
           </div>
         </div>
+
+        {(mlStatus || mlError) && (
+          <p
+            className={`border-t border-hairline px-4 py-2.5 text-xs ${
+              mlError ? "text-rose-700" : "text-emerald-700"
+            }`}
+          >
+            {mlError ?? mlStatus}
+          </p>
+        )}
 
         {sections.length === 0 && (
           <p className="border-t border-hairline px-4 py-2.5 text-xs text-amber-700">
@@ -909,8 +980,8 @@ export default function FacultyAnalyticsClient() {
 
           <Card padding="md" className="flex flex-col">
             <div className="flex items-center gap-2.5 mb-5">
-              <div className="rounded-lg bg-rose-500/10 p-1.5">
-                <FontAwesomeIcon icon={faExclamationTriangle} className="h-3.5 w-3.5 text-rose-500" />
+              <div className="rounded-lg bg-rose-600/10 p-1.5">
+                <FontAwesomeIcon icon={faExclamationTriangle} className="h-3.5 w-3.5 text-rose-600" />
               </div>
               <h3 className="font-semibold text-gray-900">At-Risk Prediction</h3>
             </div>

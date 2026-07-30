@@ -17,6 +17,25 @@ set -a; source .env; set +a
 
 or `docker build -t icare-ml . && docker run --env-file .env -p 8000:8000 icare-ml`.
 
+## Deploy
+
+**Render** (free plan) — `render.yaml` at the repository root is a Blueprint for
+this service; apply it with New → Blueprint. It prompts for `SUPABASE_URL`,
+`SUPABASE_SERVICE_ROLE_KEY` and `ML_SERVICE_SECRET`, which stay out of git. Put
+the resulting URL and the same secret into the web app as `ML_SERVICE_URL` /
+`ML_SERVICE_SECRET`.
+
+The free plan sleeps a service after ~15 minutes without traffic, and a
+sleeping process runs nothing, so the Blueprint sets `ML_SCHEDULE_ENABLED=false`
+and `.github/workflows/ml-nightly.yml` drives the nightly run instead — its
+request also wakes the service. Re-enabling the in-process scheduler on a paid
+instance means disabling that workflow, or both fire and the jobs run twice.
+
+**Fly.io** — `fly.toml` is still here and keeps one machine permanently awake so
+the in-process scheduler works, but Fly no longer offers a free tier to new
+accounts. Any host works: the container reads `$PORT` when set and falls back
+to 8000.
+
 On startup the service seeds `ml_models` with the shipped OULAD baseline
 artifacts (`models/*-oulad.joblib`) as **active** models — the manuscript's
 pre-trained-baseline clause — so predictions work before any local training

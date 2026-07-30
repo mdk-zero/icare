@@ -64,6 +64,12 @@ export interface StudentAssessment {
   best_score: number | null;
   attempt_count: number;
   last_submitted_at: string | null;
+  /** Tries allowed; null is unlimited. */
+  max_attempts: number | null;
+  /** Attempts that have run their course — submitted or expired. */
+  attempts_used: number;
+  /** null when unlimited; 0 means the quiz can no longer be started. */
+  attempts_remaining: number | null;
 }
 
 export interface AttemptQuestion {
@@ -1338,23 +1344,45 @@ export async function dismissRecommendation(id: string): Promise<boolean> {
   }
 }
 
-export async function runMlJob(
+async function postMlJob(
+  path: string,
   action: 'predict' | 'recommend',
-): Promise<{ result?: Record<string, unknown>; error?: string }> {
+): Promise<{ result?: Record<string, unknown>; students?: number; error?: string }> {
   try {
-    const res = await fetch('/api/admin/ml', {
+    const res = await fetch(path, {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action }),
     });
-    const json = (await res.json()) as { result?: Record<string, unknown>; error?: string };
+    const json = (await res.json()) as {
+      result?: Record<string, unknown>;
+      students?: number;
+      error?: string;
+    };
     if (!res.ok) return { error: json.error || 'ML run failed' };
-    return { result: json.result };
+    return { result: json.result, students: json.students };
   } catch (err) {
-    console.error('runMlJob() failed', err);
+    console.error('postMlJob() failed', path, err);
     return { error: 'ML run failed. Please try again.' };
   }
+}
+
+/** Admin: runs across the whole cohort. */
+export async function runMlJob(
+  action: 'predict' | 'recommend',
+): Promise<{ result?: Record<string, unknown>; error?: string }> {
+  return postMlJob('/api/admin/ml', action);
+}
+
+/**
+ * Faculty: the same jobs, scoped server-side to the caller's own sections.
+ * `students` reports how many that run covered.
+ */
+export async function runFacultyMlJob(
+  action: 'predict' | 'recommend',
+): Promise<{ result?: Record<string, unknown>; students?: number; error?: string }> {
+  return postMlJob('/api/faculty/ml', action);
 }
 
 // Faculty API Functions
