@@ -15,7 +15,8 @@
       },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://www.i-care.dev",
-        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "392070605495-ai3ll4fg4pfe97t7ofvfnb7iole18ljd.apps.googleusercontent.com"
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "392070605495-ai3ll4fg4pfe97t7ofvfnb7iole18ljd.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "392070605495-oe99isst492qa5u0o13iq46llke5ln33.apps.googleusercontent.com"
       }
     },
     "production": {
@@ -25,7 +26,8 @@
       },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://www.i-care.dev",
-        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "392070605495-ai3ll4fg4pfe97t7ofvfnb7iole18ljd.apps.googleusercontent.com"
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "392070605495-ai3ll4fg4pfe97t7ofvfnb7iole18ljd.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "392070605495-oe99isst492qa5u0o13iq46llke5ln33.apps.googleusercontent.com"
       }
     }
   },
