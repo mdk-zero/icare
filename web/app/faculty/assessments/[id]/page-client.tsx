@@ -907,14 +907,7 @@ export default function AssessmentQuestionsClient({
       | { kind: "question"; id: string; question: AssessmentQuestion; index: number };
 
     const entries: Entry[] = [];
-    for (const c of criteria) {
-      const owned = questionsByCriterion.map.get(c.id) ?? [];
-      entries.push({ kind: "header", id: `h_${c.id}`, criterion: c, count: owned.length });
-      for (const q of owned) {
-        entries.push({ kind: "question", id: q.id, question: q, index: indexOf.get(q.id) ?? 0 });
-      }
-    }
-    if (questionsByCriterion.unassigned.length > 0 || criteria.length === 0) {
+    if (questionsByCriterion.unassigned.length > 0) {
       entries.push({
         kind: "header",
         id: "h_unassigned",
@@ -922,6 +915,13 @@ export default function AssessmentQuestionsClient({
         count: questionsByCriterion.unassigned.length,
       });
       for (const q of questionsByCriterion.unassigned) {
+        entries.push({ kind: "question", id: q.id, question: q, index: indexOf.get(q.id) ?? 0 });
+      }
+    }
+    for (const c of criteria) {
+      const owned = questionsByCriterion.map.get(c.id) ?? [];
+      entries.push({ kind: "header", id: `h_${c.id}`, criterion: c, count: owned.length });
+      for (const q of owned) {
         entries.push({ kind: "question", id: q.id, question: q, index: indexOf.get(q.id) ?? 0 });
       }
     }
@@ -1123,8 +1123,21 @@ export default function AssessmentQuestionsClient({
             ) : (
               <div className="flex items-center gap-3">
                 <div className="flex-1 min-w-0">
-                  <h1 className="font-display text-[26px] sm:text-[31px] font-semibold leading-[1.08] tracking-[-0.015em] text-gray-900 truncate">{assessment.title}</h1>
-                  <p className="text-sm text-gray-500">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <h1 className="font-display text-[26px] sm:text-[31px] font-semibold leading-[1.08] tracking-[-0.015em] text-gray-900 truncate">{assessment.title}</h1>
+                    {blockers.length === 0 ? (
+                      <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-semibold whitespace-nowrap shrink-0">
+                        <FontAwesomeIcon icon={faCheck} className="w-3 h-3 mr-1" />
+                        Ready
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full text-xs font-semibold whitespace-nowrap shrink-0">
+                        <FontAwesomeIcon icon={faTriangleExclamation} className="w-3 h-3 mr-1" />
+                        {blockers.length} issue{blockers.length === 1 ? "" : "s"}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm text-gray-500 mt-1">
                     <span className="px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">{assessment.category}</span>{" "}
                     <span className={`px-1.5 py-0.5 rounded text-xs ${
                       assessment.difficulty === "beginner" ? "bg-green-100 text-green-700" :
@@ -1138,20 +1151,22 @@ export default function AssessmentQuestionsClient({
                   {assessment.description && (
                     <p className="text-sm text-gray-600 mt-1">{assessment.description}</p>
                   )}
-                  <p className="text-xs text-gray-500 mt-1.5">
-                    {assessment.target_sections && assessment.target_sections.length > 0 ? (
-                      <>
-                        Published to{" "}
-                        <span className="font-medium text-gray-600">
-                          {assessment.target_sections
-                            .map((name) => `Section ${name}`)
-                            .join(", ")}
-                        </span>
-                      </>
-                    ) : (
-                      "Published to all sections"
+                  <div className="flex items-center gap-3 mt-1.5 text-xs text-gray-500 flex-wrap">
+                    <span>
+                      {assessment.target_sections && assessment.target_sections.length > 0
+                        ? `Published to ${assessment.target_sections.map((name) => `Section ${name}`).join(", ")}`
+                        : "Published to all sections"}
+                    </span>
+                    {blockers.length === 0 && (
+                      <span>
+                        · Each attempt serves {servedTotal ?? questions.length - questionsByCriterion.unassigned.length} question
+                        {(servedTotal ?? questions.length) === 1 ? "" : "s"} across {criteria.length} criteria
+                        {assessment.max_attempts
+                          ? `, up to ${assessment.max_attempts} attempt${assessment.max_attempts === 1 ? "" : "s"} per student`
+                          : ", unlimited retakes"}
+                      </span>
                     )}
-                  </p>
+                  </div>
                 </div>
                 <button
                   onClick={() => setEditingDetails(true)}
@@ -1166,53 +1181,24 @@ export default function AssessmentQuestionsClient({
         </div>
       </header>
 
-      {/* Publish readiness — what selection needs before students can sit this */}
-      <div
-        className={`rounded-xl border p-4 ${
-          blockers.length === 0
-            ? "bg-green-50 border-green-200"
-            : "bg-amber-50 border-amber-200"
-        }`}
-      >
-        <div className="flex items-start gap-3">
-          <FontAwesomeIcon
-            icon={blockers.length === 0 ? faCheck : faTriangleExclamation}
-            className={`w-4 h-4 mt-0.5 shrink-0 ${
-              blockers.length === 0 ? "text-green-600" : "text-amber-600"
-            }`}
-          />
-          <div className="min-w-0">
-            <p
-              className={`text-sm font-semibold ${
-                blockers.length === 0 ? "text-green-800" : "text-amber-800"
-              }`}
-            >
-              {blockers.length === 0
-                ? "Ready to publish"
-                : `${blockers.length} thing${blockers.length === 1 ? "" : "s"} to fix before publishing`}
-            </p>
-            {blockers.length === 0 ? (
-              <p className="text-xs text-green-700 mt-1">
-                Each attempt serves{" "}
-                {servedTotal ?? questions.length - questionsByCriterion.unassigned.length} question
-                {(servedTotal ?? questions.length) === 1 ? "" : "s"} across {criteria.length} criteria
-                {assessment.max_attempts
-                  ? `, up to ${assessment.max_attempts} attempt${assessment.max_attempts === 1 ? "" : "s"} per student.`
-                  : ", with unlimited retakes."}
+      {blockers.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+          <div className="flex items-start gap-3">
+            <FontAwesomeIcon icon={faTriangleExclamation} className="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
+            <div className="min-w-0 space-y-1.5">
+              <p className="text-sm font-semibold text-amber-800">
+                Fix these before students can take this quiz
               </p>
-            ) : (
-              <ul className="mt-1.5 space-y-1">
-                {blockers.map((b) => (
-                  <li key={b.code + b.message} className="text-xs text-amber-800 flex gap-1.5">
-                    <span aria-hidden className="text-amber-600">•</span>
-                    <span>{b.message}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
+              {blockers.map((b) => (
+                <p key={b.code + b.message} className="text-xs text-amber-700 flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                  {b.message}
+                </p>
+              ))}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Criteria section */}
       <div className="bg-surface rounded-xl border border-gray-200 shadow-sm">
@@ -1241,7 +1227,7 @@ export default function AssessmentQuestionsClient({
                 <div className="flex items-center gap-3 px-3 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
                   <span className="w-6" />
                   <span className="flex-1">Criteria</span>
-                  <span className="w-40">Competency</span>
+                  <span className="w-44">Competency</span>
                   <span className="w-16 text-right" title="Questions assigned to this criteria">Pool</span>
                   <span className="w-16 text-right" title="Questions from this criteria every attempt must include">Min</span>
                   <span className="w-16 text-right">Weight</span>
@@ -1258,7 +1244,7 @@ export default function AssessmentQuestionsClient({
                     >
                       <span className="text-sm font-medium text-gray-500 w-6">{i + 1}.</span>
                       <span className="text-sm text-gray-800 flex-1">{c.name}</span>
-                      <span className="text-xs text-gray-500 w-40 truncate">
+                      <span className="text-xs text-gray-500 w-44">
                         {comp?.name ?? c.competency_id.slice(0, 8)}
                       </span>
                       <span
@@ -1290,7 +1276,7 @@ export default function AssessmentQuestionsClient({
                 <div className="flex items-center gap-3 p-3 text-sm font-semibold text-gray-700">
                   <span className="w-6" />
                   <span className="flex-1">Total</span>
-                  <span className="w-40" />
+                  <span className="w-44" />
                   <span className="w-16 text-right">{questions.length - questionsByCriterion.unassigned.length}</span>
                   <span className={`w-16 text-right ${servedTotal !== null && criteria.reduce((s, c) => s + Math.min(c.min_questions, questionsByCriterion.map.get(c.id)?.length ?? 0), 0) > servedTotal ? "text-red-600" : ""}`}>
                     {criteria.reduce((s, c) => s + Math.min(c.min_questions, questionsByCriterion.map.get(c.id)?.length ?? 0), 0)}
