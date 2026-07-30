@@ -1226,8 +1226,8 @@ export default function AssessmentQuestionsClient({
               <div className="space-y-2">
                 <div className="flex items-center gap-3 px-3 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
                   <span className="w-6" />
-                  <span className="w-32 text-center">Competency</span>
                   <span className="flex-1">Criteria</span>
+                  <span className="w-32 text-center">Competency</span>
                   <span className="w-16 text-right" title="Questions assigned to this criteria">Pool</span>
                   <span className="w-16 text-right" title="Questions from this criteria every attempt must include">Min</span>
                   <span className="w-16 text-right">Weight</span>
@@ -1243,10 +1243,10 @@ export default function AssessmentQuestionsClient({
                       className={`flex items-center gap-3 p-3 rounded-lg ${starved ? "bg-red-50 ring-1 ring-red-200" : "bg-gray-50"}`}
                     >
                       <span className="text-sm font-medium text-gray-500 w-6">{i + 1}.</span>
+                      <span className="text-sm text-gray-800 flex-1">{c.name}</span>
                       <span className="text-xs text-gray-500 w-32 text-center truncate">
                         {comp?.name ?? c.competency_id.slice(0, 8)}
                       </span>
-                      <span className="text-sm text-gray-800 flex-1">{c.name}</span>
                       <span
                         className={`text-sm w-16 text-right font-semibold ${starved ? "text-red-600" : "text-gray-700"}`}
                         title={starved ? `Only ${pool} question(s) for a minimum of ${c.min_questions}` : undefined}
@@ -1275,8 +1275,8 @@ export default function AssessmentQuestionsClient({
                 })}
                 <div className="flex items-center gap-3 p-3 text-sm font-semibold text-gray-700">
                   <span className="w-6" />
-                  <span className="w-32" />
                   <span className="flex-1">Total</span>
+                  <span className="w-32" />
                   <span className="w-16 text-right">{questions.length - questionsByCriterion.unassigned.length}</span>
                   <span className={`w-16 text-right ${servedTotal !== null && criteria.reduce((s, c) => s + Math.min(c.min_questions, questionsByCriterion.map.get(c.id)?.length ?? 0), 0) > servedTotal ? "text-red-600" : ""}`}>
                     {criteria.reduce((s, c) => s + Math.min(c.min_questions, questionsByCriterion.map.get(c.id)?.length ?? 0), 0)}
