@@ -1,4 +1,4 @@
-import { Tabs, useRouter, usePathname } from "expo-router";
+import { Tabs, useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, Image, Pressable, useWindowDimensions } from "react-native";
 import Animated, {
@@ -15,7 +15,7 @@ import { FontAwesome6 } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import Svg, { Path, Circle } from "react-native-svg";
 import { useTheme } from "@/hooks/useTheme";
-import { fetchNotifications } from "@/lib/api";
+import { useNotifications } from "@/hooks/useNotifications";
 
 /** Teal ramp sampled from the pill logo's cap (same as the login screen). */
 const Teal = {
@@ -263,24 +263,10 @@ function AppHeader({ notificationCount }: { notificationCount: number }) {
 }
 
 export default function TabLayout() {
-  const pathname = usePathname();
-  const [unreadCount, setUnreadCount] = useState(0);
+  // The badge follows the live feed, so it moves as soon as a notification is
+  // written rather than on the next tab switch.
+  const { unread: unreadCount } = useNotifications();
   const { Palette } = useTheme();
-
-  // Refresh the badge whenever the active tab changes (cheap, cached read).
-  useEffect(() => {
-    let cancelled = false;
-    fetchNotifications()
-      .then((result) => {
-        if (!cancelled) setUnreadCount(result.data.unread ?? 0);
-      })
-      .catch(() => {
-        // offline with no cache; keep the last known count
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [pathname]);
 
   return (
     <View style={{ flex: 1, backgroundColor: Palette.background }}>

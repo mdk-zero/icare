@@ -16,6 +16,12 @@ import {
   logAuditAction,
   User,
 } from "../lib/api";
+import {
+  onNotificationArrival,
+  stopNotificationStream,
+  useNotifications,
+} from "../lib/notifications-live";
+import ToastContainer, { toast } from "./Toast";
 
 export interface NavItem {
   id: string;
@@ -141,7 +147,9 @@ export default function Shell({ role, navItems, isActive, children }: ShellProps
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [isDesktop, setIsDesktop] = useState(true);
-  const [unreadCount, setUnreadCount] = useState(0);
+  // Live feed: the badge tracks the SSE stream, so it moves the moment a
+  // notification is written rather than on the next page load.
+  const { unread: unreadCount } = useNotifications();
 
   const { logo, logoIsWordmark, portalLabel, mobileRoleLabel, profileHref, homeHref } =
     config[role];
@@ -213,27 +221,14 @@ export default function Shell({ role, navItems, isActive, children }: ShellProps
     };
   }, [router, role]);
 
-  useEffect(() => {
-    const fetchCount = async () => {
-      try {
-        const res = await fetch('/api/notifications', { credentials: 'include' });
-        if (res.ok) {
-          const data = await res.json() as { unread: number };
-          setUnreadCount(data.unread ?? 0);
-        }
-      } catch { /* ignore */ }
-    };
-    fetchCount();
-    const onRefresh = () => fetchCount();
-    window.addEventListener('focus', onRefresh);
-    window.addEventListener('unread-changed', onRefresh);
-    return () => {
-      window.removeEventListener('focus', onRefresh);
-      window.removeEventListener('unread-changed', onRefresh);
-    };
-  }, []);
+  // Surface arrivals while the user is on some other page.
+  useEffect(
+    () => onNotificationArrival((notification) => toast(notification.title, "info")),
+    [],
+  );
 
   const handleLogout = () => {
+    stopNotificationStream();
     if (user?.role === "faculty") {
       void logAuditAction({
         faculty_id: user.id,
@@ -603,6 +598,8 @@ export default function Shell({ role, navItems, isActive, children }: ShellProps
           </div>
         </div>
       </div>
+      {/* Mounted here so every role gets arrival toasts from one container. */}
+      <ToastContainer />
     </>
   );
 }

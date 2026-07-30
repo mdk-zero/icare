@@ -4,13 +4,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { SkeletonScreen, EmptyState } from '@/components/ui';
-import { useApiData } from '@/hooks/useApiData';
-import {
-  fetchNotifications,
-  markNotificationRead,
-  markAllNotificationsRead,
-  AppNotification,
-} from '@/lib/api';
+import { useNotifications } from '@/hooks/useNotifications';
+import { AppNotification } from '@/lib/api';
 
 function typeAccent(
   Accent: ReturnType<typeof useTheme>['Accent'],
@@ -30,35 +25,28 @@ function typeAccent(
 }
 
 export default function NotificationsScreen() {
-  const { data, loading, refreshing, error, refresh, reload } = useApiData(fetchNotifications);
+  const { notifications, unread, loading, connected, error, markRead, markAllRead, refresh } =
+    useNotifications();
+  const [refreshing, setRefreshing] = React.useState(false);
   const { Palette, Accent, Shadow } = useTheme();
   const styles = React.useMemo(() => createStyles(Palette, Shadow), [Palette, Shadow]);
   const TYPE_ACCENT = React.useMemo(() => typeAccent(Accent), [Accent]);
 
-  if (loading && !data) {
+  const handleRefresh = React.useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await refresh();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refresh]);
+
+  if (loading) {
     return <SkeletonScreen />;
   }
 
-  const notifications = data?.notifications ?? [];
-  const unread = data?.unread ?? 0;
-
-  const handleOpen = async (notification: AppNotification) => {
-    if (notification.read_at) return;
-    try {
-      await markNotificationRead(notification.id);
-      await reload();
-    } catch {
-      // best effort; badge refreshes on next load
-    }
-  };
-
-  const handleMarkAll = async () => {
-    try {
-      await markAllNotificationsRead();
-      await reload();
-    } catch {
-      // best effort
-    }
+  const handleOpen = (notification: AppNotification) => {
+    void markRead(notification.id);
   };
 
   return (
@@ -66,20 +54,34 @@ export default function NotificationsScreen() {
       style={styles.container}
       contentContainerStyle={styles.content}
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={refresh} colors={[Palette.primary]} tintColor={Palette.primary} />
+        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={[Palette.primary]} tintColor={Palette.primary} />
       }
     >
-      {unread > 0 && (
-        <View style={styles.summaryRow}>
-          <View style={styles.unreadDot} />
-          <Text style={styles.summaryText}>
-            {unread} unread {unread === 1 ? 'message' : 'messages'}
-          </Text>
-          <Pressable onPress={handleMarkAll} style={({ pressed }) => pressed && styles.pressed}>
-            <Text style={styles.markAllText}>Mark all read</Text>
-          </Pressable>
-        </View>
-      )}
+      <View style={styles.summaryRow}>
+        {unread > 0 ? (
+          <>
+            <View style={styles.unreadDot} />
+            <Text style={styles.summaryText}>
+              {unread} unread {unread === 1 ? 'message' : 'messages'}
+            </Text>
+            <Pressable onPress={() => markAllRead()} style={({ pressed }) => pressed && styles.pressed}>
+              <Text style={styles.markAllText}>Mark all read</Text>
+            </Pressable>
+          </>
+        ) : (
+          <>
+            {/* Signals that the feed updates itself, so nobody pulls to refresh
+                waiting for something that has already arrived. */}
+            <View
+              style={[
+                styles.liveDot,
+                { backgroundColor: connected ? Accent.green.fg : Palette.textMuted },
+              ]}
+            />
+            <Text style={styles.summaryText}>{connected ? 'Live' : 'Reconnecting…'}</Text>
+          </>
+        )}
+      </View>
 
       {notifications.length === 0 && (
         <EmptyState
@@ -159,6 +161,12 @@ function createStyles(
     height: 8,
     borderRadius: 4,
     backgroundColor: Palette.primary,
+    marginRight: Spacing.sm,
+  },
+  liveDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
     marginRight: Spacing.sm,
   },
   summaryText: {

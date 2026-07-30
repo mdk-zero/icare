@@ -9,6 +9,7 @@ import React, {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as apiClient from "@/lib/api";
 import { getToken, clearToken, flushOutbox, isNetworkError } from "@/lib/client";
+import { startNotificationStream, stopNotificationStream } from "@/lib/notifications-live";
 
 const USER_KEY = "@icare_user";
 
@@ -53,6 +54,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         AsyncStorage.setItem(USER_KEY, JSON.stringify(sessionUser)).catch(() => {});
         // Push any writes queued while offline now that we know we're online.
         flushOutbox().catch(() => {});
+        startNotificationStream();
       } else {
         // Server reachable but the token is invalid/expired.
         await clearToken();
@@ -88,6 +90,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(loggedIn);
       AsyncStorage.setItem(USER_KEY, JSON.stringify(loggedIn)).catch(() => {});
       flushOutbox().catch(() => {});
+      startNotificationStream();
       return { ok: true };
     } catch (error) {
       const message = isNetworkError(error)
@@ -114,6 +117,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(result.user);
       AsyncStorage.setItem(USER_KEY, JSON.stringify(result.user)).catch(() => {});
       flushOutbox().catch(() => {});
+      startNotificationStream();
       return { ok: true };
     } catch (error) {
       const message = isNetworkError(error)
@@ -128,6 +132,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
+    // Before the token goes away, so the live feed doesn't reconnect into a 401
+    // and leak the previous account's notifications into the next session.
+    stopNotificationStream();
     await apiClient.logout();
     await AsyncStorage.removeItem(USER_KEY);
     setUser(null);

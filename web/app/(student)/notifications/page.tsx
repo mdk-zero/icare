@@ -1,6 +1,5 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faBell,
@@ -10,12 +9,8 @@ import {
   faCircleInfo,
   faCheckCircle,
 } from "@fortawesome/free-solid-svg-icons";
-import {
-  fetchNotifications,
-  markNotificationRead,
-  markAllNotificationsRead,
-  FacultyNotification,
-} from "../../lib/api";
+import { FacultyNotification } from "../../lib/api";
+import { useNotifications } from "../../lib/notifications-live";
 
 const TYPE_STYLES: Record<FacultyNotification["type"], { icon: typeof faBell; classes: string }> = {
   alert: { icon: faExclamationTriangle, classes: "bg-rose-50 text-rose-600" },
@@ -25,35 +20,7 @@ const TYPE_STYLES: Record<FacultyNotification["type"], { icon: typeof faBell; cl
 };
 
 export default function StudentNotificationsPage() {
-  const [notifications, setNotifications] = useState<FacultyNotification[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [unreadCount, setUnreadCount] = useState(0);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    const data = await fetchNotifications();
-    if (data) {
-      setNotifications(data.notifications);
-      setUnreadCount(data.unread);
-    }
-    setLoading(false);
-  }, []);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  const handleMarkAsRead = async (id: string) => {
-    await markNotificationRead(id);
-    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, is_read: true } : n)));
-    setUnreadCount((count) => Math.max(0, count - 1));
-  };
-
-  const handleMarkAllAsRead = async () => {
-    await markAllNotificationsRead();
-    setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
-    setUnreadCount(0);
-  };
+  const { notifications, unread, loading, connected, markRead, markAllRead } = useNotifications();
 
   return (
     <div className="space-y-6 max-w-3xl mx-auto">
@@ -65,18 +32,21 @@ export default function StudentNotificationsPage() {
           </h1>
           <p className="text-gray-500">
             Assignments, deadlines, and alerts from your instructors
-            {unreadCount > 0 && ` · ${unreadCount} unread`}
+            {unread > 0 && ` · ${unread} unread`}
           </p>
         </div>
-        {unreadCount > 0 && (
-          <button
-            onClick={handleMarkAllAsRead}
-            className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-brand-600 hover:bg-brand-600/5 border border-brand-600/30 rounded-xl transition-colors whitespace-nowrap"
-          >
-            <FontAwesomeIcon icon={faCheckDouble} className="w-4 h-4" />
-            Mark all as read
-          </button>
-        )}
+        <div className="flex items-center gap-3">
+          <LiveIndicator connected={connected} />
+          {unread > 0 && (
+            <button
+              onClick={() => markAllRead()}
+              className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-brand-600 hover:bg-brand-600/5 border border-brand-600/30 rounded-xl transition-colors whitespace-nowrap"
+            >
+              <FontAwesomeIcon icon={faCheckDouble} className="w-4 h-4" />
+              Mark all as read
+            </button>
+          )}
+        </div>
       </div>
 
       {loading ? (
@@ -130,7 +100,7 @@ export default function StudentNotificationsPage() {
                   </div>
                   {!notification.is_read && (
                     <button
-                      onClick={() => handleMarkAsRead(notification.id)}
+                      onClick={() => markRead(notification.id)}
                       className="px-3 py-1 text-sm text-brand-600 hover:text-brand-700 transition-colors whitespace-nowrap"
                     >
                       Mark as read
@@ -143,5 +113,22 @@ export default function StudentNotificationsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+/** Shows that the feed keeps itself current, so nobody reaches for refresh. */
+function LiveIndicator({ connected }: { connected: boolean }) {
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-400"
+      title={connected ? "Updating live" : "Reconnecting…"}
+    >
+      <span
+        className={`w-1.5 h-1.5 rounded-full ${
+          connected ? "bg-emerald-500 animate-pulse" : "bg-gray-300"
+        }`}
+      />
+      {connected ? "Live" : "Offline"}
+    </span>
   );
 }

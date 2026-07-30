@@ -1,27 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { loadNotifications } from '@/app/lib/notifications';
 
 export async function GET() {
   const session = await readSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
-    const supabase = getSupabaseAdmin();
-    const { data: notifications, error } = await supabase
-      .from('notifications')
-      .select('id, type, title, body, data, read_at, created_at')
-      .eq('user_id', session.uid)
-      .order('created_at', { ascending: false })
-      .limit(100);
-
-    if (error) {
-      console.error('Failed to fetch notifications', error);
-      return NextResponse.json({ error: 'Unable to fetch notifications' }, { status: 500 });
-    }
-
-    const unread = (notifications ?? []).filter((n) => !n.read_at).length;
-    return NextResponse.json({ notifications: notifications ?? [], unread });
+    return NextResponse.json(await loadNotifications(session.uid));
   } catch (err) {
     console.error('Fetch notifications failed', err);
     return NextResponse.json({ error: 'Unable to fetch notifications' }, { status: 500 });

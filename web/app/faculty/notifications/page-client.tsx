@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { fetchNotifications, markNotificationRead, markAllNotificationsRead, FacultyNotification } from "../../lib/api";
+import { useNotifications } from "../../lib/notifications-live";
 import { SkeletonNotificationItem } from "../../components/skeletons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -14,44 +13,18 @@ import {
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import PageHeader from "../../components/PageHeader";
 import StatTile from "../../components/StatTile";
-import Card from "../../components/Card";
 
 export default function FacultyNotificationsClient() {
-  const [notifications, setNotifications] = useState<FacultyNotification[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [unreadCount, setUnreadCount] = useState(0);
-
-  useEffect(() => {
-    loadNotifications();
-  }, []);
-
-  const loadNotifications = async () => {
-    setLoading(true);
-    const data = await fetchNotifications();
-    if (data) {
-      setNotifications(data.notifications);
-      setUnreadCount(data.unread);
-    }
-    setLoading(false);
-  };
-
-  const refreshUnread = () => window.dispatchEvent(new Event('unread-changed'));
-
-  const handleMarkAsRead = async (id: string) => {
-    await markNotificationRead(id);
-    setNotifications(notifications.map(n =>
-      n.id === id ? { ...n, is_read: true } : n
-    ));
-    setUnreadCount(Math.max(0, unreadCount - 1));
-    refreshUnread();
-  };
-
-  const handleMarkAllAsRead = async () => {
-    await markAllNotificationsRead();
-    setNotifications(notifications.map(n => ({ ...n, is_read: true })));
-    setUnreadCount(0);
-    refreshUnread();
-  };
+  // Shared live store: inserts arrive over SSE and read state stays in step
+  // with the sidebar badge.
+  const {
+    notifications,
+    unread: unreadCount,
+    loading,
+    connected,
+    markRead,
+    markAllRead,
+  } = useNotifications();
 
   const getNotificationIcon = (type: string): IconDefinition => {
     switch (type) {
@@ -79,10 +52,10 @@ export default function FacultyNotificationsClient() {
           label: "Notifications",
         }}
         title="Notifications"
-        subtitle="Real-time alerts and updates"
+        subtitle={connected ? "Live alerts and updates" : "Alerts and updates · reconnecting…"}
         action={unreadCount > 0 ? {
           icon: <FontAwesomeIcon icon={faCheck} className="w-6 h-6" />,
-          onClick: handleMarkAllAsRead,
+          onClick: () => markAllRead(),
           label: "Mark all as read",
         } : undefined}
       />
@@ -148,7 +121,7 @@ export default function FacultyNotificationsClient() {
                 </div>
                 {!notification.is_read && (
                   <button
-                    onClick={() => handleMarkAsRead(notification.id)}
+                    onClick={() => markRead(notification.id)}
                     className="px-3 py-1 text-sm text-brand-600 hover:text-brand-700 transition-colors"
                   >
                     Mark as read

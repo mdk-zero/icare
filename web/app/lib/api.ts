@@ -1846,7 +1846,7 @@ export async function generateFacultyReport(studentId: string, reportType: strin
   };
 }
 
-interface ServerNotification {
+export interface ServerNotification {
   id: string;
   type: string;
   title: string;
@@ -1867,6 +1867,19 @@ const NOTIFICATION_TYPE_MAP: Record<string, FacultyNotification['type']> = {
   system: 'info',
 };
 
+/** Shared by the polled fetch and the live SSE stream. */
+export function toFacultyNotification(n: ServerNotification): FacultyNotification {
+  return {
+    id: n.id,
+    title: n.title,
+    message: n.body,
+    type: NOTIFICATION_TYPE_MAP[n.type] ?? 'info',
+    is_read: n.read_at !== null,
+    created_at: n.created_at,
+    student_id: typeof n.data?.student_id === 'string' ? n.data.student_id : undefined,
+  };
+}
+
 export async function fetchNotifications(): Promise<{ notifications: FacultyNotification[]; total: number; unread: number } | null> {
   try {
     const res = await fetch('/api/notifications', { credentials: 'include' });
@@ -1875,15 +1888,7 @@ export async function fetchNotifications(): Promise<{ notifications: FacultyNoti
       return null;
     }
     const json = (await res.json()) as { notifications: ServerNotification[]; unread: number };
-    const notifications: FacultyNotification[] = (json.notifications ?? []).map((n) => ({
-      id: n.id,
-      title: n.title,
-      message: n.body,
-      type: NOTIFICATION_TYPE_MAP[n.type] ?? 'info',
-      is_read: n.read_at !== null,
-      created_at: n.created_at,
-      student_id: typeof n.data?.student_id === 'string' ? n.data.student_id : undefined,
-    }));
+    const notifications = (json.notifications ?? []).map(toFacultyNotification);
     return { notifications, total: notifications.length, unread: json.unread ?? 0 };
   } catch (err) {
     console.error('fetchNotifications() failed', err);
