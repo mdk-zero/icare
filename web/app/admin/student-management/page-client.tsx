@@ -21,6 +21,7 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import PageHeader from "../../components/PageHeader";
 import StatTile from "../../components/StatTile";
+import ConfirmModal from "../../components/ConfirmModal";
 import { fetchSections, Section } from "../../lib/api";
 import Avatar from "../../components/Avatar";
 
@@ -729,6 +730,10 @@ export default function StudentManagementClient() {
   const [sectionForm, setSectionForm] = useState<{ section: Section | null } | null>(null);
   const [sectionToDelete, setSectionToDelete] = useState<Section | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [confirmingBatchDelete, setConfirmingBatchDelete] = useState(false);
+  const [batchDeleting, setBatchDeleting] = useState(false);
+  const [batchDeleteError, setBatchDeleteError] = useState<string | null>(null);
 
   const loadStudents = useCallback(async () => {
     setLoading(true);
@@ -825,6 +830,62 @@ export default function StudentManagementClient() {
   }, [sections, students, filteredStudents]);
 
   const openGroup = groups.find((g) => g.key === selectedSection) ?? null;
+
+  /** Leaving a roster drops its selection, so nothing carries into the next one. */
+  const openSection = (key: string | null) => {
+    setSelectedSection(key);
+    setSelectedIds(new Set());
+  };
+
+  // Only rows currently on screen count as selected: narrowing the search after
+  // ticking boxes must not delete students the admin can no longer see.
+  const selectedStudents = useMemo(
+    () => openGroup?.students.filter((s) => selectedIds.has(s.id)) ?? [],
+    [openGroup, selectedIds],
+  );
+  const visibleCount = openGroup?.students.length ?? 0;
+  const allVisibleSelected = visibleCount > 0 && selectedStudents.length === visibleCount;
+
+  const toggleStudent = (id: string) =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(id)) next.add(id);
+      return next;
+    });
+
+  const toggleAllVisible = () =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      for (const student of openGroup?.students ?? []) {
+        if (allVisibleSelected) next.delete(student.id);
+        else next.add(student.id);
+      }
+      return next;
+    });
+
+  const handleBatchDelete = async () => {
+    setBatchDeleting(true);
+    setBatchDeleteError(null);
+    const res = await fetch("/api/admin/students", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ ids: selectedStudents.map((s) => s.id) }),
+    });
+    const json = (await res.json()) as { deleted?: number; error?: string };
+    setBatchDeleting(false);
+    if (!res.ok) {
+      setBatchDeleteError(json.error ?? "Unable to delete the selected students.");
+      return;
+    }
+    const deleted = json.deleted ?? 0;
+    setConfirmingBatchDelete(false);
+    setSelectedIds(new Set());
+    setNotice(
+      `${deleted} student${deleted === 1 ? "" : "s"} deleted — their attempts and scores are gone too.`,
+    );
+    void loadStudents();
+  };
 
   return (
     <div>
@@ -1019,7 +1080,7 @@ export default function StudentManagementClient() {
                   </span>
                 </div>
                 <button
-                  onClick={() => setSelectedSection(group.key)}
+                  onClick={() => openSection(group.key)}
                   aria-label={`View ${group.name} roster`}
                   className="absolute inset-0 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-600/40"
                 />
@@ -1048,7 +1109,7 @@ export default function StudentManagementClient() {
         <>
           <div className="mb-4 flex flex-wrap items-center gap-3">
             <button
-              onClick={() => setSelectedSection(null)}
+              onClick={() => openSection(null)}
               className="flex items-center gap-2 rounded-lg border border-gray-200 bg-surface px-3 py-2 text-sm font-medium text-gray-700 transition-all hover:bg-gray-50"
             >
               <FontAwesomeIcon icon={faArrowLeft} className="h-3.5 w-3.5" />
@@ -1087,11 +1148,52 @@ export default function StudentManagementClient() {
             )}
           </div>
 
+          {selectedStudents.length > 0 && (
+            <div className="mb-3 flex flex-wrap items-center gap-3 rounded-xl border border-brand-600/20 bg-brand-600/5 px-4 py-3">
+              <p className="text-sm font-medium text-gray-700">
+                {selectedStudents.length} student{selectedStudents.length === 1 ? "" : "s"} selected
+              </p>
+              <button
+                onClick={() => setSelectedIds(new Set())}
+                className="text-sm font-medium text-gray-500 transition-colors hover:text-gray-800"
+              >
+                Clear
+              </button>
+              <button
+                onClick={() => {
+                  setBatchDeleteError(null);
+                  setConfirmingBatchDelete(true);
+                }}
+                className="ml-auto flex items-center gap-2 rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow-[0_2px_8px_-1px_rgb(225_29_72_/_0.35)] transition-all hover:bg-rose-700"
+              >
+                <FontAwesomeIcon icon={faTrashCan} className="h-3.5 w-3.5" />
+                Delete selected
+              </button>
+            </div>
+          )}
+
           <div className="overflow-hidden rounded-xl border border-hairline bg-surface shadow-tile">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="border-b border-gray-100 bg-subtle">
                   <tr>
+                    <th className="w-12 px-4 py-3 sm:pl-6 sm:pr-0">
+                      <input
+                        type="checkbox"
+                        checked={allVisibleSelected}
+                        // Partial selections read as neither on nor off; only the
+                        // DOM node carries that third state.
+                        ref={(el) => {
+                          if (el) {
+                            el.indeterminate = selectedStudents.length > 0 && !allVisibleSelected;
+                          }
+                        }}
+                        onChange={toggleAllVisible}
+                        disabled={visibleCount === 0}
+                        aria-label={`Select all students in ${openGroup.name}`}
+                        className="h-4 w-4 cursor-pointer accent-brand-600 disabled:cursor-not-allowed disabled:opacity-40"
+                      />
+                    </th>
                     {["Student", "Quizzes", "Avg. Score", "Status", "Last Active"].map((h) => (
                       <th
                         key={h}
@@ -1107,8 +1209,20 @@ export default function StudentManagementClient() {
                     <tr
                       key={student.id}
                       onClick={() => router.push(`/admin/students/${student.id}`)}
-                      className="cursor-pointer transition-colors hover:bg-subtle"
+                      className={`cursor-pointer transition-colors ${
+                        selectedIds.has(student.id) ? "bg-brand-600/5" : "hover:bg-subtle"
+                      }`}
                     >
+                      {/* Ticking a box must not also open the student. */}
+                      <td className="px-4 py-4 sm:pl-6 sm:pr-0" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(student.id)}
+                          onChange={() => toggleStudent(student.id)}
+                          aria-label={`Select ${student.name}`}
+                          className="h-4 w-4 cursor-pointer accent-brand-600"
+                        />
+                      </td>
                       <td className="px-4 py-4 sm:px-6">
                         <div className="flex items-center gap-3">
                           <Avatar
@@ -1157,7 +1271,7 @@ export default function StudentManagementClient() {
                   ))}
                   {openGroup.students.length === 0 && (
                     <tr>
-                      <td colSpan={5} className="py-12 text-center text-gray-400">
+                      <td colSpan={6} className="py-12 text-center text-gray-400">
                         No students in this section yet
                       </td>
                     </tr>
@@ -1191,13 +1305,39 @@ export default function StudentManagementClient() {
         />
       )}
 
+      {confirmingBatchDelete && selectedStudents.length > 0 && (
+        <ConfirmModal
+          onClose={batchDeleting ? () => {} : () => setConfirmingBatchDelete(false)}
+          config={{
+            title: `Delete ${selectedStudents.length} student${
+              selectedStudents.length === 1 ? "" : "s"
+            }?`,
+            message:
+              "Their accounts, quiz attempts, scores and risk history are removed permanently. This cannot be undone.",
+            confirmLabel: `Delete ${selectedStudents.length}`,
+            loading: batchDeleting,
+            error: batchDeleteError,
+            onConfirm: () => void handleBatchDelete(),
+            children: (
+              <ul className="mt-3 max-h-40 space-y-1 overflow-y-auto rounded-lg border border-hairline bg-subtle p-2.5 text-sm text-gray-700">
+                {selectedStudents.map((s) => (
+                  <li key={s.id} className="truncate">
+                    {s.name} <span className="text-gray-400">{s.email}</span>
+                  </li>
+                ))}
+              </ul>
+            ),
+          }}
+        />
+      )}
+
       {sectionToDelete && (
         <DeleteSectionModal
           section={sectionToDelete}
           onClose={() => setSectionToDelete(null)}
           onDeleted={(message) => {
             // Its students land in Unassigned, so the open drill-in is gone.
-            if (selectedSection === sectionToDelete.id) setSelectedSection(null);
+            if (selectedSection === sectionToDelete.id) openSection(null);
             refreshAfterSectionChange(message);
           }}
         />
