@@ -1,71 +1,53 @@
 import dotenv from 'dotenv';
 dotenv.config({ path: '.env.local' });
 
-import nodemailer from 'nodemailer';
-
+/**
+ * Sends one real invitation email through whichever provider .env.local
+ * configures, so the delivery path being tested is the same one the app uses.
+ *
+ *   npx tsx scripts/test-email.ts someone@example.com
+ *
+ * The recipient is an argument on purpose: the previous version of this script
+ * always mailed SMTP_USER, which could only ever prove that you can send to
+ * yourself. Pass an address you do not own -- that is the case that fails when
+ * a provider is not fully set up.
+ */
 async function main() {
-  const host = process.env.SMTP_HOST;
-  const port = process.env.SMTP_PORT;
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
-  const fromEmail = process.env.SMTP_FROM_EMAIL;
-  const fromName = process.env.SMTP_FROM_NAME || 'iCARE++';
-
-  if (!host || !port || !user || !pass || !fromEmail) {
-    console.error(
-      'Missing SMTP environment variables. Make sure SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, and SMTP_FROM_EMAIL are set.',
-    );
+  const to = process.argv[2];
+  if (!to) {
+    console.error('Usage: npx tsx scripts/test-email.ts <recipient@example.com>');
     process.exit(1);
   }
 
-  const portNumber = Number(port);
+  const provider = process.env.RESEND_API_KEY ? 'Resend' : 'SMTP';
+  const from = process.env.RESEND_FROM_EMAIL || process.env.SMTP_FROM_EMAIL || '(unset)';
 
-  console.log('SMTP config:');
-  console.log('  host:', host);
-  console.log('  port:', portNumber);
-  console.log('  user:', user);
-  console.log('  from:', `"${fromName}" <${fromEmail}>`);
+  console.log(`Provider: ${provider}`);
+  console.log(`From:     ${from}`);
+  console.log(`To:       ${to}\n`);
 
-  const transporter = nodemailer.createTransport({
-    host,
-    port: portNumber,
-    secure: process.env.SMTP_SECURE === 'true' || portNumber === 465,
-    auth: { user, pass },
-  });
+  // Imported here, after dotenv has populated process.env, because the module
+  // reads its configuration at call time.
+  const { sendStudentInvitationEmail } = await import('../app/lib/auth/email');
 
-  console.log('\nVerifying SMTP connection...');
-  try {
-    await transporter.verify();
-    console.log('✅ SMTP connection verified');
-  } catch (err) {
-    console.error('❌ SMTP verification failed:');
-    console.error(err instanceof Error ? err.message : err);
-    process.exit(1);
+  const result = await sendStudentInvitationEmail(
+    to,
+    'Test Recipient',
+    process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000/login',
+    'TEST-PASSWORD-1234',
+  );
+
+  if (result.success) {
+    console.log('✅ Accepted for delivery. Check the inbox, and the spam folder.');
+    return;
   }
 
-  const toEmail = user; // Send the test email to yourself
-
-  console.log(`\nSending test email to ${toEmail}...`);
-  try {
-    const info = await transporter.sendMail({
-      from: `"${fromName}" <${fromEmail}>`,
-      to: toEmail,
-      subject: 'iCARE++ SMTP test',
-      html: `
-        <div style="font-family: system-ui, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px;">
-          <h2 style="color: #0d7377;">SMTP test email</h2>
-          <p>If you received this, your Gmail SMTP configuration is working correctly.</p>
-          <p>Sent at: ${new Date().toISOString()}</p>
-        </div>
-      `,
-    });
-    console.log('✅ Test email sent:', info.messageId);
-    console.log(`Check your inbox (and spam folder) at ${toEmail}.`);
-  } catch (err) {
-    console.error('❌ Failed to send test email:');
-    console.error(err instanceof Error ? err.message : err);
-    process.exit(1);
-  }
+  console.error('❌ Rejected:');
+  console.error(`   ${result.error}`);
+  process.exit(1);
 }
 
-main();
+main().catch((err) => {
+  console.error(err instanceof Error ? err.message : err);
+  process.exit(1);
+});

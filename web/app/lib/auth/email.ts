@@ -70,9 +70,82 @@ function getTransporter(): Transporter {
   return transporter;
 }
 
+/**
+ * Resend is preferred when its key is present; SMTP stays as the fallback so
+ * an existing deployment keeps working untouched.
+ */
+type MailProvider = 'resend' | 'smtp';
+
+const RESEND_ENDPOINT = 'https://api.resend.com/emails';
+
+function getFromAddress(): string | null {
+  return process.env.RESEND_FROM_EMAIL || process.env.SMTP_FROM_EMAIL || null;
+}
+
+function getFromName(): string {
+  return process.env.MAIL_FROM_NAME || process.env.SMTP_FROM_NAME || 'iCARE++';
+}
+
 function getFromHeader(): string {
-  const { fromName, fromAddress } = getSmtpConfig();
-  return `"${fromName}" <${fromAddress}>`;
+  const address = getFromAddress();
+  if (!address) {
+    // Deliberately not routed through getSmtpConfig(): with Resend configured
+    // there are no SMTP_* variables to read, and demanding them would fail a
+    // perfectly valid setup.
+    throw new Error(
+      'No sender address configured. Set RESEND_FROM_EMAIL (or SMTP_FROM_EMAIL).',
+    );
+  }
+  return `"${getFromName()}" <${address}>`;
+}
+
+function getProvider(): MailProvider | null {
+  if (process.env.RESEND_API_KEY && getFromAddress()) return 'resend';
+  if (isSmtpConfigured()) return 'smtp';
+  return null;
+}
+
+async function sendViaResend(message: {
+  from: string;
+  to: string;
+  subject: string;
+  html: string;
+}): Promise<void> {
+  const response = await fetch(RESEND_ENDPOINT, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: message.from,
+      to: [message.to],
+      subject: message.subject,
+      html: message.html,
+    }),
+    signal: AbortSignal.timeout(10000),
+  });
+
+  if (response.ok) return;
+
+  // Resend states the reason in the body, and for the refusal that matters
+  // most -- an unverified sending domain, which limits delivery to the
+  // account holder's own address -- that sentence is the entire diagnosis.
+  // It is carried through verbatim rather than flattened into a status code,
+  // because the invitation flow shows this text to the admin.
+  const raw = await response.text().catch(() => '');
+  let detail = raw;
+  try {
+    const parsed = JSON.parse(raw) as { message?: string; error?: string | { message?: string } };
+    detail =
+      parsed.message ??
+      (typeof parsed.error === 'string' ? parsed.error : parsed.error?.message) ??
+      raw;
+  } catch {
+    // Not JSON; the raw body is the best available detail.
+  }
+
+  throw new Error(`Resend refused the message (${response.status})${detail ? `: ${detail}` : ''}`);
 }
 
 function isValidEmail(email: string): boolean {
@@ -100,11 +173,12 @@ function isSmtpConfigured(): boolean {
 
 function shouldSkipSending(): boolean {
   if (process.env.NODE_ENV !== "development") return false;
-  // A machine with no SMTP set up is exactly what the dev skip is for, so the
-  // decision must not route through getSmtpConfig() -- that throws on missing
-  // SMTP_*, turning "skip quietly" into a 500 before the skip is ever checked.
-  if (!isSmtpConfigured()) return true;
-  return process.env.SMTP_SEND_IN_DEV !== "true";
+  // A machine with no mail provider set up is exactly what the dev skip is
+  // for, so the decision must not route through getSmtpConfig() -- that throws
+  // on missing SMTP_*, turning "skip quietly" into a 500 before the skip is
+  // ever checked.
+  if (getProvider() === null) return true;
+  return (process.env.MAIL_SEND_IN_DEV ?? process.env.SMTP_SEND_IN_DEV) !== "true";
 }
 
 async function sendEmail(options: {
@@ -123,19 +197,25 @@ async function sendEmail(options: {
   }
 
   if (shouldSkipSending()) {
-    console.log(`[SMTP skipped - dev mode] To: ${to}, Subject: ${subject}`);
+    console.log(`[mail skipped - dev mode] To: ${to}, Subject: ${subject}`);
     return;
   }
 
-  const transport = getTransporter();
+  const provider = getProvider();
+  if (!provider) {
+    throw new Error(
+      'No email provider is configured. Set RESEND_API_KEY and RESEND_FROM_EMAIL, or the SMTP_* variables.',
+    );
+  }
+
   const from = getFromHeader();
 
-  await transport.sendMail({
-    from,
-    to,
-    subject,
-    html,
-  });
+  if (provider === 'resend') {
+    await sendViaResend({ from, to, subject, html });
+    return;
+  }
+
+  await getTransporter().sendMail({ from, to, subject, html });
 }
 
 function buildOtpHtml(otp: string, name: string, heading: string, bodyText: string): string {
