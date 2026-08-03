@@ -63,6 +63,14 @@ const STATUS_BADGE: Record<Status, string> = {
   not_started: "bg-gray-100 text-gray-500 border-gray-200",
 };
 
+/** The threshold the score columns already colour on, named once. */
+const PASS_MARK = 70;
+
+type ScoreBand = "all" | "passing" | "failing" | "ungraded";
+
+const SELECT_CLASS =
+  "cursor-pointer rounded-xl border border-gray-200 bg-surface px-4 py-2.5 text-gray-700 transition-all focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/40";
+
 function formatDateTime(value: string | null): string {
   if (!value) return "—";
   return new Date(value).toLocaleDateString("en-US", {
@@ -94,6 +102,8 @@ export default function AssessmentResultsClient({ assessmentId }: { assessmentId
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<Status | "all">("all");
+  const [sectionFilter, setSectionFilter] = useState("all");
+  const [scoreFilter, setScoreFilter] = useState<ScoreBand>("all");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -122,14 +132,57 @@ export default function AssessmentResultsClient({ assessmentId }: { assessmentId
     void load();
   }, [load]);
 
+  /** Only the sections actually present, so the dropdown never offers a dead end. */
+  const sectionOptions = useMemo(() => {
+    const names = new Set<string>();
+    let hasUnassigned = false;
+    for (const r of results) {
+      if (r.section) names.add(r.section);
+      else hasUnassigned = true;
+    }
+    return { names: [...names].sort((a, b) => a.localeCompare(b)), hasUnassigned };
+  }, [results]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return results.filter((r) => {
-      const matchesSearch =
-        !q || r.name.toLowerCase().includes(q) || r.email.toLowerCase().includes(q);
-      return matchesSearch && (statusFilter === "all" || r.status === statusFilter);
+      if (q && !r.name.toLowerCase().includes(q) && !r.email.toLowerCase().includes(q)) {
+        return false;
+      }
+      if (statusFilter !== "all" && r.status !== statusFilter) return false;
+
+      if (sectionFilter !== "all") {
+        const section = r.section ?? "__unassigned__";
+        if (section !== sectionFilter) return false;
+      }
+
+      // Bands run off best_score, the column the table ranks on. "Ungraded"
+      // is its own band rather than a 0, so students who never submitted do
+      // not silently count as failing.
+      if (scoreFilter === "ungraded" && r.best_score !== null) return false;
+      if (scoreFilter === "passing" && (r.best_score === null || r.best_score < PASS_MARK)) {
+        return false;
+      }
+      if (scoreFilter === "failing" && (r.best_score === null || r.best_score >= PASS_MARK)) {
+        return false;
+      }
+
+      return true;
     });
-  }, [results, search, statusFilter]);
+  }, [results, search, statusFilter, sectionFilter, scoreFilter]);
+
+  const filtersActive =
+    search.trim() !== "" ||
+    statusFilter !== "all" ||
+    sectionFilter !== "all" ||
+    scoreFilter !== "all";
+
+  const clearFilters = () => {
+    setSearch("");
+    setStatusFilter("all");
+    setSectionFilter("all");
+    setScoreFilter("all");
+  };
 
   /** Exports what is on screen, so a filtered view exports the filtered rows. */
   const exportCsv = () => {
@@ -232,8 +285,8 @@ export default function AssessmentResultsClient({ assessmentId }: { assessmentId
             />
           </div>
 
-          <div className="mb-4 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
-            <div className="relative flex-1">
+          <div className="mb-4 flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+            <div className="relative min-w-[220px] flex-1">
               <FontAwesomeIcon
                 icon={faSearch}
                 className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
@@ -249,14 +302,62 @@ export default function AssessmentResultsClient({ assessmentId }: { assessmentId
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as Status | "all")}
-              className="cursor-pointer rounded-xl border border-gray-200 bg-surface px-4 py-2.5 text-gray-700 transition-all focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/40"
+              aria-label="Filter by status"
+              className={SELECT_CLASS}
             >
-              <option value="all">All students</option>
+              <option value="all">All statuses</option>
               <option value="submitted">Completed</option>
               <option value="in_progress">In progress</option>
               <option value="not_started">Not started</option>
             </select>
+            {/* Hidden on a single-section roster, where it can only ever be a
+                no-op that costs a click to discover. */}
+            {(sectionOptions.names.length > 1 ||
+              (sectionOptions.names.length === 1 && sectionOptions.hasUnassigned)) && (
+              <select
+                value={sectionFilter}
+                onChange={(e) => setSectionFilter(e.target.value)}
+                aria-label="Filter by section"
+                className={SELECT_CLASS}
+              >
+                <option value="all">All sections</option>
+                {sectionOptions.names.map((name) => (
+                  <option key={name} value={name}>
+                    Section {name}
+                  </option>
+                ))}
+                {sectionOptions.hasUnassigned && (
+                  <option value="__unassigned__">Unassigned</option>
+                )}
+              </select>
+            )}
+            <select
+              value={scoreFilter}
+              onChange={(e) => setScoreFilter(e.target.value as ScoreBand)}
+              aria-label="Filter by score"
+              className={SELECT_CLASS}
+            >
+              <option value="all">Any score</option>
+              <option value="passing">Passing ({PASS_MARK}% and above)</option>
+              <option value="failing">Below {PASS_MARK}%</option>
+              <option value="ungraded">No score yet</option>
+            </select>
           </div>
+
+          {filtersActive && (
+            <div className="mb-4 flex flex-wrap items-center gap-3 text-sm text-gray-600">
+              <span>
+                Showing <strong className="font-semibold text-gray-900">{filtered.length}</strong> of{" "}
+                {results.length} student{results.length === 1 ? "" : "s"}
+              </span>
+              <button
+                onClick={clearFilters}
+                className="font-medium text-brand-600 transition-colors hover:text-brand-700"
+              >
+                Clear filters
+              </button>
+            </div>
+          )}
 
           {loading ? (
             <SkeletonTable cols={7} />
@@ -333,7 +434,7 @@ export default function AssessmentResultsClient({ assessmentId }: { assessmentId
                         <td colSpan={7} className="py-12 text-center text-gray-400">
                           {results.length === 0
                             ? "No students are targeted by this assessment yet"
-                            : "No students match this filter"}
+                            : "No students match these filters"}
                         </td>
                       </tr>
                     )}
