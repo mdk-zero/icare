@@ -10,6 +10,7 @@ import {
   faTrash,
   faCheck,
   faArrowLeft,
+  faChartSimple,
   faPen,
   faLayerGroup,
   faChevronDown,
@@ -1168,6 +1169,13 @@ export default function AssessmentQuestionsClient({
                     )}
                   </div>
                 </div>
+                <button
+                  onClick={() => router.push(`/faculty/assessments/${assessmentId}/results`)}
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 text-sm font-medium shrink-0"
+                >
+                  <FontAwesomeIcon icon={faChartSimple} className="w-3.5 h-3.5" />
+                  Results
+                </button>
                 <button
                   onClick={() => setEditingDetails(true)}
                   title="Edit details"

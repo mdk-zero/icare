@@ -14,6 +14,7 @@ import {
   faEyeSlash,
   faSearch,
   faUsers,
+  faChartSimple,
 } from "@fortawesome/free-solid-svg-icons";
 import PageHeader from "../../components/PageHeader";
 import { SkeletonAssessmentCard } from "../../components/skeletons";
@@ -367,6 +368,14 @@ export default function FacultyAssessmentsClient() {
                     className="p-2 rounded-lg border border-red-200 text-red-600 hover:bg-red-50"
                   >
                     <FontAwesomeIcon icon={faTrash} className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => router.push(`/faculty/assessments/${a.id}/results`)}
+                    title="View student results"
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 text-sm font-medium"
+                  >
+                    <FontAwesomeIcon icon={faChartSimple} className="w-3.5 h-3.5" />
+                    Results
                   </button>
                   <button
                     onClick={() => router.push(`/faculty/assessments/${a.id}`)}
