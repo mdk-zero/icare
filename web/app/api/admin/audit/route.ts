@@ -28,10 +28,13 @@ export async function GET(request: NextRequest) {
   try {
     const supabase = getSupabaseAdmin();
 
+    // No `actor:users(...)` embed: actor_id carries no foreign key, so that a
+    // deleted account cannot rewrite or erase the trail (031). Names are
+    // resolved below instead.
     let query = supabase
       .from('audit_logs')
       .select(
-        'id, actor_id, actor_role, action, entity_type, entity_id, details, ip_address, created_at, actor:users(name, email)',
+        'id, actor_id, actor_role, action, entity_type, entity_id, details, ip_address, created_at',
         { count: 'exact' },
       )
       .order('created_at', { ascending: false })
@@ -63,8 +66,24 @@ export async function GET(request: NextRequest) {
       ...new Set((entityTypesRes.data ?? []).map((r) => r.entity_type as string)),
     ].sort();
 
+    // One lookup for the page's actors. Ids with no row left are actors whose
+    // account has since been deleted; the entry keeps its own record of who
+    // they were in `details`, and the UI falls back to that.
+    const actorIds = [...new Set((logs ?? []).map((l) => l.actor_id).filter((id): id is string => !!id))];
+    const actorsById = new Map<string, { name: string; email: string }>();
+    if (actorIds.length > 0) {
+      const { data: actors } = await supabase
+        .from('users')
+        .select('id, name, email')
+        .in('id', actorIds);
+      for (const a of actors ?? []) actorsById.set(a.id, { name: a.name, email: a.email });
+    }
+
     return NextResponse.json({
-      logs: logs ?? [],
+      logs: (logs ?? []).map((log) => ({
+        ...log,
+        actor: log.actor_id ? (actorsById.get(log.actor_id) ?? null) : null,
+      })),
       total: count ?? 0,
       entity_types: entityTypes,
     });

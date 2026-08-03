@@ -15,7 +15,6 @@ interface AuditLogRow {
   entity_id: string | null;
   details: Record<string, unknown>;
   created_at: string;
-  actor: { name: string } | null;
 }
 
 /** Human-readable summary for the page's Details column. */
@@ -39,9 +38,11 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const action = searchParams.get('action');
 
+    // No `actor:users(...)` embed: actor_id carries no foreign key (031), so
+    // the name is resolved separately once the rows are in hand.
     let query = supabase
       .from('audit_logs')
-      .select('id, actor_id, action, entity_type, entity_id, details, created_at, actor:users(name)')
+      .select('id, actor_id, action, entity_type, entity_id, details, created_at')
       .order('created_at', { ascending: false })
       .limit(200);
 
@@ -59,11 +60,22 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unable to fetch audit logs' }, { status: 500 });
     }
 
-    const logs = ((data ?? []) as unknown as AuditLogRow[]).map((row) => ({
+    const rows = (data ?? []) as unknown as AuditLogRow[];
+
+    const actorIds = [...new Set(rows.map((r) => r.actor_id).filter((id): id is string => !!id))];
+    const nameById = new Map<string, string>();
+    if (actorIds.length > 0) {
+      const { data: actors } = await supabase.from('users').select('id, name').in('id', actorIds);
+      for (const a of actors ?? []) nameById.set(a.id, a.name);
+    }
+
+    const logs = rows.map((row) => ({
       id: row.id,
       faculty_id: row.actor_id ?? '',
+      // A deleted actor leaves no user row, so the entry's own snapshot of
+      // the name is what remains.
       faculty_name:
-        row.actor?.name ??
+        (row.actor_id ? nameById.get(row.actor_id) : undefined) ??
         (typeof row.details.actor_name === 'string' ? row.details.actor_name : 'System'),
       tab: row.entity_type ?? 'general',
       action: row.action,
