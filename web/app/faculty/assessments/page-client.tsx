@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -25,6 +25,8 @@ import ConfirmModal from "../../components/ConfirmModal";
 const inputClassName =
   "w-full px-4 py-3 bg-surface border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 focus:bg-surface transition-all text-sm shadow-sm";
 const labelClassName = "block text-sm font-bold text-gray-800 mb-2";
+const filterSelectClassName =
+  "cursor-pointer px-4 py-2.5 bg-surface border border-gray-400 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 transition-all";
 
 type Difficulty = "beginner" | "intermediate" | "advanced";
 
@@ -63,19 +65,61 @@ export default function FacultyAssessmentsClient() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "published" | "draft">("all");
+  const [difficultyFilter, setDifficultyFilter] = useState<Difficulty | "all">("all");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [sectionFilter, setSectionFilter] = useState("all");
   const [confirmDelete, setConfirmDelete] = useState<Assessment | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  const filteredAssessments = assessments.filter((a) => {
-    if (!searchQuery.trim()) return true;
-    const q = searchQuery.toLowerCase();
-    return (
-      a.title.toLowerCase().includes(q) ||
-      a.description.toLowerCase().includes(q) ||
-      a.category.toLowerCase().includes(q) ||
-      a.difficulty.toLowerCase().includes(q)
-    );
-  });
+  /** Only categories in use, so the dropdown never offers an empty result. */
+  const categoryOptions = useMemo(
+    () => [...new Set(assessments.map((a) => a.category))].sort((a, b) => a.localeCompare(b)),
+    [assessments],
+  );
+
+  const filteredAssessments = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return assessments.filter((a) => {
+      if (
+        q &&
+        !a.title.toLowerCase().includes(q) &&
+        !a.description.toLowerCase().includes(q) &&
+        !a.category.toLowerCase().includes(q) &&
+        !a.difficulty.toLowerCase().includes(q)
+      ) {
+        return false;
+      }
+      if (statusFilter === "published" && !a.is_published) return false;
+      if (statusFilter === "draft" && a.is_published) return false;
+      if (difficultyFilter !== "all" && a.difficulty !== difficultyFilter) return false;
+      if (categoryFilter !== "all" && a.category !== categoryFilter) return false;
+
+      if (sectionFilter !== "all") {
+        const targets = a.target_sections ?? [];
+        // An assessment with no targets reaches every section, so it matches
+        // whichever section is being filtered for rather than none of them.
+        if (targets.length > 0 && !targets.includes(sectionFilter)) return false;
+      }
+
+      return true;
+    });
+  }, [assessments, searchQuery, statusFilter, difficultyFilter, categoryFilter, sectionFilter]);
+
+  const filtersActive =
+    searchQuery.trim() !== "" ||
+    statusFilter !== "all" ||
+    difficultyFilter !== "all" ||
+    categoryFilter !== "all" ||
+    sectionFilter !== "all";
+
+  const clearFilters = () => {
+    setSearchQuery("");
+    setStatusFilter("all");
+    setDifficultyFilter("all");
+    setCategoryFilter("all");
+    setSectionFilter("all");
+  };
 
   // assign modal — assignment is by section, so what is picked here is
   // sections; the students in them are resolved server-side.
@@ -262,6 +306,74 @@ export default function FacultyAssessmentsClient() {
         </button>
       </div>
 
+      <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-3">
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value as "all" | "published" | "draft")}
+          aria-label="Filter by status"
+          className={filterSelectClassName}
+        >
+          <option value="all">All statuses</option>
+          <option value="published">Published</option>
+          <option value="draft">Draft</option>
+        </select>
+        <select
+          value={difficultyFilter}
+          onChange={(e) => setDifficultyFilter(e.target.value as Difficulty | "all")}
+          aria-label="Filter by difficulty"
+          className={filterSelectClassName}
+        >
+          <option value="all">Any difficulty</option>
+          <option value="beginner">Beginner</option>
+          <option value="intermediate">Intermediate</option>
+          <option value="advanced">Advanced</option>
+        </select>
+        {categoryOptions.length > 1 && (
+          <select
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+            aria-label="Filter by category"
+            className={filterSelectClassName}
+          >
+            <option value="all">All categories</option>
+            {categoryOptions.map((category) => (
+              <option key={category} value={category}>
+                {category}
+              </option>
+            ))}
+          </select>
+        )}
+        {sections.length > 1 && (
+          <select
+            value={sectionFilter}
+            onChange={(e) => setSectionFilter(e.target.value)}
+            aria-label="Filter by section"
+            className={filterSelectClassName}
+          >
+            <option value="all">All sections</option>
+            {sections.map((s) => (
+              <option key={s.id} value={s.name}>
+                Section {s.name}
+              </option>
+            ))}
+          </select>
+        )}
+        {filtersActive && (
+          <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600 sm:ml-auto">
+            <span>
+              Showing <strong className="font-semibold text-gray-900">{filteredAssessments.length}</strong>{" "}
+              of {assessments.length}
+            </span>
+            <button
+              onClick={clearFilters}
+              className="font-medium text-brand-600 hover:text-brand-700 transition-colors"
+            >
+              Clear filters
+            </button>
+          </div>
+        )}
+      </div>
+
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {Array.from({ length: 6 }).map((_, i) => (
@@ -270,7 +382,9 @@ export default function FacultyAssessmentsClient() {
         </div>
       ) : filteredAssessments.length === 0 ? (
         <div className="bg-surface p-12 rounded-xl border border-hairline shadow-tile text-center text-gray-500">
-          {searchQuery ? "No assessments match your search." : "No assessments yet. Create your first quiz to start building the question bank."}
+          {filtersActive
+            ? "No assessments match these filters."
+            : "No assessments yet. Create your first quiz to start building the question bank."}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
