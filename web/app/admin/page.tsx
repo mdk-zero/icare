@@ -14,7 +14,9 @@ import {
   faCircleInfo,
   faChevronRight,
 } from "@fortawesome/free-solid-svg-icons";
+import { redirect } from "next/navigation";
 import { getSupabaseAdmin } from "@/app/lib/supabase/server";
+import { readSession } from "@/app/lib/auth/session";
 import Avatar from "@/app/components/Avatar";
 
 export const metadata: Metadata = {
@@ -150,6 +152,14 @@ async function loadDashboard() {
 }
 
 export default async function AdminDashboard() {
+  const session = await readSession();
+  if (!session) {
+    redirect("/login");
+  }
+  if (session.role !== "admin") {
+    redirect(session.role === "faculty" ? "/faculty" : "/dashboard");
+  }
+
   const data = await loadDashboard();
   const {
     totalStudents,
