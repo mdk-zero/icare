@@ -5,6 +5,7 @@ import { sendStudentInvitationEmail } from '@/app/lib/auth/email';
 import { generateRandomPassword, hashPassword } from '@/app/lib/auth/password';
 import { getFacultySectionIds } from '@/app/lib/roster';
 import { getLatestRiskByStudent, getLastActivityByStudent } from '@/app/lib/faculty-dashboard';
+import { logAudit } from '@/app/lib/audit';
 
 function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -312,6 +313,14 @@ export async function PUT(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
+  const session = await readSession();
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  if (!['faculty', 'admin'].includes(session.role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+
   let body: unknown;
   try {
     body = await request.json();
@@ -328,15 +337,42 @@ export async function DELETE(request: NextRequest) {
   try {
     const supabase = getSupabaseAdmin();
 
+    // Only ever target students, and scope faculty to their own sections so
+    // a faculty account can't delete a student (or worse, a faculty/admin
+    // account) outside its roster.
+    const { data: target } = await supabase
+      .from('users')
+      .select('id, role, section_id')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (!target || target.role !== 'student') {
+      return NextResponse.json({ error: 'Student not found' }, { status: 404 });
+    }
+
+    if (session.role === 'faculty') {
+      const facultySections = await getFacultySectionIds(supabase, session.uid);
+      if (!target.section_id || !facultySections.includes(target.section_id)) {
+        return NextResponse.json({ error: 'Student not found' }, { status: 404 });
+      }
+    }
+
     const { error: deleteError } = await supabase
       .from('users')
       .delete()
-      .eq('id', id);
+      .eq('id', id)
+      .eq('role', 'student');
 
     if (deleteError) {
       console.error('Failed to delete student', deleteError);
       return NextResponse.json({ error: 'Unable to delete student' }, { status: 500 });
     }
+
+    await logAudit(
+      session,
+      { action: 'user.delete', entityType: 'users', entityId: id },
+      request,
+    );
 
     return NextResponse.json({ success: true });
   } catch (err) {
