@@ -670,7 +670,7 @@ export default function FacultyStudentsClient() {
         <StatTile
           icon={<FontAwesomeIcon icon={faTriangleExclamation} className="w-5 h-5" />}
           value={atRiskCount}
-          label="At Risk (ML)"
+          label="At Risk"
           caption={pctOfRoster(atRiskCount)}
           iconBg="bg-red-50"
           iconColor="text-red-600"
@@ -678,7 +678,7 @@ export default function FacultyStudentsClient() {
         <StatTile
           icon={<FontAwesomeIcon icon={faCircleCheck} className="w-5 h-5" />}
           value={safeCount}
-          label="Safe (ML)"
+          label="Safe"
           caption={pctOfRoster(safeCount)}
           iconBg="bg-emerald-50"
           iconColor="text-emerald-600"
@@ -1028,10 +1028,7 @@ export default function FacultyStudentsClient() {
                         <>
                           {counts.atRisk > 0 && (
                             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700 border border-red-200">
-                              <FontAwesomeIcon
-                                icon={faTriangleExclamation}
-                                className="w-3 h-3"
-                              />
+                              <FontAwesomeIcon icon={faTriangleExclamation} className="w-3 h-3" />
                               {counts.atRisk} at risk
                             </span>
                           )}
