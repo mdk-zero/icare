@@ -96,7 +96,9 @@ export default function QuizInterfaceScreen() {
 
   // Countdown for time-limited assessments; auto-submits at zero.
   const answersRef = useRef(answers);
-  answersRef.current = answers;
+  useEffect(() => {
+    answersRef.current = answers;
+  });
   useEffect(() => {
     if (remaining === null || result) return;
     if (remaining <= 0) {

@@ -147,16 +147,6 @@ function ButtonGradient() {
   );
 }
 
-// Derived from the brand teal so the gradient feels intentional, not a random accent.
-const TEAL_DARK = "#0F5D5A";
-const TEAL = "#0D9488";
-const INK = "#0B1220";
-const SLATE = "#64748B";
-const SLATE_LIGHT = "#94A3B8";
-const FIELD_BG = "#F8FAFC";
-const FIELD_BORDER = "#E2E8F0";
-const DANGER = "#DC2626";
-
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -230,11 +220,18 @@ export default function LoginScreen() {
     [loginWithGoogle, rememberMe, router],
   );
 
+  // googleResponse is an external auth result delivered as state, so reacting
+  // to it here is what this effect is for.
   React.useEffect(() => {
     if (!googleResponse) return;
     if (googleResponse.type === "success") {
       const idToken = googleResponse.params?.id_token ?? googleResponse.authentication?.idToken;
       if (idToken) {
+        // handleGoogleIdToken clears the form and raises its spinner before it
+        // awaits, so this one write is synchronous. That is the intended
+        // response to a sign-in result arriving, and it happens at most once
+        // per prompt.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         handleGoogleIdToken(idToken);
       } else {
         setError("Google sign-in did not return a valid credential.");

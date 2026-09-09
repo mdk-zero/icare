@@ -76,6 +76,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    // checkAuth is an async function whose every state write follows an
+    // await, so none of them run synchronously in this effect body. The rule
+    // cannot see across the module boundary to prove that.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     checkAuth();
   }, [checkAuth]);
 

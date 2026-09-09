@@ -79,10 +79,8 @@ export default function ChangePasswordFlowScreen() {
     // firing on every cold start, before useAuth has restored the session.
     if (autoSent.current || isBootstrapping) return;
     autoSent.current = true;
-    if (!email) {
-      setError('This account has no email on file, so a code cannot be sent.');
-      return;
-    }
+    // sendCode reports the missing-email case itself, so there is no need to
+    // repeat that check here.
     void sendCode();
   }, [isBootstrapping, email, sendCode]);
 

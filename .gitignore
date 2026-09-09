@@ -6,3 +6,6 @@ dist/
 
 # Env
 .env
+
+# Local backups (e.g. pre-SDK-upgrade copies of mobile/)
+*.bak/

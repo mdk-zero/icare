@@ -6,13 +6,11 @@ import {
   StyleSheet,
   Pressable,
   RefreshControl,
-  useWindowDimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { FontAwesome6 } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import Svg, { Path, Circle } from "react-native-svg";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { Radius, Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
@@ -73,31 +71,9 @@ function formatDeadline(assignment: ScenarioAssignment): string {
   return new Date(assignment.deadline).toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
-/** Faint ECG trace drifting across the Next Up hero card. */
-function HeroPulse({ width }: { width: number }) {
-  const y = 74;
-  const pulse = [
-    `M0 ${y}`,
-    `L${width * 0.42} ${y}`,
-    `L${width * 0.48} ${y - 18}`,
-    `L${width * 0.54} ${y + 22}`,
-    `L${width * 0.59} ${y - 6}`,
-    `L${width * 0.64} ${y}`,
-    `L${width} ${y}`,
-  ].join(" ");
-  return (
-    <Svg width={width} height={110} style={StyleSheet.absoluteFill} pointerEvents="none">
-      <Circle cx={width * 0.14} cy={26} r={46} fill="#FFFFFF" opacity={0.06} />
-      <Circle cx={width * 0.88} cy={92} r={60} fill="#FFFFFF" opacity={0.05} />
-      <Path d={pulse} stroke="#FFFFFF" strokeOpacity={0.28} strokeWidth={2} fill="none" />
-    </Svg>
-  );
-}
-
 export default function DashboardScreen() {
   // content starts below the floating header, then scrolls beneath it
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
   const router = useRouter();
   const { user } = useAuth();
   const { Palette, Accent, Shadow, Type } = useTheme();
@@ -128,8 +104,6 @@ export default function DashboardScreen() {
       : null;
   const quizzesAvailable = assessments.filter((a) => a.attempt_count === 0).length;
 
-  const heroWidth = width - Spacing.lg * 2;
-
   const stats = [
     {
       label: "Pending Tasks",
@@ -159,13 +133,6 @@ export default function DashboardScreen() {
       accent: Accent.cyan,
       href: "/ehr",
     },
-  ];
-
-  const quickActions = [
-    { label: "Vitals", icon: "heart-pulse", accent: Accent.red, href: "/vitals" },
-    { label: "Tasks", icon: "list-check", accent: Accent.amber, href: "/tasks" },
-    { label: "Quizzes", icon: "file-lines", accent: Accent.violet, href: "/tasks/quizzes" },
-    { label: "AI Tips", icon: "lightbulb", accent: Accent.blue, href: "/recommendations" },
   ];
 
   return (

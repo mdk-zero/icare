@@ -14,12 +14,16 @@ export function useApiData<T>(fetcher: () => Promise<CachedResult<T>>) {
   const [fromCache, setFromCache] = useState(false);
 
   // Screens pass inline (often composed) fetchers; keep the latest without
-  // retriggering the mount effect.
+  // retriggering the mount effect. Written in an effect rather than during
+  // render so the ref is never mutated while rendering.
   const fetcherRef = useRef(fetcher);
-  fetcherRef.current = fetcher;
+  useEffect(() => {
+    fetcherRef.current = fetcher;
+  });
 
-  const load = useCallback(async (asRefresh = false) => {
-    if (asRefresh) setRefreshing(true);
+  // Nothing before the first await touches state, so the mount effect below
+  // cannot cascade a synchronous re-render.
+  const reload = useCallback(async () => {
     try {
       const result = await fetcherRef.current();
       setData(result.data);
@@ -34,14 +38,17 @@ export function useApiData<T>(fetcher: () => Promise<CachedResult<T>>) {
   }, []);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    reload();
+  }, [reload]);
 
+  // The spinner is raised here rather than inside reload: this runs from a
+  // gesture, where a synchronous state write is the intended behaviour.
   const refresh = useCallback(() => {
-    load(true);
-  }, [load]);
+    setRefreshing(true);
+    reload();
+  }, [reload]);
 
-  return { data, loading, refreshing, error, fromCache, refresh, reload: load };
+  return { data, loading, refreshing, error, fromCache, refresh, reload };
 }
 
 /** Combine several cached fetches into one result; stale if any part is. */

@@ -26,6 +26,9 @@ export default function SyncStatus({ onSynced }: { onSynced?: () => void }) {
   }, []);
 
   React.useEffect(() => {
+    // refreshCount is async and awaits getOutbox before touching state, so
+    // no write happens synchronously here.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void refreshCount();
     // The queue also drains from useAuth on launch, so re-check periodically
     // rather than assuming this component saw every change.

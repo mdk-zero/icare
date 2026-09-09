@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React from 'react';
 import { ScrollView, View, Text, StyleSheet, Pressable, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -7,6 +7,7 @@ import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { ScreenHeader, EmptyState, SkeletonScreen } from '@/components/ui';
 import { fetchPatients, fetchMyVitals, Patient, VitalReading } from '@/lib/api';
+import { useApiData, allCached } from '@/hooks/useApiData';
 
 function vitalFields(Accent: ReturnType<typeof useTheme>['Accent']) {
   return [
@@ -41,36 +42,19 @@ export default function VitalsScreen() {
   const { Palette, Accent, Shadow, Type } = useTheme();
   const styles = React.useMemo(() => createStyles(Palette, Accent, Shadow, Type), [Palette, Accent, Shadow, Type]);
   const VITAL_FIELDS = React.useMemo(() => vitalFields(Accent), [Accent]);
-  const [patients, setPatients] = useState<Patient[]>([]);
-  const [latestByPatient, setLatestByPatient] = useState<Record<string, VitalReading>>({});
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [fromCache, setFromCache] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { data, loading, refreshing, error, fromCache, refresh } = useApiData(() =>
+    allCached(fetchPatients(), fetchMyVitals()),
+  );
+  const patients: Patient[] = React.useMemo(() => data?.[0] ?? [], [data]);
 
-  const load = useCallback(async () => {
-    try {
-      setError(null);
-      const [patientsResult, vitalsResult] = await Promise.all([fetchPatients(), fetchMyVitals()]);
-      setPatients(patientsResult.data);
-      setFromCache(patientsResult.fromCache || vitalsResult.fromCache);
-      // readings come newest-first; keep the first per patient
-      const latest: Record<string, VitalReading> = {};
-      for (const reading of vitalsResult.data) {
-        if (!latest[reading.patient_id]) latest[reading.patient_id] = reading;
-      }
-      setLatestByPatient(latest);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to load patients');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+  // readings come newest-first; keep the first per patient
+  const latestByPatient = React.useMemo(() => {
+    const latest: Record<string, VitalReading> = {};
+    for (const reading of data?.[1] ?? []) {
+      if (!latest[reading.patient_id]) latest[reading.patient_id] = reading;
     }
-  }, []);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+    return latest;
+  }, [data]);
 
   const getStatus = (reading: VitalReading | undefined) => {
     if (!reading) return { label: 'No data', color: Palette.textSecondary, bg: Palette.borderLight };
@@ -90,10 +74,7 @@ export default function VitalsScreen() {
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
-          onRefresh={() => {
-            setRefreshing(true);
-            load();
-          }}
+          onRefresh={refresh}
           colors={[Palette.primary]}
           tintColor={Palette.primary}
         />
