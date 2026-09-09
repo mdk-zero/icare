@@ -9,7 +9,7 @@ import { useThemePreference } from './useThemePreference';
  * but an explicit Light/Dark choice in Settings overrides it.
  */
 export function useTheme() {
-  const system: ColorScheme = useColorScheme() ?? 'light';
+  const system: ColorScheme = useColorScheme();
   const { preference } = useThemePreference();
   const scheme: ColorScheme = preference === 'system' ? system : preference;
 

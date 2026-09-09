@@ -8,7 +8,7 @@ import Animated, {
   interpolate,
   Easing,
 } from "react-native-reanimated";
-import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
+import type { BottomTabBarProps } from "expo-router/tabs";
 import logoImg from "@/assets/images/logo-pill.png";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { FontAwesome6 } from "@expo/vector-icons";
