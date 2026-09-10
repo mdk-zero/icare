@@ -13,6 +13,8 @@ import {
   faBuilding,
   faCircleInfo,
   faChevronRight,
+  faTrophy,
+  faArrowTrendDown,
 } from "@fortawesome/free-solid-svg-icons";
 import { redirect } from "next/navigation";
 import { getSupabaseAdmin } from "@/app/lib/supabase/server";
@@ -41,6 +43,23 @@ interface ActivityRow {
   actor: { name: string } | null;
 }
 
+interface StudentAverageRow {
+  id: string;
+  name: string;
+  email: string;
+  picture_url: string | null;
+  average: number;
+  count: number;
+}
+
+const SCORE_BANDS = [
+  { label: "90–100", min: 90, max: 100 },
+  { label: "80–89", min: 80, max: 89 },
+  { label: "70–79", min: 70, max: 79 },
+  { label: "60–69", min: 60, max: 69 },
+  { label: "Below 60", min: 0, max: 59 },
+] as const;
+
 function relativeTime(iso: string): string {
   const diffMs = Date.now() - new Date(iso).getTime();
   const minutes = Math.floor(diffMs / 60_000);
@@ -61,7 +80,7 @@ function humanizeAction(action: string): string {
 async function loadDashboard() {
   const supabase = getSupabaseAdmin();
 
-  const [usersRes, attemptsRes, predictionsRes, roomsRes, roomAssignRes, activityRes] =
+  const [usersRes, attemptsRes, predictionsRes, roomsRes, activityRes] =
     await Promise.all([
       supabase.from("users").select("id, name, email, role, picture_url"),
       supabase
@@ -72,9 +91,7 @@ async function loadDashboard() {
         .from("performance_predictions")
         .select("student_id, risk, predicted_at")
         .order("predicted_at", { ascending: false }),
-      supabase.from("rooms").select("id, name, capacity, status").order("name"),
-      // Beds are filled by patients; `capacity` is the patient ceiling.
-      supabase.from("patients").select("room_id").not("room_id", "is", null),
+      supabase.from("rooms").select("id, status"),
       supabase
         .from("audit_logs")
         .select("action, created_at, actor:users(name)")
@@ -84,7 +101,7 @@ async function loadDashboard() {
 
   const users = usersRes.data ?? [];
   const attempts = attemptsRes.data ?? [];
-  const rooms = roomsRes.data ?? [];
+  const activeRoomCount = (roomsRes.data ?? []).filter((r) => r.status === "active").length;
 
   const students = users.filter((u) => u.role === "student");
   const facultyCount = users.filter((u) => u.role === "faculty").length;
@@ -132,10 +149,33 @@ async function loadDashboard() {
     if (weeksAgo >= 0 && weeksAgo < 5) weeklyAttempts[4 - weeksAgo] += 1;
   }
 
-  const occupancy = new Map<string, number>();
-  for (const p of roomAssignRes.data ?? []) {
-    if (p.room_id) occupancy.set(p.room_id, (occupancy.get(p.room_id) ?? 0) + 1);
-  }
+  // Average score per student, highest first — the source for both the score
+  // distribution chart and the top/bottom performer lists. Students with no
+  // submitted attempts have nothing to rank, so they're left out rather than
+  // shown as a false "0%".
+  const studentAverages: StudentAverageRow[] = students
+    .map((s) => {
+      const t = totals.get(s.id);
+      if (!t || t.count === 0) return null;
+      return {
+        id: s.id,
+        name: s.name,
+        email: s.email,
+        picture_url: s.picture_url,
+        average: Math.round(t.sum / t.count),
+        count: t.count,
+      };
+    })
+    .filter((s): s is StudentAverageRow => s !== null)
+    .sort((a, b) => b.average - a.average);
+
+  const scoreDistribution = SCORE_BANDS.map((band) => ({
+    ...band,
+    count: studentAverages.filter((s) => s.average >= band.min && s.average <= band.max).length,
+  }));
+
+  const topPerformers = studentAverages.slice(0, 5);
+  const needsImprovement = [...studentAverages].reverse().slice(0, 5);
 
   return {
     totalStudents: students.length,
@@ -146,7 +186,11 @@ async function loadDashboard() {
     scoredStudentCount: scoredStudents.length,
     atRiskStudents,
     weeklyAttempts,
-    rooms: rooms.map((r) => ({ ...r, patients_assigned: occupancy.get(r.id) ?? 0 })),
+    activeRoomCount,
+    scoreDistribution,
+    scoredStudentTotal: studentAverages.length,
+    topPerformers,
+    needsImprovement,
     activity: (activityRes.data ?? []) as unknown as ActivityRow[],
   };
 }
@@ -169,7 +213,11 @@ export default async function AdminDashboard() {
     totalQuizzes,
     atRiskStudents,
     weeklyAttempts,
-    rooms,
+    activeRoomCount,
+    scoreDistribution,
+    scoredStudentTotal,
+    topPerformers,
+    needsImprovement,
     activity,
   } = data;
 
@@ -274,34 +322,30 @@ export default async function AdminDashboard() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <div className="md:col-span-2 lg:col-span-2 bg-surface rounded-xl p-4 md:p-6 border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200">
           <div className="flex items-center justify-between mb-2">
-            <h3 className="text-lg font-semibold text-gray-900">Room Capacity</h3>
-            <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">Occupancy</span>
+            <h3 className="text-lg font-semibold text-gray-900">Score Distribution</h3>
+            <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+              {scoredStudentTotal} student{scoredStudentTotal !== 1 ? "s" : ""}
+            </span>
           </div>
-          <p className="text-xs text-gray-500 mb-4">Patients occupying each room</p>
-          {rooms.length === 0 ? (
-            <p className="text-sm text-gray-400 py-6 text-center">
-              No rooms yet — create them in <Link href="/admin/rooms" className="text-brand-600 hover:underline">Rooms</Link>.
-            </p>
+          <p className="text-xs text-gray-500 mb-4">Students grouped by average assessment score</p>
+          {scoredStudentTotal === 0 ? (
+            <p className="text-sm text-gray-400 py-6 text-center">No submitted attempts yet</p>
           ) : (
             <div className="space-y-4">
-              {rooms.slice(0, 6).map((room) => {
-                const percentage = room.capacity > 0 ? (room.patients_assigned / room.capacity) * 100 : 0;
-                const isFull = percentage >= 90;
+              {scoreDistribution.map((band) => {
+                const percentage = (band.count / scoredStudentTotal) * 100;
                 return (
-                  <div key={room.id}>
+                  <div key={band.label}>
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium text-gray-700">
-                        {room.name}
-                        {room.status !== "active" && <span className="text-gray-400 text-xs"> · {room.status}</span>}
-                      </span>
-                      <span className={`text-sm font-medium ${isFull ? "text-rose-600" : "text-gray-500"}`}>
-                        {room.patients_assigned}/{room.capacity}
+                      <span className="text-sm font-medium text-gray-700">{band.label}%</span>
+                      <span className="text-sm font-medium text-gray-500">
+                        {band.count} student{band.count !== 1 ? "s" : ""}
                       </span>
                     </div>
                     <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
                       <div
-                        className={`h-full rounded-full transition-all duration-500 ${isFull ? "bg-rose-500" : "bg-gradient-to-r from-brand-600 to-[#2a8a98]"}`}
-                        style={{ width: `${Math.min(percentage, 100)}%` }}
+                        className="h-full rounded-full bg-gradient-to-r from-brand-600 to-[#2a8a98] transition-all duration-500"
+                        style={{ width: `${band.count > 0 ? Math.max(percentage, 4) : 0}%` }}
                       />
                     </div>
                   </div>
@@ -379,7 +423,7 @@ export default async function AdminDashboard() {
                 <FontAwesomeIcon icon={faBuilding} className="w-6 h-6 text-brand-600" />
               </div>
               <div>
-                <p className="text-3xl font-bold text-gray-800">{rooms.filter((r) => r.status === "active").length}</p>
+                <p className="text-3xl font-bold text-gray-800">{activeRoomCount}</p>
                 <p className="text-sm text-gray-500 font-medium">Active Rooms</p>
               </div>
             </div>
@@ -426,6 +470,88 @@ export default async function AdminDashboard() {
             </div>
           </div>
         </Link>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200 overflow-hidden">
+          <div className="p-5 border-b border-gray-100 flex items-center gap-3">
+            <div className="w-9 h-9 bg-emerald-50 rounded-xl flex items-center justify-center">
+              <FontAwesomeIcon icon={faTrophy} className="w-4 h-4 text-emerald-600" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-gray-900">Top Performing Students</h3>
+              <p className="text-xs text-gray-500">Highest average score across submitted attempts</p>
+            </div>
+          </div>
+          {topPerformers.length === 0 ? (
+            <p className="text-sm text-gray-400 py-6 text-center">No submitted attempts yet</p>
+          ) : (
+            <div className="divide-y divide-gray-100">
+              {topPerformers.map((student, idx) => (
+                <Link
+                  key={student.id}
+                  href={`/admin/students/${student.id}`}
+                  className="flex items-center justify-between px-5 py-3.5 hover:bg-gray-50 transition-colors"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="w-4 text-center text-xs font-semibold text-gray-400">{idx + 1}</span>
+                    <Avatar name={student.name} src={student.picture_url} size="md" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-gray-800 truncate">{student.name}</p>
+                      <p className="text-xs text-gray-500">
+                        {student.count} quiz{student.count !== 1 ? "zes" : ""}
+                      </p>
+                    </div>
+                  </div>
+                  <span className="font-bold text-emerald-600">{student.average}%</span>
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200 overflow-hidden">
+          <div className="p-5 border-b border-gray-100 flex items-center gap-3">
+            <div className="w-9 h-9 bg-amber-50 rounded-xl flex items-center justify-center">
+              <FontAwesomeIcon icon={faArrowTrendDown} className="w-4 h-4 text-amber-600" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-gray-900">Students Needing Improvement</h3>
+              <p className="text-xs text-gray-500">Lowest average score across submitted attempts</p>
+            </div>
+          </div>
+          {needsImprovement.length === 0 ? (
+            <p className="text-sm text-gray-400 py-6 text-center">No submitted attempts yet</p>
+          ) : (
+            <div className="divide-y divide-gray-100">
+              {needsImprovement.map((student) => (
+                <Link
+                  key={student.id}
+                  href={`/admin/students/${student.id}`}
+                  className="flex items-center justify-between px-5 py-3.5 hover:bg-gray-50 transition-colors"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Avatar
+                      name={student.name}
+                      src={student.picture_url}
+                      size="md"
+                      tone={student.average < 75 ? "risk" : "brand"}
+                    />
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-gray-800 truncate">{student.name}</p>
+                      <p className="text-xs text-gray-500">
+                        {student.count} quiz{student.count !== 1 ? "zes" : ""}
+                      </p>
+                    </div>
+                  </div>
+                  <span className={`font-bold ${student.average < 75 ? "text-rose-600" : "text-gray-700"}`}>
+                    {student.average}%
+                  </span>
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {atRiskStudents.length > 0 && (
