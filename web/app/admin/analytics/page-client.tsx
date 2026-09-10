@@ -166,23 +166,113 @@ export default function AdminAnalyticsClient() {
                 </p>
               ) : (
                 <>
-                  <div className="h-40 flex items-end justify-between gap-2 sm:gap-3 px-2 pb-1">
-                    {trend.map((week) => (
-                      <div key={week.week_start} className="flex-1 flex flex-col items-center gap-1 group h-full justify-end">
-                        <div className="w-full relative flex flex-col justify-end flex-1">
-                          <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-brand-600 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 shadow-lg">
-                            {week.average_score}% · {week.attempts} attempt{week.attempts === 1 ? "" : "s"}
-                          </div>
-                          <div
-                            className="w-full bg-gradient-to-t from-brand-600 to-[#2a8a98] rounded-t-lg transition-all duration-500 hover:opacity-80"
-                            style={{ height: `${week.average_score}%` }}
-                          />
-                        </div>
-                        <span className="text-xs text-gray-500 font-medium shrink-0">
-                          {new Date(week.week_start).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-                        </span>
-                      </div>
-                    ))}
+                  <div className="h-[190px]">
+                    {(() => {
+                      // Score is always a 0–100 percentage, so the y-axis is a fixed
+                      // domain rather than scaled to the data's own min/max — that
+                      // keeps a 60% week from ever looking visually like an 80% week.
+                      const W = 760;
+                      const H = 190;
+                      const marginLeft = 34;
+                      const marginRight = 12;
+                      const marginTop = 22;
+                      const marginBottom = 28;
+                      const plotW = W - marginLeft - marginRight;
+                      const plotH = H - marginTop - marginBottom;
+                      const n = trend.length;
+                      const xScale = (i: number) => marginLeft + (n === 1 ? plotW / 2 : (i / (n - 1)) * plotW);
+                      const yScale = (v: number) => marginTop + (1 - v / 100) * plotH;
+                      const ticks = [0, 25, 50, 75, 100];
+                      const points = trend.map((week, i) => ({
+                        x: xScale(i),
+                        y: yScale(week.average_score),
+                        week,
+                      }));
+                      const linePath = points
+                        .map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(1)},${p.y.toFixed(1)}`)
+                        .join(" ");
+                      const baseline = marginTop + plotH;
+                      const areaPath =
+                        points.length > 1
+                          ? `${linePath} L${points[points.length - 1].x.toFixed(1)},${baseline} L${points[0].x.toFixed(1)},${baseline} Z`
+                          : "";
+                      const bandWidth = n > 1 ? plotW / (n - 1) : plotW;
+
+                      return (
+                        <svg
+                          viewBox={`0 0 ${W} ${H}`}
+                          className="w-full h-full"
+                          role="img"
+                          aria-label="Weekly average quiz score over the last 8 weeks"
+                        >
+                          <defs>
+                            <linearGradient id="weeklyTrendFill" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor="#1b6b7b" stopOpacity="0.18" />
+                              <stop offset="100%" stopColor="#1b6b7b" stopOpacity="0" />
+                            </linearGradient>
+                          </defs>
+
+                          {ticks.map((t) => {
+                            const ty = yScale(t);
+                            return (
+                              <g key={t}>
+                                <line x1={marginLeft} y1={ty} x2={marginLeft + plotW} y2={ty} stroke="#e5e7eb" strokeWidth="1" />
+                                <text x={marginLeft - 8} y={ty + 3} textAnchor="end" fontSize="10" fill="#9ca3af">
+                                  {t}
+                                </text>
+                              </g>
+                            );
+                          })}
+
+                          {areaPath && <path d={areaPath} fill="url(#weeklyTrendFill)" stroke="none" />}
+                          <path d={linePath} fill="none" stroke="#1b6b7b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+
+                          {points.map((p, i) => {
+                            const tooltipX = Math.min(Math.max(p.x - 55, marginLeft), W - marginRight - 110);
+                            const tooltipY = Math.max(p.y - 42, 2);
+                            return (
+                              <g key={p.week.week_start} className="group">
+                                <rect
+                                  x={p.x - bandWidth / 2}
+                                  y={marginTop}
+                                  width={bandWidth}
+                                  height={plotH}
+                                  fill="transparent"
+                                />
+                                <circle
+                                  cx={p.x}
+                                  cy={p.y}
+                                  r="4"
+                                  fill="#1b6b7b"
+                                  stroke="#ffffff"
+                                  strokeWidth="2"
+                                  className="transition-opacity group-hover:opacity-80"
+                                />
+                                {i === points.length - 1 && (
+                                  <text x={p.x} y={Math.max(p.y - 10, 12)} textAnchor="middle" fontSize="11" fontWeight="700" fill="#1b6b7b">
+                                    {p.week.average_score}%
+                                  </text>
+                                )}
+                                <text x={p.x} y={H - 6} textAnchor="middle" fontSize="10" fill="#6b7280">
+                                  {new Date(p.week.week_start).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                                </text>
+                                <foreignObject
+                                  x={tooltipX}
+                                  y={tooltipY}
+                                  width="110"
+                                  height="28"
+                                  className="pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity"
+                                >
+                                  <div className="bg-brand-600 text-white text-[11px] leading-tight px-2 py-1 rounded shadow-lg text-center whitespace-nowrap">
+                                    {p.week.average_score}% · {p.week.attempts} attempt{p.week.attempts === 1 ? "" : "s"}
+                                  </div>
+                                </foreignObject>
+                              </g>
+                            );
+                          })}
+                        </svg>
+                      );
+                    })()}
                   </div>
                   <div className="grid grid-cols-3 gap-4 mt-3 pt-3 border-t border-hairline">
                     <div>
