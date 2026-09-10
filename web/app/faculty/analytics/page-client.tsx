@@ -776,6 +776,7 @@ export default function FacultyAnalyticsClient() {
       icon: faChartBar,
       value: summary?.cohort.average_score != null ? `${summary.cohort.average_score}%` : "—",
       label: "Cohort Average Score",
+      tooltip: "Average quiz score across all of your students in the selected date range.",
       iconBg: "bg-blue-50",
       iconColor: "text-blue-600",
     },
@@ -783,6 +784,7 @@ export default function FacultyAnalyticsClient() {
       icon: faClipboardCheck,
       value: `${summary?.cohort.submitted_attempts ?? 0}`,
       label: "Submitted Quiz Attempts",
+      tooltip: "Total number of quiz attempts your students have submitted in the selected date range.",
       iconBg: "bg-green-50",
       iconColor: "text-green-600",
     },
@@ -790,6 +792,7 @@ export default function FacultyAnalyticsClient() {
       icon: faUsers,
       value: `${summary?.cohort.active_students_30d ?? 0}/${summary?.cohort.total_students ?? 0}`,
       label: "Active Students (in range)",
+      tooltip: "Students who had activity in the last 30 days, out of your total enrolled students.",
       iconBg: "bg-purple-50",
       iconColor: "text-purple-600",
     },
@@ -797,6 +800,7 @@ export default function FacultyAnalyticsClient() {
       icon: faExclamationTriangle,
       value: `${atRisk}`,
       label: "At-Risk Students",
+      tooltip: "Students flagged as at risk based on their assessment performance — not patient risk within simulation scenarios.",
       iconBg: "bg-amber-50",
       iconColor: "text-amber-600",
     },
@@ -948,6 +952,7 @@ export default function FacultyAnalyticsClient() {
               icon={<FontAwesomeIcon icon={card.icon} className="w-5 h-5" />}
               value={card.value}
               label={card.label}
+              tooltip={card.tooltip}
               iconBg={card.iconBg}
               iconColor={card.iconColor}
             />

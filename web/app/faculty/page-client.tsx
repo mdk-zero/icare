@@ -232,6 +232,7 @@ export default function FacultyDashboard() {
           value={total}
           label="Total Students"
           caption="Enrolled under you"
+          tooltip="Students enrolled under your sections."
         />
         <StatTile
           icon={<FontAwesomeIcon icon={faTriangleExclamation} className="w-5 h-5" />}
@@ -240,6 +241,7 @@ export default function FacultyDashboard() {
           value={atRisk}
           label="At-Risk Students"
           caption={total > 0 ? `${Math.round((atRisk / total) * 100)}% of total` : "No students yet"}
+          tooltip="Students flagged as at risk based on their assessment performance — not patient risk within simulation scenarios."
         />
         <StatTile
           icon={<FontAwesomeIcon icon={faBell} className="w-5 h-5" />}
@@ -248,6 +250,7 @@ export default function FacultyDashboard() {
           value={stats?.active_alerts ?? 0}
           label="Active Alerts"
           caption="Awaiting your review"
+          tooltip="Notifications about your students that need your attention, such as missed tasks or performance drops."
         />
         <StatTile
           icon={<FontAwesomeIcon icon={faCheckCircle} className="w-5 h-5" />}
@@ -256,6 +259,7 @@ export default function FacultyDashboard() {
           value={stats?.active_scenarios ?? 0}
           label="Active Scenarios"
           caption="Currently in progress"
+          tooltip="Simulation scenarios your students currently have in progress."
         />
       </div>
 
