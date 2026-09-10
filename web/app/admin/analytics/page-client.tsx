@@ -156,9 +156,9 @@ export default function AdminAnalyticsClient() {
             ))}
           </div>
 
-          {/* Second row: Quiz Performance (spans 2 cols on lg) + Room Utilization */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-            <div className="lg:col-span-2 bg-surface p-6 rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] flex flex-col h-full">
+          {/* Second row: Weekly Quiz Performance */}
+          <div className="mb-8">
+            <div className="bg-surface p-6 rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)]">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Weekly Quiz Performance</h3>
               {trend.length === 0 ? (
                 <p className="text-gray-400 text-sm py-12 text-center">
@@ -166,7 +166,7 @@ export default function AdminAnalyticsClient() {
                 </p>
               ) : (
                 <>
-                  <div className="flex-1 min-h-0 flex items-end justify-between gap-2 sm:gap-3 px-2 pb-1">
+                  <div className="h-40 flex items-end justify-between gap-2 sm:gap-3 px-2 pb-1">
                     {trend.map((week) => (
                       <div key={week.week_start} className="flex-1 flex flex-col items-center gap-1 group h-full justify-end">
                         <div className="w-full relative flex flex-col justify-end flex-1">
@@ -247,61 +247,9 @@ export default function AdminAnalyticsClient() {
                     </div>
                   </div>
 
-                </>
-              )}
-            </div>
-
-            <div className="bg-surface p-6 rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] flex flex-col">
-              <h3 className="text-lg font-semibold text-gray-900 mb-6">Room Utilization</h3>
-              {(summary?.room_utilization ?? []).length === 0 ? (
-                <p className="text-gray-400 text-sm py-12 text-center">No rooms configured yet.</p>
-              ) : (
-                <div className="space-y-4 flex-1">
-                  {summary!.room_utilization.map((room) => (
-                    <div
-                      key={room.room_number}
-                      className="flex items-center gap-4 p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors"
-                    >
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm font-medium text-gray-800 truncate">
-                            {room.name}
-                          </span>
-                          <span
-                            className={`text-xs font-medium px-2 py-0.5 rounded-full shrink-0 ${
-                              room.status === "active"
-                                ? "bg-green-100 text-green-700"
-                                : room.status === "maintenance"
-                                  ? "bg-amber-100 text-amber-700"
-                                  : "bg-gray-200 text-gray-500"
-                            }`}
-                          >
-                            {room.status}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-gradient-to-r from-brand-600 to-[#2a8a98] rounded-full"
-                              style={{ width: `${Math.min(room.utilization_pct, 100)}%` }}
-                            />
-                          </div>
-                          <span className="text-sm font-bold text-gray-800 w-10 shrink-0">
-                            {room.utilization_pct}%
-                          </span>
-                        </div>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <p className="text-xs text-gray-500">
-                          {room.assigned}/{room.capacity}
-                        </p>
-                        <p className="text-xs text-gray-400">students</p>
-                      </div>
-                    </div>
-                  ))}
-                  {/* Risk Summary at bottom of Room Utilization card */}
+                  {/* Risk Summary (moved out of the removed Room Utilization card) */}
                   {(summary?.risk_distribution?.at_risk ?? 0) > 0 && (
-                    <div className="mt-auto pt-4 border-t border-hairline">
+                    <div className="mt-4 pt-4 border-t border-hairline">
                       <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Risk Summary</h4>
                       <div className="flex items-center gap-3">
                         <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden">
@@ -339,7 +287,7 @@ export default function AdminAnalyticsClient() {
                       </div>
                     </div>
                   )}
-                </div>
+                </>
               )}
             </div>
           </div>
