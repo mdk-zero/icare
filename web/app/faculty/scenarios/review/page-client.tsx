@@ -8,6 +8,8 @@ import {
   faChevronLeft,
   faClipboardCheck,
   faClipboardList,
+  faMagnifyingGlass,
+  faUserGraduate,
 } from "@fortawesome/free-solid-svg-icons";
 import {
   ScenarioAssignment,
@@ -18,14 +20,17 @@ import {
   finalizeScenarioAssignment,
 } from "../../../lib/api";
 import { toast } from "../../../components/Toast";
+import Avatar from "../../../components/Avatar";
 
 type Filter = "awaiting" | "in_progress" | "completed" | "all";
 
-const FILTERS: { key: Filter; label: string }[] = [
-  { key: "awaiting", label: "Awaiting review" },
-  { key: "in_progress", label: "In progress" },
-  { key: "completed", label: "Finalized" },
-  { key: "all", label: "All" },
+/** `shortLabel` keeps all four tabs on one line in the 350px queue column;
+ * `label` (the full phrase) still shows as the button's tooltip. */
+const FILTERS: { key: Filter; label: string; shortLabel?: string }[] = [
+  { key: "awaiting", label: "Awaiting review", shortLabel: "Awaiting" },
+  { key: "in_progress", label: "In progress", shortLabel: "Ongoing" },
+  { key: "completed", label: "Finalized", shortLabel: "Finalized" },
+  { key: "all", label: "All", shortLabel: "All" },
 ];
 
 function categoryChip(category: string) {
@@ -88,6 +93,9 @@ export default function FacultyScenarioReviewClient() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<Filter>("awaiting");
 
+  const [studentQuery, setStudentQuery] = useState("");
+  const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
+
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [tasks, setTasks] = useState<FacultyScenarioTask[]>([]);
   const [tasksLoading, setTasksLoading] = useState(false);
@@ -120,14 +128,59 @@ export default function FacultyScenarioReviewClient() {
   const selected = assignments.find((a) => a.id === selectedId) ?? null;
   const finalized = selected?.status === "completed";
 
+  /** One row per student, so the queue can be searched/picked before any
+   * submissions are shown — grouping happens client-side since the API
+   * still returns a flat list of assignments. */
+  const studentGroups = useMemo(() => {
+    const byStudent = new Map<
+      string,
+      { student_id: string; student_name: string; assignments: ScenarioAssignment[] }
+    >();
+    for (const a of assignments) {
+      const entry = byStudent.get(a.student_id);
+      if (entry) entry.assignments.push(a);
+      else byStudent.set(a.student_id, { student_id: a.student_id, student_name: a.student_name, assignments: [a] });
+    }
+    return Array.from(byStudent.values())
+      .map((g) => ({
+        ...g,
+        awaiting: g.assignments.filter(isAwaiting).length,
+        inProgress: g.assignments.filter((a) => a.status !== "completed" && !a.submitted_at).length,
+        completed: g.assignments.filter((a) => a.status === "completed").length,
+      }))
+      .sort((a, b) => b.awaiting - a.awaiting || a.student_name.localeCompare(b.student_name));
+  }, [assignments]);
+
+  const filteredStudentGroups = useMemo(() => {
+    const q = studentQuery.trim().toLowerCase();
+    if (!q) return studentGroups;
+    return studentGroups.filter((g) => g.student_name.toLowerCase().includes(q));
+  }, [studentGroups, studentQuery]);
+
+  const selectedStudent = studentGroups.find((g) => g.student_id === selectedStudentId) ?? null;
+
+  const selectStudent = (studentId: string) => {
+    setSelectedStudentId(studentId);
+    setFilter("awaiting");
+    setSelectedId(null);
+    setTasks([]);
+  };
+
+  const backToStudents = () => {
+    setSelectedStudentId(null);
+    setSelectedId(null);
+    setTasks([]);
+  };
+
   const visible = useMemo(() => {
     return assignments.filter((a) => {
+      if (a.student_id !== selectedStudentId) return false;
       if (filter === "awaiting") return isAwaiting(a);
       if (filter === "in_progress") return a.status !== "completed" && !a.submitted_at;
       if (filter === "completed") return a.status === "completed";
       return true;
     });
-  }, [assignments, filter]);
+  }, [assignments, filter, selectedStudentId]);
 
   const totalPoints = tasks.reduce((sum, t) => sum + t.points, 0);
   const earnedPoints = tasks.filter((t) => t.is_completed).reduce((sum, t) => sum + t.points, 0);
@@ -181,7 +234,7 @@ export default function FacultyScenarioReviewClient() {
       />
 
       {/* Header */}
-      <header className="sticky top-0 z-20 border-b border-hairline bg-surface/85 backdrop-blur-md">
+      <header className="sticky -top-3 z-20 border-b border-hairline bg-surface lg:-top-5">
         <div className="flex items-center gap-3.5 px-4 py-3.5 sm:px-6">
           <button
             onClick={() => router.push("/faculty/scenarios")}
@@ -209,83 +262,157 @@ export default function FacultyScenarioReviewClient() {
         </div>
       </header>
 
-      <main className="grid gap-5 px-4 py-5 sm:px-6 lg:grid-cols-[350px_minmax(0,1fr)] lg:py-8">
+      <main className="grid grid-cols-1 gap-5 px-4 py-5 sm:px-6 lg:grid-cols-[350px_minmax(0,1fr)] lg:py-8">
         {/* Queue */}
         <div className="lg:sticky lg:top-[84px] lg:self-start">
-          <div className="mb-3 flex flex-wrap gap-1.5">
-            {FILTERS.map((f) => {
-              const active = filter === f.key;
-              return (
-                <button
-                  key={f.key}
-                  onClick={() => setFilter(f.key)}
-                  className={`rounded-full px-3 py-1.5 text-sm font-medium transition-all ${
-                    active
-                      ? "bg-brand-600 text-white shadow-tile"
-                      : "border border-hairline bg-surface text-foreground/60 hover:border-brand-500/40 hover:text-foreground"
-                  }`}
-                >
-                  {f.label}
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="space-y-2">
-            {loading &&
-              [0, 1, 2, 3].map((i) => (
-                <div
-                  key={i}
-                  className="h-[70px] animate-pulse rounded-2xl border border-hairline bg-subtle"
+          {!selectedStudentId ? (
+            <>
+              {/* Step 1: find the student before any submission ever renders */}
+              <div className="relative mb-3">
+                <FontAwesomeIcon
+                  icon={faMagnifyingGlass}
+                  className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-foreground/35"
                 />
-              ))}
-
-            {!loading && visible.length === 0 && (
-              <div className="rounded-2xl border border-dashed border-hairline bg-surface px-4 py-10 text-center">
-                <div className="mx-auto mb-3 grid h-11 w-11 place-items-center rounded-full bg-subtle text-foreground/40">
-                  <FontAwesomeIcon icon={faCheck} className="h-5 w-5" />
-                </div>
-                <p className="text-sm font-medium text-foreground/70">All clear</p>
-                <p className="mt-0.5 text-xs text-foreground/45">Nothing in this view right now.</p>
+                <input
+                  value={studentQuery}
+                  onChange={(e) => setStudentQuery(e.target.value)}
+                  placeholder="Search a student…"
+                  className="w-full rounded-2xl border border-hairline bg-surface py-2.5 pl-10 pr-3.5 text-sm text-foreground placeholder:text-foreground/35 shadow-tile outline-none transition-colors focus:border-brand-500/60"
+                />
               </div>
-            )}
 
-            {!loading &&
-              visible.map((a, i) => {
-                const active = selectedId === a.id;
-                return (
-                  <button
-                    key={a.id}
-                    onClick={() => selectAssignment(a.id)}
-                    style={{ animationDelay: `${Math.min(i, 8) * 35}ms` }}
-                    className={`w-full animate-rise rounded-2xl border p-4 text-left transition-all ${
-                      active
-                        ? "border-brand-500/60 bg-brand-500/[0.06] shadow-tile"
-                        : "border-hairline bg-surface hover:border-brand-500/40 hover:shadow-tile"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="truncate font-semibold text-foreground">{a.student_name}</p>
-                      {a.status === "completed" ? (
-                        <span className="shrink-0 rounded-full bg-emerald-500/12 px-2 py-0.5 text-xs font-semibold tabular-nums text-emerald-600 dark:text-emerald-300">
-                          {a.score ?? 0}%
-                        </span>
-                      ) : isAwaiting(a) ? (
-                        <span className="flex shrink-0 items-center gap-1 rounded-full bg-brand-500/12 px-2 py-0.5 text-xs font-semibold text-brand-700 dark:text-brand-300">
-                          <span className="h-1.5 w-1.5 rounded-full bg-brand-500" />
-                          Awaiting
-                        </span>
-                      ) : (
-                        <span className="shrink-0 rounded-full bg-foreground/8 px-2 py-0.5 text-xs font-medium capitalize text-foreground/55">
-                          {a.status.replace("_", " ")}
-                        </span>
-                      )}
+              <div className="space-y-2">
+                {loading &&
+                  [0, 1, 2, 3].map((i) => (
+                    <div
+                      key={i}
+                      className="h-[72px] animate-pulse rounded-2xl border border-hairline bg-subtle"
+                    />
+                  ))}
+
+                {!loading && filteredStudentGroups.length === 0 && (
+                  <div className="rounded-2xl border border-dashed border-hairline bg-surface px-4 py-10 text-center">
+                    <div className="mx-auto mb-3 grid h-11 w-11 place-items-center rounded-full bg-subtle text-foreground/40">
+                      <FontAwesomeIcon icon={faUserGraduate} className="h-5 w-5" />
                     </div>
-                    <p className="mt-1 truncate text-sm text-foreground/55">{a.scenario_title}</p>
-                  </button>
-                );
-              })}
-          </div>
+                    <p className="text-sm font-medium text-foreground/70">No students found</p>
+                    <p className="mt-0.5 text-xs text-foreground/45">Try a different name.</p>
+                  </div>
+                )}
+
+                {!loading &&
+                  filteredStudentGroups.map((g, i) => (
+                    <button
+                      key={g.student_id}
+                      onClick={() => selectStudent(g.student_id)}
+                      style={{ animationDelay: `${Math.min(i, 8) * 35}ms` }}
+                      className="w-full animate-rise rounded-2xl border border-hairline bg-surface p-3.5 text-left transition-all hover:border-brand-500/40 hover:shadow-tile"
+                    >
+                      <div className="flex items-center gap-3">
+                        <Avatar name={g.student_name} size="md" tone="solid" />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-semibold text-foreground">{g.student_name}</p>
+                          <p className="truncate text-xs text-foreground/50">
+                            {g.assignments.length} submission{g.assignments.length === 1 ? "" : "s"}
+                          </p>
+                        </div>
+                        {g.awaiting > 0 && (
+                          <span className="flex shrink-0 items-center gap-1 rounded-full bg-brand-500/12 px-2 py-0.5 text-xs font-semibold text-brand-700 dark:text-brand-300">
+                            <span className="h-1.5 w-1.5 rounded-full bg-brand-500" />
+                            {g.awaiting}
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  ))}
+              </div>
+            </>
+          ) : (
+            <>
+              {/* Step 2: filters + submissions, scoped to the chosen student */}
+              <button
+                onClick={backToStudents}
+                className="mb-3 flex w-full items-center gap-2.5 rounded-2xl border border-hairline bg-surface p-3 text-left transition-colors hover:border-brand-500/40"
+              >
+                <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-foreground/50">
+                  <FontAwesomeIcon icon={faChevronLeft} className="h-3.5 w-3.5" />
+                </span>
+                <Avatar name={selectedStudent?.student_name} size="sm" tone="solid" />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-semibold text-foreground">
+                    {selectedStudent?.student_name}
+                  </span>
+                  <span className="block text-xs text-foreground/45">Change student</span>
+                </span>
+              </button>
+
+              <div className="mb-3 flex gap-1.5">
+                {FILTERS.map((f) => {
+                  const active = filter === f.key;
+                  return (
+                    <button
+                      key={f.key}
+                      onClick={() => setFilter(f.key)}
+                      title={f.label}
+                      className={`min-w-0 flex-1 truncate rounded-full px-2.5 py-1.5 text-xs font-medium transition-all ${
+                        active
+                          ? "bg-brand-600 text-white shadow-tile"
+                          : "border border-hairline bg-surface text-foreground/60 hover:border-brand-500/40 hover:text-foreground"
+                      }`}
+                    >
+                      {f.shortLabel ?? f.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="space-y-2">
+                {!loading && visible.length === 0 && (
+                  <div className="rounded-2xl border border-dashed border-hairline bg-surface px-4 py-10 text-center">
+                    <div className="mx-auto mb-3 grid h-11 w-11 place-items-center rounded-full bg-subtle text-foreground/40">
+                      <FontAwesomeIcon icon={faCheck} className="h-5 w-5" />
+                    </div>
+                    <p className="text-sm font-medium text-foreground/70">All clear</p>
+                    <p className="mt-0.5 text-xs text-foreground/45">Nothing in this view right now.</p>
+                  </div>
+                )}
+
+                {visible.map((a, i) => {
+                  const active = selectedId === a.id;
+                  return (
+                    <button
+                      key={a.id}
+                      onClick={() => selectAssignment(a.id)}
+                      style={{ animationDelay: `${Math.min(i, 8) * 35}ms` }}
+                      className={`w-full animate-rise rounded-2xl border p-4 text-left transition-all ${
+                        active
+                          ? "border-brand-500/60 bg-brand-500/[0.06] shadow-tile"
+                          : "border-hairline bg-surface hover:border-brand-500/40 hover:shadow-tile"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="min-w-0 truncate font-semibold text-foreground">{a.scenario_title}</p>
+                        {a.status === "completed" ? (
+                          <span className="shrink-0 rounded-full bg-emerald-500/12 px-2 py-0.5 text-xs font-semibold tabular-nums text-emerald-600 dark:text-emerald-300">
+                            {a.score ?? 0}%
+                          </span>
+                        ) : isAwaiting(a) ? (
+                          <span className="flex shrink-0 items-center gap-1 rounded-full bg-brand-500/12 px-2 py-0.5 text-xs font-semibold text-brand-700 dark:text-brand-300">
+                            <span className="h-1.5 w-1.5 rounded-full bg-brand-500" />
+                            Awaiting
+                          </span>
+                        ) : (
+                          <span className="shrink-0 rounded-full bg-foreground/8 px-2 py-0.5 text-xs font-medium capitalize text-foreground/55">
+                            {a.status.replace("_", " ")}
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
         </div>
 
         {/* Detail */}
@@ -293,13 +420,15 @@ export default function FacultyScenarioReviewClient() {
           {!selected ? (
             <div className="flex min-h-[360px] flex-col items-center justify-center rounded-3xl border border-dashed border-hairline bg-surface/60 px-6 py-16 text-center">
               <div className="mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-brand-500/10 text-brand-600 dark:text-brand-300">
-                <FontAwesomeIcon icon={faClipboardList} className="h-7 w-7" />
+                <FontAwesomeIcon icon={selectedStudentId ? faClipboardList : faUserGraduate} className="h-7 w-7" />
               </div>
               <p className="font-display text-lg font-semibold text-foreground">
-                Pick a submission
+                {selectedStudentId ? "Pick a submission" : "Find a student"}
               </p>
               <p className="mt-1 max-w-xs text-sm text-foreground/50">
-                Choose a student from the queue to verify their hands-on tasks and lock in a score.
+                {selectedStudentId
+                  ? "Choose a submission from the queue to verify their hands-on tasks and lock in a score."
+                  : "Search or select a student to see their submissions awaiting review."}
               </p>
             </div>
           ) : (
