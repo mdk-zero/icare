@@ -1,5 +1,6 @@
 "use client";
 
+import { apiFetch } from "@/app/lib/api";
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -38,8 +39,8 @@ export default function AssignSectionsClient() {
 
   const loadData = useCallback(async () => {
     const [facultyRes, sectionsRes] = await Promise.all([
-      fetch("/api/admin/faculty", { credentials: "include" }),
-      fetch("/api/sections", { credentials: "include" }),
+      apiFetch("/api/admin/faculty", { credentials: "include" }),
+      apiFetch("/api/sections", { credentials: "include" }),
     ]);
     let loaded: Faculty[] = [];
     if (facultyRes.ok) {
@@ -86,7 +87,7 @@ export default function AssignSectionsClient() {
     const name = newSectionName.trim();
     if (!name) return;
     setBusy(true);
-    const res = await fetch("/api/admin/sections", {
+    const res = await apiFetch("/api/admin/sections", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
@@ -114,7 +115,7 @@ export default function AssignSectionsClient() {
         : ".");
     if (!window.confirm(warning)) return;
     setBusy(true);
-    const res = await fetch(`/api/admin/sections/${section.id}`, {
+    const res = await apiFetch(`/api/admin/sections/${section.id}`, {
       method: "DELETE",
       credentials: "include",
     });
@@ -135,7 +136,7 @@ export default function AssignSectionsClient() {
   const handleSave = async () => {
     if (!selectedFaculty) return;
     setBusy(true);
-    const res = await fetch(`/api/admin/faculty/${selectedFaculty.id}/sections`, {
+    const res = await apiFetch(`/api/admin/faculty/${selectedFaculty.id}/sections`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       credentials: "include",

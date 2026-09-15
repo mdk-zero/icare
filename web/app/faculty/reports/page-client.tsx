@@ -21,6 +21,7 @@ import {
   fetchFacultyStudents,
   fetchFacultySections,
   fetchFacultyScenarios,
+  apiFetch,
 } from "../../lib/api";
 import { SkeletonTable } from "../../components/skeletons";
 import PageHeader from "../../components/PageHeader";
@@ -120,7 +121,7 @@ export default function FacultyReportsClient() {
           })),
         );
       } else if (type === "assessment") {
-        const res = await fetch("/api/faculty/assessments", { credentials: "include" });
+        const res = await apiFetch("/api/faculty/assessments", { credentials: "include" });
         const json = (await res.json()) as {
           assessments?: { id: string; title: string; difficulty: string; is_published: boolean }[];
         };
@@ -161,7 +162,7 @@ export default function FacultyReportsClient() {
     try {
       const query = new URLSearchParams({ format });
       if (target) query.set("id", target.id);
-      const res = await fetch(`/api/faculty/reports/${kind}?${query}`, { credentials: "include" });
+      const res = await apiFetch(`/api/faculty/reports/${kind}?${query}`, { credentials: "include" });
 
       if (!res.ok) {
         const json = (await res.json().catch(() => ({}))) as { error?: string };

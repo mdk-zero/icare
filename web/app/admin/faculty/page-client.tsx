@@ -1,5 +1,6 @@
 "use client";
 
+import { apiFetch } from "@/app/lib/api";
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -58,8 +59,8 @@ export default function FacultyClient() {
 
   const loadData = useCallback(async () => {
     const [facultyRes, sectionsRes] = await Promise.all([
-      fetch("/api/admin/faculty", { credentials: "include" }),
-      fetch("/api/sections", { credentials: "include" }),
+      apiFetch("/api/admin/faculty", { credentials: "include" }),
+      apiFetch("/api/sections", { credentials: "include" }),
     ]);
     if (facultyRes.ok) {
       const json = (await facultyRes.json()) as { faculty: Faculty[] };
@@ -81,7 +82,7 @@ export default function FacultyClient() {
       return;
     }
     setBusy(true);
-    const res = await fetch("/api/admin/users", {
+    const res = await apiFetch("/api/admin/users", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
@@ -118,7 +119,7 @@ export default function FacultyClient() {
   const handleSaveAssignments = async () => {
     if (!selectedFaculty) return;
     setBusy(true);
-    const res = await fetch(`/api/admin/faculty/${selectedFaculty.id}/sections`, {
+    const res = await apiFetch(`/api/admin/faculty/${selectedFaculty.id}/sections`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       credentials: "include",

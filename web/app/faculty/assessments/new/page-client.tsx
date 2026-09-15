@@ -6,7 +6,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faSpinner,
 } from "@fortawesome/free-solid-svg-icons";
-import { fetchSections, type Section } from "../../../lib/api";
+import { fetchSections, type Section, apiFetch } from "../../../lib/api";
 import { toast } from "../../../components/Toast";
 
 const inputClassName =
@@ -56,7 +56,7 @@ export default function AssessmentNewClient() {
     setError(null);
 
     try {
-      const res = await fetch("/api/faculty/assessments", {
+      const res = await apiFetch("/api/faculty/assessments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",

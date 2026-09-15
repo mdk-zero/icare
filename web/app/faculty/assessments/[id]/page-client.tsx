@@ -21,7 +21,7 @@ import {
 import { SkeletonQuestionCard } from "../../../components/skeletons";
 import { toast } from "../../../components/Toast";
 import ConfirmModal from "../../../components/ConfirmModal";
-import { fetchSections, type Section } from "../../../lib/api";
+import { fetchSections, type Section, apiFetch } from "../../../lib/api";
 
 const inputClassName =
   "w-full px-4 py-3 bg-surface border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 focus:bg-surface transition-all text-sm shadow-sm";
@@ -232,7 +232,7 @@ export default function AssessmentQuestionsClient({
     const maxAttempts = detailForm.max_attempts ? Number(detailForm.max_attempts) : null;
 
     setSavingDetails(true);
-    const res = await fetch(`/api/faculty/assessments/${assessmentId}`, {
+    const res = await apiFetch(`/api/faculty/assessments/${assessmentId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
@@ -278,13 +278,13 @@ export default function AssessmentQuestionsClient({
     setLoading(true);
     try {
       const [assessRes, criteriaRes, compRes] = await Promise.all([
-        fetch(`/api/faculty/assessments/${assessmentId}`, {
+        apiFetch(`/api/faculty/assessments/${assessmentId}`, {
           credentials: "include",
         }),
-        fetch(`/api/faculty/assessments/${assessmentId}/criteria`, {
+        apiFetch(`/api/faculty/assessments/${assessmentId}/criteria`, {
           credentials: "include",
         }),
-        fetch("/api/competencies", { credentials: "include" }),
+        apiFetch("/api/competencies", { credentials: "include" }),
       ]);
 
       if (assessRes.ok) {
@@ -366,7 +366,7 @@ export default function AssessmentQuestionsClient({
    */
   const refreshBlockers = useCallback(async () => {
     try {
-      const res = await fetch(`/api/faculty/assessments/${assessmentId}`, {
+      const res = await apiFetch(`/api/faculty/assessments/${assessmentId}`, {
         credentials: "include",
       });
       if (!res.ok) return;
@@ -457,13 +457,13 @@ export default function AssessmentQuestionsClient({
 
     const isNew = qId.startsWith("new_");
     const res = isNew
-      ? await fetch(`/api/faculty/assessments/${assessmentId}/questions`, {
+      ? await apiFetch(`/api/faculty/assessments/${assessmentId}/questions`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
           body: JSON.stringify(payload),
         })
-      : await fetch(`/api/faculty/questions/${qId}`, {
+      : await apiFetch(`/api/faculty/questions/${qId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
@@ -521,7 +521,7 @@ export default function AssessmentQuestionsClient({
       message: "Delete this question permanently? This can't be undone.",
       action: async () => {
         setConfirmAction((prev) => prev ? { ...prev, loading: true, error: null } : null);
-        const res = await fetch(`/api/faculty/questions/${qId}`, {
+        const res = await apiFetch(`/api/faculty/questions/${qId}`, {
           method: "DELETE",
           credentials: "include",
         });
@@ -798,7 +798,7 @@ export default function AssessmentQuestionsClient({
       toast("Weight must be between 1 and 100");
       return;
     }
-    const res = await fetch(`/api/faculty/assessments/${assessmentId}/criteria`, {
+    const res = await apiFetch(`/api/faculty/assessments/${assessmentId}/criteria`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
@@ -830,7 +830,7 @@ export default function AssessmentQuestionsClient({
     setCriteria((prev) =>
       prev.map((c) => (c.id === id ? { ...c, min_questions: value } : c)),
     );
-    const res = await fetch(`/api/faculty/assessment-criteria/${id}`, {
+    const res = await apiFetch(`/api/faculty/assessment-criteria/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
@@ -859,7 +859,7 @@ export default function AssessmentQuestionsClient({
           : "Remove this criteria permanently? This can't be undone.",
       action: async () => {
         setConfirmAction((prev) => prev ? { ...prev, loading: true, error: null } : null);
-        const res = await fetch(`/api/faculty/assessment-criteria/${id}`, {
+        const res = await apiFetch(`/api/faculty/assessment-criteria/${id}`, {
           method: "DELETE",
           credentials: "include",
         });

@@ -1,5 +1,6 @@
 "use client";
 
+import { apiFetch } from "@/app/lib/api";
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
@@ -85,7 +86,7 @@ export default function AdminReportsClient() {
     setError(null);
     try {
       if (type === "faculty") {
-        const res = await fetch("/api/admin/faculty", { credentials: "include" });
+        const res = await apiFetch("/api/admin/faculty", { credentials: "include" });
         const json = (await res.json()) as {
           faculty?: { id: string; name: string; email: string; sections: { id: string; name: string }[]; student_count: number }[];
         };
@@ -97,7 +98,7 @@ export default function AdminReportsClient() {
           })),
         );
       } else if (type === "rooms") {
-        const res = await fetch("/api/admin/rooms", { credentials: "include" });
+        const res = await apiFetch("/api/admin/rooms", { credentials: "include" });
         const json = (await res.json()) as {
           rooms?: { id: string; name: string; room_number: string; capacity: number; status: string; students_assigned: number }[];
         };
@@ -109,7 +110,7 @@ export default function AdminReportsClient() {
           })),
         );
       } else if (type === "users") {
-        const res = await fetch("/api/admin/users?role=all", { credentials: "include" });
+        const res = await apiFetch("/api/admin/users?role=all", { credentials: "include" });
         const json = (await res.json()) as {
           users?: { id: string; name: string; email: string; role: string }[];
         };
@@ -147,7 +148,7 @@ export default function AdminReportsClient() {
     try {
       const query = new URLSearchParams({ format });
       if (target) query.set("id", target.id);
-      const res = await fetch(`/api/admin/reports/${kind}?${query}`, { credentials: "include" });
+      const res = await apiFetch(`/api/admin/reports/${kind}?${query}`, { credentials: "include" });
 
       if (!res.ok) {
         const json = (await res.json().catch(() => ({}))) as { error?: string };

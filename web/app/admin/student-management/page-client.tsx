@@ -22,7 +22,7 @@ import {
 import PageHeader from "../../components/PageHeader";
 import StatTile from "../../components/StatTile";
 import ConfirmModal from "../../components/ConfirmModal";
-import { fetchSections, Section } from "../../lib/api";
+import { fetchSections, Section, apiFetch } from "../../lib/api";
 import Avatar from "../../components/Avatar";
 
 interface StudentPerformance {
@@ -569,7 +569,7 @@ function DeleteSectionModal({
 
   useEffect(() => {
     // The blast radius lives in the database, so it can only arrive after mount.
-    void fetch(`/api/admin/sections/${section.id}`, { credentials: "include" })
+    void apiFetch(`/api/admin/sections/${section.id}`, { credentials: "include" })
       .then((res) => (res.ok ? (res.json() as Promise<SectionImpact>) : null))
       .then((json) => {
         if (json) setImpact(json);
@@ -579,7 +579,7 @@ function DeleteSectionModal({
   const handleDelete = async () => {
     setDeleting(true);
     setError(null);
-    const res = await fetch(`/api/admin/sections/${section.id}`, {
+    const res = await apiFetch(`/api/admin/sections/${section.id}`, {
       method: "DELETE",
       credentials: "include",
     });
@@ -737,7 +737,7 @@ export default function StudentManagementClient() {
 
   const loadStudents = useCallback(async () => {
     setLoading(true);
-    const res = await fetch("/api/admin/students", { credentials: "include" });
+    const res = await apiFetch("/api/admin/students", { credentials: "include" });
     if (res.ok) {
       const json = (await res.json()) as { students: StudentPerformance[] };
       setStudents(json.students ?? []);
@@ -771,7 +771,7 @@ export default function StudentManagementClient() {
   /** Provisions one account into a section; returns an error message or null. */
   const handleEnroll = useCallback(
     async (name: string, email: string, sectionId: string): Promise<EnrollOutcome> => {
-      const res = await fetch("/api/admin/users", {
+      const res = await apiFetch("/api/admin/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -866,7 +866,7 @@ export default function StudentManagementClient() {
   const handleBatchDelete = async () => {
     setBatchDeleting(true);
     setBatchDeleteError(null);
-    const res = await fetch("/api/admin/students", {
+    const res = await apiFetch("/api/admin/students", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       credentials: "include",

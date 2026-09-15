@@ -11,6 +11,7 @@ import {
   fetchCompetencyScores,
   type RiskPrediction,
   type ScenarioPerformance,
+  apiFetch,
 } from "../../../lib/api";
 import Avatar from "../../../components/Avatar";
 
@@ -68,7 +69,7 @@ export default function StudentDetailClient() {
     if (!studentId) return;
     const load = async () => {
       const [detailRes, pred, scenarios, areas, scores] = await Promise.all([
-        fetch(`/api/admin/students/${studentId}`, { credentials: "include" }),
+        apiFetch(`/api/admin/students/${studentId}`, { credentials: "include" }),
         fetchLatestPrediction(studentId),
         fetchStudentScenarioHistory(studentId),
         fetchCompetencyAreas(),

@@ -1,5 +1,6 @@
 "use client";
 
+import { apiFetch } from "@/app/lib/api";
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -107,7 +108,7 @@ export default function AssessmentResultsClient({ assessmentId }: { assessmentId
 
   const load = useCallback(async () => {
     setLoading(true);
-    const res = await fetch(`/api/faculty/assessments/${assessmentId}/results`, {
+    const res = await apiFetch(`/api/faculty/assessments/${assessmentId}/results`, {
       credentials: "include",
     });
     const json = (await res.json()) as {

@@ -1,5 +1,6 @@
 "use client";
 
+import { apiFetch } from "@/app/lib/api";
 import { useState, useEffect, useCallback } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faUsers, faPlus, faPencil, faTrash } from "@fortawesome/free-solid-svg-icons";
@@ -48,7 +49,7 @@ export default function UsersClient() {
   };
 
   const loadUsers = useCallback(async () => {
-    const res = await fetch("/api/admin/users", { credentials: "include" });
+    const res = await apiFetch("/api/admin/users", { credentials: "include" });
     if (res.ok) {
       const json = (await res.json()) as { users: UserAccount[] };
       setUsers(json.users ?? []);
@@ -65,7 +66,7 @@ export default function UsersClient() {
       return;
     }
     setBusy(true);
-    const res = await fetch("/api/admin/users", {
+    const res = await apiFetch("/api/admin/users", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
@@ -94,7 +95,7 @@ export default function UsersClient() {
   const handleSaveEdit = async () => {
     if (!editingUser) return;
     setBusy(true);
-    const res = await fetch(`/api/admin/users/${editingUser.id}`, {
+    const res = await apiFetch(`/api/admin/users/${editingUser.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
@@ -114,7 +115,7 @@ export default function UsersClient() {
   const handleDeleteUser = async (user: UserAccount) => {
     if (!window.confirm(`Delete ${user.name} (${user.email})? This cannot be undone.`)) return;
     setBusy(true);
-    const res = await fetch(`/api/admin/users/${user.id}`, {
+    const res = await apiFetch(`/api/admin/users/${user.id}`, {
       method: "DELETE",
       credentials: "include",
     });

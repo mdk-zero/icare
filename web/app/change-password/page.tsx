@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faLock, faCircleExclamation, faCircleNotch } from "@fortawesome/free-solid-svg-icons";
-import { getCurrentUser, refreshCurrentUser, User } from "../lib/api";
+import { getCurrentUser, refreshCurrentUser, User, apiFetch } from "../lib/api";
 
 function useAuthUser(): User | null {
   const [user] = useState<User | null>(() => {
@@ -51,7 +51,7 @@ export default function ChangePasswordPage() {
     setIsSubmitting(true);
 
     try {
-      const res = await fetch("/api/users/change-password", {
+      const res = await apiFetch("/api/users/change-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ newPassword: password }),

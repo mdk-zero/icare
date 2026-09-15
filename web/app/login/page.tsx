@@ -17,7 +17,7 @@ import {
   faChartColumn,
   faHeart,
 } from "@fortawesome/free-solid-svg-icons";
-import { login, isAuthenticated, getCurrentUser, User, logAuditAction } from "../lib/api";
+import { login, isAuthenticated, refreshCurrentUser, User, logAuditAction } from "../lib/api";
 import logo_white from "../../public/logo-white-no-bg.png";
 
 export default function LoginPage() {
@@ -44,6 +44,16 @@ export default function LoginPage() {
         router.push("/change-password");
         return;
       }
+      // Middleware parks the attempted path here when it turns a request away,
+      // so a session that expired mid-visit resumes where it left off. Read off
+      // window rather than useSearchParams, which would force this page to be
+      // wrapped in a Suspense boundary to prerender. Only same-site paths, so
+      // the parameter cannot be used as an open redirect.
+      const next = new URLSearchParams(window.location.search).get("next");
+      if (next && next.startsWith("/") && !next.startsWith("//")) {
+        router.push(next);
+        return;
+      }
       router.push(
         user.role === "student" ? "/dashboard" : user.role === "faculty" ? "/faculty" : "/admin",
       );
@@ -63,12 +73,14 @@ export default function LoginPage() {
   }, []);
 
   useEffect(() => {
-    if (isAuthenticated()) {
-      const user = getCurrentUser();
-      if (user) {
-        redirectAfterAuth(user);
-      }
-    }
+    if (!isAuthenticated()) return;
+    // The stored flag outlives the session cookie, so confirm with the server
+    // before bouncing away. Trusting localStorage here would ping-pong against
+    // the middleware, which sees no session and sends the user straight back.
+    // refreshCurrentUser clears the stale flag when the server disowns it.
+    void refreshCurrentUser().then((user) => {
+      if (user) redirectAfterAuth(user);
+    });
   }, [redirectAfterAuth]);
 
   const handleSubmit = async (e: React.FormEvent) => {

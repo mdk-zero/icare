@@ -23,6 +23,36 @@ function mirrorToStorage(user: User | null) {
   }
 }
 
+/**
+ * The session cookie expires after seven days; the localStorage flags the UI
+ * gates on never expire by themselves. When they disagree the app renders the
+ * full authenticated shell while every request behind it 401s, so a dead
+ * session has to end the client session too.
+ *
+ * A full-page navigation rather than a router push, so every in-memory cache
+ * and the notification EventSource are torn down with the document.
+ */
+let sessionExpiryHandled = false;
+
+function handleSessionExpired() {
+  if (typeof window === 'undefined' || sessionExpiryHandled) return;
+  sessionExpiryHandled = true;
+  mirrorToStorage(null);
+  const next = window.location.pathname + window.location.search;
+  window.location.replace(`/login?next=${encodeURIComponent(next)}`);
+}
+
+/**
+ * Every request in this module goes through here so expiry is handled in one
+ * place. Authentication endpoints are exempt: a 401 from /api/auth/login is a
+ * wrong password, not a dead session.
+ */
+export async function apiFetch(input: string, init?: RequestInit): Promise<Response> {
+  const res = await fetch(input, { credentials: 'include', ...init });
+  if (res.status === 401 && !input.startsWith('/api/auth/')) handleSessionExpired();
+  return res;
+}
+
 export interface Patient {
   id: string;
   subject_id?: number;
@@ -113,7 +143,7 @@ export interface AttemptResult {
 // Authentication Functions
 export async function login(email: string, password: string): Promise<{ user: User; sessionToken: string } | null> {
   try {
-    const res = await fetch('/api/auth/login', {
+    const res = await apiFetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
@@ -135,7 +165,7 @@ export async function register(
   role: User['role'],
 ): Promise<{ user: User; sessionToken: string } | null> {
   try {
-    const res = await fetch('/api/auth/register', {
+    const res = await apiFetch('/api/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, email, password, role }),
@@ -162,7 +192,7 @@ export interface GooglePendingProfile {
 
 export async function getPendingGoogleProfile(): Promise<GooglePendingProfile | null> {
   try {
-    const res = await fetch('/api/auth/google/pending', {
+    const res = await apiFetch('/api/auth/google/pending', {
       credentials: 'include',
     });
     if (!res.ok) return null;
@@ -178,7 +208,7 @@ export async function registerGoogle(
   role: User['role'],
 ): Promise<{ user: User; sessionToken: string } | null> {
   try {
-    const res = await fetch('/api/auth/google/register', {
+    const res = await apiFetch('/api/auth/google/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -200,7 +230,7 @@ export async function registerGoogle(
 export async function logout(): Promise<void> {
   mirrorToStorage(null);
   try {
-    await fetch('/api/auth/logout', { method: 'POST' });
+    await apiFetch('/api/auth/logout', { method: 'POST' });
   } catch (err) {
     console.error('logout() failed', err);
   }
@@ -219,7 +249,7 @@ export function isAuthenticated(): boolean {
 
 export async function refreshCurrentUser(): Promise<User | null> {
   try {
-    const res = await fetch(SESSION_ENDPOINT, { credentials: 'include' });
+    const res = await apiFetch(SESSION_ENDPOINT, { credentials: 'include' });
     if (!res.ok) {
       mirrorToStorage(null);
       return null;
@@ -237,7 +267,7 @@ export async function updateProfile(updates: {
   name: string;
 }): Promise<User | null> {
   try {
-    const res = await fetch('/api/users/profile', {
+    const res = await apiFetch('/api/users/profile', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -261,7 +291,7 @@ export async function uploadAvatar(file: File): Promise<{ path: string }> {
     const formData = new FormData();
     formData.append('avatar', file);
 
-    const res = await fetch('/api/users/avatar', {
+    const res = await apiFetch('/api/users/avatar', {
       method: 'POST',
       credentials: 'include',
       body: formData,
@@ -282,7 +312,7 @@ export async function uploadAvatar(file: File): Promise<{ path: string }> {
 
 export async function getAvatarUrl(path: string): Promise<string | null> {
   try {
-    const res = await fetch(
+    const res = await apiFetch(
       `/api/users/avatar-url?path=${encodeURIComponent(path)}`,
       { credentials: 'include' },
     );
@@ -309,7 +339,7 @@ export async function requestPasswordChangeOtp(
   currentPassword: string,
 ): Promise<{ success: boolean; requiresOtp?: boolean; devOtp?: string; error?: string }> {
   try {
-    const res = await fetch('/api/users/change-password', {
+    const res = await apiFetch('/api/users/change-password', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -347,7 +377,7 @@ export async function verifyPasswordChangeOtp(
   otp: string,
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const res = await fetch('/api/users/change-password', {
+    const res = await apiFetch('/api/users/change-password', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -378,7 +408,7 @@ export async function changePassword(
   otp: string,
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const res = await fetch('/api/users/change-password', {
+    const res = await apiFetch('/api/users/change-password', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -403,7 +433,7 @@ export async function fetchPatients(search?: string, abnormalOnly?: boolean): Pr
     if (search) params.set('search', search);
     if (abnormalOnly) params.set('abnormal_only', 'true');
     const query = params.toString();
-    const res = await fetch(`/api/patients${query ? `?${query}` : ''}`, {
+    const res = await apiFetch(`/api/patients${query ? `?${query}` : ''}`, {
       credentials: 'include',
     });
     if (!res.ok) {
@@ -420,7 +450,7 @@ export async function fetchPatients(search?: string, abnormalOnly?: boolean): Pr
 
 export async function fetchStudentAssessments(): Promise<StudentAssessment[]> {
   try {
-    const res = await fetch('/api/student/assessments', { credentials: 'include' });
+    const res = await apiFetch('/api/student/assessments', { credentials: 'include' });
     if (!res.ok) {
       console.error('fetchStudentAssessments() failed', res.status);
       return [];
@@ -437,7 +467,7 @@ export async function startAssessmentAttempt(
   assessmentId: string,
 ): Promise<StartedAttempt | null> {
   try {
-    const res = await fetch(`/api/student/assessments/${assessmentId}/attempts`, {
+    const res = await apiFetch(`/api/student/assessments/${assessmentId}/attempts`, {
       method: 'POST',
       credentials: 'include',
     });
@@ -457,7 +487,7 @@ export async function submitAssessmentAttempt(
   answers: { question_id: string; selected_index: number | null; time_spent_seconds?: number }[],
 ): Promise<AttemptResult | null> {
   try {
-    const res = await fetch(`/api/student/attempts/${attemptId}/submit`, {
+    const res = await apiFetch(`/api/student/attempts/${attemptId}/submit`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -517,7 +547,7 @@ export async function submitVitalReading(
   input: VitalReadingInput,
 ): Promise<{ reading?: VitalReading; is_anomaly?: boolean; anomaly_reasons?: AnomalyReason[]; error?: string }> {
   try {
-    const res = await fetch('/api/student/vitals', {
+    const res = await apiFetch('/api/student/vitals', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -542,7 +572,7 @@ export async function submitVitalReading(
 export async function fetchMyVitalReadings(patientId?: string): Promise<VitalReading[]> {
   try {
     const query = patientId ? `?patient_id=${encodeURIComponent(patientId)}` : '';
-    const res = await fetch(`/api/student/vitals${query}`, { credentials: 'include' });
+    const res = await apiFetch(`/api/student/vitals${query}`, { credentials: 'include' });
     if (!res.ok) {
       console.error('fetchMyVitalReadings() failed', res.status);
       return [];
@@ -566,7 +596,7 @@ export async function fetchFacultyVitalReadings(options?: {
     if (options?.patientId) params.set('patient_id', options.patientId);
     if (options?.studentId) params.set('student_id', options.studentId);
     const query = params.toString();
-    const res = await fetch(`/api/faculty/vitals${query ? `?${query}` : ''}`, {
+    const res = await apiFetch(`/api/faculty/vitals${query ? `?${query}` : ''}`, {
       credentials: 'include',
     });
     if (!res.ok) {
@@ -609,7 +639,7 @@ export interface RoomAssignment {
 
 export async function fetchRooms(): Promise<Room[]> {
   try {
-    const res = await fetch('/api/admin/rooms', { credentials: 'include' });
+    const res = await apiFetch('/api/admin/rooms', { credentials: 'include' });
     if (!res.ok) {
       console.error('fetchRooms() failed', res.status);
       return [];
@@ -626,7 +656,7 @@ export async function fetchRoomDetail(
   id: string,
 ): Promise<{ room: Room; assignments: RoomAssignment[] } | null> {
   try {
-    const res = await fetch(`/api/admin/rooms/${id}`, { credentials: 'include' });
+    const res = await apiFetch(`/api/admin/rooms/${id}`, { credentials: 'include' });
     if (!res.ok) {
       console.error('fetchRoomDetail() failed', res.status);
       return null;
@@ -646,7 +676,7 @@ export async function createRoom(input: {
   description?: string | null;
 }): Promise<{ room?: Room; error?: string }> {
   try {
-    const res = await fetch('/api/admin/rooms', {
+    const res = await apiFetch('/api/admin/rooms', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -666,7 +696,7 @@ export async function updateRoom(
   updates: Partial<Pick<Room, 'name' | 'room_number' | 'capacity' | 'status' | 'description'>>,
 ): Promise<{ room?: Room; error?: string }> {
   try {
-    const res = await fetch(`/api/admin/rooms/${id}`, {
+    const res = await apiFetch(`/api/admin/rooms/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -683,7 +713,7 @@ export async function updateRoom(
 
 export async function deleteRoom(id: string): Promise<{ success?: boolean; error?: string }> {
   try {
-    const res = await fetch(`/api/admin/rooms/${id}`, {
+    const res = await apiFetch(`/api/admin/rooms/${id}`, {
       method: 'DELETE',
       credentials: 'include',
     });
@@ -704,7 +734,7 @@ export async function assignStudentsToRoom(
   shift?: string | null,
 ): Promise<{ assignments?: RoomAssignment[]; error?: string }> {
   try {
-    const res = await fetch(`/api/admin/rooms/${roomId}/assignments`, {
+    const res = await apiFetch(`/api/admin/rooms/${roomId}/assignments`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -724,7 +754,7 @@ export async function endRoomAssignment(
   assignmentId: string,
 ): Promise<{ success?: boolean; error?: string }> {
   try {
-    const res = await fetch(`/api/admin/rooms/${roomId}/assignments`, {
+    const res = await apiFetch(`/api/admin/rooms/${roomId}/assignments`, {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -775,7 +805,7 @@ export async function fetchMyEhrRecords(type: EhrType, patientId?: string): Prom
   try {
     const params = new URLSearchParams({ type });
     if (patientId) params.set('patient_id', patientId);
-    const res = await fetch(`/api/student/ehr?${params}`, { credentials: 'include' });
+    const res = await apiFetch(`/api/student/ehr?${params}`, { credentials: 'include' });
     if (!res.ok) return [];
     const json = (await res.json()) as { records: EhrRecord[] };
     return json.records ?? [];
@@ -789,7 +819,7 @@ export async function createEhrRecord(
   payload: { type: EhrType; patient_id: string } & Record<string, unknown>,
 ): Promise<{ record?: EhrRecord; error?: string }> {
   try {
-    const res = await fetch('/api/student/ehr', {
+    const res = await apiFetch('/api/student/ehr', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -809,7 +839,7 @@ export async function updateIvfStatus(
   status: 'completed' | 'discontinued',
 ): Promise<{ record?: EhrRecord; error?: string }> {
   try {
-    const res = await fetch('/api/student/ehr', {
+    const res = await apiFetch('/api/student/ehr', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -832,7 +862,7 @@ export async function fetchFacultyEhrRecords(
     const params = new URLSearchParams({ type });
     if (options?.patientId) params.set('patient_id', options.patientId);
     if (options?.studentId) params.set('student_id', options.studentId);
-    const res = await fetch(`/api/faculty/ehr?${params}`, { credentials: 'include' });
+    const res = await apiFetch(`/api/faculty/ehr?${params}`, { credentials: 'include' });
     if (!res.ok) return [];
     const json = (await res.json()) as { records: EhrRecord[] };
     return json.records ?? [];
@@ -844,7 +874,7 @@ export async function fetchFacultyEhrRecords(
 
 export async function reviewProgressNote(noteId: string): Promise<{ success?: boolean; error?: string }> {
   try {
-    const res = await fetch('/api/faculty/ehr', {
+    const res = await apiFetch('/api/faculty/ehr', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -882,7 +912,7 @@ export interface CompetencyScore {
 
 export async function fetchCompetencyAreas(): Promise<CompetencyArea[]> {
   try {
-    const res = await fetch('/api/competencies', { credentials: 'include' });
+    const res = await apiFetch('/api/competencies', { credentials: 'include' });
     if (!res.ok) {
       console.error('fetchCompetencyAreas() failed', res.status);
       return [];
@@ -897,7 +927,7 @@ export async function fetchCompetencyAreas(): Promise<CompetencyArea[]> {
 
 export async function fetchCompetencyScores(studentId: string): Promise<CompetencyScore[]> {
   try {
-    const res = await fetch(
+    const res = await apiFetch(
       `/api/faculty/competency-scores?student_id=${encodeURIComponent(studentId)}`,
       { credentials: 'include' },
     );
@@ -921,7 +951,7 @@ export async function recordCompetencyScore(input: {
   attempt_id?: string | null;
 }): Promise<{ score?: CompetencyScore; error?: string }> {
   try {
-    const res = await fetch('/api/faculty/competency-scores', {
+    const res = await apiFetch('/api/faculty/competency-scores', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -1171,7 +1201,7 @@ export async function fetchAnalyticsSummary(
   const query = params.toString();
 
   try {
-    const res = await fetch(`/api/analytics/summary${query ? `?${query}` : ''}`, {
+    const res = await apiFetch(`/api/analytics/summary${query ? `?${query}` : ''}`, {
       credentials: 'include',
       signal,
     });
@@ -1210,7 +1240,7 @@ export async function generateAnalyticsNarrative(
   const query = params.toString();
 
   try {
-    const res = await fetch(`/api/analytics/narrative${query ? `?${query}` : ''}`, {
+    const res = await apiFetch(`/api/analytics/narrative${query ? `?${query}` : ''}`, {
       method: 'POST',
       credentials: 'include',
       signal,
@@ -1233,7 +1263,7 @@ export async function generateAnalyticsNarrative(
 
 export async function runWarehouseEtl(): Promise<{ rows_loaded?: Record<string, number>; error?: string }> {
   try {
-    const res = await fetch('/api/admin/etl', { method: 'POST', credentials: 'include' });
+    const res = await apiFetch('/api/admin/etl', { method: 'POST', credentials: 'include' });
     const json = (await res.json()) as { rows_loaded?: Record<string, number>; error?: string };
     if (!res.ok) return { error: json.error || 'ETL run failed' };
     return { rows_loaded: json.rows_loaded };
@@ -1268,7 +1298,7 @@ export interface RiskPrediction {
 
 export async function fetchLatestPrediction(studentId: string): Promise<RiskPrediction | null> {
   try {
-    const res = await fetch(`/api/faculty/predictions?student_id=${encodeURIComponent(studentId)}`, {
+    const res = await apiFetch(`/api/faculty/predictions?student_id=${encodeURIComponent(studentId)}`, {
       credentials: 'include',
     });
     if (!res.ok) {
@@ -1285,7 +1315,7 @@ export async function fetchLatestPrediction(studentId: string): Promise<RiskPred
 
 export async function fetchAllPredictions(): Promise<RiskPrediction[]> {
   try {
-    const res = await fetch('/api/faculty/predictions', { credentials: 'include' });
+    const res = await apiFetch('/api/faculty/predictions', { credentials: 'include' });
     if (!res.ok) {
       console.error('fetchAllPredictions() failed', res.status);
       return [];
@@ -1316,7 +1346,7 @@ export interface LearningRecommendation {
 
 export async function fetchMyRecommendations(): Promise<LearningRecommendation[]> {
   try {
-    const res = await fetch('/api/student/recommendations', { credentials: 'include' });
+    const res = await apiFetch('/api/student/recommendations', { credentials: 'include' });
     if (!res.ok) {
       console.error('fetchMyRecommendations() failed', res.status);
       return [];
@@ -1331,7 +1361,7 @@ export async function fetchMyRecommendations(): Promise<LearningRecommendation[]
 
 export async function dismissRecommendation(id: string): Promise<boolean> {
   try {
-    const res = await fetch('/api/student/recommendations', {
+    const res = await apiFetch('/api/student/recommendations', {
       method: 'PATCH',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -1349,7 +1379,7 @@ async function postMlJob(
   action: 'predict' | 'recommend',
 ): Promise<{ result?: Record<string, unknown>; students?: number; error?: string }> {
   try {
-    const res = await fetch(path, {
+    const res = await apiFetch(path, {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -1388,7 +1418,7 @@ export async function runFacultyMlJob(
 // Faculty API Functions
 export async function fetchFacultyDashboard(): Promise<{ stats: FacultyStats; recent_activities: AuditLog[] } | null> {
   try {
-    const res = await fetch('/api/faculty/dashboard', { credentials: 'include' });
+    const res = await apiFetch('/api/faculty/dashboard', { credentials: 'include' });
     const json = (await res.json()) as {
       stats?: FacultyStats;
       recent_activities?: AuditLog[];
@@ -1407,7 +1437,7 @@ export async function fetchFacultyDashboard(): Promise<{ stats: FacultyStats; re
 
 export async function fetchFacultyStudents(riskLevel?: string, search?: string): Promise<FacultyStudent[]> {
   try {
-    const res = await fetch('/api/faculty/students', { credentials: 'include' });
+    const res = await apiFetch('/api/faculty/students', { credentials: 'include' });
     const json = (await res.json()) as { students?: FacultyStudent[]; error?: string };
     if (!res.ok) {
       console.error('fetchFacultyStudents() failed', json.error);
@@ -1438,7 +1468,7 @@ export async function fetchFacultyStudents(riskLevel?: string, search?: string):
 
 export async function fetchFacultyStudentDetail(studentId: string): Promise<{ student: FacultyStudent; performance_history: any[]; competencies: Record<string, number> } | null> {
   try {
-    const res = await fetch(`/api/faculty/students/${studentId}`, { credentials: 'include' });
+    const res = await apiFetch(`/api/faculty/students/${studentId}`, { credentials: 'include' });
     const json = (await res.json()) as { student?: FacultyStudent; error?: string };
     if (!res.ok || !json.student) {
       console.error('fetchFacultyStudentDetail() failed', json.error);
@@ -1464,7 +1494,7 @@ export async function fetchAtRiskStudents(): Promise<FacultyStudent[]> {
 
 export async function fetchFacultyScenarios(): Promise<SimulationScenario[]> {
   try {
-    const res = await fetch('/api/faculty/scenarios', {
+    const res = await apiFetch('/api/faculty/scenarios', {
       credentials: 'include',
     });
     const json = (await res.json()) as { scenarios?: SimulationScenario[]; error?: string };
@@ -1481,7 +1511,7 @@ export async function fetchFacultyScenarios(): Promise<SimulationScenario[]> {
 
 export async function createScenario(scenario: Partial<SimulationScenario>): Promise<SimulationScenario | null> {
   try {
-    const res = await fetch('/api/faculty/scenarios', {
+    const res = await apiFetch('/api/faculty/scenarios', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -1504,7 +1534,7 @@ export async function generateAIScenario(
   patientId?: string,
 ): Promise<Partial<SimulationScenario> | { error: string }> {
   try {
-    const res = await fetch('/api/faculty/scenarios/generate', {
+    const res = await apiFetch('/api/faculty/scenarios/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -1561,7 +1591,7 @@ export async function generateScenarioBatch(
   signal?: AbortSignal,
 ): Promise<{ scenarios: ScenarioDraft[]; warning?: string } | { error: string }> {
   try {
-    const res = await fetch('/api/faculty/scenarios/generate-batch', {
+    const res = await apiFetch('/api/faculty/scenarios/generate-batch', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -1601,7 +1631,7 @@ export async function suggestAIScenario(
   | { error: string }
 > {
   try {
-    const res = await fetch('/api/faculty/scenarios/suggest', {
+    const res = await apiFetch('/api/faculty/scenarios/suggest', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -1634,7 +1664,7 @@ export async function updateScenario(
   scenario: Partial<SimulationScenario>,
 ): Promise<SimulationScenario | null> {
   try {
-    const res = await fetch(`/api/faculty/scenarios/${id}`, {
+    const res = await apiFetch(`/api/faculty/scenarios/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -1654,7 +1684,7 @@ export async function updateScenario(
 
 export async function deleteScenario(id: string): Promise<boolean> {
   try {
-    const res = await fetch(`/api/faculty/scenarios/${id}`, {
+    const res = await apiFetch(`/api/faculty/scenarios/${id}`, {
       method: 'DELETE',
       credentials: 'include',
     });
@@ -1667,7 +1697,7 @@ export async function deleteScenario(id: string): Promise<boolean> {
 
 export async function fetchScenarioById(id: string): Promise<SimulationScenario | null> {
   try {
-    const res = await fetch(`/api/scenarios/${id}`, {
+    const res = await apiFetch(`/api/scenarios/${id}`, {
       credentials: 'include',
     });
     const json = (await res.json()) as { scenario?: SimulationScenario; error?: string };
@@ -1687,7 +1717,7 @@ export async function fetchFacultyPatients(search?: string): Promise<FacultyPati
     const params = new URLSearchParams();
     if (search) params.set('search', search);
     const query = params.toString();
-    const res = await fetch(`/api/faculty/patients${query ? `?${query}` : ''}`, {
+    const res = await apiFetch(`/api/faculty/patients${query ? `?${query}` : ''}`, {
       credentials: 'include',
     });
     if (!res.ok) {
@@ -1706,7 +1736,7 @@ export async function createFacultyPatient(
   patient: Partial<FacultyPatient>,
 ): Promise<{ patient?: FacultyPatient; error?: string }> {
   try {
-    const res = await fetch('/api/faculty/patients', {
+    const res = await apiFetch('/api/faculty/patients', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -1729,7 +1759,7 @@ export async function updateFacultyPatient(
   patient: Partial<FacultyPatient>,
 ): Promise<{ patient?: FacultyPatient; error?: string }> {
   try {
-    const res = await fetch('/api/faculty/patients', {
+    const res = await apiFetch('/api/faculty/patients', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -1756,7 +1786,7 @@ export async function assignPatientRooms(
   mode: 'fill' | 'spread',
 ): Promise<{ assigned: number; unassigned: number } | { error: string }> {
   try {
-    const res = await fetch('/api/faculty/patients/assign-rooms', {
+    const res = await apiFetch('/api/faculty/patients/assign-rooms', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -1775,7 +1805,7 @@ export async function deleteFacultyPatient(
   id: string,
 ): Promise<{ success?: boolean; error?: string }> {
   try {
-    const res = await fetch('/api/faculty/patients', {
+    const res = await apiFetch('/api/faculty/patients', {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -1882,7 +1912,7 @@ export function toFacultyNotification(n: ServerNotification): FacultyNotificatio
 
 export async function fetchNotifications(): Promise<{ notifications: FacultyNotification[]; total: number; unread: number } | null> {
   try {
-    const res = await fetch('/api/notifications', { credentials: 'include' });
+    const res = await apiFetch('/api/notifications', { credentials: 'include' });
     if (!res.ok) {
       console.error('fetchNotifications() failed', res.status);
       return null;
@@ -1902,7 +1932,7 @@ export async function fetchFacultyNotifications(): Promise<{ notifications: Facu
 
 export async function markNotificationRead(notificationId: string): Promise<boolean> {
   try {
-    const res = await fetch('/api/notifications', {
+    const res = await apiFetch('/api/notifications', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -1917,7 +1947,7 @@ export async function markNotificationRead(notificationId: string): Promise<bool
 
 export async function markAllNotificationsRead(): Promise<boolean> {
   try {
-    const res = await fetch('/api/notifications', {
+    const res = await apiFetch('/api/notifications', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -1933,7 +1963,7 @@ export async function markAllNotificationsRead(): Promise<boolean> {
 export async function fetchFacultyAlerts(status?: string): Promise<{ alerts: FacultyAlert[]; total: number; pending: number } | null> {
   try {
     const query = status && status !== 'all' ? `?status=${encodeURIComponent(status)}` : '';
-    const res = await fetch(`/api/faculty/alerts${query}`, { credentials: 'include' });
+    const res = await apiFetch(`/api/faculty/alerts${query}`, { credentials: 'include' });
     const json = (await res.json()) as {
       alerts?: FacultyAlert[];
       total?: number;
@@ -1978,7 +2008,7 @@ export async function createAlert(alert: Partial<FacultyAlert>): Promise<Faculty
 export async function fetchAuditTrail(action?: string): Promise<AuditLog[]> {
   const params = new URLSearchParams();
   if (action) params.set('action', action);
-  const res = await fetch(`/api/faculty/audit?${params.toString()}`);
+  const res = await apiFetch(`/api/faculty/audit?${params.toString()}`);
   if (!res.ok) return [];
   const data = await res.json();
   return data.logs ?? [];
@@ -1986,7 +2016,7 @@ export async function fetchAuditTrail(action?: string): Promise<AuditLog[]> {
 
 export async function logAuditAction(payload: AuditLogInsert): Promise<void> {
   try {
-    await fetch('/api/faculty/audit', {
+    await apiFetch('/api/faculty/audit', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -2024,7 +2054,7 @@ export async function fetchScenarioAssignments(scenarioId?: string): Promise<Sce
     const url = scenarioId
       ? `/api/faculty/scenarios/assignments?scenario_id=${encodeURIComponent(scenarioId)}`
       : '/api/faculty/scenarios/assignments';
-    const res = await fetch(url, { credentials: 'include' });
+    const res = await apiFetch(url, { credentials: 'include' });
     const json = (await res.json()) as { assignments?: ScenarioAssignment[]; error?: string };
     if (!res.ok) {
       console.error('fetchScenarioAssignments() failed', json.error);
@@ -2057,7 +2087,7 @@ export async function fetchFacultyAssignmentTasks(
   assignmentId: string,
 ): Promise<{ tasks: FacultyScenarioTask[]; status: string } | null> {
   try {
-    const res = await fetch(`/api/faculty/scenarios/assignments/${assignmentId}/tasks`, {
+    const res = await apiFetch(`/api/faculty/scenarios/assignments/${assignmentId}/tasks`, {
       credentials: 'include',
     });
     const json = (await res.json()) as { tasks?: FacultyScenarioTask[]; status?: string; error?: string };
@@ -2081,13 +2111,13 @@ export async function setFacultyTaskChecked(
   try {
     const base = `/api/faculty/scenarios/assignments/${assignmentId}/tasks`;
     const res = checked
-      ? await fetch(base, {
+      ? await apiFetch(base, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
           body: JSON.stringify({ task_id: taskId }),
         })
-      : await fetch(`${base}?task_id=${encodeURIComponent(taskId)}`, {
+      : await apiFetch(`${base}?task_id=${encodeURIComponent(taskId)}`, {
           method: 'DELETE',
           credentials: 'include',
         });
@@ -2108,7 +2138,7 @@ export async function finalizeScenarioAssignment(
   assignmentId: string,
 ): Promise<{ assignment: ScenarioAssignment; score: number } | null> {
   try {
-    const res = await fetch(`/api/faculty/scenarios/assignments/${assignmentId}/finalize`, {
+    const res = await apiFetch(`/api/faculty/scenarios/assignments/${assignmentId}/finalize`, {
       method: 'POST',
       credentials: 'include',
     });
@@ -2131,7 +2161,7 @@ export async function assignScenarioToStudents(
   required: boolean
 ): Promise<ScenarioAssignment[]> {
   try {
-    const res = await fetch(`/api/faculty/scenarios/${scenarioId}/assign`, {
+    const res = await apiFetch(`/api/faculty/scenarios/${scenarioId}/assign`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -2151,7 +2181,7 @@ export async function assignScenarioToStudents(
 
 export async function fetchStudentScenarioAssignments(_studentId: string): Promise<ScenarioAssignment[]> {
   try {
-    const res = await fetch('/api/student/scenarios', { credentials: 'include' });
+    const res = await apiFetch('/api/student/scenarios', { credentials: 'include' });
     const json = (await res.json()) as { assignments?: ScenarioAssignment[]; error?: string };
     if (!res.ok) {
       console.error('fetchStudentScenarioAssignments() failed', json.error);
@@ -2181,7 +2211,7 @@ export async function fetchStudentScenarioTasks(
   assignmentId: string,
 ): Promise<StudentScenarioTasksResult | null> {
   try {
-    const res = await fetch(`/api/student/scenarios/${assignmentId}/tasks`, {
+    const res = await apiFetch(`/api/student/scenarios/${assignmentId}/tasks`, {
       credentials: 'include',
     });
     const json = (await res.json()) as {
@@ -2206,7 +2236,7 @@ export async function submitScenarioForReview(
   timeTaken: number,
 ): Promise<ScenarioAssignment | null> {
   try {
-    const res = await fetch(`/api/student/scenarios/${assignmentId}/submit`, {
+    const res = await apiFetch(`/api/student/scenarios/${assignmentId}/submit`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -2230,7 +2260,7 @@ export async function createFacultyStudent(
   sectionId: string,
 ): Promise<{ data?: CreateStudentResponse; error?: string }> {
   try {
-    const res = await fetch('/api/faculty/students', {
+    const res = await apiFetch('/api/faculty/students', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, email, section_id: sectionId }),
@@ -2267,7 +2297,7 @@ export interface Section {
 /** All sections (faculty/admin). */
 export async function fetchSections(): Promise<Section[]> {
   try {
-    const res = await fetch('/api/sections', { credentials: 'include' });
+    const res = await apiFetch('/api/sections', { credentials: 'include' });
     const json = (await res.json()) as { sections?: Section[]; error?: string };
     if (!res.ok) {
       console.error('fetchSections() failed', json.error);
@@ -2283,7 +2313,7 @@ export async function fetchSections(): Promise<Section[]> {
 /** The signed-in faculty member's assigned sections (admin: all sections). */
 export async function fetchFacultySections(): Promise<Section[]> {
   try {
-    const res = await fetch('/api/faculty/sections', { credentials: 'include' });
+    const res = await apiFetch('/api/faculty/sections', { credentials: 'include' });
     const json = (await res.json()) as { sections?: Section[]; error?: string };
     if (!res.ok) {
       console.error('fetchFacultySections() failed', json.error);
@@ -2298,7 +2328,7 @@ export async function fetchFacultySections(): Promise<Section[]> {
 
 export async function fetchAllStudentUsers(): Promise<StudentUser[]> {
   try {
-    const res = await fetch('/api/faculty/students');
+    const res = await apiFetch('/api/faculty/students');
     const json = await res.json();
 
     if (!res.ok) {
@@ -2320,7 +2350,7 @@ export async function updateStudentUser(
   sectionId?: string,
 ): Promise<{ data?: StudentUser; error?: string }> {
   try {
-    const res = await fetch('/api/faculty/students', {
+    const res = await apiFetch('/api/faculty/students', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id, name, email, section_id: sectionId }),
@@ -2343,7 +2373,7 @@ export async function deleteStudentUser(
   id: string,
 ): Promise<{ success?: boolean; error?: string }> {
   try {
-    const res = await fetch('/api/faculty/students', {
+    const res = await apiFetch('/api/faculty/students', {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id }),
@@ -2364,7 +2394,7 @@ export async function deleteStudentUser(
 
 export async function fetchStudentScenarioHistory(studentId: string): Promise<ScenarioPerformance[]> {
   try {
-    const res = await fetch(`/api/faculty/scenarios/assignments?student_id=${encodeURIComponent(studentId)}`, {
+    const res = await apiFetch(`/api/faculty/scenarios/assignments?student_id=${encodeURIComponent(studentId)}`, {
       credentials: 'include',
     });
     const json = (await res.json()) as { assignments?: ScenarioAssignment[]; error?: string };
@@ -2404,7 +2434,7 @@ export async function generateStudentSummary(
   studentId: string,
 ): Promise<{ summary?: StudentAISummary; generated_at?: string; error?: string }> {
   try {
-    const res = await fetch(`/api/faculty/students/${studentId}/summary`, {
+    const res = await apiFetch(`/api/faculty/students/${studentId}/summary`, {
       method: 'POST',
       credentials: 'include',
     });

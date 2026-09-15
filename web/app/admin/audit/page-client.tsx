@@ -1,5 +1,6 @@
 "use client";
 
+import { apiFetch } from "@/app/lib/api";
 import { useState, useEffect, useCallback } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faClock, faMagnifyingGlass } from "@fortawesome/free-solid-svg-icons";
@@ -75,7 +76,7 @@ export default function AdminAuditClient() {
     if (fromDate) params.set("from", fromDate);
     if (toDate) params.set("to", toDate);
 
-    const res = await fetch(`/api/admin/audit?${params.toString()}`, {
+    const res = await apiFetch(`/api/admin/audit?${params.toString()}`, {
       credentials: "include",
     });
     if (res.ok) {

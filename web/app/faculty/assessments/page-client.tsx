@@ -18,7 +18,7 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import PageHeader from "../../components/PageHeader";
 import { SkeletonAssessmentCard } from "../../components/skeletons";
-import { fetchFacultySections, type Section } from "../../lib/api";
+import { fetchFacultySections, type Section, apiFetch } from "../../lib/api";
 import { toast } from "../../components/Toast";
 import ConfirmModal from "../../components/ConfirmModal";
 
@@ -148,7 +148,7 @@ export default function FacultyAssessmentsClient() {
       : [];
 
   const loadAssessments = useCallback(async () => {
-    const res = await fetch("/api/faculty/assessments", { credentials: "include" });
+    const res = await apiFetch("/api/faculty/assessments", { credentials: "include" });
     if (res.ok) {
       const json = (await res.json()) as { assessments: Assessment[] };
       setAssessments(json.assessments ?? []);
@@ -158,7 +158,7 @@ export default function FacultyAssessmentsClient() {
   useEffect(() => {
     Promise.all([
       loadAssessments(),
-      fetch("/api/faculty/students", { credentials: "include" }).then(async (r) => {
+      apiFetch("/api/faculty/students", { credentials: "include" }).then(async (r) => {
         if (r.ok) {
           const j = (await r.json()) as { students: Student[] };
           setStudents(j.students ?? []);
@@ -174,7 +174,7 @@ export default function FacultyAssessmentsClient() {
 
   const togglePublish = async (a: Assessment) => {
     setBusy(true);
-    const res = await fetch(`/api/faculty/assessments/${a.id}`, {
+    const res = await apiFetch(`/api/faculty/assessments/${a.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
@@ -193,7 +193,7 @@ export default function FacultyAssessmentsClient() {
   const confirmAndDelete = async (a: Assessment) => {
     setBusy(true);
     setDeleteError(null);
-    const res = await fetch(`/api/faculty/assessments/${a.id}`, {
+    const res = await apiFetch(`/api/faculty/assessments/${a.id}`, {
       method: "DELETE",
       credentials: "include",
     });
@@ -230,7 +230,7 @@ export default function FacultyAssessmentsClient() {
       return;
     }
     setBusy(true);
-    const res = await fetch(`/api/faculty/assessments/${assignTarget.id}/assign`, {
+    const res = await apiFetch(`/api/faculty/assessments/${assignTarget.id}/assign`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
