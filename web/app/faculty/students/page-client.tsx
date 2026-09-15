@@ -1142,7 +1142,7 @@ export default function FacultyStudentsClient() {
                         Email
                       </th>
                       <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
-                        Risk (ML)
+                        Performance
                       </th>
                       <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider"></th>
                     </tr>
