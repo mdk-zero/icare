@@ -1,3 +1,5 @@
+import { cachedFetch, clearRequestCache } from './request-cache';
+
 export interface User {
   id: string;
   email: string;
@@ -38,19 +40,36 @@ function handleSessionExpired() {
   if (typeof window === 'undefined' || sessionExpiryHandled) return;
   sessionExpiryHandled = true;
   mirrorToStorage(null);
+  clearRequestCache();
   const next = window.location.pathname + window.location.search;
   window.location.replace(`/login?next=${encodeURIComponent(next)}`);
 }
 
 /**
- * Every request in this module goes through here so expiry is handled in one
- * place. Authentication endpoints are exempt: a 401 from /api/auth/login is a
- * wrong password, not a dead session.
+ * The one request that actually reaches the network. Session expiry is handled
+ * here so it is handled in exactly one place; authentication endpoints are
+ * exempt, because a 401 from /api/auth/login is a wrong password, not a dead
+ * session.
+ *
+ * A successful write drops every cached read. Reads and writes share this
+ * function, so there is no way to mutate something and leave a stale copy of it
+ * behind.
  */
-export async function apiFetch(input: string, init?: RequestInit): Promise<Response> {
+async function sendRequest(input: string, init?: RequestInit): Promise<Response> {
   const res = await fetch(input, { credentials: 'include', ...init });
   if (res.status === 401 && !input.startsWith('/api/auth/')) handleSessionExpired();
+  const method = (init?.method ?? 'GET').toUpperCase();
+  if (method !== 'GET' && res.ok) clearRequestCache();
   return res;
+}
+
+/**
+ * Every request in this module goes through here. GETs are served from the
+ * in-memory response cache when one is warm, so returning to a page the user
+ * has already opened costs no network round-trip.
+ */
+export async function apiFetch(input: string, init?: RequestInit): Promise<Response> {
+  return cachedFetch(input, init, sendRequest);
 }
 
 export interface Patient {
@@ -229,6 +248,10 @@ export async function registerGoogle(
 
 export async function logout(): Promise<void> {
   mirrorToStorage(null);
+  // Logout returns to /login through the router, so the document — and with it
+  // every cached read of the outgoing user's data — survives. Drop it here
+  // rather than relying on the request below, which may never land.
+  clearRequestCache();
   try {
     await apiFetch('/api/auth/logout', { method: 'POST' });
   } catch (err) {

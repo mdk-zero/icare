@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useState, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -48,6 +48,7 @@ import {
   assignPatientRooms,
   FacultyPatient,
 } from "../../lib/api";
+import { usePageData } from "../../lib/use-page-data";
 import { SkeletonInlineStatCard, SkeletonScenarioCard } from "../../components/skeletons";
 import PageHeader from "../../components/PageHeader";
 import StatTile from "../../components/StatTile";
@@ -76,12 +77,16 @@ const inputClassName =
  *  looping the route in sub-batches of this size — no fixed total ceiling. */
 const MAX_PER_REQUEST = 12;
 
+// Stable empty fallbacks, so the memos below them are not invalidated by a
+// fresh `[]` on every render.
+const NO_SCENARIOS: SimulationScenario[] = [];
+const NO_STUDENTS: FacultyStudent[] = [];
+
 const labelClassName = "block text-sm font-bold text-gray-800 mb-2";
 
 export default function FacultyScenariosClient() {
   const router = useRouter();
-  const [scenarios, setScenarios] = useState<SimulationScenario[]>([]);
-  const [loading, setLoading] = useState(true);
+
 
   const [searchQuery, setSearchQuery] = useState("");
   const [difficultyFilter, setDifficultyFilter] = useState("all");
@@ -119,7 +124,7 @@ export default function FacultyScenariosClient() {
   const [selectedScenario, setSelectedScenario] = useState<SimulationScenario | null>(null);
 
   const [showAssignModal, setShowAssignModal] = useState(false);
-  const [students, setStudents] = useState<FacultyStudent[]>([]);
+
   const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
   const [assignDeadline, setAssignDeadline] = useState("");
   const [assignRequired, setAssignRequired] = useState(false);
@@ -137,29 +142,20 @@ export default function FacultyScenariosClient() {
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  const loadStudents = useCallback(async () => {
-    const data = await fetchFacultyStudents();
-    setStudents(data);
-  }, []);
+  const { data, loading, refresh, setData } = usePageData(
+    "faculty:scenarios",
+    async () => {
+      const [scenarios, students] = await Promise.all([
+        fetchFacultyScenarios(),
+        fetchFacultyStudents(),
+      ]);
+      return { scenarios, students };
+    },
+  );
 
-  const loadScenarios = useCallback(async () => {
-    setLoading(true);
-    const data = await fetchFacultyScenarios();
-    setScenarios(data);
-    setLoading(false);
-  }, []);
-
-  useEffect(() => {
-    let mounted = true;
-    async function init() {
-      await loadScenarios();
-      if (mounted) await loadStudents();
-    }
-    void init();
-    return () => {
-      mounted = false;
-    };
-  }, [loadScenarios, loadStudents]);
+  const scenarios = data?.scenarios ?? NO_SCENARIOS;
+  const students = data?.students ?? NO_STUDENTS;
+  const loadScenarios = refresh;
 
   const loadPatientsForSelector = async () => {
     setLoadingPatients(true);
@@ -543,7 +539,10 @@ export default function FacultyScenariosClient() {
       return;
     }
 
-    setScenarios((prev) => prev.filter((s) => s.id !== deleteTarget.id));
+    setData((previous) => ({
+      scenarios: (previous?.scenarios ?? []).filter((s) => s.id !== deleteTarget.id),
+      students: previous?.students ?? [],
+    }));
     const faculty = getCurrentFacultyUser();
     if (faculty) {
       logAuditAction({

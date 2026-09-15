@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -45,6 +45,7 @@ import StatTile from "../../components/StatTile";
 import Card from "../../components/Card";
 import Avatar from "../../components/Avatar";
 import { SkeletonSectionGrid, SkeletonTable } from "../../components/skeletons";
+import { usePageData } from "../../lib/use-page-data";
 
 /** Minimal CSV parser: quoted fields, "" escapes, \r\n or \n row breaks. */
 function parseCsv(text: string): string[][] {
@@ -96,6 +97,13 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 /** Group key for students who have no section assigned. */
 const UNASSIGNED_KEY = "__unassigned__";
 
+// Stable empty fallbacks: a fresh `[]` per render would defeat every memo
+// downstream that depends on these lists.
+const NO_STUDENTS: FacultyStudent[] = [];
+const NO_STUDENT_USERS: StudentUser[] = [];
+const NO_SECTIONS: Section[] = [];
+const NO_PREDICTIONS: Record<string, RiskPrediction> = {};
+
 interface SectionGroup {
   /** Section id, or UNASSIGNED_KEY. */
   key: string;
@@ -124,47 +132,33 @@ interface BulkRow {
 
 export default function FacultyStudentsClient() {
   const router = useRouter();
-  const [students, setStudents] = useState<FacultyStudent[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [riskFilter, setRiskFilter] = useState("all");
-  const [studentUsers, setStudentUsers] = useState<StudentUser[]>([]);
-  const [loadingStudentUsers, setLoadingStudentUsers] = useState(true);
-  const [predictions, setPredictions] = useState<Record<string, RiskPrediction>>({});
-  const [sections, setSections] = useState<Section[]>([]);
   /** Section whose roster is open; null shows the section cards. */
   const [selectedSectionKey, setSelectedSectionKey] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadStudents();
-    loadStudentUsers();
-  }, [riskFilter, searchQuery]);
+  // One snapshot per filter combination, so flipping a filter back to a
+  // combination already seen — like navigating away and returning — is instant.
+  const { data, loading, refresh } = usePageData(
+    `faculty:students:${riskFilter}:${searchQuery}`,
+    async () => {
+      const [students, studentUsers, sections, predictionRows] = await Promise.all([
+        fetchFacultyStudents(riskFilter, searchQuery),
+        fetchAllStudentUsers(),
+        fetchFacultySections(),
+        fetchAllPredictions(),
+      ]);
+      const predictions: Record<string, RiskPrediction> = {};
+      for (const row of predictionRows) predictions[row.student_id] = row;
+      return { students, studentUsers, sections, predictions };
+    },
+  );
 
-  useEffect(() => {
-    fetchFacultySections().then(setSections);
-  }, []);
-
-  useEffect(() => {
-    fetchAllPredictions().then((rows) => {
-      const map: Record<string, RiskPrediction> = {};
-      for (const row of rows) map[row.student_id] = row;
-      setPredictions(map);
-    });
-  }, []);
-
-  const loadStudents = async () => {
-    setLoading(true);
-    const data = await fetchFacultyStudents(riskFilter, searchQuery);
-    setStudents(data);
-    setLoading(false);
-  };
-
-  const loadStudentUsers = async () => {
-    setLoadingStudentUsers(true);
-    const data = await fetchAllStudentUsers();
-    setStudentUsers(data);
-    setLoadingStudentUsers(false);
-  };
+  const students = data?.students ?? NO_STUDENTS;
+  const studentUsers = data?.studentUsers ?? NO_STUDENT_USERS;
+  const sections = data?.sections ?? NO_SECTIONS;
+  const predictions = data?.predictions ?? NO_PREDICTIONS;
+  const loadingStudentUsers = loading;
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [firstName, setFirstName] = useState("");
@@ -335,8 +329,7 @@ export default function FacultyStudentsClient() {
     setBulkFinished(true);
 
     if (createdCount > 0) {
-      loadStudents();
-      loadStudentUsers();
+      refresh();
       const faculty = getCurrentFacultyUser();
       if (faculty) {
         logAuditAction({
@@ -421,8 +414,7 @@ export default function FacultyStudentsClient() {
       setLastName("");
       setNewSectionId("");
       if (newEmailRef.current) newEmailRef.current.value = "";
-      loadStudents();
-      loadStudentUsers();
+      refresh();
       const faculty = getCurrentFacultyUser();
       if (faculty) {
         logAuditAction({
@@ -478,7 +470,7 @@ export default function FacultyStudentsClient() {
       toast(`${data!.name} has been updated successfully!`);
       setShowUpdateModal(false);
       setUpdatingStudent(null);
-      loadStudentUsers();
+      refresh();
       const faculty = getCurrentFacultyUser();
       if (faculty) {
         logAuditAction({
@@ -515,7 +507,7 @@ export default function FacultyStudentsClient() {
       toast(`${deletingStudent.name} has been deleted successfully!`);
       setShowDeleteModal(false);
       setDeletingStudent(null);
-      loadStudentUsers();
+      refresh();
       const faculty = getCurrentFacultyUser();
       if (faculty) {
         logAuditAction({

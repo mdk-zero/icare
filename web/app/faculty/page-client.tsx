@@ -1,17 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   fetchFacultyDashboard,
   fetchFacultyAlerts,
   fetchFacultyStudents,
   refreshCurrentUser,
-  FacultyStats,
-  FacultyAlert,
-  AuditLog,
-  FacultyStudent
 } from "../lib/api";
+import { usePageData } from "../lib/use-page-data";
 import {
   SkeletonStatCard,
   SkeletonStudentRow,
@@ -63,47 +59,31 @@ function timeAgo(iso: string | null | undefined): string {
 
 export default function FacultyDashboard() {
   const router = useRouter();
-  const [stats, setStats] = useState<FacultyStats | null>(null);
-  const [students, setStudents] = useState<FacultyStudent[]>([]);
-  const [alerts, setAlerts] = useState<FacultyAlert[]>([]);
-  const [pendingAlerts, setPendingAlerts] = useState(0);
-  const [activities, setActivities] = useState<AuditLog[]>([]);
-  const [firstName, setFirstName] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { data, loading } = usePageData("faculty:overview", async () => {
+    const [dashboardData, alertsData, studentsData, user] = await Promise.all([
+      fetchFacultyDashboard(),
+      fetchFacultyAlerts(),
+      fetchFacultyStudents(),
+      refreshCurrentUser(),
+    ]);
 
-  useEffect(() => {
-    const loadDashboardData = async () => {
-      const [dashboardData, alertsData, studentsData, user] = await Promise.all([
-        fetchFacultyDashboard(),
-        fetchFacultyAlerts(),
-        fetchFacultyStudents(),
-        refreshCurrentUser(),
-      ]);
-
-      if (dashboardData) {
-        setStats(dashboardData.stats);
-        setActivities(dashboardData.recent_activities);
-      }
-
-      if (alertsData) {
-        // The table shows the newest few; the badge must still count them all.
-        setAlerts(alertsData.alerts.slice(0, 5));
-        setPendingAlerts(alertsData.pending);
-      }
-
-      if (studentsData) {
-        setStudents(studentsData.slice(0, 5));
-      }
-
-      if (user?.name) {
-        setFirstName(user.name.split(" ")[0]);
-      }
-
-      setLoading(false);
+    return {
+      stats: dashboardData?.stats ?? null,
+      activities: dashboardData?.recent_activities ?? [],
+      // The table shows the newest few; the badge must still count them all.
+      alerts: alertsData?.alerts.slice(0, 5) ?? [],
+      pendingAlerts: alertsData?.pending ?? 0,
+      students: studentsData?.slice(0, 5) ?? [],
+      firstName: user?.name ? user.name.split(" ")[0] : null,
     };
+  });
 
-    loadDashboardData();
-  }, []);
+  const stats = data?.stats ?? null;
+  const activities = data?.activities ?? [];
+  const alerts = data?.alerts ?? [];
+  const pendingAlerts = data?.pendingAlerts ?? 0;
+  const students = data?.students ?? [];
+  const firstName = data?.firstName ?? null;
 
   const getRisk = (risk?: string | null) => RISK_STYLES[risk ?? "default"] ?? RISK_STYLES.default;
 

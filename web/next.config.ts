@@ -14,6 +14,15 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: path.join(__dirname),
   },
+  experimental: {
+    // Hold route segments in the client router cache instead of re-requesting
+    // the RSC payload on every navigation. Without this `dynamic` is 0s, so
+    // moving between two pages re-renders both server-side every time.
+    staleTimes: {
+      dynamic: 180,
+      static: 300,
+    },
+  },
   // LAN origins allowed to reach the dev server (phones/emulators testing
   // the mobile app against this machine).
   allowedDevOrigins: ["192.168.1.100", "192.168.1.11"],
