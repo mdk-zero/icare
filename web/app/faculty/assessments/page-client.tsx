@@ -61,6 +61,21 @@ interface Student {
 // Stable empty fallbacks, so the derived lists below are not rebuilt from a
 // fresh `[]` on every render.
 const NO_ASSESSMENTS: Assessment[] = [];
+
+/**
+ * The bank reads as a progression, so the list is grouped in this order rather
+ * than sorted by it.
+ *
+ * -600 not -500 on the markers: the dark theme rethemes 50/100/200/600/700/800
+ * of the tinted ramps, so a 500 would keep its light-mode saturation on a dark
+ * surface. Amber rather than yellow for the same reason — globals.css rethemes
+ * no step of the yellow ramp.
+ */
+const DIFFICULTY_SECTIONS: { key: Difficulty; label: string; marker: string }[] = [
+  { key: "beginner", label: "Beginner", marker: "bg-emerald-600" },
+  { key: "intermediate", label: "Intermediate", marker: "bg-amber-600" },
+  { key: "advanced", label: "Advanced", marker: "bg-rose-600" },
+];
 const NO_STUDENTS: Student[] = [];
 const NO_SECTIONS: Section[] = [];
 
@@ -131,6 +146,39 @@ export default function FacultyAssessmentsClient() {
       return true;
     });
   }, [assessments, searchQuery, statusFilter, difficultyFilter, categoryFilter, sectionFilter]);
+
+  /**
+   * Difficulty is a heading rather than a badge on each card, so an empty
+   * level is left out entirely. A difficulty outside the three known values
+   * still gets its own section rather than dropping off the page.
+   */
+  const difficultyGroups = useMemo(() => {
+    const byDifficulty = new Map<string, Assessment[]>();
+    for (const a of filteredAssessments) {
+      const bucket = byDifficulty.get(a.difficulty);
+      if (bucket) bucket.push(a);
+      else byDifficulty.set(a.difficulty, [a]);
+    }
+
+    const known = DIFFICULTY_SECTIONS.map(({ key, label, marker }) => ({
+      key: key as string,
+      label,
+      marker,
+      items: byDifficulty.get(key) ?? [],
+    }));
+
+    const unrecognised = [...byDifficulty.keys()]
+      .filter((key) => !DIFFICULTY_SECTIONS.some((section) => section.key === key))
+      .sort((a, b) => a.localeCompare(b))
+      .map((key) => ({
+        key,
+        label: key.charAt(0).toUpperCase() + key.slice(1),
+        marker: "bg-gray-400",
+        items: byDifficulty.get(key) ?? [],
+      }));
+
+    return [...known, ...unrecognised].filter((group) => group.items.length > 0);
+  }, [filteredAssessments]);
 
   const filtersActive =
     searchQuery.trim() !== "" ||
@@ -390,121 +438,118 @@ export default function FacultyAssessmentsClient() {
             : "No assessments yet. Create your first quiz to start building the question bank."}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredAssessments.map((a) => (
-            <div key={a.id} className="relative bg-surface rounded-xl border border-hairline shadow-tile overflow-hidden flex flex-col">
-              {/* -600 not -500: the dark theme rethemes 50/100/200/600/700/800
-                  of the tinted ramps, so a 500 would keep its light-mode
-                  saturation on a dark surface. */}
-              <span className={`absolute left-0 top-0 h-full w-0.5 ${
-                a.difficulty === "beginner" ? "bg-emerald-600" :
-                a.difficulty === "intermediate" ? "bg-amber-600" :
-                a.difficulty === "advanced" ? "bg-rose-600" : "bg-gray-600"
-              }`} aria-hidden />
-              <div className="p-4 flex-1">
-                <div className="flex items-center gap-2 flex-wrap mb-1">
-                  <h3 className="font-semibold text-gray-800 truncate">{a.title}</h3>
-                  <span className={`px-2 py-0.5 text-xs rounded-full shrink-0 ${
-                    a.is_published
-                      ? "bg-green-100 text-green-700"
-                      : "bg-gray-100 text-gray-500"
-                  }`}>
-                    {a.is_published ? "Published" : "Draft"}
-                  </span>
-                </div>
-                {a.description && (
-                  <p className="text-sm text-gray-500 mb-3 line-clamp-2">{a.description}</p>
-                )}
-                <div className="flex items-center gap-2 text-sm text-gray-400 flex-wrap">
-                  <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">
-                    {a.category}
-                  </span>
-                  {/* amber, not the yellow ramp: globals.css rethemes no step
-                      of yellow, so that chip stayed light-mode on a dark card. */}
-                  <span className={`px-2 py-0.5 rounded text-xs ${
-                    a.difficulty === "beginner"
-                      ? "bg-green-100 text-green-700"
-                      : a.difficulty === "intermediate"
-                        ? "bg-amber-100 text-amber-700"
-                        : "bg-red-100 text-red-700"
-                  }`}>
-                    {a.difficulty}
-                  </span>
-                  {/* Bank size, and the paper drawn from it when they differ —
-                      the surplus is held back for later attempts. */}
-                  <span className="text-xs">
-                    {a.question_count} question{a.question_count === 1 ? "" : "s"}
-                    {a.total_questions !== null && a.total_questions < a.question_count && (
-                      <span className="text-gray-500"> · serves {a.total_questions}</span>
-                    )}
-                  </span>
-                  <span className="text-xs">{a.student_count} assigned</span>
-                  {a.time_limit_seconds && (
-                    <span className="text-xs">{Math.round(a.time_limit_seconds / 60)} min</span>
-                  )}
-                  <span className="text-xs">
-                    {a.max_attempts === null
-                      ? "Unlimited tries"
-                      : `${a.max_attempts} ${a.max_attempts === 1 ? "try" : "tries"}`}
-                  </span>
-                </div>
+        <div className="space-y-6">
+          {difficultyGroups.map((group) => (
+            <section key={group.key} className="space-y-3">
+              <div className="flex items-center gap-2.5">
+                <span className={`h-2 w-2 shrink-0 rounded-full ${group.marker}`} aria-hidden />
+                <h2 className="text-sm font-semibold uppercase tracking-[0.08em] text-gray-700">
+                  {group.label}
+                </h2>
+                <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium tabular-nums text-gray-600">
+                  {group.items.length}
+                </span>
+                <span className="h-px flex-1 bg-hairline" aria-hidden />
               </div>
-              <div className="px-4 py-3 bg-subtle border-t border-hairline">
-                <div className="text-xs text-gray-500 mb-2 truncate">
-                  {a.target_sections && a.target_sections.length > 0
-                    ? `Published to ${a.target_sections.map((s) => `Section ${s}`).join(", ")}`
-                    : "Published to all sections"}
-                </div>
-                <div className="flex items-center justify-end gap-1.5">
-                  <button
-                    onClick={() => openAssignModal(a)}
-                    disabled={!a.is_published}
-                    title={a.is_published ? "Assign to students" : "Publish first to assign"}
-                    className="p-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40"
-                  >
-                    <FontAwesomeIcon icon={faUserPlus} className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    onClick={() => togglePublish(a)}
-                    disabled={busy}
-                    title={a.is_published ? "Unpublish" : "Publish"}
-                    className="p-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"
-                  >
-                    <FontAwesomeIcon icon={a.is_published ? faEyeSlash : faGlobe} className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    onClick={() => router.push(`/faculty/assessments/${a.id}`)}
-                    title="Edit details"
-                    className="p-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"
-                  >
-                    <FontAwesomeIcon icon={faPen} className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    onClick={() => setConfirmDelete(a)}
-                    title="Delete"
-                    className="p-2 rounded-lg border border-red-200 text-red-600 hover:bg-red-50"
-                  >
-                    <FontAwesomeIcon icon={faTrash} className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    onClick={() => router.push(`/faculty/assessments/${a.id}/results`)}
-                    title="View student results"
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 text-sm font-medium"
-                  >
-                    <FontAwesomeIcon icon={faChartSimple} className="w-3.5 h-3.5" />
-                    Results
-                  </button>
-                  <button
-                    onClick={() => router.push(`/faculty/assessments/${a.id}`)}
-                    title="Manage questions"
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-brand-600/10 dark:bg-brand-600/25 text-brand-700 dark:text-white hover:bg-brand-600/20 dark:hover:bg-brand-600/35 text-sm font-medium"
-                  >
-                    <FontAwesomeIcon icon={faListCheck} className="w-3.5 h-3.5" />
-                    Questions
-                  </button>
-                </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {group.items.map((a) => (
+                  <div key={a.id} className="bg-surface rounded-xl border border-hairline shadow-tile overflow-hidden flex flex-col">
+                    <div className="p-4 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap mb-1">
+                        <h3 className="font-semibold text-gray-800 truncate">{a.title}</h3>
+                        <span className={`px-2 py-0.5 text-xs rounded-full shrink-0 ${
+                          a.is_published
+                            ? "bg-green-100 text-green-700"
+                            : "bg-gray-100 text-gray-500"
+                        }`}>
+                          {a.is_published ? "Published" : "Draft"}
+                        </span>
+                      </div>
+                      {a.description && (
+                        <p className="text-sm text-gray-500 mb-3 line-clamp-2">{a.description}</p>
+                      )}
+                      <div className="flex items-center gap-2 text-sm text-gray-400 flex-wrap">
+                        <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">
+                          {a.category}
+                        </span>
+                        {/* Bank size, and the paper drawn from it when they differ —
+                            the surplus is held back for later attempts. */}
+                        <span className="text-xs">
+                          {a.question_count} question{a.question_count === 1 ? "" : "s"}
+                          {a.total_questions !== null && a.total_questions < a.question_count && (
+                            <span className="text-gray-500"> · serves {a.total_questions}</span>
+                          )}
+                        </span>
+                        <span className="text-xs">{a.student_count} assigned</span>
+                        {a.time_limit_seconds && (
+                          <span className="text-xs">{Math.round(a.time_limit_seconds / 60)} min</span>
+                        )}
+                        <span className="text-xs">
+                          {a.max_attempts === null
+                            ? "Unlimited tries"
+                            : `${a.max_attempts} ${a.max_attempts === 1 ? "try" : "tries"}`}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="px-4 py-3 bg-subtle border-t border-hairline">
+                      <div className="text-xs text-gray-500 mb-2 truncate">
+                        {a.target_sections && a.target_sections.length > 0
+                          ? `Published to ${a.target_sections.map((s) => `Section ${s}`).join(", ")}`
+                          : "Published to all sections"}
+                      </div>
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          onClick={() => openAssignModal(a)}
+                          disabled={!a.is_published}
+                          title={a.is_published ? "Assign to students" : "Publish first to assign"}
+                          className="p-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+                        >
+                          <FontAwesomeIcon icon={faUserPlus} className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => togglePublish(a)}
+                          disabled={busy}
+                          title={a.is_published ? "Unpublish" : "Publish"}
+                          className="p-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"
+                        >
+                          <FontAwesomeIcon icon={a.is_published ? faEyeSlash : faGlobe} className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => router.push(`/faculty/assessments/${a.id}`)}
+                          title="Edit details"
+                          className="p-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"
+                        >
+                          <FontAwesomeIcon icon={faPen} className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => setConfirmDelete(a)}
+                          title="Delete"
+                          className="p-2 rounded-lg border border-red-200 text-red-600 hover:bg-red-50"
+                        >
+                          <FontAwesomeIcon icon={faTrash} className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => router.push(`/faculty/assessments/${a.id}/results`)}
+                          title="View student results"
+                          className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 text-sm font-medium"
+                        >
+                          <FontAwesomeIcon icon={faChartSimple} className="w-3.5 h-3.5" />
+                          Results
+                        </button>
+                        <button
+                          onClick={() => router.push(`/faculty/assessments/${a.id}`)}
+                          title="Manage questions"
+                          className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-brand-600/10 dark:bg-brand-600/25 text-brand-700 dark:text-white hover:bg-brand-600/20 dark:hover:bg-brand-600/35 text-sm font-medium"
+                        >
+                          <FontAwesomeIcon icon={faListCheck} className="w-3.5 h-3.5" />
+                          Questions
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
-            </div>
+            </section>
           ))}
         </div>
       )}
