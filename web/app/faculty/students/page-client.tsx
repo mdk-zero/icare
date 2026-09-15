@@ -688,9 +688,20 @@ export default function FacultyStudentsClient() {
         title="My Students"
         subtitle="Manage and monitor students under your supervision"
         action={{
-          icon: <FontAwesomeIcon icon={faPlus} className="w-6 h-6" />,
-          onClick: openCreateModal,
-          label: "Register Student",
+          icon: (
+            <FontAwesomeIcon
+              icon={runningMl ? faSpinner : faBrain}
+              spin={runningMl}
+              className="w-6 h-6"
+            />
+          ),
+          onClick: handleRunMl,
+          disabled: runningMl || sections.length === 0,
+          label: runningMl
+            ? "Running ML jobs…"
+            : sections.length === 0
+              ? "Run ML Jobs — you need at least one section before the jobs have anyone to run against"
+              : "Run ML Jobs — score your students for risk and refresh their quiz recommendations",
         }}
       />
 
@@ -778,23 +789,6 @@ export default function FacultyStudentsClient() {
           >
             <FontAwesomeIcon icon={faFileCsv} className="w-5 h-5" />
             Import CSV
-          </button>
-          <button
-            onClick={handleRunMl}
-            disabled={runningMl || sections.length === 0}
-            title={
-              sections.length === 0
-                ? "You need at least one section before ML jobs have anyone to run against"
-                : "Score your students for risk and refresh their quiz recommendations"
-            }
-            className="px-4 py-2.5 bg-surface border border-brand-600/30 text-brand-600 font-medium rounded-lg hover:bg-brand-600/5 transition-all flex items-center gap-2 disabled:opacity-50"
-          >
-            <FontAwesomeIcon
-              icon={runningMl ? faSpinner : faBrain}
-              spin={runningMl}
-              className="w-5 h-5"
-            />
-            {runningMl ? "Running…" : "Run ML Jobs"}
           </button>
         </div>
       </div>

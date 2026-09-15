@@ -4,7 +4,7 @@ interface PageHeaderProps {
   badge?: { icon: ReactNode; label: string };
   title: string;
   subtitle: string;
-  action?: { icon: ReactNode; onClick: () => void; label: string };
+  action?: { icon: ReactNode; onClick: () => void; label: string; disabled?: boolean };
 }
 
 export default function PageHeader({ badge, title, subtitle, action }: PageHeaderProps) {
@@ -42,11 +42,12 @@ export default function PageHeader({ badge, title, subtitle, action }: PageHeade
         {action && (
           <button
             onClick={action.onClick}
+            disabled={action.disabled}
             aria-label={action.label}
             title={action.label}
-            className="group shrink-0 w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center text-white bg-gradient-to-br from-brand-500 to-brand-700 shadow-[0_4px_14px_-2px_rgb(27_107_123_/_0.45)] ring-1 ring-brand-800/20 transition-all hover:shadow-[0_8px_22px_-4px_rgb(27_107_123_/_0.55)] hover:-translate-y-0.5 active:translate-y-0"
+            className="group shrink-0 w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center text-white bg-gradient-to-br from-brand-500 to-brand-700 shadow-[0_4px_14px_-2px_rgb(27_107_123_/_0.45)] ring-1 ring-brand-800/20 transition-all hover:shadow-[0_8px_22px_-4px_rgb(27_107_123_/_0.55)] hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:shadow-none disabled:hover:translate-y-0"
           >
-            <span className="transition-transform duration-200 group-hover:scale-110">
+            <span className="transition-transform duration-200 group-hover:scale-110 group-disabled:scale-100">
               {action.icon}
             </span>
           </button>

@@ -938,9 +938,18 @@ export default function StudentManagementClient() {
         title="Student Management"
         subtitle="Enroll and monitor nursing students by section"
         action={{
-          icon: <FontAwesomeIcon icon={faPlus} className="h-5 w-5" />,
-          onClick: () => setIsEnrollModalOpen(true),
-          label: "Enroll students",
+          icon: (
+            <FontAwesomeIcon
+              icon={runningMl ? faSpinner : faBrain}
+              spin={runningMl}
+              className="h-5 w-5"
+            />
+          ),
+          onClick: handleRunMl,
+          disabled: runningMl,
+          label: runningMl
+            ? "Running ML jobs…"
+            : "Run ML Jobs — score every student for risk and refresh their quiz recommendations",
         }}
       />
 
@@ -1057,17 +1066,11 @@ export default function StudentManagementClient() {
           New section
         </button>
         <button
-          onClick={handleRunMl}
-          disabled={runningMl}
-          title="Score every student for risk and refresh their quiz recommendations"
-          className="flex shrink-0 items-center justify-center gap-2 rounded-xl border border-brand-600/30 bg-surface px-4 py-2.5 text-sm font-medium text-brand-600 transition-all hover:bg-brand-600/5 disabled:opacity-50"
+          onClick={() => setIsEnrollModalOpen(true)}
+          className="flex shrink-0 items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white transition-all hover:bg-brand-700"
         >
-          <FontAwesomeIcon
-            icon={runningMl ? faSpinner : faBrain}
-            spin={runningMl}
-            className="h-4 w-4"
-          />
-          {runningMl ? "Running…" : "Run ML Jobs"}
+          <FontAwesomeIcon icon={faPlus} className="h-4 w-4" />
+          Enroll students
         </button>
       </div>
 
