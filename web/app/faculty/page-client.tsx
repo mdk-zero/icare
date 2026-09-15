@@ -24,19 +24,16 @@ import Avatar from "../components/Avatar";
  * (public.risk_level = 'safe' | 'at_risk'); `default` covers students the
  * model has never scored.
  */
-const RISK_STYLES: Record<string, { bar: string; badge: string; label: string }> = {
+const RISK_STYLES: Record<string, { badge: string; label: string }> = {
   at_risk: {
-    bar: "bg-red-600",
     badge: "bg-red-100 text-red-700 border-red-200",
     label: "At risk",
   },
   safe: {
-    bar: "bg-emerald-600",
     badge: "bg-emerald-100 text-emerald-700 border-emerald-200",
     label: "On track",
   },
   default: {
-    bar: "bg-gray-300",
     badge: "bg-gray-100 text-gray-700 border-gray-200",
     label: "No prediction",
   },
@@ -257,11 +254,7 @@ export default function FacultyDashboard() {
             {students.map((student) => {
               const risk = getRisk(student.risk_level);
               return (
-                <div
-                  key={student.id}
-                  className="relative flex items-center gap-3 p-4 pl-5"
-                >
-                  <span className={`absolute left-0 top-0 h-full w-1 ${risk.bar}`} aria-hidden />
+                <div key={student.id} className="flex items-center gap-3 p-4">
                   <Avatar name={student.name} src={student.picture_url} size="md" tone="solid" />
                   <div className="min-w-0 flex-1">
                     <p className="font-medium text-gray-900 truncate">{student.name}</p>

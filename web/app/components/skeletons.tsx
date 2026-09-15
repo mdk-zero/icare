@@ -26,11 +26,10 @@ export function SkeletonInlineStatCard() {
   );
 }
 
-/** Mirrors StatTile: left accent bar, h-10 icon, value + label row, caption. */
+/** Mirrors StatTile: h-10 icon, value + label row, caption. */
 export function SkeletonStatTile() {
   return (
-    <div className="relative flex items-center gap-3.5 overflow-hidden rounded-xl border border-hairline bg-surface p-3.5 pl-4 shadow-tile animate-pulse">
-      <span className="absolute left-0 top-0 h-full w-[3px] bg-gray-100" aria-hidden />
+    <div className="flex items-center gap-3.5 overflow-hidden rounded-xl border border-hairline bg-surface p-3.5 shadow-tile animate-pulse">
       <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gray-100" />
       <span className="min-w-0 flex-1 space-y-2">
         <span className="flex items-baseline gap-2">
@@ -382,8 +381,7 @@ export function SkeletonEhrTable() {
 
 export function SkeletonAssessmentCard() {
   return (
-    <div className="relative bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04)] overflow-hidden flex flex-col animate-pulse">
-      <span className="absolute left-0 top-0 h-full w-0.5 bg-gray-200" aria-hidden />
+    <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04)] overflow-hidden flex flex-col animate-pulse">
       <div className="p-4 flex-1 space-y-3">
         <div className="flex items-center gap-2">
           <div className="h-5 w-36 bg-gray-100 rounded" />

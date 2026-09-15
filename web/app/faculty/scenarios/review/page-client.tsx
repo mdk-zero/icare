@@ -367,21 +367,12 @@ export default function FacultyScenarioReviewClient() {
                         key={task.id}
                         onClick={() => interactive && handleToggle(task)}
                         style={{ animationDelay: `${Math.min(i, 10) * 30}ms` }}
-                        className={`group relative animate-rise overflow-hidden rounded-xl border py-3.5 pl-5 pr-4 transition-all ${
+                        className={`group animate-rise overflow-hidden rounded-xl border px-4 py-3.5 transition-all ${
                           done
                             ? "border-emerald-500/40 bg-emerald-500/[0.06]"
                             : "border-hairline bg-surface"
                         } ${interactive ? "cursor-pointer hover:border-brand-500/50 hover:shadow-tile" : ""}`}
                       >
-                        <span
-                          className={`absolute inset-y-0 left-0 w-1 ${
-                            done
-                              ? "bg-emerald-500/70"
-                              : isFaculty
-                                ? "bg-violet-400/70"
-                                : "bg-brand-500/70"
-                          }`}
-                        />
                         <div className="flex items-start gap-3.5">
                           {/* Checkbox */}
                           <div
