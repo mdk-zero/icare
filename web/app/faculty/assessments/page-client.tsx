@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -21,6 +21,7 @@ import { SkeletonAssessmentCard } from "../../components/skeletons";
 import { fetchFacultySections, type Section, apiFetch } from "../../lib/api";
 import { toast } from "../../components/Toast";
 import ConfirmModal from "../../components/ConfirmModal";
+import { usePageData } from "../../lib/use-page-data";
 
 const inputClassName =
   "w-full px-4 py-3 bg-surface border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 focus:bg-surface transition-all text-sm shadow-sm";
@@ -57,12 +58,37 @@ interface Student {
   section: string | null;
 }
 
+// Stable empty fallbacks, so the derived lists below are not rebuilt from a
+// fresh `[]` on every render.
+const NO_ASSESSMENTS: Assessment[] = [];
+const NO_STUDENTS: Student[] = [];
+const NO_SECTIONS: Section[] = [];
+
 export default function FacultyAssessmentsClient() {
   const router = useRouter();
-  const [assessments, setAssessments] = useState<Assessment[]>([]);
-  const [students, setStudents] = useState<Student[]>([]);
-  const [sections, setSections] = useState<Section[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data, loading, refresh: loadAssessments } = usePageData(
+    "faculty:assessments",
+    async () => {
+      const [assessmentsRes, studentsRes, sections] = await Promise.all([
+        apiFetch("/api/faculty/assessments", { credentials: "include" }),
+        apiFetch("/api/faculty/students", { credentials: "include" }),
+        // Own sections only: a faculty member can assign to the sections they
+        // handle (admin gets all of them).
+        fetchFacultySections(),
+      ]);
+      const assessments = assessmentsRes.ok
+        ? ((await assessmentsRes.json()) as { assessments?: Assessment[] }).assessments ?? []
+        : [];
+      const students = studentsRes.ok
+        ? ((await studentsRes.json()) as { students?: Student[] }).students ?? []
+        : [];
+      return { assessments, students, sections };
+    },
+  );
+
+  const assessments = data?.assessments ?? NO_ASSESSMENTS;
+  const students = data?.students ?? NO_STUDENTS;
+  const sections = data?.sections ?? NO_SECTIONS;
   const [busy, setBusy] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "published" | "draft">("all");
@@ -146,29 +172,6 @@ export default function FacultyAssessmentsClient() {
             selectedSections.has(s.id) && !assignTarget.target_sections!.includes(s.name),
         )
       : [];
-
-  const loadAssessments = useCallback(async () => {
-    const res = await apiFetch("/api/faculty/assessments", { credentials: "include" });
-    if (res.ok) {
-      const json = (await res.json()) as { assessments: Assessment[] };
-      setAssessments(json.assessments ?? []);
-    }
-  }, []);
-
-  useEffect(() => {
-    Promise.all([
-      loadAssessments(),
-      apiFetch("/api/faculty/students", { credentials: "include" }).then(async (r) => {
-        if (r.ok) {
-          const j = (await r.json()) as { students: Student[] };
-          setStudents(j.students ?? []);
-        }
-      }),
-      // Own sections only: a faculty member can assign to the sections they
-      // handle (admin gets all of them).
-      fetchFacultySections().then(setSections),
-    ]).finally(() => setLoading(false));
-  }, [loadAssessments]);
 
   // ---------- assessment CRUD ----------
 

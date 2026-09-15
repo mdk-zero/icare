@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import {
@@ -18,23 +18,18 @@ import PageHeader from "../../components/PageHeader";
 import StatTile from "../../components/StatTile";
 import Card from "../../components/Card";
 import { SkeletonTable } from "../../components/skeletons";
+import { usePageData } from "../../lib/use-page-data";
+
+/** Stable empty fallback, so no memo downstream sees a new array each render. */
+const NO_LOGS: AuditLog[] = [];
 
 export default function FacultyAuditClient() {
-  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
-  const [loading, setLoading] = useState(true);
   const [actionFilter, setActionFilter] = useState("all");
 
-  const loadAuditTrail = useCallback(async () => {
-    setLoading(true);
-    const action = actionFilter !== "all" ? actionFilter : undefined;
-    const data = await fetchAuditTrail(action);
-    setAuditLogs(data);
-    setLoading(false);
-  }, [actionFilter]);
-
-  useEffect(() => {
-    loadAuditTrail();
-  }, [loadAuditTrail]);
+  const { data, loading } = usePageData(`faculty:audit:${actionFilter}`, () =>
+    fetchAuditTrail(actionFilter !== "all" ? actionFilter : undefined),
+  );
+  const auditLogs = data ?? NO_LOGS;
 
   const formatTimestamp = (ts: string) => {
     const d = new Date(ts);

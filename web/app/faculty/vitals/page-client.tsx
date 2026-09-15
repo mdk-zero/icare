@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faHeartbeat,
@@ -20,6 +20,10 @@ import Card from "../../components/Card";
 import { SkeletonTable } from "../../components/skeletons";
 import ActionsMenu from "../../components/ActionsMenu";
 import PatientVitalsHistory from "./PatientVitalsHistory";
+import { usePageData } from "../../lib/use-page-data";
+
+/** Stable empty fallback, so the search memo is not invalidated every render. */
+const NO_READINGS: VitalReading[] = [];
 
 function formatVitals(reading: VitalReading): string {
   return [
@@ -35,8 +39,6 @@ function formatVitals(reading: VitalReading): string {
 }
 
 export default function FacultyVitalsClient() {
-  const [readings, setReadings] = useState<VitalReading[]>([]);
-  const [loading, setLoading] = useState(true);
   const [flaggedOnly, setFlaggedOnly] = useState(false);
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<VitalReading | null>(null);
@@ -46,16 +48,10 @@ export default function FacultyVitalsClient() {
     room: string | null;
   } | null>(null);
 
-  const loadReadings = useCallback(async () => {
-    setLoading(true);
-    const data = await fetchFacultyVitalReadings({ flaggedOnly });
-    setReadings(data);
-    setLoading(false);
-  }, [flaggedOnly]);
-
-  useEffect(() => {
-    loadReadings();
-  }, [loadReadings]);
+  const { data, loading } = usePageData(`faculty:vitals:${flaggedOnly}`, () =>
+    fetchFacultyVitalReadings({ flaggedOnly }),
+  );
+  const readings = data ?? NO_READINGS;
 
   // Search narrows the loaded page of readings by the people and places a
   // faculty member would actually search for — student, patient, or room.

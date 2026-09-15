@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faUsers,
@@ -37,6 +37,7 @@ import StatTile from "./StatTile";
 import ConfirmModal from "./ConfirmModal";
 import type { ConfirmConfig } from "./ConfirmModal";
 import { toast } from "./Toast";
+import { usePageData } from "../lib/use-page-data";
 
 const inputClassName =
   "w-full px-4 py-3 bg-surface border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 focus:bg-surface transition-all text-sm shadow-sm";
@@ -134,6 +135,10 @@ type FilterKey = "status" | "gender" | "age" | "labs";
 type Filters = Record<FilterKey, string>;
 
 const NO_FILTERS: Filters = { status: "all", gender: "all", age: "all", labs: "all" };
+
+// Stable empty fallbacks, so the filter memos are not invalidated every render.
+const NO_PATIENTS: FacultyPatient[] = [];
+const NO_ROOMS: Room[] = [];
 
 /**
  * One bucket function per filter, used for both the matching and the option
@@ -364,9 +369,6 @@ function VitalChips({ patient }: { patient: FacultyPatient }) {
 }
 
 export default function PatientsManager() {
-  const [patients, setPatients] = useState<FacultyPatient[]>([]);
-  const [rooms, setRooms] = useState<Room[]>([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [roomSearch, setRoomSearch] = useState("");
   const [filters, setFilters] = useState<Filters>(NO_FILTERS);
@@ -381,19 +383,14 @@ export default function PatientsManager() {
 
   // Fetched whole and filtered in the browser: grouping needs the unfiltered
   // roster to show each room's real size while a search is narrowing it.
-  const loadPatients = useCallback(async () => {
-    const data = await fetchFacultyPatients();
-    setPatients(data);
-    setLoading(false);
-  }, []);
+  // Rooms populate the assignment dropdown in the add/edit form.
+  const { data, loading, refresh: loadPatients } = usePageData("patients-manager", async () => {
+    const [patients, rooms] = await Promise.all([fetchFacultyPatients(), fetchRooms()]);
+    return { patients, rooms };
+  });
 
-  useEffect(() => {
-    // The roster is remote, so it can only be populated after mount.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void loadPatients();
-    // Rooms populate the assignment dropdown in the add/edit form.
-    void fetchRooms().then(setRooms);
-  }, [loadPatients]);
+  const patients = data?.patients ?? NO_PATIENTS;
+  const rooms = data?.rooms ?? NO_ROOMS;
 
   const query = search.trim().toLowerCase();
   const roomQuery = roomSearch.trim().toLowerCase();

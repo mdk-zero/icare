@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useMemo } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import { toast } from "../../components/Toast";
@@ -24,6 +24,7 @@ import {
   apiFetch,
 } from "../../lib/api";
 import { SkeletonTable } from "../../components/skeletons";
+import { usePageData } from "../../lib/use-page-data";
 import PageHeader from "../../components/PageHeader";
 
 type ReportType = "student" | "section" | "scenario" | "assessment" | "roster";
@@ -88,67 +89,57 @@ interface Target {
   sub: string;
 }
 
+/** Stable empty fallback, so the filter memo is not invalidated every render. */
+const NO_TARGETS: Target[] = [];
+
 export default function FacultyReportsClient() {
   const [kind, setKind] = useState<ReportType>("student");
   const [format, setFormat] = useState<Format>("pdf");
-  const [targets, setTargets] = useState<Target[]>([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [generateError, setGenerateError] = useState<string | null>(null);
 
   const active = KINDS.find((k) => k.type === kind)!;
 
-  const loadTargets = useCallback(async (type: ReportType) => {
-    setLoading(true);
-    setError(null);
-    try {
-      if (type === "student") {
+  // One list per report type, kept once loaded, so switching back and forth
+  // between types does not refetch either of them.
+  const { data, loading, error: loadError } = usePageData<Target[]>(
+    `faculty:report-targets:${kind}`,
+    async () => {
+      if (kind === "student") {
         const rows = await fetchFacultyStudents();
-        setTargets(
-          rows.map((s) => ({ id: s.id, label: s.name, sub: s.email })),
-        );
-      } else if (type === "section") {
+        return rows.map((s) => ({ id: s.id, label: s.name, sub: s.email }));
+      }
+      if (kind === "section") {
         const rows = await fetchFacultySections();
-        setTargets(rows.map((s) => ({ id: s.id, label: s.name, sub: "Section" })));
-      } else if (type === "scenario") {
+        return rows.map((s) => ({ id: s.id, label: s.name, sub: "Section" }));
+      }
+      if (kind === "scenario") {
         const rows = await fetchFacultyScenarios();
-        setTargets(
-          rows.map((s) => ({
-            id: s.id,
-            label: s.title,
-            sub: `${s.difficulty} · ${s.category} · ${s.student_count} assigned`,
-          })),
-        );
-      } else if (type === "assessment") {
+        return rows.map((s) => ({
+          id: s.id,
+          label: s.title,
+          sub: `${s.difficulty} · ${s.category} · ${s.student_count} assigned`,
+        }));
+      }
+      if (kind === "assessment") {
         const res = await apiFetch("/api/faculty/assessments", { credentials: "include" });
         const json = (await res.json()) as {
           assessments?: { id: string; title: string; difficulty: string; is_published: boolean }[];
         };
-        setTargets(
-          (json.assessments ?? []).map((a) => ({
-            id: a.id,
-            label: a.title,
-            sub: `${a.difficulty} · ${a.is_published ? "Published" : "Draft"}`,
-          })),
-        );
-      } else {
-        setTargets([]);
+        return (json.assessments ?? []).map((a) => ({
+          id: a.id,
+          label: a.title,
+          sub: `${a.difficulty} · ${a.is_published ? "Published" : "Draft"}`,
+        }));
       }
-    } catch {
-      setError("Unable to load the list for this report type.");
-      setTargets([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+      return [];
+    },
+  );
 
-  useEffect(() => {
-    // The target list is remote and keyed on the selected report type, so it
-    // has to be fetched here rather than derived during render.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void loadTargets(kind);
-  }, [kind, loadTargets]);
+  const targets = data ?? NO_TARGETS;
+  const error =
+    generateError ?? (loadError ? "Unable to load the list for this report type." : null);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
@@ -157,7 +148,7 @@ export default function FacultyReportsClient() {
 
   const generate = async (target?: Target) => {
     const key = target?.id ?? "roster";
-    setError(null);
+    setGenerateError(null);
     setBusy(key);
     try {
       const query = new URLSearchParams({ format });
@@ -166,7 +157,7 @@ export default function FacultyReportsClient() {
 
       if (!res.ok) {
         const json = (await res.json().catch(() => ({}))) as { error?: string };
-        setError(json.error || `Unable to generate this ${active.label.toLowerCase()} report`);
+        setGenerateError(json.error || `Unable to generate this ${active.label.toLowerCase()} report`);
         return;
       }
 
@@ -184,7 +175,7 @@ export default function FacultyReportsClient() {
       link.remove();
       URL.revokeObjectURL(url);
     } catch {
-      setError("Unable to generate report");
+      setGenerateError("Unable to generate report");
     } finally {
       setBusy(null);
     }

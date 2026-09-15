@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo, Fragment } from "react";
+import { useState, useEffect, useMemo, Fragment } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { toast } from "../../components/Toast";
 import {
@@ -31,6 +31,12 @@ import {
 } from "../../lib/api";
 import PageHeader from "../../components/PageHeader";
 import { SkeletonPatientGrid, SkeletonEhrTable } from "../../components/skeletons";
+import { usePageData } from "../../lib/use-page-data";
+
+// Stable empty fallbacks, so the filter memos below are not invalidated
+// by a fresh `[]` on every render.
+const NO_PATIENTS: FacultyPatient[] = [];
+const NO_RECORDS: EhrRecord[] = [];
 
 const TABS: { id: EhrType; label: string; icon: typeof faHeartPulse }[] = [
   { id: "tpr", label: "TPR Sheets", icon: faHeartPulse },
@@ -88,7 +94,6 @@ const CRITICALITY = [
 const inputClass = "w-full px-3 py-1.5 bg-surface border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 transition-all";
 
 export default function FacultyEhrClient() {
-  const [patients, setPatients] = useState<FacultyPatient[]>([]);
   const [selectedPatient, setSelectedPatient] = useState<FacultyPatient | null>(null);
   const [search, setSearch] = useState("");
   const [showFilters, setShowFilters] = useState(false);
@@ -99,8 +104,6 @@ export default function FacultyEhrClient() {
   const [roomFilter, setRoomFilter] = useState("");
 
   const [tab, setTab] = useState<EhrType>("note");
-  const [records, setRecords] = useState<EhrRecord[]>([]);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -109,6 +112,26 @@ export default function FacultyEhrClient() {
   const [dateTo, setDateTo] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [reviewingAll, setReviewingAll] = useState(false);
+
+  const { data: patientsData, loading: loadingPatients } = usePageData(
+    "faculty:ehr:patients",
+    fetchFacultyPatients,
+  );
+
+  // One entry per patient-and-tab, so stepping between a patient's notes, meds
+  // and IVs — then back — reads each list from memory after the first visit.
+  const recordsKey = selectedPatient ? `faculty:ehr:records:${selectedPatient.id}:${tab}` : null;
+  const {
+    data: recordsData,
+    loading: loadingRecords,
+    refresh: reloadRecords,
+  } = usePageData(recordsKey, () =>
+    fetchFacultyEhrRecords(tab, { patientId: selectedPatient!.id }),
+  );
+
+  const patients = patientsData ?? NO_PATIENTS;
+  const records = recordsData ?? NO_RECORDS;
+  const loading = selectedPatient ? loadingRecords : loadingPatients;
 
   const roomOptions = useMemo(() => {
     const set = new Set<string>();
@@ -205,33 +228,15 @@ export default function FacultyEhrClient() {
     return list;
   }, [records, studentFilter, dateFrom, dateTo]);
 
-  const loadPatients = useCallback(async () => {
-    setLoading(true);
-    const data = await fetchFacultyPatients();
-    setPatients(data);
-    setLoading(false);
-  }, []);
-
+  // Filters and checkboxes belong to the list being looked at, so switching
+  // patient or tab clears them. The records themselves are keyed above.
   useEffect(() => {
-    loadPatients();
-  }, [loadPatients]);
-
-  const loadRecords = useCallback(async (patientId: string, type: EhrType) => {
-    setLoading(true);
-    const data = await fetchFacultyEhrRecords(type, { patientId });
-    setRecords(data);
-    setLoading(false);
-  }, []);
-
-  useEffect(() => {
-    if (!selectedPatient) return;
     setError(null);
     setStudentFilter("all");
     setDateFrom("");
     setDateTo("");
     setSelectedIds(new Set());
-    loadRecords(selectedPatient.id, tab);
-  }, [selectedPatient, tab, loadRecords]);
+  }, [recordsKey]);
 
   const handleReview = async (noteId: string) => {
     setError(null);
@@ -242,7 +247,7 @@ export default function FacultyEhrClient() {
     }
     toast("Note reviewed");
     if (selectedPatient) {
-      loadRecords(selectedPatient.id, tab);
+      reloadRecords();
     }
   };
 
@@ -265,7 +270,7 @@ export default function FacultyEhrClient() {
       toast(`${reviewed.length} note${reviewed.length === 1 ? "" : "s"} reviewed`);
     }
     if (selectedPatient) {
-      loadRecords(selectedPatient.id, tab);
+      reloadRecords();
     }
   };
 
@@ -294,7 +299,6 @@ export default function FacultyEhrClient() {
 
   const goBack = () => {
     setSelectedPatient(null);
-    setRecords([]);
     setError(null);
   };
 

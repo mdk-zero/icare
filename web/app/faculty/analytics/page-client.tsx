@@ -27,7 +27,6 @@ import {
   fetchFacultySections,
   generateAnalyticsNarrative,
   runFacultyMlJob,
-  AnalyticsSummary,
   AnalyticsNarrative,
   AnalyticsBucket,
   Section,
@@ -36,6 +35,10 @@ import { SkeletonStatCard, SkeletonChartArea, SkeletonCompetencyGrid } from "../
 import PageHeader from "../../components/PageHeader";
 import Card, { CardLabel } from "../../components/Card";
 import StatTile from "../../components/StatTile";
+import { usePageData } from "../../lib/use-page-data";
+
+/** Stable empty fallback, so nothing downstream sees a new array each render. */
+const NO_SECTIONS: Section[] = [];
 
 const BRAND = "#1B6B7B";
 
@@ -597,17 +600,12 @@ function NarrativeCard({
 }
 
 export default function FacultyAnalyticsClient() {
-  const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
-  const [bucket, setBucket] = useState<AnalyticsBucket>("week");
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
 
   // On-demand ML runs, scoped by the server to this faculty member's sections.
   const [runningMl, setRunningMl] = useState(false);
   const [mlStatus, setMlStatus] = useState<string | null>(null);
   const [mlError, setMlError] = useState<string | null>(null);
 
-  const [sections, setSections] = useState<Section[]>([]);
   const [sectionIds, setSectionIds] = useState<string[]>([]);
   const [preset, setPreset] = useState<PresetId>("3m");
   // Lazily initialised so `new Date()` never runs during a server render —
@@ -618,24 +616,24 @@ export default function FacultyAnalyticsClient() {
   // controlled inputs still track every keystroke.
   const [draft, setDraft] = useState<{ from: string; to: string }>(() => rangeForPreset("3m"));
 
-  useEffect(() => {
-    (async () => setSections(await fetchFacultySections()))();
-  }, []);
+  const { data: sectionsData } = usePageData("faculty:sections", fetchFacultySections);
+  const sections = sectionsData ?? NO_SECTIONS;
 
   const { from, to } = range;
-  useEffect(() => {
-    const controller = new AbortController();
-    (async () => {
-      setRefreshing(true);
-      const result = await fetchAnalyticsSummary({ sectionIds, from, to }, controller.signal);
-      if (controller.signal.aborted) return;
-      setSummary(result.summary);
-      setBucket(result.bucket);
-      setLoading(false);
-      setRefreshing(false);
-    })();
-    return () => controller.abort();
-  }, [sectionIds, from, to]);
+  const sectionKey = [...sectionIds].sort().join(",");
+
+  // One entry per filter combination. A late response lands on its own key
+  // rather than on whatever the user has since selected, which is what the
+  // abort controller here used to be for; and re-selecting a range already
+  // looked at costs nothing.
+  const { data: analytics, loading, revalidating: refreshing } = usePageData(
+    `faculty:analytics:${sectionKey}:${from}:${to}`,
+    () => fetchAnalyticsSummary({ sectionIds, from, to }),
+    { keepPreviousData: true },
+  );
+
+  const summary = analytics?.summary ?? null;
+  const bucket = analytics?.bucket ?? "week";
 
   /**
    * Runs both jobs, prediction first so the recommender sees fresh risk
@@ -703,7 +701,7 @@ export default function FacultyAnalyticsClient() {
   // is labelled rather than silently describing the wrong numbers.
   const [narrativeKey, setNarrativeKey] = useState<string | null>(null);
 
-  const filterKey = `${[...sectionIds].sort().join(",")}|${from}|${to}`;
+  const filterKey = `${sectionKey}|${from}|${to}`;
 
   const runNarrative = useCallback(
     async (key: string, ids: string[], start: string, end: string) => {

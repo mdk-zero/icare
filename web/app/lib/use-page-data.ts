@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import {
   ensureLoaded,
   readPage,
@@ -39,30 +39,41 @@ export interface PageData<T> {
  *
  * `key` must encode everything `loader` reads — a filter, a search term, a
  * route param — because it is the only thing that separates one cached result
- * from another. `loader` may be a fresh closure on every render; scheduling is
- * idempotent, so re-running the effect costs nothing.
+ * from another. A null key means there is nothing to load yet (no row selected,
+ * no id in the URL); the loader never runs and `loading` stays false.
+ * `loader` may be a fresh closure on every render; scheduling is idempotent, so
+ * re-running the effect costs nothing.
  */
 export function usePageData<T>(
-  key: string,
+  key: string | null,
   loader: () => Promise<T>,
-  options?: { freshFor?: number },
+  options?: { freshFor?: number; keepPreviousData?: boolean },
 ): PageData<T> {
   const freshFor = options?.freshFor ?? DEFAULT_FRESH_FOR_MS;
+  const keepPreviousData = options?.keepPreviousData ?? false;
 
   const entry = useSyncExternalStore(
-    useCallback((onChange: () => void) => subscribePage(key, onChange), [key]),
-    useCallback(() => readPage(key), [key]),
+    useCallback(
+      (onChange: () => void) => (key === null ? NOOP_UNSUBSCRIBE : subscribePage(key, onChange)),
+      [key],
+    ),
+    useCallback(() => (key === null ? undefined : readPage(key)), [key]),
     () => undefined,
   );
 
   useEffect(() => {
+    if (key === null) return;
     ensureLoaded(key, loader, freshFor);
   }, [key, loader, freshFor]);
 
-  const refresh = useCallback(() => reloadPage(key, loader), [key, loader]);
+  const refresh = useCallback(
+    () => (key === null ? Promise.resolve() : reloadPage(key, loader)),
+    [key, loader],
+  );
 
   const setData = useCallback(
     (next: T | ((previous: T | undefined) => T)) => {
+      if (key === null) return;
       const previous = readPage(key)?.data as T | undefined;
       writePage(
         key,
@@ -72,12 +83,26 @@ export function usePageData<T>(
     [key],
   );
 
+  // Holding the last result across a key change lets a page keep its panels on
+  // screen while a new filter loads, instead of collapsing to a skeleton. This
+  // is the documented way to adjust state from a changed input: it converges
+  // after one extra render and never loops.
+  const [held, setHeld] = useState<T | undefined>(undefined);
+  const fresh = entry?.data as T | undefined;
+  if (keepPreviousData && fresh !== undefined && held !== fresh) setHeld(fresh);
+
+  const data = fresh ?? (keepPreviousData ? held : undefined);
+
   return {
-    data: entry?.data as T | undefined,
-    loading: entry === undefined,
-    revalidating: entry?.revalidating ?? false,
+    data,
+    loading: key !== null && data === undefined,
+    // A key whose own result has not arrived yet is still refreshing, even
+    // though the previous key's data is what is on screen.
+    revalidating: (entry?.revalidating ?? false) || (data !== undefined && fresh === undefined),
     error: entry?.error,
     refresh,
     setData,
   };
 }
+
+function NOOP_UNSUBSCRIBE() {}
