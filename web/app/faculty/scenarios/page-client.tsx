@@ -82,6 +82,20 @@ const MAX_PER_REQUEST = 12;
 const NO_SCENARIOS: SimulationScenario[] = [];
 const NO_STUDENTS: FacultyStudent[] = [];
 
+/**
+ * The library reads as a progression, so the grid is grouped in this order
+ * rather than sorted by it.
+ *
+ * -600 not -500 on the markers: the dark theme rethemes 50/100/200/600/700/800
+ * of the tinted ramps, so a 500 would keep its light-mode saturation on a dark
+ * surface.
+ */
+const DIFFICULTY_SECTIONS = [
+  { key: "beginner", label: "Beginner", marker: "bg-emerald-600" },
+  { key: "intermediate", label: "Intermediate", marker: "bg-amber-600" },
+  { key: "advanced", label: "Advanced", marker: "bg-rose-600" },
+];
+
 const labelClassName = "block text-sm font-bold text-gray-800 mb-2";
 
 export default function FacultyScenariosClient() {
@@ -181,6 +195,39 @@ export default function FacultyScenariosClient() {
       return matchesSearch && matchesDifficulty && matchesCategory;
     });
   }, [scenarios, searchQuery, difficultyFilter, categoryFilter]);
+
+  /**
+   * Difficulty is a heading rather than a badge on each card, so an empty
+   * level is left out entirely. A difficulty outside the three known values
+   * still gets its own section rather than dropping off the page.
+   */
+  const difficultyGroups = useMemo(() => {
+    const byDifficulty = new Map<string, SimulationScenario[]>();
+    for (const scenario of filteredScenarios) {
+      const bucket = byDifficulty.get(scenario.difficulty);
+      if (bucket) bucket.push(scenario);
+      else byDifficulty.set(scenario.difficulty, [scenario]);
+    }
+
+    const known = DIFFICULTY_SECTIONS.map(({ key, label, marker }) => ({
+      key,
+      label,
+      marker,
+      items: byDifficulty.get(key) ?? [],
+    }));
+
+    const unrecognised = [...byDifficulty.keys()]
+      .filter((key) => !DIFFICULTY_SECTIONS.some((section) => section.key === key))
+      .sort((a, b) => a.localeCompare(b))
+      .map((key) => ({
+        key,
+        label: key.charAt(0).toUpperCase() + key.slice(1),
+        marker: "bg-gray-400",
+        items: byDifficulty.get(key) ?? [],
+      }));
+
+    return [...known, ...unrecognised].filter((group) => group.items.length > 0);
+  }, [filteredScenarios]);
 
   const linkModalFilteredPatients = useMemo(() => {
     const q = linkPatientSearchQuery.toLowerCase();
@@ -387,12 +434,6 @@ export default function FacultyScenariosClient() {
       default:
         return "bg-gray-100 text-gray-700 border-gray-200";
     }
-  };
-
-  const difficultyBar: Record<string, string> = {
-    advanced: "bg-rose-600",
-    intermediate: "bg-amber-600",
-    beginner: "bg-emerald-600",
   };
 
   const getDifficultyIcon = (difficulty: string) => {
@@ -743,91 +784,92 @@ export default function FacultyScenariosClient() {
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredScenarios.map((scenario) => (
-            <div
-              key={scenario.id}
-              className="group relative bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200 overflow-hidden flex flex-col"
-            >
-              <span
-                className={`absolute left-0 top-0 h-full w-0.5 ${difficultyBar[scenario.difficulty] ?? "bg-gray-500"}`}
-                aria-hidden
-              />
-              <div className="p-3 border-b border-hairline flex-1">
-                <div className="flex items-start justify-between mb-3">
-                  <h3 className="font-semibold text-gray-900 line-clamp-2 pr-2">
-                    {scenario.title}
-                  </h3>
-                  {scenario.is_ai_generated && (
-                    <span className="px-2 py-1 bg-brand-100 text-brand-700 text-xs font-medium rounded-full flex items-center gap-1 whitespace-nowrap">
-                      <FontAwesomeIcon icon={faRobot} className="w-3 h-3" />
-                      AI
-                    </span>
-                  )}
-                </div>
-                <p className="text-sm text-gray-500 line-clamp-2 mb-4">{scenario.description}</p>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span
-                    className={`px-2.5 py-1 rounded-full text-xs font-medium border flex items-center gap-1 ${getDifficultyColor(
-                      scenario.difficulty,
-                    )}`}
+        <div className="space-y-6">
+          {difficultyGroups.map((group) => (
+            <section key={group.key} className="space-y-3">
+              <div className="flex items-center gap-2.5">
+                <span className={`h-2 w-2 shrink-0 rounded-full ${group.marker}`} aria-hidden />
+                <h2 className="text-sm font-semibold uppercase tracking-[0.08em] text-gray-700">
+                  {group.label}
+                </h2>
+                <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium tabular-nums text-gray-600">
+                  {group.items.length}
+                </span>
+                <span className="h-px flex-1 bg-hairline" aria-hidden />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {group.items.map((scenario) => (
+                  <div
+                    key={scenario.id}
+                    className="group bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200 overflow-hidden flex flex-col"
                   >
-                    <FontAwesomeIcon
-                      icon={getDifficultyIcon(scenario.difficulty)}
-                      className="w-3 h-3"
-                    />
-                    {scenario.difficulty}
-                  </span>
-                  <span className="px-2.5 py-1 bg-gray-100 text-gray-700 text-xs font-medium rounded-full">
-                    {scenario.category}
-                  </span>
-                  {scenario.patient_name && (
-                    <span className="px-2.5 py-1 bg-teal-50 text-teal-700 text-xs font-medium rounded-full flex items-center gap-1">
-                      <FontAwesomeIcon icon={faUsers} className="w-3 h-3" />
-                      {scenario.patient_name}
-                    </span>
-                  )}
-                </div>
+                    <div className="p-3 border-b border-hairline flex-1">
+                      <div className="flex items-start justify-between mb-3">
+                        <h3 className="font-semibold text-gray-900 line-clamp-2 pr-2">
+                          {scenario.title}
+                        </h3>
+                        {scenario.is_ai_generated && (
+                          <span className="px-2 py-1 bg-brand-100 text-brand-700 text-xs font-medium rounded-full flex items-center gap-1 whitespace-nowrap">
+                            <FontAwesomeIcon icon={faRobot} className="w-3 h-3" />
+                            AI
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm text-gray-500 line-clamp-2 mb-4">{scenario.description}</p>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="px-2.5 py-1 bg-gray-100 text-gray-700 text-xs font-medium rounded-full">
+                          {scenario.category}
+                        </span>
+                        {scenario.patient_name && (
+                          <span className="px-2.5 py-1 bg-teal-50 text-teal-700 text-xs font-medium rounded-full flex items-center gap-1">
+                            <FontAwesomeIcon icon={faUsers} className="w-3 h-3" />
+                            {scenario.patient_name}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="p-5 bg-subtle">
+                      <div className="flex items-center justify-between text-sm mb-4">
+                        <span className="text-gray-500 flex items-center gap-1.5">
+                          <FontAwesomeIcon icon={faUsers} className="w-3.5 h-3.5" />
+                          {scenario.student_count} students
+                        </span>
+                        <span className="text-gray-400 flex items-center gap-1.5">
+                          <FontAwesomeIcon icon={faCalendarDay} className="w-3.5 h-3.5" />
+                          {new Date(scenario.created_at).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <ActionsMenu
+                        actions={[
+                          { label: "View", icon: faEye, onClick: () => handleViewDetails(scenario) },
+                          {
+                            label: "Edit",
+                            icon: faPenToSquare,
+                            onClick: () => router.push(`/faculty/scenarios/${scenario.id}/edit`),
+                          },
+                          {
+                            label: "Assign",
+                            icon: faUserPlus,
+                            onClick: () => handleOpenAssignModal(scenario),
+                          },
+                          {
+                            label: scenario.patient_name ? "Change patient" : "Link patient",
+                            icon: faHospitalUser,
+                            onClick: () => handleOpenLinkPatientModal(scenario),
+                          },
+                          {
+                            label: "Delete",
+                            icon: faTrash,
+                            danger: true,
+                            onClick: () => handleOpenDeleteModal(scenario),
+                          },
+                        ]}
+                      />
+                    </div>
+                  </div>
+                ))}
               </div>
-              <div className="p-5 bg-subtle">
-                <div className="flex items-center justify-between text-sm mb-4">
-                  <span className="text-gray-500 flex items-center gap-1.5">
-                    <FontAwesomeIcon icon={faUsers} className="w-3.5 h-3.5" />
-                    {scenario.student_count} students
-                  </span>
-                  <span className="text-gray-400 flex items-center gap-1.5">
-                    <FontAwesomeIcon icon={faCalendarDay} className="w-3.5 h-3.5" />
-                    {new Date(scenario.created_at).toLocaleDateString()}
-                  </span>
-                </div>
-                <ActionsMenu
-                  actions={[
-                    { label: "View", icon: faEye, onClick: () => handleViewDetails(scenario) },
-                    {
-                      label: "Edit",
-                      icon: faPenToSquare,
-                      onClick: () => router.push(`/faculty/scenarios/${scenario.id}/edit`),
-                    },
-                    {
-                      label: "Assign",
-                      icon: faUserPlus,
-                      onClick: () => handleOpenAssignModal(scenario),
-                    },
-                    {
-                      label: scenario.patient_name ? "Change patient" : "Link patient",
-                      icon: faHospitalUser,
-                      onClick: () => handleOpenLinkPatientModal(scenario),
-                    },
-                    {
-                      label: "Delete",
-                      icon: faTrash,
-                      danger: true,
-                      onClick: () => handleOpenDeleteModal(scenario),
-                    },
-                  ]}
-                />
-              </div>
-            </div>
+            </section>
           ))}
         </div>
       )}
