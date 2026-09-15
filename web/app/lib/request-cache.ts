@@ -94,7 +94,7 @@ export function onCacheClear(listener: () => void): () => void {
 interface CachedResponse {
   body: string;
   status: number;
-  contentType: string | null;
+  contentType: string;
   storedAt: number;
 }
 
@@ -121,7 +121,7 @@ function isCacheable(url: string, init?: RequestInit): boolean {
 function toResponse(entry: CachedResponse): Response {
   return new Response(entry.body, {
     status: entry.status,
-    headers: entry.contentType ? { "content-type": entry.contentType } : undefined,
+    headers: { "content-type": entry.contentType },
   });
 }
 
@@ -148,21 +148,35 @@ export async function cachedFetch(
     if (hit && Date.now() - hit.storedAt < RESPONSE_TTL_MS) return toResponse(hit);
 
     // Two components mounting at once ask for the same endpoint; they share the
-    // one request rather than racing each other.
+    // one request rather than racing each other. If that request turns out not
+    // to be replayable, its body belongs to whoever started it, so this caller
+    // goes and asks for its own.
     const pending = inflight.get(input);
-    if (pending) return toResponse(await pending);
+    if (pending) {
+      try {
+        return toResponse(await pending);
+      } catch (err) {
+        if (err instanceof PassThrough) return send(input, init);
+        throw err;
+      }
+    }
   }
 
   const request = (async () => {
     const startedAt = generation;
     const res = await send(input, init);
-    // Only a plain 200 with a body is replayable; 204 in particular cannot be
-    // reconstructed, because `new Response(body, { status: 204 })` throws.
+    // Only a plain 200 is replayable; 204 in particular cannot be reconstructed,
+    // because `new Response(body, { status: 204 })` throws.
     if (res.status !== 200) throw new PassThrough(res);
+    // And only JSON. Reports come back over GET as application/pdf or text/csv,
+    // and a PDF read through `text()` and handed back as a new body is a
+    // corrupt PDF — so anything that is not JSON goes straight through, uncached.
+    const contentType = res.headers.get("content-type");
+    if (!contentType?.includes("application/json")) throw new PassThrough(res);
     const entry: CachedResponse = {
       body: await res.text(),
       status: res.status,
-      contentType: res.headers.get("content-type"),
+      contentType,
       storedAt: Date.now(),
     };
     if (startedAt === generation) responses.set(input, entry);

@@ -95,7 +95,10 @@ export function usePageData<T>(
 
   return {
     data,
-    loading: key !== null && data === undefined,
+    // Having settled is what ends the skeleton, not having data: a loader that
+    // failed leaves an entry with an error and nothing else, and the page has to
+    // be allowed to render its empty state rather than spin forever.
+    loading: key !== null && entry === undefined && data === undefined,
     // A key whose own result has not arrived yet is still refreshing, even
     // though the previous key's data is what is on screen.
     revalidating: (entry?.revalidating ?? false) || (data !== undefined && fresh === undefined),
