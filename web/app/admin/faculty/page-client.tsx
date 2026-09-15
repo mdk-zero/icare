@@ -1,7 +1,8 @@
 "use client";
 
 import { apiFetch } from "@/app/lib/api";
-import { useState, useEffect, useCallback } from "react";
+import { usePageData } from "@/app/lib/use-page-data";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faUsers, faPlus, faChevronDown } from "@fortawesome/free-solid-svg-icons";
@@ -22,6 +23,10 @@ interface Faculty {
   student_count: number;
 }
 
+// Stable empty fallbacks, so nothing downstream sees a new array each render.
+const NO_FACULTY: Faculty[] = [];
+const NO_SECTIONS: SectionRef[] = [];
+
 function formatDate(value: string | null): string {
   if (!value) return "Never";
   return new Date(value).toLocaleDateString("en-US", {
@@ -33,9 +38,6 @@ function formatDate(value: string | null): string {
 
 export default function FacultyClient() {
   const router = useRouter();
-  const [faculty, setFaculty] = useState<Faculty[]>([]);
-  const [sections, setSections] = useState<SectionRef[]>([]);
-  const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [tempPassword, setTempPassword] = useState<{ email: string; password: string } | null>(null);
@@ -46,6 +48,27 @@ export default function FacultyClient() {
   const [selectedFaculty, setSelectedFaculty] = useState<Faculty | null>(null);
   const [selectedSections, setSelectedSections] = useState<string[]>([]);
   const [filterSection, setFilterSection] = useState("");
+
+  const { data, loading, refresh: loadData, setData } = usePageData(
+    "admin:faculty",
+    async () => {
+      const [facultyRes, sectionsRes] = await Promise.all([
+        apiFetch("/api/admin/faculty", { credentials: "include" }),
+        apiFetch("/api/sections", { credentials: "include" }),
+      ]);
+      const faculty = facultyRes.ok
+        ? ((await facultyRes.json()) as { faculty?: Faculty[] }).faculty ?? NO_FACULTY
+        : NO_FACULTY;
+      const sections = sectionsRes.ok
+        ? ((await sectionsRes.json()) as { sections?: SectionRef[] }).sections ?? NO_SECTIONS
+        : NO_SECTIONS;
+      return { faculty, sections };
+    },
+  );
+
+  const faculty = data?.faculty ?? NO_FACULTY;
+  const sections = data?.sections ?? NO_SECTIONS;
+
   const filteredFaculty = faculty.filter((f) => {
     if (filterSection === "__none__") return f.sections.length === 0;
     if (filterSection && !f.sections.some((s) => s.id === filterSection)) return false;
@@ -57,24 +80,6 @@ export default function FacultyClient() {
     setTimeout(() => setMessage(null), 4000);
   };
 
-  const loadData = useCallback(async () => {
-    const [facultyRes, sectionsRes] = await Promise.all([
-      apiFetch("/api/admin/faculty", { credentials: "include" }),
-      apiFetch("/api/sections", { credentials: "include" }),
-    ]);
-    if (facultyRes.ok) {
-      const json = (await facultyRes.json()) as { faculty: Faculty[] };
-      setFaculty(json.faculty ?? []);
-    }
-    if (sectionsRes.ok) {
-      const json = (await sectionsRes.json()) as { sections: SectionRef[] };
-      setSections(json.sections ?? []);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadData().finally(() => setLoading(false));
-  }, [loadData]);
 
   const handleAddFaculty = async () => {
     if (!newFaculty.name.trim() || !newFaculty.email.trim()) {
@@ -98,7 +103,10 @@ export default function FacultyClient() {
       flash(json.error ?? "Failed to create faculty");
       return;
     }
-    setFaculty((prev) => [...prev, { ...json.user!, sections: [], student_count: 0 }]);
+    setData((previous) => ({
+      faculty: [...(previous?.faculty ?? []), { ...json.user!, sections: [], student_count: 0 }],
+      sections: previous?.sections ?? NO_SECTIONS,
+    }));
     setShowAddModal(false);
     setNewFaculty({ name: "", email: "" });
     if (json.password) setTempPassword({ email: json.user.email, password: json.password });

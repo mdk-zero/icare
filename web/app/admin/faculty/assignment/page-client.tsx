@@ -1,7 +1,8 @@
 "use client";
 
 import { apiFetch } from "@/app/lib/api";
-import { useState, useEffect, useCallback } from "react";
+import { usePageData } from "@/app/lib/use-page-data";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faChevronLeft, faTrash } from "@fortawesome/free-solid-svg-icons";
@@ -19,11 +20,12 @@ interface Faculty {
   student_count: number;
 }
 
+// Stable empty fallbacks, so nothing downstream sees a new array each render.
+const NO_FACULTY: Faculty[] = [];
+const NO_SECTIONS: Section[] = [];
+
 export default function AssignSectionsClient() {
   const router = useRouter();
-  const [faculty, setFaculty] = useState<Faculty[]>([]);
-  const [sections, setSections] = useState<Section[]>([]);
-  const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -37,34 +39,41 @@ export default function AssignSectionsClient() {
     setTimeout(() => setMessage(null), 4000);
   };
 
-  const loadData = useCallback(async () => {
+  const { data, loading, setData } = usePageData("admin:faculty-assignment", async () => {
     const [facultyRes, sectionsRes] = await Promise.all([
       apiFetch("/api/admin/faculty", { credentials: "include" }),
       apiFetch("/api/sections", { credentials: "include" }),
     ]);
-    let loaded: Faculty[] = [];
-    if (facultyRes.ok) {
-      const json = (await facultyRes.json()) as { faculty: Faculty[] };
-      loaded = json.faculty ?? [];
-      setFaculty(loaded);
-    }
-    if (sectionsRes.ok) {
-      const json = (await sectionsRes.json()) as { sections: Section[] };
-      setSections(json.sections ?? []);
-    }
-    return loaded;
-  }, []);
+    const faculty = facultyRes.ok
+      ? ((await facultyRes.json()) as { faculty?: Faculty[] }).faculty ?? NO_FACULTY
+      : NO_FACULTY;
+    const sections = sectionsRes.ok
+      ? ((await sectionsRes.json()) as { sections?: Section[] }).sections ?? NO_SECTIONS
+      : NO_SECTIONS;
+    return { faculty, sections };
+  });
 
+  const faculty = data?.faculty ?? NO_FACULTY;
+  const sections = data?.sections ?? NO_SECTIONS;
+
+  // Every edit below patches the loaded pair in place rather than refetching it.
+  const setFaculty = (update: (previous: Faculty[]) => Faculty[]) =>
+    setData((previous) => ({
+      faculty: update(previous?.faculty ?? NO_FACULTY),
+      sections: previous?.sections ?? NO_SECTIONS,
+    }));
+  const setSections = (update: (previous: Section[]) => Section[]) =>
+    setData((previous) => ({
+      faculty: previous?.faculty ?? NO_FACULTY,
+      sections: update(previous?.sections ?? NO_SECTIONS),
+    }));
+
+  // The page opens on someone, so the first arrival picks the first member.
   useEffect(() => {
-    loadData()
-      .then((loaded) => {
-        if (loaded.length > 0) {
-          setSelectedFaculty(loaded[0]);
-          setSelectedSections(loaded[0].sections.map((s) => s.id));
-        }
-      })
-      .finally(() => setLoading(false));
-  }, [loadData]);
+    if (selectedFaculty || faculty.length === 0) return;
+    setSelectedFaculty(faculty[0]);
+    setSelectedSections(faculty[0].sections.map((s) => s.id));
+  }, [faculty, selectedFaculty]);
 
   const handleFacultySelect = (member: Faculty) => {
     if (hasChanges && !window.confirm("Discard unsaved section changes?")) return;

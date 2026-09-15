@@ -1,7 +1,8 @@
 "use client";
 
 import { apiFetch } from "@/app/lib/api";
-import { useState, useEffect, useCallback } from "react";
+import { usePageData } from "@/app/lib/use-page-data";
+import { useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faClock, faMagnifyingGlass } from "@fortawesome/free-solid-svg-icons";
 import PageHeader from "../../components/PageHeader";
@@ -20,6 +21,10 @@ interface AuditRow {
 }
 
 const PAGE_SIZE = 50;
+
+// Stable empty fallbacks, so nothing downstream sees a new array each render.
+const NO_LOGS: AuditRow[] = [];
+const NO_ENTITY_TYPES: string[] = [];
 
 const ROLE_BADGE: Record<string, string> = {
   admin: "bg-orange-50 text-orange-700",
@@ -50,11 +55,6 @@ function csvEscape(value: string): string {
 }
 
 export default function AdminAuditClient() {
-  const [logs, setLogs] = useState<AuditRow[]>([]);
-  const [total, setTotal] = useState(0);
-  const [entityTypes, setEntityTypes] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
-
   // filters
   const [search, setSearch] = useState("");
   const [appliedSearch, setAppliedSearch] = useState("");
@@ -64,37 +64,37 @@ export default function AdminAuditClient() {
   const [toDate, setToDate] = useState("");
   const [page, setPage] = useState(0);
 
-  const loadLogs = useCallback(async () => {
-    setLoading(true);
-    const params = new URLSearchParams({
-      limit: String(PAGE_SIZE),
-      offset: String(page * PAGE_SIZE),
-    });
-    if (appliedSearch) params.set("q", appliedSearch);
-    if (roleFilter !== "all") params.set("role", roleFilter);
-    if (entityFilter !== "all") params.set("entity", entityFilter);
-    if (fromDate) params.set("from", fromDate);
-    if (toDate) params.set("to", toDate);
+  const params = new URLSearchParams({
+    limit: String(PAGE_SIZE),
+    offset: String(page * PAGE_SIZE),
+  });
+  if (appliedSearch) params.set("q", appliedSearch);
+  if (roleFilter !== "all") params.set("role", roleFilter);
+  if (entityFilter !== "all") params.set("entity", entityFilter);
+  if (fromDate) params.set("from", fromDate);
+  if (toDate) params.set("to", toDate);
+  const query = params.toString();
 
-    const res = await apiFetch(`/api/admin/audit?${params.toString()}`, {
-      credentials: "include",
-    });
-    if (res.ok) {
-      const json = (await res.json()) as {
-        logs: AuditRow[];
-        total: number;
-        entity_types: string[];
-      };
-      setLogs(json.logs ?? []);
-      setTotal(json.total ?? 0);
-      setEntityTypes(json.entity_types ?? []);
-    }
-    setLoading(false);
-  }, [appliedSearch, roleFilter, entityFilter, fromDate, toDate, page]);
+  // The query string is the key, so paging back to a page already looked at —
+  // or clearing a filter — is served from memory.
+  const { data, loading } = usePageData(`admin:audit:${query}`, async () => {
+    const res = await apiFetch(`/api/admin/audit?${query}`, { credentials: "include" });
+    if (!res.ok) return { logs: NO_LOGS, total: 0, entityTypes: NO_ENTITY_TYPES };
+    const json = (await res.json()) as {
+      logs?: AuditRow[];
+      total?: number;
+      entity_types?: string[];
+    };
+    return {
+      logs: json.logs ?? NO_LOGS,
+      total: json.total ?? 0,
+      entityTypes: json.entity_types ?? NO_ENTITY_TYPES,
+    };
+  });
 
-  useEffect(() => {
-    loadLogs();
-  }, [loadLogs]);
+  const logs = data?.logs ?? NO_LOGS;
+  const total = data?.total ?? 0;
+  const entityTypes = data?.entityTypes ?? NO_ENTITY_TYPES;
 
   // Any filter change returns to the first page.
   const withPageReset = <T,>(setter: (v: T) => void) => (value: T) => {

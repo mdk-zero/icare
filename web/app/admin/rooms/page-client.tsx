@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faSpinner,
@@ -29,6 +29,12 @@ import {
   RoomAssignment,
   StudentUser,
 } from "../../lib/api";
+import { usePageData } from "../../lib/use-page-data";
+
+// Stable empty fallbacks, so nothing downstream sees a new array each render.
+const NO_ROOMS: Room[] = [];
+const NO_ASSIGNMENTS: RoomAssignment[] = [];
+const NO_STUDENT_USERS: StudentUser[] = [];
 
 const STATUS_STYLES: Record<Room["status"], string> = {
   active: "bg-green-100 text-green-700",
@@ -59,22 +65,13 @@ const EMPTY_FORM: RoomFormState = {
 };
 
 export default function RoomsClient() {
-  const [rooms, setRooms] = useState<Room[]>([]);
-  const [loading, setLoading] = useState(true);
   const [roomFilter, setRoomFilter] = useState("all");
   const [formOpen, setFormOpen] = useState(false);
   const [editingRoom, setEditingRoom] = useState<Room | null>(null);
   const [managingRoom, setManagingRoom] = useState<Room | null>(null);
 
-  const loadRooms = useCallback(async () => {
-    setLoading(true);
-    setRooms(await fetchRooms());
-    setLoading(false);
-  }, []);
-
-  useEffect(() => {
-    loadRooms();
-  }, [loadRooms]);
+  const { data, loading, refresh: loadRooms } = usePageData("admin:rooms", fetchRooms);
+  const rooms = data ?? NO_ROOMS;
 
   const filteredRooms = rooms.filter(
     (r) => roomFilter === "all" || r.status === roomFilter,
@@ -485,28 +482,21 @@ function RoomStudentsModal({
   onClose: () => void;
   onChanged: () => void;
 }) {
-  const [assignments, setAssignments] = useState<RoomAssignment[]>([]);
-  const [students, setStudents] = useState<StudentUser[]>([]);
-  const [loading, setLoading] = useState(true);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [shift, setShift] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const { data, loading, refresh: load } = usePageData(`admin:room:${room.id}`, async () => {
     const [detail, allStudents] = await Promise.all([
       fetchRoomDetail(room.id),
       fetchAllStudentUsers(),
     ]);
-    setAssignments(detail?.assignments ?? []);
-    setStudents(allStudents);
-    setLoading(false);
-  }, [room.id]);
+    return { assignments: detail?.assignments ?? NO_ASSIGNMENTS, students: allStudents };
+  });
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  const assignments = data?.assignments ?? NO_ASSIGNMENTS;
+  const students = data?.students ?? NO_STUDENT_USERS;
 
   const assignedIds = new Set(assignments.map((a) => a.student_id));
   const available = students.filter((s) => !assignedIds.has(s.id));

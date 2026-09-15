@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faChartBar,
@@ -16,25 +16,19 @@ import {
   faCircleCheck,
   faGraduationCap,
 } from "@fortawesome/free-solid-svg-icons";
-import { fetchAnalyticsSummary, runWarehouseEtl, runMlJob, AnalyticsSummary } from "../../lib/api";
+import { fetchAnalyticsSummary, runWarehouseEtl, runMlJob } from "../../lib/api";
+import { usePageData } from "../../lib/use-page-data";
 
 export default function AdminAnalyticsClient() {
-  const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
-  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [runningMl, setRunningMl] = useState(false);
   const [mlStatus, setMlStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    const { summary } = await fetchAnalyticsSummary();
-    setSummary(summary);
-    setLoading(false);
-  }, []);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+  const { data: summary, loading, refresh: load } = usePageData(
+    "admin:analytics",
+    async () => (await fetchAnalyticsSummary()).summary,
+  );
 
   const handleRefresh = async () => {
     setError(null);

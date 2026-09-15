@@ -1,7 +1,8 @@
 "use client";
 
 import { apiFetch } from "@/app/lib/api";
-import { useState, useEffect, useCallback } from "react";
+import { usePageData } from "@/app/lib/use-page-data";
+import { useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faUsers, faPlus, faPencil, faTrash } from "@fortawesome/free-solid-svg-icons";
 import PageHeader from "../../components/PageHeader";
@@ -14,6 +15,9 @@ interface UserAccount {
   created_at: string;
   last_login_at: string | null;
 }
+
+/** Stable empty fallback, so nothing downstream sees a new array each render. */
+const NO_USERS: UserAccount[] = [];
 
 const roleLabels: Record<string, string> = {
   student: "Student",
@@ -31,8 +35,6 @@ function formatDate(value: string | null): string {
 }
 
 export default function UsersClient() {
-  const [users, setUsers] = useState<UserAccount[]>([]);
-  const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [userRoleFilter, setUserRoleFilter] = useState("all");
   const [message, setMessage] = useState<string | null>(null);
@@ -48,17 +50,17 @@ export default function UsersClient() {
     setTimeout(() => setMessage(null), 4000);
   };
 
-  const loadUsers = useCallback(async () => {
+  const { data, loading, setData } = usePageData("admin:users", async () => {
     const res = await apiFetch("/api/admin/users", { credentials: "include" });
-    if (res.ok) {
-      const json = (await res.json()) as { users: UserAccount[] };
-      setUsers(json.users ?? []);
-    }
-  }, []);
+    if (!res.ok) return NO_USERS;
+    const json = (await res.json()) as { users?: UserAccount[] };
+    return json.users ?? NO_USERS;
+  });
 
-  useEffect(() => {
-    loadUsers().finally(() => setLoading(false));
-  }, [loadUsers]);
+  const users = data ?? NO_USERS;
+  // Create, edit and delete each patch the loaded list rather than refetching it.
+  const setUsers = (update: (previous: UserAccount[]) => UserAccount[]) =>
+    setData((previous) => update(previous ?? NO_USERS));
 
   const handleCreateUser = async () => {
     if (!newUser.name.trim() || !newUser.email.trim()) {

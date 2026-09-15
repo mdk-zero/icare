@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faChevronLeft, faBolt } from "@fortawesome/free-solid-svg-icons";
@@ -9,11 +9,11 @@ import {
   fetchStudentScenarioHistory,
   fetchCompetencyAreas,
   fetchCompetencyScores,
-  type RiskPrediction,
   type ScenarioPerformance,
   apiFetch,
 } from "../../../lib/api";
 import Avatar from "../../../components/Avatar";
+import { usePageData } from "../../../lib/use-page-data";
 
 interface AttemptRow {
   id: string;
@@ -33,6 +33,11 @@ interface StudentData {
   quizzes_completed: number;
   average_score: number | null;
 }
+
+// Stable empty fallbacks, so nothing downstream sees a new value each render.
+const NO_ATTEMPTS: AttemptRow[] = [];
+const NO_SCENARIO_HISTORY: ScenarioPerformance[] = [];
+const NO_COMPETENCIES: Record<string, number> = {};
 
 function formatDateTime(value: string | null): string {
   if (!value) return "—";
@@ -57,18 +62,14 @@ export default function StudentDetailClient() {
   const params = useParams();
   const studentId = params?.id as string;
 
-  const [student, setStudent] = useState<StudentData | null>(null);
-  const [attempts, setAttempts] = useState<AttemptRow[]>([]);
-  const [scenarioHistory, setScenarioHistory] = useState<ScenarioPerformance[]>([]);
-  const [competencies, setCompetencies] = useState<Record<string, number>>({});
-  const [prediction, setPrediction] = useState<RiskPrediction | null>(null);
-  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("performance");
 
-  useEffect(() => {
-    if (!studentId) return;
-    const load = async () => {
-      const [detailRes, pred, scenarios, areas, scores] = await Promise.all([
+  // Keyed by student, so stepping back to the roster and into the same student
+  // again — the common way to compare two of them — costs no reload.
+  const { data, loading } = usePageData(
+    studentId ? `admin:student:${studentId}` : null,
+    async () => {
+      const [detailRes, prediction, scenarioHistory, areas, scores] = await Promise.all([
         apiFetch(`/api/admin/students/${studentId}`, { credentials: "include" }),
         fetchLatestPrediction(studentId),
         fetchStudentScenarioHistory(studentId),
@@ -76,25 +77,33 @@ export default function StudentDetailClient() {
         fetchCompetencyScores(studentId),
       ]);
 
-      if (detailRes.ok) {
-        const json = (await detailRes.json()) as { student: StudentData; attempts: AttemptRow[] };
-        setStudent(json.student);
-        setAttempts(json.attempts ?? []);
-      }
-      setPrediction(pred);
-      setScenarioHistory(scenarios);
+      const detail = detailRes.ok
+        ? ((await detailRes.json()) as { student?: StudentData; attempts?: AttemptRow[] })
+        : {};
 
       // Latest validated score per competency area (scores arrive newest-first).
       const areaNames = new Map(areas.map((a) => [a.id, a.name]));
-      const byCompetency: Record<string, number> = {};
+      const competencies: Record<string, number> = {};
       for (const score of scores) {
         const name = score.competency_areas?.name ?? areaNames.get(score.competency_id);
-        if (name && byCompetency[name] === undefined) byCompetency[name] = Math.round(score.score);
+        if (name && competencies[name] === undefined) competencies[name] = Math.round(score.score);
       }
-      setCompetencies(byCompetency);
-    };
-    load().finally(() => setLoading(false));
-  }, [studentId]);
+
+      return {
+        student: detail.student ?? null,
+        attempts: detail.attempts ?? NO_ATTEMPTS,
+        prediction,
+        scenarioHistory,
+        competencies,
+      };
+    },
+  );
+
+  const student = data?.student ?? null;
+  const attempts = data?.attempts ?? NO_ATTEMPTS;
+  const scenarioHistory = data?.scenarioHistory ?? NO_SCENARIO_HISTORY;
+  const competencies = data?.competencies ?? NO_COMPETENCIES;
+  const prediction = data?.prediction ?? null;
 
   const riskLevel: "low" | "high" | null = prediction
     ? prediction.risk === "at_risk"

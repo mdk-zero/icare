@@ -23,6 +23,7 @@ import PageHeader from "../../components/PageHeader";
 import StatTile from "../../components/StatTile";
 import ConfirmModal from "../../components/ConfirmModal";
 import { fetchSections, Section, apiFetch } from "../../lib/api";
+import { usePageData } from "../../lib/use-page-data";
 import Avatar from "../../components/Avatar";
 
 interface StudentPerformance {
@@ -37,6 +38,10 @@ interface StudentPerformance {
   section_id: string | null;
   section: string | null;
 }
+
+// Stable empty fallbacks, so the grouping memos are not invalidated every render.
+const NO_STUDENTS: StudentPerformance[] = [];
+const NO_SECTIONS: Section[] = [];
 
 /** Group key for students with no section assigned. */
 const UNASSIGNED_KEY = "__unassigned__";
@@ -718,9 +723,6 @@ interface SectionGroup {
 
 export default function StudentManagementClient() {
   const router = useRouter();
-  const [students, setStudents] = useState<StudentPerformance[]>([]);
-  const [sections, setSections] = useState<Section[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [selectedSection, setSelectedSection] = useState<string | null>(null);
@@ -735,26 +737,22 @@ export default function StudentManagementClient() {
   const [batchDeleting, setBatchDeleting] = useState(false);
   const [batchDeleteError, setBatchDeleteError] = useState<string | null>(null);
 
-  const loadStudents = useCallback(async () => {
-    setLoading(true);
-    const res = await apiFetch("/api/admin/students", { credentials: "include" });
-    if (res.ok) {
-      const json = (await res.json()) as { students: StudentPerformance[] };
-      setStudents(json.students ?? []);
-    }
-    setLoading(false);
-  }, []);
+  // Sections carry names into the roster, so the two load and refresh together.
+  const { data, loading, refresh } = usePageData("admin:student-management", async () => {
+    const [studentsRes, sections] = await Promise.all([
+      apiFetch("/api/admin/students", { credentials: "include" }),
+      fetchSections(),
+    ]);
+    const students = studentsRes.ok
+      ? ((await studentsRes.json()) as { students?: StudentPerformance[] }).students ?? NO_STUDENTS
+      : NO_STUDENTS;
+    return { students, sections };
+  });
 
-  const loadSections = useCallback(async () => {
-    setSections(await fetchSections());
-  }, []);
-
-  useEffect(() => {
-    // Both lists are remote, so they can only be populated after mount.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void loadStudents();
-    void loadSections();
-  }, [loadStudents, loadSections]);
+  const students = data?.students ?? NO_STUDENTS;
+  const sections = data?.sections ?? NO_SECTIONS;
+  const loadStudents = refresh;
+  const loadSections = refresh;
 
   /** Sections carry names into the roster, so both lists refresh together. */
   const refreshAfterSectionChange = useCallback(

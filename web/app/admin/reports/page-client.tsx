@@ -1,7 +1,8 @@
 "use client";
 
 import { apiFetch } from "@/app/lib/api";
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { usePageData } from "@/app/lib/use-page-data";
+import { useState, useMemo } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import {
@@ -70,71 +71,63 @@ interface Target {
   sub: string;
 }
 
+/** Stable empty fallback, so the filter memo is not invalidated every render. */
+const NO_TARGETS: Target[] = [];
+
 export default function AdminReportsClient() {
   const [kind, setKind] = useState<ReportType>("faculty");
   const [format, setFormat] = useState<Format>("pdf");
-  const [targets, setTargets] = useState<Target[]>([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [generateError, setGenerateError] = useState<string | null>(null);
 
   const active = KINDS.find((k) => k.type === kind)!;
 
-  const loadTargets = useCallback(async (type: ReportType) => {
-    setLoading(true);
-    setError(null);
-    try {
-      if (type === "faculty") {
+  // One list per report type, kept once loaded, so switching back and forth
+  // between types does not refetch either of them.
+  const { data, loading, error: loadError } = usePageData<Target[]>(
+    `admin:report-targets:${kind}`,
+    async () => {
+      if (kind === "faculty") {
         const res = await apiFetch("/api/admin/faculty", { credentials: "include" });
         const json = (await res.json()) as {
           faculty?: { id: string; name: string; email: string; sections: { id: string; name: string }[]; student_count: number }[];
         };
-        setTargets(
-          (json.faculty ?? []).map((f) => ({
-            id: f.id,
-            label: f.name,
-            sub: `${f.email} · ${f.sections.length} section${f.sections.length === 1 ? "" : "s"}`,
-          })),
-        );
-      } else if (type === "rooms") {
+        return (json.faculty ?? []).map((f) => ({
+          id: f.id,
+          label: f.name,
+          sub: `${f.email} · ${f.sections.length} section${f.sections.length === 1 ? "" : "s"}`,
+        }));
+      }
+      if (kind === "rooms") {
         const res = await apiFetch("/api/admin/rooms", { credentials: "include" });
         const json = (await res.json()) as {
           rooms?: { id: string; name: string; room_number: string; capacity: number; status: string; students_assigned: number }[];
         };
-        setTargets(
-          (json.rooms ?? []).map((r) => ({
-            id: r.id,
-            label: `${r.name} (${r.room_number})`,
-            sub: `${r.students_assigned}/${r.capacity} occupied · ${r.status}`,
-          })),
-        );
-      } else if (type === "users") {
+        return (json.rooms ?? []).map((r) => ({
+          id: r.id,
+          label: `${r.name} (${r.room_number})`,
+          sub: `${r.students_assigned}/${r.capacity} occupied · ${r.status}`,
+        }));
+      }
+      if (kind === "users") {
         const res = await apiFetch("/api/admin/users?role=all", { credentials: "include" });
         const json = (await res.json()) as {
           users?: { id: string; name: string; email: string; role: string }[];
         };
-        setTargets(
-          (json.users ?? []).map((u) => ({
-            id: u.id,
-            label: u.name,
-            sub: `${u.email} · ${u.role}`,
-          })),
-        );
-      } else {
-        setTargets([]);
+        return (json.users ?? []).map((u) => ({
+          id: u.id,
+          label: u.name,
+          sub: `${u.email} · ${u.role}`,
+        }));
       }
-    } catch {
-      setError("Unable to load the list for this report type.");
-      setTargets([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+      return [];
+    },
+  );
 
-  useEffect(() => {
-    void loadTargets(kind);
-  }, [kind, loadTargets]);
+  const targets = data ?? NO_TARGETS;
+  const error =
+    generateError ?? (loadError ? "Unable to load the list for this report type." : null);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
@@ -143,7 +136,7 @@ export default function AdminReportsClient() {
 
   const generate = async (target?: Target) => {
     const key = target?.id ?? "all";
-    setError(null);
+    setGenerateError(null);
     setBusy(key);
     try {
       const query = new URLSearchParams({ format });
@@ -152,7 +145,7 @@ export default function AdminReportsClient() {
 
       if (!res.ok) {
         const json = (await res.json().catch(() => ({}))) as { error?: string };
-        setError(json.error || `Unable to generate this ${active.label.toLowerCase()} report`);
+        setGenerateError(json.error || `Unable to generate this ${active.label.toLowerCase()} report`);
         return;
       }
 
@@ -168,7 +161,7 @@ export default function AdminReportsClient() {
       link.remove();
       URL.revokeObjectURL(url);
     } catch {
-      setError("Unable to generate report");
+      setGenerateError("Unable to generate report");
     } finally {
       setBusy(null);
     }
