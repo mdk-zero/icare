@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faFileLines,
@@ -21,36 +21,42 @@ import {
   dismissRecommendation,
   LearningRecommendation,
   StudentAssessment,
+  ScenarioAssignment,
 } from "../../lib/api";
+import { usePageData } from "../../lib/use-page-data";
 
-interface ScenarioAssignment {
-  id: string;
-  scenario_id: string;
-  scenario_title: string;
-  assigned_at: string;
-  deadline: string;
-  status: "pending" | "in_progress" | "completed" | "overdue";
-  required: boolean;
-  score?: number;
-}
+// Stable empty fallbacks, so nothing downstream sees a new array each render.
+const NO_PATIENTS: Patient[] = [];
+const NO_QUIZZES: StudentAssessment[] = [];
+const NO_RECOMMENDATIONS: LearningRecommendation[] = [];
+const NO_ASSIGNMENTS: ScenarioAssignment[] = [];
 
 export default function StudentDashboard() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [user, setUser] = useState<User | null>(getCurrentUser);
-  const [patients, setPatients] = useState<Patient[]>([]);
-  const [quizzes, setQuizzes] = useState<StudentAssessment[]>([]);
-  const [recommendations, setRecommendations] = useState<LearningRecommendation[]>([]);
-  const [scenarioAssignments, setScenarioAssignments] = useState<
-    ScenarioAssignment[]
-  >([]);
 
   const activeTab = searchParams.get("tab") || "dashboard";
 
-  const loadScenarioAssignments = useCallback(async (studentId: string) => {
-    const assignments = await fetchStudentScenarioAssignments(studentId);
-    setScenarioAssignments(assignments);
-  }, []);
+  // Every tab on this page reads the same four lists, so they load together
+  // once and the tabs — which are query-string navigations — are instant.
+  const { data, setData } = usePageData(
+    user ? `student:dashboard:${user.id}` : null,
+    async () => {
+      const [scenarioAssignments, quizzes, recommendations, patients] = await Promise.all([
+        fetchStudentScenarioAssignments(user!.id),
+        fetchStudentAssessments(),
+        fetchMyRecommendations(),
+        fetchPatients(),
+      ]);
+      return { scenarioAssignments, quizzes, recommendations, patients };
+    },
+  );
+
+  const patients = data?.patients ?? NO_PATIENTS;
+  const quizzes = data?.quizzes ?? NO_QUIZZES;
+  const recommendations = data?.recommendations ?? NO_RECOMMENDATIONS;
+  const scenarioAssignments = data?.scenarioAssignments ?? NO_ASSIGNMENTS;
 
   useEffect(() => {
     const currentUser = getCurrentUser();
@@ -60,14 +66,15 @@ export default function StudentDashboard() {
     }
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setUser(currentUser);
-    loadScenarioAssignments(currentUser.id);
-    fetchStudentAssessments().then(setQuizzes);
-    fetchMyRecommendations().then(setRecommendations);
-    fetchPatients().then(setPatients);
-  }, [router, loadScenarioAssignments]);
+  }, [router]);
 
   const handleDismissRecommendation = async (id: string) => {
-    setRecommendations((prev) => prev.filter((rec) => rec.id !== id));
+    setData((previous) => ({
+      scenarioAssignments: previous?.scenarioAssignments ?? NO_ASSIGNMENTS,
+      quizzes: previous?.quizzes ?? NO_QUIZZES,
+      patients: previous?.patients ?? NO_PATIENTS,
+      recommendations: (previous?.recommendations ?? []).filter((rec) => rec.id !== id),
+    }));
     await dismissRecommendation(id);
   };
 

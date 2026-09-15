@@ -21,10 +21,8 @@ import {
 import {
   fetchFacultyStudentDetail,
   fetchLatestPrediction,
-  RiskPrediction,
   logAuditAction,
   getCurrentFacultyUser,
-  FacultyStudent,
   fetchStudentScenarioHistory,
   fetchCompetencyAreas,
   fetchCompetencyScores,
@@ -37,6 +35,7 @@ import {
 import { SkeletonProfileHeader, SkeletonRiskPredictionCard, SkeletonTabContent } from "../../../components/skeletons";
 import Card from "../../../components/Card";
 import Avatar from "../../../components/Avatar";
+import { usePageData } from "../../../lib/use-page-data";
 
 interface PerformanceHistory {
   quiz_title: string;
@@ -56,22 +55,21 @@ interface ScenarioPerformanceRecord {
   completed_tasks: string[];
 }
 
+// Stable empty fallbacks, so nothing downstream sees a new array each render.
+const NO_PERFORMANCE_HISTORY: PerformanceHistory[] = [];
+const NO_SCENARIO_HISTORY: ScenarioPerformanceRecord[] = [];
+const NO_COMPETENCIES: ResolvedCompetency[] = [];
+const NO_COMPETENCY_AREAS: CompetencyArea[] = [];
+const NO_SCORE_HISTORY: CompetencyScore[] = [];
+
 export default function StudentDetailClient() {
   const router = useRouter();
   const params = useParams();
   const studentId = params?.id as string;
   
-  const [student, setStudent] = useState<FacultyStudent | null>(null);
-  const [performanceHistory, setPerformanceHistory] = useState<PerformanceHistory[]>([]);
-  const [scenarioHistory, setScenarioHistory] = useState<ScenarioPerformanceRecord[]>([]);
-  const [competencies, setCompetencies] = useState<ResolvedCompetency[]>([]);
-  const [competencyAreas, setCompetencyAreas] = useState<CompetencyArea[]>([]);
-  const [scoreHistory, setScoreHistory] = useState<CompetencyScore[]>([]);
   const [validateForm, setValidateForm] = useState({ competency_id: "", score: "", remarks: "" });
   const [validateError, setValidateError] = useState<string | null>(null);
   const [validating, setValidating] = useState(false);
-  const [riskPrediction, setRiskPrediction] = useState<RiskPrediction | null>(null);
-  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("performance");
   const [aiSummary, setAiSummary] = useState<StudentAISummary | null>(null);
   const [summaryGeneratedAt, setSummaryGeneratedAt] = useState<string | null>(null);
@@ -98,47 +96,47 @@ export default function StudentDetailClient() {
   }, [studentId]);
 
   useEffect(() => {
-    if (studentId) {
-      loadStudentData();
-    }
-  }, [studentId]);
-
-  useEffect(() => {
     if (!studentId || summaryRequestedRef.current) return;
     summaryRequestedRef.current = true;
     handleGenerateSummary();
   }, [studentId]);
 
-  const loadCompetencyData = async () => {
-    const [areas, scores] = await Promise.all([
-      fetchCompetencyAreas(),
-      fetchCompetencyScores(studentId),
-    ]);
-    setCompetencyAreas(areas);
-    setScoreHistory(scores);
-    // A faculty validation outranks a quiz result; assessment-derived scores
-    // fill every competency nobody has reviewed by hand.
-    setCompetencies(resolveCompetencies(scores));
-  };
+  // Keyed by student, so stepping back to the roster and into the same student
+  // again reads the whole profile from memory.
+  const {
+    data,
+    loading,
+    refresh: loadCompetencyData,
+  } = usePageData(studentId ? `faculty:student:${studentId}` : null, async () => {
+    const [detail, riskPrediction, scenarioHistory, competencyAreas, scoreHistory] =
+      await Promise.all([
+        fetchFacultyStudentDetail(studentId),
+        fetchLatestPrediction(studentId),
+        fetchStudentScenarioHistory(studentId),
+        fetchCompetencyAreas(),
+        fetchCompetencyScores(studentId),
+      ]);
 
-  const loadStudentData = async () => {
-    setLoading(true);
-    const [data, prediction] = await Promise.all([
-      fetchFacultyStudentDetail(studentId),
-      fetchLatestPrediction(studentId),
-    ]);
-    setRiskPrediction(prediction);
-    if (data) {
-      setStudent(data.student);
-      setPerformanceHistory(data.performance_history);
-    }
+    return {
+      student: detail?.student ?? null,
+      performanceHistory: detail?.performance_history ?? NO_PERFORMANCE_HISTORY,
+      riskPrediction,
+      scenarioHistory,
+      competencyAreas,
+      scoreHistory,
+      // A faculty validation outranks a quiz result; assessment-derived scores
+      // fill every competency nobody has reviewed by hand.
+      competencies: resolveCompetencies(scoreHistory),
+    };
+  });
 
-    const scenarios = await fetchStudentScenarioHistory(studentId);
-    setScenarioHistory(scenarios);
-    await loadCompetencyData();
-
-    setLoading(false);
-  };
+  const student = data?.student ?? null;
+  const performanceHistory = data?.performanceHistory ?? NO_PERFORMANCE_HISTORY;
+  const scenarioHistory = data?.scenarioHistory ?? NO_SCENARIO_HISTORY;
+  const competencies = data?.competencies ?? NO_COMPETENCIES;
+  const competencyAreas = data?.competencyAreas ?? NO_COMPETENCY_AREAS;
+  const scoreHistory = data?.scoreHistory ?? NO_SCORE_HISTORY;
+  const riskPrediction = data?.riskPrediction ?? null;
 
   const handleGenerateSummary = async () => {
     setSummaryLoading(true);

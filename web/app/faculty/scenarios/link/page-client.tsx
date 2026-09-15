@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -22,15 +22,17 @@ import {
 } from "../../../lib/api";
 import PageHeader from "../../../components/PageHeader";
 import { toast } from "../../../components/Toast";
+import { usePageData } from "../../../lib/use-page-data";
+
+// Stable empty fallbacks, so the filter memos are not invalidated every render.
+const NO_SCENARIOS: SimulationScenario[] = [];
+const NO_PATIENTS: FacultyPatient[] = [];
 
 const inputClassName =
   "w-full px-4 py-3 bg-surface border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 focus:bg-surface transition-all text-sm shadow-sm";
 
 export default function LinkPatientsClient() {
   const router = useRouter();
-  const [scenarios, setScenarios] = useState<SimulationScenario[]>([]);
-  const [patients, setPatients] = useState<FacultyPatient[]>([]);
-  const [loading, setLoading] = useState(true);
 
   const [mode, setMode] = useState<"auto" | "manual">("auto");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -41,20 +43,16 @@ export default function LinkPatientsClient() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    const [scenarioData, patientData] = await Promise.all([
+  const { data, loading } = usePageData("faculty:scenario-link", async () => {
+    const [scenarios, patients] = await Promise.all([
       fetchFacultyScenarios(),
       fetchFacultyPatients(),
     ]);
-    setScenarios(scenarioData);
-    setPatients(patientData);
-    setLoading(false);
-  }, []);
+    return { scenarios, patients };
+  });
 
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void load();
-  }, [load]);
+  const scenarios = data?.scenarios ?? NO_SCENARIOS;
+  const patients = data?.patients ?? NO_PATIENTS;
 
   const patientById = useMemo(() => new Map(patients.map((p) => [p.id, p])), [patients]);
 

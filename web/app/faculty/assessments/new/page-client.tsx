@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -8,6 +8,10 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import { fetchSections, type Section, apiFetch } from "../../../lib/api";
 import { toast } from "../../../components/Toast";
+import { usePageData } from "../../../lib/use-page-data";
+
+/** Stable empty fallback, so nothing downstream sees a new array each render. */
+const NO_SECTIONS: Section[] = [];
 
 const inputClassName =
   "w-full px-4 py-3 bg-surface border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 focus:bg-surface transition-all text-sm shadow-sm";
@@ -30,7 +34,6 @@ type Difficulty = "beginner" | "intermediate" | "advanced";
 
 export default function AssessmentNewClient() {
   const router = useRouter();
-  const [sections, setSections] = useState<Section[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -43,9 +46,8 @@ export default function AssessmentNewClient() {
     target_sections: [] as string[],
   });
 
-  useEffect(() => {
-    fetchSections().then(setSections);
-  }, []);
+  const { data: sectionsData } = usePageData("faculty:sections", fetchSections);
+  const sections = sectionsData ?? NO_SECTIONS;
 
   const handleCreate = async () => {
     if (!form.title.trim()) {

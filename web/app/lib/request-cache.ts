@@ -72,6 +72,19 @@ export function clearRequestCache() {
     pages.set(key, { ...entry, settledAt: 0 });
     notify(key);
   }
+  for (const listener of clearListeners) listener();
+}
+
+const clearListeners = new Set<() => void>();
+
+/**
+ * Runs after every clear. Server-rendered segments are held by the router's own
+ * cache, which knows nothing about these, so something has to tell it that a
+ * write happened — see the `Shell`.
+ */
+export function onCacheClear(listener: () => void): () => void {
+  clearListeners.add(listener);
+  return () => clearListeners.delete(listener);
 }
 
 // ---------------------------------------------------------------------------

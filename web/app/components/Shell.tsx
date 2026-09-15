@@ -22,6 +22,7 @@ import {
   useNotifications,
 } from "../lib/notifications-live";
 import ToastContainer, { toast } from "./Toast";
+import { onCacheClear } from "../lib/request-cache";
 
 export interface NavItem {
   id: string;
@@ -222,10 +223,15 @@ export default function Shell({ role, navItems, isActive, children }: ShellProps
   }, [router, role]);
 
   // Surface arrivals while the user is on some other page.
-  useEffect(
-    () => onNotificationArrival((notification) => toast(notification.title, "info")),
-    [],
-  );
+  useEffect(() => onNotificationArrival((notification) => toast(notification.title, "info")), []);
+
+  /**
+   * Server-rendered pages — the admin overview above all — are held by the
+   * router's segment cache, which a write through `apiFetch` cannot reach. A
+   * refresh bumps that cache's version globally, so the next visit to any of
+   * them reflects the write rather than a copy from before it.
+   */
+  useEffect(() => onCacheClear(() => router.refresh()), [router]);
 
   const handleLogout = () => {
     stopNotificationStream();

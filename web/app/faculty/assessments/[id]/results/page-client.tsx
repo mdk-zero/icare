@@ -1,7 +1,7 @@
 "use client";
 
 import { apiFetch } from "@/app/lib/api";
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -18,6 +18,7 @@ import PageHeader from "../../../../components/PageHeader";
 import StatTile from "../../../../components/StatTile";
 import Avatar from "../../../../components/Avatar";
 import { SkeletonTable } from "../../../../components/skeletons";
+import { usePageData } from "../../../../lib/use-page-data";
 
 type Status = "submitted" | "in_progress" | "not_started";
 
@@ -35,6 +36,9 @@ interface StudentResult {
   latest_submitted_at: string | null;
   latest_time_taken_seconds: number | null;
 }
+
+/** Stable empty fallback, so the filter memos are not invalidated every render. */
+const NO_RESULTS: StudentResult[] = [];
 
 interface Summary {
   total: number;
@@ -96,18 +100,12 @@ function formatScore(score: number | null): string {
 
 export default function AssessmentResultsClient({ assessmentId }: { assessmentId: string }) {
   const router = useRouter();
-  const [assessment, setAssessment] = useState<AssessmentRef | null>(null);
-  const [results, setResults] = useState<StudentResult[]>([]);
-  const [summary, setSummary] = useState<Summary | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<Status | "all">("all");
   const [sectionFilter, setSectionFilter] = useState("all");
   const [scoreFilter, setScoreFilter] = useState<ScoreBand>("all");
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const { data, loading, error: loadError } = usePageData(`faculty:assessment-results:${assessmentId}`, async () => {
     const res = await apiFetch(`/api/faculty/assessments/${assessmentId}/results`, {
       credentials: "include",
     });
@@ -117,21 +115,18 @@ export default function AssessmentResultsClient({ assessmentId }: { assessmentId
       summary?: Summary;
       error?: string;
     };
-    if (!res.ok) {
-      setError(json.error ?? "Unable to load results.");
-      setLoading(false);
-      return;
-    }
-    setAssessment(json.assessment ?? null);
-    setResults(json.results ?? []);
-    setSummary(json.summary ?? null);
-    setLoading(false);
-  }, [assessmentId]);
+    if (!res.ok) throw new Error(json.error ?? "Unable to load results.");
+    return {
+      assessment: json.assessment ?? null,
+      results: json.results ?? NO_RESULTS,
+      summary: json.summary ?? null,
+    };
+  });
 
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void load();
-  }, [load]);
+  const assessment = data?.assessment ?? null;
+  const results = data?.results ?? NO_RESULTS;
+  const summary = data?.summary ?? null;
+  const error = loadError instanceof Error ? loadError.message : loadError ? String(loadError) : null;
 
   /** Only the sections actually present, so the dropdown never offers a dead end. */
   const sectionOptions = useMemo(() => {

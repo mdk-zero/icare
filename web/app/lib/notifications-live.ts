@@ -9,6 +9,7 @@ import {
   markNotificationRead,
   toFacultyNotification,
 } from "./api";
+import { withFreshResponses } from "./request-cache";
 
 /**
  * One process-wide notification store fed by /api/notifications/stream.
@@ -204,9 +205,15 @@ export function stopNotificationStream() {
 // Actions
 // ---------------------------------------------------------------
 
-/** One-shot read, used for the first paint and whenever the tab refocuses. */
+/**
+ * One-shot read, used for the first paint and whenever the tab refocuses.
+ *
+ * Deliberately past the response cache: the point of this call is to pick up
+ * what arrived while the tab was in the background, which a cached copy from
+ * before it went away cannot tell us.
+ */
 export async function refreshNotifications() {
-  const data = await fetchNotifications();
+  const data = await withFreshResponses(fetchNotifications);
   if (!data) {
     setState({ loading: false });
     return;

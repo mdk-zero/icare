@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faSearch,
@@ -30,7 +30,12 @@ import {
   VitalReading,
   AnomalyReason,
 } from "../../lib/api";
+import { usePageData } from "../../lib/use-page-data";
 import EhrModal from "./ehr-modal";
+
+// Stable empty fallbacks, so the cleaning memo is not invalidated every render.
+const NO_PATIENTS: Patient[] = [];
+const NO_READINGS: VitalReading[] = [];
 
 interface CleanedPatient extends Patient {
   displayGender: string;
@@ -156,27 +161,26 @@ function formatVital(
 }
 
 export default function StudentPatientsPage() {
-  const [patients, setPatients] = useState<Patient[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  // What the query actually runs on. Kept a beat behind the input so typing
+  // does not fire a request per keystroke.
+  const [appliedSearch, setAppliedSearch] = useState("");
   const [abnormalOnly, setAbnormalOnly] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<CleanedPatient | null>(null);
   const [encodingPatient, setEncodingPatient] = useState<CleanedPatient | null>(null);
   const [ehrPatient, setEhrPatient] = useState<CleanedPatient | null>(null);
 
-  const loadPatients = useCallback(async () => {
-    setLoading(true);
-    const data = await fetchPatients(searchQuery, abnormalOnly);
-    setPatients(data);
-    setLoading(false);
-  }, [searchQuery, abnormalOnly]);
-
   useEffect(() => {
-    const timeout = setTimeout(() => {
-      loadPatients();
-    }, 300);
+    const timeout = setTimeout(() => setAppliedSearch(searchQuery), 300);
     return () => clearTimeout(timeout);
-  }, [loadPatients]);
+  }, [searchQuery]);
+
+  const { data, loading } = usePageData(
+    `student:patients:${appliedSearch}:${abnormalOnly}`,
+    () => fetchPatients(appliedSearch, abnormalOnly),
+    { keepPreviousData: true },
+  );
+  const patients = data ?? NO_PATIENTS;
 
   const cleanedPatients = useMemo(() => patients.map(cleanPatient), [patients]);
 
@@ -635,19 +639,14 @@ function LogVitalsModal({
     isAnomaly: boolean;
     reasons: AnomalyReason[];
   } | null>(null);
-  const [recent, setRecent] = useState<VitalReading[]>([]);
-  const [loadingRecent, setLoadingRecent] = useState(true);
-
-  const loadRecent = useCallback(async () => {
-    setLoadingRecent(true);
-    const readings = await fetchMyVitalReadings(patient.id);
-    setRecent(readings.slice(0, 5));
-    setLoadingRecent(false);
-  }, [patient.id]);
-
-  useEffect(() => {
-    loadRecent();
-  }, [loadRecent]);
+  const {
+    data: recentData,
+    loading: loadingRecent,
+    refresh: loadRecent,
+  } = usePageData(`student:recent-vitals:${patient.id}`, async () =>
+    (await fetchMyVitalReadings(patient.id)).slice(0, 5),
+  );
+  const recent = recentData ?? NO_READINGS;
 
   const hasAnyValue = Object.values(values).some((v) => v.trim() !== "");
 

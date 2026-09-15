@@ -14,6 +14,7 @@ import {
   fetchStudentScenarioTasks,
   submitScenarioForReview,
 } from "../../lib/api";
+import { withFreshResponses } from "../../lib/request-cache";
 
 function categoryColor(category: string) {
   switch (category) {
@@ -46,8 +47,11 @@ export default function ScenarioRunnerClient() {
   const [submitting, setSubmitting] = useState(false);
   const [activeSection, setActiveSection] = useState<"patient" | "tasks" | "objectives">("tasks");
 
+  // Past the response cache on purpose: tasks are checked off by the server
+  // while the student charts elsewhere, so a cached copy is exactly the answer
+  // this must not give.
   const reloadTasks = useCallback(async (assignmentId: string) => {
-    const result = await fetchStudentScenarioTasks(assignmentId);
+    const result = await withFreshResponses(() => fetchStudentScenarioTasks(assignmentId));
     if (result) setTaskInfo(result);
   }, []);
 

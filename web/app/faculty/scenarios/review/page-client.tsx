@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -18,6 +18,11 @@ import {
   finalizeScenarioAssignment,
 } from "../../../lib/api";
 import { toast } from "../../../components/Toast";
+import { usePageData } from "../../../lib/use-page-data";
+
+// Stable empty fallbacks, so the filter memos are not invalidated every render.
+const NO_ASSIGNMENTS: ScenarioAssignment[] = [];
+const NO_TASKS: FacultyScenarioTask[] = [];
 
 type Filter = "awaiting" | "in_progress" | "completed" | "all";
 
@@ -84,37 +89,37 @@ const CheckIcon = ({ className = "h-4 w-4" }: { className?: string }) => (
 
 export default function FacultyScenarioReviewClient() {
   const router = useRouter();
-  const [assignments, setAssignments] = useState<ScenarioAssignment[]>([]);
-  const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<Filter>("awaiting");
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [tasks, setTasks] = useState<FacultyScenarioTask[]>([]);
-  const [tasksLoading, setTasksLoading] = useState(false);
   const [busyTaskId, setBusyTaskId] = useState<string | null>(null);
   const [finalizing, setFinalizing] = useState(false);
 
-  const loadAssignments = useCallback(async () => {
-    setLoading(true);
-    const data = await fetchScenarioAssignments();
-    setAssignments(data);
-    setLoading(false);
-  }, []);
+  const { data: assignmentsData, loading, setData: setAssignmentsData } = usePageData(
+    "faculty:scenario-review",
+    fetchScenarioAssignments,
+  );
+  const assignments = assignmentsData ?? NO_ASSIGNMENTS;
+  const setAssignments = (update: (previous: ScenarioAssignment[]) => ScenarioAssignment[]) =>
+    setAssignmentsData((previous) => update(previous ?? NO_ASSIGNMENTS));
 
-  useEffect(() => {
-    void loadAssignments();
-  }, [loadAssignments]);
-
-  const loadTasks = useCallback(async (assignmentId: string) => {
-    setTasksLoading(true);
-    const result = await fetchFacultyAssignmentTasks(assignmentId);
-    setTasks(result?.tasks ?? []);
-    setTasksLoading(false);
-  }, []);
+  // Keyed by assignment, so clicking back through a list of submissions reads
+  // each one's checklist from memory after the first look.
+  const {
+    data: tasksData,
+    loading: tasksLoading,
+    refresh: reloadTasks,
+    setData: setTasksData,
+  } = usePageData(
+    selectedId ? `faculty:assignment-tasks:${selectedId}` : null,
+    async () => (await fetchFacultyAssignmentTasks(selectedId!))?.tasks ?? NO_TASKS,
+  );
+  const tasks = tasksData ?? NO_TASKS;
+  const setTasks = (update: (previous: FacultyScenarioTask[]) => FacultyScenarioTask[]) =>
+    setTasksData((previous) => update(previous ?? NO_TASKS));
 
   const selectAssignment = (id: string) => {
     setSelectedId(id);
-    void loadTasks(id);
   };
 
   const selected = assignments.find((a) => a.id === selectedId) ?? null;
@@ -144,7 +149,7 @@ export default function FacultyScenarioReviewClient() {
       ),
     );
     const ok = await setFacultyTaskChecked(selectedId, task.id, next);
-    if (!ok) await loadTasks(selectedId);
+    if (!ok) await reloadTasks();
     setBusyTaskId(null);
   };
 
@@ -165,7 +170,7 @@ export default function FacultyScenarioReviewClient() {
             : a,
         ),
       );
-      await loadTasks(selectedId);
+      await reloadTasks();
       toast("Assignment finalized");
     }
     setFinalizing(false);

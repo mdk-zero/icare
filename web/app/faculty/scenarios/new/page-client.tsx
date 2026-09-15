@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -27,6 +27,11 @@ import {
 } from "../../../lib/api";
 import { roomStatus, ROOM_STATUS_LABEL, ROOM_STATUS_TONE } from "../../../lib/rooms";
 import PageHeader from "../../../components/PageHeader";
+import { usePageData } from "../../../lib/use-page-data";
+
+// Stable empty fallbacks, so the occupancy memo is not invalidated every render.
+const NO_PATIENTS: FacultyPatient[] = [];
+const NO_ROOMS: Room[] = [];
 
 const inputClassName =
   "w-full px-4 py-3 bg-surface border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 focus:bg-surface transition-all text-sm shadow-sm";
@@ -62,9 +67,6 @@ const emptyForm = {
 export default function NewScenarioClient() {
   const router = useRouter();
   const [form, setForm] = useState(emptyForm);
-  const [patients, setPatients] = useState<FacultyPatient[]>([]);
-  const [rooms, setRooms] = useState<Room[]>([]);
-  const [loadingData, setLoadingData] = useState(true);
   const [patientSearch, setPatientSearch] = useState("");
   const [customCategory, setCustomCategory] = useState(false);
 
@@ -77,17 +79,13 @@ export default function NewScenarioClient() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    const [patientData, roomData] = await Promise.all([fetchFacultyPatients(), fetchRooms()]);
-    setPatients(patientData);
-    setRooms(roomData);
-    setLoadingData(false);
-  }, []);
+  const { data, loading: loadingData } = usePageData("faculty:scenario-form-refs", async () => {
+    const [patients, rooms] = await Promise.all([fetchFacultyPatients(), fetchRooms()]);
+    return { patients, rooms };
+  });
 
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void load();
-  }, [load]);
+  const patients = data?.patients ?? NO_PATIENTS;
+  const rooms = data?.rooms ?? NO_ROOMS;
 
   const occupancyByRoom = useMemo(() => {
     const tally = new Map<string, number>();
