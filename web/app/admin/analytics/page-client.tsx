@@ -9,20 +9,17 @@ import {
   faExclamationTriangle,
   faSpinner,
   faRotate,
-  faBrain,
   faHeartbeat,
   faNotesMedical,
   faClipboardCheck,
   faCircleCheck,
   faGraduationCap,
 } from "@fortawesome/free-solid-svg-icons";
-import { fetchAnalyticsSummary, runWarehouseEtl, runMlJob } from "../../lib/api";
+import { fetchAnalyticsSummary, runWarehouseEtl } from "../../lib/api";
 import { usePageData } from "../../lib/use-page-data";
 
 export default function AdminAnalyticsClient() {
   const [refreshing, setRefreshing] = useState(false);
-  const [runningMl, setRunningMl] = useState(false);
-  const [mlStatus, setMlStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const { data: summary, loading, refresh: load } = usePageData(
@@ -40,32 +37,6 @@ export default function AdminAnalyticsClient() {
       await load();
     }
     setRefreshing(false);
-  };
-
-  const handleRunMl = async () => {
-    setError(null);
-    setMlStatus(null);
-    setRunningMl(true);
-    const predictions = await runMlJob("predict");
-    if (predictions.error) {
-      setError(predictions.error);
-      setRunningMl(false);
-      return;
-    }
-    const recommendations = await runMlJob("recommend");
-    if (recommendations.error) {
-      setError(recommendations.error);
-      setRunningMl(false);
-      return;
-    }
-    const scored = predictions.result?.scored ?? 0;
-    const atRiskNow = predictions.result?.at_risk ?? 0;
-    const recs = recommendations.result?.recommendations ?? 0;
-    setMlStatus(
-      `Scored ${scored} students (${atRiskNow} at risk) and wrote ${recs} recommendations. ` +
-        "Run Refresh Warehouse to fold new predictions into these charts.",
-    );
-    setRunningMl(false);
   };
 
   const atRisk = summary?.risk_distribution?.at_risk ?? 0;
@@ -91,14 +62,6 @@ export default function AdminAnalyticsClient() {
           </div>
           <div className="flex items-center gap-3 shrink-0">
             <button
-              onClick={handleRunMl}
-              disabled={runningMl}
-              className="px-4 py-2 bg-surface text-brand-600 font-medium rounded-lg border border-brand-600/30 hover:bg-brand-600/5 transition-all duration-200 flex items-center gap-2 disabled:opacity-50"
-            >
-              <FontAwesomeIcon icon={runningMl ? faSpinner : faBrain} spin={runningMl} className="w-4 h-4" />
-              {runningMl ? "Running…" : "Run ML Jobs"}
-            </button>
-            <button
               onClick={handleRefresh}
               disabled={refreshing}
               className="px-4 py-2 bg-brand-600 text-white font-medium rounded-lg hover:bg-brand-700 transition-all duration-200 flex items-center gap-2 shadow-[0_2px_6px_rgba(27,107,123,0.2)] disabled:opacity-50"
@@ -111,11 +74,6 @@ export default function AdminAnalyticsClient() {
         {error && (
           <div className="mt-4 p-3 bg-rose-50 border border-rose-200 rounded-xl text-sm text-rose-700">
             {error}
-          </div>
-        )}
-        {mlStatus && (
-          <div className="mt-4 p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-sm text-emerald-700">
-            {mlStatus}
           </div>
         )}
       </div>

@@ -23,6 +23,7 @@ import {
   faChevronDown,
   faArrowLeft,
   faGraduationCap,
+  faBrain,
 } from "@fortawesome/free-solid-svg-icons";
 import { toast } from "../../components/Toast";
 import {
@@ -31,6 +32,7 @@ import {
   fetchAllStudentUsers,
   fetchAllPredictions,
   fetchFacultySections,
+  runFacultyMlJob,
   updateStudentUser,
   deleteStudentUser,
   logAuditAction,
@@ -134,6 +136,11 @@ export default function FacultyStudentsClient() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
   const [riskFilter, setRiskFilter] = useState("all");
+
+  // On-demand ML runs, scoped by the server to this faculty member's sections.
+  const [runningMl, setRunningMl] = useState(false);
+  const [mlStatus, setMlStatus] = useState<string | null>(null);
+  const [mlError, setMlError] = useState<string | null>(null);
   /** Section whose roster is open; null shows the section cards. */
   const [selectedSectionKey, setSelectedSectionKey] = useState<string | null>(null);
 
@@ -153,6 +160,43 @@ export default function FacultyStudentsClient() {
       return { students, studentUsers, sections, predictions };
     },
   );
+
+  /**
+   * Runs both jobs, prediction first so the recommender sees fresh risk
+   * scores. Stops at the first failure rather than reporting a half-run.
+   *
+   * The roster is reloaded afterwards, because the risk badge on every row
+   * below is exactly what this has just rewritten.
+   */
+  const handleRunMl = async () => {
+    setRunningMl(true);
+    setMlError(null);
+    setMlStatus(null);
+
+    const predictions = await runFacultyMlJob("predict");
+    if (predictions.error) {
+      setMlError(predictions.error);
+      setRunningMl(false);
+      return;
+    }
+    const recommendations = await runFacultyMlJob("recommend");
+    if (recommendations.error) {
+      setMlError(recommendations.error);
+      setRunningMl(false);
+      return;
+    }
+
+    const scored = Number(predictions.result?.scored ?? 0);
+    const atRisk = Number(predictions.result?.at_risk ?? 0);
+    const recs = Number(recommendations.result?.recommendations ?? 0);
+    setMlStatus(
+      `Scored ${scored} of your students (${atRisk} at risk) and wrote ${recs} recommendation${
+        recs === 1 ? "" : "s"
+      }. Predictions reach the Analytics charts after the warehouse is refreshed.`,
+    );
+    setRunningMl(false);
+    await refresh();
+  };
 
   const students = data?.students ?? NO_STUDENTS;
   const studentUsers = data?.studentUsers ?? NO_STUDENT_USERS;
@@ -735,8 +779,37 @@ export default function FacultyStudentsClient() {
             <FontAwesomeIcon icon={faFileCsv} className="w-5 h-5" />
             Import CSV
           </button>
+          <button
+            onClick={handleRunMl}
+            disabled={runningMl || sections.length === 0}
+            title={
+              sections.length === 0
+                ? "You need at least one section before ML jobs have anyone to run against"
+                : "Score your students for risk and refresh their quiz recommendations"
+            }
+            className="px-4 py-2.5 bg-surface border border-brand-600/30 text-brand-600 font-medium rounded-lg hover:bg-brand-600/5 transition-all flex items-center gap-2 disabled:opacity-50"
+          >
+            <FontAwesomeIcon
+              icon={runningMl ? faSpinner : faBrain}
+              spin={runningMl}
+              className="w-5 h-5"
+            />
+            {runningMl ? "Running…" : "Run ML Jobs"}
+          </button>
         </div>
       </div>
+
+      {(mlStatus || mlError) && (
+        <div
+          className={`mb-4 rounded-xl border px-4 py-3 text-sm ${
+            mlError
+              ? "border-rose-200 bg-rose-50 text-rose-700"
+              : "border-emerald-200 bg-emerald-50 text-emerald-800"
+          }`}
+        >
+          {mlError ?? mlStatus}
+        </div>
+      )}
 
       {showCreateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">

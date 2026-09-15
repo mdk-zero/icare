@@ -18,11 +18,12 @@ import {
   faSearch,
   faPenToSquare,
   faFolderPlus,
+  faBrain,
 } from "@fortawesome/free-solid-svg-icons";
 import PageHeader from "../../components/PageHeader";
 import StatTile from "../../components/StatTile";
 import ConfirmModal from "../../components/ConfirmModal";
-import { fetchSections, Section, apiFetch } from "../../lib/api";
+import { fetchSections, runMlJob, Section, apiFetch } from "../../lib/api";
 import { usePageData } from "../../lib/use-page-data";
 import Avatar from "../../components/Avatar";
 
@@ -737,6 +738,11 @@ export default function StudentManagementClient() {
   const [batchDeleting, setBatchDeleting] = useState(false);
   const [batchDeleteError, setBatchDeleteError] = useState<string | null>(null);
 
+  // On-demand ML runs across the whole cohort.
+  const [runningMl, setRunningMl] = useState(false);
+  const [mlStatus, setMlStatus] = useState<string | null>(null);
+  const [mlError, setMlError] = useState<string | null>(null);
+
   // Sections carry names into the roster, so the two load and refresh together.
   const { data, loading, refresh } = usePageData("admin:student-management", async () => {
     const [studentsRes, sections] = await Promise.all([
@@ -753,6 +759,43 @@ export default function StudentManagementClient() {
   const sections = data?.sections ?? NO_SECTIONS;
   const loadStudents = refresh;
   const loadSections = refresh;
+
+  /**
+   * Runs both jobs, prediction first so the recommender sees fresh risk
+   * scores. Stops at the first failure rather than reporting a half-run.
+   *
+   * The roster is reloaded afterwards, because the at-risk counts above and
+   * the flag on every row are what this has just rewritten.
+   */
+  const handleRunMl = async () => {
+    setRunningMl(true);
+    setMlError(null);
+    setMlStatus(null);
+
+    const predictions = await runMlJob("predict");
+    if (predictions.error) {
+      setMlError(predictions.error);
+      setRunningMl(false);
+      return;
+    }
+    const recommendations = await runMlJob("recommend");
+    if (recommendations.error) {
+      setMlError(recommendations.error);
+      setRunningMl(false);
+      return;
+    }
+
+    const scored = Number(predictions.result?.scored ?? 0);
+    const atRisk = Number(predictions.result?.at_risk ?? 0);
+    const recs = Number(recommendations.result?.recommendations ?? 0);
+    setMlStatus(
+      `Scored ${scored} student${scored === 1 ? "" : "s"} (${atRisk} at risk) and wrote ${recs} ` +
+        `recommendation${recs === 1 ? "" : "s"}. Run Refresh Warehouse on Analytics to fold the ` +
+        "new predictions into the charts.",
+    );
+    setRunningMl(false);
+    await refresh();
+  };
 
   /** Sections carry names into the roster, so both lists refresh together. */
   const refreshAfterSectionChange = useCallback(
@@ -913,6 +956,18 @@ export default function StudentManagementClient() {
         </div>
       )}
 
+      {(mlStatus || mlError) && (
+        <div
+          className={`mb-4 rounded-xl border px-4 py-3 text-sm ${
+            mlError
+              ? "border-rose-200 bg-rose-50 text-rose-700"
+              : "border-emerald-200 bg-emerald-50 text-emerald-800"
+          }`}
+        >
+          {mlError ?? mlStatus}
+        </div>
+      )}
+
       {passwords.length > 0 && (
         <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           <div className="mb-2 flex items-center justify-between gap-4">
@@ -1000,6 +1055,19 @@ export default function StudentManagementClient() {
         >
           <FontAwesomeIcon icon={faFolderPlus} className="h-4 w-4" />
           New section
+        </button>
+        <button
+          onClick={handleRunMl}
+          disabled={runningMl}
+          title="Score every student for risk and refresh their quiz recommendations"
+          className="flex shrink-0 items-center justify-center gap-2 rounded-xl border border-brand-600/30 bg-surface px-4 py-2.5 text-sm font-medium text-brand-600 transition-all hover:bg-brand-600/5 disabled:opacity-50"
+        >
+          <FontAwesomeIcon
+            icon={runningMl ? faSpinner : faBrain}
+            spin={runningMl}
+            className="h-4 w-4"
+          />
+          {runningMl ? "Running…" : "Run ML Jobs"}
         </button>
       </div>
 
