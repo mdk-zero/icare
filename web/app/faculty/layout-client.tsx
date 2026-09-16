@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
+  faBedPulse,
   faChartBar,
   faClipboardList,
   faFileLines,
@@ -35,6 +36,7 @@ const navItems: NavItem[] = [
   { id: "scenarios", label: "Scenarios", href: "/faculty/scenarios", icon: faNotesMedical, section: "Teaching" },
   { id: "assessments", label: "Question Bank", href: "/faculty/assessments", icon: faListCheck, section: "Teaching" },
   { id: "patients", label: "Patients", href: "/faculty/patients", icon: faHospitalUser, section: "Clinical" },
+  { id: "monitoring", label: "Monitoring", href: "/faculty/monitoring", icon: faBedPulse, section: "Clinical" },
   { id: "vitals", label: "Vitals Monitor", href: "/faculty/vitals", icon: faHeartbeat, section: "Clinical" },
   { id: "ehr", label: "EHR Review", href: "/faculty/ehr", icon: faNotesMedical, section: "Clinical" },
   { id: "analytics", label: "Analytics", href: "/faculty/analytics", icon: faChartBar, section: "Data" },

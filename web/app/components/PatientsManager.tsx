@@ -20,12 +20,15 @@ import {
   faCircleCheck,
   faHospital,
   faBuilding,
+  faRightFromBracket,
+  faRightToBracket,
 } from "@fortawesome/free-solid-svg-icons";
 import {
   fetchFacultyPatients,
   createFacultyPatient,
   updateFacultyPatient,
   deleteFacultyPatient,
+  setPatientAdmission,
   fetchRooms,
   FacultyPatient,
   Room,
@@ -48,6 +51,14 @@ const vitalLabelClassName = "block text-xs font-bold text-gray-700 mb-1.5";
 
 /** Patients not linked to any room. */
 const UNASSIGNED_KEY = "__unassigned__";
+
+/** Checked-out patients; kept out of the ward rooms and the unassigned bucket. */
+const DISCHARGED_KEY = "__discharged__";
+
+/** Rows predating migration 034 carry no status and read as admitted. */
+function isDischarged(patient: FacultyPatient): boolean {
+  return patient.status === "discharged";
+}
 
 /**
  * Reference ranges used to flag a reading. Shared by the table chips and the
@@ -131,10 +142,16 @@ function hasLabs(patient: FacultyPatient): boolean {
   return Object.keys(patient.labs ?? {}).length > 0;
 }
 
-type FilterKey = "status" | "gender" | "age" | "labs";
+type FilterKey = "admission" | "status" | "gender" | "age" | "labs";
 type Filters = Record<FilterKey, string>;
 
-const NO_FILTERS: Filters = { status: "all", gender: "all", age: "all", labs: "all" };
+const NO_FILTERS: Filters = {
+  admission: "all",
+  status: "all",
+  gender: "all",
+  age: "all",
+  labs: "all",
+};
 
 // Stable empty fallbacks, so the filter memos are not invalidated every render.
 const NO_PATIENTS: FacultyPatient[] = [];
@@ -147,6 +164,7 @@ const NO_ROOMS: Room[] = [];
  * dimension and is excluded whenever it is narrowed.
  */
 const FILTER_BUCKETS: Record<FilterKey, (patient: FacultyPatient) => string> = {
+  admission: (p) => (isDischarged(p) ? "discharged" : "admitted"),
   status: vitalStatus,
   gender: (p) => genderCode(p.gender),
   age: (p) => ageBand(p.age),
@@ -159,6 +177,14 @@ const FILTER_OPTIONS: Record<
   FilterKey,
   { label: string; options: { value: string; label: string }[] }
 > = {
+  admission: {
+    label: "Filter by admission",
+    options: [
+      { value: "all", label: "Any status" },
+      { value: "admitted", label: "Admitted" },
+      { value: "discharged", label: "Discharged" },
+    ],
+  },
   status: {
     label: "Filter by vitals",
     options: [
@@ -368,7 +394,18 @@ function VitalChips({ patient }: { patient: FacultyPatient }) {
   );
 }
 
-export default function PatientsManager() {
+interface PatientsManagerProps {
+  /** Header overrides, so /monitoring can present the same census under its own name. */
+  badgeLabel?: string;
+  title?: string;
+  subtitle?: string;
+}
+
+export default function PatientsManager({
+  badgeLabel = "Patient Management",
+  title = "Patient Records",
+  subtitle = "Browse patients by their assigned room, then open a room's census",
+}: PatientsManagerProps = {}) {
   const [search, setSearch] = useState("");
   const [roomSearch, setRoomSearch] = useState("");
   const [filters, setFilters] = useState<Filters>(NO_FILTERS);
@@ -380,6 +417,12 @@ export default function PatientsManager() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<ConfirmConfig | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Check-in needs a room choice, so it gets a small modal of its own;
+  // check-out only needs the shared confirm dialog.
+  const [checkInPatient, setCheckInPatient] = useState<FacultyPatient | null>(null);
+  const [checkInRoomId, setCheckInRoomId] = useState("");
+  const [checkInBusy, setCheckInBusy] = useState(false);
+  const [checkInError, setCheckInError] = useState<string | null>(null);
 
   // Fetched whole and filtered in the browser: grouping needs the unfiltered
   // roster to show each room's real size while a search is narrowing it.
@@ -443,24 +486,41 @@ export default function PatientsManager() {
   const occupancyByRoom = useMemo(() => {
     const tally = new Map<string, number>();
     for (const p of patients) {
-      if (p.room_id) tally.set(p.room_id, (tally.get(p.room_id) ?? 0) + 1);
+      // Only admitted patients hold a bed. Check-out clears room_id, so this
+      // guard matters only for hand-edited rows — but it must agree with the
+      // server's capacity count either way.
+      if (p.room_id && !isDischarged(p)) tally.set(p.room_id, (tally.get(p.room_id) ?? 0) + 1);
     }
     return tally;
   }, [patients]);
+
+  const dischargedCount = useMemo(() => patients.filter(isDischarged).length, [patients]);
 
   const roomGroups = useMemo<RoomGroup[]>(() => {
     const matching = new Set(filteredPatients.map((p) => p.id));
     const byKey = new Map<string, RoomGroup>();
 
     for (const patient of patients) {
-      const key = patient.room_id ?? UNASSIGNED_KEY;
+      // Discharged patients hold no bed, so without their own bucket they
+      // would all pile into "Unassigned" and read as waiting for a room.
+      const key = isDischarged(patient)
+        ? DISCHARGED_KEY
+        : (patient.room_id ?? UNASSIGNED_KEY);
 
       let group = byKey.get(key);
       if (!group) {
         group = {
           key,
-          name: key === UNASSIGNED_KEY ? "Unassigned" : (patient.room?.name ?? "Room"),
-          roomNumber: key === UNASSIGNED_KEY ? "" : (patient.room?.room_number ?? ""),
+          name:
+            key === DISCHARGED_KEY
+              ? "Discharged"
+              : key === UNASSIGNED_KEY
+                ? "Unassigned"
+                : (patient.room?.name ?? "Room"),
+          roomNumber:
+            key === UNASSIGNED_KEY || key === DISCHARGED_KEY
+              ? ""
+              : (patient.room?.room_number ?? ""),
           patients: [],
           total: 0,
         };
@@ -474,10 +534,12 @@ export default function PatientsManager() {
       group.patients.sort((a, b) => a.name.localeCompare(b.name));
     }
 
-    // Real rooms by number, then the unassigned bucket last.
+    // Real rooms by number, then unassigned, then discharged last.
+    const bucketRank = (key: string) =>
+      key === DISCHARGED_KEY ? 2 : key === UNASSIGNED_KEY ? 1 : 0;
     return [...byKey.values()].sort((a, b) => {
-      if (a.key === UNASSIGNED_KEY) return 1;
-      if (b.key === UNASSIGNED_KEY) return -1;
+      const rank = bucketRank(a.key) - bucketRank(b.key);
+      if (rank !== 0) return rank;
       return compareRoomNumbers(a.roomNumber, b.roomNumber) || a.name.localeCompare(b.name);
     });
   }, [patients, filteredPatients]);
@@ -619,6 +681,53 @@ export default function PatientsManager() {
     });
   };
 
+  const handleCheckOut = async (patient: FacultyPatient) => {
+    setConfirmDelete((prev) => (prev ? { ...prev, loading: true, error: null } : null));
+    const result = await setPatientAdmission(patient.id, "check_out");
+    if (result.error) {
+      setConfirmDelete((prev) => (prev ? { ...prev, loading: false, error: result.error } : null));
+      return;
+    }
+    await loadPatients();
+    setConfirmDelete(null);
+    toast(`${patient.name} checked out`);
+  };
+
+  const openCheckOutConfirm = (patient: FacultyPatient) => {
+    setConfirmDelete({
+      title: "Check Out Patient",
+      message: `Check out "${patient.name}"?${patient.room?.name ? ` Their bed in ${patient.room.name} will be freed.` : ""} The record moves to Discharged and can be checked in again later.`,
+      confirmLabel: "Check Out",
+      danger: false,
+      loading: false,
+      error: null,
+      onConfirm: () => handleCheckOut(patient),
+    });
+  };
+
+  const openCheckInModal = (patient: FacultyPatient) => {
+    setCheckInPatient(patient);
+    setCheckInRoomId("");
+    setCheckInError(null);
+  };
+
+  const handleCheckIn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!checkInPatient) return;
+    setCheckInBusy(true);
+    setCheckInError(null);
+    const result = await setPatientAdmission(checkInPatient.id, "check_in", checkInRoomId || null);
+    if (result.error) {
+      setCheckInError(result.error);
+      setCheckInBusy(false);
+      return;
+    }
+    await loadPatients();
+    setCheckInBusy(false);
+    toast(`${checkInPatient.name} checked in`);
+    setCheckInPatient(null);
+  };
+
   const updateFormField = (field: keyof PatientForm, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
@@ -638,10 +747,10 @@ export default function PatientsManager() {
       <PageHeader
         badge={{
           icon: <FontAwesomeIcon icon={faBuilding} className="w-3.5 h-3.5" />,
-          label: "Patient Management",
+          label: badgeLabel,
         }}
-        title="Patient Records"
-        subtitle="Browse patients by their assigned room, then open a room's census"
+        title={title}
+        subtitle={subtitle}
       />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
@@ -658,7 +767,11 @@ export default function PatientsManager() {
               icon={<FontAwesomeIcon icon={faUsers} className="w-5 h-5" />}
               value={patients.length}
               label="Total Patients"
-              caption={`${roomGroups.length} room${roomGroups.length === 1 ? "" : "s"}`}
+              caption={
+                dischargedCount > 0
+                  ? `${patients.length - dischargedCount} in ward · ${dischargedCount} discharged`
+                  : `${roomGroups.length} room${roomGroups.length === 1 ? "" : "s"}`
+              }
               iconBg="bg-brand-600/10"
               iconColor="text-brand-600"
             />
@@ -780,7 +893,8 @@ export default function PatientsManager() {
           {visibleGroups.map((group) => {
             const critical = group.patients.filter(isCritical).length;
             const isUnassigned = group.key === UNASSIGNED_KEY;
-            const room = isUnassigned ? undefined : roomById.get(group.key);
+            const isDischargedGroup = group.key === DISCHARGED_KEY;
+            const room = isUnassigned || isDischargedGroup ? undefined : roomById.get(group.key);
             const capacity = room?.capacity ?? 0;
             const occupied = occupancyByRoom.get(group.key) ?? 0;
             const status = roomStatus(occupied, capacity);
@@ -801,13 +915,19 @@ export default function PatientsManager() {
                     <div className="flex items-center gap-3 min-w-0">
                       <div
                         className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${
-                          isUnassigned
+                          isUnassigned || isDischargedGroup
                             ? "bg-gray-100 text-gray-500"
                             : "bg-brand-600/10 text-brand-600"
                         }`}
                       >
                         <FontAwesomeIcon
-                          icon={isUnassigned ? faBedPulse : faHospital}
+                          icon={
+                            isDischargedGroup
+                              ? faRightFromBracket
+                              : isUnassigned
+                                ? faBedPulse
+                                : faHospital
+                          }
                           className="w-5 h-5"
                         />
                       </div>
@@ -834,7 +954,14 @@ export default function PatientsManager() {
                 {/* A card only reaches here with at least one patient: empty
                     rooms are dropped from visibleGroups. */}
                 <div className="mt-4 pt-4 border-t border-gray-100 flex flex-wrap items-center gap-2">
-                  {critical > 0 ? (
+                  {isDischargedGroup ? (
+                    // Discharged patients are no longer being monitored, so
+                    // neither vitals badge would be honest here.
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200">
+                      <FontAwesomeIcon icon={faRightFromBracket} className="w-3 h-3" />
+                      Checked out
+                    </span>
+                  ) : critical > 0 ? (
                     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700 border border-red-200">
                       <FontAwesomeIcon icon={faTriangleExclamation} className="w-3 h-3" />
                       {critical} critical
@@ -918,7 +1045,10 @@ export default function PatientsManager() {
               className="ml-auto inline-flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-[#145a68] text-white text-sm font-medium rounded-lg transition-colors"
             >
               <FontAwesomeIcon icon={faPlus} className="w-3.5 h-3.5" />
-              Add to {selectedGroup.name}
+              {/* Pseudo buckets are not somewhere a patient can be added "to". */}
+              {selectedGroup.key === UNASSIGNED_KEY || selectedGroup.key === DISCHARGED_KEY
+                ? "Add Patient"
+                : `Add to ${selectedGroup.name}`}
             </button>
           </div>
 
@@ -974,10 +1104,23 @@ export default function PatientsManager() {
                                 <p className="font-semibold text-gray-800 truncate">
                                   {patient.name}
                                 </p>
-                                {critical && (
-                                  <span className="inline-flex items-center rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-rose-600">
-                                    Critical
+                                {isDischarged(patient) ? (
+                                  <span
+                                    className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-600"
+                                    title={
+                                      patient.discharged_at
+                                        ? `Checked out ${new Date(patient.discharged_at).toLocaleString()}`
+                                        : undefined
+                                    }
+                                  >
+                                    Discharged
                                   </span>
+                                ) : (
+                                  critical && (
+                                    <span className="inline-flex items-center rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-rose-600">
+                                      Critical
+                                    </span>
+                                  )
                                 )}
                               </div>
                               <p className="text-sm text-gray-500">
@@ -1005,6 +1148,23 @@ export default function PatientsManager() {
                         </td>
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-2">
+                            {isDischarged(patient) ? (
+                              <button
+                                onClick={() => openCheckInModal(patient)}
+                                className="p-2 text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                                title="Check in patient"
+                              >
+                                <FontAwesomeIcon icon={faRightToBracket} className="w-4 h-4" />
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => openCheckOutConfirm(patient)}
+                                className="p-2 text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+                                title="Check out patient"
+                              >
+                                <FontAwesomeIcon icon={faRightFromBracket} className="w-4 h-4" />
+                              </button>
+                            )}
                             <button
                               onClick={() => openEditModal(patient)}
                               className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
@@ -1126,6 +1286,9 @@ export default function PatientsManager() {
                       value={form.room_id || ""}
                       onChange={(e) => updateFormField("room_id", e.target.value)}
                       className={inputClassName}
+                      // The server refuses a room on a discharged patient anyway;
+                      // disabling here says why instead of failing the save.
+                      disabled={!!editingPatient && isDischarged(editingPatient)}
                     >
                       <option value="">No room assigned</option>
                       {rooms.map((room) => {
@@ -1140,7 +1303,9 @@ export default function PatientsManager() {
                       })}
                     </select>
                     <p className="mt-1.5 text-xs text-gray-500">
-                      Links the patient to a room in the system. Full rooms can&apos;t be selected.
+                      {editingPatient && isDischarged(editingPatient)
+                        ? "Discharged — check the patient in to assign a room."
+                        : "Links the patient to a room in the system. Full rooms can't be selected."}
                     </p>
                   </div>
                   <div className="sm:col-span-2">
@@ -1250,6 +1415,77 @@ export default function PatientsManager() {
                 </div>
               </form>
             </div>
+          </div>
+        </div>
+      )}
+      {checkInPatient && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-surface rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] w-full max-w-md overflow-hidden border border-hairline">
+            <div className="flex items-center justify-between p-4 border-b border-hairline bg-subtle">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-brand-600/10 rounded-lg flex items-center justify-center">
+                  <FontAwesomeIcon icon={faRightToBracket} className="text-brand-600 w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-gray-900">Check In Patient</h2>
+                  <p className="text-sm text-gray-500">Re-admit {checkInPatient.name}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => !checkInBusy && setCheckInPatient(null)}
+                className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
+              >
+                <FontAwesomeIcon icon={faTimes} className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+            <form onSubmit={handleCheckIn} className="p-4 space-y-4">
+              {checkInError && (
+                <div className="p-3 bg-red-50 text-red-700 text-sm rounded-lg">{checkInError}</div>
+              )}
+              <div>
+                <label className={labelClassName}>Room</label>
+                <select
+                  value={checkInRoomId}
+                  onChange={(e) => setCheckInRoomId(e.target.value)}
+                  className={inputClassName}
+                >
+                  <option value="">No room assigned</option>
+                  {rooms.map((room) => {
+                    const occ = occupancyByRoom.get(room.id) ?? 0;
+                    const full = roomStatus(occ, room.capacity) === "full";
+                    return (
+                      <option key={room.id} value={room.id} disabled={full}>
+                        {`${room.name} · Room ${room.room_number} (${occ}/${room.capacity})${full ? " — Full" : ""}`}
+                      </option>
+                    );
+                  })}
+                </select>
+                <p className="mt-1.5 text-xs text-gray-500">
+                  The admission date restarts at check-in. A room can also be assigned later.
+                </p>
+              </div>
+              <div className="flex items-center justify-end gap-3 pt-2 border-t border-hairline">
+                <button
+                  type="button"
+                  onClick={() => setCheckInPatient(null)}
+                  disabled={checkInBusy}
+                  className="px-5 py-2.5 bg-surface border border-gray-200 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={checkInBusy}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-brand-600 hover:bg-[#145a68] disabled:opacity-60 text-white font-medium rounded-lg transition-colors shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
+                >
+                  {checkInBusy && (
+                    <FontAwesomeIcon icon={faSpinner} className="w-4 h-4 animate-spin" />
+                  )}
+                  <FontAwesomeIcon icon={faRightToBracket} className="w-4 h-4" />
+                  {checkInBusy ? "Checking In..." : "Check In"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

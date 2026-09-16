@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { resolveRoom, roomCapacityError } from '@/app/lib/patient-rooms';
+import { logAudit } from '@/app/lib/audit';
 
 function isFacultyOrAdmin(role: string | undefined): boolean {
   return role === 'faculty' || role === 'admin';
@@ -77,53 +79,6 @@ function sanitizePatientInput(body: Record<string, unknown>): {
   };
 }
 
-/**
- * Resolves a room_id to the stored FK plus a denormalized room_number label
- * ("<name> · Room <number>") that EHR/Vitals/AI read. An unknown or empty id
- * clears both. Returns { room_id: null } if the id doesn't match a room.
- */
-async function resolveRoom(
-  supabase: ReturnType<typeof getSupabaseAdmin>,
-  roomId: string | null,
-): Promise<{ room_id: string | null; room_number: string }> {
-  if (!roomId) return { room_id: null, room_number: '' };
-  const { data: room } = await supabase
-    .from('rooms')
-    .select('name, room_number')
-    .eq('id', roomId)
-    .maybeSingle();
-  if (!room) return { room_id: null, room_number: '' };
-  return { room_id: roomId, room_number: `${room.name} · Room ${room.room_number}` };
-}
-
-/**
- * Rooms are hard-capped: refuses a room already at capacity. excludePatientId
- * skips the row being edited so re-saving a patient in its own full room is fine.
- * Returns an error message when full, or null when there is space / no such room.
- */
-async function roomCapacityError(
-  supabase: ReturnType<typeof getSupabaseAdmin>,
-  roomId: string,
-  excludePatientId: string | null,
-): Promise<string | null> {
-  const { data: room } = await supabase
-    .from('rooms')
-    .select('name, capacity')
-    .eq('id', roomId)
-    .maybeSingle();
-  if (!room) return null; // unknown room — resolveRoom clears it, no capacity concern
-  let query = supabase
-    .from('patients')
-    .select('id', { count: 'exact', head: true })
-    .eq('room_id', roomId);
-  if (excludePatientId) query = query.neq('id', excludePatientId);
-  const { count } = await query;
-  if ((count ?? 0) >= room.capacity) {
-    return `${room.name} is full (${room.capacity}/${room.capacity}). Free a bed or pick another room.`;
-  }
-  return null;
-}
-
 function validateRequired(input: ReturnType<typeof sanitizePatientInput>): string | null {
   if (!input.name) return 'Patient name is required';
   if (!input.gender) return 'Gender is required';
@@ -146,7 +101,7 @@ export async function GET(request: NextRequest) {
     // it holds — omitting them here made saving a patient blank both columns.
     let query = supabase
       .from('patients')
-      .select('id, subject_id, hadm_id, name, age, gender, room_number, room_id, room:rooms(id, name, room_number), diagnosis, admission_date, mimic_id, medical_history, vital_signs, labs, created_at')
+      .select('id, subject_id, hadm_id, name, age, gender, room_number, room_id, room:rooms(id, name, room_number), diagnosis, admission_date, status, discharged_at, mimic_id, medical_history, vital_signs, labs, created_at')
       .order('admission_date', { ascending: false })
       .limit(500);
 
@@ -227,6 +182,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unable to create patient' }, { status: 500 });
     }
 
+    // Creating a patient is their first check-in; the admission route logs
+    // every later transition, so the trail starts here.
+    await logAudit(
+      session,
+      {
+        action: 'patient.create',
+        entityType: 'patients',
+        entityId: patient.id,
+        details: { name: patient.name, room: room.room_number || null },
+      },
+      request,
+    );
+
     return NextResponse.json({ patient }, { status: 201 });
   } catch (err) {
     console.error('Create patient failed', err);
@@ -262,12 +230,18 @@ export async function PUT(request: NextRequest) {
 
     const { data: existing } = await supabase
       .from('patients')
-      .select('id')
+      .select('id, status')
       .eq('id', id)
       .maybeSingle();
 
     if (!existing) {
       return NextResponse.json({ error: 'Patient not found' }, { status: 404 });
+    }
+
+    // A discharged patient holds no bed; check-in is the only door back into
+    // a room, so an edit can never quietly re-occupy one.
+    if (existing.status === 'discharged') {
+      input.room_id = null;
     }
 
     if (input.room_id) {

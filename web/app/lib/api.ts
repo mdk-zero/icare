@@ -1128,6 +1128,9 @@ export interface FacultyPatient {
   room?: { id: string; name: string; room_number: string } | null;
   diagnosis: string;
   admission_date: string;
+  /** Admission lifecycle; rows predating migration 034 read as admitted. */
+  status?: 'admitted' | 'discharged';
+  discharged_at?: string | null;
   vital_signs?: {
     heart_rate: number | null;
     blood_pressure: string | null;
@@ -1799,6 +1802,33 @@ export async function updateFacultyPatient(
   } catch (err) {
     console.error('updateFacultyPatient() failed', err);
     return { error: 'Unable to update patient. Please try again.' };
+  }
+}
+
+/**
+ * Check a patient in or out. Check-out discharges and frees the bed;
+ * check-in re-admits a discharged patient, optionally into a room.
+ */
+export async function setPatientAdmission(
+  id: string,
+  action: 'check_in' | 'check_out',
+  roomId?: string | null,
+): Promise<{ patient?: FacultyPatient; error?: string }> {
+  try {
+    const res = await apiFetch('/api/faculty/patients/admission', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ id, action, room_id: roomId ?? null }),
+    });
+    const json = (await res.json()) as { patient?: FacultyPatient; error?: string };
+    if (!res.ok) {
+      return { error: json.error || 'Unable to update admission status' };
+    }
+    return { patient: json.patient };
+  } catch (err) {
+    console.error('setPatientAdmission() failed', err);
+    return { error: 'Unable to update admission status. Please try again.' };
   }
 }
 
