@@ -5,7 +5,6 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faChartBar,
   faUsers,
-  faClipboardCheck,
   faHeartbeat,
   faExclamationTriangle,
   faNotesMedical,
@@ -18,6 +17,10 @@ import {
   faWandMagicSparkles,
   faArrowsRotate,
   faChevronUp,
+  faBullseye,
+  faTrophy,
+  faArrowUp,
+  faArrowDown,
 } from "@fortawesome/free-solid-svg-icons";
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import {
@@ -26,13 +29,15 @@ import {
   generateAnalyticsNarrative,
   AnalyticsNarrative,
   AnalyticsBucket,
+  AnalyticsSummary,
   Section,
 } from "../../lib/api";
 import { SkeletonStatCard, SkeletonChartArea, SkeletonCompetencyGrid } from "../../components/skeletons";
 import PageHeader from "../../components/PageHeader";
 import Card, { CardLabel } from "../../components/Card";
-import StatTile from "../../components/StatTile";
+import Avatar from "../../components/Avatar";
 import { usePageData } from "../../lib/use-page-data";
+import { MODEL_EVAL_SNAPSHOT, DEFAULT_MODEL_KIND } from "../../lib/model-eval-snapshot";
 
 /** Stable empty fallback, so nothing downstream sees a new array each render. */
 const NO_SECTIONS: Section[] = [];
@@ -114,6 +119,27 @@ function formatRange(from: string, to: string): string {
   });
   const right = b.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
   return `${left} – ${right}`;
+}
+
+/** The same number of days immediately before `from`, for a "vs last period"
+ * comparison — mirrors the reference dashboard's KPI cards. */
+function previousRange(from: string, to: string): { from: string; to: string } {
+  const a = parseDay(from);
+  const b = parseDay(to);
+  const days = Math.round((b.getTime() - a.getTime()) / 86_400_000) + 1;
+  const prevTo = new Date(a);
+  prevTo.setDate(prevTo.getDate() - 1);
+  const prevFrom = new Date(prevTo);
+  prevFrom.setDate(prevFrom.getDate() - (days - 1));
+  return { from: isoDay(prevFrom), to: isoDay(prevTo) };
+}
+
+/** Percent change, `null` when there's nothing sensible to divide by — the
+ * card then shows a dash instead of a misleading 0%/∞%. */
+function pctChange(curr: number | null | undefined, prev: number | null | undefined): number | null {
+  if (curr == null || prev == null) return null;
+  if (prev === 0) return curr === 0 ? 0 : null;
+  return ((curr - prev) / prev) * 100;
 }
 
 /* --------------------------------------------------------------- charts */
@@ -458,6 +484,114 @@ function HBars({
   );
 }
 
+/**
+ * KPI tile with a label + icon header, a large value, and a "vs last period"
+ * trend badge — the shape of the reference dashboard's cards, sized to fill
+ * its grid cell rather than hugging its content.
+ */
+function KpiCard({
+  label,
+  value,
+  icon,
+  iconBg,
+  iconColor,
+  change,
+  comparisonLabel,
+  /** Whether an increasing value is the good outcome (revenue, scores) or
+   * the bad one (at-risk count) — flips which direction is colored green. */
+  goodDirection = "up",
+}: {
+  label: string;
+  value: string;
+  icon: IconDefinition;
+  iconBg: string;
+  iconColor: string;
+  change: number | null;
+  comparisonLabel: string;
+  goodDirection?: "up" | "down";
+}) {
+  const isUp = (change ?? 0) >= 0;
+  const isGood = change == null ? null : goodDirection === "up" ? isUp : !isUp;
+  return (
+    <div className="flex h-full flex-col justify-between rounded-2xl border border-hairline bg-surface p-5 shadow-tile">
+      <div className="flex items-start justify-between gap-3">
+        <span className="text-[11px] font-bold uppercase tracking-wider text-gray-400">{label}</span>
+        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${iconBg} ${iconColor}`}>
+          <FontAwesomeIcon icon={icon} className="h-4 w-4" />
+        </span>
+      </div>
+      <p className="mt-4 font-display text-3xl font-bold tabular-nums text-gray-900">{value}</p>
+      <div className="mt-2.5 flex flex-wrap items-center gap-1.5 text-xs">
+        {change != null ? (
+          <span
+            className={`flex items-center gap-1 font-semibold ${isGood ? "text-emerald-600" : "text-rose-600"}`}
+          >
+            <FontAwesomeIcon icon={isUp ? faArrowUp : faArrowDown} className="h-2.5 w-2.5" />
+            {Math.abs(change).toFixed(1)}%
+          </span>
+        ) : (
+          <span className="font-semibold text-gray-400">—</span>
+        )}
+        <span className="text-gray-400">{comparisonLabel}</span>
+      </div>
+    </div>
+  );
+}
+
+/** Ranked list of top scorers — a leaderboard, not a plain table, so rank
+ * and magnitude are both legible at a glance (medal badge + a proportional
+ * fill bar behind each row). */
+function Leaderboard({ students }: { students: AnalyticsSummary["top_students"] }) {
+  if (students.length === 0) {
+    return (
+      <p className="text-gray-400 text-sm py-12 text-center">
+        No submitted attempts in range yet — scores will rank here once students start.
+      </p>
+    );
+  }
+  const max = Math.max(...students.map((s) => s.average_score), 1);
+  const rankStyle = (rank: number) => {
+    if (rank === 1) return "bg-gradient-to-br from-amber-300 to-amber-500 text-white shadow-sm";
+    if (rank === 2) return "bg-gradient-to-br from-slate-300 to-slate-400 text-white shadow-sm";
+    if (rank === 3) return "bg-gradient-to-br from-orange-300 to-orange-500 text-white shadow-sm";
+    return "bg-gray-100 text-gray-500";
+  };
+  return (
+    <div className="space-y-2">
+      {students.map((s, i) => {
+        const rank = i + 1;
+        return (
+          <div
+            key={s.student_key}
+            className="relative flex items-center gap-3 overflow-hidden rounded-xl border border-hairline bg-surface p-3"
+          >
+            <div
+              className="absolute inset-y-0 left-0 bg-brand-600/[0.06] transition-all duration-700 ease-out"
+              style={{ width: `${(s.average_score / max) * 100}%` }}
+              aria-hidden
+            />
+            <span
+              className={`relative z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${rankStyle(rank)}`}
+            >
+              {rank}
+            </span>
+            <Avatar name={s.name} size="sm" tone="brand" className="relative z-10" />
+            <div className="relative z-10 min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold text-gray-900">{s.name}</p>
+              <p className="truncate text-xs text-gray-400">
+                {s.section ?? "No section"} · {s.attempts} attempt{s.attempts === 1 ? "" : "s"}
+              </p>
+            </div>
+            <span className="relative z-10 shrink-0 text-sm font-bold text-brand-700 tabular-nums">
+              {s.average_score}%
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 /** Plain-language reading of whatever the filters currently select. */
 function NarrativeCard({
   narrative,
@@ -627,6 +761,16 @@ export default function FacultyAnalyticsClient() {
   const summary = analytics?.summary ?? null;
   const bucket = analytics?.bucket ?? "week";
 
+  // A second, quieter fetch for the immediately preceding period of equal
+  // length, purely to power each KPI card's "vs last period" badge.
+  const prevRangeValue = useMemo(() => previousRange(from, to), [from, to]);
+  const { data: prevAnalytics } = usePageData(
+    `faculty:analytics:prev:${sectionKey}:${prevRangeValue.from}:${prevRangeValue.to}`,
+    () => fetchAnalyticsSummary({ sectionIds, from: prevRangeValue.from, to: prevRangeValue.to }),
+    { keepPreviousData: true },
+  );
+  const prevSummary = prevAnalytics?.summary ?? null;
+
   const applyPreset = useCallback((id: PresetId) => {
     setPreset(id);
     if (id === "custom") return;
@@ -727,35 +871,59 @@ export default function FacultyAnalyticsClient() {
   const competencies = Object.entries(summary?.competency_breakdown ?? {}).sort(
     (a, b) => b[1] - a[1],
   );
+  const topStudents = summary?.top_students ?? [];
+  const sectionsWithActivity = summary?.sections ?? [];
+
+  // No ground-truth outcome column exists to score live predictions against,
+  // so accuracy is a shipped offline-eval snapshot, labelled with whichever
+  // model actually issued the most recent risk labels.
+  const modelKind = summary?.active_model?.kind ?? DEFAULT_MODEL_KIND;
+  const modelEval = MODEL_EVAL_SNAPSHOT[modelKind] ?? MODEL_EVAL_SNAPSHOT[DEFAULT_MODEL_KIND];
+
+  const prevAtRisk = prevSummary?.risk_distribution?.at_risk ?? null;
+  const comparisonLabel = `vs ${formatRange(prevRangeValue.from, prevRangeValue.to)}`;
 
   const statCards = [
     {
       icon: faChartBar,
       value: summary?.cohort.average_score != null ? `${summary.cohort.average_score}%` : "—",
-      label: "Cohort Average Score",
+      label: "Average Student Performance",
+      change: pctChange(summary?.cohort.average_score, prevSummary?.cohort.average_score),
+      comparisonLabel,
+      goodDirection: "up" as const,
       iconBg: "bg-blue-50",
       iconColor: "text-blue-600",
     },
     {
-      icon: faClipboardCheck,
-      value: `${summary?.cohort.submitted_attempts ?? 0}`,
-      label: "Submitted Quiz Attempts",
-      iconBg: "bg-green-50",
-      iconColor: "text-green-600",
-    },
-    {
       icon: faUsers,
       value: `${summary?.cohort.active_students_30d ?? 0}/${summary?.cohort.total_students ?? 0}`,
-      label: "Active Students (in range)",
+      label: "Active Students",
+      change: pctChange(summary?.cohort.active_students_30d, prevSummary?.cohort.active_students_30d),
+      comparisonLabel,
+      goodDirection: "up" as const,
       iconBg: "bg-purple-50",
       iconColor: "text-purple-600",
     },
     {
       icon: faExclamationTriangle,
       value: `${atRisk}`,
-      label: "At-Risk Students",
+      label: "Students At-Risk",
+      change: pctChange(atRisk, prevAtRisk),
+      comparisonLabel,
+      // Rising at-risk counts are the bad direction, unlike every other card.
+      goodDirection: "down" as const,
       iconBg: "bg-amber-50",
       iconColor: "text-amber-600",
+    },
+    {
+      icon: faBullseye,
+      value: `${Math.round(modelEval.accuracy * 100)}%`,
+      label: "Prediction Accuracy",
+      change: null,
+      comparisonLabel: `${modelEval.model} · offline eval`,
+      goodDirection: "up" as const,
+      iconBg: "bg-rose-50",
+      iconColor: "text-rose-600",
     },
   ];
 
@@ -870,13 +1038,16 @@ export default function FacultyAnalyticsClient() {
       {/* Refetches dim the panels in place rather than tearing the page down
           to skeletons, so changing a filter doesn't make the layout jump. */}
       <div className={`transition-opacity duration-200 ${refreshing ? "opacity-60" : ""}`}>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4 items-stretch">
           {statCards.map((card) => (
-            <StatTile
+            <KpiCard
               key={card.label}
-              icon={<FontAwesomeIcon icon={card.icon} className="w-5 h-5" />}
+              icon={card.icon}
               value={card.value}
               label={card.label}
+              change={card.change}
+              comparisonLabel={card.comparisonLabel}
+              goodDirection={card.goodDirection}
               iconBg={card.iconBg}
               iconColor={card.iconColor}
             />
@@ -890,10 +1061,13 @@ export default function FacultyAnalyticsClient() {
                 <div className="rounded-lg bg-brand-600/10 p-1.5">
                   <FontAwesomeIcon icon={faChartBar} className="h-3.5 w-3.5 text-brand-600" />
                 </div>
-                <h3 className="font-semibold text-gray-900">Score Trend</h3>
+                <div>
+                  <h3 className="font-semibold text-gray-900">Classroom Performance Overview</h3>
+                  <p className="text-xs text-gray-400">Line chart — average quiz score over time</p>
+                </div>
               </div>
               <span className="font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-slate-400">
-                avg quiz score, {BUCKET_LABEL[bucket]}
+                {BUCKET_LABEL[bucket]}
               </span>
             </div>
             <div className="flex-1 flex flex-col justify-center">
@@ -932,10 +1106,66 @@ export default function FacultyAnalyticsClient() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4 items-stretch">
           <Card padding="md" className="flex flex-col">
             <div className="flex items-center gap-2.5 mb-5">
+              <div className="rounded-lg bg-purple-600/10 p-1.5">
+                <FontAwesomeIcon icon={faUsers} className="h-3.5 w-3.5 text-purple-600" />
+              </div>
+              <h3 className="font-semibold text-gray-900">Active Students by Section</h3>
+            </div>
+            <div className="flex-1 flex flex-col justify-center">
+              {sectionsWithActivity.length === 0 ? (
+                <p className="text-gray-400 text-sm py-12 text-center">
+                  No sections in scope — pick a section above, or ask an admin to assign you one.
+                </p>
+              ) : (
+                <div className="space-y-4">
+                  {sectionsWithActivity.map((s) => {
+                    // `active_students` is only populated once migration 030 has
+                    // run; a not-yet-migrated warehouse omits the key entirely.
+                    const active = s.active_students ?? 0;
+                    const pct = s.students > 0 ? Math.round((active / s.students) * 100) : 0;
+                    return (
+                      <div key={s.id} className="flex items-center gap-3">
+                        <span className="w-28 shrink-0 truncate text-sm text-gray-600">{s.name}</span>
+                        <div className="h-3 flex-1 rounded-full bg-gray-100 overflow-hidden ring-1 ring-gray-200/50">
+                          <div
+                            className="h-full rounded-full bg-gradient-to-r from-purple-500 to-purple-400 transition-all duration-700 ease-out"
+                            style={{ width: `${Math.max(pct, active > 0 ? 4 : 0)}%` }}
+                          />
+                        </div>
+                        <span className="w-16 shrink-0 text-right text-sm font-bold text-gray-800 tabular-nums">
+                          {active}/{s.students}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </Card>
+
+          <Card padding="md" className="flex flex-col">
+            <div className="flex items-center gap-2.5 mb-5">
+              <div className="rounded-lg bg-amber-500/10 p-1.5">
+                <FontAwesomeIcon icon={faTrophy} className="h-3.5 w-3.5 text-amber-600" />
+              </div>
+              <h3 className="font-semibold text-gray-900">Top Performing Students</h3>
+            </div>
+            <div className="flex-1 flex flex-col justify-center">
+              <Leaderboard students={topStudents} />
+            </div>
+          </Card>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4 items-stretch">
+          <Card padding="md" className="flex flex-col">
+            <div className="flex items-center gap-2.5 mb-5">
               <div className="rounded-lg bg-brand-600/10 p-1.5">
                 <FontAwesomeIcon icon={faLayerGroup} className="h-3.5 w-3.5 text-brand-600" />
               </div>
-              <h3 className="font-semibold text-gray-900">Competency Breakdown</h3>
+              <div>
+                <h3 className="font-semibold text-gray-900">Performance per Competency</h3>
+                <p className="text-xs text-gray-400">Bar chart — average score by competency</p>
+              </div>
             </div>
             <div className="flex-1 flex flex-col justify-center">
               {competencies.length === 0 ? (
