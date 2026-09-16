@@ -69,7 +69,13 @@ export default function ClientAdminLayout({
       const user = getCurrentUser() ?? (await refreshCurrentUser());
       if (cancelled) return;
       if (!user) router.replace("/login");
-      else if (user.role === "student") router.replace("/dashboard");
+      // Every /api/admin/* route requires role === 'admin', so anything less
+      // gets a console it cannot act in: the forms render, then each submit
+      // comes back "Forbidden". Bouncing non-admins here is what the server
+      // component at app/admin/page.tsx already does; the two gates only
+      // disagreed because this one screened for students alone.
+      else if (user.role !== "admin")
+        router.replace(user.role === "faculty" ? "/faculty" : "/dashboard");
       else setReady(true);
     }
     void gate();
