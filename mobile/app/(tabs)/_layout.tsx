@@ -118,7 +118,12 @@ function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
       pointerEvents="box-none"
       style={[styles.tabBarWrap, { paddingBottom: Math.max(insets.bottom, 12) }]}
     >
-      <View style={[styles.tabBarPill, { backgroundColor: Palette.surface, borderColor: Palette.borderLight }]}>
+      <View
+        style={[
+          styles.tabBarPill,
+          { backgroundColor: Palette.surface, borderColor: Palette.borderLight },
+        ]}
+      >
         {state.routes.map((route, index) => {
           const { options } = descriptors[route.key];
           const label = options.title ?? route.name;
@@ -335,7 +340,7 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: "#FFFFFF",
     letterSpacing: 0.3,
-    marginLeft: -10,
+    marginLeft: -8,
     marginTop: 10,
     textShadowColor: "rgba(8, 46, 56, 0.4)",
     textShadowOffset: { width: 0, height: 1 },
@@ -362,9 +367,6 @@ const styles = StyleSheet.create({
     height: 38,
     justifyContent: "center",
     borderRadius: 12,
-    backgroundColor: "rgba(255, 255, 255, 0.14)",
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.22)",
   },
   clockText: {
     fontSize: 13,
