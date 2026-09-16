@@ -25,6 +25,7 @@ import {
   faRightToBracket,
   faFolderOpen,
   faMap,
+  faTableCellsLarge,
 } from "@fortawesome/free-solid-svg-icons";
 import {
   fetchFacultyPatients,
@@ -423,6 +424,7 @@ export default function PatientsManager({
   const [roomSearch, setRoomSearch] = useState("");
   const [filters, setFilters] = useState<Filters>(NO_FILTERS);
   const [selectedRoomKey, setSelectedRoomKey] = useState<string | null>(null);
+  const [view, setView] = useState<"plan" | "cards">("plan");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingPatient, setEditingPatient] = useState<FacultyPatient | null>(null);
   const [form, setForm] = useState<PatientForm>(emptyPatient);
@@ -567,6 +569,18 @@ export default function PatientsManager({
     ? roomGroups.filter((group) => group.patients.length > 0)
     : roomGroups;
   const hiddenGroups = roomGroups.length - visibleGroups.length;
+
+  // The map only exists where an admin has placed rooms, so pages without a
+  // plan stay on cards no matter what the toggle last held.
+  const planView = showFloorPlan && view === "plan";
+
+  // Rooms still holding a matching patient. Passed to the map so a narrowed
+  // filter dims the rest, rather than leaving the plan silently contradicting
+  // the controls above it.
+  const matchingRoomIds = useMemo(
+    () => new Set(filteredPatients.map((p) => p.room_id).filter((id): id is string => !!id)),
+    [filteredPatients],
+  );
 
   const setFilter = (key: FilterKey, value: string) =>
     setFilters((prev) => ({ ...prev, [key]: value }));
@@ -766,34 +780,6 @@ export default function PatientsManager({
         subtitle={subtitle}
       />
 
-      {/* The ward map is a navigation surface: click a room to open its census.
-          Hidden inside a room so the census table keeps the space. */}
-      {showFloorPlan && !loading && !selectedGroup && (
-        <div className="mb-4">
-          <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-            <h2 className="flex items-center gap-2 font-display text-base font-semibold text-gray-900">
-              <FontAwesomeIcon icon={faMap} className="h-4 w-4 text-brand-600" />
-              Room Layout
-            </h2>
-            <p className="text-xs text-gray-500">
-              Arranged in Admin · Rooms. Select a room to open its census.
-            </p>
-          </div>
-          <FloorPlanCanvas
-            rooms={rooms}
-            occupancy={occupancyByRoom}
-            onRoomClick={(room) => {
-              if (roomGroups.some((g) => g.key === room.id)) {
-                setSelectedRoomKey(room.id);
-                setSearch("");
-              } else {
-                toast(`No patients in ${room.name} yet`);
-              }
-            }}
-          />
-        </div>
-      )}
-
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
         {loading ? (
           <>
@@ -863,6 +849,31 @@ export default function PatientsManager({
           here. Hidden while the roster loads, alongside the skeleton. */}
       {!loading && !selectedGroup && (
         <div className="flex flex-wrap items-center gap-2 mb-4">
+          {showFloorPlan && (
+            <div className="inline-flex rounded-xl border border-gray-200 bg-surface p-1">
+              {(
+                [
+                  { key: "plan", label: "Room Layout", icon: faMap },
+                  { key: "cards", label: "Card Layout", icon: faTableCellsLarge },
+                ] as const
+              ).map((option) => (
+                <button
+                  key={option.key}
+                  onClick={() => setView(option.key)}
+                  aria-pressed={view === option.key}
+                  className={`inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                    view === option.key
+                      ? "bg-brand-600 text-white shadow-sm"
+                      : "text-gray-600 hover:text-gray-900"
+                  }`}
+                >
+                  <FontAwesomeIcon icon={option.icon} className="w-3.5 h-3.5" />
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          )}
+
           <div className="relative w-full sm:w-64">
             <FontAwesomeIcon
               icon={faSearch}
@@ -928,6 +939,39 @@ export default function PatientsManager({
           <p className="text-gray-500 text-sm mt-1">
             Seed MIMIC-IV Demo data with npm run db:seed:mimic-demo.
           </p>
+        </div>
+      ) : !selectedGroup && planView ? (
+        /* The ward map: a navigation surface, so selecting a room opens its
+           census below. Rooms an admin has not placed only exist on cards. */
+        <div>
+          <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="flex items-center gap-2 font-display text-base font-semibold text-gray-900">
+              <FontAwesomeIcon icon={faMap} className="h-4 w-4 text-brand-600" />
+              Room Layout
+            </h2>
+            <p className="text-xs text-gray-500">
+              Arranged in Admin · Rooms. Select a room to open its census.
+            </p>
+          </div>
+          <FloorPlanCanvas
+            rooms={rooms}
+            occupancy={occupancyByRoom}
+            dimmedUnless={filtersActive ? matchingRoomIds : undefined}
+            onRoomClick={(room) => {
+              if (roomGroups.some((g) => g.key === room.id)) {
+                setSelectedRoomKey(room.id);
+                setSearch("");
+              } else {
+                toast(`No patients in ${room.name} yet`);
+              }
+            }}
+          />
+          {rooms.every((r) => r.plan_x == null) && (
+            <p className="mt-3 rounded-xl border border-hairline bg-surface p-6 text-center text-sm text-gray-500">
+              No rooms have been placed on the floor plan yet. An admin can arrange
+              them under Rooms, or switch to Card Layout to browse the census.
+            </p>
+          )}
         </div>
       ) : !selectedGroup ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

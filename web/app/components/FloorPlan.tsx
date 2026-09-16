@@ -165,11 +165,18 @@ export function FloorPlanCanvas({
   rooms,
   occupancy,
   onRoomClick,
+  dimmedUnless,
 }: {
   rooms: Room[];
   /** Admitted patients per room id; rooms absent from the map read as 0. */
   occupancy: Map<string, number>;
   onRoomClick?: (room: Room) => void;
+  /**
+   * When set, rooms outside this set are dimmed — the map's way of answering a
+   * filter applied above it. Omit it entirely to leave every room at full
+   * strength; an empty set legitimately means "nothing matched".
+   */
+  dimmedUnless?: Set<string>;
 }) {
   const blocks: BlockVisual[] = [];
   for (const room of rooms) {
@@ -185,7 +192,9 @@ export function FloorPlanCanvas({
           key={room.id}
           onClick={() => onRoomClick?.(room)}
           title={`${room.name} · Room ${room.room_number}`}
-          className={`absolute rounded-lg border shadow-sm transition-all hover:z-10 hover:shadow-md hover:brightness-[0.97] focus:outline-none focus:ring-2 focus:ring-brand-600/50 ${blockClasses(room, occupied)}`}
+          className={`absolute rounded-lg border shadow-sm transition-all hover:z-10 hover:shadow-md hover:brightness-[0.97] focus:outline-none focus:ring-2 focus:ring-brand-600/50 ${
+            dimmedUnless && !dimmedUnless.has(room.id) ? "opacity-35" : ""
+          } ${blockClasses(room, occupied)}`}
           style={{
             left: pct(rect.x, GRID_COLS),
             top: pct(rect.y, GRID_ROWS),
