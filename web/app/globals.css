@@ -304,6 +304,23 @@ html {
   scroll-behavior: smooth;
 }
 
+/* ---------------------------------------------------------------------------
+ * Entrance reveals belong to the load that brings the app up. Every page after
+ * that is a client-side navigation into data the caches already hold, so
+ * replaying a 450ms reveal each time is latency added to a render that was
+ * otherwise instant. `Shell` sets `.no-entrance` on <html> at the first
+ * navigation, and it stays for the life of the document.
+ *
+ * Only reveals are listed. Spinners, skeleton pulses, the sidebar's pending
+ * sweep, the shake on a rejected field and the logout dialog's fade and pop are
+ * feedback — they answer something the user just did, and they keep running.
+ * ------------------------------------------------------------------------ */
+.no-entrance .animate-rise,
+.no-entrance .animate-fade-in-up,
+.no-entrance .sb-enter {
+  animation: none !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

@@ -2,7 +2,7 @@
 
 import Link, { useLinkStatus } from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import { SkeletonSidebar } from "./skeletons";
@@ -224,6 +224,21 @@ export default function Shell({ role, navItems, isActive, children }: ShellProps
 
   // Surface arrivals while the user is on some other page.
   useEffect(() => onNotificationArrival((notification) => toast(notification.title, "info")), []);
+
+  /**
+   * The first navigation ends the entrance animations for good — see
+   * `.no-entrance` in globals.css. Search params count as a navigation because
+   * the student dashboard's tabs are query-string links onto one page, and
+   * those re-reveal the same content.
+   *
+   * Defaulting to animating and opting out from here, rather than the reverse,
+   * keeps the reveal working if this never runs.
+   */
+  const location = `${pathname}?${searchParams}`;
+  const openedAt = useRef(location);
+  useEffect(() => {
+    if (location !== openedAt.current) document.documentElement.classList.add("no-entrance");
+  }, [location]);
 
   /**
    * Server-rendered pages — the admin overview above all — are held by the
