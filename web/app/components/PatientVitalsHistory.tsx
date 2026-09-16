@@ -8,7 +8,7 @@ import {
   faCheckCircle,
   faHeartbeat,
 } from "@fortawesome/free-solid-svg-icons";
-import { fetchFacultyVitalReadings, VitalReading } from "../../lib/api";
+import { fetchFacultyVitalReadings, VitalReading } from "../lib/api";
 
 const BRAND = "#1b6b7b";
 const GRID = "#eef2f6";

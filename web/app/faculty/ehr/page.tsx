@@ -1,10 +1,10 @@
-import type { Metadata } from "next";
-import FacultyEhrClient from "./page-client";
+import { redirect } from "next/navigation";
 
-export const metadata: Metadata = {
-  title: "EHR Review | iCARE++ Faculty",
-};
-
+/**
+ * Folded into Monitoring. Per-note review moved onto the patient chart, which
+ * shows every TPR/IVF sheet and progress note for one patient with the same
+ * "Mark reviewed" sign-off this page carried.
+ */
 export default function FacultyEhrPage() {
-  return <FacultyEhrClient />;
+  redirect("/faculty/monitoring");
 }

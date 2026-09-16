@@ -20,10 +20,14 @@ import {
   faUserPlus,
   faNotesMedical,
   faStethoscope,
+  faChartLine,
 } from "@fortawesome/free-solid-svg-icons";
 import PageHeader from "./PageHeader";
+import PatientVitalsHistory from "./PatientVitalsHistory";
+import { toast } from "./Toast";
 import {
   fetchFacultyPatientDetail,
+  reviewProgressNote,
   EhrRecord,
   EhrType,
   PatientChart as PatientChartData,
@@ -35,8 +39,11 @@ import { usePageData } from "../lib/use-page-data";
 /**
  * One patient's chart: demographics, the vitals trend, TPR/IVF/notes, and the
  * admission timeline on a single screen — the "all in one dashboard per
- * patient" view. Read-only: charting stays with students, review stays on the
- * EHR page, so nothing here duplicates a write surface that already exists.
+ * patient" view, and the only route to a patient's records now that Patients,
+ * Vitals Monitor and EHR Review have been folded into Monitoring.
+ *
+ * Charting itself stays with students; the one faculty write action here is
+ * signing off a progress note, which moved from the retired EHR Review page.
  */
 
 // ---------------------------------------------------------------------------
@@ -302,14 +309,42 @@ function lengthOfStay(chart: PatientChartData): string {
   return days === 1 ? "1 day" : `${days} days`;
 }
 
-export default function PatientChart({ backHref }: { backHref: string }) {
+export default function PatientChart({
+  backHref,
+  backLabel = "All patients",
+}: {
+  backHref: string;
+  /** Names the destination, which differs per portal. */
+  backLabel?: string;
+}) {
   const params = useParams<{ id: string }>();
   const patientId = params?.id ?? "";
   const [tab, setTab] = useState<EhrType>("tpr");
+  const [reviewingId, setReviewingId] = useState<string | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
-  const { data: chart, loading } = usePageData(`faculty:patient:${patientId}`, () =>
-    fetchFacultyPatientDetail(patientId),
-  );
+  const {
+    data: chart,
+    loading,
+    refresh,
+  } = usePageData(`faculty:patient:${patientId}`, () => fetchFacultyPatientDetail(patientId));
+
+  /**
+   * Faculty sign-off on a student's progress note — the one write action in the
+   * clinical cluster, and the trigger for the student's "reviewed" notification.
+   * It lives here because the chart is now the only route to a patient's notes.
+   */
+  const handleReview = async (noteId: string) => {
+    setReviewingId(noteId);
+    const result = await reviewProgressNote(noteId);
+    setReviewingId(null);
+    if (result.error) {
+      toast(result.error);
+      return;
+    }
+    await refresh();
+    toast("Progress note marked reviewed");
+  };
 
   const records = useMemo<EhrRecord[]>(() => {
     if (!chart) return [];
@@ -331,7 +366,7 @@ export default function PatientChart({ backHref }: { backHref: string }) {
   if (!chart) {
     return (
       <div>
-        <BackLink href={backHref} />
+        <BackLink href={backHref} label={backLabel} />
         <div className="rounded-xl border border-hairline bg-surface p-12 text-center shadow-tile">
           <FontAwesomeIcon icon={faBed} className="mx-auto mb-4 h-12 w-12 text-gray-300" />
           <h3 className="text-lg font-semibold text-gray-700">Patient not found</h3>
@@ -350,7 +385,7 @@ export default function PatientChart({ backHref }: { backHref: string }) {
 
   return (
     <div>
-      <BackLink href={backHref} />
+      <BackLink href={backHref} label={backLabel} />
 
       <PageHeader
         badge={{ icon: <FontAwesomeIcon icon={faStethoscope} className="h-3.5 w-3.5" />, label: "Patient Chart" }}
@@ -392,13 +427,26 @@ export default function PatientChart({ backHref }: { backHref: string }) {
                 <FontAwesomeIcon icon={faHeartPulse} className="h-4 w-4 text-rose-500" />
                 Vital Signs
               </h2>
-              <span className="text-xs text-gray-500">
-                {chart.vitals.length === 0
-                  ? "No readings charted"
-                  : `${chart.vitals.length} reading${chart.vitals.length === 1 ? "" : "s"}${
-                      flaggedCount > 0 ? ` · ${flaggedCount} flagged` : ""
-                    }`}
-              </span>
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-gray-500">
+                  {chart.vitals.length === 0
+                    ? "No readings charted"
+                    : `${chart.vitals.length} reading${chart.vitals.length === 1 ? "" : "s"}${
+                        flaggedCount > 0 ? ` · ${flaggedCount} flagged` : ""
+                      }`}
+                </span>
+                {/* The charted history the retired Vitals Monitor page carried:
+                    per-metric lines against their reference bands. */}
+                {chart.vitals.length > 0 && (
+                  <button
+                    onClick={() => setHistoryOpen(true)}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-700 transition-colors hover:border-brand-600/40 hover:text-brand-700"
+                  >
+                    <FontAwesomeIcon icon={faChartLine} className="h-3 w-3" />
+                    Full history
+                  </button>
+                )}
+              </div>
             </div>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -512,9 +560,19 @@ export default function PatientChart({ backHref }: { backHref: string }) {
                           Reviewed
                         </span>
                       ) : (
-                        <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
-                          Awaiting review
-                        </span>
+                        <button
+                          onClick={() => handleReview(record.id)}
+                          disabled={reviewingId === record.id}
+                          title="Mark this note reviewed and notify the student"
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-800 transition-colors hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-800 disabled:opacity-60"
+                        >
+                          {reviewingId === record.id ? (
+                            <FontAwesomeIcon icon={faSpinner} spin className="h-2.5 w-2.5" />
+                          ) : (
+                            <FontAwesomeIcon icon={faCircleCheck} className="h-2.5 w-2.5" />
+                          )}
+                          {reviewingId === record.id ? "Saving..." : "Mark reviewed"}
+                        </button>
                       ))}
                   </li>
                 ))}
@@ -596,18 +654,27 @@ export default function PatientChart({ backHref }: { backHref: string }) {
           </section>
         </div>
       </div>
+
+      {historyOpen && (
+        <PatientVitalsHistory
+          patientId={patient.id}
+          patientName={patient.name}
+          roomNumber={patient.room_number || null}
+          onClose={() => setHistoryOpen(false)}
+        />
+      )}
     </div>
   );
 }
 
-function BackLink({ href }: { href: string }) {
+function BackLink({ href, label }: { href: string; label: string }) {
   return (
     <Link
       href={href}
       className="mb-4 inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-surface px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
     >
       <FontAwesomeIcon icon={faArrowLeft} className="h-3.5 w-3.5" />
-      All patients
+      {label}
     </Link>
   );
 }

@@ -6,5 +6,6 @@ export const metadata: Metadata = {
 };
 
 export default function FacultyPatientChartPage() {
-  return <PatientChart backHref="/faculty/patients" />;
+  // Back to Monitoring, not /faculty/patients — that path now redirects here.
+  return <PatientChart backHref="/faculty/monitoring" backLabel="Monitoring" />;
 }

@@ -7,8 +7,6 @@ import {
   faChartBar,
   faClipboardList,
   faFileLines,
-  faHeartbeat,
-  faHospitalUser,
   faHouse,
   faListCheck,
   faNotesMedical,
@@ -35,10 +33,11 @@ const navItems: NavItem[] = [
   { id: "students", label: "My Students", href: "/faculty/students", icon: faUsers, section: "Teaching" },
   { id: "scenarios", label: "Scenarios", href: "/faculty/scenarios", icon: faNotesMedical, section: "Teaching" },
   { id: "assessments", label: "Question Bank", href: "/faculty/assessments", icon: faListCheck, section: "Teaching" },
-  { id: "patients", label: "Patients", href: "/faculty/patients", icon: faHospitalUser, section: "Clinical" },
+  // Monitoring is the single clinical destination: the room layout and census
+  // open a patient's chart, which carries their vitals, TPR/IVF, notes and
+  // note sign-off. Patients, Vitals Monitor and EHR Review were folded into it
+  // and their routes now redirect here.
   { id: "monitoring", label: "Monitoring", href: "/faculty/monitoring", icon: faBedPulse, section: "Clinical" },
-  { id: "vitals", label: "Vitals Monitor", href: "/faculty/vitals", icon: faHeartbeat, section: "Clinical" },
-  { id: "ehr", label: "EHR Review", href: "/faculty/ehr", icon: faNotesMedical, section: "Clinical" },
   { id: "analytics", label: "Analytics", href: "/faculty/analytics", icon: faChartBar, section: "Data" },
   { id: "reports", label: "Reports", href: "/faculty/reports", icon: faFileLines, section: "Data" },
   { id: "audit", label: "Audit Trail", href: "/faculty/audit", icon: faClipboardList, section: "Administration" },

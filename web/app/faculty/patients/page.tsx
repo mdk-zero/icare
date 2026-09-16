@@ -1,10 +1,10 @@
-import type { Metadata } from "next";
-import PatientsManager from "../../components/PatientsManager";
+import { redirect } from "next/navigation";
 
-export const metadata: Metadata = {
-  title: "Patient Records | iCARE++ Faculty",
-};
-
+/**
+ * Folded into Monitoring, which renders the same census above the room layout.
+ * Kept as a redirect rather than deleted: this path is in bookmarks, and the
+ * patient chart still lives beneath it at /faculty/patients/[id].
+ */
 export default function FacultyPatientsPage() {
-  return <PatientsManager chartBase="/faculty/patients" />;
+  redirect("/faculty/monitoring");
 }

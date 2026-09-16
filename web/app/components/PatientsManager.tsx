@@ -24,6 +24,7 @@ import {
   faRightFromBracket,
   faRightToBracket,
   faFolderOpen,
+  faMap,
 } from "@fortawesome/free-solid-svg-icons";
 import {
   fetchFacultyPatients,
@@ -769,6 +770,15 @@ export default function PatientsManager({
           Hidden inside a room so the census table keeps the space. */}
       {showFloorPlan && !loading && !selectedGroup && (
         <div className="mb-4">
+          <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="flex items-center gap-2 font-display text-base font-semibold text-gray-900">
+              <FontAwesomeIcon icon={faMap} className="h-4 w-4 text-brand-600" />
+              Room Layout
+            </h2>
+            <p className="text-xs text-gray-500">
+              Arranged in Admin · Rooms. Select a room to open its census.
+            </p>
+          </div>
           <FloorPlanCanvas
             rooms={rooms}
             occupancy={occupancyByRoom}
