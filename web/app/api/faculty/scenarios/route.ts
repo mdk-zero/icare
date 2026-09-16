@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { seedScenarioTasks } from '@/app/lib/scenario-default-tasks';
+import {
+  getFacultyStudentIdSet,
+  scenarioVisibleToFaculty,
+} from '@/app/lib/scenario-visibility';
 
 const validDifficulties = ['beginner', 'intermediate', 'advanced'] as const;
 
@@ -29,7 +33,7 @@ export async function GET() {
     const { data: scenarios, error } = await supabase
       .from('scenarios')
       .select(
-        'id, created_by, title, description, difficulty, category, learning_objectives, is_ai_generated, created_at, updated_at, patient_id, patients(name), scenario_assignments(count)',
+        'id, created_by, title, description, difficulty, category, learning_objectives, is_ai_generated, created_at, updated_at, patient_id, patients(name), scenario_assignments(student_id)',
       )
       .order('created_at', { ascending: false })
       .limit(500);
@@ -42,21 +46,48 @@ export async function GET() {
       );
     }
 
-    const formatted = scenarios.map((s) => ({
-      id: s.id,
-      created_by: s.created_by,
-      title: s.title,
-      description: s.description,
-      difficulty: s.difficulty,
-      category: s.category,
-      learning_objectives: Array.isArray(s.learning_objectives) ? s.learning_objectives : [],
-      is_ai_generated: s.is_ai_generated,
-      created_at: s.created_at,
-      updated_at: s.updated_at,
-      patient_id: s.patient_id,
-      patient_name: (s as unknown as { patients: { name: string } | null }).patients?.name ?? null,
-      student_count: Number((s as unknown as { scenario_assignments: [{ count: number }] }).scenario_assignments?.[0]?.count ?? 0),
-    }));
+    // An admin oversees every section, so nothing is filtered for them.
+    const facultyStudentIds =
+      session.role === 'admin'
+        ? null
+        : await getFacultyStudentIdSet(supabase, session.uid);
+
+    const visible = scenarios.filter((s) => {
+      if (facultyStudentIds === null) return true;
+      const assigned = (s as unknown as { scenario_assignments: { student_id: string }[] })
+        .scenario_assignments ?? [];
+      return scenarioVisibleToFaculty(
+        assigned.map((a) => a.student_id),
+        facultyStudentIds,
+      );
+    });
+
+    const formatted = visible.map((s) => {
+      const assigned = (s as unknown as { scenario_assignments: { student_id: string }[] })
+        .scenario_assignments ?? [];
+      // Count the students this viewer actually teaches. The raw total would
+      // report other faculty's assignments on a shared scenario, which reads
+      // as "3 students" on a card that only lists one of them.
+      const ownAssigned =
+        facultyStudentIds === null
+          ? assigned.length
+          : assigned.filter((a) => facultyStudentIds.has(a.student_id)).length;
+      return {
+        id: s.id,
+        created_by: s.created_by,
+        title: s.title,
+        description: s.description,
+        difficulty: s.difficulty,
+        category: s.category,
+        learning_objectives: Array.isArray(s.learning_objectives) ? s.learning_objectives : [],
+        is_ai_generated: s.is_ai_generated,
+        created_at: s.created_at,
+        updated_at: s.updated_at,
+        patient_id: s.patient_id,
+        patient_name: (s as unknown as { patients: { name: string } | null }).patients?.name ?? null,
+        student_count: ownAssigned,
+      };
+    });
 
     return NextResponse.json({ scenarios: formatted });
   } catch (err) {

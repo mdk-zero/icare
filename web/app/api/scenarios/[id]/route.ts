@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { canFacultySeeScenario } from '@/app/lib/scenario-visibility';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -32,8 +33,18 @@ export async function GET(request: Request, { params }: RouteParams) {
       return NextResponse.json({ error: 'Scenario not found' }, { status: 404 });
     }
 
-    // Faculty and admin can read any scenario.
-    if (session.role === 'faculty' || session.role === 'admin') {
+    // An admin oversees every section and reads anything.
+    if (session.role === 'admin') {
+      return NextResponse.json({ scenario });
+    }
+
+    // Faculty share the unassigned bank, but an assigned scenario belongs to
+    // the students working it. Enforced here and not only in the list, or the
+    // scenario would still be served to anyone who knows its id.
+    if (session.role === 'faculty') {
+      if (!(await canFacultySeeScenario(supabase, session.uid, id))) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
       return NextResponse.json({ scenario });
     }
 
