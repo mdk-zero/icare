@@ -1,6 +1,6 @@
 /**
- * Charting: the TPR, IVF and progress-note entries students made on their
- * patients.
+ * Everything on a patient's chart: the vital-sign readings, TPR, IVF and
+ * progress notes students recorded, plus the admission timeline above them.
  *
  * A student may chart on the patients linked to scenarios assigned to them —
  * the rule in lib/assigned-patients.ts — so this walks the completed scenario
@@ -25,6 +25,7 @@
 
 import { config } from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
+import { evaluateVitals } from '../app/lib/vitals/rules';
 
 config({ path: '.env.local' });
 
@@ -49,6 +50,15 @@ function hash(text: string): number {
 const SHIFTS = ['AM', 'PM', 'Night'] as const;
 
 interface CaseChart {
+  /**
+   * Pain on the 0–10 scale at each shift. 7+ is flagged severe by the vitals
+   * rules, so this is what decides whether a reading raises a pain anomaly.
+   */
+  pain: [number, number, number];
+  /** Systolic/diastolic drift per shift, applied to the patient's own BP. */
+  bp: [[number, number], [number, number], [number, number]];
+  /** SpO2 offsets per shift. */
+  spo2: [number, number, number];
   /** Per-shift offsets applied to the patient's own recorded vitals. */
   temp: [number, number, number];
   pulse: [number, number, number];
@@ -66,6 +76,9 @@ interface CaseChart {
  */
 const CHARTS: Record<string, CaseChart> = {
   'Rosa Delgado': {
+    pain: [3, 2, 1],
+    bp: [[0, 0], [-4, -2], [-6, -4]],
+    spo2: [0, 1, 1],
     temp: [0, -0.6, -1.1],
     pulse: [0, -6, -10],
     resp: [0, -2, -2],
@@ -83,6 +96,9 @@ const CHARTS: Record<string, CaseChart> = {
     },
   },
   'Mateo Salazar': {
+    pain: [2, 2, 1],
+    bp: [[0, 0], [6, 4], [10, 6]],
+    spo2: [0, 0, 1],
     temp: [0, -0.3, -0.5],
     pulse: [0, -6, -12],
     resp: [0, -1, -2],
@@ -107,6 +123,9 @@ const CHARTS: Record<string, CaseChart> = {
     },
   },
   'Liza Fontanilla': {
+    pain: [4, 3, 2],
+    bp: [[0, 0], [-2, 0], [-4, -2]],
+    spo2: [0, 0, 0],
     temp: [0, -0.5, -0.8],
     pulse: [0, -4, -8],
     resp: [0, 0, -1],
@@ -124,6 +143,9 @@ const CHARTS: Record<string, CaseChart> = {
     },
   },
   'Ernesto Bautista': {
+    pain: [0, 0, 0],
+    bp: [[0, 0], [-6, -4], [-10, -6]],
+    spo2: [0, 0, 0],
     temp: [0, 0, -0.2],
     pulse: [0, 2, -4],
     resp: [0, 0, 0],
@@ -141,6 +163,9 @@ const CHARTS: Record<string, CaseChart> = {
     },
   },
   'Joana Rivas': {
+    pain: [2, 1, 1],
+    bp: [[0, 0], [-4, -2], [-6, -4]],
+    spo2: [0, 2, 3],
     temp: [0, 0, -0.2],
     pulse: [0, -6, -10],
     resp: [0, -2, -4],
@@ -158,6 +183,9 @@ const CHARTS: Record<string, CaseChart> = {
     },
   },
   'Rafael Ocampo': {
+    pain: [7, 4, 2],
+    bp: [[0, 0], [-2, 0], [-4, -2]],
+    spo2: [0, 1, 1],
     temp: [0, -0.3, -0.6],
     pulse: [0, -4, -8],
     resp: [0, -1, -2],
@@ -182,6 +210,9 @@ const CHARTS: Record<string, CaseChart> = {
     },
   },
   'Corazon Villamor': {
+    pain: [5, 4, 3],
+    bp: [[0, 0], [-4, -2], [-6, -4]],
+    spo2: [0, 0, 1],
     temp: [0, -0.4, -0.7],
     pulse: [0, -4, -6],
     resp: [0, 0, -1],
@@ -206,6 +237,9 @@ const CHARTS: Record<string, CaseChart> = {
     },
   },
   'Nadine Corpuz': {
+    pain: [2, 2, 1],
+    bp: [[0, 0], [2, 2], [4, 2]],
+    spo2: [0, 0, 0],
     temp: [0, 0, 0],
     pulse: [0, -4, -6],
     resp: [0, 0, -1],
@@ -223,6 +257,13 @@ const CHARTS: Record<string, CaseChart> = {
     },
   },
 };
+
+/** Splits the "118/74" string patients carry into its two numbers. */
+function parseBp(value: unknown): { systolic: number; diastolic: number } {
+  const match = typeof value === 'string' ? value.match(/(\d+)\s*\/\s*(\d+)/) : null;
+  if (!match) return { systolic: 120, diastolic: 80 };
+  return { systolic: Number(match[1]), diastolic: Number(match[2]) };
+}
 
 const HOUR_MS = 60 * 60 * 1000;
 
@@ -274,6 +315,8 @@ async function main() {
   const facultyBySection = new Map((links ?? []).map((l) => [l.section_id, l.faculty_id]));
   const studentById = new Map((studentRows ?? []).map((s) => [s.id, s]));
 
+  let vitalsCount = 0;
+  let anomalyCount = 0;
   let tprCount = 0;
   let ivfCount = 0;
   let noteCount = 0;
@@ -296,6 +339,7 @@ async function main() {
     const rng = seeded(hash(`${student.email}|${patient.name}`));
 
     // This (patient, student) pair is ours — rebuild rather than stack.
+    await supabase.from('vital_sign_readings').delete().eq('patient_id', patient.id).eq('recorded_by', student.id);
     await supabase.from('tpr_records').delete().eq('patient_id', patient.id).eq('recorded_by', student.id);
     await supabase.from('ivf_records').delete().eq('patient_id', patient.id).eq('recorded_by', student.id);
     await supabase.from('progress_notes').delete().eq('patient_id', patient.id).eq('author_id', student.id);
@@ -331,6 +375,45 @@ async function main() {
       process.exit(1);
     }
     tprCount += tprRows.length;
+
+    // Vital signs sit alongside TPR but carry the fuller set the Vitals
+    // screen records — blood pressure, saturation and pain — and each one is
+    // run through evaluateVitals(), the same rules the app applies on save,
+    // so is_anomaly and anomaly_reasons say exactly what a real reading would.
+    const bp = parseBp((vitals as { blood_pressure?: unknown }).blood_pressure);
+    const baseSpo2 = Number((vitals as { oxygen_saturation?: number }).oxygen_saturation ?? 98);
+
+    const vitalRows = SHIFTS.map((shift, i) => {
+      const reading = {
+        heart_rate: Math.max(40, basePulse + chart.pulse[i]),
+        bp_systolic: bp.systolic + chart.bp[i][0],
+        bp_diastolic: bp.diastolic + chart.bp[i][1],
+        temperature_c: Math.round((baseTemp + chart.temp[i]) * 10) / 10,
+        respiratory_rate: Math.max(8, baseResp + chart.resp[i]),
+        oxygen_saturation: Math.min(100, baseSpo2 + chart.spo2[i]),
+        pain_score: chart.pain[i],
+      };
+      const evaluation = evaluateVitals(reading);
+      return {
+        patient_id: patient.id,
+        recorded_by: student.id,
+        // Half an hour after the TPR round, the order a student works in.
+        recorded_at: new Date(
+          dayStart.getTime() + i * 8 * HOUR_MS + 30 * 60000 + Math.round(rng() * 15) * 60000,
+        ).toISOString(),
+        ...reading,
+        notes: chart.remarks[i],
+        is_anomaly: evaluation.is_anomaly,
+        anomaly_reasons: evaluation.reasons,
+      };
+    });
+    const { error: vitalsError } = await supabase.from('vital_sign_readings').insert(vitalRows);
+    if (vitalsError) {
+      console.error(`  ✗ Vitals for ${patient.name} / ${student.email}:`, vitalsError.message);
+      process.exit(1);
+    }
+    vitalsCount += vitalRows.length;
+    anomalyCount += vitalRows.filter((v) => v.is_anomaly).length;
 
     if (chart.ivf) {
       const started = new Date(dayStart.getTime() + HOUR_MS);
@@ -383,12 +466,103 @@ async function main() {
     if (isReviewed) reviewed += 1;
   }
 
+  // ---- Admission history ------------------------------------------------
+  //
+  // The chart's timeline is not a table of its own: it reads audit_logs for
+  // entity_type 'patients' and the three lifecycle actions, which is what the
+  // app writes as patients are created and moved. Seeding it means writing
+  // those same rows. entity_id is plain text here — 031 dropped the foreign
+  // key so an actor or patient can be removed without taking the trail.
+  const { data: allPatients } = await supabase
+    .from('patients')
+    .select('id, name, room_number, admission_date, created_by, created_at');
+
+  let eventCount = 0;
+  let skippedTimelines = 0;
+  for (const patient of allPatients ?? []) {
+    // audit_logs is append-only — 031 restored a trigger that refuses both
+    // DELETE and UPDATE, because a trail you can rewrite is not a trail. So
+    // this cannot rebuild its rows the way the rest of the seed does: it
+    // writes a patient's timeline once and then leaves it alone. Re-running
+    // after editing the events below will not replace them.
+    const { count: existingEvents } = await supabase
+      .from('audit_logs')
+      .select('id', { count: 'exact', head: true })
+      .eq('entity_type', 'patients')
+      .eq('entity_id', patient.id)
+      .in('action', ['patient.create', 'patient.check_in', 'patient.check_out']);
+    if ((existingEvents ?? 0) > 0) {
+      skippedTimelines += 1;
+      continue;
+    }
+
+    const admitted = new Date(patient.admission_date ?? patient.created_at ?? Date.now());
+    // eventDetail() in PatientChart reads room/to_room/from_room, and the
+    // label it shows is the bare room number rather than the full name.
+    const roomNumber = (patient.room_number ?? '').split('Room ').pop() ?? null;
+    const rng = seeded(hash(`admission|${patient.name}`));
+
+    // Some of the ward has been here before. That earlier stay has to sit
+    // *before* the current admission, not after it: admission_date is when
+    // this stay began, so hanging a discharge and readmission off the end
+    // would date them in the future and leave a trail that ends in a
+    // check-out while the row still reads admitted.
+    const readmitted = rng() < 0.4;
+    const events: { action: string; at: Date; details: Record<string, unknown> }[] = readmitted
+      ? [
+          {
+            action: 'patient.create',
+            at: new Date(admitted.getTime() - 10 * 24 * HOUR_MS),
+            details: { name: patient.name, room: roomNumber },
+          },
+          {
+            action: 'patient.check_out',
+            at: new Date(admitted.getTime() - 8 * 24 * HOUR_MS),
+            details: { name: patient.name, from_room: roomNumber, discharge_summary_id: null },
+          },
+          {
+            action: 'patient.check_in',
+            at: admitted,
+            details: { name: patient.name, to_room: roomNumber },
+          },
+        ]
+      : [
+          {
+            action: 'patient.create',
+            at: admitted,
+            details: { name: patient.name, room: roomNumber },
+          },
+        ];
+
+    const { error: eventError } = await supabase.from('audit_logs').insert(
+      events.map((e) => ({
+        actor_id: patient.created_by,
+        actor_role: 'faculty' as const,
+        action: e.action,
+        entity_type: 'patients',
+        entity_id: patient.id,
+        details: e.details,
+        created_at: e.at.toISOString(),
+      })),
+    );
+    if (eventError) {
+      console.error(`  ✗ Admission history for ${patient.name}:`, eventError.message);
+      process.exit(1);
+    }
+    eventCount += events.length;
+  }
+
   for (const name of missing) {
     console.warn(`  note: no chart defined for patient "${name}" — left unchartted.`);
   }
   console.log(
-    `\nTPR entries: ${tprCount}\nIVF records: ${ivfCount}\n` +
-      `Progress notes: ${noteCount} (${reviewed} countersigned by faculty)\n`,
+    `\nVital readings: ${vitalsCount} (${anomalyCount} flagged anomalous)\n` +
+      `TPR entries: ${tprCount}\nIVF records: ${ivfCount}\n` +
+      `Progress notes: ${noteCount} (${reviewed} countersigned by faculty)\n` +
+      `Admission events: ${eventCount} written` +
+      (skippedTimelines > 0
+        ? `, ${skippedTimelines} patient timeline(s) already present and left as-is`
+        : ` across ${allPatients?.length ?? 0} patients`),
   );
 }
 
