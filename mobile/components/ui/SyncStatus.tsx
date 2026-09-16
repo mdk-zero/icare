@@ -6,11 +6,13 @@ import { useTheme } from '@/hooks/useTheme';
 import { getOutbox, flushOutbox, isOnline, subscribeConnectivity } from '@/lib/client';
 
 /**
- * Offline/pending-sync banner. Clinical writes made without a connection go to
- * an outbox and were previously flushed silently, so a student had no way to
+ * Pending-sync banner. Clinical writes made without a connection go to an
+ * outbox and were previously flushed silently, so a student had no way to
  * know whether their vitals entry had actually reached the server.
  *
- * Renders nothing when online with an empty queue.
+ * Renders nothing when the queue is empty: plain "you are offline" is the
+ * global ConnectionToast's job, and saying it twice on one screen just makes
+ * the queue count harder to spot.
  */
 export default function SyncStatus({ onSynced }: { onSynced?: () => void }) {
   const { Palette, Accent } = useTheme();
@@ -57,13 +59,10 @@ export default function SyncStatus({ onSynced }: { onSynced?: () => void }) {
     }
   };
 
-  if (online && pending === 0) return null;
+  if (pending === 0) return null;
 
-  const label = !online
-    ? pending > 0
-      ? `Offline — ${pending} change${pending === 1 ? '' : 's'} waiting to sync`
-      : 'Offline — showing saved data'
-    : `${pending} change${pending === 1 ? '' : 's'} waiting to sync`;
+  const suffix = `${pending} change${pending === 1 ? '' : 's'} waiting to sync`;
+  const label = online ? suffix : `Offline — ${suffix}`;
 
   return (
     <View style={[styles.banner, online ? styles.pendingTone : styles.offlineTone]}>
@@ -75,7 +74,7 @@ export default function SyncStatus({ onSynced }: { onSynced?: () => void }) {
       <Text style={[styles.text, { color: online ? Accent.amber.fg : Palette.textSecondary }]}>
         {label}
       </Text>
-      {online && pending > 0 && (
+      {online && (
         <Pressable onPress={handleSync} disabled={syncing} hitSlop={8}>
           {syncing ? (
             <ActivityIndicator size="small" color={Accent.amber.fg} />

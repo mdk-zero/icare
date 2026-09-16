@@ -10,3 +10,4 @@ export { ScreenHeader } from './ScreenHeader';
 export { SectionHeader } from './SectionHeader';
 export { EmptyState } from './EmptyState';
 export { default as SyncStatus } from './SyncStatus';
+export { ConnectionToast } from './ConnectionToast';

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { DarkTheme, DefaultTheme, ThemeProvider, Stack, useRouter } from 'expo-router';
+import { View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -7,6 +8,8 @@ import { AuthProvider, useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/hooks/useTheme';
 import { ThemePreferenceProvider } from '@/hooks/useThemePreference';
 import { BootLoader } from '@/components/ui/BootLoader';
+import { ConnectionToast } from '@/components/ui/ConnectionToast';
+import { startConnectivityMonitor } from '@/lib/client';
 
 function AuthStack() {
   const { Palette } = useTheme();
@@ -92,10 +95,20 @@ function AuthNavigator() {
 function ThemedApp() {
   const { scheme, isDark } = useTheme();
 
+  // App-lifetime reachability heartbeat: without it the app only learns it is
+  // offline when a request the student made happens to fail.
+  useEffect(() => startConnectivityMonitor(), []);
+
   return (
     <ThemeProvider value={isDark ? DarkTheme : DefaultTheme}>
       <StatusBar style={isDark ? 'light' : 'dark'} key={scheme} />
-      <AuthNavigator />
+      {/* The toast is a sibling of the navigator so it floats over every
+          screen — boot loader and login included — instead of each one
+          having to make room for it. */}
+      <View style={{ flex: 1 }}>
+        <AuthNavigator />
+        <ConnectionToast />
+      </View>
     </ThemeProvider>
   );
 }

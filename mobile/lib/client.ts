@@ -10,11 +10,13 @@
  * - Write outbox: vitals/EHR writes made offline queue up and sync in order
  *   when connectivity returns. Server wins on rejection: a 4xx drops the
  *   queued item and surfaces the reason instead of retrying forever.
+ * - Connectivity: inferred from request outcomes and topped up by a heartbeat
+ *   probe, so an idle screen still notices the network coming and going.
  */
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
-import { Platform } from "react-native";
+import { AppState, AppStateStatus, Platform } from "react-native";
 
 // Android emulators reach the host machine at 10.0.2.2, not localhost.
 // Physical devices still need EXPO_PUBLIC_API_URL set to the host's LAN IP.
@@ -88,9 +90,12 @@ export async function clearToken(): Promise<void> {
 // ---------------------------------------------------------------
 
 let online = true;
+/** When the server last answered anything — a real request or a heartbeat. */
+let lastContactAt = 0;
 const connectivityListeners = new Set<(online: boolean) => void>();
 
 function setOnline(value: boolean) {
+  if (value) lastContactAt = Date.now();
   if (online === value) return;
   online = value;
   for (const listener of connectivityListeners) listener(value);
@@ -102,7 +107,116 @@ export function isOnline(): boolean {
 
 export function subscribeConnectivity(listener: (online: boolean) => void): () => void {
   connectivityListeners.add(listener);
-  return () => connectivityListeners.delete(listener);
+  return () => {
+    connectivityListeners.delete(listener);
+  };
+}
+
+// ---------------------------------------------------------------
+// Connectivity heartbeat
+// ---------------------------------------------------------------
+
+// Lazy while online (an active screen's own requests already prove
+// reachability), brisk while offline so a reconnect surfaces in seconds
+// rather than whenever the student next taps something.
+const HEARTBEAT_ONLINE_MS = 30_000;
+const HEARTBEAT_OFFLINE_MS = 4_000;
+const PROBE_TIMEOUT_MS = 8_000;
+
+let heartbeatTimer: ReturnType<typeof setTimeout> | null = null;
+let probeInFlight = false;
+let monitorRunning = false;
+let monitorUnsubscribe: (() => void) | null = null;
+let appStateSubscription: { remove: () => void } | null = null;
+
+/**
+ * One reachability check against /api/health. Any HTTP response proves the
+ * network path is open, so the status code is irrelevant — only a thrown
+ * fetch (no route, DNS failure, refused connection) or a timeout is offline.
+ */
+export async function probeConnectivity(): Promise<boolean> {
+  if (probeInFlight) return online;
+  probeInFlight = true;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
+  try {
+    await fetch(`${API_URL}/api/health`, { method: "HEAD", signal: controller.signal });
+    setOnline(true);
+    return true;
+  } catch {
+    setOnline(false);
+    return false;
+  } finally {
+    clearTimeout(timer);
+    probeInFlight = false;
+  }
+}
+
+function scheduleHeartbeat() {
+  if (heartbeatTimer) clearTimeout(heartbeatTimer);
+  if (!monitorRunning) return;
+  heartbeatTimer = setTimeout(
+    () => void runHeartbeat(),
+    online ? HEARTBEAT_ONLINE_MS : HEARTBEAT_OFFLINE_MS,
+  );
+}
+
+async function runHeartbeat() {
+  heartbeatTimer = null;
+  // A request that just succeeded on its own is proof enough; don't spend a
+  // probe re-asking what the app already learned this cycle.
+  if (!online || Date.now() - lastContactAt >= HEARTBEAT_ONLINE_MS) {
+    await probeConnectivity();
+  }
+  scheduleHeartbeat();
+}
+
+/**
+ * Starts the reachability heartbeat and returns its stop function.
+ *
+ * Connectivity used to be inferred only from requests the student happened to
+ * make, so losing the network on an idle screen still looked online until the
+ * next tap — and a reconnect went unnoticed until then too. Mounted once at
+ * the app root; safe to call repeatedly.
+ */
+export function startConnectivityMonitor(): () => void {
+  if (monitorRunning) return stopConnectivityMonitor;
+  monitorRunning = true;
+
+  monitorUnsubscribe = subscribeConnectivity((value) => {
+    // Reconnecting is the moment queued clinical writes should go out; the
+    // outbox otherwise waited for a relaunch or a manual "Sync now".
+    if (value) flushOutbox().catch(() => {});
+    // Re-arm at the cadence the new state calls for.
+    scheduleHeartbeat();
+  });
+
+  // The OS freezes timers in the background, so the state on the way back in
+  // is whatever it was on the way out — re-check immediately rather than
+  // showing a stale banner over the first screen the student sees.
+  appStateSubscription = AppState.addEventListener("change", (status: AppStateStatus) => {
+    if (status === "active") {
+      void probeConnectivity().then(() => scheduleHeartbeat());
+    } else if (heartbeatTimer) {
+      clearTimeout(heartbeatTimer);
+      heartbeatTimer = null;
+    }
+  });
+
+  void probeConnectivity().then(() => scheduleHeartbeat());
+  return stopConnectivityMonitor;
+}
+
+export function stopConnectivityMonitor(): void {
+  monitorRunning = false;
+  if (heartbeatTimer) {
+    clearTimeout(heartbeatTimer);
+    heartbeatTimer = null;
+  }
+  monitorUnsubscribe?.();
+  monitorUnsubscribe = null;
+  appStateSubscription?.remove();
+  appStateSubscription = null;
 }
 
 // ---------------------------------------------------------------
