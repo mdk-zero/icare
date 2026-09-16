@@ -692,10 +692,11 @@ export default function FacultyStudentsClient() {
             <FontAwesomeIcon
               icon={runningMl ? faSpinner : faBrain}
               spin={runningMl}
-              className="w-6 h-6"
+              className="h-4 w-4"
             />
           ),
           onClick: handleRunMl,
+          text: runningMl ? "Running…" : "Run ML Jobs",
           disabled: runningMl || sections.length === 0,
           label: runningMl
             ? "Running ML jobs…"

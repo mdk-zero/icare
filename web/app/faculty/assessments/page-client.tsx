@@ -316,6 +316,10 @@ export default function FacultyAssessmentsClient() {
   return (
     <div className="space-y-4">
       <PageHeader
+        badge={{
+          icon: <FontAwesomeIcon icon={faListCheck} className="h-4 w-4" />,
+          label: "Assessments",
+        }}
         title="Question Bank"
         subtitle="Create quizzes, manage questions, and assign them to your students"
       />

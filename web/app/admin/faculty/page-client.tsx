@@ -157,9 +157,10 @@ export default function FacultyClient() {
         title="Faculty Management"
         subtitle="Manage faculty accounts and their handled sections"
         action={{
-          icon: <FontAwesomeIcon icon={faPlus} className="w-6 h-6" />,
+          icon: <FontAwesomeIcon icon={faPlus} className="h-4 w-4" />,
           onClick: () => setShowAddModal(true),
-          label: "Add Faculty",
+          label: "Add a faculty account",
+          text: "Add Faculty",
         }}
       />
 

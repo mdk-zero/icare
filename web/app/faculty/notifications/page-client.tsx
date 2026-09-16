@@ -54,9 +54,10 @@ export default function FacultyNotificationsClient() {
         title="Notifications"
         subtitle={connected ? "Live alerts and updates" : "Alerts and updates · reconnecting…"}
         action={unreadCount > 0 ? {
-          icon: <FontAwesomeIcon icon={faCheck} className="w-6 h-6" />,
+          icon: <FontAwesomeIcon icon={faCheck} className="h-4 w-4" />,
           onClick: () => markAllRead(),
-          label: "Mark all as read",
+          label: `Mark all ${unreadCount} as read`,
+          text: "Mark all read",
         } : undefined}
       />
 
