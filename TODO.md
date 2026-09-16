@@ -19,7 +19,7 @@
 
 ### New Patient UI
 
-- Floor Plan visuals for Room Management
+- Dynamic Editable Floor Plan visuals for Room Management
 - Patient Check-in and Check-out System
 - Vitals, TPR, & IVF Monitoring all in one dashboard per patient
 - Patient History and Records Management
