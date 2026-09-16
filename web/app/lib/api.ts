@@ -1923,21 +1923,37 @@ export async function deleteFacultyPatient(
   }
 }
 
-export async function fetchFacultyPatientDetail(patientId: string): Promise<{ patient: FacultyPatient; clinical_decision_support: any } | null> {
-  await new Promise(resolve => setTimeout(resolve, 200));
-  
-  const patients = await fetchFacultyPatients();
-  const patient = patients.find(p => p.id === patientId);
-  
-  if (!patient) return null;
+/** One admission-lifecycle entry on a patient's timeline, from the audit trail. */
+export interface PatientEvent {
+  id: string;
+  action: string;
+  created_at: string;
+  actor_name: string;
+  details: Record<string, unknown>;
+}
 
-  return {
-    patient,
-    clinical_decision_support: {
-      recommendations: ['Monitor cardiac enzymes', 'Continue ECG monitoring', 'Administer antiplatelet therapy'],
-      warnings: ['High heart rate - potential arrhythmia', 'Elevated blood pressure'],
-    },
-  };
+/** A patient's whole chart, as served by /api/faculty/patients/[id]. */
+export interface PatientChart {
+  patient: FacultyPatient & { medical_history?: string | null };
+  vitals: VitalReading[];
+  tpr: EhrRecord[];
+  ivf: EhrRecord[];
+  notes: EhrRecord[];
+  events: PatientEvent[];
+}
+
+export async function fetchFacultyPatientDetail(patientId: string): Promise<PatientChart | null> {
+  try {
+    const res = await apiFetch(`/api/faculty/patients/${patientId}`, { credentials: 'include' });
+    if (!res.ok) {
+      if (res.status !== 404) console.error('fetchFacultyPatientDetail() failed', res.status);
+      return null;
+    }
+    return (await res.json()) as PatientChart;
+  } catch (err) {
+    console.error('fetchFacultyPatientDetail() failed', err);
+    return null;
+  }
 }
 
 export async function fetchFacultyReports(): Promise<FacultyReport[]> {

@@ -1,0 +1,622 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import Link from "next/link";
+import { useParams } from "next/navigation";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faArrowLeft,
+  faHeartPulse,
+  faTint,
+  faFileLines,
+  faFlask,
+  faClockRotateLeft,
+  faSpinner,
+  faTriangleExclamation,
+  faCircleCheck,
+  faBed,
+  faRightFromBracket,
+  faRightToBracket,
+  faUserPlus,
+  faNotesMedical,
+  faStethoscope,
+} from "@fortawesome/free-solid-svg-icons";
+import PageHeader from "./PageHeader";
+import {
+  fetchFacultyPatientDetail,
+  EhrRecord,
+  EhrType,
+  PatientChart as PatientChartData,
+  PatientEvent,
+  VitalReading,
+} from "../lib/api";
+import { usePageData } from "../lib/use-page-data";
+
+/**
+ * One patient's chart: demographics, the vitals trend, TPR/IVF/notes, and the
+ * admission timeline on a single screen — the "all in one dashboard per
+ * patient" view. Read-only: charting stays with students, review stays on the
+ * EHR page, so nothing here duplicates a write surface that already exists.
+ */
+
+// ---------------------------------------------------------------------------
+// Vitals trend
+// ---------------------------------------------------------------------------
+
+type VitalKey = "heart_rate" | "bp_systolic" | "temperature_c" | "respiratory_rate" | "oxygen_saturation";
+
+type Level = "normal" | "warning" | "critical" | "none";
+
+interface VitalSpec {
+  key: VitalKey;
+  label: string;
+  unit: string;
+  low: number;
+  high: number;
+  criticalLow?: number;
+  criticalHigh?: number;
+  /** Decimal places when rendering the value. */
+  precision?: number;
+}
+
+/**
+ * Mirrors app/lib/vitals/rules.ts, which is server/shared and keyed to the
+ * charting form. Only the five vitals this dashboard trends are listed; the
+ * thresholds are the same numbers so a tile and a flagged reading agree.
+ */
+const VITAL_SPECS: VitalSpec[] = [
+  { key: "heart_rate", label: "Heart rate", unit: "bpm", low: 60, high: 100, criticalLow: 40, criticalHigh: 130 },
+  { key: "bp_systolic", label: "Systolic BP", unit: "mmHg", low: 90, high: 140, criticalLow: 80, criticalHigh: 180 },
+  { key: "temperature_c", label: "Temperature", unit: "°C", low: 36.1, high: 37.5, criticalLow: 35.0, criticalHigh: 39.5, precision: 1 },
+  { key: "respiratory_rate", label: "Respiratory rate", unit: "/min", low: 12, high: 20, criticalLow: 8, criticalHigh: 30 },
+  { key: "oxygen_saturation", label: "Oxygen saturation", unit: "%", low: 95, high: 100, criticalLow: 90 },
+];
+
+function levelFor(spec: VitalSpec, value: number | null | undefined): Level {
+  if (value === null || value === undefined) return "none";
+  if (spec.criticalLow !== undefined && value < spec.criticalLow) return "critical";
+  if (spec.criticalHigh !== undefined && value > spec.criticalHigh) return "critical";
+  if (value < spec.low || value > spec.high) return "warning";
+  return "normal";
+}
+
+/** Status is stated in words as well as color — never color alone. */
+function levelWord(spec: VitalSpec, value: number | null | undefined, level: Level): string {
+  if (level === "none") return "Not recorded";
+  if (level === "normal") return "Normal";
+  const low = value! < spec.low;
+  return level === "critical" ? (low ? "Critically low" : "Critically high") : low ? "Low" : "High";
+}
+
+const LEVEL_TEXT: Record<Level, string> = {
+  none: "text-gray-400",
+  normal: "text-emerald-700",
+  warning: "text-amber-700",
+  critical: "text-rose-700",
+};
+
+const LEVEL_CHIP: Record<Level, string> = {
+  none: "bg-gray-100 text-gray-500 border-gray-200",
+  normal: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  warning: "bg-amber-50 text-amber-700 border-amber-200",
+  critical: "bg-rose-50 text-rose-700 border-rose-200",
+};
+
+/** Newest-last series of at most `max` points for one vital. */
+function seriesFor(readings: VitalReading[], key: VitalKey, max = 12): { value: number; at: string }[] {
+  const points: { value: number; at: string }[] = [];
+  // readings arrive newest-first; walk from the newest and reverse at the end.
+  for (const reading of readings) {
+    const value = reading[key];
+    if (typeof value === "number") points.push({ value, at: reading.recorded_at });
+    if (points.length === max) break;
+  }
+  return points.reverse();
+}
+
+/**
+ * Compact trend for one vital. The line is recessive (it is context for the
+ * current value beside it); only the latest point is accented, colored by the
+ * status it reports. Per-point hit targets carry a native tooltip, so a value
+ * can be read off the trend without a charting library.
+ */
+function Sparkline({
+  points,
+  spec,
+  level,
+}: {
+  points: { value: number; at: string }[];
+  spec: VitalSpec;
+  level: Level;
+}) {
+  const W = 104;
+  const H = 30;
+  const PAD = 3;
+
+  if (points.length < 2) {
+    return (
+      <div className="flex h-[30px] w-[104px] items-center justify-center rounded bg-subtle">
+        <span className="text-[10px] text-gray-400">
+          {points.length === 0 ? "No trend" : "1 reading"}
+        </span>
+      </div>
+    );
+  }
+
+  const values = points.map((p) => p.value);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = max - min;
+  const x = (i: number) => PAD + (i * (W - PAD * 2)) / (points.length - 1);
+  // Unchanging vitals are the common case (a stable patient charted hourly).
+  // Scaling them normally divides by zero, and treating the span as 1 pins the
+  // line to the floor — which reads as "bottomed out" rather than "steady", so
+  // a flat series is drawn level through the middle instead.
+  const y = (v: number) =>
+    span === 0 ? H / 2 : H - PAD - ((v - min) / span) * (H - PAD * 2);
+
+  const path = points.map((p, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(p.value).toFixed(1)}`).join(" ");
+  const lastX = x(points.length - 1);
+  const lastY = y(points[points.length - 1].value);
+
+  return (
+    <svg
+      width={W}
+      height={H}
+      viewBox={`0 0 ${W} ${H}`}
+      className="overflow-visible"
+      role="img"
+      aria-label={`${spec.label} trend, last ${points.length} readings, ${min}${spec.unit} to ${max}${spec.unit}`}
+    >
+      <path d={path} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="text-gray-300" />
+      <circle cx={lastX} cy={lastY} r={3} className={LEVEL_TEXT[level]} fill="currentColor" />
+      {points.map((p, i) => (
+        <rect
+          key={`${p.at}-${i}`}
+          x={x(i) - (W - PAD * 2) / (points.length - 1) / 2}
+          y={0}
+          width={(W - PAD * 2) / (points.length - 1)}
+          height={H}
+          fill="transparent"
+        >
+          <title>{`${p.value}${spec.unit} · ${new Date(p.at).toLocaleString()}`}</title>
+        </rect>
+      ))}
+    </svg>
+  );
+}
+
+function VitalTile({ spec, readings }: { spec: VitalSpec; readings: VitalReading[] }) {
+  const points = seriesFor(readings, spec.key);
+  const latest = points.length > 0 ? points[points.length - 1].value : null;
+  const level = levelFor(spec, latest);
+  const previous = points.length > 1 ? points[points.length - 2].value : null;
+  const delta = latest !== null && previous !== null ? latest - previous : null;
+
+  return (
+    <div className="rounded-xl border border-hairline bg-surface p-3.5 shadow-tile">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-xs font-medium text-gray-500">{spec.label}</p>
+          <p className="mt-1 flex items-baseline gap-1">
+            <span className="font-display text-[26px] font-semibold leading-none tracking-[-0.02em] text-slate-900">
+              {latest === null ? "—" : latest.toFixed(spec.precision ?? 0)}
+            </span>
+            <span className="text-xs text-gray-500">{spec.unit}</span>
+          </p>
+          <p className="mt-1.5 flex flex-wrap items-center gap-1.5">
+            <span className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${LEVEL_CHIP[level]}`}>
+              {levelWord(spec, latest, level)}
+            </span>
+            {delta !== null && delta !== 0 && (
+              <span className="font-mono text-[10px] text-gray-500">
+                {delta > 0 ? "+" : ""}
+                {delta.toFixed(spec.precision ?? 0)} since last
+              </span>
+            )}
+          </p>
+        </div>
+        <Sparkline points={points} spec={spec} level={level} />
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Records
+// ---------------------------------------------------------------------------
+
+const RECORD_TABS: { id: EhrType; label: string; icon: typeof faHeartPulse }[] = [
+  { id: "tpr", label: "TPR Sheets", icon: faHeartPulse },
+  { id: "ivf", label: "IVF Sheets", icon: faTint },
+  { id: "note", label: "Progress Notes", icon: faFileLines },
+];
+
+function recordSummary(record: EhrRecord, type: EhrType): string {
+  if (type === "tpr") {
+    return [
+      record.shift && `${record.shift} shift`,
+      record.temperature_c != null && `T ${record.temperature_c}°C`,
+      record.pulse != null && `P ${record.pulse}`,
+      record.respiration != null && `R ${record.respiration}`,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+  }
+  if (type === "ivf") {
+    return [
+      record.solution,
+      record.volume_ml != null && `${record.volume_ml} mL`,
+      record.rate_ml_hr != null && `@ ${record.rate_ml_hr} mL/hr`,
+      record.site,
+      record.status && `(${record.status})`,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+  }
+  return record.content ?? "";
+}
+
+// ---------------------------------------------------------------------------
+// Timeline
+// ---------------------------------------------------------------------------
+
+const EVENT_ICON: Record<string, typeof faHeartPulse> = {
+  "patient.create": faUserPlus,
+  "patient.check_in": faRightToBracket,
+  "patient.check_out": faRightFromBracket,
+};
+
+const EVENT_LABEL: Record<string, string> = {
+  "patient.create": "Admitted",
+  "patient.check_in": "Checked in",
+  "patient.check_out": "Checked out",
+};
+
+function eventDetail(event: PatientEvent): string | null {
+  const room = event.details.to_room ?? event.details.from_room ?? event.details.room;
+  return typeof room === "string" && room ? room : null;
+}
+
+// ---------------------------------------------------------------------------
+// Page
+// ---------------------------------------------------------------------------
+
+function formatDate(value: string | null | undefined): string {
+  if (!value) return "—";
+  return new Date(value).toLocaleString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+/** Whole days between admission and discharge (or now, while admitted). */
+function lengthOfStay(chart: PatientChartData): string {
+  const start = chart.patient.admission_date ? new Date(chart.patient.admission_date) : null;
+  if (!start || Number.isNaN(start.getTime())) return "—";
+  const end = chart.patient.discharged_at ? new Date(chart.patient.discharged_at) : new Date();
+  const days = Math.max(0, Math.floor((end.getTime() - start.getTime()) / 86_400_000));
+  return days === 1 ? "1 day" : `${days} days`;
+}
+
+export default function PatientChart({ backHref }: { backHref: string }) {
+  const params = useParams<{ id: string }>();
+  const patientId = params?.id ?? "";
+  const [tab, setTab] = useState<EhrType>("tpr");
+
+  const { data: chart, loading } = usePageData(`faculty:patient:${patientId}`, () =>
+    fetchFacultyPatientDetail(patientId),
+  );
+
+  const records = useMemo<EhrRecord[]>(() => {
+    if (!chart) return [];
+    return tab === "tpr" ? chart.tpr : tab === "ivf" ? chart.ivf : chart.notes;
+  }, [chart, tab]);
+
+  const flaggedCount = chart?.vitals.filter((r) => r.is_anomaly).length ?? 0;
+  const unreviewedNotes = chart?.notes.filter((n) => !n.reviewed_at).length ?? 0;
+  const activeIvf = chart?.ivf.filter((r) => r.status === "ongoing").length ?? 0;
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-16">
+        <FontAwesomeIcon icon={faSpinner} spin className="h-8 w-8 text-brand-600" />
+      </div>
+    );
+  }
+
+  if (!chart) {
+    return (
+      <div>
+        <BackLink href={backHref} />
+        <div className="rounded-xl border border-hairline bg-surface p-12 text-center shadow-tile">
+          <FontAwesomeIcon icon={faBed} className="mx-auto mb-4 h-12 w-12 text-gray-300" />
+          <h3 className="text-lg font-semibold text-gray-700">Patient not found</h3>
+          <p className="mt-1 text-sm text-gray-500">
+            This record may have been deleted. Return to the patient list to pick another.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const { patient } = chart;
+  const discharged = patient.status === "discharged";
+  const roomLabel = patient.room ? `${patient.room.name} · Room ${patient.room.room_number}` : null;
+  const labs = Object.entries(patient.labs ?? {});
+
+  return (
+    <div>
+      <BackLink href={backHref} />
+
+      <PageHeader
+        badge={{ icon: <FontAwesomeIcon icon={faStethoscope} className="h-3.5 w-3.5" />, label: "Patient Chart" }}
+        title={patient.name}
+        subtitle={[
+          patient.age != null ? `${patient.age} years old` : null,
+          patient.gender,
+          patient.diagnosis,
+        ]
+          .filter(Boolean)
+          .join(" · ")}
+      />
+
+      {/* Identity strip: the facts a clinician checks before reading anything else. */}
+      <div className="mb-5 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border border-hairline bg-surface px-4 py-3 shadow-tile">
+        <span
+          className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${
+            discharged
+              ? "border-gray-200 bg-gray-100 text-gray-600"
+              : "border-emerald-200 bg-emerald-50 text-emerald-700"
+          }`}
+        >
+          <FontAwesomeIcon icon={discharged ? faRightFromBracket : faCircleCheck} className="h-3 w-3" />
+          {discharged ? "Discharged" : "Admitted"}
+        </span>
+        <Fact label="Room" value={discharged ? "—" : (roomLabel ?? "Unassigned")} />
+        <Fact label="Admitted" value={formatDate(patient.admission_date)} />
+        {discharged && <Fact label="Discharged" value={formatDate(patient.discharged_at)} />}
+        <Fact label="Length of stay" value={lengthOfStay(chart)} />
+        <Fact label="Record ID" value={patient.mimic_id} mono />
+      </div>
+
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+        <div className="space-y-5 lg:col-span-2">
+          {/* Vitals: current value + trend per sign, then the readings behind them. */}
+          <section className="rounded-xl border border-hairline bg-surface p-4 shadow-tile">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <h2 className="flex items-center gap-2 font-display text-base font-semibold text-gray-900">
+                <FontAwesomeIcon icon={faHeartPulse} className="h-4 w-4 text-rose-500" />
+                Vital Signs
+              </h2>
+              <span className="text-xs text-gray-500">
+                {chart.vitals.length === 0
+                  ? "No readings charted"
+                  : `${chart.vitals.length} reading${chart.vitals.length === 1 ? "" : "s"}${
+                      flaggedCount > 0 ? ` · ${flaggedCount} flagged` : ""
+                    }`}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {VITAL_SPECS.map((spec) => (
+                <VitalTile key={spec.key} spec={spec} readings={chart.vitals} />
+              ))}
+            </div>
+
+            {chart.vitals.length > 0 && (
+              <details className="mt-4 group">
+                <summary className="cursor-pointer text-xs font-medium text-brand-600 hover:text-brand-700">
+                  Show the {Math.min(chart.vitals.length, 20)} most recent readings
+                </summary>
+                <div className="mt-2 overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="border-b border-gray-100 bg-subtle">
+                      <tr>
+                        {["Recorded", "HR", "BP", "Temp", "RR", "SpO₂", "By"].map((h) => (
+                          <th
+                            key={h}
+                            className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-500"
+                          >
+                            {h}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-hairline">
+                      {chart.vitals.slice(0, 20).map((reading) => (
+                        <tr key={reading.id} className={reading.is_anomaly ? "bg-rose-50/40" : undefined}>
+                          <td className="whitespace-nowrap px-3 py-2 text-gray-700">
+                            <span className="flex items-center gap-1.5">
+                              {reading.is_anomaly && (
+                                <FontAwesomeIcon
+                                  icon={faTriangleExclamation}
+                                  title="Flagged by the vitals rules"
+                                  className="h-3 w-3 text-rose-500"
+                                />
+                              )}
+                              {formatDate(reading.recorded_at)}
+                            </span>
+                          </td>
+                          <td className="tabular px-3 py-2 text-gray-700">{reading.heart_rate ?? "—"}</td>
+                          <td className="tabular px-3 py-2 text-gray-700">
+                            {reading.bp_systolic != null && reading.bp_diastolic != null
+                              ? `${reading.bp_systolic}/${reading.bp_diastolic}`
+                              : "—"}
+                          </td>
+                          <td className="tabular px-3 py-2 text-gray-700">{reading.temperature_c ?? "—"}</td>
+                          <td className="tabular px-3 py-2 text-gray-700">{reading.respiratory_rate ?? "—"}</td>
+                          <td className="tabular px-3 py-2 text-gray-700">{reading.oxygen_saturation ?? "—"}</td>
+                          <td className="px-3 py-2 text-gray-500">{reading.users?.name ?? "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </details>
+            )}
+          </section>
+
+          {/* Clinical documentation: the three sheets students chart against. */}
+          <section className="rounded-xl border border-hairline bg-surface shadow-tile">
+            <div className="flex flex-wrap items-center gap-1 border-b border-hairline p-2">
+              {RECORD_TABS.map((t) => {
+                const count = t.id === "tpr" ? chart.tpr.length : t.id === "ivf" ? chart.ivf.length : chart.notes.length;
+                return (
+                  <button
+                    key={t.id}
+                    onClick={() => setTab(t.id)}
+                    className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                      tab === t.id ? "bg-brand-600 text-white" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                    }`}
+                  >
+                    <FontAwesomeIcon icon={t.icon} className="h-3.5 w-3.5" />
+                    {t.label}
+                    <span className={`rounded-full px-1.5 text-[10px] ${tab === t.id ? "bg-white/20" : "bg-gray-100"}`}>
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+              {(activeIvf > 0 || unreviewedNotes > 0) && (
+                <span className="ml-auto flex items-center gap-2 pr-2 text-[11px] text-gray-500">
+                  {activeIvf > 0 && <span>{activeIvf} IVF running</span>}
+                  {unreviewedNotes > 0 && <span>{unreviewedNotes} note{unreviewedNotes === 1 ? "" : "s"} to review</span>}
+                </span>
+              )}
+            </div>
+
+            {records.length === 0 ? (
+              <p className="p-8 text-center text-sm text-gray-400">
+                No {tab === "tpr" ? "TPR sheets" : tab === "ivf" ? "IVF sheets" : "progress notes"} charted for this
+                patient.
+              </p>
+            ) : (
+              <ul className="divide-y divide-hairline">
+                {records.map((record) => (
+                  <li key={record.id} className="flex flex-wrap items-start gap-x-3 gap-y-1 px-4 py-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm text-gray-800">{recordSummary(record, tab) || "—"}</p>
+                      <p className="mt-0.5 text-xs text-gray-500">
+                        {record.users?.name ?? "Unknown"} · {formatDate(record.created_at)}
+                        {record.remarks ? ` · ${record.remarks}` : ""}
+                      </p>
+                    </div>
+                    {tab === "note" &&
+                      (record.reviewed_at ? (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                          <FontAwesomeIcon icon={faCircleCheck} className="h-2.5 w-2.5" />
+                          Reviewed
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                          Awaiting review
+                        </span>
+                      ))}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </div>
+
+        <div className="space-y-5">
+          <section className="rounded-xl border border-hairline bg-surface p-4 shadow-tile">
+            <h2 className="mb-3 flex items-center gap-2 font-display text-base font-semibold text-gray-900">
+              <FontAwesomeIcon icon={faNotesMedical} className="h-4 w-4 text-brand-600" />
+              Clinical Record
+            </h2>
+            <dl className="space-y-3 text-sm">
+              <div>
+                <dt className="text-xs font-medium text-gray-500">Diagnosis</dt>
+                <dd className="mt-0.5 text-gray-800">{patient.diagnosis || "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-xs font-medium text-gray-500">Medical history</dt>
+                <dd className="mt-0.5 whitespace-pre-wrap text-gray-800">
+                  {patient.medical_history || "No history recorded."}
+                </dd>
+              </div>
+            </dl>
+          </section>
+
+          <section className="rounded-xl border border-hairline bg-surface p-4 shadow-tile">
+            <h2 className="mb-3 flex items-center gap-2 font-display text-base font-semibold text-gray-900">
+              <FontAwesomeIcon icon={faFlask} className="h-4 w-4 text-purple-600" />
+              Laboratory
+            </h2>
+            {labs.length === 0 ? (
+              <p className="text-sm text-gray-400">No lab results on file.</p>
+            ) : (
+              <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
+                {labs.map(([key, value]) => (
+                  <div key={key} className="min-w-0">
+                    <dt className="truncate text-xs text-gray-500">{key.replace(/_/g, " ")}</dt>
+                    <dd className="tabular truncate font-medium text-gray-800">{value ?? "—"}</dd>
+                  </div>
+                ))}
+              </dl>
+            )}
+          </section>
+
+          <section className="rounded-xl border border-hairline bg-surface p-4 shadow-tile">
+            <h2 className="mb-3 flex items-center gap-2 font-display text-base font-semibold text-gray-900">
+              <FontAwesomeIcon icon={faClockRotateLeft} className="h-4 w-4 text-gray-500" />
+              Admission History
+            </h2>
+            {chart.events.length === 0 ? (
+              <p className="text-sm text-gray-400">
+                No admission events recorded. Events appear here from the first check-in onward.
+              </p>
+            ) : (
+              <ol className="space-y-3">
+                {chart.events.map((event) => (
+                  <li key={event.id} className="flex gap-3">
+                    <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-600/10 text-brand-600">
+                      <FontAwesomeIcon icon={EVENT_ICON[event.action] ?? faClockRotateLeft} className="h-3 w-3" />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-800">
+                        {EVENT_LABEL[event.action] ?? event.action}
+                        {eventDetail(event) && (
+                          <span className="font-normal text-gray-500"> · {eventDetail(event)}</span>
+                        )}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {formatDate(event.created_at)} · {event.actor_name}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </section>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BackLink({ href }: { href: string }) {
+  return (
+    <Link
+      href={href}
+      className="mb-4 inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-surface px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+    >
+      <FontAwesomeIcon icon={faArrowLeft} className="h-3.5 w-3.5" />
+      All patients
+    </Link>
+  );
+}
+
+function Fact({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <span className="min-w-0">
+      <span className="block text-[10px] font-medium uppercase tracking-wide text-gray-400">{label}</span>
+      <span className={`block truncate text-sm text-gray-800 ${mono ? "font-mono text-xs" : ""}`}>{value}</span>
+    </span>
+  );
+}

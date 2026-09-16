@@ -6,5 +6,5 @@ export const metadata: Metadata = {
 };
 
 export default function FacultyPatientsPage() {
-  return <PatientsManager />;
+  return <PatientsManager chartBase="/faculty/patients" />;
 }

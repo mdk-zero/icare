@@ -11,5 +11,5 @@ export const metadata: Metadata = {
  * parallel implementation.
  */
 export default function AdminPatientsPage() {
-  return <PatientsManager />;
+  return <PatientsManager chartBase="/admin/patients" />;
 }
