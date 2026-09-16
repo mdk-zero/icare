@@ -17,6 +17,7 @@ export default function FacultyMonitoringPage() {
       badgeLabel="Ward Monitoring"
       title="Monitoring"
       subtitle="Live ward census — room occupancy, check-ins and check-outs at a glance"
+      showFloorPlan
     />
   );
 }

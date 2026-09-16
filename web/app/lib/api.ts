@@ -651,6 +651,39 @@ export interface Room {
   students_assigned: number;
   /** Patients occupying the room — this is what `capacity` limits. */
   patients_assigned: number;
+  /** Floor-plan rectangle in grid units; all four null = not placed. */
+  plan_x: number | null;
+  plan_y: number | null;
+  plan_w: number | null;
+  plan_h: number | null;
+}
+
+/** One room's floor-plan rectangle, or all-null to remove it from the plan. */
+export interface RoomPlacement {
+  id: string;
+  x: number | null;
+  y: number | null;
+  w: number | null;
+  h: number | null;
+}
+
+export async function saveRoomLayout(
+  positions: RoomPlacement[],
+): Promise<{ saved?: number; error?: string }> {
+  try {
+    const res = await apiFetch('/api/admin/rooms/layout', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ positions }),
+    });
+    const json = (await res.json()) as { saved?: number; error?: string };
+    if (!res.ok) return { error: json.error || 'Unable to save the floor plan' };
+    return { saved: json.saved };
+  } catch (err) {
+    console.error('saveRoomLayout() failed', err);
+    return { error: 'Unable to save the floor plan. Please try again.' };
+  }
 }
 
 export interface RoomAssignment {

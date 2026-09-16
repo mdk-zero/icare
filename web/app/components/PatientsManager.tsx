@@ -34,6 +34,7 @@ import {
   Room,
 } from "../lib/api";
 import { SkeletonUnitGrid, SkeletonStatTile } from "./skeletons";
+import { FloorPlanCanvas } from "./FloorPlan";
 import { roomStatus, ROOM_STATUS_LABEL, ROOM_STATUS_TONE } from "../lib/rooms";
 import PageHeader from "./PageHeader";
 import StatTile from "./StatTile";
@@ -399,12 +400,15 @@ interface PatientsManagerProps {
   badgeLabel?: string;
   title?: string;
   subtitle?: string;
+  /** Renders the ward floor plan (admin-arranged) above the census. */
+  showFloorPlan?: boolean;
 }
 
 export default function PatientsManager({
   badgeLabel = "Patient Management",
   title = "Patient Records",
   subtitle = "Browse patients by their assigned room, then open a room's census",
+  showFloorPlan = false,
 }: PatientsManagerProps = {}) {
   const [search, setSearch] = useState("");
   const [roomSearch, setRoomSearch] = useState("");
@@ -752,6 +756,25 @@ export default function PatientsManager({
         title={title}
         subtitle={subtitle}
       />
+
+      {/* The ward map is a navigation surface: click a room to open its census.
+          Hidden inside a room so the census table keeps the space. */}
+      {showFloorPlan && !loading && !selectedGroup && (
+        <div className="mb-4">
+          <FloorPlanCanvas
+            rooms={rooms}
+            occupancy={occupancyByRoom}
+            onRoomClick={(room) => {
+              if (roomGroups.some((g) => g.key === room.id)) {
+                setSelectedRoomKey(room.id);
+                setSearch("");
+              } else {
+                toast(`No patients in ${room.name} yet`);
+              }
+            }}
+          />
+        </div>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
         {loading ? (

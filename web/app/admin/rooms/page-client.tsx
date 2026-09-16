@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faSpinner,
@@ -13,6 +13,10 @@ import {
   faCheckCircle,
   faUserPlus,
   faBuilding,
+  faMap,
+  faTableCellsLarge,
+  faSave,
+  faRotateLeft,
 } from "@fortawesome/free-solid-svg-icons";
 import PageHeader from "../../components/PageHeader";
 import { roomStatus, ROOM_STATUS_LABEL, ROOM_STATUS_TONE } from "../../lib/rooms";
@@ -22,14 +26,18 @@ import {
   createRoom,
   updateRoom,
   deleteRoom,
+  saveRoomLayout,
   assignStudentsToRoom,
   endRoomAssignment,
   fetchAllStudentUsers,
   Room,
   RoomAssignment,
+  RoomPlacement,
   StudentUser,
 } from "../../lib/api";
 import { usePageData } from "../../lib/use-page-data";
+import { FloorPlanEditor, layoutFromRooms, Layout, Rect } from "../../components/FloorPlan";
+import { toast } from "../../components/Toast";
 
 // Stable empty fallbacks, so nothing downstream sees a new array each render.
 const NO_ROOMS: Room[] = [];
@@ -64,11 +72,21 @@ const EMPTY_FORM: RoomFormState = {
   description: "",
 };
 
+/** Placement equality; two absent placements are the same placement. */
+function sameRect(a: Rect | null | undefined, b: Rect | null | undefined): boolean {
+  if (!a || !b) return !a === !b;
+  return a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h;
+}
+
 export default function RoomsClient() {
   const [roomFilter, setRoomFilter] = useState("all");
+  const [view, setView] = useState<"cards" | "plan">("cards");
   const [formOpen, setFormOpen] = useState(false);
   const [editingRoom, setEditingRoom] = useState<Room | null>(null);
   const [managingRoom, setManagingRoom] = useState<Room | null>(null);
+  // null = mirror the server; an object = unsaved edits in progress.
+  const [draftLayout, setDraftLayout] = useState<Layout | null>(null);
+  const [savingLayout, setSavingLayout] = useState(false);
 
   const { data, loading, refresh: loadRooms } = usePageData("admin:rooms", fetchRooms);
   const rooms = data ?? NO_ROOMS;
@@ -76,6 +94,46 @@ export default function RoomsClient() {
   const filteredRooms = rooms.filter(
     (r) => roomFilter === "all" || r.status === roomFilter,
   );
+
+  const serverLayout = useMemo(() => layoutFromRooms(rooms), [rooms]);
+  const workingLayout = draftLayout ?? serverLayout;
+  const layoutDirty =
+    draftLayout !== null && rooms.some((r) => !sameRect(draftLayout[r.id], serverLayout[r.id]));
+
+  // patients_assigned counts patients holding a bed, which since 034 means
+  // admitted patients — exactly what the plan's occupancy colors should show.
+  const occupancy = useMemo(
+    () => new Map(rooms.map((r) => [r.id, r.patients_assigned])),
+    [rooms],
+  );
+
+  const handleLayoutChange = (roomId: string, rect: Rect | null) => {
+    setDraftLayout({ ...workingLayout, [roomId]: rect });
+  };
+
+  const handleLayoutSave = async () => {
+    if (!draftLayout) return;
+    // Only the placements that actually moved; the audit row stays honest.
+    const positions: RoomPlacement[] = rooms
+      .filter((r) => !sameRect(draftLayout[r.id], serverLayout[r.id]))
+      .map((r) => {
+        const rect = draftLayout[r.id] ?? null;
+        return rect
+          ? { id: r.id, x: rect.x, y: rect.y, w: rect.w, h: rect.h }
+          : { id: r.id, x: null, y: null, w: null, h: null };
+      });
+    if (positions.length === 0) return;
+    setSavingLayout(true);
+    const result = await saveRoomLayout(positions);
+    setSavingLayout(false);
+    if (result.error) {
+      window.alert(result.error);
+      return;
+    }
+    setDraftLayout(null);
+    await loadRooms();
+    toast("Floor plan saved");
+  };
 
   const handleDelete = async (room: Room) => {
     if (
@@ -146,30 +204,111 @@ export default function RoomsClient() {
         </div>
       </div>
 
-      <div className="flex items-center justify-between mb-6">
-        <select
-          value={roomFilter}
-          onChange={(e) => setRoomFilter(e.target.value)}
-          className="px-4 py-2.5 bg-surface border border-gray-200 rounded-xl text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-600/50 focus:border-brand-600 transition-all cursor-pointer"
-        >
-          <option value="all">All Rooms</option>
-          <option value="active">Active</option>
-          <option value="inactive">Inactive</option>
-          <option value="maintenance">Maintenance</option>
-        </select>
-        <button
-          onClick={() => {
-            setEditingRoom(null);
-            setFormOpen(true);
-          }}
-          className="flex items-center gap-2 px-4 py-2.5 bg-brand-600 text-white font-medium rounded-xl hover:bg-brand-700 hover:shadow-lg transition-all duration-300"
-        >
-          <FontAwesomeIcon icon={faPlus} className="w-4 h-4" />
-          Add Room
-        </button>
+      <div className="flex flex-wrap items-center gap-3 mb-6">
+        <div className="inline-flex rounded-xl border border-gray-200 bg-surface p-1">
+          {(
+            [
+              { key: "cards", label: "Cards", icon: faTableCellsLarge },
+              { key: "plan", label: "Floor Plan", icon: faMap },
+            ] as const
+          ).map((option) => (
+            <button
+              key={option.key}
+              onClick={() => setView(option.key)}
+              className={`inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                view === option.key
+                  ? "bg-brand-600 text-white shadow-sm"
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              <FontAwesomeIcon icon={option.icon} className="w-3.5 h-3.5" />
+              {option.label}
+            </button>
+          ))}
+        </div>
+
+        {view === "cards" && (
+          <select
+            value={roomFilter}
+            onChange={(e) => setRoomFilter(e.target.value)}
+            className="px-4 py-2.5 bg-surface border border-gray-200 rounded-xl text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-600/50 focus:border-brand-600 transition-all cursor-pointer"
+          >
+            <option value="all">All Rooms</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+            <option value="maintenance">Maintenance</option>
+          </select>
+        )}
+
+        <div className="ml-auto flex items-center gap-2">
+          {view === "plan" && (
+            <>
+              <button
+                onClick={() => setDraftLayout(null)}
+                disabled={!layoutDirty || savingLayout}
+                className="inline-flex items-center gap-2 px-4 py-2.5 border border-gray-200 text-gray-700 font-medium rounded-xl hover:bg-gray-50 transition-all disabled:opacity-40"
+              >
+                <FontAwesomeIcon icon={faRotateLeft} className="w-3.5 h-3.5" />
+                Reset
+              </button>
+              <button
+                onClick={handleLayoutSave}
+                disabled={!layoutDirty || savingLayout}
+                className="inline-flex items-center gap-2 px-4 py-2.5 bg-brand-600 text-white font-medium rounded-xl hover:bg-brand-700 transition-all disabled:opacity-40"
+              >
+                {savingLayout ? (
+                  <FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" />
+                ) : (
+                  <FontAwesomeIcon icon={faSave} className="w-4 h-4" />
+                )}
+                {savingLayout ? "Saving..." : layoutDirty ? "Save Plan" : "Saved"}
+              </button>
+            </>
+          )}
+          <button
+            onClick={() => {
+              setEditingRoom(null);
+              setFormOpen(true);
+            }}
+            className="flex items-center gap-2 px-4 py-2.5 bg-brand-600 text-white font-medium rounded-xl hover:bg-brand-700 hover:shadow-lg transition-all duration-300"
+          >
+            <FontAwesomeIcon icon={faPlus} className="w-4 h-4" />
+            Add Room
+          </button>
+        </div>
       </div>
 
-      {loading ? (
+      {view === "plan" && !loading && (
+        <div className="mb-6">
+          {rooms.length === 0 ? (
+            <div className="bg-surface rounded-xl p-12 text-center border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)]">
+              <FontAwesomeIcon icon={faMap} className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+              <h3 className="text-lg font-semibold text-gray-700">No rooms to place</h3>
+              <p className="text-gray-500 text-sm mt-1">Create a room first, then arrange it here.</p>
+            </div>
+          ) : (
+            <>
+              <p className="mb-3 text-sm text-gray-500">
+                Drag rooms to move them, use the corner grip to resize, and place rooms from the
+                tray. Colors show live bed occupancy. Changes apply after{" "}
+                <span className="font-medium text-gray-700">Save Plan</span>.
+              </p>
+              <FloorPlanEditor
+                rooms={rooms}
+                layout={workingLayout}
+                occupancy={occupancy}
+                onChange={handleLayoutChange}
+              />
+            </>
+          )}
+        </div>
+      )}
+
+      {view === "plan" && loading ? (
+        <div className="flex items-center justify-center p-12">
+          <FontAwesomeIcon icon={faSpinner} spin className="w-8 h-8 text-brand-600" />
+        </div>
+      ) : view === "plan" ? null : loading ? (
         <div className="flex items-center justify-center p-12">
           <FontAwesomeIcon icon={faSpinner} spin className="w-8 h-8 text-brand-600" />
         </div>
