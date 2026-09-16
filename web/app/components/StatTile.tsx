@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import Link from "next/link";
 
 interface StatTileProps {
   icon: ReactNode;
@@ -8,6 +9,12 @@ interface StatTileProps {
   iconBg?: string;
   iconColor?: string;
   onClick?: () => void;
+  /**
+   * Navigates instead of calling back. Server components can't hand down an
+   * `onClick`, so a tile that is really a link says so with an href and keeps
+   * the same lift and focus ring the clickable tile has.
+   */
+  href?: string;
   className?: string;
 }
 
@@ -19,19 +26,21 @@ export default function StatTile({
   iconBg = "bg-brand-600/10",
   iconColor = "text-brand-600",
   onClick,
+  href,
   className = "",
 }: StatTileProps) {
-  const Tag = onClick ? "button" : "div";
+  const interactive = Boolean(onClick || href);
 
-  return (
-    <Tag
-      onClick={onClick}
-      className={`group flex items-center gap-3.5 overflow-hidden rounded-xl border border-hairline bg-surface p-3.5 text-left shadow-tile transition-all duration-200 hover:shadow-tile-hover ${
-        onClick
-          ? "cursor-pointer hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-offset-2"
-          : ""
-      } ${className}`}
-    >
+  const classes = `group flex items-center gap-3.5 overflow-hidden rounded-xl border border-hairline bg-surface p-3.5 text-left shadow-tile transition-all duration-200 hover:shadow-tile-hover ${
+    interactive
+      ? "cursor-pointer hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-offset-2"
+      : ""
+  } ${className}`;
+
+  // Spans throughout: the tile renders as a <button> when it has an onClick,
+  // and a button may not contain block-level children.
+  const body = (
+    <>
       <span
         className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${iconBg} ${iconColor} transition-transform duration-200 group-hover:scale-105`}
       >
@@ -51,6 +60,21 @@ export default function StatTile({
           </span>
         )}
       </span>
+    </>
+  );
+
+  if (href) {
+    return (
+      <Link href={href} className={classes}>
+        {body}
+      </Link>
+    );
+  }
+
+  const Tag = onClick ? "button" : "div";
+  return (
+    <Tag onClick={onClick} className={classes}>
+      {body}
     </Tag>
   );
 }
