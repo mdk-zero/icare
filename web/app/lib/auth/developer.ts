@@ -1,5 +1,6 @@
 import { getSupabaseAdmin } from '../supabase/server';
 import { readSession } from './session';
+import { isDeveloperEmail } from './developer-allowlist';
 import type { SessionPayload } from './jwt';
 
 /**
@@ -10,20 +11,7 @@ import type { SessionPayload } from './jwt';
  * Unset or empty means nobody is a developer — the safe default for any
  * deployment that never opts in.
  */
-export function developerEmails(): string[] {
-  const raw = process.env.DEVELOPER_EMAILS ?? '';
-  return raw
-    .split(',')
-    .map((entry) => entry.trim().toLowerCase())
-    .filter(Boolean);
-}
-
-export function isDeveloperEmail(email: string | null | undefined): boolean {
-  if (!email) return false;
-  const allowed = developerEmails();
-  if (allowed.length === 0) return false;
-  return allowed.includes(email.trim().toLowerCase());
-}
+export { developerEmails, isDeveloperEmail } from './developer-allowlist';
 
 /**
  * The console's authority on who is asking.

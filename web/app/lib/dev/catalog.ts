@@ -31,6 +31,11 @@ export interface DevColumn {
   references_column: string | null;
 }
 
+/** A column plus the legal values the console can offer for it. */
+export interface DevColumnView extends DevColumn {
+  options: string[] | null;
+}
+
 export interface DevRelation {
   constraint_name: string;
   child_schema: string;
@@ -129,6 +134,19 @@ export function checkConstraintOptions(clause: string | null): string[] | null {
   // to speak of; an enumeration is the only shape worth offering as options.
   if (!/=\s*ANY|IN\s*\(/i.test(clause)) return null;
   return [...new Set(literals)];
+}
+
+/**
+ * Attaches each column's legal values, from an enum type or an enumerating
+ * check constraint. Done server-side because parsing lives beside the catalog
+ * types, and the client cannot import this module without dragging the
+ * service-role Supabase client into the browser bundle.
+ */
+export function withOptions(columns: DevColumn[]): DevColumnView[] {
+  return columns.map((column) => ({
+    ...column,
+    options: column.enum_values ?? checkConstraintOptions(column.check_clause),
+  }));
 }
 
 const NUMERIC_TYPES = new Set([

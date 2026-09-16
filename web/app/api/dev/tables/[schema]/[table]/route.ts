@@ -10,6 +10,7 @@ import {
   MAX_PAGE_SIZE,
   parseFilters,
   primaryKeyColumns,
+  withOptions,
   WRITABLE_SCHEMA,
   type DevColumn,
 } from '@/app/lib/dev/catalog';
@@ -55,6 +56,15 @@ function pkMatch(columns: DevColumn[], supplied: unknown): Row {
     match[key.column_name] = coerceValue(key, value);
   }
   return match;
+}
+
+/** A malformed body is a bad request, not a server fault. */
+async function readBody<T>(request: NextRequest): Promise<T> {
+  try {
+    return (await request.json()) as T;
+  } catch {
+    throw new DevError('Invalid JSON body');
+  }
 }
 
 function coerceRow(columns: DevColumn[], supplied: unknown): Row {
@@ -138,7 +148,7 @@ export async function GET(request: NextRequest, { params }: Params) {
 
     return NextResponse.json({
       relation,
-      columns,
+      columns: withOptions(columns),
       rows,
       total,
       limit,
@@ -160,7 +170,7 @@ export async function POST(request: NextRequest, { params }: Params) {
     const relation = await findTable(schema, table);
     assertWritable(schema, relation.kind);
 
-    const body = (await request.json()) as { values?: unknown };
+    const body = await readBody<{ values?: unknown }>(request);
     const columns = await getColumns(schema, table);
     const values = coerceRow(columns, body.values);
 
@@ -192,7 +202,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     const relation = await findTable(schema, table);
     assertWritable(schema, relation.kind);
 
-    const body = (await request.json()) as { pk?: unknown; values?: unknown };
+    const body = await readBody<{ pk?: unknown; values?: unknown }>(request);
     const columns = await getColumns(schema, table);
     const match = pkMatch(columns, body.pk);
     const values = coerceRow(columns, body.values);
@@ -233,7 +243,7 @@ export async function DELETE(request: NextRequest, { params }: Params) {
     const relation = await findTable(schema, table);
     assertWritable(schema, relation.kind);
 
-    const body = (await request.json()) as { pk?: unknown };
+    const body = await readBody<{ pk?: unknown }>(request);
     const columns = await getColumns(schema, table);
     const match = pkMatch(columns, body.pk);
 

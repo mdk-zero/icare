@@ -15,7 +15,9 @@ export async function PATCH(request: NextRequest, { params }: Params) {
 
   try {
     const { id } = await params;
-    const body = (await request.json()) as {
+    const body = (await request.json().catch(() => {
+      throw new DevError('Invalid JSON body');
+    })) as {
       role?: unknown;
       section_id?: unknown;
       name?: unknown;

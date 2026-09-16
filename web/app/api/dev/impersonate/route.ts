@@ -42,7 +42,11 @@ export async function POST(request: NextRequest) {
       throw new DevError('Already impersonating — return to yourself first');
     }
 
-    const body = (await request.json()) as { user_id?: unknown };
+    const body = await request
+      .json()
+      .catch(() => {
+        throw new DevError('Invalid JSON body');
+      });
     if (typeof body.user_id !== 'string' || !body.user_id) {
       throw new DevError('user_id is required');
     }
