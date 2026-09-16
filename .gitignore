@@ -9,3 +9,6 @@ dist/
 
 # Local backups (e.g. pre-SDK-upgrade copies of mobile/)
 *.bak/
+
+# Database snapshots (contain live user data — never commit)
+db-backups/
