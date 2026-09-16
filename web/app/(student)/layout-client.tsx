@@ -2,6 +2,7 @@
 
 import { usePathname, useSearchParams } from "next/navigation";
 import {
+  faCalendarCheck,
   faBell,
   faChartBar,
   faClipboardCheck,
@@ -23,6 +24,12 @@ const navItems: NavItem[] = [
     label: "Patients",
     href: "/patients",
     icon: faFileLines,
+  },
+  {
+    id: "attendance",
+    label: "Attendance",
+    href: "/attendance",
+    icon: faCalendarCheck,
   },
   {
     id: "quizzes",

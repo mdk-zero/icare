@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   faBedPulse,
+  faCalendarCheck,
   faChartBar,
   faClipboardList,
   faFileLines,
@@ -38,6 +39,7 @@ const navItems: NavItem[] = [
   // note sign-off. Patients, Vitals Monitor and EHR Review were folded into it
   // and their routes now redirect here.
   { id: "monitoring", label: "Monitoring", href: "/faculty/monitoring", icon: faBedPulse, section: "Clinical" },
+  { id: "attendance", label: "Attendance", href: "/faculty/attendance", icon: faCalendarCheck, section: "Clinical" },
   { id: "analytics", label: "Analytics", href: "/faculty/analytics", icon: faChartBar, section: "Data" },
   { id: "reports", label: "Reports", href: "/faculty/reports", icon: faFileLines, section: "Data" },
   { id: "audit", label: "Audit Trail", href: "/faculty/audit", icon: faClipboardList, section: "Administration" },

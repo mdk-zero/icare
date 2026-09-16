@@ -1,4 +1,5 @@
 import { cachedFetch, clearRequestCache } from './request-cache';
+import type { AttendanceTally, ShiftAttendanceStatus } from './shifts';
 
 export interface User {
   id: string;
@@ -1930,6 +1931,158 @@ export interface PatientEvent {
   created_at: string;
   actor_name: string;
   details: Record<string, unknown>;
+}
+
+/** One of the signed-in student's own shifts, with how they were marked. */
+export interface StudentAttendanceRow {
+  id: string;
+  attendance_status: ShiftAttendanceStatus;
+  checked_in_at: string | null;
+  notes: string | null;
+  shifts: {
+    id: string;
+    label: string | null;
+    shift_type: 'am' | 'pm' | 'night' | 'custom';
+    starts_at: string;
+    ends_at: string;
+    status: 'scheduled' | 'cancelled';
+    room?: { name: string; room_number: string } | null;
+  } | null;
+}
+
+export async function fetchMyAttendance(): Promise<{
+  shifts: StudentAttendanceRow[];
+  tally: AttendanceTally;
+} | null> {
+  try {
+    const res = await apiFetch('/api/student/attendance', { credentials: 'include' });
+    if (!res.ok) return null;
+    return (await res.json()) as { shifts: StudentAttendanceRow[]; tally: AttendanceTally };
+  } catch (err) {
+    console.error('fetchMyAttendance() failed', err);
+    return null;
+  }
+}
+
+// Shifts and attendance (migration 029)
+export interface FacultyShift {
+  id: string;
+  section_id: string | null;
+  room_id: string | null;
+  label: string | null;
+  shift_type: 'am' | 'pm' | 'night' | 'custom';
+  starts_at: string;
+  ends_at: string;
+  notes: string | null;
+  status: 'scheduled' | 'cancelled';
+  created_at: string;
+  section?: { id: string; name: string } | null;
+  room?: { id: string; name: string; room_number: string } | null;
+  /** One entry per rostered student, for the list's tallies. */
+  statuses: ShiftAttendanceStatus[];
+}
+
+export interface ShiftRosterEntry {
+  id: string;
+  student_id: string;
+  attendance_status: ShiftAttendanceStatus;
+  checked_in_at: string | null;
+  notes: string | null;
+  users?: { name: string; email: string } | null;
+}
+
+export async function fetchShifts(): Promise<FacultyShift[]> {
+  try {
+    const res = await apiFetch('/api/faculty/shifts', { credentials: 'include' });
+    if (!res.ok) {
+      console.error('fetchShifts() failed', res.status);
+      return [];
+    }
+    const json = (await res.json()) as { shifts: FacultyShift[] };
+    return json.shifts ?? [];
+  } catch (err) {
+    console.error('fetchShifts() failed', err);
+    return [];
+  }
+}
+
+export async function createShift(input: {
+  section_id: string;
+  shift_type: string;
+  starts_at: string;
+  ends_at: string;
+  room_id?: string | null;
+  label?: string | null;
+  notes?: string | null;
+}): Promise<{ shift?: FacultyShift; assigned?: number; error?: string }> {
+  try {
+    const res = await apiFetch('/api/faculty/shifts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(input),
+    });
+    const json = (await res.json()) as { shift?: FacultyShift; assigned?: number; error?: string };
+    if (!res.ok) return { error: json.error || 'Unable to create shift' };
+    return { shift: json.shift, assigned: json.assigned };
+  } catch (err) {
+    console.error('createShift() failed', err);
+    return { error: 'Unable to create shift. Please try again.' };
+  }
+}
+
+export async function fetchShiftRoster(
+  shiftId: string,
+): Promise<{ shift: FacultyShift; roster: ShiftRosterEntry[] } | null> {
+  try {
+    const res = await apiFetch(`/api/faculty/shifts/${shiftId}`, { credentials: 'include' });
+    if (!res.ok) return null;
+    return (await res.json()) as { shift: FacultyShift; roster: ShiftRosterEntry[] };
+  } catch (err) {
+    console.error('fetchShiftRoster() failed', err);
+    return null;
+  }
+}
+
+/** Marks attendance for one or many students, and/or cancels the shift. */
+export async function updateShift(
+  shiftId: string,
+  payload: {
+    marks?: { assignment_id: string; status: ShiftAttendanceStatus; notes?: string }[];
+    status?: 'cancelled' | 'scheduled';
+  },
+): Promise<{ updated?: number; error?: string }> {
+  try {
+    const res = await apiFetch(`/api/faculty/shifts/${shiftId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(payload),
+    });
+    const json = (await res.json()) as { updated?: number; error?: string };
+    if (!res.ok) return { error: json.error || 'Unable to update the shift' };
+    return { updated: json.updated };
+  } catch (err) {
+    console.error('updateShift() failed', err);
+    return { error: 'Unable to update the shift. Please try again.' };
+  }
+}
+
+export async function deleteShift(shiftId: string): Promise<{ error?: string }> {
+  try {
+    const res = await apiFetch(`/api/faculty/shifts/${shiftId}`, {
+      method: 'DELETE',
+      credentials: 'include',
+    });
+    if (!res.ok) {
+      const json = (await res.json()) as { error?: string };
+      return { error: json.error || 'Unable to delete the shift' };
+    }
+    return {};
+  } catch (err) {
+    console.error('deleteShift() failed', err);
+    return { error: 'Unable to delete the shift. Please try again.' };
+  }
 }
 
 /** One AI-drafted follow-up action on a discharge summary. */

@@ -3,10 +3,11 @@ import type { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { getFacultySectionIds } from '@/app/lib/roster';
 import { ReportShell, StatGrid, Table, styles, type ReportMeta, type ReportDocument } from './kit';
 import { toCsv, toCsvBlocks, type CsvCell } from './csv';
+import { tallyAttendance, type ShiftAttendanceStatus } from '../shifts';
 
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
 
-export const REPORT_TYPES = ['student', 'section', 'scenario', 'assessment', 'roster', 'discharge'] as const;
+export const REPORT_TYPES = ['student', 'section', 'scenario', 'assessment', 'roster', 'discharge', 'attendance'] as const;
 export type ReportType = (typeof REPORT_TYPES)[number];
 
 export function isReportType(value: unknown): value is ReportType {
@@ -23,6 +24,8 @@ export const REPORT_NEEDS_TARGET: Record<ReportType, boolean> = {
   // Targets one stored summary, not a patient: a re-admitted patient has more
   // than one, and each closes a different stay.
   discharge: true,
+  // Attendance is reported per section.
+  attendance: true,
 };
 
 export interface BuiltReport {
@@ -745,4 +748,189 @@ export async function buildDischargeReport(
   ]);
 
   return { subject: name, pdf, csv };
+}
+
+/**
+ * Clinical attendance for one section: a per-student rate plus the shift-by-
+ * shift grid behind it.
+ *
+ * Rates come from `tallyAttendance`, the same function the attendance screens
+ * use, so a printed report and the page it was printed from can never disagree
+ * about what counts as attended.
+ */
+export async function buildAttendanceReport(
+  supabase: Supabase,
+  meta: ReportMeta,
+  sectionId: string,
+): Promise<BuildResult> {
+  const { data: section } = await supabase
+    .from('sections')
+    .select('id, name')
+    .eq('id', sectionId)
+    .maybeSingle();
+  if (!section) return { error: 'Section not found', status: 404 };
+
+  const { data: shifts } = await supabase
+    .from('shifts')
+    .select('id, label, shift_type, starts_at, status')
+    .eq('section_id', sectionId)
+    .order('starts_at', { ascending: true })
+    .limit(200);
+
+  const shiftList = (shifts ?? []) as {
+    id: string;
+    label: string | null;
+    shift_type: string;
+    starts_at: string;
+    status: string;
+  }[];
+
+  const { data: students } = await supabase
+    .from('users')
+    .select('id, name')
+    .eq('role', 'student')
+    .eq('section_id', sectionId)
+    .order('name');
+
+  const studentList = (students ?? []) as { id: string; name: string }[];
+
+  const assignments = shiftList.length
+    ? ((
+        await supabase
+          .from('shift_assignments')
+          .select('shift_id, student_id, attendance_status')
+          .in(
+            'shift_id',
+            shiftList.map((s) => s.id),
+          )
+      ).data ?? [])
+    : [];
+
+  // student -> shift -> status
+  const grid = new Map<string, Map<string, ShiftAttendanceStatus>>();
+  for (const row of assignments as {
+    shift_id: string;
+    student_id: string;
+    attendance_status: ShiftAttendanceStatus;
+  }[]) {
+    const byShift = grid.get(row.student_id) ?? new Map<string, ShiftAttendanceStatus>();
+    byShift.set(row.shift_id, row.attendance_status);
+    grid.set(row.student_id, byShift);
+  }
+
+  // A cancelled shift is not a shift anyone failed to attend, so it is left
+  // out of the rates entirely rather than counted against the roster.
+  const counted = shiftList.filter((s) => s.status !== 'cancelled');
+
+  const perStudent = studentList.map((student) => {
+    const byShift = grid.get(student.id);
+    const statuses = counted
+      .map((shift) => byShift?.get(shift.id))
+      .filter((v): v is ShiftAttendanceStatus => !!v);
+    const tally = tallyAttendance(statuses);
+    return { student, tally };
+  });
+
+  const sectionTally = tallyAttendance(
+    perStudent.flatMap(({ student }) =>
+      counted
+        .map((shift) => grid.get(student.id)?.get(shift.id))
+        .filter((v): v is ShiftAttendanceStatus => !!v),
+    ),
+  );
+
+  const SHORT: Record<ShiftAttendanceStatus, string> = {
+    scheduled: '–',
+    present: 'P',
+    late: 'L',
+    absent: 'A',
+    excused: 'E',
+  };
+
+  const summaryRows = perStudent.map(({ student, tally }) => [
+    student.name,
+    tally.present,
+    tally.late,
+    tally.absent,
+    tally.excused,
+    tally.rate === null ? '—' : `${tally.rate}%`,
+  ]);
+
+  const pdf = (
+    <ReportShell
+      title={`Attendance — ${section.name}`}
+      heading="Clinical Attendance Report"
+      meta={meta}
+      metaRows={[
+        { label: 'Section', value: section.name },
+        { label: 'Students', value: String(studentList.length) },
+        { label: 'Shifts', value: String(counted.length) },
+        {
+          label: 'Section attendance',
+          value: sectionTally.rate === null ? 'Not yet marked' : `${sectionTally.rate}%`,
+        },
+      ]}
+    >
+      <Text style={styles.sectionTitle}>Summary</Text>
+      <StatGrid
+        items={[
+          { label: 'Present', value: sectionTally.present },
+          { label: 'Late', value: sectionTally.late },
+          { label: 'Absent', value: sectionTally.absent },
+          { label: 'Excused', value: sectionTally.excused },
+          { label: 'Unmarked', value: sectionTally.scheduled },
+        ]}
+      />
+
+      <Text style={styles.sectionTitle}>Attendance by student</Text>
+      <Table
+        head={['Student', 'Present', 'Late', 'Absent', 'Excused', 'Rate']}
+        rows={summaryRows}
+        emptyText="No students are enrolled in this section."
+      />
+
+      <Text style={styles.sectionTitle}>Shifts</Text>
+      <Table
+        head={['Shift', 'Marked', 'Present', 'Absent']}
+        rows={counted.map((shift) => {
+          const statuses = studentList
+            .map((s) => grid.get(s.id)?.get(shift.id))
+            .filter((v): v is ShiftAttendanceStatus => !!v);
+          const t = tallyAttendance(statuses);
+          return [
+            `${shift.label || shift.shift_type.toUpperCase()} · ${date(shift.starts_at)}`,
+            t.total - t.scheduled,
+            t.present + t.late,
+            t.absent,
+          ];
+        })}
+        emptyText="No shifts have been scheduled for this section."
+      />
+      <Text style={{ fontSize: 8, color: '#6b7280', marginTop: 6 }}>
+        Rate counts present and late as attended. Excused and unmarked shifts are excluded from
+        the rate rather than counted as absences. Cancelled shifts are omitted entirely.
+      </Text>
+    </ReportShell>
+  );
+
+  const csv = toCsvBlocks([
+    {
+      title: `Attendance — ${section.name}`,
+      head: ['Student', 'Present', 'Late', 'Absent', 'Excused', 'Rate'],
+      rows: summaryRows as CsvCell[][],
+    },
+    {
+      title: 'Shift grid (P present, L late, A absent, E excused, - unmarked)',
+      head: ['Student', ...counted.map((s) => `${s.label || s.shift_type.toUpperCase()} ${date(s.starts_at)}`)],
+      rows: studentList.map((student) => [
+        student.name,
+        ...counted.map((shift) => {
+          const status = grid.get(student.id)?.get(shift.id);
+          return status ? SHORT[status] : '';
+        }),
+      ]) as CsvCell[][],
+    },
+  ]);
+
+  return { subject: section.name, pdf, csv };
 }

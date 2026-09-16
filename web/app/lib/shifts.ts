@@ -194,3 +194,62 @@ export function shiftTitle(shift: {
   if (shift.room) parts.push(`${shift.room.name} ${shift.room.room_number}`.trim());
   return parts.join(' · ');
 }
+
+/**
+ * Expands a calendar date plus a standard rotation into a concrete window.
+ *
+ * Built from local date parts rather than by parsing an ISO string, so the
+ * window lands on the ward's clock rather than UTC — a 22:00 night shift
+ * scheduled in Manila must start at 22:00 there, not at 06:00 the next day.
+ * `night` ends the following morning, which `presetEndsNextDay` reports.
+ */
+export function shiftWindowFromPreset(
+  /** `YYYY-MM-DD`, as produced by a date input. */
+  date: string,
+  type: Exclude<ShiftType, 'custom'>,
+): { starts_at: string; ends_at: string } | null {
+  const [y, m, d] = date.split('-').map(Number);
+  if (!y || !m || !d) return null;
+
+  const { start, end } = SHIFT_TYPE_PRESETS[type];
+  const [sh, sm] = start.split(':').map(Number);
+  const [eh, em] = end.split(':').map(Number);
+
+  const startsAt = new Date(y, m - 1, d, sh, sm, 0, 0);
+  const endsAt = new Date(y, m - 1, d, eh, em, 0, 0);
+  if (presetEndsNextDay(type)) endsAt.setDate(endsAt.getDate() + 1);
+
+  return { starts_at: startsAt.toISOString(), ends_at: endsAt.toISOString() };
+}
+
+/** Tally of one roster's attendance, and the rate that follows from it. */
+export interface AttendanceTally {
+  scheduled: number;
+  present: number;
+  late: number;
+  absent: number;
+  excused: number;
+  total: number;
+  /**
+   * Share of *decided* attendance that was met, as a percentage, or null when
+   * nothing has been decided yet.
+   *
+   * Present and late both count as attended — a late nurse still worked the
+   * shift. Excused and still-scheduled rows are excluded from the denominator
+   * rather than counted as absences: an excused absence is not a failure to
+   * attend, and an unmarked future shift is not one either. Counting either
+   * would quietly depress every student's rate the moment a shift is created.
+   */
+  rate: number | null;
+}
+
+export function tallyAttendance(statuses: ShiftAttendanceStatus[]): AttendanceTally {
+  const tally: AttendanceTally = {
+    scheduled: 0, present: 0, late: 0, absent: 0, excused: 0, total: statuses.length, rate: null,
+  };
+  for (const status of statuses) tally[status]++;
+
+  const decided = tally.present + tally.late + tally.absent;
+  tally.rate = decided === 0 ? null : Math.round(((tally.present + tally.late) / decided) * 100);
+  return tally;
+}
