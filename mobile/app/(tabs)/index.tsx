@@ -82,30 +82,40 @@ const SURNAME_PARTICLES = new Set([
 /** Generational and credential suffixes; never part of the surname. */
 const NAME_SUFFIXES = new Set(["jr", "sr", "ii", "iii", "iv", "rn"]);
 
-function getSurname(fullName: string): string {
+/**
+ * Splits a stored roster name into the two parts the greeting uses. Both the
+ * faculty form and the CSV import write first, middle and last into one
+ * `name` string, so the middle name has to be dropped here.
+ */
+function splitName(fullName: string): { first: string; surname: string } {
   const parts = fullName.trim().split(/\s+/).filter(Boolean);
   const strip = (part: string) => part.toLowerCase().replace(/[.,]/g, "");
   while (parts.length > 1 && NAME_SUFFIXES.has(strip(parts[parts.length - 1]))) {
     parts.pop();
   }
-  if (parts.length === 0) return "";
+  if (parts.length === 0) return { first: "", surname: "" };
+  if (parts.length === 1) return { first: parts[0], surname: "" };
   // Walk back over particles, but never past the first token: a two-word name
   // is a first name and a surname, not a particle and a surname.
   let start = parts.length - 1;
   while (start > 1 && SURNAME_PARTICLES.has(strip(parts[start - 1]))) start -= 1;
-  return parts.slice(start).join(" ");
+  return { first: parts[0], surname: parts.slice(start).join(" ") };
 }
 
 /**
- * How the ward would address this student. Falls back to the full name when
- * sex is unrecorded, so nobody is ever greeted with a guessed honorific.
+ * How the ward would address this student: honorific, first name, surname —
+ * "Ms. Maria Dela Cruz" for a roster entry of "Maria Reyes Dela Cruz".
+ *
+ * The honorific appears only once sex is recorded, so nobody is ever greeted
+ * with a guessed one; the name still drops to first and last either way.
  */
 function getAddressedName(user: { name?: string; sex?: "male" | "female" | null } | null): string {
   const fullName = user?.name?.trim();
   if (!fullName) return "Student";
+  const { first, surname } = splitName(fullName);
+  const shortName = [first, surname].filter(Boolean).join(" ") || fullName;
   const title = getHonorific(user?.sex);
-  const surname = getSurname(fullName);
-  return title && surname ? `${title} ${surname}` : fullName;
+  return title ? `${title} ${shortName}` : shortName;
 }
 
 function getInitials(name?: string) {
@@ -241,7 +251,9 @@ export default function DashboardScreen() {
             <Text style={styles.dutyText}>ON DUTY · {getShiftLabel()}</Text>
           </View>
           <Text style={styles.greeting}>{getGreeting()},</Text>
-          <Text style={styles.name}>{getAddressedName(user)}</Text>
+          <Text style={styles.name} numberOfLines={2}>
+            {getAddressedName(user)}
+          </Text>
           <View style={styles.dateRow}>
             <FontAwesome6 name="calendar-day" size={11} color={Teal.primary} />
             <Text style={styles.dateText}>{dateStr}</Text>
