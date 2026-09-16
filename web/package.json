@@ -16,7 +16,8 @@
     "db:seed:basic-cases": "tsx scripts/seed-basic-cases.ts",
     "db:seed:scenario-quizzes": "tsx scripts/seed-scenario-quizzes.ts",
     "db:seed:student-history": "tsx scripts/seed-student-history.ts",
-    "db:seed:clinical-records": "tsx scripts/seed-clinical-records.ts"
+    "db:seed:clinical-records": "tsx scripts/seed-clinical-records.ts",
+    "db:seed:discharged": "tsx scripts/seed-discharged-patients.ts"
   },
   "dependencies": {
     "@fortawesome/fontawesome-svg-core": "^7.2.0",
