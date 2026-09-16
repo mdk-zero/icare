@@ -10,6 +10,7 @@ import {
   faUser,
   faEnvelope,
   faChevronDown,
+  faVenusMars,
   faLock,
   faEye,
   faEyeSlash,
@@ -18,7 +19,7 @@ import {
   faChartColumn,
   faHeart,
 } from "@fortawesome/free-solid-svg-icons";
-import { register, User } from "../lib/api";
+import { register, StudentSex, User } from "../lib/api";
 import logo_white from "../../public/logo-white-no-bg.png";
 
 export default function SignUpPage() {
@@ -28,6 +29,7 @@ export default function SignUpPage() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [role, setRole] = useState<User["role"]>("faculty");
+  const [sex, setSex] = useState<StudentSex>("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
@@ -56,7 +58,7 @@ export default function SignUpPage() {
     setIsLoading(true);
 
     try {
-      const result = await register(name, email, password, role);
+      const result = await register(name, email, password, role, sex);
       if (!result) {
         setError("Unable to create account. This email may already be in use.");
         setIsLoading(false);
@@ -251,6 +253,34 @@ export default function SignUpPage() {
                     <FontAwesomeIcon icon={faChevronDown} className="h-4 w-4 text-white/35" />
                   </div>
                 </div>
+              </div>
+
+              <div>
+                <label htmlFor="sex" className="block text-sm font-medium text-white/70 mb-1.5">
+                  Sex <span className="text-white/35">(optional)</span>
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <FontAwesomeIcon icon={faVenusMars} className="h-5 w-5 text-white/35" />
+                  </div>
+                  <select
+                    id="sex"
+                    value={sex}
+                    onChange={(e) => setSex(e.target.value as StudentSex)}
+                    className="w-full pl-11 pr-10 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#7DD3D8]/30 focus:border-[#7DD3D8]/50 transition-all appearance-none [&>option]:bg-[#0A4A4D] [&>option]:text-white"
+                  >
+                    <option value="">Not specified</option>
+                    <option value="female">Female (Ms.)</option>
+                    <option value="male">Male (Mr.)</option>
+                  </select>
+                  <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
+                    <FontAwesomeIcon icon={faChevronDown} className="h-4 w-4 text-white/35" />
+                  </div>
+                </div>
+                <p className="mt-1.5 text-xs text-white/40">
+                  Sets the Mr./Ms. the app greets you by. Leave it unspecified and it
+                  greets you by name alone.
+                </p>
               </div>
 
               <div>

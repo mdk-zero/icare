@@ -9,9 +9,17 @@ import {
   faGear,
   faCircleExclamation,
   faChevronRight,
+  faChevronDown,
+  faVenusMars,
 } from "@fortawesome/free-solid-svg-icons";
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
-import { getPendingGoogleProfile, registerGoogle, GooglePendingProfile, User } from "../../lib/api";
+import {
+  getPendingGoogleProfile,
+  registerGoogle,
+  GooglePendingProfile,
+  StudentSex,
+  User,
+} from "../../lib/api";
 import logo_white from "../../../public/logo-white-no-bg.png";
 
 const roles: {
@@ -37,6 +45,7 @@ const roles: {
 export default function SelectRolePage() {
   const router = useRouter();
   const [profile, setProfile] = useState<GooglePendingProfile | null>(null);
+  const [sex, setSex] = useState<StudentSex>("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -65,7 +74,7 @@ export default function SelectRolePage() {
     setIsSubmitting(true);
     setError("");
 
-    const result = await registerGoogle(role);
+    const result = await registerGoogle(role, sex);
     if (!result) {
       setIsSubmitting(false);
       setError("Unable to create your account. Please try again.");
@@ -167,6 +176,35 @@ export default function SelectRolePage() {
                 <span>{error}</span>
               </div>
             )}
+
+            <div className="mb-5">
+              <label htmlFor="sex" className="block text-sm font-medium text-white/70 mb-1.5">
+                Sex <span className="text-white/35">(optional)</span>
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                  <FontAwesomeIcon icon={faVenusMars} className="h-5 w-5 text-white/35" />
+                </div>
+                <select
+                  id="sex"
+                  value={sex}
+                  onChange={(e) => setSex(e.target.value as StudentSex)}
+                  disabled={isSubmitting}
+                  className="w-full pl-11 pr-10 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#7DD3D8]/30 focus:border-[#7DD3D8]/50 transition-all appearance-none disabled:opacity-60 [&>option]:bg-[#0A4A4D] [&>option]:text-white"
+                >
+                  <option value="">Not specified</option>
+                  <option value="female">Female (Ms.)</option>
+                  <option value="male">Male (Mr.)</option>
+                </select>
+                <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
+                  <FontAwesomeIcon icon={faChevronDown} className="h-4 w-4 text-white/35" />
+                </div>
+              </div>
+              <p className="mt-1.5 text-xs text-white/40">
+                Sets the Mr./Ms. the app greets you by. Choosing a role below creates
+                your account.
+              </p>
+            </div>
 
             <div className="space-y-3">
               {roles.map((role) => (

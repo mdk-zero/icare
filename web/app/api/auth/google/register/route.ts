@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { UserRole } from '@/app/lib/supabase/server';
-import { createGoogleUser, toPublicUser } from '@/app/lib/auth/user';
+import { createGoogleUser, parseSex, toPublicUser } from '@/app/lib/auth/user';
 import {
   clearGoogleOnboardingCookie,
   readGoogleOnboarding,
@@ -26,13 +26,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const { role } = body as { role?: unknown };
+  const { role, sex } = body as { role?: unknown; sex?: unknown };
   if (!VALID_ROLES.includes(role as UserRole)) {
     return NextResponse.json({ error: 'Invalid role' }, { status: 400 });
   }
 
+  const parsedSex = parseSex(sex);
+  if (parsedSex.error) {
+    return NextResponse.json({ error: parsedSex.error }, { status: 400 });
+  }
+
   try {
-    const user = await createGoogleUser(pending, role as UserRole);
+    const user = await createGoogleUser(pending, role as UserRole, parsedSex.sex ?? null);
     const publicUser = toPublicUser(user);
     const token = await signSession({
       uid: publicUser.id,

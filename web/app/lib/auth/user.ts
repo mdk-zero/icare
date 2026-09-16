@@ -111,6 +111,8 @@ export async function createGoogleUser(
     picture: string | null;
   },
   role: UserRole,
+  /** Google tells us nothing about this, so it is asked for alongside the role. */
+  sex: UserSex | null = null,
 ) {
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase
@@ -121,6 +123,7 @@ export async function createGoogleUser(
       name: profile.name,
       picture_url: profile.picture,
       role,
+      sex,
       last_login_at: new Date().toISOString(),
     })
     .select(USER_SELECT)

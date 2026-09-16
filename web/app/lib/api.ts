@@ -226,13 +226,14 @@ export async function getPendingGoogleProfile(): Promise<GooglePendingProfile | 
 
 export async function registerGoogle(
   role: User['role'],
+  sex: StudentSex = '',
 ): Promise<{ user: User; sessionToken: string } | null> {
   try {
     const res = await apiFetch('/api/auth/google/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({ role }),
+      body: JSON.stringify({ role, sex }),
     });
     if (!res.ok) return null;
     const { user, sessionToken } = (await res.json()) as {
