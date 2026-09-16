@@ -13,6 +13,7 @@ import {
   faUsers,
 } from "@fortawesome/free-solid-svg-icons";
 import Shell, { NavItem } from "../components/Shell";
+import { refreshCurrentUser } from "../lib/api";
 
 interface User {
   id: string;
@@ -53,17 +54,28 @@ export default function ClientAdminLayout({
   const pathname = usePathname();
   const [ready, setReady] = useState(false);
 
+  /**
+   * localStorage is only a mirror of the session cookie, and the two can
+   * disagree — clearing site data drops the mirror while the cookie survives.
+   * The proxy then lets the request through on the cookie while this sees
+   * nobody, and redirecting to /login on the mirror alone bounces off the
+   * proxy straight back here: a loop that renders nothing at all. So an empty
+   * mirror asks the server before concluding anyone is signed out, and
+   * refreshCurrentUser() repopulates it.
+   */
   useEffect(() => {
-    const currentUser = getCurrentUser();
-    if (!currentUser) {
-      router.push("/login");
-    } else if (currentUser.role === "student") {
-      router.push("/dashboard");
-    } else {
-      // Mark shell ready after client-side auth check.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setReady(true);
+    let cancelled = false;
+    async function gate() {
+      const user = getCurrentUser() ?? (await refreshCurrentUser());
+      if (cancelled) return;
+      if (!user) router.replace("/login");
+      else if (user.role === "student") router.replace("/dashboard");
+      else setReady(true);
     }
+    void gate();
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
   if (!ready) return null;

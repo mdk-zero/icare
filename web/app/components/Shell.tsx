@@ -192,16 +192,12 @@ export default function Shell({ role, navItems, isActive, children }: ShellProps
   useEffect(() => {
     let mounted = true;
     async function init() {
-      const current = getCurrentUser();
-      if (!current) {
-        router.replace("/login");
-        return;
-      }
-
-      let fresh: User | null = current;
-      if (role === "student") {
-        fresh = await refreshCurrentUser();
-      }
+      // localStorage is only a mirror of the session cookie and the two can
+      // disagree; an empty mirror asks the server rather than assuming nobody
+      // is signed in, since the proxy would bounce that redirect back here.
+      const cached = getCurrentUser();
+      const fresh: User | null =
+        cached && role !== "student" ? cached : await refreshCurrentUser();
 
       if (!mounted) return;
       if (!fresh) {
