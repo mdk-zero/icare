@@ -1169,7 +1169,7 @@ export interface AuditLogInsert {
 export interface AnalyticsSummary {
   etl: { last_run_at: string | null; rows_loaded: Record<string, number> } | null;
   /** Sections represented in the current scope, with their student counts. */
-  sections: { id: string; name: string; students: number }[];
+  sections: { id: string; name: string; students: number; active_students: number }[];
   cohort: {
     total_students: number;
     submitted_attempts: number;
@@ -1202,6 +1202,18 @@ export interface AnalyticsSummary {
     notes_reviewed: number;
   };
   risk_distribution: Record<string, number>; // keys: 'safe' | 'at_risk'
+  /** Ranked by average submitted score, same section/date scope as everything else. */
+  top_students: {
+    student_key: string;
+    name: string;
+    section: string | null;
+    average_score: number;
+    attempts: number;
+  }[];
+  /** Whichever model most recently issued a risk label — pairs with the
+   * offline accuracy figure shipped in model-eval-snapshot.ts, since there is
+   * no ground-truth outcome column to score predictions against live. */
+  active_model: { kind: string | null; version: string | null } | null;
 }
 
 /** Trend granularity the server derived from the requested range. */
