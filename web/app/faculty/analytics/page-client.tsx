@@ -193,8 +193,9 @@ function TrendLineChart({
   data: { week_start: string; average_score: number; attempts: number }[];
   bucket: AnalyticsBucket;
 }) {
-  const W = 600;
-  const H = 220;
+  // Sized for the half-width column this sits in — see CompetencyBarChart.
+  const W = 460;
+  const H = 240;
   const padL = 32;
   const padR = 16;
   const padT = 16;
@@ -401,53 +402,6 @@ function SectionPicker({
 }
 
 /** Horizontal bars — the correct shape for comparing labelled magnitudes. */
-function HBars({
-  items,
-  max,
-  suffix = "",
-  tone = "brand",
-}: {
-  items: { key: string; label: string; value: number; icon?: IconDefinition }[];
-  max: number;
-  suffix?: string;
-  tone?: "brand" | "grade";
-}) {
-  const barColor = (v: number) => {
-    if (tone === "grade") {
-      if (v >= 75) return "bg-emerald-600";
-      if (v >= 50) return "bg-amber-600";
-      return "bg-rose-600";
-    }
-    return "bg-gradient-to-r from-brand-600 to-brand-500";
-  };
-  return (
-    <div className="space-y-4">
-      {items.map((item) => (
-        <div key={item.key} className="flex items-center gap-3">
-          <span className="flex w-36 shrink-0 items-center gap-2 text-sm text-gray-600 truncate">
-            {item.icon && (
-              <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-brand-600/10">
-                <FontAwesomeIcon icon={item.icon} className="w-3 h-3 text-brand-600 shrink-0" />
-              </span>
-            )}
-            <span className="truncate">{item.label}</span>
-          </span>
-          <div className="h-3 flex-1 rounded-full bg-gray-100 overflow-hidden ring-1 ring-gray-200/50">
-            <div
-              className={`h-full rounded-full transition-all duration-700 ease-out ${barColor(item.value)}`}
-              style={{ width: `${max > 0 ? Math.max((item.value / max) * 100, item.value > 0 ? 4 : 0) : 0}%` }}
-            />
-          </div>
-          <span className="w-14 shrink-0 text-right text-sm font-bold text-gray-800 tabular-nums">
-            {item.value}
-            {suffix}
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 /** Smallest "nice" round number at or above `roughStep` — 1/2/5/10 scaled by
  * magnitude — so evenly-spaced gridlines land on whole numbers (0,1,2,3
  * instead of 0,1,3,4 from naively quartering an arbitrary ceiling). */
@@ -550,6 +504,136 @@ function SectionBarChart({
             >
               {s.name.length > 10 ? `${s.name.slice(0, 9)}…` : s.name}
             </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+/**
+ * Wraps a label into at most two lines, breaking on words. SVG has no text
+ * wrapping of its own, and competency names run long enough ("Safe and
+ * Quality Nursing Care") that a single truncated line says nothing.
+ */
+function wrapLabel(label: string, perLine = 14, maxLines = 2): string[] {
+  const lines: string[] = [];
+  let current = "";
+  for (const word of label.split(" ")) {
+    const candidate = current ? `${current} ${word}` : word;
+    if (candidate.length <= perLine) {
+      current = candidate;
+      continue;
+    }
+    if (current) lines.push(current);
+    current = word;
+    if (lines.length === maxLines) break;
+  }
+  if (current && lines.length < maxLines) lines.push(current);
+  if (lines.length === maxLines && current && lines[maxLines - 1] !== current) {
+    lines[maxLines - 1] = `${lines[maxLines - 1].slice(0, perLine - 1)}…`;
+  }
+  return lines;
+}
+
+/**
+ * Vertical bar chart — one bar per competency, height for its average score.
+ *
+ * Replaces the inline progress bars this panel used to draw. The axis is
+ * pinned to 0–100 rather than scaled to the highest score: these are
+ * percentages, and letting the best competency fill the plot would make 60%
+ * read as mastery. Colours are the same grade thresholds the rest of the
+ * page uses, so a red bar means the same thing here as anywhere else.
+ */
+function CompetencyBarChart({
+  items,
+}: {
+  items: { key: string; label: string; value: number }[];
+}) {
+  // The card is half the page wide, and a viewBox scales its text along with
+  // the box: at 640 the labels rendered around 5px. Narrower box, same fonts.
+  const W = 460;
+  const H = 300;
+  const padL = 36;
+  const padR = 12;
+  const padT = 24;
+  const padB = 60;
+  const plotW = W - padL - padR;
+  const plotH = H - padT - padB;
+  const n = items.length;
+
+  const ticks = [0, 25, 50, 75, 100];
+  const y = (v: number) => padT + (1 - v / 100) * plotH;
+
+  const barGap = n > 6 ? 12 : 24;
+  const barW = Math.min(56, (plotW - barGap * Math.max(n - 1, 0)) / Math.max(n, 1));
+  const rowW = barW * n + barGap * Math.max(n - 1, 0);
+  const startX = padL + Math.max(0, (plotW - rowW) / 2);
+
+  const fillFor = (v: number) => {
+    if (v >= 75) return "fill-emerald-600";
+    if (v >= 50) return "fill-amber-600";
+    return "fill-rose-600";
+  };
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full overflow-visible">
+      {ticks.map((t) => (
+        <g key={t}>
+          <line
+            x1={padL}
+            y1={y(t)}
+            x2={W - padR}
+            y2={y(t)}
+            className="stroke-gray-200"
+            strokeWidth="1"
+            strokeDasharray="3 3"
+          />
+          <text x={padL - 8} y={y(t) + 3} textAnchor="end" fontSize="10" className="fill-gray-400 tabular-nums">
+            {t}
+          </text>
+        </g>
+      ))}
+
+      {items.map((item, i) => {
+        const x = startX + i * (barW + barGap);
+        const barY = y(item.value);
+        return (
+          <g key={item.key}>
+            {/* Faint full-height track, the same device the other bars on
+                this page use to show the distance left to 100%. */}
+            <rect x={x} y={padT} width={barW} height={plotH} rx={6} className="fill-gray-100" />
+            <rect
+              x={x}
+              y={barY}
+              width={barW}
+              height={Math.max(0, padT + plotH - barY)}
+              rx={6}
+              className={`${fillFor(item.value)} transition-all duration-700 ease-out`}
+            >
+              <title>{`${item.label}: ${item.value}%`}</title>
+            </rect>
+            <text
+              x={x + barW / 2}
+              y={barY - 6}
+              textAnchor="middle"
+              fontSize="11"
+              className="fill-gray-700 font-semibold tabular-nums"
+            >
+              {item.value}%
+            </text>
+            {wrapLabel(item.label).map((line, li) => (
+              <text
+                key={line + li}
+                x={x + barW / 2}
+                y={H - padB + 16 + li * 12}
+                textAnchor="middle"
+                fontSize="10"
+                className="fill-gray-400"
+              >
+                {line}
+              </text>
+            ))}
           </g>
         );
       })}
@@ -1208,57 +1292,56 @@ export default function FacultyAnalyticsClient() {
           </Card>
         </div>
 
-        <Card padding="md" className="mb-4 flex flex-col">
-          <div className="flex items-center justify-between mb-5">
-            <div className="flex items-center gap-2.5">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4 items-stretch">
+          <Card padding="md" className="flex flex-col">
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center gap-2.5">
+                <div className="rounded-lg bg-brand-600/10 p-1.5">
+                  <FontAwesomeIcon icon={faChartBar} className="h-3.5 w-3.5 text-brand-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-900">Classroom Performance Overview</h3>
+                  <p className="text-xs text-gray-400">Line chart — average quiz score over time</p>
+                </div>
+              </div>
+              <span className="font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-slate-400">
+                {BUCKET_LABEL[bucket]}
+              </span>
+            </div>
+            <div className="flex-1 flex flex-col justify-center">
+              {trend.length === 0 ? (
+                <p className="text-gray-400 text-sm py-16 text-center">
+                  No submitted attempts in {formatRange(from, to)}.
+                </p>
+              ) : (
+                <TrendLineChart data={trend} bucket={bucket} />
+              )}
+            </div>
+          </Card>
+
+          <Card padding="md" className="flex flex-col">
+            <div className="flex items-center gap-2.5 mb-5">
               <div className="rounded-lg bg-brand-600/10 p-1.5">
-                <FontAwesomeIcon icon={faChartBar} className="h-3.5 w-3.5 text-brand-600" />
+                <FontAwesomeIcon icon={faLayerGroup} className="h-3.5 w-3.5 text-brand-600" />
               </div>
               <div>
-                <h3 className="font-semibold text-gray-900">Classroom Performance Overview</h3>
-                <p className="text-xs text-gray-400">Line chart — average quiz score over time</p>
+                <h3 className="font-semibold text-gray-900">Performance per Competency</h3>
+                <p className="text-xs text-gray-400">Bar chart — average score by competency</p>
               </div>
             </div>
-            <span className="font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-slate-400">
-              {BUCKET_LABEL[bucket]}
-            </span>
-          </div>
-          <div className="flex-1 flex flex-col justify-center">
-            {trend.length === 0 ? (
-              <p className="text-gray-400 text-sm py-16 text-center">
-                No submitted attempts in {formatRange(from, to)}.
-              </p>
-            ) : (
-              <TrendLineChart data={trend} bucket={bucket} />
-            )}
-          </div>
-        </Card>
-
-        <Card padding="md" className="mb-4 flex flex-col">
-          <div className="flex items-center gap-2.5 mb-5">
-            <div className="rounded-lg bg-brand-600/10 p-1.5">
-              <FontAwesomeIcon icon={faLayerGroup} className="h-3.5 w-3.5 text-brand-600" />
+            <div className="flex-1 flex flex-col justify-center">
+              {competencies.length === 0 ? (
+                <p className="text-gray-400 text-sm py-12 text-center">
+                  No validated competency scores yet — record them from each student&apos;s profile.
+                </p>
+              ) : (
+                <CompetencyBarChart
+                  items={competencies.map(([name, value]) => ({ key: name, label: name, value }))}
+                />
+              )}
             </div>
-            <div>
-              <h3 className="font-semibold text-gray-900">Performance per Competency</h3>
-              <p className="text-xs text-gray-400">Bar chart — average score by competency</p>
-            </div>
-          </div>
-          <div className="flex-1 flex flex-col justify-center">
-            {competencies.length === 0 ? (
-              <p className="text-gray-400 text-sm py-12 text-center">
-                No validated competency scores yet — record them from each student&apos;s profile.
-              </p>
-            ) : (
-              <HBars
-                items={competencies.map(([name, value]) => ({ key: name, label: name, value }))}
-                max={100}
-                suffix="%"
-                tone="grade"
-              />
-            )}
-          </div>
-        </Card>
+          </Card>
+        </div>
       </div>
 
       {summary?.etl?.last_run_at && (
