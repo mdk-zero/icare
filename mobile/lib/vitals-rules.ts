@@ -20,6 +20,17 @@ export interface AnomalyReason {
   value: number;
   severity: AnomalySeverity;
   message: string;
+  /**
+   * The nursing action the reading calls for, authored server-side next to the
+   * thresholds (web: app/lib/vitals/rules.ts).
+   *
+   * Absent from readings this file flags locally: offline evaluation is a
+   * provisional preview, and the server re-evaluates on sync and stores the
+   * authoritative reasons. Duplicating the advice text here would double the
+   * drift surface this file already carries for the thresholds, so the UI
+   * simply omits the line until the reading has synced.
+   */
+  recommendation?: string;
 }
 
 export interface VitalRule {

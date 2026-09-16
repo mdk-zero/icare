@@ -35,6 +35,7 @@ import {
   VitalReading,
 } from "../lib/api";
 import { usePageData } from "../lib/use-page-data";
+import { summarizeAnomalyReasons } from "../lib/vitals/rules";
 
 /**
  * One patient's chart: demographics, the vitals trend, TPR/IVF/notes, and the
@@ -352,6 +353,19 @@ export default function PatientChart({
   }, [chart, tab]);
 
   const flaggedCount = chart?.vitals.filter((r) => r.is_anomaly).length ?? 0;
+
+  // The most recent flagged readings, with their stored reasons parsed back
+  // out of JSONB. Capped because this sits above the trend, and an unreviewed
+  // patient can accumulate a long tail of them.
+  const flagged = useMemo(
+    () =>
+      (chart?.vitals ?? [])
+        .filter((r) => r.is_anomaly)
+        .slice(0, 3)
+        .map((reading) => ({ reading, reasons: summarizeAnomalyReasons(reading.anomaly_reasons) }))
+        .filter(({ reasons }) => reasons.all.length > 0),
+    [chart],
+  );
   const unreviewedNotes = chart?.notes.filter((n) => !n.reviewed_at).length ?? 0;
   const activeIvf = chart?.ivf.filter((r) => r.status === "ongoing").length ?? 0;
 
@@ -448,6 +462,51 @@ export default function PatientChart({
                 )}
               </div>
             </div>
+
+            {flagged.length > 0 && (
+              <div className="mb-3 space-y-2">
+                {flagged.map(({ reading, reasons }) => (
+                  <div
+                    key={reading.id}
+                    className={`rounded-xl border p-3 ${
+                      reasons.critical
+                        ? "border-rose-200 bg-rose-50/60"
+                        : "border-amber-200 bg-amber-50/60"
+                    }`}
+                  >
+                    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                      <span
+                        className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                          reasons.critical
+                            ? "bg-rose-600 text-white"
+                            : "bg-amber-500 text-white"
+                        }`}
+                      >
+                        <FontAwesomeIcon icon={faTriangleExclamation} className="h-2.5 w-2.5" />
+                        {reasons.critical ? "Critical" : "Out of range"}
+                      </span>
+                      <span className="text-xs text-gray-600">
+                        {formatDate(reading.recorded_at)}
+                        {reading.users?.name ? ` · ${reading.users.name}` : ""}
+                      </span>
+                    </div>
+                    <ul className="mt-1.5 space-y-1.5">
+                      {reasons.all.map((reason, i) => (
+                        <li key={`${reading.id}-${i}`}>
+                          <p className="text-sm font-medium text-gray-900">{reason.message}</p>
+                          {reason.recommendation && (
+                            <p className="mt-0.5 text-xs leading-relaxed text-gray-700">
+                              <span className="font-semibold">Recommended: </span>
+                              {reason.recommendation}
+                            </p>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            )}
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {VITAL_SPECS.map((spec) => (

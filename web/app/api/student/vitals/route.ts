@@ -2,7 +2,12 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { logAudit } from '@/app/lib/audit';
-import { evaluateVitals, VITAL_RULES, type VitalSignsInput } from '@/app/lib/vitals/rules';
+import {
+  evaluateVitals,
+  VITAL_RULES,
+  type AnomalyReason,
+  type VitalSignsInput,
+} from '@/app/lib/vitals/rules';
 import { isPatientAssigned } from '@/app/lib/assigned-patients';
 import { autoCompleteScenarioTasks } from '@/app/lib/scenario-tasks';
 
@@ -147,7 +152,7 @@ export async function POST(request: NextRequest) {
     );
 
     if (evaluation.is_anomaly) {
-      await notifyRosterFaculty(session.uid, patient.name, reading.id, patient_id, evaluation.reasons.length);
+      await notifyRosterFaculty(session.uid, patient.name, reading.id, patient_id, evaluation.reasons);
     }
 
     // Recording vitals auto-checks the scenario's system 'vitals' task.
@@ -173,7 +178,7 @@ async function notifyRosterFaculty(
   patientName: string,
   readingId: string,
   patientId: string,
-  reasonCount: number,
+  reasons: AnomalyReason[],
 ): Promise<void> {
   try {
     const supabase = getSupabaseAdmin();
@@ -192,12 +197,35 @@ async function notifyRosterFaculty(
     if (!roster || roster.length === 0) return;
 
     const studentName = student?.name ?? 'A student';
+
+    // A bare count ("2 out-of-range vitals") told faculty nothing actionable.
+    // Lead with the most severe finding and carry its recommendation, so the
+    // notification says what happened and what the student should do about it.
+    const critical = reasons.some((r) => r.severity === 'critical');
+    const top = reasons.find((r) => r.severity === 'critical') ?? reasons[0];
+    const others = reasons.length - 1;
+    const headline = top
+      ? `${top.message}${others > 0 ? ` (+${others} more)` : ''}`
+      : `${reasons.length} out-of-range vitals`;
+
     const rows = roster.map(({ faculty_id }) => ({
       user_id: faculty_id,
       type: 'vitals_anomaly',
-      title: 'Anomalous vital signs recorded',
-      body: `${studentName} recorded ${reasonCount} out-of-range vital${reasonCount === 1 ? '' : 's'} for ${patientName}`,
-      data: { reading_id: readingId, patient_id: patientId, student_id: studentId },
+      title: critical
+        ? `Critical vitals recorded for ${patientName}`
+        : `Anomalous vitals recorded for ${patientName}`,
+      body: `${studentName}: ${headline}.${top?.recommendation ? ` Advised: ${top.recommendation}` : ''}`,
+      data: {
+        reading_id: readingId,
+        patient_id: patientId,
+        student_id: studentId,
+        critical,
+        reasons: reasons.map((r) => ({
+          message: r.message,
+          severity: r.severity,
+          recommendation: r.recommendation ?? null,
+        })),
+      },
     }));
 
     const { error } = await supabase.from('notifications').insert(rows);

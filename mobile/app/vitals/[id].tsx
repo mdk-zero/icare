@@ -151,7 +151,12 @@ export default function VitalDetailScreen() {
       setPainScore('');
       setNotes('');
 
-      const anomalyDetail = result.anomaly_reasons.map((r) => `• ${r.message}`).join('\n');
+      // The moment right after charting is the teaching one, so the advice goes
+      // in the alert beside the finding. Queued readings carry no advice yet
+      // (the server attaches it on sync), and fall back to the finding alone.
+      const anomalyDetail = result.anomaly_reasons
+        .map((r) => `• ${r.message}${r.recommendation ? `\n   ${r.recommendation}` : ''}`)
+        .join('\n');
       if (result.queued) {
         Alert.alert(
           result.is_anomaly ? 'Queued — Anomaly Flagged' : 'Saved Offline',
@@ -350,7 +355,14 @@ export default function VitalDetailScreen() {
                 <View style={styles.anomalyContent}>
                   <Text style={styles.anomalyTitle}>Anomaly Detected</Text>
                   {latest.anomaly_reasons.map((reason, idx) => (
-                    <Text key={idx} style={styles.anomalyDesc}>{reason.message}</Text>
+                    <View key={idx}>
+                      <Text style={styles.anomalyDesc}>{reason.message}</Text>
+                      {/* Absent on a reading still queued offline — the server
+                          attaches the advice when it re-evaluates on sync. */}
+                      {reason.recommendation ? (
+                        <Text style={styles.anomalyAdvice}>{reason.recommendation}</Text>
+                      ) : null}
+                    </View>
                   ))}
                 </View>
               </View>
@@ -600,6 +612,14 @@ function createStyles(
   anomalyDesc: {
     fontSize: 11,
     color: Accent.red.fg,
+    marginTop: 2,
+  },
+  // Recessive against the finding above it: the abnormal value is the alert,
+  // the advice is what to do next.
+  anomalyAdvice: {
+    fontSize: 11,
+    lineHeight: 16,
+    color: Palette.textMuted,
     marginTop: 2,
   },
   timestampRow: {

@@ -1,4 +1,5 @@
 import type { getSupabaseAdmin } from './supabase/server';
+import { summarizeAnomalyReasons } from './vitals/rules';
 import type { SessionPayload } from './auth/session';
 import { getFacultySectionIds } from './roster';
 
@@ -202,16 +203,19 @@ export async function buildFacultyAlerts(
   }
 
   for (const row of anomalies.data ?? []) {
-    const reasons = Array.isArray(row.anomaly_reasons) ? row.anomaly_reasons : [];
+    // Stored as JSONB objects, so String(reason) yields "[object Object]" —
+    // read the message off each one, and keep the recommendation for the alert
+    // so faculty see the advised action, not just the abnormal number.
+    const reasons = summarizeAnomalyReasons(row.anomaly_reasons);
     alerts.push({
       id: `vitals-${row.id}`,
       student_id: row.recorded_by,
       student_name: nameOf.get(row.recorded_by) ?? 'Unknown student',
       alert_type: 'Vitals Anomaly',
-      severity: 'medium',
-      description: reasons.length > 0
-        ? `Out-of-range vitals recorded: ${reasons.map(String).join(', ')}.`
-        : 'Out-of-range vitals recorded.',
+      // A critical reading outranks a merely out-of-range one; flattening both
+      // to "medium" hid the readings that actually needed attention first.
+      severity: reasons.critical ? 'high' : 'medium',
+      description: reasons.text || 'Out-of-range vitals recorded.',
       status: 'pending',
       created_at: row.recorded_at,
     });
