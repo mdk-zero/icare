@@ -73,8 +73,7 @@ interface DraftRow {
 }
 
 /** Provisioned rows must not be re-sent: the account exists, so a retry 409s. */
-const isProvisioned = (status: DraftRow["status"]) =>
-  status === "created" || status === "no-email";
+const isProvisioned = (status: DraftRow["status"]) => status === "created" || status === "no-email";
 
 /** The account was made; `warning` is set when the invitation did not go out. */
 type EnrollOutcome = { ok: true; warning?: string } | { ok: false; error: string };
@@ -123,7 +122,8 @@ function EnrollSectionModal({
     const seen = new Set<string>();
     for (const row of filled) {
       if (!row.name.trim()) return "Every student needs a name.";
-      if (!EMAIL_REGEX.test(row.email.trim())) return `"${row.email.trim() || "(blank)"}" is not a valid email.`;
+      if (!EMAIL_REGEX.test(row.email.trim()))
+        return `"${row.email.trim() || "(blank)"}" is not a valid email.`;
       const email = row.email.trim().toLowerCase();
       if (seen.has(email)) return `${email} appears twice in this batch.`;
       seen.add(email);
@@ -202,7 +202,10 @@ function EnrollSectionModal({
 
         <form onSubmit={handleSubmit} className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
           <div>
-            <label htmlFor="enroll-section" className="mb-1.5 block text-sm font-semibold text-gray-700">
+            <label
+              htmlFor="enroll-section"
+              className="mb-1.5 block text-sm font-semibold text-gray-700"
+            >
               Section <span className="text-rose-500">*</span>
             </label>
             <select
@@ -260,10 +263,17 @@ function EnrollSectionModal({
                   />
                   <span className="mt-2 flex w-5 shrink-0 justify-center">
                     {row.status === "creating" && (
-                      <FontAwesomeIcon icon={faSpinner} spin className="h-3.5 w-3.5 text-brand-600" />
+                      <FontAwesomeIcon
+                        icon={faSpinner}
+                        spin
+                        className="h-3.5 w-3.5 text-brand-600"
+                      />
                     )}
                     {row.status === "created" && (
-                      <FontAwesomeIcon icon={faCircleCheck} className="h-3.5 w-3.5 text-emerald-600" />
+                      <FontAwesomeIcon
+                        icon={faCircleCheck}
+                        className="h-3.5 w-3.5 text-emerald-600"
+                      />
                     )}
                     {row.status === "no-email" && (
                       <FontAwesomeIcon
@@ -311,8 +321,8 @@ function EnrollSectionModal({
             {rows.some((r) => r.status === "no-email") && (
               <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
                 <p className="text-xs font-medium text-amber-800">
-                  Enrolled, but the invitation email did not go out. Share the temporary
-                  password below with these students yourself:
+                  Enrolled, but the invitation email did not go out. Share the temporary password
+                  below with these students yourself:
                 </p>
                 <ul className="mt-1 space-y-1">
                   {rows
@@ -403,9 +413,7 @@ function SectionFormModal({
   const trimmed = name.trim();
   const isDuplicate =
     trimmed.length > 0 &&
-    existingNames.some(
-      (n) => n.toLowerCase() === trimmed.toLowerCase() && n !== section?.name,
-    );
+    existingNames.some((n) => n.toLowerCase() === trimmed.toLowerCase() && n !== section?.name);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -420,15 +428,12 @@ function SectionFormModal({
     setSaving(true);
     setError(null);
 
-    const res = await fetch(
-      section ? `/api/admin/sections/${section.id}` : "/api/admin/sections",
-      {
-        method: section ? "PATCH" : "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ name: trimmed }),
-      },
-    );
+    const res = await fetch(section ? `/api/admin/sections/${section.id}` : "/api/admin/sections", {
+      method: section ? "PATCH" : "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ name: trimmed }),
+    });
     const json = (await res.json()) as {
       section?: Section;
       assessments_retargeted?: number;
@@ -476,7 +481,9 @@ function SectionFormModal({
                 {section ? "Rename section" : "New section"}
               </h2>
               <p className="text-sm text-gray-500">
-                {section ? `Currently “${section.name}”` : "Sections group students and their faculty"}
+                {section
+                  ? `Currently “${section.name}”`
+                  : "Sections group students and their faculty"}
               </p>
             </div>
           </div>
@@ -492,7 +499,10 @@ function SectionFormModal({
 
         <form onSubmit={handleSubmit} className="space-y-3 p-5">
           <div>
-            <label htmlFor="section-name" className="mb-1.5 block text-sm font-semibold text-gray-700">
+            <label
+              htmlFor="section-name"
+              className="mb-1.5 block text-sm font-semibold text-gray-700"
+            >
               Section name <span className="text-rose-500">*</span>
             </label>
             <input
@@ -598,9 +608,7 @@ function DeleteSectionModal({
     const freed = json.unassigned_students ?? 0;
     onDeleted(
       `Section "${section.name}" deleted` +
-        (freed > 0
-          ? ` — ${freed} student${freed === 1 ? " is" : "s are"} now unassigned.`
-          : "."),
+        (freed > 0 ? ` — ${freed} student${freed === 1 ? " is" : "s are"} now unassigned.` : "."),
     );
   };
 
@@ -634,7 +642,10 @@ function DeleteSectionModal({
           ) : (
             <ul className="space-y-2 text-sm text-gray-700">
               <li className="flex items-start gap-2.5">
-                <FontAwesomeIcon icon={faUsers} className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gray-400" />
+                <FontAwesomeIcon
+                  icon={faUsers}
+                  className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gray-400"
+                />
                 <span>
                   {impact.student_count === 0 ? (
                     "No students are enrolled here."
@@ -750,7 +761,8 @@ export default function StudentManagementClient() {
       fetchSections(),
     ]);
     const students = studentsRes.ok
-      ? ((await studentsRes.json()) as { students?: StudentPerformance[] }).students ?? NO_STUDENTS
+      ? (((await studentsRes.json()) as { students?: StudentPerformance[] }).students ??
+        NO_STUDENTS)
       : NO_STUDENTS;
     return { students, sections };
   });
@@ -824,7 +836,8 @@ export default function StudentManagementClient() {
         warning?: string;
         error?: string;
       };
-      if (!res.ok || !json.user) return { ok: false, error: json.error ?? "Failed to enroll student" };
+      if (!res.ok || !json.user)
+        return { ok: false, error: json.error ?? "Failed to enroll student" };
       if (json.password) {
         setPasswords((prev) => [...prev, { email: json.user!.email, password: json.password! }]);
       }
@@ -839,7 +852,8 @@ export default function StudentManagementClient() {
   const filteredStudents = useMemo(() => {
     const q = searchQuery.toLowerCase();
     return students.filter((s) => {
-      const matchesSearch = !q || s.name.toLowerCase().includes(q) || s.email.toLowerCase().includes(q);
+      const matchesSearch =
+        !q || s.name.toLowerCase().includes(q) || s.email.toLowerCase().includes(q);
       const matchesFilter =
         filterStatus === "all" ||
         (filterStatus === "at-risk" && s.at_risk) ||
@@ -946,7 +960,7 @@ export default function StudentManagementClient() {
             />
           ),
           onClick: handleRunMl,
-          text: runningMl ? "Running…" : "Run ML Jobs",
+          text: runningMl ? "Running…" : "",
           disabled: runningMl,
           label: runningMl
             ? "Running ML jobs…"
@@ -982,8 +996,8 @@ export default function StudentManagementClient() {
         <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           <div className="mb-2 flex items-center justify-between gap-4">
             <p className="font-semibold">
-              Temporary passwords ({passwords.length}) — invitation emails were attempted; keep these
-              as backup.
+              Temporary passwords ({passwords.length}) — invitation emails were attempted; keep
+              these as backup.
             </p>
             <button
               onClick={() => setPasswords([])}
@@ -1093,7 +1107,9 @@ export default function StudentManagementClient() {
                   <div className="flex min-w-0 items-center gap-3">
                     <span
                       className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${
-                        isUnassigned ? "bg-gray-100 text-gray-500" : "bg-brand-600/10 text-brand-600"
+                        isUnassigned
+                          ? "bg-gray-100 text-gray-500"
+                          : "bg-brand-600/10 text-brand-600"
                       }`}
                     >
                       <FontAwesomeIcon icon={faLayerGroup} className="h-5 w-5" />
@@ -1109,7 +1125,9 @@ export default function StudentManagementClient() {
                   {!isUnassigned && (
                     <div className="relative z-10 flex shrink-0 items-center gap-0.5">
                       <button
-                        onClick={() => setSectionForm({ section: { id: group.key, name: group.name } })}
+                        onClick={() =>
+                          setSectionForm({ section: { id: group.key, name: group.name } })
+                        }
                         aria-label={`Rename section ${group.name}`}
                         title="Rename"
                         className="rounded-lg p-2 text-gray-300 transition-colors hover:bg-brand-600/10 hover:text-brand-600"
@@ -1185,7 +1203,9 @@ export default function StudentManagementClient() {
               <FontAwesomeIcon icon={faArrowLeft} className="h-3.5 w-3.5" />
               All sections
             </button>
-            <h2 className="font-display truncate text-lg font-bold text-gray-900">{openGroup.name}</h2>
+            <h2 className="font-display truncate text-lg font-bold text-gray-900">
+              {openGroup.name}
+            </h2>
             <span className="rounded-full border border-brand-600/20 bg-brand-600/10 px-2.5 py-1 text-xs font-medium text-brand-700">
               {openGroup.students.length} student{openGroup.students.length === 1 ? "" : "s"}
             </span>
@@ -1284,7 +1304,10 @@ export default function StudentManagementClient() {
                       }`}
                     >
                       {/* Ticking a box must not also open the student. */}
-                      <td className="px-4 py-4 sm:pl-6 sm:pr-0" onClick={(e) => e.stopPropagation()}>
+                      <td
+                        className="px-4 py-4 sm:pl-6 sm:pr-0"
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         <input
                           type="checkbox"
                           checked={selectedIds.has(student.id)}

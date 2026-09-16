@@ -7,7 +7,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import { SkeletonSidebar } from "./skeletons";
 import LiveClock from "./LiveClock";
-import { faBars, faBell, faRightFromBracket, faXmark } from "@fortawesome/free-solid-svg-icons";
+import { faBars, faRightFromBracket, faXmark } from "@fortawesome/free-solid-svg-icons";
 import {
   getCurrentUser,
   getDisplayAvatarUrl,
@@ -22,6 +22,7 @@ import {
   useNotifications,
 } from "../lib/notifications-live";
 import ToastContainer, { toast } from "./Toast";
+import NotificationsPopover from "./NotificationsPopover";
 import { onCacheClear } from "../lib/request-cache";
 
 export interface NavItem {
@@ -148,9 +149,10 @@ export default function Shell({ role, navItems, isActive, children }: ShellProps
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [isDesktop, setIsDesktop] = useState(true);
-  // Live feed: the badge tracks the SSE stream, so it moves the moment a
-  // notification is written rather than on the next page load.
-  const { unread: unreadCount } = useNotifications();
+  // Keeps the live stream open for every role so arrival toasts fire on pages
+  // that have no bell of their own (students, admins). The bell below reads the
+  // same store for its badge and preview.
+  useNotifications();
 
   const { logo, logoIsWordmark, portalLabel, mobileRoleLabel, profileHref, homeHref } =
     config[role];
@@ -356,21 +358,7 @@ export default function Shell({ role, navItems, isActive, children }: ShellProps
                 </span>
               </span>
             </Link>
-            {role === "faculty" && (
-              <Link
-                href="/faculty/notifications"
-                onClick={() => setSidebarOpen(false)}
-                aria-label="Notifications"
-                className="relative w-9 h-9 shrink-0 rounded-xl flex items-center justify-center bg-white/[0.05] ring-1 ring-white/10 text-white/65 hover:text-white hover:bg-white/[0.11] hover:ring-white/20 transition-all outline-none focus-visible:ring-2 focus-visible:ring-[#5eead4]/70"
-              >
-                <FontAwesomeIcon icon={faBell} className="w-3.5 h-3.5" />
-                {unreadCount > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 flex min-w-[16px] h-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white ring-2 ring-[#0b3d3d]">
-                    {unreadCount > 99 ? "99+" : unreadCount}
-                  </span>
-                )}
-              </Link>
-            )}
+            {role === "faculty" && <NotificationsPopover variant="sidebar" />}
           </div>
 
           {/* Navigation */}
@@ -593,17 +581,7 @@ export default function Shell({ role, navItems, isActive, children }: ShellProps
             </div>
             <div className="flex items-center gap-2">
               <LiveClock className="inline-flex items-center gap-1.5 font-mono text-xs font-semibold text-gray-600" />
-              {role === "faculty" && (
-                <Link
-                  href="/faculty/notifications"
-                  className="relative p-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
-                >
-                  <FontAwesomeIcon icon={faBell} className="w-5 h-5 text-gray-600" />
-                  {unreadCount > 0 && (
-                    <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-red-500 ring-2 ring-white" />
-                  )}
-                </Link>
-              )}
+              {role === "faculty" && <NotificationsPopover variant="topbar" />}
               <span className="px-2 py-1.5 bg-gradient-to-br from-[#0b3d3d] to-[#146464] text-white text-xs font-medium rounded-lg">
                 {mobileRoleLabel}
               </span>

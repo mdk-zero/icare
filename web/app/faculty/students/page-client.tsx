@@ -737,7 +737,7 @@ export default function FacultyStudentsClient() {
             />
           ),
           onClick: handleRunMl,
-          text: runningMl ? "Running…" : "Run ML Jobs",
+          text: runningMl ? "Running…" : "",
           disabled: runningMl || sections.length === 0,
           label: runningMl
             ? "Running ML jobs…"
@@ -1416,9 +1416,10 @@ export default function FacultyStudentsClient() {
                         <td className="py-1.5 pr-4">No</td>
                         <td className="py-1.5">
                           <span className="font-mono">male</span> or{" "}
-                          <span className="font-mono">female</span> (<span className="font-mono">M</span>/
-                          <span className="font-mono">F</span> also work). Sets the Mr./Ms. the mobile
-                          app greets the student with; blank leaves it unspecified
+                          <span className="font-mono">female</span> (
+                          <span className="font-mono">M</span>/<span className="font-mono">F</span>{" "}
+                          also work). Sets the Mr./Ms. the mobile app greets the student with; blank
+                          leaves it unspecified
                         </td>
                       </tr>
                       <tr>

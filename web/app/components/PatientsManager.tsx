@@ -82,12 +82,12 @@ const VITAL_TONE: Record<VitalState, string> = {
 function isCritical(patient: FacultyPatient): boolean {
   const v = patient.vital_signs;
   if (!v) return false;
-  return (
-    ["heart_rate", "temperature", "respiratory_rate", "oxygen_saturation"] as const
-  ).some((key) => {
-    const state = vitalState(v[key], key);
-    return state === "low" || state === "high";
-  });
+  return (["heart_rate", "temperature", "respiratory_rate", "oxygen_saturation"] as const).some(
+    (key) => {
+      const state = vitalState(v[key], key);
+      return state === "low" || state === "high";
+    },
+  );
 }
 
 /**
@@ -384,7 +384,11 @@ export default function PatientsManager() {
   // Fetched whole and filtered in the browser: grouping needs the unfiltered
   // roster to show each room's real size while a search is narrowing it.
   // Rooms populate the assignment dropdown in the add/edit form.
-  const { data, loading, refresh: loadPatients } = usePageData("patients-manager", async () => {
+  const {
+    data,
+    loading,
+    refresh: loadPatients,
+  } = usePageData("patients-manager", async () => {
     const [patients, rooms] = await Promise.all([fetchFacultyPatients(), fetchRooms()]);
     return { patients, rooms };
   });
@@ -410,7 +414,8 @@ export default function PatientsManager() {
     const result = {} as Record<FilterKey, Record<string, number>>;
     for (const key of FILTER_KEYS) {
       const base = patients.filter(
-        (p) => matchesSearch(p, query) && matchesRoom(p, roomQuery) && matchesFilters(p, filters, key),
+        (p) =>
+          matchesSearch(p, query) && matchesRoom(p, roomQuery) && matchesFilters(p, filters, key),
       );
       const tally: Record<string, number> = { all: base.length };
       for (const patient of base) {
@@ -454,8 +459,8 @@ export default function PatientsManager() {
       if (!group) {
         group = {
           key,
-          name: key === UNASSIGNED_KEY ? "Unassigned" : patient.room?.name ?? "Room",
-          roomNumber: key === UNASSIGNED_KEY ? "" : patient.room?.room_number ?? "",
+          name: key === UNASSIGNED_KEY ? "Unassigned" : (patient.room?.name ?? "Room"),
+          roomNumber: key === UNASSIGNED_KEY ? "" : (patient.room?.room_number ?? ""),
           patients: [],
           total: 0,
         };
@@ -632,10 +637,8 @@ export default function PatientsManager() {
     <div>
       <PageHeader
         badge={{
-          icon: (
-            <FontAwesomeIcon icon={faBuilding} className="w-3.5 h-3.5" />
-          ),
-          label: "MIMIC-IV Demo",
+          icon: <FontAwesomeIcon icon={faBuilding} className="w-3.5 h-3.5" />,
+          label: "Patient Management",
         }}
         title="Patient Records"
         subtitle="Browse patients by their assigned room, then open a room's census"
@@ -651,52 +654,52 @@ export default function PatientsManager() {
           </>
         ) : (
           <>
-        <StatTile
-          icon={<FontAwesomeIcon icon={faUsers} className="w-5 h-5" />}
-          value={patients.length}
-          label="Total Patients"
-          caption={`${roomGroups.length} room${roomGroups.length === 1 ? "" : "s"}`}
-          iconBg="bg-brand-600/10"
-          iconColor="text-brand-600"
-        />
-        <StatTile
-          icon={<FontAwesomeIcon icon={faTriangleExclamation} className="w-5 h-5" />}
-          value={rosterStatus.critical}
-          label="Critical Vitals"
-          caption="Outside reference range"
-          iconBg="bg-red-50"
-          iconColor="text-red-600"
-          onClick={() => toggleFilter("status", "critical")}
-          className={filters.status === "critical" ? "ring-2 ring-red-500/40" : ""}
-        />
-        <StatTile
-          icon={<FontAwesomeIcon icon={faHeartPulse} className="w-5 h-5" />}
-          value={rosterStatus.stable}
-          label="Stable"
-          caption={
-            rosterStatus.none > 0
-              ? `${rosterStatus.none} not yet recorded`
-              : "All readings in range"
-          }
-          iconBg="bg-emerald-50"
-          iconColor="text-emerald-600"
-          onClick={() => toggleFilter("status", "stable")}
-          className={filters.status === "stable" ? "ring-2 ring-emerald-500/40" : ""}
-        />
-        <StatTile
-          icon={<FontAwesomeIcon icon={faFlask} className="w-5 h-5" />}
-          value={labsOnFile}
-          label="Lab Results Available"
-          caption={
-            labsOnFile < patients.length
-              ? `${patients.length - labsOnFile} without labs`
-              : undefined
-          }
-          iconBg="bg-purple-50"
-          iconColor="text-purple-600"
-          onClick={() => toggleFilter("labs", "has")}
-          className={filters.labs === "has" ? "ring-2 ring-purple-500/40" : ""}
-        />
+            <StatTile
+              icon={<FontAwesomeIcon icon={faUsers} className="w-5 h-5" />}
+              value={patients.length}
+              label="Total Patients"
+              caption={`${roomGroups.length} room${roomGroups.length === 1 ? "" : "s"}`}
+              iconBg="bg-brand-600/10"
+              iconColor="text-brand-600"
+            />
+            <StatTile
+              icon={<FontAwesomeIcon icon={faTriangleExclamation} className="w-5 h-5" />}
+              value={rosterStatus.critical}
+              label="Critical Vitals"
+              caption="Outside reference range"
+              iconBg="bg-red-50"
+              iconColor="text-red-600"
+              onClick={() => toggleFilter("status", "critical")}
+              className={filters.status === "critical" ? "ring-2 ring-red-500/40" : ""}
+            />
+            <StatTile
+              icon={<FontAwesomeIcon icon={faHeartPulse} className="w-5 h-5" />}
+              value={rosterStatus.stable}
+              label="Stable"
+              caption={
+                rosterStatus.none > 0
+                  ? `${rosterStatus.none} not yet recorded`
+                  : "All readings in range"
+              }
+              iconBg="bg-emerald-50"
+              iconColor="text-emerald-600"
+              onClick={() => toggleFilter("status", "stable")}
+              className={filters.status === "stable" ? "ring-2 ring-emerald-500/40" : ""}
+            />
+            <StatTile
+              icon={<FontAwesomeIcon icon={faFlask} className="w-5 h-5" />}
+              value={labsOnFile}
+              label="Lab Results Available"
+              caption={
+                labsOnFile < patients.length
+                  ? `${patients.length - labsOnFile} without labs`
+                  : undefined
+              }
+              iconBg="bg-purple-50"
+              iconColor="text-purple-600"
+              onClick={() => toggleFilter("labs", "has")}
+              className={filters.labs === "has" ? "ring-2 ring-purple-500/40" : ""}
+            />
           </>
         )}
       </div>
@@ -798,7 +801,9 @@ export default function PatientsManager() {
                     <div className="flex items-center gap-3 min-w-0">
                       <div
                         className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${
-                          isUnassigned ? "bg-gray-100 text-gray-500" : "bg-brand-600/10 text-brand-600"
+                          isUnassigned
+                            ? "bg-gray-100 text-gray-500"
+                            : "bg-brand-600/10 text-brand-600"
                         }`}
                       >
                         <FontAwesomeIcon
@@ -957,14 +962,18 @@ export default function PatientsManager() {
                           <div className="flex items-center gap-3">
                             <div
                               className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold shrink-0 ${
-                                critical ? "bg-rose-50 text-rose-600" : "bg-brand-600/10 text-brand-600"
+                                critical
+                                  ? "bg-rose-50 text-rose-600"
+                                  : "bg-brand-600/10 text-brand-600"
                               }`}
                             >
                               {patient.name.charAt(0)}
                             </div>
                             <div className="min-w-0">
                               <div className="flex items-center gap-2">
-                                <p className="font-semibold text-gray-800 truncate">{patient.name}</p>
+                                <p className="font-semibold text-gray-800 truncate">
+                                  {patient.name}
+                                </p>
                                 {critical && (
                                   <span className="inline-flex items-center rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-rose-600">
                                     Critical
@@ -1010,7 +1019,10 @@ export default function PatientsManager() {
                               title="Delete patient"
                             >
                               {deletingId === patient.id ? (
-                                <FontAwesomeIcon icon={faSpinner} className="w-4 h-4 animate-spin" />
+                                <FontAwesomeIcon
+                                  icon={faSpinner}
+                                  className="w-4 h-4 animate-spin"
+                                />
                               ) : (
                                 <FontAwesomeIcon icon={faTrash} className="w-4 h-4" />
                               )}
@@ -1042,7 +1054,10 @@ export default function PatientsManager() {
             <div className="flex items-center justify-between p-4 border-b border-hairline bg-subtle">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-brand-600/10 rounded-lg flex items-center justify-center">
-                  <FontAwesomeIcon icon={editingPatient ? faPen : faPlus} className="text-brand-600 w-5 h-5" />
+                  <FontAwesomeIcon
+                    icon={editingPatient ? faPen : faPlus}
+                    className="text-brand-600 w-5 h-5"
+                  />
                 </div>
                 <div>
                   <h2 className="text-lg font-bold text-gray-900">
@@ -1061,204 +1076,192 @@ export default function PatientsManager() {
               </button>
             </div>
             <div className="overflow-y-auto flex-1 custom-scrollbar">
+              <form onSubmit={handleSubmit} className="p-4 space-y-4">
+                {error && (
+                  <div className="p-3 bg-red-50 text-red-700 text-sm rounded-lg">{error}</div>
+                )}
 
-            <form onSubmit={handleSubmit} className="p-4 space-y-4">
-              {error && (
-                <div className="p-3 bg-red-50 text-red-700 text-sm rounded-lg">{error}</div>
-              )}
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className={labelClassName}>
-                    Full Name
-                  </label>
-                  <input
-                    required
-                    type="text"
-                    placeholder="e.g. Juan Dela Cruz"
-                    value={form.name || ""}
-                    onChange={(e) => updateFormField("name", e.target.value)}
-                    className={inputClassName}
-                  />
-                </div>
-                <div>
-                  <label className={labelClassName}>Gender</label>
-                  <select
-                    required
-                    value={form.gender || ""}
-                    onChange={(e) => updateFormField("gender", e.target.value)}
-                    className={inputClassName}
-                  >
-                    <option value="">Select gender</option>
-                    <option value="M">Male</option>
-                    <option value="F">Female</option>
-                    <option value="U">Unknown</option>
-                  </select>
-                </div>
-                <div>
-                  <label className={labelClassName}>Age</label>
-                  <input
-                    required
-                    type="number"
-                    min={0}
-                    max={150}
-                    placeholder="e.g. 35"
-                    value={form.age ?? ""}
-                    onChange={(e) => updateFormField("age", e.target.value)}
-                    className={inputClassName}
-                  />
-                </div>
-                <div>
-                  <label className={labelClassName}>
-                    Room
-                  </label>
-                  <select
-                    value={form.room_id || ""}
-                    onChange={(e) => updateFormField("room_id", e.target.value)}
-                    className={inputClassName}
-                  >
-                    <option value="">No room assigned</option>
-                    {rooms.map((room) => {
-                      const occ = occupancyByRoom.get(room.id) ?? 0;
-                      const isCurrent = editingPatient?.room_id === room.id;
-                      const full = roomStatus(occ, room.capacity) === "full";
-                      return (
-                        <option key={room.id} value={room.id} disabled={full && !isCurrent}>
-                          {`${room.name} · Room ${room.room_number} (${occ}/${room.capacity})${full ? " — Full" : ""}`}
-                        </option>
-                      );
-                    })}
-                  </select>
-                  <p className="mt-1.5 text-xs text-gray-500">
-                    Links the patient to a room in the system. Full rooms can&apos;t be selected.
-                  </p>
-                </div>
-                <div className="sm:col-span-2">
-                  <label className={labelClassName}>
-                    Diagnosis
-                  </label>
-                  <input
-                    required
-                    type="text"
-                    placeholder="e.g. Community-acquired pneumonia"
-                    value={form.diagnosis || ""}
-                    onChange={(e) => updateFormField("diagnosis", e.target.value)}
-                    className={inputClassName}
-                  />
-                </div>
-                <div className="sm:col-span-2">
-                  <label className={labelClassName}>
-                    Admission Date
-                  </label>
-                  <input
-                    required
-                    type="datetime-local"
-                    value={form.admission_date || ""}
-                    onChange={(e) => updateFormField("admission_date", e.target.value)}
-                    className={inputClassName}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <h3 className="text-base font-bold text-gray-900 mb-4 flex items-center gap-2">
-                  <FontAwesomeIcon icon={faHeartPulse} className="w-4 h-4 text-red-500" />
-                  Vital Signs
-                </h3>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className={vitalLabelClassName}>
-                      Heart Rate (bpm)
-                    </label>
+                    <label className={labelClassName}>Full Name</label>
                     <input
-                      type="number"
-                      placeholder="e.g. 72"
-                      value={form.vital_signs?.heart_rate ?? ""}
-                      onChange={(e) => updateVitalField("heart_rate", e.target.value)}
-                      className={inputClassName}
-                    />
-                  </div>
-                  <div>
-                    <label className={vitalLabelClassName}>
-                      Blood Pressure
-                    </label>
-                    <input
+                      required
                       type="text"
-                      placeholder="e.g. 120/80"
-                      value={form.vital_signs?.blood_pressure || ""}
-                      onChange={(e) => updateVitalField("blood_pressure", e.target.value)}
+                      placeholder="e.g. Juan Dela Cruz"
+                      value={form.name || ""}
+                      onChange={(e) => updateFormField("name", e.target.value)}
                       className={inputClassName}
                     />
                   </div>
                   <div>
-                    <label className={vitalLabelClassName}>
-                      Temperature (°C)
-                    </label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      placeholder="e.g. 37.0"
-                      value={form.vital_signs?.temperature ?? ""}
-                      onChange={(e) => updateVitalField("temperature", e.target.value)}
+                    <label className={labelClassName}>Gender</label>
+                    <select
+                      required
+                      value={form.gender || ""}
+                      onChange={(e) => updateFormField("gender", e.target.value)}
                       className={inputClassName}
-                    />
+                    >
+                      <option value="">Select gender</option>
+                      <option value="M">Male</option>
+                      <option value="F">Female</option>
+                      <option value="U">Unknown</option>
+                    </select>
                   </div>
                   <div>
-                    <label className={vitalLabelClassName}>
-                      Respiratory Rate
-                    </label>
+                    <label className={labelClassName}>Age</label>
                     <input
-                      type="number"
-                      placeholder="e.g. 16"
-                      value={form.vital_signs?.respiratory_rate ?? ""}
-                      onChange={(e) => updateVitalField("respiratory_rate", e.target.value)}
-                      className={inputClassName}
-                    />
-                  </div>
-                  <div>
-                    <label className={vitalLabelClassName}>
-                      SpO2 (%)
-                    </label>
-                    <input
+                      required
                       type="number"
                       min={0}
-                      max={100}
-                      placeholder="e.g. 98"
-                      value={form.vital_signs?.oxygen_saturation ?? ""}
-                      onChange={(e) => updateVitalField("oxygen_saturation", e.target.value)}
+                      max={150}
+                      placeholder="e.g. 35"
+                      value={form.age ?? ""}
+                      onChange={(e) => updateFormField("age", e.target.value)}
+                      className={inputClassName}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelClassName}>Room</label>
+                    <select
+                      value={form.room_id || ""}
+                      onChange={(e) => updateFormField("room_id", e.target.value)}
+                      className={inputClassName}
+                    >
+                      <option value="">No room assigned</option>
+                      {rooms.map((room) => {
+                        const occ = occupancyByRoom.get(room.id) ?? 0;
+                        const isCurrent = editingPatient?.room_id === room.id;
+                        const full = roomStatus(occ, room.capacity) === "full";
+                        return (
+                          <option key={room.id} value={room.id} disabled={full && !isCurrent}>
+                            {`${room.name} · Room ${room.room_number} (${occ}/${room.capacity})${full ? " — Full" : ""}`}
+                          </option>
+                        );
+                      })}
+                    </select>
+                    <p className="mt-1.5 text-xs text-gray-500">
+                      Links the patient to a room in the system. Full rooms can&apos;t be selected.
+                    </p>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className={labelClassName}>Diagnosis</label>
+                    <input
+                      required
+                      type="text"
+                      placeholder="e.g. Community-acquired pneumonia"
+                      value={form.diagnosis || ""}
+                      onChange={(e) => updateFormField("diagnosis", e.target.value)}
+                      className={inputClassName}
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className={labelClassName}>Admission Date</label>
+                    <input
+                      required
+                      type="datetime-local"
+                      value={form.admission_date || ""}
+                      onChange={(e) => updateFormField("admission_date", e.target.value)}
                       className={inputClassName}
                     />
                   </div>
                 </div>
-              </div>
 
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-hairline">
-                <button
-                  type="button"
-                  onClick={closeModal}
-                  className="px-5 py-2.5 bg-surface border border-gray-200 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-all"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-brand-600 hover:bg-[#145a68] disabled:opacity-60 text-white font-medium rounded-lg transition-colors shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
-                >
-                  {saving && <FontAwesomeIcon icon={faSpinner} className="w-4 h-4 animate-spin" />}
-                  <FontAwesomeIcon icon={faSave} className="w-4 h-4" />
-                  {saving ? "Admitting..." : "Admit Patient"}
-                </button>
-              </div>
-            </form>
+                <div>
+                  <h3 className="text-base font-bold text-gray-900 mb-4 flex items-center gap-2">
+                    <FontAwesomeIcon icon={faHeartPulse} className="w-4 h-4 text-red-500" />
+                    Vital Signs
+                  </h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className={vitalLabelClassName}>Heart Rate (bpm)</label>
+                      <input
+                        type="number"
+                        placeholder="e.g. 72"
+                        value={form.vital_signs?.heart_rate ?? ""}
+                        onChange={(e) => updateVitalField("heart_rate", e.target.value)}
+                        className={inputClassName}
+                      />
+                    </div>
+                    <div>
+                      <label className={vitalLabelClassName}>Blood Pressure</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. 120/80"
+                        value={form.vital_signs?.blood_pressure || ""}
+                        onChange={(e) => updateVitalField("blood_pressure", e.target.value)}
+                        className={inputClassName}
+                      />
+                    </div>
+                    <div>
+                      <label className={vitalLabelClassName}>Temperature (°C)</label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        placeholder="e.g. 37.0"
+                        value={form.vital_signs?.temperature ?? ""}
+                        onChange={(e) => updateVitalField("temperature", e.target.value)}
+                        className={inputClassName}
+                      />
+                    </div>
+                    <div>
+                      <label className={vitalLabelClassName}>Respiratory Rate</label>
+                      <input
+                        type="number"
+                        placeholder="e.g. 16"
+                        value={form.vital_signs?.respiratory_rate ?? ""}
+                        onChange={(e) => updateVitalField("respiratory_rate", e.target.value)}
+                        className={inputClassName}
+                      />
+                    </div>
+                    <div>
+                      <label className={vitalLabelClassName}>SpO2 (%)</label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        placeholder="e.g. 98"
+                        value={form.vital_signs?.oxygen_saturation ?? ""}
+                        onChange={(e) => updateVitalField("oxygen_saturation", e.target.value)}
+                        className={inputClassName}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-4 border-t border-hairline">
+                  <button
+                    type="button"
+                    onClick={closeModal}
+                    className="px-5 py-2.5 bg-surface border border-gray-200 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-all"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={saving}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-brand-600 hover:bg-[#145a68] disabled:opacity-60 text-white font-medium rounded-lg transition-colors shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
+                  >
+                    {saving && (
+                      <FontAwesomeIcon icon={faSpinner} className="w-4 h-4 animate-spin" />
+                    )}
+                    <FontAwesomeIcon icon={faSave} className="w-4 h-4" />
+                    {saving ? "Admitting..." : "Admit Patient"}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         </div>
-      </div>
       )}
       {confirmDelete && (
         <ConfirmModal
           config={confirmDelete}
-          onClose={() => { if (!confirmDelete.loading) { setConfirmDelete(null); setDeletingId(null); } }}
+          onClose={() => {
+            if (!confirmDelete.loading) {
+              setConfirmDelete(null);
+              setDeletingId(null);
+            }
+          }}
         />
       )}
     </div>
