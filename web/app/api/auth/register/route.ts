@@ -3,7 +3,7 @@ import { getSupabaseAdmin, type UserRole } from '@/app/lib/supabase/server';
 import { hashPassword } from '@/app/lib/auth/password';
 import { setSessionCookie, signSession } from '@/app/lib/auth/session';
 import { checkRateLimit } from '@/app/lib/auth/rate-limit';
-import { toPublicUser } from '@/app/lib/auth/user';
+import { parseSex, toPublicUser, USER_SELECT } from '@/app/lib/auth/user';
 
 const MIN_PASSWORD_LENGTH = 8;
 const MAX_REQUESTS = 3;
@@ -17,11 +17,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const { name, email, password, role } = body as {
+  const { name, email, password, role, sex } = body as {
     name?: unknown;
     email?: unknown;
     password?: unknown;
     role?: unknown;
+    sex?: unknown;
   };
 
   const validRoles: UserRole[] = ['faculty', 'admin'];
@@ -49,6 +50,13 @@ export async function POST(request: Request) {
       { error: `Password must be at least ${MIN_PASSWORD_LENGTH} characters` },
       { status: 400 },
     );
+  }
+
+  // Optional, like everywhere else it is collected: an account that does not
+  // answer simply carries no honorific.
+  const parsedSex = parseSex(sex);
+  if (parsedSex.error) {
+    return NextResponse.json({ error: parsedSex.error }, { status: 400 });
   }
 
   // Rate limit by email.
@@ -86,9 +94,10 @@ export async function POST(request: Request) {
         email: normalizedEmail,
         name: trimmedName,
         role: selectedRole,
+        sex: parsedSex.sex ?? null,
         password_hash: passwordHash,
       })
-      .select('id, email, name, role, picture_url, password_hash, force_password_change')
+      .select(USER_SELECT)
       .single();
 
     if (error) {

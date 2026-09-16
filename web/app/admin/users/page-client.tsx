@@ -12,9 +12,18 @@ interface UserAccount {
   name: string;
   email: string;
   role: "student" | "faculty" | "admin";
+  /** Null until someone records it; drives the Mr./Ms. greeting in mobile. */
+  sex: "male" | "female" | null;
   created_at: string;
   last_login_at: string | null;
 }
+
+/** "" is the form's way of saying unrecorded; the API reads it as null. */
+const SEX_OPTIONS = [
+  { value: "", label: "Not specified" },
+  { value: "female", label: "Female (Ms.)" },
+  { value: "male", label: "Male (Mr.)" },
+];
 
 /** Stable empty fallback, so nothing downstream sees a new array each render. */
 const NO_USERS: UserAccount[] = [];
@@ -41,9 +50,9 @@ export default function UsersClient() {
   const [tempPassword, setTempPassword] = useState<{ email: string; password: string } | null>(null);
 
   const [showAddModal, setShowAddModal] = useState(false);
-  const [newUser, setNewUser] = useState({ name: "", email: "", role: "student" });
+  const [newUser, setNewUser] = useState({ name: "", email: "", role: "student", sex: "" });
   const [editingUser, setEditingUser] = useState<UserAccount | null>(null);
-  const [editForm, setEditForm] = useState({ name: "", role: "student" });
+  const [editForm, setEditForm] = useState({ name: "", role: "student", sex: "" });
 
   const flash = (text: string) => {
     setMessage(text);
@@ -87,7 +96,7 @@ export default function UsersClient() {
     }
     setUsers((prev) => [json.user!, ...prev]);
     setShowAddModal(false);
-    setNewUser({ name: "", email: "", role: "student" });
+    setNewUser({ name: "", email: "", role: "student", sex: "" });
     if (json.password) {
       setTempPassword({ email: json.user.email, password: json.password });
     }
@@ -265,7 +274,7 @@ export default function UsersClient() {
                         <button
                           onClick={() => {
                             setEditingUser(user);
-                            setEditForm({ name: user.name, role: user.role });
+                            setEditForm({ name: user.name, role: user.role, sex: user.sex ?? "" });
                           }}
                           title="Edit"
                           className="p-2 text-gray-400 hover:text-brand-600 hover:bg-brand-600/10 rounded-lg transition-colors"
@@ -330,6 +339,23 @@ export default function UsersClient() {
                   A temporary password is generated; students receive it by email, other roles are shown it here once.
                 </p>
               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Sex</label>
+                <select
+                  value={newUser.sex}
+                  onChange={(e) => setNewUser({ ...newUser, sex: e.target.value })}
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-gray-800 focus:outline-none focus:ring-2 focus:ring-brand-600 focus:border-brand-600"
+                >
+                  {SEX_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-400 mt-2">
+                  Optional. Students are greeted as Mr./Ms. on mobile once this is set; left unspecified, the greeting uses their name alone.
+                </p>
+              </div>
             </div>
             <div className="flex justify-end gap-3 mt-6">
               <button
@@ -375,6 +401,20 @@ export default function UsersClient() {
                   <option value="student">Student</option>
                   <option value="faculty">Faculty</option>
                   <option value="admin">Administrator</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Sex</label>
+                <select
+                  value={editForm.sex}
+                  onChange={(e) => setEditForm({ ...editForm, sex: e.target.value })}
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-gray-800 focus:outline-none focus:ring-2 focus:ring-brand-600 focus:border-brand-600"
+                >
+                  {SEX_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
                 </select>
               </div>
             </div>

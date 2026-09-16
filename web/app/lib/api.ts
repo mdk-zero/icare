@@ -182,12 +182,13 @@ export async function register(
   email: string,
   password: string,
   role: User['role'],
+  sex: StudentSex = '',
 ): Promise<{ user: User; sessionToken: string } | null> {
   try {
     const res = await apiFetch('/api/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, email, password, role }),
+      body: JSON.stringify({ name, email, password, role, sex }),
     });
     if (!res.ok) return null;
     const { user, sessionToken } = (await res.json()) as {
@@ -2277,16 +2278,20 @@ export async function submitScenarioForReview(
   }
 }
 
+/** "" means unrecorded — the API stores null and mobile drops the honorific. */
+export type StudentSex = 'male' | 'female' | '';
+
 export async function createFacultyStudent(
   name: string,
   email: string,
   sectionId: string,
+  sex: StudentSex = '',
 ): Promise<{ data?: CreateStudentResponse; error?: string }> {
   try {
     const res = await apiFetch('/api/faculty/students', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, email, section_id: sectionId }),
+      body: JSON.stringify({ name, email, section_id: sectionId, sex }),
     });
 
     const json = await res.json() as { student?: CreateStudentResponse['student']; password?: string; warning?: string; error?: string };
@@ -2308,6 +2313,7 @@ export interface StudentUser {
   name: string;
   role: string;
   picture_url: string | null;
+  sex: 'male' | 'female' | null;
   section_id: string | null;
   section: string | null;
 }
@@ -2371,12 +2377,13 @@ export async function updateStudentUser(
   name: string,
   email: string,
   sectionId?: string,
+  sex?: StudentSex,
 ): Promise<{ data?: StudentUser; error?: string }> {
   try {
     const res = await apiFetch('/api/faculty/students', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, name, email, section_id: sectionId }),
+      body: JSON.stringify({ id, name, email, section_id: sectionId, sex }),
     });
 
     const json = await res.json();

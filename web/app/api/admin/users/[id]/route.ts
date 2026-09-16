@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { logAudit } from '@/app/lib/audit';
+import { parseSex } from '@/app/lib/auth/user';
 
 const VALID_ROLES = ['student', 'faculty', 'admin'] as const;
 
@@ -25,7 +26,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const { name, role } = body as { name?: unknown; role?: unknown };
+  const { name, role, sex } = body as { name?: unknown; role?: unknown; sex?: unknown };
   const updates: Record<string, unknown> = {};
 
   if (name !== undefined) {
@@ -43,6 +44,14 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     }
     updates.role = role;
   }
+
+  const parsedSex = parseSex(sex);
+  if (parsedSex.error) {
+    return NextResponse.json({ error: parsedSex.error }, { status: 400 });
+  }
+  // Absent leaves the recorded value alone; an explicit empty clears it.
+  if (parsedSex.sex !== undefined) updates.sex = parsedSex.sex;
+
   if (Object.keys(updates).length === 0) {
     return NextResponse.json({ error: 'Nothing to update' }, { status: 400 });
   }
@@ -53,7 +62,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       .from('users')
       .update(updates)
       .eq('id', id)
-      .select('id, email, name, role, picture_url, created_at, last_login_at')
+      .select('id, email, name, role, picture_url, sex, created_at, last_login_at')
       .maybeSingle();
 
     if (error) {

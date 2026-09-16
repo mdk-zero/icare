@@ -4,6 +4,7 @@ import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { sendStudentInvitationEmail } from '@/app/lib/auth/email';
 import { generateRandomPassword, hashPassword } from '@/app/lib/auth/password';
 import { logAudit } from '@/app/lib/audit';
+import { parseSex } from '@/app/lib/auth/user';
 
 const VALID_ROLES = ['student', 'faculty', 'admin'] as const;
 
@@ -24,7 +25,7 @@ export async function GET(request: NextRequest) {
     const supabase = getSupabaseAdmin();
     let query = supabase
       .from('users')
-      .select('id, email, name, role, picture_url, created_at, last_login_at')
+      .select('id, email, name, role, picture_url, sex, created_at, last_login_at')
       .order('created_at', { ascending: false });
     if (role && (VALID_ROLES as readonly string[]).includes(role)) {
       query = query.eq('role', role);
@@ -55,11 +56,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const { name, email, role, section_id } = body as {
+  const { name, email, role, section_id, sex } = body as {
     name?: unknown;
     email?: unknown;
     role?: unknown;
     section_id?: unknown;
+    sex?: unknown;
   };
 
   if (typeof name !== 'string' || name.trim().length === 0) {
@@ -86,6 +88,11 @@ export async function POST(request: NextRequest) {
   const normalizedEmail = email.trim().toLowerCase();
   if (!isValidEmail(normalizedEmail)) {
     return NextResponse.json({ error: 'Invalid email format' }, { status: 400 });
+  }
+
+  const parsedSex = parseSex(sex);
+  if (parsedSex.error) {
+    return NextResponse.json({ error: parsedSex.error }, { status: 400 });
   }
 
   try {
@@ -123,6 +130,7 @@ export async function POST(request: NextRequest) {
         email: normalizedEmail,
         name: trimmedName,
         role,
+        sex: parsedSex.sex ?? null,
         password_hash: passwordHash,
         force_password_change: true,
         picture_url: null,

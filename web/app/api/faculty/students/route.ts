@@ -4,6 +4,7 @@ import { readSession } from '@/app/lib/auth/session';
 import { sendStudentInvitationEmail } from '@/app/lib/auth/email';
 import { generateRandomPassword, hashPassword } from '@/app/lib/auth/password';
 import { getFacultySectionIds } from '@/app/lib/roster';
+import { parseSex } from '@/app/lib/auth/user';
 import { getLatestRiskByStudent, getLastActivityByStudent } from '@/app/lib/faculty-dashboard';
 import { logAudit } from '@/app/lib/audit';
 
@@ -64,7 +65,7 @@ export async function GET() {
     // Admin sees all students; faculty only students in their sections.
     let query = supabase
       .from('users')
-      .select('id, email, name, role, picture_url, section_id, sections(id, name)')
+      .select('id, email, name, role, picture_url, sex, section_id, sections(id, name)')
       .eq('role', 'student')
       .order('name', { ascending: true });
 
@@ -120,10 +121,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const { name, email, section_id } = body as {
+  const { name, email, section_id, sex } = body as {
     name?: unknown;
     email?: unknown;
     section_id?: unknown;
+    sex?: unknown;
   };
 
   if (typeof name !== 'string' || name.trim().length === 0) {
@@ -144,6 +146,11 @@ export async function POST(request: NextRequest) {
 
   if (!isValidEmail(normalizedEmail)) {
     return NextResponse.json({ error: 'Invalid email format' }, { status: 400 });
+  }
+
+  const parsedSex = parseSex(sex);
+  if (parsedSex.error) {
+    return NextResponse.json({ error: parsedSex.error }, { status: 400 });
   }
 
   try {
@@ -176,12 +183,13 @@ export async function POST(request: NextRequest) {
         email: normalizedEmail,
         name: trimmedName,
         role: 'student',
+        sex: parsedSex.sex ?? null,
         password_hash: passwordHash,
         force_password_change: true,
         picture_url: null,
         section_id: sectionId,
       })
-      .select('id, email, name, role, picture_url, section_id')
+      .select('id, email, name, role, picture_url, sex, section_id')
       .single();
 
     if (insertError) {
@@ -237,11 +245,12 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const { id, name, email, section_id } = body as {
+  const { id, name, email, section_id, sex } = body as {
     id?: unknown;
     name?: unknown;
     email?: unknown;
     section_id?: unknown;
+    sex?: unknown;
   };
 
   if (typeof id !== 'string' || id.trim().length === 0) {
@@ -267,6 +276,13 @@ export async function PUT(request: NextRequest) {
     const supabase = getSupabaseAdmin();
 
     const updates: Record<string, unknown> = { name: trimmedName, email: normalizedEmail };
+
+    const parsedSex = parseSex(sex);
+    if (parsedSex.error) {
+      return NextResponse.json({ error: parsedSex.error }, { status: 400 });
+    }
+    // Absent leaves the recorded value alone; an explicit empty clears it.
+    if (parsedSex.sex !== undefined) updates.sex = parsedSex.sex;
 
     if (section_id !== undefined) {
       if (typeof section_id !== 'string' || section_id.trim().length === 0) {
@@ -297,7 +313,7 @@ export async function PUT(request: NextRequest) {
       .from('users')
       .update(updates)
       .eq('id', id)
-      .select('id, email, name, role, picture_url, section_id, sections(id, name)')
+      .select('id, email, name, role, picture_url, sex, section_id, sections(id, name)')
       .single();
 
     if (updateError) {

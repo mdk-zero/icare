@@ -48,6 +48,66 @@ function getGreeting() {
   return "Good evening";
 }
 
+/**
+ * Duty band by the clock, following the AM/PM/night convention the schema's
+ * shift_type enum uses (migration 029). The shifts table itself is not
+ * reachable from mobile yet, so this frames the screen by time of day rather
+ * than by a roster entry.
+ */
+function getShiftLabel() {
+  const hour = new Date().getHours();
+  if (hour < 6) return "NIGHT SHIFT";
+  if (hour < 14) return "AM SHIFT";
+  if (hour < 22) return "PM SHIFT";
+  return "NIGHT SHIFT";
+}
+
+/** Null when sex is unrecorded, which is the default for every account. */
+function getHonorific(sex?: "male" | "female" | null): string | null {
+  if (sex === "male") return "Mr.";
+  if (sex === "female") return "Ms.";
+  return null;
+}
+
+/**
+ * Particles that belong to the surname following them. The roster stores one
+ * `name` string, so the last token is otherwise all there is to go on — and
+ * that greets "Juan Santos Dela Cruz" as "Mr. Cruz".
+ */
+const SURNAME_PARTICLES = new Set([
+  "de", "del", "dela", "delas", "delos", "della", "di", "da", "das", "dos",
+  "la", "las", "los", "san", "santa", "sta", "sto", "van", "von", "bin",
+]);
+
+/** Generational and credential suffixes; never part of the surname. */
+const NAME_SUFFIXES = new Set(["jr", "sr", "ii", "iii", "iv", "rn"]);
+
+function getSurname(fullName: string): string {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+  const strip = (part: string) => part.toLowerCase().replace(/[.,]/g, "");
+  while (parts.length > 1 && NAME_SUFFIXES.has(strip(parts[parts.length - 1]))) {
+    parts.pop();
+  }
+  if (parts.length === 0) return "";
+  // Walk back over particles, but never past the first token: a two-word name
+  // is a first name and a surname, not a particle and a surname.
+  let start = parts.length - 1;
+  while (start > 1 && SURNAME_PARTICLES.has(strip(parts[start - 1]))) start -= 1;
+  return parts.slice(start).join(" ");
+}
+
+/**
+ * How the ward would address this student. Falls back to the full name when
+ * sex is unrecorded, so nobody is ever greeted with a guessed honorific.
+ */
+function getAddressedName(user: { name?: string; sex?: "male" | "female" | null } | null): string {
+  const fullName = user?.name?.trim();
+  if (!fullName) return "Student";
+  const title = getHonorific(user?.sex);
+  const surname = getSurname(fullName);
+  return title && surname ? `${title} ${surname}` : fullName;
+}
+
 function getInitials(name?: string) {
   if (!name) return "S";
   return name
@@ -104,6 +164,27 @@ export default function DashboardScreen() {
       : null;
   const quizzesAvailable = assessments.filter((a) => a.attempt_count === 0).length;
 
+  // Shift handover, in the ward's own terms. Both lines come from data this
+  // screen already loads, so they move with the day rather than being decor.
+  const handover = [
+    {
+      icon: "hospital-user",
+      color: Accent.cyan.fg,
+      text:
+        patients.length === 0
+          ? "No patients assigned to you yet"
+          : `${patients.length} patient${patients.length === 1 ? "" : "s"} under your care`,
+    },
+    {
+      icon: "clipboard-list",
+      color: openTasks.length === 0 ? Accent.green.fg : Accent.amber.fg,
+      text:
+        openTasks.length === 0
+          ? "Nothing pending — your list is clear"
+          : `${openTasks.length} task${openTasks.length === 1 ? "" : "s"} pending this shift`,
+    },
+  ];
+
   const stats = [
     {
       label: "Pending Tasks",
@@ -152,11 +233,15 @@ export default function DashboardScreen() {
       {/* Offline / queued-write state; renders nothing when there is nothing to say. */}
       <SyncStatus onSynced={refresh} />
 
-      {/* Greeting */}
+      {/* Greeting — framed as a duty roster: who is on, what they walk into. */}
       <Animated.View entering={FadeInDown.duration(220)} style={styles.greetingRow}>
         <View style={styles.greetingText}>
+          <View style={styles.dutyPill}>
+            <View style={styles.dutyDot} />
+            <Text style={styles.dutyText}>ON DUTY · {getShiftLabel()}</Text>
+          </View>
           <Text style={styles.greeting}>{getGreeting()},</Text>
-          <Text style={styles.name}>{user?.name || "Student"}</Text>
+          <Text style={styles.name}>{getAddressedName(user)}</Text>
           <View style={styles.dateRow}>
             <FontAwesome6 name="calendar-day" size={11} color={Teal.primary} />
             <Text style={styles.dateText}>{dateStr}</Text>
@@ -175,6 +260,16 @@ export default function DashboardScreen() {
             <Text style={styles.avatarText}>{getInitials(user?.name)}</Text>
           </LinearGradient>
         </Pressable>
+      </Animated.View>
+
+      {/* Shift handover */}
+      <Animated.View entering={FadeInDown.duration(220).delay(20)} style={styles.handover}>
+        {handover.map((line) => (
+          <View key={line.text} style={styles.handoverRow}>
+            <FontAwesome6 name={line.icon} size={12} solid color={line.color} />
+            <Text style={styles.handoverText}>{line.text}</Text>
+          </View>
+        ))}
       </Animated.View>
 
       {/* Next Up hero */}
@@ -315,7 +410,47 @@ function createStyles(
       alignItems: "center",
       justifyContent: "space-between",
       paddingVertical: Spacing.sm,
+      marginBottom: Spacing.md,
+    },
+    dutyPill: {
+      flexDirection: "row",
+      alignItems: "center",
+      alignSelf: "flex-start",
+      gap: 5,
+      backgroundColor: Accent.green.bg,
+      borderRadius: Radius.pill,
+      paddingHorizontal: Spacing.sm,
+      paddingVertical: 3,
+      marginBottom: 6,
+    },
+    dutyDot: {
+      width: 5,
+      height: 5,
+      borderRadius: Radius.pill,
+      backgroundColor: Accent.green.fg,
+    },
+    dutyText: {
+      fontSize: 9.5,
+      fontWeight: "800",
+      letterSpacing: 0.8,
+      color: Accent.green.fg,
+    },
+    handover: {
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: Palette.border,
+      paddingTop: Spacing.md,
       marginBottom: Spacing.lg,
+      gap: Spacing.xs + 2,
+    },
+    handoverRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.sm,
+    },
+    handoverText: {
+      fontSize: 13,
+      fontWeight: "500",
+      color: Palette.text,
     },
     greetingText: {
       flex: 1,

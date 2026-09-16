@@ -39,6 +39,7 @@ import {
   getCurrentFacultyUser,
   FacultyStudent,
   StudentUser,
+  StudentSex,
   RiskPrediction,
   Section,
 } from "../../lib/api";
@@ -89,12 +90,32 @@ function parseCsv(text: string): string[][] {
   return rows;
 }
 
-const STUDENT_CSV_TEMPLATE = `first_name,middle_name,last_name,email,section
-Juan,Santos,Dela Cruz,juan.delacruz@batstate-u.edu.ph,A
-Maria,,Reyes,maria.reyes@batstate-u.edu.ph,
+const STUDENT_CSV_TEMPLATE = `first_name,middle_name,last_name,email,sex,section
+Juan,Santos,Dela Cruz,juan.delacruz@batstate-u.edu.ph,male,A
+Maria,,Reyes,maria.reyes@batstate-u.edu.ph,female,
 `;
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * Optional on every form. "" is how a form says unrecorded; the API stores
+ * null, and mobile greets the student by name alone rather than guessing an
+ * honorific.
+ */
+const SEX_OPTIONS: { value: StudentSex; label: string }[] = [
+  { value: "", label: "Not specified" },
+  { value: "female", label: "Female (Ms.)" },
+  { value: "male", label: "Male (Mr.)" },
+];
+
+/** Accepts what a roster spreadsheet actually holds, including M/F. */
+function normalizeCsvSex(raw: string): StudentSex | null {
+  const value = raw.trim().toLowerCase();
+  if (!value) return "";
+  if (value === "male" || value === "m") return "male";
+  if (value === "female" || value === "f") return "female";
+  return null;
+}
 
 /** Group key for students who have no section assigned. */
 const UNASSIGNED_KEY = "__unassigned__";
@@ -122,6 +143,8 @@ interface BulkRow {
   middleName: string;
   lastName: string;
   email: string;
+  /** Normalized from the CSV; "" when the column is absent or blank. */
+  sex: StudentSex;
   /** Section name as written in the CSV (may be empty). */
   sectionName: string;
   /** Resolved section id when sectionName matched one of the faculty's sections. */
@@ -209,6 +232,7 @@ export default function FacultyStudentsClient() {
   const [middleInitial, setMiddleInitial] = useState("");
   const [lastName, setLastName] = useState("");
   const [newSectionId, setNewSectionId] = useState("");
+  const [newSex, setNewSex] = useState<StudentSex>("");
   const newEmailRef = useRef<HTMLInputElement>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState<{
@@ -222,6 +246,7 @@ export default function FacultyStudentsClient() {
   const [updatingStudent, setUpdatingStudent] = useState<StudentUser | null>(null);
   const [updateName, setUpdateName] = useState("");
   const [updateSectionId, setUpdateSectionId] = useState("");
+  const [updateSex, setUpdateSex] = useState<StudentSex>("");
   const updateEmailRef = useRef<HTMLInputElement>(null);
   const [isUpdating, setIsUpdating] = useState(false);
 
@@ -283,6 +308,7 @@ export default function FacultyStudentsClient() {
     const middleIdx = header.findIndex((h) => h === "middle_name" || h === "middle_initial");
     const lastIdx = header.indexOf("last_name");
     const emailIdx = header.indexOf("email");
+    const sexIdx = header.findIndex((h) => h === "sex" || h === "gender");
     const sectionIdx = header.indexOf("section");
 
     const missing = [
@@ -302,12 +328,17 @@ export default function FacultyStudentsClient() {
     const sectionByName = new Map(sections.map((s) => [s.name.toLowerCase(), s.id]));
     const parsed: BulkRow[] = rows.slice(1).map((cells, i) => {
       const sectionName = sectionIdx === -1 ? "" : (cells[sectionIdx] ?? "").trim();
+      const rawSex = sexIdx === -1 ? "" : (cells[sexIdx] ?? "");
+      const sex = normalizeCsvSex(rawSex);
       const row: BulkRow = {
         line: i + 2,
         firstName: (cells[firstIdx] ?? "").trim(),
         middleName: middleIdx === -1 ? "" : (cells[middleIdx] ?? "").trim(),
         lastName: (cells[lastIdx] ?? "").trim(),
         email: (cells[emailIdx] ?? "").trim().toLowerCase(),
+        // An unreadable value is rejected below rather than silently dropped:
+        // importing the row without it would leave no trace of the typo.
+        sex: sex ?? "",
         sectionName,
         sectionId: sectionName ? (sectionByName.get(sectionName.toLowerCase()) ?? null) : null,
         status: "ready",
@@ -321,6 +352,8 @@ export default function FacultyStudentsClient() {
         row.invalidReason = "A student with this email already exists";
       else if (row.sectionName && !row.sectionId)
         row.invalidReason = `"${row.sectionName}" is not one of your sections`;
+      else if (sex === null)
+        row.invalidReason = `"${rawSex.trim()}" is not a valid sex — use male or female`;
       seenEmails.add(row.email);
       return row;
     });
@@ -342,14 +375,14 @@ export default function FacultyStudentsClient() {
       rows[i] = { ...rows[i], status: "creating" };
       setBulkRows([...rows]);
 
-      const { firstName, middleName, lastName, email } = rows[i];
+      const { firstName, middleName, lastName, email, sex } = rows[i];
       const fullName = middleName
         ? `${firstName} ${middleName} ${lastName}`
         : `${firstName} ${lastName}`;
       const sectionId = rows[i].sectionId ?? bulkDefaultSectionId;
 
       try {
-        const { data, error } = await createFacultyStudent(fullName, email, sectionId);
+        const { data, error } = await createFacultyStudent(fullName, email, sectionId, sex);
         if (error) {
           rows[i] = { ...rows[i], status: "failed", resultText: error };
         } else if (data?.warning) {
@@ -439,7 +472,12 @@ export default function FacultyStudentsClient() {
     setIsSubmitting(true);
 
     try {
-      const { data, error } = await createFacultyStudent(fullName, emailTrimmed, newSectionId);
+      const { data, error } = await createFacultyStudent(
+        fullName,
+        emailTrimmed,
+        newSectionId,
+        newSex,
+      );
 
       if (error) {
         setMessage({ type: "error", text: error });
@@ -457,6 +495,7 @@ export default function FacultyStudentsClient() {
       setMiddleInitial("");
       setLastName("");
       setNewSectionId("");
+      setNewSex("");
       if (newEmailRef.current) newEmailRef.current.value = "";
       refresh();
       const faculty = getCurrentFacultyUser();
@@ -504,6 +543,7 @@ export default function FacultyStudentsClient() {
         nameTrimmed,
         emailTrimmed,
         updateSectionId || undefined,
+        updateSex,
       );
 
       if (error) {
@@ -586,6 +626,7 @@ export default function FacultyStudentsClient() {
     setUpdatingStudent(student);
     setUpdateName(student.name);
     setUpdateSectionId(student.section_id ?? "");
+    setUpdateSex(student.sex ?? "");
     if (updateEmailRef.current) updateEmailRef.current.value = student.email;
     setShowUpdateModal(true);
     setMessage(null);
@@ -911,6 +952,31 @@ export default function FacultyStudentsClient() {
                     className="w-full pl-10 pr-4 py-3 bg-surface border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 focus:bg-surface transition-all shadow-sm"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="new-student-sex"
+                  className="block text-sm font-semibold text-gray-700 mb-2"
+                >
+                  Sex
+                </label>
+                <select
+                  id="new-student-sex"
+                  value={newSex}
+                  onChange={(e) => setNewSex(e.target.value as StudentSex)}
+                  className="w-full px-4 py-3 bg-surface border border-gray-400 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 transition-all shadow-sm"
+                >
+                  {SEX_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1.5 text-xs text-gray-500">
+                  Optional. The mobile app greets the student as Mr./Ms. once this is set; left
+                  unspecified, it uses their name alone.
+                </p>
               </div>
 
               <div>
@@ -1346,6 +1412,16 @@ export default function FacultyStudentsClient() {
                         </td>
                       </tr>
                       <tr>
+                        <td className="py-1.5 pr-4 font-mono">sex</td>
+                        <td className="py-1.5 pr-4">No</td>
+                        <td className="py-1.5">
+                          <span className="font-mono">male</span> or{" "}
+                          <span className="font-mono">female</span> (<span className="font-mono">M</span>/
+                          <span className="font-mono">F</span> also work). Sets the Mr./Ms. the mobile
+                          app greets the student with; blank leaves it unspecified
+                        </td>
+                      </tr>
+                      <tr>
                         <td className="py-1.5 pr-4 font-mono">section</td>
                         <td className="py-1.5 pr-4">No</td>
                         <td className="py-1.5">
@@ -1439,6 +1515,11 @@ export default function FacultyStudentsClient() {
                                 .join(" ") || "—"}
                             </td>
                             <td className="py-2 px-2 text-gray-500">{row.email || "—"}</td>
+                            {/* The honorific rather than the raw value: it is
+                                what the student will actually be greeted with. */}
+                            <td className="py-2 px-2 whitespace-nowrap text-xs text-gray-500">
+                              {row.sex === "male" ? "Mr." : row.sex === "female" ? "Ms." : "—"}
+                            </td>
                             <td className="py-2 px-2 whitespace-nowrap">
                               {row.sectionId ? (
                                 <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-brand-600/10 text-brand-600 border border-brand-600/20">
@@ -1626,6 +1707,26 @@ export default function FacultyStudentsClient() {
                   {sections.map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label
+                  htmlFor="update-student-sex"
+                  className="block text-sm font-semibold text-gray-700 mb-2"
+                >
+                  Sex
+                </label>
+                <select
+                  id="update-student-sex"
+                  value={updateSex}
+                  onChange={(e) => setUpdateSex(e.target.value as StudentSex)}
+                  className="w-full px-4 py-3 bg-surface border border-gray-400 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 transition-all shadow-sm"
+                >
+                  {SEX_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
                     </option>
                   ))}
                 </select>

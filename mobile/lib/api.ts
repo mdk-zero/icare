@@ -26,6 +26,8 @@ export interface User {
   email: string;
   name: string;
   role: 'student' | 'faculty' | 'admin';
+  /** Null when unrecorded — faculty/admin set it on the roster (migration 032). */
+  sex?: 'male' | 'female' | null;
   picture_url?: string | null;
   has_password?: boolean;
   force_password_change?: boolean;

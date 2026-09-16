@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
-import { toPublicUser } from '@/app/lib/auth/user';
+import { toPublicUser, USER_SELECT } from '@/app/lib/auth/user';
 
 export async function GET() {
   const session = await readSession();
@@ -13,7 +13,7 @@ export async function GET() {
     const supabase = getSupabaseAdmin();
     const { data, error } = await supabase
       .from('users')
-      .select('id, email, name, role, picture_url, password_hash, force_password_change, sections(name)')
+      .select(`${USER_SELECT}, sections(name)`)
       .eq('id', session.uid)
       .maybeSingle();
     if (error) throw error;

@@ -22,6 +22,9 @@ export function getSupabaseAdmin(): SupabaseClient {
 
 export type UserRole = 'student' | 'faculty' | 'admin';
 
+/** Null means unrecorded — see migration 032; it is not a third value. */
+export type UserSex = 'male' | 'female';
+
 export interface DbUser {
   id: string;
   google_sub: string | null;
@@ -29,6 +32,7 @@ export interface DbUser {
   name: string;
   picture_url: string | null;
   role: UserRole;
+  sex: UserSex | null;
   password_hash: string | null;
   force_password_change: boolean;
   created_at: string;
