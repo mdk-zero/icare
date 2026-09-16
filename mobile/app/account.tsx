@@ -11,10 +11,21 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { useAuth } from '@/hooks/useAuth';
+import { useAvatarPicker, useAvatarUrl } from '@/hooks/useAvatar';
 import { updateProfile } from '@/lib/api';
+
+/** First letter of the first name plus the last — matches the web avatar. */
+function getInitials(value?: string) {
+  const words = (value ?? '').trim().split(/\s+/).filter((w) => /[\p{L}\p{N}]/u.test(w));
+  if (words.length === 0) return 'S';
+  const letterOf = (w: string) => w.match(/[\p{L}\p{N}]/u)?.[0] ?? '';
+  const last = words.length > 1 ? letterOf(words[words.length - 1]) : '';
+  return (letterOf(words[0]) + last).toUpperCase() || 'S';
+}
 
 const DETAILS: { icon: keyof typeof Ionicons.glyphMap; label: string; key: 'email' | 'role' | 'section' }[] = [
   { icon: 'mail-outline', label: 'Email', key: 'email' },
@@ -30,6 +41,10 @@ export default function AccountScreen() {
     () => createStyles(Palette, Accent, Shadow, Type),
     [Palette, Accent, Shadow, Type],
   );
+
+  const avatarUrl = useAvatarUrl(user?.picture_url);
+  const initials = getInitials(user?.name);
+  const { uploading, changeAvatar } = useAvatarPicker();
 
   const [name, setName] = React.useState(user?.name ?? '');
   const [saving, setSaving] = React.useState(false);
@@ -64,6 +79,46 @@ export default function AccountScreen() {
       contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled"
     >
+      <Text style={styles.sectionLabel}>Profile photo</Text>
+      <View style={styles.card}>
+        <View style={styles.photoRow}>
+          <Pressable
+            onPress={changeAvatar}
+            disabled={uploading}
+            hitSlop={6}
+            style={({ pressed }) => [pressed && styles.pressed]}
+          >
+            {avatarUrl ? (
+              <Image source={{ uri: avatarUrl }} style={styles.photo} contentFit="cover" />
+            ) : (
+              <View style={[styles.photo, styles.photoFallback]}>
+                <Text style={styles.photoInitials}>{initials}</Text>
+              </View>
+            )}
+            <View style={styles.photoBadge}>
+              {uploading ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Ionicons name="camera" size={13} color="#fff" />
+              )}
+            </View>
+          </Pressable>
+          <View style={styles.photoText}>
+            <Text style={styles.photoTitle}>
+              {avatarUrl ? 'Your profile photo' : 'No photo yet'}
+            </Text>
+            <Text style={styles.photoSub}>
+              Shown on your dashboard and to your faculty. JPEG or PNG, cropped to a square.
+            </Text>
+            <Pressable onPress={changeAvatar} disabled={uploading} hitSlop={8}>
+              <Text style={[styles.photoAction, uploading && styles.photoActionBusy]}>
+                {uploading ? 'Uploading…' : avatarUrl ? 'Change photo' : 'Add photo'}
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+
       <Text style={styles.sectionLabel}>Profile</Text>
       <View style={styles.card}>
         <Text style={styles.fieldLabel}>Full name</Text>
@@ -148,6 +203,64 @@ function createStyles(
       borderWidth: 1,
       borderColor: Palette.border,
       ...Shadow.card,
+    },
+    photoRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Spacing.lg,
+    },
+    photo: {
+      width: 72,
+      height: 72,
+      borderRadius: 36,
+    },
+    photoFallback: {
+      backgroundColor: Palette.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    photoInitials: {
+      color: '#fff',
+      fontSize: 24,
+      fontWeight: '700',
+    },
+    photoBadge: {
+      position: 'absolute',
+      right: -2,
+      bottom: -2,
+      width: 26,
+      height: 26,
+      borderRadius: 13,
+      backgroundColor: Palette.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+      // Rides the edge of the photo, so it needs a ring in the card's own
+      // colour to stay readable against a busy image.
+      borderWidth: 2,
+      borderColor: Palette.surface,
+    },
+    photoText: {
+      flex: 1,
+    },
+    photoTitle: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: Palette.ink,
+    },
+    photoSub: {
+      fontSize: 12,
+      color: Palette.textSecondary,
+      marginTop: 2,
+      lineHeight: 16,
+    },
+    photoAction: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: Palette.primary,
+      marginTop: Spacing.sm,
+    },
+    photoActionBusy: {
+      color: Palette.textMuted,
     },
     fieldLabel: {
       fontSize: 12,

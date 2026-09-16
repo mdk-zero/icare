@@ -7,6 +7,7 @@
 
 import {
   api,
+  apiUpload,
   cachedGet,
   CachedResult,
   clearCache,
@@ -679,6 +680,22 @@ export async function completeForcedPasswordChange(
  * become loadable after being exchanged for a signed URL. Google pictures are
  * already absolute and pass straight through.
  */
+/**
+ * Uploads a local image as the signed-in user's avatar and returns the stored
+ * bucket path — feed it to `resolveAvatarUrl()` to display it.
+ *
+ * Deliberately not queued to the offline outbox: that queue replays JSON
+ * bodies, and a cache file URI it replayed days later may well be gone.
+ */
+export async function uploadAvatar(uri: string): Promise<string> {
+  const form = new FormData();
+  // React Native's FormData takes a file as this {uri,name,type} shape; the
+  // DOM typings only know about Blob, hence the cast.
+  form.append('avatar', { uri, name: 'avatar.jpg', type: 'image/jpeg' } as unknown as Blob);
+  const result = await apiUpload<{ path: string }>('/api/users/avatar', form);
+  return result.path;
+}
+
 export async function resolveAvatarUrl(pictureUrl: string | null | undefined): Promise<string | null> {
   if (!pictureUrl) return null;
   if (!pictureUrl.startsWith('avatars/')) return pictureUrl;

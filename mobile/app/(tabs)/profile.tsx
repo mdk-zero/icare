@@ -1,5 +1,14 @@
 import React from 'react';
-import { ScrollView, View, Text, StyleSheet, Pressable, Alert, RefreshControl } from 'react-native';
+import {
+  ScrollView,
+  View,
+  Text,
+  StyleSheet,
+  Pressable,
+  Alert,
+  ActivityIndicator,
+  RefreshControl,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,8 +18,9 @@ import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { SectionHeader } from '@/components/ui';
 import { useAuth } from '@/hooks/useAuth';
+import { useAvatarPicker, useAvatarUrl } from '@/hooks/useAvatar';
 import { useApiData, allCached } from '@/hooks/useApiData';
-import { fetchProgress, fetchRecommendations, resolveAvatarUrl } from '@/lib/api';
+import { fetchProgress, fetchRecommendations } from '@/lib/api';
 import { clearCache } from '@/lib/client';
 import { ThemePreference, useThemePreference } from '@/hooks/useThemePreference';
 
@@ -59,19 +69,8 @@ export default function ProfileScreen() {
   );
   const [progress, recommendations] = data ?? [null, []];
 
-  // Uploaded avatars are stored as a bucket path and need signing before they
-  // can be displayed; Google URLs resolve to themselves.
-  const [avatarUrl, setAvatarUrl] = React.useState<string | null>(null);
-  React.useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      const url = await resolveAvatarUrl(user?.picture_url);
-      if (!cancelled) setAvatarUrl(url);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [user?.picture_url]);
+  const avatarUrl = useAvatarUrl(user?.picture_url);
+  const { uploading, changeAvatar } = useAvatarPicker();
 
   const handleClearCache = () => {
     Alert.alert(
@@ -151,7 +150,15 @@ export default function ProfileScreen() {
         end={{ x: 1, y: 1 }}
         style={styles.headerCard}
       >
-        <View style={styles.avatarRow}>
+        {/* The photo is the affordance — tapping it is how a student changes it. */}
+        <Pressable
+          onPress={changeAvatar}
+          disabled={uploading}
+          hitSlop={6}
+          accessibilityRole="button"
+          accessibilityLabel="Change profile photo"
+          style={({ pressed }) => [styles.avatarRow, pressed && styles.pressedDim]}
+        >
           {avatarUrl ? (
             <Image source={{ uri: avatarUrl }} style={styles.avatarLarge} contentFit="cover" />
           ) : (
@@ -164,7 +171,14 @@ export default function ProfileScreen() {
               <Text style={styles.avatarText}>{getInitials(user?.name)}</Text>
             </LinearGradient>
           )}
-        </View>
+          <View style={styles.editButton}>
+            {uploading ? (
+              <ActivityIndicator size="small" color={Palette.primary} />
+            ) : (
+              <Ionicons name="camera" size={14} color={Palette.primary} />
+            )}
+          </View>
+        </Pressable>
         <Text style={styles.name}>{user?.name || 'Student'}</Text>
         <Text style={styles.email}>{user?.email || 'student@icare.edu'}</Text>
         <View style={styles.badges}>

@@ -274,7 +274,10 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
     clearTimeout(timer);
   }
   setOnline(true);
+  return parseResponse<T>(response);
+}
 
+async function parseResponse<T>(response: Response): Promise<T> {
   let json: unknown = null;
   try {
     json = await response.json();
@@ -290,6 +293,41 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
     throw new ApiError(message, response.status);
   }
   return json as T;
+}
+
+/** A photo over a slow campus connection needs more room than a JSON call. */
+const UPLOAD_TIMEOUT_MS = 60_000;
+
+/**
+ * Multipart POST — the one thing the JSON `api()` above cannot carry.
+ *
+ * Content-Type is deliberately left unset: fetch has to generate the multipart
+ * boundary itself, and naming the type without one yields a body the server
+ * cannot parse.
+ */
+export async function apiUpload<T>(path: string, form: FormData): Promise<T> {
+  const headers: Record<string, string> = {};
+  const token = await getToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), UPLOAD_TIMEOUT_MS);
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}${path}`, {
+      method: "POST",
+      headers,
+      body: form,
+      signal: controller.signal,
+    });
+  } catch {
+    setOnline(false);
+    throw new ApiError(controller.signal.aborted ? "Upload timed out" : "Network unreachable", 0);
+  } finally {
+    clearTimeout(timer);
+  }
+  setOnline(true);
+  return parseResponse<T>(response);
 }
 
 // ---------------------------------------------------------------
