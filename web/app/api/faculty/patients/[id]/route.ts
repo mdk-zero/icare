@@ -104,6 +104,22 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
       for (const actor of actors ?? []) actorNames.set(actor.id, actor.name);
     }
 
+    // Only a discharged patient has summaries, so the admitted majority never
+    // pays for this query.
+    let dischargeSummaries: unknown[] = [];
+    if (patient.status === 'discharged') {
+      const { data, error } = await supabase
+        .from('discharge_summaries')
+        .select(
+          'id, patient_id, admitted_at, discharged_at, diagnosis, room_label, vitals_digest, ehr_digest, follow_up, ai_model, ai_generated_at, created_at',
+        )
+        .eq('patient_id', id)
+        .order('discharged_at', { ascending: false })
+        .limit(10);
+      if (error) console.error('Patient chart: discharge summaries query failed', error);
+      dischargeSummaries = data ?? [];
+    }
+
     const events = rows.map((row) => ({
       id: row.id,
       action: row.action,
@@ -119,6 +135,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
       ivf: ivf.data ?? [],
       notes: notes.data ?? [],
       events,
+      discharge_summaries: dischargeSummaries,
     });
   } catch (err) {
     console.error('Fetch patient chart failed', err);

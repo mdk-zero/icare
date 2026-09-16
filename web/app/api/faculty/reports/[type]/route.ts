@@ -7,6 +7,7 @@ import { slugify } from '@/app/lib/reports/csv';
 import {
   REPORT_NEEDS_TARGET,
   buildAssessmentReport,
+  buildDischargeReport,
   buildRosterReport,
   buildScenarioReport,
   buildSectionReport,
@@ -72,6 +73,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         break;
       case 'roster':
         result = await buildRosterReport(supabase, meta, session);
+        break;
+      case 'discharge':
+        result = await buildDischargeReport(supabase, meta, id);
         break;
     }
 

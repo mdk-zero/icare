@@ -21,12 +21,15 @@ import {
   faNotesMedical,
   faStethoscope,
   faChartLine,
+  faFilePdf,
+  faWandMagicSparkles,
 } from "@fortawesome/free-solid-svg-icons";
 import PageHeader from "./PageHeader";
 import PatientVitalsHistory from "./PatientVitalsHistory";
 import { toast } from "./Toast";
 import {
   fetchFacultyPatientDetail,
+  generateFollowUps,
   reviewProgressNote,
   EhrRecord,
   EhrType,
@@ -323,12 +326,26 @@ export default function PatientChart({
   const [tab, setTab] = useState<EhrType>("tpr");
   const [reviewingId, setReviewingId] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [draftingId, setDraftingId] = useState<string | null>(null);
 
   const {
     data: chart,
     loading,
     refresh,
   } = usePageData(`faculty:patient:${patientId}`, () => fetchFacultyPatientDetail(patientId));
+
+  const handleDraftFollowUps = async (summaryId: string) => {
+    setDraftingId(summaryId);
+    const result = await generateFollowUps(summaryId);
+    setDraftingId(null);
+    if (result.error || !result.summary) {
+      toast(result.error ?? "Unable to generate recommendations");
+      return;
+    }
+    const count = result.summary.follow_up.length;
+    await refresh();
+    toast(`Drafted ${count} follow-up recommendation${count === 1 ? "" : "s"}`);
+  };
 
   /**
    * Faculty sign-off on a student's progress note — the one write action in the
@@ -353,6 +370,7 @@ export default function PatientChart({
   }, [chart, tab]);
 
   const flaggedCount = chart?.vitals.filter((r) => r.is_anomaly).length ?? 0;
+  const summaries = chart?.discharge_summaries ?? [];
 
   // The most recent flagged readings, with their stored reasons parsed back
   // out of JSONB. Capped because this sits above the trend, and an unreviewed
@@ -641,6 +659,113 @@ export default function PatientChart({
         </div>
 
         <div className="space-y-5">
+          {/* Only a discharged patient has one; the newest stay leads. */}
+          {discharged && (
+            <section className="rounded-xl border border-hairline bg-surface p-4 shadow-tile">
+              <h2 className="mb-3 flex items-center gap-2 font-display text-base font-semibold text-gray-900">
+                <FontAwesomeIcon icon={faFileLines} className="h-4 w-4 text-brand-600" />
+                Discharge Summary
+              </h2>
+
+              {summaries.length === 0 ? (
+                <p className="text-sm text-gray-400">
+                  No discharge summary was recorded for this stay. Summaries are written
+                  automatically at check-out.
+                </p>
+              ) : (
+                <div className="space-y-4">
+                  {summaries.map((summary, index) => (
+                    <div
+                      key={summary.id}
+                      className={index > 0 ? "border-t border-hairline pt-4" : undefined}
+                    >
+                      <div className="flex flex-wrap items-baseline justify-between gap-2">
+                        <p className="text-sm font-medium text-gray-800">
+                          Discharged {formatDate(summary.discharged_at)}
+                        </p>
+                        <a
+                          href={`/api/faculty/reports/discharge?id=${summary.id}&format=pdf`}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-700 transition-colors hover:border-brand-600/40 hover:text-brand-700"
+                        >
+                          <FontAwesomeIcon icon={faFilePdf} className="h-3 w-3" />
+                          PDF
+                        </a>
+                      </div>
+                      <p className="mt-0.5 text-xs text-gray-500">
+                        {summary.diagnosis || "No diagnosis recorded"}
+                        {summary.room_label ? ` · ${summary.room_label}` : ""}
+                      </p>
+
+                      <dl className="mt-2 grid grid-cols-3 gap-2 text-center">
+                        {[
+                          { label: "Readings", value: summary.vitals_digest?.readings ?? 0 },
+                          { label: "Flagged", value: summary.vitals_digest?.flagged ?? 0 },
+                          { label: "Notes", value: summary.ehr_digest?.notes ?? 0 },
+                        ].map((stat) => (
+                          <div key={stat.label} className="rounded-lg bg-subtle py-1.5">
+                            <dt className="text-[10px] uppercase tracking-wide text-gray-500">
+                              {stat.label}
+                            </dt>
+                            <dd className="tabular text-sm font-semibold text-gray-900">
+                              {stat.value}
+                            </dd>
+                          </div>
+                        ))}
+                      </dl>
+
+                      {(summary.ehr_digest?.ivf_ongoing ?? 0) > 0 && (
+                        <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-800">
+                          {summary.ehr_digest.ivf_ongoing} IVF line(s) were still running at
+                          discharge.
+                        </p>
+                      )}
+
+                      <div className="mt-3">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                          Follow-up recommendations
+                        </p>
+                        {summary.follow_up.length === 0 ? (
+                          <div className="mt-1.5">
+                            <p className="text-sm text-gray-400">Not drafted yet.</p>
+                            <button
+                              onClick={() => handleDraftFollowUps(summary.id)}
+                              disabled={draftingId === summary.id}
+                              className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-brand-700 disabled:opacity-60"
+                            >
+                              <FontAwesomeIcon
+                                icon={draftingId === summary.id ? faSpinner : faWandMagicSparkles}
+                                spin={draftingId === summary.id}
+                                className="h-3 w-3"
+                              />
+                              {draftingId === summary.id ? "Drafting..." : "Draft with AI"}
+                            </button>
+                          </div>
+                        ) : (
+                          <>
+                            <ol className="mt-1.5 space-y-2">
+                              {summary.follow_up.map((item, i) => (
+                                <li key={i} className="text-sm">
+                                  <span className="font-medium text-gray-900">{item.title}</span>
+                                  <p className="text-xs leading-relaxed text-gray-600">
+                                    {item.detail}
+                                  </p>
+                                </li>
+                              ))}
+                            </ol>
+                            <p className="mt-2 text-[10px] leading-relaxed text-gray-400">
+                              AI-drafted from this stay&apos;s recorded data — review before sharing
+                              with students.
+                            </p>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+
           <section className="rounded-xl border border-hairline bg-surface p-4 shadow-tile">
             <h2 className="mb-3 flex items-center gap-2 font-display text-base font-semibold text-gray-900">
               <FontAwesomeIcon icon={faNotesMedical} className="h-4 w-4 text-brand-600" />

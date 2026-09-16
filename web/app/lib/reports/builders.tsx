@@ -6,7 +6,7 @@ import { toCsv, toCsvBlocks, type CsvCell } from './csv';
 
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
 
-export const REPORT_TYPES = ['student', 'section', 'scenario', 'assessment', 'roster'] as const;
+export const REPORT_TYPES = ['student', 'section', 'scenario', 'assessment', 'roster', 'discharge'] as const;
 export type ReportType = (typeof REPORT_TYPES)[number];
 
 export function isReportType(value: unknown): value is ReportType {
@@ -20,6 +20,9 @@ export const REPORT_NEEDS_TARGET: Record<ReportType, boolean> = {
   scenario: true,
   assessment: true,
   roster: false,
+  // Targets one stored summary, not a patient: a re-admitted patient has more
+  // than one, and each closes a different stay.
+  discharge: true,
 };
 
 export interface BuiltReport {
@@ -551,4 +554,195 @@ export async function buildRosterReport(
   );
 
   return { subject: 'roster-summary', pdf, csv };
+}
+
+/**
+ * A stored discharge summary, rendered as-is.
+ *
+ * This is the one builder that does not query live data for its body: a
+ * discharge summary is a point-in-time record (migration 037), so re-printing
+ * it a month later must produce the same document even if the readings behind
+ * it have since been edited or deleted.
+ */
+export async function buildDischargeReport(
+  supabase: Supabase,
+  meta: ReportMeta,
+  summaryId: string,
+): Promise<BuildResult> {
+  const { data: summary } = await supabase
+    .from('discharge_summaries')
+    .select(
+      'id, admitted_at, discharged_at, diagnosis, room_label, vitals_digest, ehr_digest, follow_up, ai_generated_at, patients(name, age, gender, mimic_id)',
+    )
+    .eq('id', summaryId)
+    .maybeSingle();
+
+  if (!summary) return { error: 'Discharge summary not found', status: 404 };
+
+  const patient = (summary as unknown as {
+    patients: { name: string; age: number | null; gender: string; mimic_id: string } | null;
+  }).patients;
+
+  const vitals = (summary.vitals_digest ?? {}) as {
+    readings?: number;
+    flagged?: number;
+    critical?: number;
+    stats?: Record<string, { min: number; max: number; avg: number; n: number }>;
+    findings?: { message: string; severity: string; recommendation?: string }[];
+  };
+  const ehr = (summary.ehr_digest ?? {}) as {
+    tpr?: number;
+    ivf?: number;
+    ivf_ongoing?: number;
+    notes?: number;
+    notes_reviewed?: number;
+  };
+  const followUp = (Array.isArray(summary.follow_up) ? summary.follow_up : []) as {
+    title?: string;
+    detail?: string;
+  }[];
+
+  const name = patient?.name ?? 'Unknown patient';
+  const days =
+    summary.admitted_at && summary.discharged_at
+      ? Math.max(
+          0,
+          Math.floor(
+            (new Date(summary.discharged_at).getTime() - new Date(summary.admitted_at).getTime()) /
+              86_400_000,
+          ),
+        )
+      : null;
+
+  const VITAL_LABELS: Record<string, string> = {
+    heart_rate: 'Heart rate (bpm)',
+    bp_systolic: 'Systolic BP (mmHg)',
+    bp_diastolic: 'Diastolic BP (mmHg)',
+    temperature_c: 'Temperature (°C)',
+    respiratory_rate: 'Respiratory rate (/min)',
+    oxygen_saturation: 'Oxygen saturation (%)',
+  };
+
+  const vitalRows = Object.entries(vitals.stats ?? {}).map(([key, stat]) => [
+    VITAL_LABELS[key] ?? key,
+    stat.min,
+    stat.avg,
+    stat.max,
+    stat.n,
+  ]);
+
+  const pdf = (
+    <ReportShell
+      title={`Discharge Summary — ${name}`}
+      heading="Discharge Summary"
+      meta={meta}
+      metaRows={[
+        { label: 'Patient', value: `${name}${patient?.age != null ? `, ${patient.age}` : ''}` },
+        { label: 'Record ID', value: patient?.mimic_id ?? '—' },
+        { label: 'Diagnosis', value: summary.diagnosis || '—' },
+        { label: 'Room', value: summary.room_label || '—' },
+        { label: 'Admitted', value: date(summary.admitted_at) },
+        { label: 'Discharged', value: date(summary.discharged_at) },
+        { label: 'Length of stay', value: days === null ? '—' : `${days} day(s)` },
+      ]}
+    >
+      <Text style={styles.sectionTitle}>Stay at a glance</Text>
+      <StatGrid
+        items={[
+          { label: 'Vitals readings', value: vitals.readings ?? 0 },
+          { label: 'Flagged', value: vitals.flagged ?? 0 },
+          { label: 'TPR sheets', value: ehr.tpr ?? 0 },
+          { label: 'IVF records', value: ehr.ivf ?? 0 },
+          { label: 'Progress notes', value: ehr.notes ?? 0 },
+        ]}
+      />
+
+      <Text style={styles.sectionTitle}>Vital signs over the stay</Text>
+      <Table
+        head={['Vital', 'Min', 'Avg', 'Max', 'Readings']}
+        rows={vitalRows}
+        emptyText="No vital signs were charted during this stay."
+      />
+
+      <Text style={styles.sectionTitle}>Abnormal findings</Text>
+      {(vitals.findings ?? []).length === 0 ? (
+        <Text style={styles.empty}>No readings fell outside their reference range.</Text>
+      ) : (
+        (vitals.findings ?? []).map((finding, i) => (
+          <Text key={i} style={{ marginBottom: 3 }}>
+            {finding.severity === 'critical' ? '[CRITICAL] ' : '• '}
+            {finding.message}
+            {finding.recommendation ? ` — ${finding.recommendation}` : ''}
+          </Text>
+        ))
+      )}
+
+      <Text style={styles.sectionTitle}>Follow-up recommendations</Text>
+      {followUp.length === 0 ? (
+        <Text style={styles.empty}>
+          No follow-up recommendations have been drafted for this discharge.
+        </Text>
+      ) : (
+        followUp.map((item, i) => (
+          <Text key={i} style={{ marginBottom: 4 }}>
+            {i + 1}. {item.title ?? ''} — {item.detail ?? ''}
+          </Text>
+        ))
+      )}
+      {followUp.length > 0 && summary.ai_generated_at && (
+        <Text style={{ fontSize: 8, color: '#6b7280', marginTop: 4 }}>
+          Follow-up recommendations were AI-drafted on {date(summary.ai_generated_at)} from the
+          recorded data above, and are intended for review by the supervising instructor.
+        </Text>
+      )}
+      {(ehr.ivf_ongoing ?? 0) > 0 && (
+        <Text style={{ marginTop: 6 }}>
+          Note: {ehr.ivf_ongoing} IVF line(s) were still recorded as running at discharge.
+        </Text>
+      )}
+    </ReportShell>
+  );
+
+  const csv = toCsvBlocks([
+    {
+      title: 'Discharge summary',
+      head: ['Field', 'Value'],
+      rows: [
+        ['Patient', name],
+        ['Record ID', patient?.mimic_id ?? ''],
+        ['Diagnosis', summary.diagnosis || ''],
+        ['Room', summary.room_label || ''],
+        ['Admitted', date(summary.admitted_at)],
+        ['Discharged', date(summary.discharged_at)],
+        ['Length of stay (days)', days === null ? '' : days],
+        ['Vitals readings', vitals.readings ?? 0],
+        ['Flagged readings', vitals.flagged ?? 0],
+        ['TPR sheets', ehr.tpr ?? 0],
+        ['IVF records', ehr.ivf ?? 0],
+        ['IVF still running', ehr.ivf_ongoing ?? 0],
+        ['Progress notes', ehr.notes ?? 0],
+      ] as CsvCell[][],
+    },
+    {
+      title: 'Vital signs',
+      head: ['Vital', 'Min', 'Avg', 'Max', 'Readings'],
+      rows: vitalRows as CsvCell[][],
+    },
+    {
+      title: 'Abnormal findings',
+      head: ['Severity', 'Finding', 'Recommendation'],
+      rows: (vitals.findings ?? []).map((f) => [
+        f.severity,
+        f.message,
+        f.recommendation ?? '',
+      ]) as CsvCell[][],
+    },
+    {
+      title: 'Follow-up recommendations',
+      head: ['#', 'Title', 'Detail'],
+      rows: followUp.map((f, i) => [i + 1, f.title ?? '', f.detail ?? '']) as CsvCell[][],
+    },
+  ]);
+
+  return { subject: name, pdf, csv };
 }
