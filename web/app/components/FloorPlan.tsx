@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faTimes, faWrench, faBan } from "@fortawesome/free-solid-svg-icons";
+import { faTimes, faWrench, faBan, faPen, faTrash } from "@fortawesome/free-solid-svg-icons";
 import type { Room } from "../lib/api";
 import { roomStatus } from "../lib/rooms";
 
@@ -131,9 +131,19 @@ function blockClasses(room: Room, occupied: number): string {
 }
 
 /** The grid surface both variants draw on. */
-function Surface({ children }: { children: React.ReactNode }) {
+function Surface({
+  children,
+  onBackgroundPointerDown,
+}: {
+  children: React.ReactNode;
+  /** Fires only for the empty grid, never for a room block. */
+  onBackgroundPointerDown?: () => void;
+}) {
   return (
     <div
+      onPointerDown={(e) => {
+        if (e.target === e.currentTarget) onBackgroundPointerDown?.();
+      }}
       className="relative w-full rounded-xl border border-hairline bg-subtle"
       style={{
         aspectRatio: `${GRID_COLS} / ${GRID_ROWS}`,
@@ -212,18 +222,27 @@ export function FloorPlanEditor({
   layout,
   occupancy,
   onChange,
+  onEditRoom,
+  onDeleteRoom,
 }: {
   rooms: Room[];
   layout: Layout;
   occupancy: Map<string, number>;
   /** null rect = remove the room from the plan. */
   onChange: (roomId: string, rect: Rect | null) => void;
+  /** Open the room's edit form; a click (no drag) selects and the bar offers it. */
+  onEditRoom?: (room: Room) => void;
+  /** Delete the room record itself — the caller owns the confirm. */
+  onDeleteRoom?: (room: Room) => void;
 }) {
   const surfaceRef = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const placed = rooms.filter((r) => layout[r.id]);
   const unplaced = rooms.filter((r) => !layout[r.id]);
+  // Derived from rooms, so a deletion elsewhere clears the bar by itself.
+  const selectedRoom = rooms.find((r) => r.id === selectedId) ?? null;
 
   /** Grid cell size in px, from the live surface — resizes with the page. */
   const cellSize = (): { w: number; h: number } => {
@@ -264,7 +283,13 @@ export function FloorPlanEditor({
 
   const endDrag = () => {
     if (!drag) return;
-    if (drag.preview && drag.valid) onChange(drag.roomId, drag.preview);
+    if (drag.preview && drag.valid) {
+      onChange(drag.roomId, drag.preview);
+      setSelectedId(drag.roomId);
+    } else if (!drag.preview) {
+      // The pointer never left its cell: that is a click, and clicks select.
+      setSelectedId((prev) => (prev === drag.roomId ? null : drag.roomId));
+    }
     setDrag(null);
   };
 
@@ -277,8 +302,55 @@ export function FloorPlanEditor({
 
   return (
     <div className="space-y-3">
+      {selectedRoom && (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-brand-600/30 bg-brand-600/5 px-3 py-2">
+          <p className="min-w-0 truncate text-sm font-semibold text-gray-900">
+            {selectedRoom.name}
+            <span className="ml-1.5 font-normal text-gray-500">
+              Room {selectedRoom.room_number} · {occupancy.get(selectedRoom.id) ?? 0}/
+              {selectedRoom.capacity} beds
+            </span>
+          </p>
+          <div className="ml-auto flex items-center gap-1.5">
+            {onEditRoom && (
+              <button
+                onClick={() => onEditRoom(selectedRoom)}
+                className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-brand-700 hover:bg-brand-600/10 transition-colors"
+              >
+                <FontAwesomeIcon icon={faPen} className="h-3 w-3" />
+                Edit
+              </button>
+            )}
+            {layout[selectedRoom.id] && (
+              <button
+                onClick={() => onChange(selectedRoom.id, null)}
+                className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100 transition-colors"
+              >
+                <FontAwesomeIcon icon={faTimes} className="h-3 w-3" />
+                Remove from plan
+              </button>
+            )}
+            {onDeleteRoom && (
+              <button
+                onClick={() => onDeleteRoom(selectedRoom)}
+                className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-rose-600 hover:bg-rose-50 transition-colors"
+              >
+                <FontAwesomeIcon icon={faTrash} className="h-3 w-3" />
+                Delete
+              </button>
+            )}
+            <button
+              onClick={() => setSelectedId(null)}
+              title="Deselect"
+              className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+            >
+              <FontAwesomeIcon icon={faTimes} className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
       <div ref={surfaceRef}>
-        <Surface>
+        <Surface onBackgroundPointerDown={() => setSelectedId(null)}>
           {placed.map((room) => {
             const isDragging = drag?.roomId === room.id;
             const rect = (isDragging && drag.preview) || layout[room.id]!;
@@ -295,7 +367,9 @@ export function FloorPlanEditor({
                     ? drag.valid
                       ? "z-20 ring-2 ring-brand-600/60"
                       : "z-20 ring-2 ring-rose-500 opacity-70"
-                    : "hover:z-10 hover:shadow-md"
+                    : selectedId === room.id
+                      ? "z-10 ring-2 ring-brand-600"
+                      : "hover:z-10 hover:shadow-md"
                 } ${blockClasses(room, occupied)}`}
                 style={{
                   left: pct(rect.x, GRID_COLS),
@@ -349,15 +423,37 @@ export function FloorPlanEditor({
         ) : (
           <div className="flex flex-wrap gap-2">
             {unplaced.map((room) => (
-              <button
+              <span
                 key={room.id}
-                onClick={() => placeRoom(room.id)}
-                disabled={trayFull}
-                title={trayFull ? "No free space left on the plan" : "Place on the plan"}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-surface px-2.5 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:border-brand-600/40 hover:text-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex items-center overflow-hidden rounded-lg border border-gray-200 bg-surface text-xs font-medium text-gray-700"
               >
-                {room.name} · {room.room_number}
-              </button>
+                <button
+                  onClick={() => placeRoom(room.id)}
+                  disabled={trayFull}
+                  title={trayFull ? "No free space left on the plan" : "Place on the plan"}
+                  className="px-2.5 py-1.5 transition-colors hover:bg-brand-600/5 hover:text-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {room.name} · {room.room_number}
+                </button>
+                {onEditRoom && (
+                  <button
+                    onClick={() => onEditRoom(room)}
+                    title="Edit room"
+                    className="border-l border-gray-200 px-2 py-1.5 text-gray-400 transition-colors hover:bg-gray-50 hover:text-brand-700"
+                  >
+                    <FontAwesomeIcon icon={faPen} className="h-3 w-3" />
+                  </button>
+                )}
+                {onDeleteRoom && (
+                  <button
+                    onClick={() => onDeleteRoom(room)}
+                    title="Delete room"
+                    className="border-l border-gray-200 px-2 py-1.5 text-gray-400 transition-colors hover:bg-rose-50 hover:text-rose-600"
+                  >
+                    <FontAwesomeIcon icon={faTrash} className="h-3 w-3" />
+                  </button>
+                )}
+              </span>
             ))}
           </div>
         )}

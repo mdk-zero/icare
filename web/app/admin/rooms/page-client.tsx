@@ -289,15 +289,22 @@ export default function RoomsClient() {
           ) : (
             <>
               <p className="mb-3 text-sm text-gray-500">
-                Drag rooms to move them, use the corner grip to resize, and place rooms from the
-                tray. Colors show live bed occupancy. Changes apply after{" "}
-                <span className="font-medium text-gray-700">Save Plan</span>.
+                Click a room to select it — the bar above the plan offers edit and delete. Drag to
+                move, use the corner grip to resize, and place new rooms from the tray. Colors show
+                live bed occupancy. Layout changes apply after{" "}
+                <span className="font-medium text-gray-700">Save Plan</span>; room edits and
+                deletions apply immediately.
               </p>
               <FloorPlanEditor
                 rooms={rooms}
                 layout={workingLayout}
                 occupancy={occupancy}
                 onChange={handleLayoutChange}
+                onEditRoom={(room) => {
+                  setEditingRoom(room);
+                  setFormOpen(true);
+                }}
+                onDeleteRoom={handleDelete}
               />
             </>
           )}
