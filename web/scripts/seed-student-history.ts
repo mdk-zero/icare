@@ -37,6 +37,7 @@ import { config } from 'dotenv';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { selectQuestionsForAttempt } from '../app/lib/assessment-selection';
 import { deriveCompetencyScoresForAttempt } from '../app/lib/competency';
+import { generateRandomPassword, hashPassword } from '../app/lib/auth/password';
 
 config({ path: '.env.local' });
 
@@ -60,6 +61,10 @@ function hash(text: string): number {
 
 interface Profile {
   email: string;
+  /** Used only when the student does not exist yet; existing rows are left alone. */
+  name: string;
+  section: string;
+  sex: 'male' | 'female';
   /** Baseline chance of answering a question correctly. */
   ability: number;
   /** Competency names this student reliably misses, and reliably gets. */
@@ -69,6 +74,15 @@ interface Profile {
   taskCompletion: number;
   /** Quizzes they sat twice, by quiz title. Exercises the unseen-first retake path. */
   retakes: string[];
+  /**
+   * Share of their section's work they actually did, 0..1.
+   *
+   * Below 1 leaves the rest assigned but untouched — no attempt, no
+   * submission, and past its deadline it reads as overdue. That absence is
+   * the strongest at-risk signal there is, and a cohort where everyone
+   * finished everything never produces it.
+   */
+  engagement: number;
 }
 
 /**
@@ -77,37 +91,180 @@ interface Profile {
  * and students who are plainly not.
  */
 const PROFILES: Profile[] = [
+  // ---- the four that already existed --------------------------------------
   {
     email: '23-74349@g.batstate-u.edu.ph',
+    name: 'Linux Mandrake S. Adona',
+    section: 'BSN 1101',
+    sex: 'male',
     ability: 0.88,
     weakAt: [],
     strongAt: ['Safe and Quality Nursing Care', 'Records Management'],
     taskCompletion: 1,
     retakes: [],
+    engagement: 1,
   },
   {
     email: '23-75538@g.batstate-u.edu.ph',
+    name: 'Andre A. Cachola',
+    section: 'BSN 1102',
+    sex: 'male',
     ability: 0.72,
     weakAt: ['Pharmacology'],
     strongAt: ['Communication'],
     taskCompletion: 0.85,
     retakes: ['Asthma Assessment and Inhaler Technique'],
+    engagement: 1,
   },
   {
     email: 'cacholaandot@gmail.com',
+    name: 'Andot S. Wong',
+    section: 'BSN 1102',
+    sex: 'male',
     ability: 0.45,
     weakAt: ['Pharmacology', 'Safe and Quality Nursing Care'],
     strongAt: [],
     taskCompletion: 0.5,
     retakes: ['Urinary Tract Infection Care'],
+    engagement: 1,
   },
   {
     email: 'dotdot042822@gmail.com',
+    name: 'Dotdot I. Corpuz',
+    section: 'BSN 1102',
+    sex: 'male',
     ability: 0.63,
     weakAt: ['Quality Improvement'],
     strongAt: ['Health Education'],
     taskCompletion: 0.7,
     retakes: [],
+    engagement: 1,
+  },
+
+  // ---- BSN 1101, which had a single student ------------------------------
+  {
+    email: '23-80112@g.batstate-u.edu.ph',
+    name: 'Bea R. Katigbak',
+    section: 'BSN 1101',
+    sex: 'female',
+    ability: 0.81,
+    weakAt: [],
+    strongAt: ['Health Education', 'Communication'],
+    taskCompletion: 0.95,
+    retakes: [],
+    engagement: 1,
+  },
+  {
+    email: '23-80147@g.batstate-u.edu.ph',
+    name: 'Miguel A. Panganiban',
+    section: 'BSN 1101',
+    sex: 'male',
+    ability: 0.66,
+    weakAt: ['Records Management'],
+    strongAt: [],
+    taskCompletion: 0.75,
+    retakes: ['Fever Assessment and Management'],
+    engagement: 1,
+  },
+  {
+    email: '23-80233@g.batstate-u.edu.ph',
+    name: 'Trisha Mae L. Macatangay',
+    section: 'BSN 1101',
+    sex: 'female',
+    ability: 0.52,
+    weakAt: ['Pharmacology'],
+    strongAt: [],
+    taskCompletion: 0.6,
+    // Stopped after the first two. The gap is the point.
+    retakes: [],
+    engagement: 0.67,
+  },
+  {
+    email: '23-80318@g.batstate-u.edu.ph',
+    name: 'Kenji P. Villanueva',
+    section: 'BSN 1101',
+    sex: 'male',
+    ability: 0.38,
+    weakAt: ['Safe and Quality Nursing Care', 'Quality Improvement'],
+    strongAt: [],
+    taskCompletion: 0.4,
+    retakes: [],
+    engagement: 0.34,
+  },
+  {
+    email: '23-80402@g.batstate-u.edu.ph',
+    name: 'Angelica D. Manalo',
+    section: 'BSN 1101',
+    sex: 'female',
+    ability: 0.74,
+    weakAt: ['Communication'],
+    strongAt: ['Safe and Quality Nursing Care'],
+    taskCompletion: 0.9,
+    retakes: [],
+    engagement: 1,
+  },
+
+  // ---- BSN 1102 -----------------------------------------------------------
+  {
+    email: '23-80519@g.batstate-u.edu.ph',
+    name: 'Jomar T. Dimaculangan',
+    section: 'BSN 1102',
+    sex: 'male',
+    ability: 0.85,
+    weakAt: [],
+    strongAt: ['Pharmacology', 'Safe and Quality Nursing Care'],
+    taskCompletion: 1,
+    retakes: [],
+    engagement: 1,
+  },
+  {
+    email: '23-80624@g.batstate-u.edu.ph',
+    name: 'Shaira Mae B. Aguilar',
+    section: 'BSN 1102',
+    sex: 'female',
+    ability: 0.58,
+    weakAt: ['Health Education'],
+    strongAt: [],
+    taskCompletion: 0.65,
+    retakes: ['Skin Infection and Diabetes Care'],
+    engagement: 1,
+  },
+  {
+    email: '23-80730@g.batstate-u.edu.ph',
+    name: 'Renz Carlo M. Ilagan',
+    section: 'BSN 1102',
+    sex: 'male',
+    ability: 0.41,
+    weakAt: ['Pharmacology', 'Quality Improvement'],
+    strongAt: [],
+    taskCompletion: 0.45,
+    retakes: [],
+    engagement: 0.67,
+  },
+  {
+    email: '23-80845@g.batstate-u.edu.ph',
+    name: 'Nicole Anne S. Perez',
+    section: 'BSN 1102',
+    sex: 'female',
+    ability: 0.69,
+    weakAt: [],
+    strongAt: ['Records Management'],
+    taskCompletion: 0.8,
+    retakes: [],
+    engagement: 1,
+  },
+  {
+    email: '23-80951@g.batstate-u.edu.ph',
+    name: 'Paulo G. Hernandez',
+    section: 'BSN 1102',
+    sex: 'male',
+    ability: 0.33,
+    weakAt: ['Safe and Quality Nursing Care', 'Pharmacology', 'Health Education'],
+    strongAt: [],
+    taskCompletion: 0.3,
+    // Barely engaged: one piece of work, done badly. The clearest at-risk case.
+    retakes: [],
+    engagement: 0.34,
   },
 ];
 
@@ -158,6 +315,57 @@ async function main() {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
+  // ---- Create any student in the roster that does not exist yet ---------
+  const { data: sections } = await supabase.from('sections').select('id, name');
+  const sectionByName = new Map((sections ?? []).map((r) => [r.name, r.id]));
+
+  const { data: before } = await supabase.from('users').select('email').eq('role', 'student');
+  const existing = new Set((before ?? []).map((r) => r.email));
+  const credentials: string[] = [];
+
+  for (const profile of PROFILES) {
+    if (existing.has(profile.email)) continue;
+    const sectionId = sectionByName.get(profile.section);
+    if (!sectionId) {
+      console.error(`  ✗ ${profile.email}: no section named "${profile.section}"`);
+      process.exit(1);
+    }
+    // Same shape the admin invite flow creates: a temporary password the
+    // student must change at first login.
+    //
+    // Only the hash is stored, so a generated one exists solely in the line
+    // printed below — lose that and the account is unreachable. Set
+    // SEED_STUDENT_PASSWORD to give every seeded student the same known
+    // password instead, which is usually what you want for a dev cohort you
+    // intend to log in as.
+    const password = process.env.SEED_STUDENT_PASSWORD || generateRandomPassword();
+    const { error } = await supabase.from('users').insert({
+      email: profile.email,
+      name: profile.name,
+      role: 'student',
+      sex: profile.sex,
+      section_id: sectionId,
+      password_hash: await hashPassword(password),
+      force_password_change: true,
+    });
+    if (error) {
+      console.error(`  ✗ ${profile.email}:`, error.message);
+      process.exit(1);
+    }
+    credentials.push(`  ${profile.email.padEnd(32)} ${password}`);
+  }
+  if (credentials.length > 0) {
+    console.log(`Created ${credentials.length} student(s). Temporary passwords:`);
+    for (const line of credentials) console.log(line);
+    if (!process.env.SEED_STUDENT_PASSWORD) {
+      console.log(
+        '\n  These were randomly generated and are not stored anywhere. Keep them,\n' +
+          '  or re-run with SEED_STUDENT_PASSWORD set to choose your own.',
+      );
+    }
+    console.log('');
+  }
+
   // ---- Look up everything this seed refers to by name -------------------
   const { data: students } = await supabase
     .from('users')
@@ -200,6 +408,8 @@ async function main() {
   let scenarioCount = 0;
   let attemptCount = 0;
   let taskCount = 0;
+  let skippedScenarios = 0;
+  let skippedQuizzes = 0;
   const summary: string[] = [];
 
   for (const profile of PROFILES) {
@@ -228,8 +438,12 @@ async function main() {
       }
     }
 
+    // Work beyond this index was assigned and never touched.
+    const didCount = Math.max(1, Math.round(profile.engagement * work.length));
+
     // ---- Scenarios ------------------------------------------------------
     for (const [i, item] of work.entries()) {
+      const completed = i < didCount;
       const scenarioId = scenarioByTitle.get(item.scenario);
       if (!scenarioId) {
         console.warn(`  missing scenario "${item.scenario}" — run db:seed:basic-cases first`);
@@ -254,6 +468,11 @@ async function main() {
       const submittedAt = new Date(assignedAt.getTime() + 2 * DAY_MS);
       const completedAt = new Date(submittedAt.getTime() + 6 * 60 * 60 * 1000);
 
+      const deadline = new Date(assignedAt.getTime() + 7 * DAY_MS);
+      // Untouched work that is past its deadline is overdue, not pending —
+      // the same distinction the app makes, and the one faculty act on.
+      const openStatus = deadline.getTime() < Date.now() ? 'overdue' : 'pending';
+
       const { data: assignment, error: aErr } = await supabase
         .from('scenario_assignments')
         .insert({
@@ -261,20 +480,25 @@ async function main() {
           student_id: student.id,
           assigned_by: facultyId,
           assigned_at: assignedAt.toISOString(),
-          deadline: new Date(assignedAt.getTime() + 7 * DAY_MS).toISOString(),
-          status: 'completed',
+          deadline: deadline.toISOString(),
+          status: completed ? 'completed' : openStatus,
           required: true,
-          submitted_at: submittedAt.toISOString(),
-          time_taken: 1800 + Math.round(rng() * 2400),
-          completed_at: completedAt.toISOString(),
-          finalized_by: facultyId,
-          score: 0, // replaced below, once the completed tasks are known
+          submitted_at: completed ? submittedAt.toISOString() : null,
+          time_taken: completed ? 1800 + Math.round(rng() * 2400) : null,
+          completed_at: completed ? completedAt.toISOString() : null,
+          finalized_by: completed ? facultyId : null,
+          score: completed ? 0 : null, // replaced below once tasks are known
         })
         .select('id')
         .single();
       if (aErr || !assignment) {
         console.error(`  ✗ ${profile.email} / ${item.scenario}:`, aErr?.message);
         process.exit(1);
+      }
+
+      if (!completed) {
+        skippedScenarios += 1;
+        continue;
       }
 
       const { data: tasks } = await supabase
@@ -309,6 +533,7 @@ async function main() {
 
     // ---- Quizzes --------------------------------------------------------
     for (const [i, item] of work.entries()) {
+      const completed = i < didCount;
       const assessmentId = assessmentByTitle.get(item.quiz);
       if (!assessmentId) {
         console.warn(`  missing quiz "${item.quiz}" — run db:seed:scenario-quizzes first`);
@@ -335,6 +560,7 @@ async function main() {
       }
 
       const assignedAt = new Date(Date.now() - (38 - i * 9) * DAY_MS);
+      const quizDeadline = new Date(assignedAt.getTime() + 7 * DAY_MS);
       const { data: quizAssignment } = await supabase
         .from('assessment_assignments')
         .insert({
@@ -342,12 +568,22 @@ async function main() {
           student_id: student.id,
           assigned_by: facultyId,
           assigned_at: assignedAt.toISOString(),
-          deadline: new Date(assignedAt.getTime() + 7 * DAY_MS).toISOString(),
-          status: 'completed',
+          deadline: quizDeadline.toISOString(),
+          status: completed
+            ? 'completed'
+            : quizDeadline.getTime() < Date.now()
+              ? 'overdue'
+              : 'pending',
           required: true,
         })
         .select('id')
         .single();
+
+      // Assigned but never sat: the row stands, with no attempt behind it.
+      if (!completed) {
+        skippedQuizzes += 1;
+        continue;
+      }
 
       const sittings = profile.retakes.includes(item.quiz) ? 2 : 1;
       for (let sitting = 0; sitting < sittings; sitting++) {
@@ -472,8 +708,9 @@ async function main() {
   }
 
   console.log(
-    `\nScenarios: ${scenarioCount} completed (${taskCount} task check-offs). ` +
-      `Quizzes: ${attemptCount} attempts submitted.\n`,
+    `\nScenarios: ${scenarioCount} completed (${taskCount} task check-offs), ` +
+      `${skippedScenarios} left outstanding.\n` +
+      `Quizzes: ${attemptCount} attempts submitted, ${skippedQuizzes} never sat.\n`,
   );
   for (const line of summary) console.log(line);
 }
