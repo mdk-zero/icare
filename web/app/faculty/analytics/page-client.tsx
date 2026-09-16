@@ -5,12 +5,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faChartBar,
   faUsers,
-  faHeartbeat,
   faExclamationTriangle,
-  faNotesMedical,
-  faDroplet,
-  faTemperatureHalf,
-  faCircleCheck,
   faChevronDown,
   faCheck,
   faLayerGroup,
@@ -34,6 +29,7 @@ import {
 } from "../../lib/api";
 import { SkeletonStatCard, SkeletonChartArea, SkeletonCompetencyGrid } from "../../components/skeletons";
 import PageHeader from "../../components/PageHeader";
+import { toast } from "../../components/Toast";
 import Card, { CardLabel } from "../../components/Card";
 import Avatar from "../../components/Avatar";
 import { usePageData } from "../../lib/use-page-data";
@@ -43,6 +39,51 @@ import { MODEL_EVAL_SNAPSHOT, DEFAULT_MODEL_KIND } from "../../lib/model-eval-sn
 const NO_SECTIONS: Section[] = [];
 
 const BRAND = "#1B6B7B";
+
+// The warehouse ETL can nudge cohort numbers every few minutes with nothing
+// meaningfully new to say, so a changed AI-summary data signature waits out
+// this cooldown before it's actually spent on a fresh (slow) AI call.
+const NARRATIVE_COOLDOWN_MS = 10 * 60 * 1000;
+
+/**
+ * Successful narratives survive a hard refresh (not just client-side nav) via
+ * localStorage, keyed by the same data signature as the in-memory cache. A
+ * failed generation is deliberately never persisted here — replaying a stale
+ * "rate-limited" message after the limit has since cleared would be worse
+ * than just trying again. Capped so a semester of filter combinations
+ * doesn't grow this without bound.
+ */
+const NARRATIVE_STORAGE_PREFIX = "icare:analytics-narrative:";
+const NARRATIVE_STORAGE_INDEX_KEY = "icare:analytics-narrative:index";
+const NARRATIVE_STORAGE_MAX_ENTRIES = 15;
+
+type NarrativeResult = Awaited<ReturnType<typeof generateAnalyticsNarrative>>;
+
+function readStoredNarrative(key: string): NarrativeResult | null {
+  try {
+    const raw = localStorage.getItem(NARRATIVE_STORAGE_PREFIX + key);
+    return raw ? (JSON.parse(raw) as NarrativeResult) : null;
+  } catch {
+    // Private browsing, disabled storage, or corrupt JSON — just miss the cache.
+    return null;
+  }
+}
+
+function writeStoredNarrative(key: string, result: NarrativeResult) {
+  try {
+    localStorage.setItem(NARRATIVE_STORAGE_PREFIX + key, JSON.stringify(result));
+    const raw = localStorage.getItem(NARRATIVE_STORAGE_INDEX_KEY);
+    const index: string[] = raw ? (JSON.parse(raw) as string[]) : [];
+    const next = [...index.filter((k) => k !== key), key];
+    while (next.length > NARRATIVE_STORAGE_MAX_ENTRIES) {
+      const evicted = next.shift();
+      if (evicted) localStorage.removeItem(NARRATIVE_STORAGE_PREFIX + evicted);
+    }
+    localStorage.setItem(NARRATIVE_STORAGE_INDEX_KEY, JSON.stringify(next));
+  } catch {
+    // Storage full or unavailable — the in-memory cache still covers this tab.
+  }
+}
 
 /* ---------------------------------------------------------------- dates */
 
@@ -359,83 +400,6 @@ function SectionPicker({
   );
 }
 
-/** Safe vs at-risk split — a donut, the correct shape for a part-to-whole. */
-function RiskDonut({ safe, atRisk }: { safe: number; atRisk: number }) {
-  const total = safe + atRisk;
-  const r = 48;
-  const cx = 70;
-  const cy = 70;
-  const sw = 20;
-  const gap = 4;
-  const c = 2 * Math.PI * r;
-  const totalLen = c - gap * 2;
-  const safeLen = total ? (safe / total) * totalLen : 0;
-  const atRiskLen = total ? (atRisk / total) * totalLen : 0;
-  const offset = -gap;
-
-  return (
-    <div className="flex flex-col items-center gap-4">
-      <div className="relative w-[140px] h-[140px]">
-        <svg viewBox="0 0 140 140" className="w-full h-full -rotate-90">
-          <circle cx={cx} cy={cy} r={r} fill="none" stroke="#f1f5f9" strokeWidth={sw} />
-          {safeLen > 0 && (
-            <circle
-              cx={cx}
-              cy={cy}
-              r={r}
-              fill="none"
-              stroke="url(#safeGrad)"
-              strokeWidth={sw}
-              strokeDasharray={`${safeLen} ${c - safeLen}`}
-              strokeDashoffset={offset}
-              strokeLinecap="round"
-            />
-          )}
-          {atRiskLen > 0 && (
-            <circle
-              cx={cx}
-              cy={cy}
-              r={r}
-              fill="none"
-              stroke="url(#riskGrad)"
-              strokeWidth={sw}
-              strokeDasharray={`${atRiskLen} ${c - atRiskLen}`}
-              strokeDashoffset={safeLen > 0 ? -(safeLen + gap * 2) : offset}
-              strokeLinecap="round"
-            />
-          )}
-          <defs>
-            <linearGradient id="safeGrad" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%" stopColor="#34d399" />
-              <stop offset="100%" stopColor="#10b981" />
-            </linearGradient>
-            <linearGradient id="riskGrad" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%" stopColor="#fb7185" />
-              <stop offset="100%" stopColor="#f43f5e" />
-            </linearGradient>
-          </defs>
-        </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-3xl font-bold text-gray-900">{total}</span>
-          <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wider">predicted</span>
-        </div>
-      </div>
-      <div className="flex items-center gap-5">
-        <span className="flex items-center gap-2 text-sm">
-          <span className="w-2.5 h-2.5 rounded-full bg-emerald-600 ring-2 ring-emerald-100" />
-          <span className="text-gray-500">Safe</span>
-          <span className="font-bold text-gray-900">{safe}</span>
-        </span>
-        <span className="flex items-center gap-2 text-sm">
-          <span className="w-2.5 h-2.5 rounded-full bg-rose-600 ring-2 ring-rose-100" />
-          <span className="text-gray-500">At risk</span>
-          <span className="font-bold text-gray-900">{atRisk}</span>
-        </span>
-      </div>
-    </div>
-  );
-}
-
 /** Horizontal bars — the correct shape for comparing labelled magnitudes. */
 function HBars({
   items,
@@ -481,6 +445,115 @@ function HBars({
         </div>
       ))}
     </div>
+  );
+}
+
+/** Smallest "nice" round number at or above `roughStep` — 1/2/5/10 scaled by
+ * magnitude — so evenly-spaced gridlines land on whole numbers (0,1,2,3
+ * instead of 0,1,3,4 from naively quartering an arbitrary ceiling). */
+function niceStep(roughStep: number): number {
+  if (roughStep <= 0) return 1;
+  const magnitude = Math.pow(10, Math.floor(Math.log10(roughStep)));
+  for (const step of [1, 2, 5, 10]) {
+    const candidate = step * magnitude;
+    if (candidate >= roughStep) return candidate;
+  }
+  return 10 * magnitude;
+}
+
+/**
+ * Vertical bar chart — one bar per section, height for its active-student
+ * count, with the section's total enrolled shown as a lighter cap and its
+ * name below the axis. The actual chart shape "Active Students by Section"
+ * asks for, rather than a list of inline progress bars.
+ */
+function SectionBarChart({
+  sections,
+}: {
+  sections: { id: string; name: string; students: number; active_students?: number }[];
+}) {
+  const W = 640;
+  const H = 260;
+  const padL = 36;
+  const padR = 12;
+  const padT = 28;
+  const padB = 48;
+  const plotW = W - padL - padR;
+  const plotH = H - padT - padB;
+  const n = sections.length;
+  const maxStudents = Math.max(1, ...sections.map((s) => s.students));
+  const step = niceStep(maxStudents / 4);
+  const ceiling = step * Math.ceil(maxStudents / step);
+  const ticks: number[] = [];
+  for (let t = 0; t <= ceiling; t += step) ticks.push(t);
+  const y = (v: number) => padT + (1 - v / ceiling) * plotH;
+
+  const barGap = 28;
+  const barW = Math.min(64, (plotW - barGap * Math.max(n - 1, 0)) / Math.max(n, 1));
+  const rowW = barW * n + barGap * Math.max(n - 1, 0);
+  const startX = padL + Math.max(0, (plotW - rowW) / 2);
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full overflow-visible">
+      {ticks.map((t) => (
+        <g key={t}>
+          <line
+            x1={padL}
+            y1={y(t)}
+            x2={W - padR}
+            y2={y(t)}
+            className="stroke-gray-200"
+            strokeWidth="1"
+            strokeDasharray="3 3"
+          />
+          <text x={padL - 8} y={y(t) + 3} textAnchor="end" fontSize="10" className="fill-gray-400 tabular-nums">
+            {t}
+          </text>
+        </g>
+      ))}
+
+      {sections.map((s, i) => {
+        const active = s.active_students ?? 0;
+        const x = startX + i * (barW + barGap);
+        const totalY = y(s.students);
+        const activeY = y(active);
+        return (
+          <g key={s.id}>
+            {/* Total enrolled — a faint track behind the active bar, same
+                role as the gray-100 track other bars on this page use. */}
+            <rect
+              x={x}
+              y={totalY}
+              width={barW}
+              height={Math.max(0, padT + plotH - totalY)}
+              rx={6}
+              className="fill-gray-100"
+            />
+            <rect
+              x={x}
+              y={activeY}
+              width={barW}
+              height={Math.max(0, padT + plotH - activeY)}
+              rx={6}
+              className="fill-brand-500 transition-all duration-700 ease-out"
+            >
+              <title>
+                {`${s.name}: ${active} active of ${s.students} enrolled`}
+              </title>
+            </rect>
+            <text
+              x={x + barW / 2}
+              y={H - padB + 18}
+              textAnchor="middle"
+              fontSize="11"
+              className="fill-gray-400"
+            >
+              {s.name.length > 10 ? `${s.name.slice(0, 9)}…` : s.name}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
   );
 }
 
@@ -598,7 +671,7 @@ function NarrativeCard({
   generatedAt,
   loading,
   error,
-  stale,
+  pendingUpdate,
   show,
   onToggle,
   onGenerate,
@@ -607,7 +680,9 @@ function NarrativeCard({
   generatedAt: string | null;
   loading: boolean;
   error: string | null;
-  stale: boolean;
+  /** Newer data has arrived but the summary is holding off a beat rather
+   * than spending an AI call on every minor warehouse tick. */
+  pendingUpdate: boolean;
   show: boolean;
   onToggle: () => void;
   onGenerate: () => void;
@@ -635,9 +710,14 @@ function NarrativeCard({
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          {stale && !loading && (
-            <span className="hidden rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-medium text-amber-700 sm:inline">
-              Filters changed
+          {!loading && !error && (pendingUpdate || narrative) && (
+            <span
+              className={`hidden items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium sm:flex ${
+                pendingUpdate ? "bg-amber-50 text-amber-700" : "bg-gray-100 text-gray-500"
+              }`}
+            >
+              <FontAwesomeIcon icon={pendingUpdate ? faArrowsRotate : faCheck} className="h-2.5 w-2.5" />
+              {pendingUpdate ? "New data available" : "No changes since last summary"}
             </span>
           )}
           <button
@@ -654,14 +734,27 @@ function NarrativeCard({
           <button
             type="button"
             onClick={onGenerate}
-            disabled={loading}
+            disabled={loading || (!pendingUpdate && !error && Boolean(narrative))}
+            title={
+              !loading && !pendingUpdate && !error && narrative
+                ? "No new data yet — regenerating now would spend the same (limited) AI quota on a near-identical answer."
+                : undefined
+            }
             className="flex items-center gap-2 rounded-lg bg-brand-600 px-3.5 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <FontAwesomeIcon
               icon={faArrowsRotate}
               className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`}
             />
-            {loading ? "Reading…" : error ? "Retry" : narrative ? "Update" : "Generate"}
+            {loading
+              ? "Reading…"
+              : error
+                ? "Retry"
+                : pendingUpdate
+                  ? "Refresh now"
+                  : narrative
+                    ? "Up to date"
+                    : "Generate"}
           </button>
         </div>
       </div>
@@ -796,46 +889,88 @@ export default function FacultyAnalyticsClient() {
   /* --- AI narrative -------------------------------------------------- */
 
   const [showNarrative, setShowNarrative] = useState(true);
-  const [narrative, setNarrative] = useState<AnalyticsNarrative | null>(null);
-  const [narrativeAt, setNarrativeAt] = useState<string | null>(null);
-  const [narrativeLoading, setNarrativeLoading] = useState(false);
-  const [narrativeError, setNarrativeError] = useState<string | null>(null);
-  // Which filter combination the current narrative describes, so a stale one
-  // is labelled rather than silently describing the wrong numbers.
-  const [narrativeKey, setNarrativeKey] = useState<string | null>(null);
 
-  const filterKey = `${sectionKey}|${from}|${to}`;
+  // Keyed by the numbers themselves rather than the filter selection, so
+  // picking a section/range that happens to produce the same figures — or
+  // just navigating back to this page — reuses the cached reading instead of
+  // spending another (slow) AI call to describe data that hasn't moved.
+  const dataSignature = summary
+    ? JSON.stringify({
+        avg: summary.cohort.average_score,
+        attempts: summary.cohort.submitted_attempts,
+        active: summary.cohort.active_students_30d,
+        total: summary.cohort.total_students,
+        risk: summary.risk_distribution,
+        competency: summary.competency_breakdown,
+        // Both keys are undefined on a warehouse that hasn't run migration
+        // 030 yet, hence the fallbacks — same as everywhere else these are read.
+        top: (summary.top_students ?? []).map((s) => [s.student_key, s.average_score, s.attempts]),
+        sections: (summary.sections ?? []).map((s) => [s.id, s.students, s.active_students ?? 0]),
+      })
+    : null;
+  const narrativeKey = dataSignature ? `faculty:analytics:narrative:${dataSignature}` : null;
 
-  const runNarrative = useCallback(
-    async (key: string, ids: string[], start: string, end: string) => {
-      setNarrativeLoading(true);
-      setNarrativeError(null);
-      const result = await generateAnalyticsNarrative({ sectionIds: ids, from: start, to: end });
-      setNarrativeLoading(false);
-      if (result.error || !result.narrative) {
-        setNarrativeError(result.error ?? "Unable to generate summary");
-        return;
-      }
-      setNarrative(result.narrative);
-      setNarrativeAt(result.generated_at ?? null);
-      setNarrativeKey(key);
-    },
-    [],
-  );
+  // The warehouse ETL can nudge these numbers every few minutes with nothing
+  // meaningfully new to say, so a changed signature doesn't switch the AI
+  // summary over immediately — only after a cooldown, so a session left open
+  // doesn't spend a slow AI call on every minor tick. `activeNarrativeKey` is
+  // what's actually handed to usePageData; `narrativeKey` above is just
+  // "what the data looks like right now."
+  const [activeNarrativeKey, setActiveNarrativeKey] = useState<string | null>(null);
+  const lastAutoSwitchAt = useRef(0);
 
-  // One automatic reading on arrival; after that the faculty member asks for
-  // it, so changing filters doesn't spend an AI call per click. It waits for
-  // the first summary because that request is what heals a cold warehouse —
-  // running earlier would narrate zeros. The ref makes every later pass a
-  // no-op.
-  const autoNarrative = useRef(false);
   useEffect(() => {
-    if (loading || autoNarrative.current) return;
-    autoNarrative.current = true;
-    void (async () => {
-      await runNarrative(filterKey, sectionIds, from, to);
-    })();
-  }, [loading, runNarrative, filterKey, sectionIds, from, to]);
+    if (narrativeKey === null || narrativeKey === activeNarrativeKey) return;
+    const elapsed = Date.now() - lastAutoSwitchAt.current;
+    if (activeNarrativeKey === null || elapsed >= NARRATIVE_COOLDOWN_MS) {
+      lastAutoSwitchAt.current = Date.now();
+      setActiveNarrativeKey(narrativeKey);
+    }
+    // Otherwise leave the older key active; `pendingUpdate` below surfaces
+    // that newer data exists, and Regenerate can always jump the cooldown.
+  }, [narrativeKey, activeNarrativeKey]);
+
+  const pendingUpdate = narrativeKey !== null && narrativeKey !== activeNarrativeKey;
+
+  const narrativeLoader = useCallback(async () => {
+    if (activeNarrativeKey) {
+      const stored = readStoredNarrative(activeNarrativeKey);
+      if (stored) return stored;
+    }
+    const result = await generateAnalyticsNarrative({ sectionIds, from, to });
+    if (activeNarrativeKey && result.narrative) writeStoredNarrative(activeNarrativeKey, result);
+    return result;
+  }, [activeNarrativeKey, sectionIds, from, to]);
+
+  const {
+    data: narrativeResult,
+    loading: narrativeLoading,
+    revalidating: narrativeRevalidating,
+    refresh: reloadActiveNarrative,
+  } = usePageData(activeNarrativeKey, narrativeLoader, { freshFor: Infinity, keepPreviousData: true });
+
+  const narrative = narrativeResult?.narrative ?? null;
+  const narrativeAt = narrativeResult?.generated_at ?? null;
+  const narrativeError = narrativeResult && !narrativeResult.narrative
+    ? (narrativeResult.error ?? "Unable to generate summary")
+    : null;
+  const narrativeBusy = narrativeLoading || narrativeRevalidating;
+
+  // Pending data jumps the cooldown, and a failed attempt is always worth
+  // retrying — both are real reasons to spend another AI call. Clicking this
+  // with neither reason true would just re-ask about numbers we already have
+  // a good answer for, burning the same (limited) quota for a near-identical
+  // reply, so that case is a no-op instead.
+  const regenerateNarrative = () => {
+    if (pendingUpdate) {
+      lastAutoSwitchAt.current = Date.now();
+      setActiveNarrativeKey(narrativeKey);
+    } else if (narrativeError) {
+      void reloadActiveNarrative();
+    } else {
+      toast("No new data yet — this summary is already current.", "info");
+    }
+  };
 
   if (loading) {
     return (
@@ -864,10 +999,7 @@ export default function FacultyAnalyticsClient() {
   }
 
   const atRisk = summary?.risk_distribution?.at_risk ?? 0;
-  const safe = summary?.risk_distribution?.safe ?? 0;
-  const predicted = atRisk + safe;
   const trend = summary?.weekly_trend ?? [];
-  const activity = summary?.clinical_activity;
   const competencies = Object.entries(summary?.competency_breakdown ?? {}).sort(
     (a, b) => b[1] - a[1],
   );
@@ -926,16 +1058,6 @@ export default function FacultyAnalyticsClient() {
       iconColor: "text-rose-600",
     },
   ];
-
-  const activityItems = [
-    { key: "vitals", label: "Vital Readings", value: activity?.vital_readings ?? 0, icon: faHeartbeat },
-    { key: "anomalies", label: "Anomalies Flagged", value: activity?.anomalies ?? 0, icon: faExclamationTriangle },
-    { key: "tpr", label: "TPR Entries", value: activity?.tpr_entries ?? 0, icon: faTemperatureHalf },
-    { key: "ivf", label: "IVF Records", value: activity?.ivf_records ?? 0, icon: faDroplet },
-    { key: "notes", label: "Progress Notes", value: activity?.progress_notes ?? 0, icon: faNotesMedical },
-    { key: "reviewed", label: "Notes Reviewed", value: activity?.notes_reviewed ?? 0, icon: faCircleCheck },
-  ];
-  const activityMax = Math.max(1, ...activityItems.map((a) => a.value));
 
   return (
     <div>
@@ -1027,12 +1149,12 @@ export default function FacultyAnalyticsClient() {
       <NarrativeCard
         narrative={narrative}
         generatedAt={narrativeAt}
-        loading={narrativeLoading}
+        loading={narrativeBusy}
         error={narrativeError}
-        stale={narrativeKey !== null && narrativeKey !== filterKey}
+        pendingUpdate={pendingUpdate}
         show={showNarrative}
         onToggle={() => setShowNarrative((v) => !v)}
-        onGenerate={() => runNarrative(filterKey, sectionIds, from, to)}
+        onGenerate={regenerateNarrative}
       />
 
       {/* Refetches dim the panels in place rather than tearing the page down
@@ -1054,60 +1176,11 @@ export default function FacultyAnalyticsClient() {
           ))}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4 items-stretch">
-          <Card padding="md" className="lg:col-span-2 flex flex-col">
-            <div className="flex items-center justify-between mb-5">
-              <div className="flex items-center gap-2.5">
-                <div className="rounded-lg bg-brand-600/10 p-1.5">
-                  <FontAwesomeIcon icon={faChartBar} className="h-3.5 w-3.5 text-brand-600" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900">Classroom Performance Overview</h3>
-                  <p className="text-xs text-gray-400">Line chart — average quiz score over time</p>
-                </div>
-              </div>
-              <span className="font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-slate-400">
-                {BUCKET_LABEL[bucket]}
-              </span>
-            </div>
-            <div className="flex-1 flex flex-col justify-center">
-              {trend.length === 0 ? (
-                <p className="text-gray-400 text-sm py-16 text-center">
-                  No submitted attempts in {formatRange(from, to)}.
-                </p>
-              ) : (
-                <TrendLineChart data={trend} bucket={bucket} />
-              )}
-            </div>
-          </Card>
-
-          <Card padding="md" className="flex flex-col">
-            <div className="flex items-center gap-2.5 mb-5">
-              <div className="rounded-lg bg-rose-600/10 p-1.5">
-                <FontAwesomeIcon icon={faExclamationTriangle} className="h-3.5 w-3.5 text-rose-600" />
-              </div>
-              <h3 className="font-semibold text-gray-900">At-Risk Prediction</h3>
-            </div>
-            <div className="flex-1 flex items-center justify-center">
-              {predicted === 0 ? (
-                <div className="text-center">
-                  <FontAwesomeIcon icon={faExclamationTriangle} className="w-8 h-8 text-gray-300 mb-3" />
-                  <p className="text-gray-500 text-sm">
-                    No predictions yet — the ML prediction service populates this once it runs.
-                  </p>
-                </div>
-              ) : (
-                <RiskDonut safe={safe} atRisk={atRisk} />
-              )}
-            </div>
-          </Card>
-        </div>
-
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4 items-stretch">
           <Card padding="md" className="flex flex-col">
             <div className="flex items-center gap-2.5 mb-5">
-              <div className="rounded-lg bg-purple-600/10 p-1.5">
-                <FontAwesomeIcon icon={faUsers} className="h-3.5 w-3.5 text-purple-600" />
+              <div className="rounded-lg bg-brand-500/10 p-1.5">
+                <FontAwesomeIcon icon={faUsers} className="h-3.5 w-3.5 text-brand-500" />
               </div>
               <h3 className="font-semibold text-gray-900">Active Students by Section</h3>
             </div>
@@ -1117,28 +1190,7 @@ export default function FacultyAnalyticsClient() {
                   No sections in scope — pick a section above, or ask an admin to assign you one.
                 </p>
               ) : (
-                <div className="space-y-4">
-                  {sectionsWithActivity.map((s) => {
-                    // `active_students` is only populated once migration 030 has
-                    // run; a not-yet-migrated warehouse omits the key entirely.
-                    const active = s.active_students ?? 0;
-                    const pct = s.students > 0 ? Math.round((active / s.students) * 100) : 0;
-                    return (
-                      <div key={s.id} className="flex items-center gap-3">
-                        <span className="w-28 shrink-0 truncate text-sm text-gray-600">{s.name}</span>
-                        <div className="h-3 flex-1 rounded-full bg-gray-100 overflow-hidden ring-1 ring-gray-200/50">
-                          <div
-                            className="h-full rounded-full bg-gradient-to-r from-purple-500 to-purple-400 transition-all duration-700 ease-out"
-                            style={{ width: `${Math.max(pct, active > 0 ? 4 : 0)}%` }}
-                          />
-                        </div>
-                        <span className="w-16 shrink-0 text-right text-sm font-bold text-gray-800 tabular-nums">
-                          {active}/{s.students}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
+                <SectionBarChart sections={sectionsWithActivity} />
               )}
             </div>
           </Card>
@@ -1156,45 +1208,57 @@ export default function FacultyAnalyticsClient() {
           </Card>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4 items-stretch">
-          <Card padding="md" className="flex flex-col">
-            <div className="flex items-center gap-2.5 mb-5">
+        <Card padding="md" className="mb-4 flex flex-col">
+          <div className="flex items-center justify-between mb-5">
+            <div className="flex items-center gap-2.5">
               <div className="rounded-lg bg-brand-600/10 p-1.5">
-                <FontAwesomeIcon icon={faLayerGroup} className="h-3.5 w-3.5 text-brand-600" />
+                <FontAwesomeIcon icon={faChartBar} className="h-3.5 w-3.5 text-brand-600" />
               </div>
               <div>
-                <h3 className="font-semibold text-gray-900">Performance per Competency</h3>
-                <p className="text-xs text-gray-400">Bar chart — average score by competency</p>
+                <h3 className="font-semibold text-gray-900">Classroom Performance Overview</h3>
+                <p className="text-xs text-gray-400">Line chart — average quiz score over time</p>
               </div>
             </div>
-            <div className="flex-1 flex flex-col justify-center">
-              {competencies.length === 0 ? (
-                <p className="text-gray-400 text-sm py-12 text-center">
-                  No validated competency scores yet — record them from each student&apos;s profile.
-                </p>
-              ) : (
-                <HBars
-                  items={competencies.map(([name, value]) => ({ key: name, label: name, value }))}
-                  max={100}
-                  suffix="%"
-                  tone="grade"
-                />
-              )}
-            </div>
-          </Card>
+            <span className="font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-slate-400">
+              {BUCKET_LABEL[bucket]}
+            </span>
+          </div>
+          <div className="flex-1 flex flex-col justify-center">
+            {trend.length === 0 ? (
+              <p className="text-gray-400 text-sm py-16 text-center">
+                No submitted attempts in {formatRange(from, to)}.
+              </p>
+            ) : (
+              <TrendLineChart data={trend} bucket={bucket} />
+            )}
+          </div>
+        </Card>
 
-          <Card padding="md" className="flex flex-col">
-            <div className="flex items-center gap-2.5 mb-5">
-              <div className="rounded-lg bg-brand-600/10 p-1.5">
-                <FontAwesomeIcon icon={faHeartbeat} className="h-3.5 w-3.5 text-brand-600" />
-              </div>
-              <h3 className="font-semibold text-gray-900">Clinical Training Activity</h3>
+        <Card padding="md" className="mb-4 flex flex-col">
+          <div className="flex items-center gap-2.5 mb-5">
+            <div className="rounded-lg bg-brand-600/10 p-1.5">
+              <FontAwesomeIcon icon={faLayerGroup} className="h-3.5 w-3.5 text-brand-600" />
             </div>
-            <div className="flex-1 flex flex-col justify-center">
-              <HBars items={activityItems} max={activityMax} />
+            <div>
+              <h3 className="font-semibold text-gray-900">Performance per Competency</h3>
+              <p className="text-xs text-gray-400">Bar chart — average score by competency</p>
             </div>
-          </Card>
-        </div>
+          </div>
+          <div className="flex-1 flex flex-col justify-center">
+            {competencies.length === 0 ? (
+              <p className="text-gray-400 text-sm py-12 text-center">
+                No validated competency scores yet — record them from each student&apos;s profile.
+              </p>
+            ) : (
+              <HBars
+                items={competencies.map(([name, value]) => ({ key: name, label: name, value }))}
+                max={100}
+                suffix="%"
+                tone="grade"
+              />
+            )}
+          </div>
+        </Card>
       </div>
 
       {summary?.etl?.last_run_at && (
