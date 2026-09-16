@@ -1,5 +1,5 @@
 -- =================================================================
--- 030: Per-section active-student counts + a top-performers list for
+-- 036: Per-section active-student counts + a top-performers list for
 -- the faculty analytics dashboard's redesign.
 --
 -- Both pieces reuse data the warehouse already has:
