@@ -72,11 +72,7 @@ function isActive(item: NavItem, pathname: string, searchParams: URLSearchParams
   return pathname === "/dashboard" && activeTab === item.id;
 }
 
-export default function StudentLayoutClient({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function StudentLayoutClient({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 

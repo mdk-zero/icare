@@ -518,9 +518,7 @@ export default function PatientsManager({
     for (const patient of patients) {
       // Discharged patients hold no bed, so without their own bucket they
       // would all pile into "Unassigned" and read as waiting for a room.
-      const key = isDischarged(patient)
-        ? DISCHARGED_KEY
-        : (patient.room_id ?? UNASSIGNED_KEY);
+      const key = isDischarged(patient) ? DISCHARGED_KEY : (patient.room_id ?? UNASSIGNED_KEY);
 
       let group = byKey.get(key);
       if (!group) {
@@ -912,13 +910,6 @@ export default function PatientsManager({
           )}
 
           <div className="flex items-center gap-3 ml-auto">
-            {!loading && patients.length > 0 && (
-              <span className="text-xs font-medium text-gray-500 whitespace-nowrap">
-                {filtersActive
-                  ? `${filteredPatients.length} of ${patients.length} patients`
-                  : `${patients.length} patients`}
-              </span>
-            )}
             <button
               onClick={openAddModal}
               className="inline-flex items-center gap-2 px-4 py-2.5 bg-brand-600 hover:bg-[#145a68] text-white text-sm font-medium rounded-lg transition-colors shadow-[0_2px_6px_rgba(27,107,123,0.2)] whitespace-nowrap"
@@ -968,8 +959,8 @@ export default function PatientsManager({
           />
           {rooms.every((r) => r.plan_x == null) && (
             <p className="mt-3 rounded-xl border border-hairline bg-surface p-6 text-center text-sm text-gray-500">
-              No rooms have been placed on the floor plan yet. An admin can arrange
-              them under Rooms, or switch to Card Layout to browse the census.
+              No rooms have been placed on the floor plan yet. An admin can arrange them under
+              Rooms, or switch to Card Layout to browse the census.
             </p>
           )}
         </div>

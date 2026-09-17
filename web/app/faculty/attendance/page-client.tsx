@@ -87,10 +87,7 @@ export default function AttendanceClient() {
 
   // Headline numbers read across every shift on screen, so a single shift's
   // roster cannot disagree with the tiles above it.
-  const overall = useMemo(
-    () => tallyAttendance(shifts.flatMap((s) => s.statuses)),
-    [shifts],
-  );
+  const overall = useMemo(() => tallyAttendance(shifts.flatMap((s) => s.statuses)), [shifts]);
   const unmarked = useMemo(
     () =>
       shifts.filter(
@@ -137,8 +134,11 @@ export default function AttendanceClient() {
   return (
     <div>
       <PageHeader
-        badge={{ icon: <FontAwesomeIcon icon={faCalendarCheck} className="w-3.5 h-3.5" />, label: "Attendance" }}
-        title="Attendance"
+        badge={{
+          icon: <FontAwesomeIcon icon={faCalendarCheck} className="w-3.5 h-3.5" />,
+          label: "Shifts Management",
+        }}
+        title="Shifting Schedule"
         subtitle="Schedule clinical shifts and record who turned up for them"
         action={{
           icon: <FontAwesomeIcon icon={faPlus} className="w-4 h-4" />,
@@ -153,7 +153,9 @@ export default function AttendanceClient() {
           icon={<FontAwesomeIcon icon={faClipboardList} className="h-5 w-5" />}
           value={shifts.length}
           label="Shifts scheduled"
-          caption={unmarked > 0 ? `${unmarked} past shift${unmarked === 1 ? "" : "s"} unmarked` : undefined}
+          caption={
+            unmarked > 0 ? `${unmarked} past shift${unmarked === 1 ? "" : "s"} unmarked` : undefined
+          }
         />
         <StatTile
           icon={<FontAwesomeIcon icon={faPercent} className="h-5 w-5" />}
@@ -187,7 +189,10 @@ export default function AttendanceClient() {
         </div>
       ) : shifts.length === 0 ? (
         <div className="rounded-xl border border-hairline bg-surface p-12 text-center shadow-tile">
-          <FontAwesomeIcon icon={faCalendarCheck} className="mx-auto mb-4 h-12 w-12 text-gray-300" />
+          <FontAwesomeIcon
+            icon={faCalendarCheck}
+            className="mx-auto mb-4 h-12 w-12 text-gray-300"
+          />
           <h3 className="text-lg font-semibold text-gray-700">No shifts scheduled yet</h3>
           <p className="mt-1 text-sm text-gray-500">
             Schedule a shift for one of your sections — every student in it is rostered
@@ -221,7 +226,6 @@ export default function AttendanceClient() {
     </div>
   );
 }
-
 
 // ---------------------------------------------------------------------------
 // Calendar
@@ -343,7 +347,9 @@ function ShiftCalendar({
           const sameMonth = from.getMonth() === to.getMonth();
           return `${from.toLocaleDateString(undefined, { month: "short", day: "numeric" })} – ${to.toLocaleDateString(
             undefined,
-            sameMonth ? { day: "numeric", year: "numeric" } : { month: "short", day: "numeric", year: "numeric" },
+            sameMonth
+              ? { day: "numeric", year: "numeric" }
+              : { month: "short", day: "numeric", year: "numeric" },
           )}`;
         })();
 
@@ -542,7 +548,13 @@ function WeekGrid({
                 className="absolute right-2 -translate-y-1/2 text-[10px] tabular-nums text-gray-400"
                 style={{ top: i * HOUR_ROW_PX }}
               >
-                {hour === 0 ? "12 AM" : hour < 12 ? `${hour} AM` : hour === 12 ? "12 PM" : `${hour - 12} PM`}
+                {hour === 0
+                  ? "12 AM"
+                  : hour < 12
+                    ? `${hour} AM`
+                    : hour === 12
+                      ? "12 PM"
+                      : `${hour - 12} PM`}
               </div>
             ))}
           </div>
@@ -570,7 +582,9 @@ function WeekGrid({
                     style={{ top, height }}
                     className={`absolute inset-x-1 overflow-hidden rounded border px-1.5 py-1 text-left text-[11px] font-medium transition-opacity hover:opacity-80 ${shiftTone(shift)}`}
                   >
-                    <span className="block truncate">{shift.section?.name ?? SHIFT_TYPE_LABEL[shift.shift_type]}</span>
+                    <span className="block truncate">
+                      {shift.section?.name ?? SHIFT_TYPE_LABEL[shift.shift_type]}
+                    </span>
                     <span className="block truncate text-[10px] opacity-75">
                       {formatShiftTimeRange(shift)}
                     </span>
@@ -616,7 +630,10 @@ function ScheduleShiftModal({
         setError("A custom shift needs a start and an end time.");
         return;
       }
-      window = { starts_at: new Date(customStart).toISOString(), ends_at: new Date(customEnd).toISOString() };
+      window = {
+        starts_at: new Date(customStart).toISOString(),
+        ends_at: new Date(customEnd).toISOString(),
+      };
     } else {
       window = shiftWindowFromPreset(date, shiftType);
     }
@@ -665,7 +682,11 @@ function ScheduleShiftModal({
 
           <div>
             <label className={labelClass}>Section</label>
-            <select value={sectionId} onChange={(e) => setSectionId(e.target.value)} className={inputClass}>
+            <select
+              value={sectionId}
+              onChange={(e) => setSectionId(e.target.value)}
+              className={inputClass}
+            >
               {sections.length === 0 && <option value="">No sections available</option>}
               {sections.map((section) => (
                 <option key={section.id} value={section.id}>
@@ -740,7 +761,11 @@ function ScheduleShiftModal({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelClass}>Room (optional)</label>
-              <select value={roomId} onChange={(e) => setRoomId(e.target.value)} className={inputClass}>
+              <select
+                value={roomId}
+                onChange={(e) => setRoomId(e.target.value)}
+                className={inputClass}
+              >
                 <option value="">Ward-wide</option>
                 {rooms.map((room) => (
                   <option key={room.id} value={room.id}>
@@ -805,10 +830,7 @@ function ShiftRoster({
 
   const shift = data?.shift;
   const roster = useMemo<ShiftRosterEntry[]>(() => data?.roster ?? [], [data]);
-  const tally = useMemo(
-    () => tallyAttendance(roster.map((r) => r.attendance_status)),
-    [roster],
-  );
+  const tally = useMemo(() => tallyAttendance(roster.map((r) => r.attendance_status)), [roster]);
 
   const mark = async (entry: ShiftRosterEntry, status: ShiftAttendanceStatus) => {
     setSavingId(entry.id);
@@ -880,7 +902,10 @@ function ShiftRoster({
       <BackButton onBack={onBack} />
 
       <PageHeader
-        badge={{ icon: <FontAwesomeIcon icon={faCalendarCheck} className="w-3.5 h-3.5" />, label: "Attendance" }}
+        badge={{
+          icon: <FontAwesomeIcon icon={faCalendarCheck} className="w-3.5 h-3.5" />,
+          label: "Attendance",
+        }}
         title={shiftTitle(shift)}
         subtitle={`${shift.section?.name ?? "No section"} · ${formatShiftTimeRange(shift)}${
           shift.room ? ` · ${shift.room.name}` : ""
@@ -945,7 +970,9 @@ function ShiftRoster({
             {roster.map((entry) => (
               <li key={entry.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
                 <div className="min-w-0 flex-1">
-                  <p className="font-medium text-gray-900">{entry.users?.name ?? "Unknown student"}</p>
+                  <p className="font-medium text-gray-900">
+                    {entry.users?.name ?? "Unknown student"}
+                  </p>
                   <p className="text-xs text-gray-500">
                     {entry.users?.email ?? ""}
                     {entry.checked_in_at &&

@@ -15,7 +15,7 @@ export default function FacultyMonitoringPage() {
   return (
     <PatientsManager
       badgeLabel="Ward Monitoring"
-      title="Monitoring"
+      title="Ward Management"
       subtitle="Live ward census — room occupancy, check-ins and check-outs at a glance"
       showFloorPlan
       chartBase="/faculty/patients"

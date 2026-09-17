@@ -31,18 +31,60 @@ function getCurrentUser(): User | null {
 
 const navItems: NavItem[] = [
   { id: "overview", label: "Overview", href: "/faculty", icon: faHouse, section: "General" },
-  { id: "students", label: "My Students", href: "/faculty/students", icon: faUsers, section: "Teaching" },
-  { id: "scenarios", label: "Scenarios", href: "/faculty/scenarios", icon: faNotesMedical, section: "Teaching" },
-  { id: "assessments", label: "Question Bank", href: "/faculty/assessments", icon: faListCheck, section: "Teaching" },
+  {
+    id: "students",
+    label: "My Students",
+    href: "/faculty/students",
+    icon: faUsers,
+    section: "Teaching",
+  },
+  {
+    id: "scenarios",
+    label: "Scenarios",
+    href: "/faculty/scenarios",
+    icon: faNotesMedical,
+    section: "Teaching",
+  },
+  {
+    id: "assessments",
+    label: "Question Bank",
+    href: "/faculty/assessments",
+    icon: faListCheck,
+    section: "Teaching",
+  },
   // Monitoring is the single clinical destination: the room layout and census
   // open a patient's chart, which carries their vitals, TPR/IVF, notes and
   // note sign-off. Patients, Vitals Monitor and EHR Review were folded into it
   // and their routes now redirect here.
-  { id: "monitoring", label: "Monitoring", href: "/faculty/monitoring", icon: faBedPulse, section: "Clinical" },
-  { id: "attendance", label: "Attendance", href: "/faculty/attendance", icon: faCalendarCheck, section: "Clinical" },
-  { id: "analytics", label: "Analytics", href: "/faculty/analytics", icon: faChartBar, section: "Data" },
+  {
+    id: "wards",
+    label: "Wards",
+    href: "/faculty/monitoring",
+    icon: faBedPulse,
+    section: "Clinical",
+  },
+  {
+    id: "shifts",
+    label: "Shifts",
+    href: "/faculty/attendance",
+    icon: faCalendarCheck,
+    section: "Clinical",
+  },
+  {
+    id: "analytics",
+    label: "Analytics",
+    href: "/faculty/analytics",
+    icon: faChartBar,
+    section: "Data",
+  },
   { id: "reports", label: "Reports", href: "/faculty/reports", icon: faFileLines, section: "Data" },
-  { id: "audit", label: "Audit Trail", href: "/faculty/audit", icon: faClipboardList, section: "Administration" },
+  {
+    id: "audit",
+    label: "Audit Trail",
+    href: "/faculty/audit",
+    icon: faClipboardList,
+    section: "Administration",
+  },
 ];
 
 function isActive(item: NavItem, pathname: string) {
@@ -50,11 +92,7 @@ function isActive(item: NavItem, pathname: string) {
   return pathname.startsWith(item.href);
 }
 
-export default function ClientFacultyLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function ClientFacultyLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const [ready, setReady] = useState(false);
@@ -87,11 +125,7 @@ export default function ClientFacultyLayout({
   if (!ready) return null;
 
   return (
-    <Shell
-      role="faculty"
-      navItems={navItems}
-      isActive={(item) => isActive(item, pathname)}
-    >
+    <Shell role="faculty" navItems={navItems} isActive={(item) => isActive(item, pathname)}>
       {children}
     </Shell>
   );
