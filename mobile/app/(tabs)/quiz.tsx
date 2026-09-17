@@ -1,8 +1,9 @@
 import React from 'react';
 import { ScrollView, View, Text, StyleSheet, Pressable, RefreshControl } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { SectionHeader, SkeletonScreen, EmptyState } from '@/components/ui';
+import { ScreenHeader, SectionHeader, SkeletonScreen, EmptyState } from '@/components/ui';
 import { useApiData } from '@/hooks/useApiData';
 import { fetchAssessments, StudentAssessment } from '@/lib/api';
 import { Radius, Spacing } from '@/constants/theme';
@@ -140,7 +141,9 @@ function QuizCard({
   );
 }
 
-export default function QuizzesScreen() {
+export default function QuizScreen() {
+  // content starts below the floating header, then scrolls beneath it
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const { Palette, Accent, Shadow, Type } = useTheme();
   const styles = React.useMemo(() => createStyles(Palette, Accent, Shadow, Type), [Palette, Accent, Shadow, Type]);
@@ -155,7 +158,7 @@ export default function QuizzesScreen() {
   );
 
   if (loading && !data) {
-    return <SkeletonScreen />;
+    return <SkeletonScreen topOffset={insets.top + 88} />;
   }
 
   const assessments = data ?? [];
@@ -170,12 +173,20 @@ export default function QuizzesScreen() {
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={[styles.content, { paddingTop: insets.top + 88 }]}
       showsVerticalScrollIndicator={false}
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={refresh} colors={[Palette.primary]} tintColor={Palette.primary} />
       }
     >
+      <ScreenHeader
+        eyebrow="Knowledge Check"
+        title="Quiz"
+        subtitle={`${assigned.length + available.length} available`}
+        icon="school-outline"
+        accent="violet"
+      />
+
       <View style={styles.intro}>
         <Ionicons name="school-outline" size={16} color={Accent.violet.fg} />
         <Text style={styles.introText}>Assessments from your faculty&apos;s question banks</Text>
@@ -187,7 +198,7 @@ export default function QuizzesScreen() {
         <View style={styles.section}>
           <SectionHeader title="Assigned to You" count={assigned.length} />
           {assigned.map((quiz) => (
-            <QuizCard key={quiz.id} quiz={quiz} onPress={() => router.push(`/tasks/quizzes/${quiz.id}`)} Palette={Palette} Accent={Accent} styles={styles} />
+            <QuizCard key={quiz.id} quiz={quiz} onPress={() => router.push(`/quiz/${quiz.id}`)} Palette={Palette} Accent={Accent} styles={styles} />
           ))}
         </View>
       )}
@@ -196,7 +207,7 @@ export default function QuizzesScreen() {
         <View style={styles.section}>
           <SectionHeader title="Available Quizzes" count={available.length} />
           {available.map((quiz) => (
-            <QuizCard key={quiz.id} quiz={quiz} onPress={() => router.push(`/tasks/quizzes/${quiz.id}`)} Palette={Palette} Accent={Accent} styles={styles} />
+            <QuizCard key={quiz.id} quiz={quiz} onPress={() => router.push(`/quiz/${quiz.id}`)} Palette={Palette} Accent={Accent} styles={styles} />
           ))}
         </View>
       ) : assigned.length === 0 && completed.length > 0 ? (
@@ -215,7 +226,7 @@ export default function QuizzesScreen() {
         <View style={styles.section}>
           <SectionHeader title="Completed" count={completed.length} />
           {completed.map((quiz) => (
-            <QuizCard key={quiz.id} quiz={quiz} onPress={() => router.push(`/tasks/quizzes/${quiz.id}`)} Palette={Palette} Accent={Accent} styles={styles} />
+            <QuizCard key={quiz.id} quiz={quiz} onPress={() => router.push(`/quiz/${quiz.id}`)} Palette={Palette} Accent={Accent} styles={styles} />
           ))}
         </View>
       )}
@@ -236,7 +247,8 @@ function createStyles(
   },
   content: {
     padding: Spacing.lg,
-    paddingBottom: 32,
+    // clears the floating tab bar so the last items can scroll above it
+    paddingBottom: 128,
   },
   pressed: {
     opacity: 0.85,

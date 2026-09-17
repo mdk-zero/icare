@@ -77,8 +77,8 @@ export default function RecommendationsScreen() {
             key={rec.id}
             style={({ pressed }) => [styles.recommendationCard, pressed && styles.pressed]}
             onPress={() => {
-              if (rec.assessments) router.push(`/tasks/quizzes/${rec.assessment_id}`);
-              else router.push('/tasks/quizzes');
+              if (rec.assessments) router.push(`/quiz/${rec.assessment_id}`);
+              else router.push("/quiz");
             }}
             onLongPress={() => handleDismiss(rec.id)}
           >

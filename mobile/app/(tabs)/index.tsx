@@ -145,6 +145,16 @@ export default function DashboardScreen() {
   // content starts below the floating header, then scrolls beneath it
   const insets = useSafeAreaInsets();
   const router = useRouter();
+
+  // A scenario is worked on its patient now, in the Clinic tab. Scenarios with
+  // no patient linked still have a brief-only screen to land on.
+  const openAssignment = React.useCallback(
+    (assignment: ScenarioAssignment) => {
+      if (assignment.patient_id) router.push(`/clinic/patient/${assignment.patient_id}`);
+      else router.push(`/clinic/assignment/${assignment.id}`);
+    },
+    [router],
+  );
   const { user } = useAuth();
   const { Palette, Accent, Shadow, Type } = useTheme();
   const styles = React.useMemo(
@@ -201,7 +211,7 @@ export default function DashboardScreen() {
       value: String(openTasks.length),
       icon: "clipboard-list",
       accent: Accent.teal,
-      href: "/tasks",
+      href: "/clinic",
     },
     {
       label: "Avg Score",
@@ -215,14 +225,14 @@ export default function DashboardScreen() {
       value: String(quizzesAvailable),
       icon: "file-lines",
       accent: Accent.violet,
-      href: "/tasks/quizzes",
+      href: "/quiz",
     },
     {
       label: "My Patients",
       value: String(patients.length),
       icon: "hospital-user",
       accent: Accent.cyan,
-      href: "/ehr",
+      href: "/clinic",
     },
   ];
 
@@ -289,7 +299,7 @@ export default function DashboardScreen() {
         <Animated.View entering={FadeInDown.duration(220).delay(40)}>
           <Pressable
             style={({ pressed }) => [styles.heroWrap, pressed && styles.pressedCard]}
-            onPress={() => router.push(`/tasks/${nextTask.id}`)}
+            onPress={() => openAssignment(nextTask)}
           >
             <LinearGradient
               colors={[Teal.deepest, Teal.deep, Teal.primary]}
@@ -345,7 +355,7 @@ export default function DashboardScreen() {
           title={nextTask ? "Up Later" : "Assigned Scenarios"}
           subtitle={`${openTasks.length} pending`}
           actionLabel="See all"
-          onAction={() => router.push("/tasks")}
+          onAction={() => router.push("/clinic")}
         />
         <View style={styles.taskList}>
           {openTasks.length === 0 ? (
@@ -373,7 +383,7 @@ export default function DashboardScreen() {
                   index > 0 && styles.taskItemBorder,
                   pressed && styles.pressedDim,
                 ]}
-                onPress={() => router.push(`/tasks/${task.id}`)}
+                onPress={() => openAssignment(task)}
               >
                 <View
                   style={[

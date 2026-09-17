@@ -52,7 +52,14 @@ function PatientCase({
   );
 }
 
-export default function ScenarioRunnerScreen() {
+/**
+ * Brief-only view of a scenario assignment. A scenario with a patient linked is
+ * worked on the patient hub (app/clinic/patient/[id].tsx), where the checklist,
+ * the record actions and the hand-in sit together. This screen is where an
+ * assignment lands when faculty never set scenarios.patient_id — the student
+ * can still read the brief and submit, but there is nothing to chart on.
+ */
+export default function ScenarioBriefScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
   const assignmentId = id as string;
@@ -256,14 +263,14 @@ export default function ScenarioRunnerScreen() {
           <View style={styles.patientLinkRow}>
             <Pressable
               style={({ pressed }) => [styles.patientLinkButton, pressed && styles.patientLinkPressed]}
-              onPress={() => router.push(`/ehr/${scenario.patient_id}`)}
+              onPress={() => router.push(`/clinic/patient/${scenario.patient_id}`)}
             >
               <Ionicons name="folder-open-outline" size={16} color={Palette.primary} />
               <Text style={styles.patientLinkText}>Patient Chart</Text>
             </Pressable>
             <Pressable
               style={({ pressed }) => [styles.patientLinkButton, pressed && styles.patientLinkPressed]}
-              onPress={() => router.push(`/vitals/${scenario.patient_id}`)}
+              onPress={() => router.push(`/clinic/patient/${scenario.patient_id}/vitals`)}
             >
               <Ionicons name="pulse-outline" size={16} color={Palette.primary} />
               <Text style={styles.patientLinkText}>Record Vitals</Text>
@@ -347,7 +354,7 @@ export default function ScenarioRunnerScreen() {
           disabled={submitting}
         />
       )}
-      {!isActive && <PrimaryButton title="Back to Tasks" onPress={() => router.back()} size="lg" />}
+      {!isActive && <PrimaryButton title="Back to Clinic" onPress={() => router.back()} size="lg" />}
     </ScrollView>
   );
 }

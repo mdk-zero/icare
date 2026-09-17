@@ -27,10 +27,9 @@ const Teal = {
 };
 
 const TAB_ICONS: Record<string, string> = {
-  vitals: "heart-pulse",
-  tasks: "list-check",
+  clinic: "hospital",
+  quiz: "clipboard-question",
   index: "house",
-  ehr: "folder-open",
   profile: "user",
 };
 
@@ -278,17 +277,16 @@ export default function TabLayout() {
       <AppHeader notificationCount={unreadCount} />
       <Tabs
         // Without this, the tab navigator defaults to whichever Tabs.Screen
-        // is registered first (Vitals) instead of Home.
+        // is registered first (Clinic) instead of Home.
         initialRouteName="index"
         tabBar={(props) => <FloatingTabBar {...props} />}
         screenOptions={{
           headerShown: false,
         }}
       >
-        <Tabs.Screen name="vitals" options={{ title: "Vitals" }} />
-        <Tabs.Screen name="tasks" options={{ title: "Tasks" }} />
+        <Tabs.Screen name="clinic" options={{ title: "Clinic" }} />
+        <Tabs.Screen name="quiz" options={{ title: "Quiz" }} />
         <Tabs.Screen name="index" options={{ title: "Home" }} />
-        <Tabs.Screen name="ehr" options={{ title: "EHR" }} />
         <Tabs.Screen name="profile" options={{ title: "Profile" }} />
       </Tabs>
     </View>

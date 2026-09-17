@@ -28,13 +28,13 @@ function AuthStack() {
       <Stack.Screen name="login" options={{ headerShown: false }} />
       <Stack.Screen name="forgot-password" options={{ headerShown: false }} />
       <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-      <Stack.Screen name="vitals/[id]" options={{ title: 'Vital Signs' }} />
-      <Stack.Screen name="tasks/[id]" options={{ title: 'Task' }} />
-      <Stack.Screen name="tasks/quizzes/index" options={{ title: 'Quizzes' }} />
-      <Stack.Screen name="tasks/quizzes/[id]" options={{ title: 'Quiz' }} />
-      <Stack.Screen name="ehr/[id]" options={{ title: 'Patient Record' }} />
-      <Stack.Screen name="ehr/[id]/tpr" options={{ title: 'TPR Sheet' }} />
-      <Stack.Screen name="ehr/[id]/ivf" options={{ title: 'IVF Sheet' }} />
+      <Stack.Screen name="clinic/room/[id]" options={{ title: 'Room' }} />
+      <Stack.Screen name="clinic/patient/[id]" options={{ title: 'Patient' }} />
+      <Stack.Screen name="clinic/patient/[id]/vitals" options={{ title: 'Vital Signs' }} />
+      <Stack.Screen name="clinic/patient/[id]/tpr" options={{ title: 'TPR Sheet' }} />
+      <Stack.Screen name="clinic/patient/[id]/ivf" options={{ title: 'IVF Sheet' }} />
+      <Stack.Screen name="clinic/assignment/[id]" options={{ title: 'Scenario' }} />
+      <Stack.Screen name="quiz/[id]" options={{ title: 'Quiz' }} />
       <Stack.Screen name="notifications" options={{ title: 'Notifications' }} />
       <Stack.Screen name="recommendations" options={{ title: 'AI Recommendations' }} />
       <Stack.Screen name="progress" options={{ title: 'Performance' }} />
