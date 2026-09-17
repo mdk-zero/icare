@@ -670,15 +670,15 @@ function KpiCard({
   const isUp = (change ?? 0) >= 0;
   const isGood = change == null ? null : goodDirection === "up" ? isUp : !isUp;
   return (
-    <div className="flex h-full flex-col justify-between rounded-2xl border border-hairline bg-surface p-5 shadow-tile">
-      <div className="flex items-start justify-between gap-3">
-        <span className="text-[11px] font-bold uppercase tracking-wider text-gray-400">{label}</span>
-        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${iconBg} ${iconColor}`}>
-          <FontAwesomeIcon icon={icon} className="h-4 w-4" />
+    <div className="flex flex-col rounded-2xl border border-hairline bg-surface p-4 shadow-tile">
+      <div className="flex items-start justify-between gap-2">
+        <span className="min-w-0 text-xs font-bold uppercase tracking-wider text-gray-400">{label}</span>
+        <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full ${iconBg} ${iconColor}`}>
+          <FontAwesomeIcon icon={icon} className="h-11 w-11" />
         </span>
       </div>
-      <p className="mt-4 font-display text-3xl font-bold tabular-nums text-gray-900">{value}</p>
-      <div className="mt-2.5 flex flex-wrap items-center gap-1.5 text-xs">
+      <p className="mt-2 font-display text-4xl font-bold tabular-nums text-gray-900">{value}</p>
+      <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs">
         {change != null ? (
           <span
             className={`flex items-center gap-1 font-semibold ${isGood ? "text-emerald-600" : "text-rose-600"}`}
@@ -1263,8 +1263,8 @@ export default function FacultyAnalyticsClient() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4 items-stretch">
           <Card padding="md" className="flex flex-col">
             <div className="flex items-center gap-2.5 mb-5">
-              <div className="rounded-lg bg-brand-500/10 p-1.5">
-                <FontAwesomeIcon icon={faUsers} className="h-3.5 w-3.5 text-brand-500" />
+              <div className="rounded-xl bg-brand-500/10 p-2.5">
+                <FontAwesomeIcon icon={faUsers} className="h-5 w-5 text-brand-500" />
               </div>
               <h3 className="font-semibold text-gray-900">Active Students by Section</h3>
             </div>
@@ -1281,8 +1281,8 @@ export default function FacultyAnalyticsClient() {
 
           <Card padding="md" className="flex flex-col">
             <div className="flex items-center gap-2.5 mb-5">
-              <div className="rounded-lg bg-amber-500/10 p-1.5">
-                <FontAwesomeIcon icon={faTrophy} className="h-3.5 w-3.5 text-amber-600" />
+              <div className="rounded-xl bg-amber-500/10 p-2.5">
+                <FontAwesomeIcon icon={faTrophy} className="h-5 w-5 text-amber-600" />
               </div>
               <h3 className="font-semibold text-gray-900">Top Performing Students</h3>
             </div>
@@ -1296,8 +1296,8 @@ export default function FacultyAnalyticsClient() {
           <Card padding="md" className="flex flex-col">
             <div className="flex items-center justify-between mb-5">
               <div className="flex items-center gap-2.5">
-                <div className="rounded-lg bg-brand-600/10 p-1.5">
-                  <FontAwesomeIcon icon={faChartBar} className="h-3.5 w-3.5 text-brand-600" />
+                <div className="rounded-xl bg-brand-600/10 p-2.5">
+                  <FontAwesomeIcon icon={faChartBar} className="h-5 w-5 text-brand-600" />
                 </div>
                 <div>
                   <h3 className="font-semibold text-gray-900">Classroom Performance Overview</h3>
@@ -1321,8 +1321,8 @@ export default function FacultyAnalyticsClient() {
 
           <Card padding="md" className="flex flex-col">
             <div className="flex items-center gap-2.5 mb-5">
-              <div className="rounded-lg bg-brand-600/10 p-1.5">
-                <FontAwesomeIcon icon={faLayerGroup} className="h-3.5 w-3.5 text-brand-600" />
+              <div className="rounded-xl bg-brand-600/10 p-2.5">
+                <FontAwesomeIcon icon={faLayerGroup} className="h-5 w-5 text-brand-600" />
               </div>
               <div>
                 <h3 className="font-semibold text-gray-900">Performance per Competency</h3>
