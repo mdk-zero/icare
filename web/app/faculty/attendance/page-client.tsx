@@ -4,6 +4,8 @@ import { useMemo, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faCalendarCheck,
+  faChevronLeft,
+  faChevronRight,
   faPlus,
   faSpinner,
   faTimes,
@@ -119,6 +121,15 @@ export default function AttendanceClient() {
         shiftId={openShiftId}
         onBack={() => setOpenShiftId(null)}
         onChanged={refresh}
+        onDelete={(shift) =>
+          setConfirm({
+            title: "Delete this shift?",
+            message: `${shiftTitle(shift)} on ${formatShiftTimeRange(shift)} and its roster will be removed. Cancelling the shift instead keeps the record.`,
+            confirmLabel: "Delete shift",
+            danger: true,
+            onConfirm: () => handleDelete(shift),
+          })
+        }
       />
     );
   }
@@ -184,100 +195,7 @@ export default function AttendanceClient() {
           </p>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-hairline bg-surface shadow-tile">
-          <table className="w-full">
-            <thead className="border-b border-gray-100 bg-subtle">
-              <tr>
-                {["Shift", "Section", "When", "Attendance", ""].map((h, i) => (
-                  <th
-                    key={h || i}
-                    className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-500"
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-hairline">
-              {shifts.map((shift) => {
-                const phase = shiftPhase(shift);
-                const tally = tallyAttendance(shift.statuses);
-                return (
-                  <tr key={shift.id} className="transition-colors hover:bg-subtle">
-                    <td className="px-4 py-3">
-                      <button
-                        onClick={() => setOpenShiftId(shift.id)}
-                        className="text-left font-semibold text-gray-900 hover:text-brand-700"
-                      >
-                        {shiftTitle(shift)}
-                      </button>
-                      <p className="mt-0.5">
-                        <span
-                          className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${SHIFT_PHASE_TONE[phase]}`}
-                        >
-                          {SHIFT_PHASE_LABEL[phase]}
-                        </span>
-                        {shift.room && (
-                          <span className="ml-1.5 text-xs text-gray-500">{shift.room.name}</span>
-                        )}
-                      </p>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-700">{shift.section?.name ?? "—"}</td>
-                    <td className="px-4 py-3 text-sm text-gray-700">
-                      {formatShiftTimeRange(shift)}
-                    </td>
-                    <td className="px-4 py-3">
-                      {tally.total === 0 ? (
-                        <span className="text-xs text-gray-400">No students rostered</span>
-                      ) : (
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <span className="tabular text-sm font-semibold text-gray-900">
-                            {tally.rate === null ? "—" : `${tally.rate}%`}
-                          </span>
-                          <span className="text-xs text-gray-500">
-                            {tally.present + tally.late}/{tally.present + tally.late + tally.absent || tally.total}
-                          </span>
-                          {tally.scheduled > 0 && (
-                            <span className="rounded-full border border-gray-200 bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600">
-                              {tally.scheduled} unmarked
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          onClick={() => setOpenShiftId(shift.id)}
-                          className="rounded-lg px-2.5 py-1.5 text-xs font-medium text-brand-700 transition-colors hover:bg-brand-600/10"
-                        >
-                          Mark attendance
-                        </button>
-                        <button
-                          onClick={() =>
-                            setConfirm({
-                              title: "Delete Shift",
-                              message: `Delete ${shiftTitle(shift)}? Its attendance records are deleted with it.`,
-                              confirmLabel: "Delete",
-                              danger: true,
-                              loading: false,
-                              error: null,
-                              onConfirm: () => handleDelete(shift),
-                            })
-                          }
-                          title="Delete shift"
-                          className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-rose-50 hover:text-rose-600"
-                        >
-                          <FontAwesomeIcon icon={faTrash} className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <ShiftCalendar shifts={shifts} onOpen={setOpenShiftId} />
       )}
 
       {formOpen && (
@@ -300,6 +218,369 @@ export default function AttendanceClient() {
       {confirm && (
         <ConfirmModal config={confirm} onClose={() => !confirm.loading && setConfirm(null)} />
       )}
+    </div>
+  );
+}
+
+
+// ---------------------------------------------------------------------------
+// Calendar
+// ---------------------------------------------------------------------------
+
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+/** Earliest and latest hour the week grid draws, in local time. */
+const GRID_START_HOUR = 5;
+const GRID_END_HOUR = 23;
+const HOUR_ROW_PX = 44;
+
+type CalendarView = "month" | "week";
+
+function startOfDay(d: Date): Date {
+  const out = new Date(d);
+  out.setHours(0, 0, 0, 0);
+  return out;
+}
+
+function addDays(d: Date, n: number): Date {
+  const out = new Date(d);
+  out.setDate(out.getDate() + n);
+  return out;
+}
+
+/** Sunday on or before `d`, which is where both grids begin. */
+function startOfWeek(d: Date): Date {
+  return addDays(startOfDay(d), -startOfDay(d).getDay());
+}
+
+function sameDay(a: Date, b: Date): boolean {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+/**
+ * Colour for one shift block.
+ *
+ * Phase decides the base — an upcoming rotation is brand, a finished one
+ * recedes to grey — and a past shift still carrying unmarked students turns
+ * amber, because that is the one state the faculty has to act on.
+ */
+function shiftTone(shift: FacultyShift): string {
+  if (shift.status === "cancelled") {
+    return "bg-rose-50 text-rose-700 border-rose-200 line-through";
+  }
+  const phase = shiftPhase(shift);
+  if (phase === "past") {
+    const unmarked = shift.statuses.some((v) => v === "scheduled");
+    return unmarked
+      ? "bg-amber-50 text-amber-800 border-amber-200"
+      : "bg-gray-100 text-gray-600 border-gray-200";
+  }
+  if (phase === "active" || phase === "grace") {
+    return "bg-emerald-50 text-emerald-800 border-emerald-300";
+  }
+  return "bg-brand-600/10 text-brand-800 border-brand-600/25";
+}
+
+function shiftChipLabel(shift: FacultyShift): string {
+  const start = new Date(shift.starts_at);
+  const time = start.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  return `${time} ${shift.section?.name ?? SHIFT_TYPE_LABEL[shift.shift_type]}`;
+}
+
+/**
+ * Month and week views over the shift list.
+ *
+ * The table this replaces was fine for reading one shift at a time and no use
+ * at all for the thing a rotation is actually planned against — where the gaps
+ * are. Month answers that at a glance; week keeps the hour grid a duty roster
+ * is normally drawn on, with each shift occupying the height of its window.
+ */
+function ShiftCalendar({
+  shifts,
+  onOpen,
+}: {
+  shifts: FacultyShift[];
+  onOpen: (id: string) => void;
+}) {
+  const [view, setView] = useState<CalendarView>("month");
+  const [cursor, setCursor] = useState<Date>(() => startOfDay(new Date()));
+  const today = startOfDay(new Date());
+
+  // Bucket by local calendar day once, so neither grid re-scans the list per
+  // cell. A shift that runs past midnight belongs to the day it started.
+  const byDay = useMemo(() => {
+    const map = new Map<string, FacultyShift[]>();
+    for (const shift of shifts) {
+      const key = startOfDay(new Date(shift.starts_at)).toDateString();
+      const list = map.get(key) ?? [];
+      list.push(shift);
+      map.set(key, list);
+    }
+    for (const list of map.values()) {
+      list.sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+    }
+    return map;
+  }, [shifts]);
+
+  const step = (direction: number) => {
+    setCursor((prev) =>
+      view === "month"
+        ? new Date(prev.getFullYear(), prev.getMonth() + direction, 1)
+        : addDays(prev, direction * 7),
+    );
+  };
+
+  const heading =
+    view === "month"
+      ? cursor.toLocaleDateString(undefined, { month: "long", year: "numeric" })
+      : (() => {
+          const from = startOfWeek(cursor);
+          const to = addDays(from, 6);
+          const sameMonth = from.getMonth() === to.getMonth();
+          return `${from.toLocaleDateString(undefined, { month: "short", day: "numeric" })} – ${to.toLocaleDateString(
+            undefined,
+            sameMonth ? { day: "numeric", year: "numeric" } : { month: "short", day: "numeric", year: "numeric" },
+          )}`;
+        })();
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-hairline bg-surface shadow-tile">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-hairline px-4 py-3">
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => setCursor(today)}
+            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-subtle"
+          >
+            Today
+          </button>
+          <button
+            onClick={() => step(-1)}
+            aria-label={view === "month" ? "Previous month" : "Previous week"}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-subtle hover:text-gray-700"
+          >
+            <FontAwesomeIcon icon={faChevronLeft} className="h-3.5 w-3.5" />
+          </button>
+          <button
+            onClick={() => step(1)}
+            aria-label={view === "month" ? "Next month" : "Next week"}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-subtle hover:text-gray-700"
+          >
+            <FontAwesomeIcon icon={faChevronRight} className="h-3.5 w-3.5" />
+          </button>
+          <h3 className="ml-1.5 font-display text-base font-semibold text-gray-900">{heading}</h3>
+        </div>
+
+        <div className="flex rounded-lg border border-gray-300 p-0.5">
+          {(["month", "week"] as CalendarView[]).map((option) => (
+            <button
+              key={option}
+              onClick={() => setView(option)}
+              className={`rounded-md px-3 py-1 text-sm font-medium capitalize transition-colors ${
+                view === option ? "bg-brand-600 text-white" : "text-gray-600 hover:bg-subtle"
+              }`}
+            >
+              {option}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {view === "month" ? (
+        <MonthGrid cursor={cursor} today={today} byDay={byDay} onOpen={onOpen} />
+      ) : (
+        <WeekGrid cursor={cursor} today={today} byDay={byDay} onOpen={onOpen} />
+      )}
+    </div>
+  );
+}
+
+function MonthGrid({
+  cursor,
+  today,
+  byDay,
+  onOpen,
+}: {
+  cursor: Date;
+  today: Date;
+  byDay: Map<string, FacultyShift[]>;
+  onOpen: (id: string) => void;
+}) {
+  const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
+  const gridStart = startOfWeek(first);
+  // Six rows always, so the grid does not change height as months change and
+  // push the page around underneath the pointer.
+  const days = Array.from({ length: 42 }, (_, i) => addDays(gridStart, i));
+
+  return (
+    <div>
+      <div className="grid grid-cols-7 border-b border-hairline bg-subtle">
+        {WEEKDAYS.map((day) => (
+          <div
+            key={day}
+            className="px-2 py-2 text-center text-[11px] font-semibold uppercase tracking-wider text-gray-500"
+          >
+            {day}
+          </div>
+        ))}
+      </div>
+      <div className="grid grid-cols-7">
+        {days.map((day) => {
+          const inMonth = day.getMonth() === cursor.getMonth();
+          const isToday = sameDay(day, today);
+          const dayShifts = byDay.get(day.toDateString()) ?? [];
+          return (
+            <div
+              key={day.toISOString()}
+              className={`min-h-[104px] border-b border-r border-hairline p-1.5 [&:nth-child(7n)]:border-r-0 ${
+                inMonth ? "bg-surface" : "bg-subtle/40"
+              }`}
+            >
+              <div className="mb-1 flex justify-end">
+                <span
+                  className={`flex h-6 w-6 items-center justify-center rounded-full text-xs tabular-nums ${
+                    isToday
+                      ? "bg-brand-600 font-semibold text-white"
+                      : inMonth
+                        ? "text-gray-600"
+                        : "text-gray-300"
+                  }`}
+                >
+                  {day.getDate()}
+                </span>
+              </div>
+              <div className="space-y-1">
+                {dayShifts.slice(0, 3).map((shift) => (
+                  <button
+                    key={shift.id}
+                    onClick={() => onOpen(shift.id)}
+                    title={`${shiftTitle(shift)} · ${formatShiftTimeRange(shift)}`}
+                    className={`block w-full truncate rounded border px-1.5 py-0.5 text-left text-[11px] font-medium transition-opacity hover:opacity-80 ${shiftTone(shift)}`}
+                  >
+                    {shiftChipLabel(shift)}
+                  </button>
+                ))}
+                {dayShifts.length > 3 && (
+                  <p className="px-1.5 text-[10px] font-medium text-gray-400">
+                    +{dayShifts.length - 3} more
+                  </p>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function WeekGrid({
+  cursor,
+  today,
+  byDay,
+  onOpen,
+}: {
+  cursor: Date;
+  today: Date;
+  byDay: Map<string, FacultyShift[]>;
+  onOpen: (id: string) => void;
+}) {
+  const from = startOfWeek(cursor);
+  const days = Array.from({ length: 7 }, (_, i) => addDays(from, i));
+  const hours = Array.from(
+    { length: GRID_END_HOUR - GRID_START_HOUR + 1 },
+    (_, i) => GRID_START_HOUR + i,
+  );
+  const gridHeight = (GRID_END_HOUR - GRID_START_HOUR) * HOUR_ROW_PX;
+
+  /** Where a shift sits in the column, clamped to the drawn hours. */
+  const place = (shift: FacultyShift, day: Date) => {
+    const start = new Date(shift.starts_at);
+    const end = new Date(shift.ends_at);
+    const dayStart = startOfDay(day);
+    const startHour = (start.getTime() - dayStart.getTime()) / 3_600_000;
+    // A night shift ends the next morning; stop it at the bottom of the grid
+    // rather than letting it run off the column.
+    const endHour = Math.min((end.getTime() - dayStart.getTime()) / 3_600_000, GRID_END_HOUR);
+    const top = (Math.max(startHour, GRID_START_HOUR) - GRID_START_HOUR) * HOUR_ROW_PX;
+    const height = Math.max((endHour - Math.max(startHour, GRID_START_HOUR)) * HOUR_ROW_PX, 22);
+    return { top, height };
+  };
+
+  return (
+    <div className="overflow-x-auto">
+      <div className="min-w-[760px]">
+        <div className="grid grid-cols-[56px_repeat(7,1fr)] border-b border-hairline bg-subtle">
+          <div />
+          {days.map((day) => {
+            const isToday = sameDay(day, today);
+            return (
+              <div key={day.toISOString()} className="px-2 py-2 text-center">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+                  {WEEKDAYS[day.getDay()]}
+                </p>
+                <span
+                  className={`mx-auto mt-1 flex h-7 w-7 items-center justify-center rounded-full text-sm tabular-nums ${
+                    isToday ? "bg-brand-600 font-semibold text-white" : "text-gray-700"
+                  }`}
+                >
+                  {day.getDate()}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="grid grid-cols-[56px_repeat(7,1fr)]">
+          <div className="relative" style={{ height: gridHeight }}>
+            {hours.slice(0, -1).map((hour, i) => (
+              <div
+                key={hour}
+                className="absolute right-2 -translate-y-1/2 text-[10px] tabular-nums text-gray-400"
+                style={{ top: i * HOUR_ROW_PX }}
+              >
+                {hour === 0 ? "12 AM" : hour < 12 ? `${hour} AM` : hour === 12 ? "12 PM" : `${hour - 12} PM`}
+              </div>
+            ))}
+          </div>
+
+          {days.map((day) => (
+            <div
+              key={day.toISOString()}
+              className="relative border-l border-hairline"
+              style={{ height: gridHeight }}
+            >
+              {hours.slice(0, -1).map((hour, i) => (
+                <div
+                  key={hour}
+                  className="absolute inset-x-0 border-t border-hairline"
+                  style={{ top: i * HOUR_ROW_PX }}
+                />
+              ))}
+              {(byDay.get(day.toDateString()) ?? []).map((shift) => {
+                const { top, height } = place(shift, day);
+                return (
+                  <button
+                    key={shift.id}
+                    onClick={() => onOpen(shift.id)}
+                    title={`${shiftTitle(shift)} · ${formatShiftTimeRange(shift)}`}
+                    style={{ top, height }}
+                    className={`absolute inset-x-1 overflow-hidden rounded border px-1.5 py-1 text-left text-[11px] font-medium transition-opacity hover:opacity-80 ${shiftTone(shift)}`}
+                  >
+                    <span className="block truncate">{shift.section?.name ?? SHIFT_TYPE_LABEL[shift.shift_type]}</span>
+                    <span className="block truncate text-[10px] opacity-75">
+                      {formatShiftTimeRange(shift)}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -507,10 +788,13 @@ function ShiftRoster({
   shiftId,
   onBack,
   onChanged,
+  onDelete,
 }: {
   shiftId: string;
   onBack: () => void;
   onChanged: () => void;
+  /** Raised to the page, which owns the confirm dialog and the refresh. */
+  onDelete: (shift: FacultyShift) => void;
 }) {
   const [savingId, setSavingId] = useState<string | null>(null);
   const [bulkSaving, setBulkSaving] = useState(false);
@@ -636,6 +920,13 @@ function ShiftRoster({
               className="h-3.5 w-3.5"
             />
             {shift.status === "cancelled" ? "Reinstate" : "Cancel shift"}
+          </button>
+          <button
+            onClick={() => onDelete(shift)}
+            className="inline-flex items-center gap-2 rounded-xl border border-rose-200 px-3 py-2 text-sm font-medium text-rose-700 transition-colors hover:bg-rose-50"
+          >
+            <FontAwesomeIcon icon={faTrash} className="h-3.5 w-3.5" />
+            Delete
           </button>
         </div>
       </div>
