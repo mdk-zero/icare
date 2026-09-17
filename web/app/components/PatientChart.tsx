@@ -23,8 +23,12 @@ import {
   faChartLine,
   faFilePdf,
   faWandMagicSparkles,
+  faSun,
+  faMoon,
+  faLocationDot,
 } from "@fortawesome/free-solid-svg-icons";
 import PageHeader from "./PageHeader";
+import Avatar from "./Avatar";
 import PatientVitalsHistory from "./PatientVitalsHistory";
 import { toast } from "./Toast";
 import {
@@ -243,29 +247,130 @@ const RECORD_TABS: { id: EhrType; label: string; icon: typeof faHeartPulse }[] =
   { id: "note", label: "Progress Notes", icon: faFileLines },
 ];
 
-function recordSummary(record: EhrRecord, type: EhrType): string {
-  if (type === "tpr") {
-    return [
-      record.shift && `${record.shift} shift`,
-      record.temperature_c != null && `T ${record.temperature_c}°C`,
-      record.pulse != null && `P ${record.pulse}`,
-      record.respiration != null && `R ${record.respiration}`,
-    ]
-      .filter(Boolean)
-      .join(" · ");
+/**
+ * Structured record display for the TPR/IVF/note list — chips and a clearly
+ * separate remarks paragraph, rather than one dense dot-joined line that
+ * mixed the vitals, the free-text note, the student, and the timestamp
+ * together (hard for a faculty member to scan at a glance).
+ */
+
+const SHIFT_STYLE: Record<string, { icon: typeof faSun; classes: string }> = {
+  AM: { icon: faSun, classes: "bg-amber-50 text-amber-700 border-amber-200" },
+  PM: { icon: faSun, classes: "bg-orange-50 text-orange-700 border-orange-200" },
+  Night: { icon: faMoon, classes: "bg-indigo-50 text-indigo-700 border-indigo-200" },
+};
+
+const IVF_STATUS_STYLE: Record<string, string> = {
+  ongoing: "bg-blue-50 text-blue-700 border-blue-200",
+  completed: "bg-gray-100 text-gray-600 border-gray-200",
+  discontinued: "bg-rose-50 text-rose-700 border-rose-200",
+};
+
+function VitalChip({ label, value }: { label: string; value: string }) {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-md bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-700">
+      {label && <span className="text-gray-400">{label}</span>}
+      {value}
+    </span>
+  );
+}
+
+function TprSummary({ record }: { record: EhrRecord }) {
+  const shiftStyle = record.shift ? SHIFT_STYLE[record.shift] : null;
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {record.shift && (
+        <span
+          className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
+            shiftStyle?.classes ?? "border-gray-200 bg-gray-100 text-gray-600"
+          }`}
+        >
+          <FontAwesomeIcon icon={shiftStyle?.icon ?? faSun} className="h-2.5 w-2.5" />
+          {record.shift} shift
+        </span>
+      )}
+      {record.temperature_c != null && <VitalChip label="T" value={`${record.temperature_c}°C`} />}
+      {record.pulse != null && <VitalChip label="P" value={`${record.pulse}`} />}
+      {record.respiration != null && <VitalChip label="R" value={`${record.respiration}`} />}
+    </div>
+  );
+}
+
+function IvfSummary({ record }: { record: EhrRecord }) {
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {record.solution && <span className="text-sm font-semibold text-gray-900">{record.solution}</span>}
+      {record.volume_ml != null && <VitalChip label="" value={`${record.volume_ml} mL`} />}
+      {record.rate_ml_hr != null && <VitalChip label="@" value={`${record.rate_ml_hr} mL/hr`} />}
+      {record.site && (
+        <span className="inline-flex items-center gap-1 rounded-md bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-700">
+          <FontAwesomeIcon icon={faLocationDot} className="h-2.5 w-2.5 text-gray-400" />
+          {record.site}
+        </span>
+      )}
+      {record.status && (
+        <span
+          className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold capitalize ${
+            IVF_STATUS_STYLE[record.status] ?? "border-gray-200 bg-gray-100 text-gray-600"
+          }`}
+        >
+          {record.status}
+        </span>
+      )}
+    </div>
+  );
+}
+
+const SOAP_LABELS: Record<string, string> = {
+  S: "Subjective",
+  O: "Objective",
+  A: "Assessment",
+  P: "Plan",
+};
+
+/**
+ * Splits a SOAP-formatted note ("S: ... O: ... A: ... P: ...") into labeled
+ * sections. Students write in the abbreviated clinical shorthand, which reads
+ * as one dense, jargon-heavy paragraph; a faculty member scanning many notes
+ * benefits from the same content broken into clearly labeled sections
+ * instead. Returns null for a note that isn't in this format, so free-form
+ * text still renders as a plain paragraph rather than being mangled.
+ */
+function parseSoapNote(content: string): { label: string; text: string }[] | null {
+  const pattern = /(?:^|\n)\s*([SOAP]):\s*/g;
+  const matches = [...content.matchAll(pattern)];
+  if (matches.length < 2) return null;
+  const sections: { label: string; text: string }[] = [];
+  for (let i = 0; i < matches.length; i++) {
+    const match = matches[i];
+    const start = match.index! + match[0].length;
+    const end = i + 1 < matches.length ? matches[i + 1].index! : content.length;
+    const text = content.slice(start, end).trim();
+    if (text) sections.push({ label: SOAP_LABELS[match[1]], text });
   }
-  if (type === "ivf") {
-    return [
-      record.solution,
-      record.volume_ml != null && `${record.volume_ml} mL`,
-      record.rate_ml_hr != null && `@ ${record.rate_ml_hr} mL/hr`,
-      record.site,
-      record.status && `(${record.status})`,
-    ]
-      .filter(Boolean)
-      .join(" · ");
+  return sections.length >= 2 ? sections : null;
+}
+
+function ProgressNoteBody({ content }: { content: string }) {
+  if (!content) {
+    return <p className="text-base text-gray-400">No content recorded.</p>;
   }
-  return record.content ?? "";
+  const sections = parseSoapNote(content);
+  if (!sections) {
+    return <p className="whitespace-pre-wrap text-base leading-relaxed text-gray-800">{content}</p>;
+  }
+  return (
+    <div className="space-y-2.5">
+      {sections.map((s) => (
+        <p key={s.label} className="text-base leading-relaxed text-gray-800">
+          <span className="mr-1.5 inline-block rounded bg-brand-600/10 px-2 py-0.5 align-middle text-xs font-bold uppercase tracking-wide text-brand-700">
+            {s.label}:
+          </span>
+          {s.text}
+        </p>
+      ))}
+    </div>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -584,81 +689,9 @@ export default function PatientChart({
               </details>
             )}
           </section>
-
-          {/* Clinical documentation: the three sheets students chart against. */}
-          <section className="rounded-xl border border-hairline bg-surface shadow-tile">
-            <div className="flex flex-wrap items-center gap-1 border-b border-hairline p-2">
-              {RECORD_TABS.map((t) => {
-                const count = t.id === "tpr" ? chart.tpr.length : t.id === "ivf" ? chart.ivf.length : chart.notes.length;
-                return (
-                  <button
-                    key={t.id}
-                    onClick={() => setTab(t.id)}
-                    className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                      tab === t.id ? "bg-brand-600 text-white" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-                    }`}
-                  >
-                    <FontAwesomeIcon icon={t.icon} className="h-3.5 w-3.5" />
-                    {t.label}
-                    <span className={`rounded-full px-1.5 text-[10px] ${tab === t.id ? "bg-white/20" : "bg-gray-100"}`}>
-                      {count}
-                    </span>
-                  </button>
-                );
-              })}
-              {(activeIvf > 0 || unreviewedNotes > 0) && (
-                <span className="ml-auto flex items-center gap-2 pr-2 text-[11px] text-gray-500">
-                  {activeIvf > 0 && <span>{activeIvf} IVF running</span>}
-                  {unreviewedNotes > 0 && <span>{unreviewedNotes} note{unreviewedNotes === 1 ? "" : "s"} to review</span>}
-                </span>
-              )}
-            </div>
-
-            {records.length === 0 ? (
-              <p className="p-8 text-center text-sm text-gray-400">
-                No {tab === "tpr" ? "TPR sheets" : tab === "ivf" ? "IVF sheets" : "progress notes"} charted for this
-                patient.
-              </p>
-            ) : (
-              <ul className="divide-y divide-hairline">
-                {records.map((record) => (
-                  <li key={record.id} className="flex flex-wrap items-start gap-x-3 gap-y-1 px-4 py-3">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm text-gray-800">{recordSummary(record, tab) || "—"}</p>
-                      <p className="mt-0.5 text-xs text-gray-500">
-                        {record.users?.name ?? "Unknown"} · {formatDate(record.created_at)}
-                        {record.remarks ? ` · ${record.remarks}` : ""}
-                      </p>
-                    </div>
-                    {tab === "note" &&
-                      (record.reviewed_at ? (
-                        <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
-                          <FontAwesomeIcon icon={faCircleCheck} className="h-2.5 w-2.5" />
-                          Reviewed
-                        </span>
-                      ) : (
-                        <button
-                          onClick={() => handleReview(record.id)}
-                          disabled={reviewingId === record.id}
-                          title="Mark this note reviewed and notify the student"
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-800 transition-colors hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-800 disabled:opacity-60"
-                        >
-                          {reviewingId === record.id ? (
-                            <FontAwesomeIcon icon={faSpinner} spin className="h-2.5 w-2.5" />
-                          ) : (
-                            <FontAwesomeIcon icon={faCircleCheck} className="h-2.5 w-2.5" />
-                          )}
-                          {reviewingId === record.id ? "Saving..." : "Mark reviewed"}
-                        </button>
-                      ))}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
         </div>
 
-        <div className="space-y-5">
+        <div className="flex flex-col gap-5 lg:h-full">
           {/* Only a discharged patient has one; the newest stay leads. */}
           {discharged && (
             <section className="rounded-xl border border-hairline bg-surface p-4 shadow-tile">
@@ -804,7 +837,7 @@ export default function PatientChart({
             )}
           </section>
 
-          <section className="rounded-xl border border-hairline bg-surface p-4 shadow-tile">
+          <section className="flex min-h-0 flex-col rounded-xl border border-hairline bg-surface p-4 shadow-tile lg:flex-1">
             <h2 className="mb-3 flex items-center gap-2 font-display text-base font-semibold text-gray-900">
               <FontAwesomeIcon icon={faClockRotateLeft} className="h-4 w-4 text-gray-500" />
               Admission History
@@ -814,7 +847,7 @@ export default function PatientChart({
                 No admission events recorded. Events appear here from the first check-in onward.
               </p>
             ) : (
-              <ol className="space-y-3">
+              <ol className="max-h-72 space-y-3 overflow-y-auto pr-1 custom-scrollbar lg:max-h-none lg:min-h-0 lg:flex-1">
                 {chart.events.map((event) => (
                   <li key={event.id} className="flex gap-3">
                     <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-600/10 text-brand-600">
@@ -838,6 +871,96 @@ export default function PatientChart({
           </section>
         </div>
       </div>
+
+      {/* Clinical documentation: the three sheets students chart against.
+          Full width of its own — the vitals+sidebar row above it is the only
+          part of this page that needs the two-column split. */}
+      <section className="mt-5 rounded-xl border border-hairline bg-surface shadow-tile">
+        <div className="flex flex-wrap items-center gap-1 border-b border-hairline p-2">
+          {RECORD_TABS.map((t) => {
+            const count = t.id === "tpr" ? chart.tpr.length : t.id === "ivf" ? chart.ivf.length : chart.notes.length;
+            return (
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                className={`inline-flex items-center gap-2 rounded-lg px-3.5 py-2.5 text-base font-medium transition-colors ${
+                  tab === t.id ? "bg-brand-600 text-white" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                }`}
+              >
+                <FontAwesomeIcon icon={t.icon} className="h-4 w-4" />
+                {t.label}
+                <span className={`rounded-full px-1.5 text-xs ${tab === t.id ? "bg-white/20" : "bg-gray-100"}`}>
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+          {(activeIvf > 0 || unreviewedNotes > 0) && (
+            <span className="ml-auto flex items-center gap-2 pr-2 text-[11px] text-gray-500">
+              {activeIvf > 0 && <span>{activeIvf} IVF running</span>}
+              {unreviewedNotes > 0 && <span>{unreviewedNotes} note{unreviewedNotes === 1 ? "" : "s"} to review</span>}
+            </span>
+          )}
+        </div>
+
+        {records.length === 0 ? (
+          <p className="p-8 text-center text-sm text-gray-400">
+            No {tab === "tpr" ? "TPR sheets" : tab === "ivf" ? "IVF sheets" : "progress notes"} charted for this
+            patient.
+          </p>
+        ) : (
+          <ul className="divide-y divide-hairline">
+            {records.map((record) => (
+              <li key={record.id} className="px-4 py-3.5">
+                {/* Comment-style header: who and when lead, same as the rest
+                    of the app's activity feeds — a faculty member scanning
+                    many entries needs that before the clinical detail. */}
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <Avatar name={record.users?.name} size="sm" tone="brand" />
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-gray-900">
+                        {record.users?.name ?? "Unknown"}
+                      </p>
+                      <p className="text-xs text-gray-500">{formatDate(record.created_at)}</p>
+                    </div>
+                  </div>
+                  {tab === "note" &&
+                    (record.reviewed_at ? (
+                      <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                        <FontAwesomeIcon icon={faCircleCheck} className="h-2.5 w-2.5" />
+                        Reviewed
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => handleReview(record.id)}
+                        disabled={reviewingId === record.id}
+                        title="Mark this note reviewed and notify the student"
+                        className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-800 transition-colors hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-800 disabled:opacity-60"
+                      >
+                        {reviewingId === record.id ? (
+                          <FontAwesomeIcon icon={faSpinner} spin className="h-2.5 w-2.5" />
+                        ) : (
+                          <FontAwesomeIcon icon={faCircleCheck} className="h-2.5 w-2.5" />
+                        )}
+                        {reviewingId === record.id ? "Saving..." : "Mark reviewed"}
+                      </button>
+                    ))}
+                </div>
+
+                <div className="mt-2.5 space-y-1.5 pl-10">
+                  {tab === "tpr" && <TprSummary record={record} />}
+                  {tab === "ivf" && <IvfSummary record={record} />}
+                  {tab === "note" && <ProgressNoteBody content={record.content ?? ""} />}
+                  {tab !== "note" && record.remarks && (
+                    <p className="text-sm leading-relaxed text-gray-700">{record.remarks}</p>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       {historyOpen && (
         <PatientVitalsHistory

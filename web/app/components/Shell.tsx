@@ -271,7 +271,7 @@ export default function Shell({ role, navItems, isActive, children }: ShellProps
       <div className="h-screen bg-canvas flex overflow-hidden">
         <aside
           inert={!isDesktop && !sidebarOpen ? true : undefined}
-          className={`fixed md:relative z-40 md:z-auto w-64 h-full font-sans text-white flex flex-col shadow-[4px_0_24px_-8px_rgba(0,0,0,0.45)] transform transition-transform duration-300 ease-[cubic-bezier(0.22,0.61,0.36,1)] ${
+          className={`fixed md:relative z-40 md:z-auto w-72 h-full font-sans text-white flex flex-col shadow-[4px_0_24px_-8px_rgba(0,0,0,0.45)] transform transition-transform duration-300 ease-[cubic-bezier(0.22,0.61,0.36,1)] ${
             sidebarOpen ? "translate-x-0" : "-translate-x-full"
           } md:translate-x-0`}
           style={{ background: SIDEBAR_GRADIENT }}
@@ -295,15 +295,15 @@ export default function Shell({ role, navItems, isActive, children }: ShellProps
                   <img
                     src={logo}
                     alt="iCARE++"
-                    className="h-[26px] w-auto object-contain brightness-0 invert opacity-95 transition-opacity group-hover:opacity-100"
+                    className="h-8 w-auto object-contain brightness-0 invert opacity-95 transition-opacity group-hover:opacity-100"
                   />
-                  <span className="mt-2 block font-mono text-[9px] uppercase leading-none tracking-[0.16em] text-white/55 truncate">
+                  <span className="mt-2 block font-mono text-[10px] uppercase leading-none tracking-[0.16em] text-white/55 truncate">
                     {portalLabel}
                   </span>
                 </span>
               ) : (
                 <>
-                  <span className="relative w-9 h-9 shrink-0 rounded-[11px] bg-white/[0.08] ring-1 ring-white/15 flex items-center justify-center p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.14)] transition-colors group-hover:bg-white/[0.13]">
+                  <span className="relative w-10 h-10 shrink-0 rounded-[11px] bg-white/[0.08] ring-1 ring-white/15 flex items-center justify-center p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.14)] transition-colors group-hover:bg-white/[0.13]">
                     <img
                       src={logo}
                       alt=""
@@ -311,10 +311,10 @@ export default function Shell({ role, navItems, isActive, children }: ShellProps
                     />
                   </span>
                   <span className="min-w-0">
-                    <span className="block font-mono text-[13px] font-bold leading-none tracking-tight text-white">
+                    <span className="block font-mono text-sm font-bold leading-none tracking-tight text-white">
                       iCARE<span style={{ color: ACCENT }}>++</span>
                     </span>
-                    <span className="mt-1.5 block font-mono text-[9px] uppercase leading-none tracking-[0.16em] text-white/55 truncate">
+                    <span className="mt-1.5 block font-mono text-[10px] uppercase leading-none tracking-[0.16em] text-white/55 truncate">
                       {portalLabel}
                     </span>
                   </span>
@@ -338,22 +338,22 @@ export default function Shell({ role, navItems, isActive, children }: ShellProps
               onClick={() => setSidebarOpen(false)}
               className="group flex items-center gap-2.5 flex-1 min-w-0 rounded-xl px-2 py-2 bg-white/[0.05] ring-1 ring-white/10 hover:bg-white/[0.09] hover:ring-white/20 transition-all outline-none focus-visible:ring-2 focus-visible:ring-[#5eead4]/70"
             >
-              <span className="w-8 h-8 rounded-full flex items-center justify-center overflow-hidden shrink-0 ring-1 ring-white/25">
+              <span className="w-9 h-9 rounded-full flex items-center justify-center overflow-hidden shrink-0 ring-1 ring-white/25">
                 {avatarUrl ? (
                   <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
                 ) : (
                   <span className="w-full h-full bg-gradient-to-br from-white/25 to-white/5 flex items-center justify-center">
-                    <span className="text-[13px] font-bold text-white/90">
+                    <span className="text-sm font-bold text-white/90">
                       {user.name.charAt(0).toUpperCase()}
                     </span>
                   </span>
                 )}
               </span>
               <span className="flex-1 min-w-0">
-                <span className="block text-[13px] font-semibold text-white truncate leading-tight">
+                <span className="block text-sm font-semibold text-white truncate leading-tight">
                   {user.name}
                 </span>
-                <span className="block font-mono text-[9px] uppercase tracking-[0.14em] text-white/55 leading-none mt-1">
+                <span className="block font-mono text-[10px] uppercase tracking-[0.14em] text-white/55 leading-none mt-1">
                   {user.role}
                 </span>
               </span>
@@ -382,7 +382,7 @@ export default function Shell({ role, navItems, isActive, children }: ShellProps
                     <div className="flex items-center gap-2 px-2.5 pb-2 pt-1">
                       <p
                         id={headingId}
-                        className="font-mono text-[9px] font-medium uppercase tracking-[0.18em] text-white/55"
+                        className="font-mono text-[10px] font-medium uppercase tracking-[0.18em] text-white/55"
                       >
                         {group.section}
                       </p>
@@ -398,7 +398,7 @@ export default function Shell({ role, navItems, isActive, children }: ShellProps
                           href={item.href}
                           onClick={() => setSidebarOpen(false)}
                           aria-current={active ? "page" : undefined}
-                          className={`group relative flex items-center gap-2.5 rounded-lg pl-3 pr-2.5 py-2 transition-colors duration-150 outline-none focus-visible:ring-2 focus-visible:ring-[#5eead4]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0f5252] ${
+                          className={`group relative flex items-center gap-2.5 rounded-lg pl-3 pr-2.5 py-2.5 transition-colors duration-150 outline-none focus-visible:ring-2 focus-visible:ring-[#5eead4]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0f5252] ${
                             active ? "bg-white/[0.13]" : "hover:bg-white/[0.07]"
                           }`}
                         >
@@ -415,14 +415,14 @@ export default function Shell({ role, navItems, isActive, children }: ShellProps
                           />
                           <FontAwesomeIcon
                             icon={item.icon}
-                            className={`w-4 h-4 shrink-0 transition-all duration-150 ${
+                            className={`w-5 h-5 shrink-0 transition-all duration-150 ${
                               active
                                 ? "text-white"
                                 : "text-white/60 group-hover:text-white/90 group-hover:-translate-y-px"
                             }`}
                           />
                           <span
-                            className={`text-[13px] leading-none tracking-[-0.005em] truncate transition-colors duration-150 ${
+                            className={`text-[15px] leading-none tracking-[-0.005em] truncate transition-colors duration-150 ${
                               active
                                 ? "font-semibold text-white"
                                 : "font-medium text-white/75 group-hover:text-white"
@@ -453,13 +453,13 @@ export default function Shell({ role, navItems, isActive, children }: ShellProps
               onClick={() => setShowLogoutConfirm(true)}
               className="group w-full flex items-center gap-2.5 rounded-xl px-2.5 py-2.5 bg-white/[0.04] ring-1 ring-white/10 text-white/70 hover:bg-rose-500/[0.16] hover:ring-rose-300/30 hover:text-[#ffe4e6] transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-rose-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0f5252]"
             >
-              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white/[0.07] transition-colors duration-200 group-hover:bg-rose-400/25">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/[0.07] transition-colors duration-200 group-hover:bg-rose-400/25">
                 <FontAwesomeIcon
                   icon={faRightFromBracket}
-                  className="w-3.5 h-3.5 transition-transform duration-200 group-hover:translate-x-0.5"
+                  className="w-4 h-4 transition-transform duration-200 group-hover:translate-x-0.5"
                 />
               </span>
-              <span className="text-[13px] font-semibold leading-none">Log out</span>
+              <span className="text-sm font-semibold leading-none">Log out</span>
             </button>
           </div>
         </aside>
