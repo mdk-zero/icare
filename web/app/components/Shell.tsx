@@ -198,8 +198,7 @@ export default function Shell({ role, navItems, isActive, children }: ShellProps
       // disagree; an empty mirror asks the server rather than assuming nobody
       // is signed in, since the proxy would bounce that redirect back here.
       const cached = getCurrentUser();
-      const fresh: User | null =
-        cached && role !== "student" ? cached : await refreshCurrentUser();
+      const fresh: User | null = cached && role !== "student" ? cached : await refreshCurrentUser();
 
       if (!mounted) return;
       if (!fresh) {
@@ -295,7 +294,7 @@ export default function Shell({ role, navItems, isActive, children }: ShellProps
                   <img
                     src={logo}
                     alt="iCARE++"
-                    className="h-8 w-auto object-contain brightness-0 invert opacity-95 transition-opacity group-hover:opacity-100"
+                    className="h-12 w-auto object-contain brightness-0 invert opacity-95 transition-opacity group-hover:opacity-100"
                   />
                   <span className="mt-2 block font-mono text-[10px] uppercase leading-none tracking-[0.16em] text-white/55 truncate">
                     {portalLabel}
