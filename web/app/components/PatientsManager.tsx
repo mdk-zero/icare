@@ -915,7 +915,7 @@ export default function PatientsManager({
               className="inline-flex items-center gap-2 px-4 py-2.5 bg-brand-600 hover:bg-[#145a68] text-white text-sm font-medium rounded-lg transition-colors shadow-[0_2px_6px_rgba(27,107,123,0.2)] whitespace-nowrap"
             >
               <FontAwesomeIcon icon={faPlus} className="w-4 h-4" />
-              Add Patient
+              Admit Patient
             </button>
           </div>
         </div>
