@@ -148,6 +148,92 @@ export async function fetchPatients(): Promise<CachedResult<Patient[]>> {
 }
 
 // ---------------------------------------------------------------
+// Ward ("Clinic" tab: the admin's floor plan, its beds, and my assignments)
+// ---------------------------------------------------------------
+
+/** A room as the admin placed it. plan_* are null when it is not on the plan. */
+export interface WardRoom {
+  id: string;
+  name: string;
+  room_number: string;
+  capacity: number;
+  status: 'active' | 'inactive' | 'maintenance';
+  plan_x: number | null;
+  plan_y: number | null;
+  plan_w: number | null;
+  plan_h: number | null;
+  /** Admitted patients in the room — what `capacity` gates. */
+  occupied: number;
+  /** True when one of this student's scenario patients is in this room. */
+  has_assignment: boolean;
+}
+
+export interface WardVitals {
+  recorded_at: string;
+  heart_rate: number | null;
+  bp_systolic: number | null;
+  bp_diastolic: number | null;
+  temperature_c: number | null;
+  respiratory_rate: number | null;
+  oxygen_saturation: number | null;
+  is_anomaly: boolean;
+  anomaly_reasons: AnomalyReason[];
+}
+
+export interface WardPatient {
+  id: string;
+  name: string;
+  age: number | null;
+  gender: string | null;
+  room_id: string | null;
+  room_number: string | null;
+  /** Only an assigned patient may be charted on; the server enforces it too. */
+  is_assigned: boolean;
+  /** Withheld by the server for patients this student is not assigned to. */
+  diagnosis?: string | null;
+  latest_vitals?: WardVitals | null;
+}
+
+export interface WardAssignment {
+  id: string;
+  scenario_id: string;
+  scenario_title: string;
+  description: string | null;
+  difficulty: string | null;
+  category: string | null;
+  learning_objectives: string[] | null;
+  patient_id: string | null;
+  assigned_at: string;
+  deadline: string | null;
+  status: ScenarioAssignment['status'];
+  required: boolean;
+  score: number | null;
+  submitted_at: string | null;
+  completed_at: string | null;
+  tasks_done: number;
+  tasks_total: number;
+}
+
+export interface WardResult {
+  rooms: WardRoom[];
+  patients: WardPatient[];
+  assignments: WardAssignment[];
+}
+
+/** The whole Clinic tab in one cached read — plan, beds and assignments. */
+export async function fetchWard(): Promise<CachedResult<WardResult>> {
+  const result = await cachedGet<WardResult>('/api/student/ward');
+  return {
+    ...result,
+    data: {
+      rooms: result.data.rooms ?? [],
+      patients: result.data.patients ?? [],
+      assignments: result.data.assignments ?? [],
+    },
+  };
+}
+
+// ---------------------------------------------------------------
 // Vitals (5.2 + 5.3 outbox + 5.5 anomaly UX)
 // ---------------------------------------------------------------
 
