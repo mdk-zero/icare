@@ -319,6 +319,14 @@ export default function Shell({ role, navItems, isActive, children }: ShellProps
                 </>
               )}
             </Link>
+            {/* Beside the logo, where the eye lands first, rather than tucked
+                after the profile card. Centred on the 48px wordmark, not on the
+                wordmark plus the portal label under it. */}
+            {role === "faculty" && (
+              <div className="mt-1.5 shrink-0 self-start">
+                <NotificationsPopover variant="sidebar" />
+              </div>
+            )}
             <button
               onClick={() => setSidebarOpen(false)}
               aria-label="Close navigation"
@@ -355,7 +363,6 @@ export default function Shell({ role, navItems, isActive, children }: ShellProps
                 </span>
               </span>
             </Link>
-            {role === "faculty" && <NotificationsPopover variant="sidebar" />}
           </div>
 
           {/* Navigation */}
