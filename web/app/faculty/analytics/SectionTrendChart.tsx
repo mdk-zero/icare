@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import type { AnalyticsBucket, AnalyticsSummary, Section } from "../../lib/api";
 import { formatBucket } from "./dates";
 
@@ -130,8 +130,14 @@ export function TrendLegend({ series }: { series: TrendSeries[] }) {
   );
 }
 
-const W = 460;
+/**
+ * Drawn at the card's real pixel width and a fixed height, rather than scaled
+ * from a fixed viewBox — scaling made text and lines grow with the card, so a
+ * wide card got a tall, heavy chart.
+ */
 const H = 240;
+/** Tick labels ("Aug 24") need about this much room each. */
+const TICK_SPACING = 72;
 const PAD_L = 32;
 const PAD_T = 16;
 const PAD_B = 36;
@@ -148,8 +154,19 @@ export function TrendLineChart({
   series: TrendSeries[];
   bucket: AnalyticsBucket;
 }) {
+  const boxRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const [hover, setHover] = useState<number | null>(null);
+  const [width, setWidth] = useState<number | null>(null);
+
+  useEffect(() => {
+    const box = boxRef.current;
+    if (!box) return;
+    const observer = new ResizeObserver(([entry]) => setWidth(Math.floor(entry.contentRect.width)));
+    observer.observe(box);
+    return () => observer.disconnect();
+  }, []);
+  const W = width ?? 0;
 
   const buckets = bucketsOf(series);
   const n = buckets.length;
@@ -175,7 +192,7 @@ export function TrendLineChart({
   const x = (i: number) => PAD_L + (n === 1 ? plotW / 2 : (i / (n - 1)) * plotW);
   const y = (v: number) => PAD_T + yRaw(v) * plotH;
   const grid = [0, 25, 50, 75, 100];
-  const tickStep = Math.max(1, Math.ceil(n / 8));
+  const tickStep = Math.max(1, Math.ceil(n / Math.max(2, Math.floor(plotW / TICK_SPACING))));
   // The last bucket is always labelled, so a regular tick too close to it gives way.
   const isTick = (i: number) => i === last || (i % tickStep === 0 && last - i >= tickStep);
   const marked = n <= MAX_MARKED_BUCKETS;
@@ -208,135 +225,140 @@ export function TrendLineChart({
   const flip = hoverX > W * 0.6;
 
   return (
-    <div className="relative">
-      <svg
-        ref={svgRef}
-        viewBox={`0 0 ${W} ${H}`}
-        className="w-full overflow-visible"
-        role="img"
-        aria-label={`Average quiz score over time for ${series.map((s) => s.name).join(", ")}. Use the table view for exact values.`}
-        tabIndex={0}
-        onPointerMove={onPointerMove}
-        onPointerLeave={() => setHover(null)}
-        onFocus={() => setHover((h) => h ?? last)}
-        onBlur={() => setHover(null)}
-        onKeyDown={onKeyDown}
-      >
-        {grid.map((g) => (
-          <g key={g}>
+    // Holds the chart's height before the first measurement, so nothing jumps.
+    <div ref={boxRef} className="relative" style={{ height: H }}>
+      {width !== null && (
+        <svg
+          ref={svgRef}
+          width={W}
+          height={H}
+          viewBox={`0 0 ${W} ${H}`}
+          className="block overflow-visible"
+          role="img"
+          aria-label={`Average quiz score over time for ${series.map((s) => s.name).join(", ")}. Use the table view for exact values.`}
+          tabIndex={0}
+          onPointerMove={onPointerMove}
+          onPointerLeave={() => setHover(null)}
+          onFocus={() => setHover((h) => h ?? last)}
+          onBlur={() => setHover(null)}
+          onKeyDown={onKeyDown}
+        >
+          {grid.map((g) => (
+            <g key={g}>
+              <line
+                x1={PAD_L}
+                y1={y(g)}
+                x2={W - padR}
+                y2={y(g)}
+                stroke="var(--color-hairline)"
+                strokeWidth="1"
+              />
+              <text
+                x={PAD_L - 6}
+                y={y(g) + 3}
+                textAnchor="end"
+                fontSize="10"
+                fill="var(--color-gray-400)"
+                className="tabular-nums"
+              >
+                {g}
+              </text>
+            </g>
+          ))}
+
+          {/* A lone line keeps a faint wash under it; overlapping washes would muddy. */}
+          {drawn.length === 1 && drawn[0].pts.length > 1 && (
+            <path
+              d={`${smoothPath(drawn[0].pts)} L ${drawn[0].pts[drawn[0].pts.length - 1].x},${PAD_T + plotH} L ${drawn[0].pts[0].x},${PAD_T + plotH} Z`}
+              fill={drawn[0].color}
+              fillOpacity="0.1"
+            />
+          )}
+
+          {drawn.map((s) =>
+            s.pts.length > 1 ? (
+              <path
+                key={`line-${s.id}`}
+                d={smoothPath(s.pts)}
+                fill="none"
+                stroke={s.color}
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            ) : null,
+          )}
+
+          {hover !== null && (
             <line
-              x1={PAD_L}
-              y1={y(g)}
-              x2={W - padR}
-              y2={y(g)}
-              stroke="var(--color-hairline)"
+              x1={hoverX}
+              y1={PAD_T}
+              x2={hoverX}
+              y2={PAD_T + plotH}
+              stroke="var(--color-gray-400)"
               strokeWidth="1"
             />
-            <text
-              x={PAD_L - 6}
-              y={y(g) + 3}
-              textAnchor="end"
-              fontSize="10"
-              fill="var(--color-gray-400)"
-              className="tabular-nums"
-            >
-              {g}
-            </text>
-          </g>
-        ))}
+          )}
 
-        {/* A lone line keeps a faint wash under it; overlapping washes would muddy. */}
-        {drawn.length === 1 && drawn[0].pts.length > 1 && (
-          <path
-            d={`${smoothPath(drawn[0].pts)} L ${drawn[0].pts[drawn[0].pts.length - 1].x},${PAD_T + plotH} L ${drawn[0].pts[0].x},${PAD_T + plotH} Z`}
-            fill={drawn[0].color}
-            fillOpacity="0.1"
-          />
-        )}
+          {/* Markers carry a 2px surface ring so they stay legible where lines cross. */}
+          {drawn.map((s) =>
+            s.pts.map((pt, i) => {
+              const isEnd = i === s.pts.length - 1;
+              const isHovered = hoverBucket === pt.p.week_start;
+              if (!marked && !isEnd && !isHovered) return null;
+              return (
+                <circle
+                  key={`dot-${s.id}-${pt.p.week_start}`}
+                  cx={pt.x}
+                  cy={pt.y}
+                  r={isHovered ? 5 : 4}
+                  fill={s.color}
+                  stroke="var(--color-surface)"
+                  strokeWidth="2"
+                />
+              );
+            }),
+          )}
 
-        {drawn.map((s) =>
-          s.pts.length > 1 ? (
-            <path
-              key={`line-${s.id}`}
-              d={smoothPath(s.pts)}
-              fill="none"
-              stroke={s.color}
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          ) : null,
-        )}
+          {labelEnds &&
+            drawn.map((s) => {
+              const end = s.pts[s.pts.length - 1];
+              return (
+                <text
+                  key={`label-${s.id}`}
+                  x={end.x + 9}
+                  y={end.y + 3.5}
+                  fontSize="10"
+                  fontWeight="600"
+                  fill="var(--color-gray-600)"
+                >
+                  {s.name}
+                </text>
+              );
+            })}
 
-        {hover !== null && (
-          <line
-            x1={hoverX}
-            y1={PAD_T}
-            x2={hoverX}
-            y2={PAD_T + plotH}
-            stroke="var(--color-gray-400)"
-            strokeWidth="1"
-          />
-        )}
-
-        {/* Markers carry a 2px surface ring so they stay legible where lines cross. */}
-        {drawn.map((s) =>
-          s.pts.map((pt, i) => {
-            const isEnd = i === s.pts.length - 1;
-            const isHovered = hoverBucket === pt.p.week_start;
-            if (!marked && !isEnd && !isHovered) return null;
-            return (
-              <circle
-                key={`dot-${s.id}-${pt.p.week_start}`}
-                cx={pt.x}
-                cy={pt.y}
-                r={isHovered ? 5 : 4}
-                fill={s.color}
-                stroke="var(--color-surface)"
-                strokeWidth="2"
-              />
-            );
-          }),
-        )}
-
-        {labelEnds &&
-          drawn.map((s) => {
-            const end = s.pts[s.pts.length - 1];
-            return (
+          {buckets.map((b, i) =>
+            isTick(i) ? (
               <text
-                key={`label-${s.id}`}
-                x={end.x + 9}
-                y={end.y + 3.5}
+                key={`t-${b}`}
+                x={x(i)}
+                y={H - 8}
+                textAnchor={i === 0 && n > 1 ? "start" : i === last && n > 1 ? "end" : "middle"}
                 fontSize="10"
-                fontWeight="600"
-                fill="var(--color-gray-600)"
+                fill="var(--color-gray-400)"
               >
-                {s.name}
+                {formatBucket(b, bucket)}
               </text>
-            );
-          })}
-
-        {buckets.map((b, i) =>
-          isTick(i) ? (
-            <text
-              key={`t-${b}`}
-              x={x(i)}
-              y={H - 8}
-              textAnchor={i === 0 && n > 1 ? "start" : i === last && n > 1 ? "end" : "middle"}
-              fontSize="10"
-              fill="var(--color-gray-400)"
-            >
-              {formatBucket(b, bucket)}
-            </text>
-          ) : null,
-        )}
-      </svg>
+            ) : null,
+          )}
+        </svg>
+      )}
 
       {hoverBucket !== null && (
         <div
           className="pointer-events-none absolute top-2 z-10 min-w-36 rounded-lg border border-hairline bg-surface px-3 py-2 shadow-overlay"
           style={{
-            left: `${(hoverX / W) * 100}%`,
+            left: hoverX,
             transform: flip ? "translateX(calc(-100% - 10px))" : "translateX(10px)",
           }}
         >
