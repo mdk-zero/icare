@@ -57,7 +57,7 @@ const THEME_OPTIONS: { value: ThemePreference; label: string; icon: keyof typeof
 ];
 
 export default function ProfileScreen() {
-  // content starts below the floating header, then scrolls beneath it
+  // no tab bar here, so the footer only has to clear the home indicator
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, logout } = useAuth();
@@ -138,7 +138,7 @@ export default function ProfileScreen() {
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={[styles.content, { paddingTop: insets.top + 88 }]}
+      contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + Spacing.xxl }]}
       showsVerticalScrollIndicator={false}
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={refresh} colors={[Palette.primary]} tintColor={Palette.primary} />
@@ -421,8 +421,6 @@ function createStyles(
   },
   content: {
     padding: Spacing.lg,
-    // clears the floating tab bar so the last items can scroll above it
-    paddingBottom: 128,
   },
   pressedDim: {
     opacity: 0.7,

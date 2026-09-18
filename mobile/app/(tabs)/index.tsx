@@ -11,11 +11,13 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { FontAwesome6 } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import { Image } from "expo-image";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { Radius, Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
 import { SectionHeader, SkeletonScreen, SyncStatus } from "@/components/ui";
 import { useAuth } from "@/hooks/useAuth";
+import { useAvatarUrl } from "@/hooks/useAvatar";
 import { useApiData, allCached } from "@/hooks/useApiData";
 import {
   fetchScenarioAssignments,
@@ -118,14 +120,16 @@ function getAddressedName(user: { name?: string; sex?: "male" | "female" | null 
   return title ? `${title} ${shortName}` : shortName;
 }
 
+/**
+ * First letter of the first name plus the last — the same initials the
+ * profile screen shows, which this avatar opens.
+ */
 function getInitials(name?: string) {
-  if (!name) return "S";
-  return name
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
+  const words = (name ?? "").trim().split(/\s+/).filter((w) => /[\p{L}\p{N}]/u.test(w));
+  if (words.length === 0) return "S";
+  const letterOf = (w: string) => w.match(/[\p{L}\p{N}]/u)?.[0] ?? "";
+  const last = words.length > 1 ? letterOf(words[words.length - 1]) : "";
+  return (letterOf(words[0]) + last).toUpperCase() || "S";
 }
 
 function statusColors(Accent: ReturnType<typeof useTheme>["Accent"]): Record<string, string> {
@@ -156,6 +160,7 @@ export default function DashboardScreen() {
     [router],
   );
   const { user } = useAuth();
+  const avatarUrl = useAvatarUrl(user?.picture_url);
   const { Palette, Accent, Shadow, Type } = useTheme();
   const styles = React.useMemo(
     () => createStyles(Palette, Accent, Shadow, Type),
@@ -269,18 +274,26 @@ export default function DashboardScreen() {
             <Text style={styles.dateText}>{dateStr}</Text>
           </View>
         </View>
+        {/* The only way into the profile now that it has no tab of its own. */}
         <Pressable
           style={({ pressed }) => [pressed && styles.pressedDim]}
           onPress={() => router.push("/profile")}
+          hitSlop={6}
+          accessibilityRole="button"
+          accessibilityLabel="Open profile"
         >
-          <LinearGradient
-            colors={[Teal.light, Teal.primary, Teal.deep]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.avatar}
-          >
-            <Text style={styles.avatarText}>{getInitials(user?.name)}</Text>
-          </LinearGradient>
+          {avatarUrl ? (
+            <Image source={{ uri: avatarUrl }} style={styles.avatar} contentFit="cover" />
+          ) : (
+            <LinearGradient
+              colors={[Teal.light, Teal.primary, Teal.deep]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.avatar}
+            >
+              <Text style={styles.avatarText}>{getInitials(user?.name)}</Text>
+            </LinearGradient>
+          )}
         </Pressable>
       </Animated.View>
 
