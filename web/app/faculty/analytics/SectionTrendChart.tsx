@@ -23,32 +23,21 @@ export interface TrendSeries {
 
 const SLOTS = 8;
 const slotColor = (slot: number) => `var(--color-series-${slot + 1})`;
-/** The page's brand teal, for the cohort line drawn when there is no split. */
-const COHORT_COLOR = "var(--color-brand-600)";
 /** Folded sections are not an entity of their own, so they get no hue. */
 const OTHER_COLOR = "var(--color-gray-400)";
 
 const byName = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true });
 
 /**
- * One series per section in the summary's `section_trend`. A warehouse without
- * migration 039 sends no split, and the chart falls back to the single cohort
- * line it always drew. Past eight sections, the ninth onward fold into one
+ * One series per section in the summary's `section_trend` — never a merged
+ * all-sections line. Past eight sections, the ninth onward fold into one
  * attempt-weighted "Other sections" line rather than cycling a hue.
  */
 export function buildTrendSeries(
   summary: AnalyticsSummary | null,
   managed: Section[],
 ): TrendSeries[] {
-  if (!summary) return [];
-  if (summary.section_trend == null) {
-    const cohort = summary.weekly_trend ?? [];
-    return cohort.length === 0
-      ? []
-      : [{ id: "all", name: "All sections", color: COHORT_COLOR, points: cohort }];
-  }
-
-  const rows = summary.section_trend;
+  const rows = summary?.section_trend ?? [];
   const names = new Map<string, string>();
   for (const s of managed) names.set(s.id, s.name);
   for (const r of rows) if (!names.has(r.section_id)) names.set(r.section_id, r.section_name);

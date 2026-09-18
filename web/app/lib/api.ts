@@ -1214,8 +1214,8 @@ export interface AnalyticsSummary {
     active_students_30d: number;
   };
   weekly_trend: { week_start: string; average_score: number; attempts: number }[];
-  /** `weekly_trend` split by section (migration 039), attached by the API route.
-   * Null when the warehouse doesn't have it yet — draw the cohort line instead. */
+  /** `weekly_trend` split by section, attached when asked for with
+   * `sectionTrend`. Null only when the split couldn't be read at all. */
   section_trend?: {
     section_id: string;
     section_name: string;
@@ -1271,6 +1271,8 @@ export interface AnalyticsFilters {
   /** YYYY-MM-DD bounds. */
   from?: string;
   to?: string;
+  /** Summary only: also attach `section_trend`, one series per section. */
+  sectionTrend?: boolean;
 }
 
 export async function fetchAnalyticsSummary(
@@ -1281,6 +1283,7 @@ export async function fetchAnalyticsSummary(
   if (filters.sectionIds?.length) params.set('section_ids', filters.sectionIds.join(','));
   if (filters.from) params.set('from', filters.from);
   if (filters.to) params.set('to', filters.to);
+  if (filters.sectionTrend) params.set('section_trend', '1');
   const query = params.toString();
 
   try {
