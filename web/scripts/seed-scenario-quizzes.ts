@@ -14,6 +14,12 @@
  * who misses a question can open the checklist and read the step. validate()
  * refuses a question that does not cite its skill.
  *
+ * Competencies follow from those citations. The competency areas are the
+ * book's 18 chapters (taylors-chapters.ts, migration 041), and a skill's
+ * number names its chapter, so a criterion's competency is its skill's
+ * chapter and each question is tagged with the chapter of the skill it cites.
+ * Nothing here is tagged by hand.
+ *
  * Every quiz is built to satisfy publish validation (app/lib/assessment-
  * validation.ts) so it can be published rather than sitting in draft:
  *
@@ -35,33 +41,15 @@
 
 import { config } from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
+import { TAYLORS_CHAPTERS, chapterOfSkill, skillsIn } from './taylors-chapters';
 
 config({ path: '.env.local' });
 
-/**
- * The PRC/CHED core competencies, by the ids migration 009 seeds. Same
- * constants as seed-assessments.ts — both scripts point at the same rows.
- */
-const C = {
-  SAFE_QUALITY_CARE: 'cb61c12e-896c-4b01-8782-4d1f77ac21f5',
-  MANAGEMENT_RESOURCES: 'a2e3f4eb-8898-496e-b224-52f523b55e77',
-  HEALTH_EDUCATION: '36565c30-3c0e-4559-b20a-bddfcfd1b0e2',
-  LEGAL_RESPONSIBILITY: '8caec700-9577-4583-92c7-25ef3e7c4599',
-  ETHICO_MORAL: '7a6a27f0-e0d4-4b26-9e22-ef821bb50c42',
-  PROFESSIONAL_DEV: 'b991ab11-f8a1-4192-aa5e-dac6f2543e2f',
-  QUALITY_IMPROVEMENT: 'fbefb01d-51e6-4fde-8ce6-1ec67e0cd1fc',
-  RESEARCH: '07dae176-15e2-4078-81ec-5cc46578ae64',
-  RECORDS_MANAGEMENT: 'd3f7a4d5-a0c5-4486-b22f-1e1a0e8b12b8',
-  COMMUNICATION: 'b4f9884a-de33-46e9-8c05-a183a4167779',
-  COLLABORATION_TEAMWORK: 'd71b3490-5280-4c97-927e-e0de4cbce75a',
-  PHARMACOLOGY: '631e7fd0-247e-4a1f-b82d-7188f88c0cec',
-} as const;
-
 interface CriterionSeed {
+  /** Opens with the Taylor's skill(s) it covers: "Skill 1-1 · …", "Skills 1-4 & 1-6 · …". */
   name: string;
   weight: number;
   min_questions: number;
-  competency_id: string;
 }
 
 interface QuestionSeed {
@@ -71,7 +59,16 @@ interface QuestionSeed {
   explanation: string;
   /** Index into the quiz's criteria array. Every question must own one. */
   criterion: number;
-  competency_ids: string[];
+}
+
+/** The Taylor's skills a criterion covers, from the part of its name before " · ". */
+function criterionSkills(c: CriterionSeed): string[] {
+  return skillsIn(c.name.split(' · ')[0]);
+}
+
+/** The skill a question's explanation opens by citing ("Skill 5-23, step 18: …"). */
+function citedSkill(q: QuestionSeed): string | undefined {
+  return q.explanation.match(/^Skills? (\d+-\d+)/)?.[1];
 }
 
 interface QuizSeed {
@@ -107,10 +104,10 @@ const QUIZZES: QuizSeed[] = [
     time_limit_seconds: 900,
     total_questions: 6,
     criteria: [
-      { name: 'Skill 1-1 · Assessing Body Temperature', weight: 30, min_questions: 1, competency_id: C.SAFE_QUALITY_CARE },
-      { name: 'Skills 1-4 & 1-6 · Pulse and Respiration', weight: 20, min_questions: 1, competency_id: C.SAFE_QUALITY_CARE },
-      { name: 'Skill 18-5 · Obtaining a Nasopharyngeal Swab', weight: 30, min_questions: 1, competency_id: C.SAFE_QUALITY_CARE },
-      { name: 'Skill 5-1 · Administering Oral Medications', weight: 20, min_questions: 1, competency_id: C.PHARMACOLOGY },
+      { name: 'Skill 1-1 · Assessing Body Temperature', weight: 30, min_questions: 1 },
+      { name: 'Skills 1-4 & 1-6 · Pulse and Respiration', weight: 20, min_questions: 1 },
+      { name: 'Skill 18-5 · Obtaining a Nasopharyngeal Swab', weight: 30, min_questions: 1 },
+      { name: 'Skill 5-1 · Administering Oral Medications', weight: 20, min_questions: 1 },
     ],
     questions: [
       {
@@ -124,7 +121,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 2,
         explanation: 'Skill 1-1, oral step 12: place the probe beneath the tongue in the posterior sublingual pocket and ask the patient to close the lips around it, then hold it until the beep (step 13).',
         criterion: 0,
-        competency_ids: [C.SAFE_QUALITY_CARE],
       },
       {
         content: 'Before inserting a tympanic thermometer in an adult, how does the nurse straighten the ear canal?',
@@ -137,7 +133,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 0,
         explanation: 'Skill 1-1, tympanic step 12: insert the probe snugly, angled toward the jaw line, pulling the pinna up and back to straighten the canal in an adult. The reading is immediate, usually within 2 seconds (step 13).',
         criterion: 0,
-        competency_ids: [C.SAFE_QUALITY_CARE],
       },
       {
         content: 'How far is a lubricated rectal thermometer probe inserted in an adult?',
@@ -145,7 +140,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 3,
         explanation: 'Skill 1-1, rectal steps 13–15: lubricate about 1 inch of the probe and insert it about 1.5 inches in an adult (1 inch in a child), with the patient side-lying and only the buttocks exposed.',
         criterion: 0,
-        competency_ids: [C.SAFE_QUALITY_CARE],
       },
       {
         content: 'After counting a radial pulse for 30 seconds, the nurse notices the rhythm is irregular. What should the nurse do?',
@@ -158,7 +152,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 1,
         explanation: 'Skill 1-4, step 9: a 30-second count doubled is only acceptable when the pulse is normal. If the rate, rhythm, or amplitude is abnormal in any way, palpate and count for 1 full minute, then note rhythm and amplitude (step 10).',
         criterion: 1,
-        competency_ids: [C.SAFE_QUALITY_CARE, C.QUALITY_IMPROVEMENT],
       },
       {
         content: 'Why does the nurse count respirations while the fingers are still on the pulse?',
@@ -171,7 +164,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 0,
         explanation: 'Skill 1-6, step 1: observe respirations while your fingers are still in place after counting the pulse. People change their breathing when they know it is being watched, so the count stays unobtrusive. Count 30 seconds × 2, or a full minute if abnormal (steps 3–4).',
         criterion: 1,
-        competency_ids: [C.SAFE_QUALITY_CARE],
       },
       {
         content: 'How is the swab placed when collecting a nasopharyngeal specimen from an adult?',
@@ -184,7 +176,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 2,
         explanation: 'Skill 18-5, step 10: insert the swab approximately 6 inches (adult) through one naris to the nasopharynx, rotate it, and leave it 15 to 30 seconds, without touching the tongue or the sides of the nostril.',
         criterion: 2,
-        competency_ids: [C.SAFE_QUALITY_CARE],
       },
       {
         content: 'Immediately before inserting the nasopharyngeal swab, what does the nurse ask the patient to do?',
@@ -197,7 +188,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 3,
         explanation: 'Skill 18-5, step 7: ask the patient to cough and then tip the head back, assisting as necessary. The nurse then inspects the back of the throat with a tongue depressor (step 9) before inserting the swab.',
         criterion: 2,
-        competency_ids: [C.SAFE_QUALITY_CARE, C.COMMUNICATION],
       },
       {
         content: 'Which details must the nasopharyngeal specimen label carry?',
@@ -210,7 +200,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 1,
         explanation: 'Skill 18-5, step 4: check the label against the ID bracelet. It must include the patient’s name and identification number, time of collection, route of collection, the person obtaining the sample, and anything else agency policy requires.',
         criterion: 2,
-        competency_ids: [C.SAFE_QUALITY_CARE, C.RECORDS_MANAGEMENT],
       },
       {
         content: 'How does the nurse identify Rosa before giving her paracetamol?',
@@ -223,7 +212,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 0,
         explanation: 'Skill 5-1, step 14: identify the patient using two methods and compare with the CMAR/MAR: the name and ID number on the band, and the patient stating name and birth date. Room and bed numbers are never identifiers.',
         criterion: 3,
-        competency_ids: [C.PHARMACOLOGY, C.SAFE_QUALITY_CARE],
       },
       {
         content: 'Rosa asks the nurse to leave her paracetamol on the bedside table until after her shower. What is the correct action?',
@@ -236,7 +224,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 2,
         explanation: 'Skill 5-1, step 19: remain with the patient until each medication is swallowed and never leave medication at the bedside. Documentation happens only after administration (step 21).',
         criterion: 3,
-        competency_ids: [C.PHARMACOLOGY, C.COMMUNICATION],
       },
     ],
   },
@@ -250,10 +237,10 @@ const QUIZZES: QuizSeed[] = [
     time_limit_seconds: 900,
     total_questions: 6,
     criteria: [
-      { name: 'Skill 15-1 · Initiating a Peripheral IV Infusion', weight: 30, min_questions: 1, competency_id: C.SAFE_QUALITY_CARE },
-      { name: 'Skill 15-3 · Monitoring an IV Site and Infusion', weight: 30, min_questions: 1, competency_id: C.SAFE_QUALITY_CARE },
-      { name: 'Skill 18-2 · Collecting a Stool Specimen for Culture', weight: 20, min_questions: 1, competency_id: C.SAFE_QUALITY_CARE },
-      { name: 'Skill 4-7 · Using Personal Protective Equipment', weight: 20, min_questions: 1, competency_id: C.MANAGEMENT_RESOURCES },
+      { name: 'Skill 15-1 · Initiating a Peripheral IV Infusion', weight: 30, min_questions: 1 },
+      { name: 'Skill 15-3 · Monitoring an IV Site and Infusion', weight: 30, min_questions: 1 },
+      { name: 'Skill 18-2 · Collecting a Stool Specimen for Culture', weight: 20, min_questions: 1 },
+      { name: 'Skill 4-7 · Using Personal Protective Equipment', weight: 20, min_questions: 1 },
     ],
     questions: [
       {
@@ -267,7 +254,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 1,
         explanation: 'Skill 15-1, step 19: apply the tourniquet 3 to 4 inches above the venipuncture site to distend the vein, direct its ends away from the entry site, and make sure the radial pulse is still present. It should stop venous flow, not arterial.',
         criterion: 0,
-        competency_ids: [C.SAFE_QUALITY_CARE],
       },
       {
         content: 'How does the nurse prepare the skin with chlorhexidine before inserting the IV catheter?',
@@ -280,7 +266,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 3,
         explanation: 'Skill 15-1, step 22: press the applicator against the skin, use a back-and-forth friction scrub for at least 30 seconds, do not wipe or blot, and allow it to dry completely.',
         criterion: 0,
-        competency_ids: [C.SAFE_QUALITY_CARE, C.QUALITY_IMPROVEMENT],
       },
       {
         content: 'At what angle, and with the bevel which way, is the IV catheter inserted?',
@@ -293,7 +278,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 0,
         explanation: 'Skill 15-1, step 24: holding the catheter by the hub, bevel side up, enter the skin at a 10- to 15-degree angle, directly over or beside the vein. When blood returns in the flashback chamber, advance until the hub is at the site (step 25).',
         criterion: 0,
-        competency_ids: [C.SAFE_QUALITY_CARE],
       },
       {
         content: 'Mateo’s IV site is swollen, cool, and pale, and his arm feels tight. What does this indicate, and what is done?',
@@ -306,7 +290,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 2,
         explanation: 'Skill 15-3, step 10: swelling, leakage, coolness, or pallor at the site indicate infiltration. The IV must be removed and restarted at another site, following facility policy for treating the infiltration.',
         criterion: 1,
-        competency_ids: [C.SAFE_QUALITY_CARE],
       },
       {
         content: 'Which findings at an IV site suggest phlebitis?',
@@ -319,7 +302,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 0,
         explanation: 'Skill 15-3, step 11: redness, swelling, and heat, induration on palpation, and pain suggest phlebitis. Notify the primary care provider; the IV is discontinued and restarted at another site.',
         criterion: 1,
-        competency_ids: [C.SAFE_QUALITY_CARE, C.COLLABORATION_TEAMWORK],
       },
       {
         content: 'Which findings suggest fluid overload in a patient receiving IV fluids?',
@@ -332,7 +314,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 3,
         explanation: 'Skill 15-3, step 13a: fluid overload can lead to cardiac or respiratory failure. Monitor intake and output and vital signs, assess for edema, auscultate lung sounds, and ask about shortness of breath.',
         criterion: 1,
-        competency_ids: [C.SAFE_QUALITY_CARE, C.RECORDS_MANAGEMENT],
       },
       {
         content: 'What does the nurse tell Mateo before he produces a stool specimen for culture?',
@@ -345,7 +326,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 1,
         explanation: 'Skill 18-2, step 3: instruct the patient to void first, not to discard toilet paper with the stool, and to call as soon as the bowel movement is complete. The sample must be free of urine and blood (step 5).',
         criterion: 2,
-        competency_ids: [C.SAFE_QUALITY_CARE, C.HEALTH_EDUCATION],
       },
       {
         content: 'How is a stool specimen for culture handled once collected?',
@@ -358,7 +338,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 2,
         explanation: 'Skill 18-2, step 10: transport the specimen while the stool is still warm. If immediate transport is impossible, check with the laboratory or policy manual whether refrigeration is contraindicated.',
         criterion: 2,
-        competency_ids: [C.SAFE_QUALITY_CARE],
       },
       {
         content: 'In what order does the nurse put on PPE?',
@@ -371,7 +350,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 3,
         explanation: 'Skill 4-7, step 5: gown first, tied at neck and waist; then mask or respirator; then goggles or face shield; and last, clean gloves extended over the cuffs of the gown.',
         criterion: 3,
-        competency_ids: [C.MANAGEMENT_RESOURCES, C.SAFE_QUALITY_CARE],
       },
       {
         content: 'Leaving Mateo’s room, which PPE comes off first, and when is hand hygiene done?',
@@ -384,7 +362,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 2,
         explanation: 'Skill 4-7, steps 7–8: at the doorway, remove the gloves first (untying a front-tied gown waist before that), then goggles or face shield, then the gown rolled inside out, then the mask. Perform hand hygiene immediately after all PPE is removed.',
         criterion: 3,
-        competency_ids: [C.MANAGEMENT_RESOURCES, C.SAFE_QUALITY_CARE],
       },
     ],
   },
@@ -398,9 +375,9 @@ const QUIZZES: QuizSeed[] = [
     time_limit_seconds: 900,
     total_questions: 6,
     criteria: [
-      { name: 'Skill 18-7 · Clean-Catch Midstream Urine Specimen', weight: 40, min_questions: 2, competency_id: C.SAFE_QUALITY_CARE },
-      { name: 'Skill 5-1 · Administering Oral Medications', weight: 35, min_questions: 1, competency_id: C.PHARMACOLOGY },
-      { name: 'Skill 4-1 · Handwashing With Soap and Water', weight: 25, min_questions: 1, competency_id: C.MANAGEMENT_RESOURCES },
+      { name: 'Skill 18-7 · Clean-Catch Midstream Urine Specimen', weight: 40, min_questions: 2 },
+      { name: 'Skill 5-1 · Administering Oral Medications', weight: 35, min_questions: 1 },
+      { name: 'Skill 4-1 · Handwashing With Soap and Water', weight: 25, min_questions: 1 },
     ],
     questions: [
       {
@@ -414,7 +391,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 3,
         explanation: 'Skill 18-7, step 8: with the labia separated, clean each side of the urinary meatus and then the center over it, front to back, using a new wipe (or a clean area of the washcloth) for each stroke. Keep the labia separated during collection.',
         criterion: 0,
-        competency_ids: [C.SAFE_QUALITY_CARE, C.HEALTH_EDUCATION],
       },
       {
         content: 'Which portion of the urine stream goes into the specimen cup?',
@@ -427,7 +403,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 1,
         explanation: 'Skill 18-7, step 9: void a small amount into the toilet, bedpan, or commode, stop briefly, then void into the container, collect the specimen, and finish voiding. The first portion flushes organisms from the urethra so they don’t contaminate the specimen.',
         criterion: 0,
-        competency_ids: [C.SAFE_QUALITY_CARE, C.HEALTH_EDUCATION],
       },
       {
         content: 'How much urine is sufficient for a clean-catch specimen?',
@@ -435,7 +410,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 0,
         explanation: 'Skill 18-7, step 9: 10 to 20 mL is sufficient. The patient must not touch the inside of the container or the lid.',
         criterion: 0,
-        competency_ids: [C.SAFE_QUALITY_CARE],
       },
       {
         content: 'Liza’s urine specimen cannot go to the laboratory straight away. What should the nurse do?',
@@ -448,7 +422,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 2,
         explanation: 'Skill 18-7, step 15: transport the specimen as soon as possible; if it cannot go to the laboratory immediately, refrigerate it. (Contrast Skill 18-2, where stool for culture goes while still warm.)',
         criterion: 0,
-        competency_ids: [C.SAFE_QUALITY_CARE, C.QUALITY_IMPROVEMENT],
       },
       {
         content: 'When is Liza’s antibiotic dose documented?',
@@ -461,7 +434,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 2,
         explanation: 'Skill 5-1, step 21: document the administration of the medication immediately after administration. Charting in advance records a dose that may never be taken.',
         criterion: 1,
-        competency_ids: [C.PHARMACOLOGY, C.RECORDS_MANAGEMENT],
       },
       {
         content: 'The antibiotic tablets come in a multidose bottle. How does the nurse transfer them?',
@@ -474,7 +446,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 0,
         explanation: 'Skill 5-1, step 9b: pour the necessary number into the bottle cap and then into a medication cup. Break only scored tablets if needed, and do not touch tablets or capsules with the hands.',
         criterion: 1,
-        competency_ids: [C.PHARMACOLOGY, C.SAFE_QUALITY_CARE],
       },
       {
         content: 'At the bedside, what must the nurse complete immediately before giving the antibiotic?',
@@ -487,7 +458,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 3,
         explanation: 'Skill 5-1, step 16: complete necessary assessments, check the allergy bracelet or ask about allergies, and explain the purpose and action of each medication to the patient.',
         criterion: 1,
-        competency_ids: [C.PHARMACOLOGY, C.COMMUNICATION],
       },
       {
         content: 'During handwashing, how are the hands held?',
@@ -500,7 +470,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 1,
         explanation: 'Skill 4-1, steps 4 and 9: keep the hands lower than the elbows so water flows toward the fingertips, both when wetting and when rinsing.',
         criterion: 2,
-        competency_ids: [C.MANAGEMENT_RESOURCES, C.SAFE_QUALITY_CARE],
       },
       {
         content: 'How long should the friction motion of handwashing last, at minimum?',
@@ -508,7 +477,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 0,
         explanation: 'Skill 4-1, step 7: continue the friction motion for at least 15 seconds, covering palms, backs, each finger and the spaces between them, knuckles, wrists, and forearms (step 6).',
         criterion: 2,
-        competency_ids: [C.MANAGEMENT_RESOURCES, C.SAFE_QUALITY_CARE],
       },
       {
         content: 'After drying the hands, how does the nurse turn off a hand-operated faucet?',
@@ -521,7 +489,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 2,
         explanation: 'Skill 4-1, step 10: pat the hands dry from the fingers up toward the forearms, discard the towel, then use another clean towel to turn off the faucet and discard it without touching the clean hand.',
         criterion: 2,
-        competency_ids: [C.MANAGEMENT_RESOURCES, C.SAFE_QUALITY_CARE],
       },
     ],
   },
@@ -535,9 +502,9 @@ const QUIZZES: QuizSeed[] = [
     time_limit_seconds: 900,
     total_questions: 6,
     criteria: [
-      { name: 'Skill 1-7 · Assessing Brachial Artery Blood Pressure', weight: 40, min_questions: 2, competency_id: C.SAFE_QUALITY_CARE },
-      { name: 'Skills 2-1 & 2-6 · General Survey and Cardiovascular Assessment', weight: 30, min_questions: 1, competency_id: C.SAFE_QUALITY_CARE },
-      { name: 'Skill 16-1 · Obtaining an Electrocardiogram', weight: 30, min_questions: 1, competency_id: C.SAFE_QUALITY_CARE },
+      { name: 'Skill 1-7 · Assessing Brachial Artery Blood Pressure', weight: 40, min_questions: 2 },
+      { name: 'Skills 2-1 & 2-6 · General Survey and Cardiovascular Assessment', weight: 30, min_questions: 1 },
+      { name: 'Skill 16-1 · Obtaining an Electrocardiogram', weight: 30, min_questions: 1 },
     ],
     questions: [
       {
@@ -551,7 +518,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 0,
         explanation: 'Skill 1-7, step 7: support the forearm at heart level with the palm upward. If he is sitting, the chair supports his back and his legs stay uncrossed. Step 4: first confirm he has relaxed for several minutes.',
         criterion: 0,
-        competency_ids: [C.SAFE_QUALITY_CARE],
       },
       {
         content: 'Where does the blood pressure cuff go?',
@@ -564,7 +530,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 2,
         explanation: 'Skill 1-7, step 9: palpate the brachial artery and center the cuff bladder over it, about midway on the arm, with the lower edge 2.5 to 5 cm above the inner aspect of the elbow and the artery marker lined up.',
         criterion: 0,
-        competency_ids: [C.SAFE_QUALITY_CARE],
       },
       {
         content: 'The nurse palpates the brachial pulse, inflates the cuff, and the pulse disappears at 150 mm Hg. To what level is the cuff pumped for auscultation, and how fast is it released?',
@@ -577,7 +542,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 1,
         explanation: 'Skill 1-7, step 19: pump the pressure 30 mm Hg above the point where the palpated pulse disappeared (150 + 30 = 180), then open the valve so the gauge drops 2 to 3 mm Hg per second. Step 15: after the palpated estimate, deflate and wait 1 minute.',
         criterion: 0,
-        competency_ids: [C.SAFE_QUALITY_CARE],
       },
       {
         content: 'The nurse suspects a blood pressure reading is wrong. How is it repeated?',
@@ -590,7 +554,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 3,
         explanation: 'Skill 1-7, steps 21 and 23: never reinflate the cuff mid-release to recheck the systolic. Let the remaining air escape, deflate the cuff completely, and wait at least 1 minute before repeating a suspicious reading.',
         criterion: 0,
-        competency_ids: [C.SAFE_QUALITY_CARE, C.QUALITY_IMPROVEMENT],
       },
       {
         content: 'During the general survey, where is Ernesto’s waist circumference measured?',
@@ -603,7 +566,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 3,
         explanation: 'Skill 2-1, step 12: place the tape measure snugly around the waist at the level of the umbilicus.',
         criterion: 1,
-        competency_ids: [C.SAFE_QUALITY_CARE],
       },
       {
         content: 'Ernesto weighs 86 kg and is 1.70 m tall. What is his BMI?',
@@ -611,7 +573,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 0,
         explanation: 'Skill 2-1, step 11: BMI = weight in kilograms ÷ height in meters². 86 ÷ (1.70 × 1.70) = 86 ÷ 2.89 ≈ 29.8.',
         criterion: 1,
-        competency_ids: [C.SAFE_QUALITY_CARE, C.HEALTH_EDUCATION],
       },
       {
         content: 'In what order does the nurse auscultate the heart?',
@@ -624,7 +585,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 2,
         explanation: 'Skill 2-6, step 9: auscultate systematically from the aortic area to the pulmonic area, Erb’s point, the tricuspid area, and finally the mitral area. Use the diaphragm for high-pitched sounds, then the bell for low-pitched ones.',
         criterion: 1,
-        competency_ids: [C.SAFE_QUALITY_CARE],
       },
       {
         content: 'How are the carotid arteries palpated?',
@@ -637,7 +597,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 1,
         explanation: 'Skill 2-6, step 5: inspect and palpate the left and then the right carotid artery, only one at a time, and auscultate them with the bell. Pressing both at once can reduce blood flow to the brain.',
         criterion: 1,
-        competency_ids: [C.SAFE_QUALITY_CARE],
       },
       {
         content: 'Where is chest lead V1 placed?',
@@ -650,7 +609,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 0,
         explanation: 'Skill 16-1, step 13: V1 goes at the fourth intercostal space at the right sternal border and V2 at the left sternal border. V4 sits at the fifth intercostal space, left midclavicular line, V3 halfway between V2 and V4, and V6 at the midaxillary line, level with V4.',
         criterion: 2,
-        competency_ids: [C.SAFE_QUALITY_CARE],
       },
       {
         content: 'Which limb lead is attached to the left leg?',
@@ -658,7 +616,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 3,
         explanation: 'Skill 16-1, step 11: white (RA) goes on the right arm, green (RL) on the right leg, red (LL) on the left leg, and black (LA) on the left arm. Choose flat, fleshy areas and avoid muscle and bone (step 9).',
         criterion: 2,
-        competency_ids: [C.SAFE_QUALITY_CARE],
       },
       {
         content: 'Ernesto asks whether the ECG will give him a shock. Which explanation is correct?',
@@ -671,7 +628,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 1,
         explanation: 'Skill 16-1, step 5: tell the patient the test records the heart’s electrical activity, that no electrical current will enter his body, and that it typically takes about 5 minutes. During recording he relaxes, breathes normally, and does not talk (step 17).',
         criterion: 2,
-        competency_ids: [C.COMMUNICATION, C.HEALTH_EDUCATION],
       },
     ],
   },
@@ -685,10 +641,10 @@ const QUIZZES: QuizSeed[] = [
     time_limit_seconds: 900,
     total_questions: 6,
     criteria: [
-      { name: 'Skill 14-1 · Using a Pulse Oximeter', weight: 25, min_questions: 1, competency_id: C.SAFE_QUALITY_CARE },
-      { name: 'Skill 5-23 · Metered-Dose Inhaler', weight: 30, min_questions: 1, competency_id: C.PHARMACOLOGY },
-      { name: 'Skill 5-24 · Small-Volume Nebulizer', weight: 25, min_questions: 1, competency_id: C.PHARMACOLOGY },
-      { name: 'Skill 14-3 · Oxygen by Nasal Cannula', weight: 20, min_questions: 1, competency_id: C.SAFE_QUALITY_CARE },
+      { name: 'Skill 14-1 · Using a Pulse Oximeter', weight: 25, min_questions: 1 },
+      { name: 'Skill 5-23 · Metered-Dose Inhaler', weight: 30, min_questions: 1 },
+      { name: 'Skill 5-24 · Small-Volume Nebulizer', weight: 25, min_questions: 1 },
+      { name: 'Skill 14-3 · Oxygen by Nasal Cannula', weight: 20, min_questions: 1 },
     ],
     questions: [
       {
@@ -697,7 +653,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 2,
         explanation: 'Skill 14-1, step 6a: use the patient’s index, middle, or ring finger, after checking the proximal pulse and capillary refill (6b). Use a toe only if lower-extremity circulation is not compromised (6d).',
         criterion: 0,
-        competency_ids: [C.SAFE_QUALITY_CARE],
       },
       {
         content: 'Circulation at Joana’s finger is poor. Which alternative sensor sites are recommended?',
@@ -710,7 +665,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 0,
         explanation: 'Skill 14-1, step 6c: if circulation at the site is inadequate, consider the earlobe, forehead, or bridge of the nose. On the forehead or nose the emitter and receiver don’t need aligning (step 9).',
         criterion: 0,
-        competency_ids: [C.SAFE_QUALITY_CARE],
       },
       {
         content: 'Joana’s oximeter uses a spring-tension finger clip. How often is it removed to check the skin?',
@@ -718,7 +672,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 3,
         explanation: 'Skill 14-1, step 13: remove the sensor regularly to check for skin irritation or pressure, every 2 hours for a spring-tension sensor or every 4 hours for an adhesive finger or toe sensor.',
         criterion: 0,
-        competency_ids: [C.SAFE_QUALITY_CARE, C.QUALITY_IMPROVEMENT],
       },
       {
         content: 'What is done with the inhaler and spacer just before the first puff?',
@@ -731,7 +684,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 1,
         explanation: 'Skill 5-23, steps 17–18: remove the mouthpiece covers, attach the MDI to the spacer, and shake the inhaler and spacer well. She then seals her lips around the spacer mouthpiece and breathes normally through it (step 19).',
         criterion: 1,
-        competency_ids: [C.PHARMACOLOGY, C.HEALTH_EDUCATION],
       },
       {
         content: 'After releasing a puff into the spacer and inhaling slowly and deeply, what does Joana do next?',
@@ -744,7 +696,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 2,
         explanation: 'Skill 5-23, steps 20–21: depress the canister to release one puff into the spacer, inhale slowly and deeply through the mouth, hold the breath for 5 to 10 seconds or as long as possible, then exhale slowly through pursed lips.',
         criterion: 1,
-        competency_ids: [C.PHARMACOLOGY, C.HEALTH_EDUCATION],
       },
       {
         content: 'Two puffs are ordered. When is the second given?',
@@ -757,7 +708,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 0,
         explanation: 'Skill 5-23, step 22: wait 1 to 5 minutes, as prescribed, before the next puff. Afterward she rinses and gargles with tap water as needed (step 24), and the nurse reassesses lung sounds, saturation, and respirations (step 27).',
         criterion: 1,
-        competency_ids: [C.PHARMACOLOGY],
       },
       {
         content: 'How long does a small-volume nebulizer treatment usually take, and when is it finished?',
@@ -770,7 +720,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 3,
         explanation: 'Skill 5-24, step 21: continue until all medication in the cup has been aerosolized, usually about 15 minutes. When the mist decreases, gently flick the sides of the cup.',
         criterion: 2,
-        competency_ids: [C.PHARMACOLOGY],
       },
       {
         content: 'How should Joana breathe through the nebulizer mouthpiece?',
@@ -783,7 +732,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 1,
         explanation: 'Skill 5-24, steps 19–20: she grasps the mouthpiece securely with teeth and lips and inhales slowly and deeply through the mouth, holding each breath for a slight pause before exhaling. A nose clip may be needed if she also breathes through the nose.',
         criterion: 2,
-        competency_ids: [C.PHARMACOLOGY, C.HEALTH_EDUCATION],
       },
       {
         content: 'Joana’s saturation stays below target and nasal cannula oxygen is started. Which safety step is required?',
@@ -796,7 +744,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 0,
         explanation: 'Skill 14-3, step 5: explain the procedure, review the safety precautions needed when oxygen is in use, and place “No Smoking” signs in appropriate areas. The flow rate is set to the order (step 6).',
         criterion: 3,
-        competency_ids: [C.SAFE_QUALITY_CARE, C.MANAGEMENT_RESOURCES],
       },
       {
         content: 'How often does the nurse remove and clean the nasal cannula and check the nares?',
@@ -809,7 +756,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 2,
         explanation: 'Skill 14-3, step 12: with clean gloves, remove and clean the cannula and assess the nares for irritation or bleeding at least every 8 hours, or according to agency recommendations.',
         criterion: 3,
-        competency_ids: [C.SAFE_QUALITY_CARE],
       },
     ],
   },
@@ -823,10 +769,10 @@ const QUIZZES: QuizSeed[] = [
     time_limit_seconds: 900,
     total_questions: 6,
     criteria: [
-      { name: 'Skill 8-1 · Dry, Sterile Dressing', weight: 30, min_questions: 1, competency_id: C.SAFE_QUALITY_CARE },
-      { name: 'Skill 6-2 · Deep Breathing, Coughing, and Splinting', weight: 25, min_questions: 1, competency_id: C.HEALTH_EDUCATION },
-      { name: 'Skill 14-2 · Incentive Spirometer Teaching', weight: 20, min_questions: 1, competency_id: C.HEALTH_EDUCATION },
-      { name: 'Skill 10-1 · Promoting Patient Comfort', weight: 25, min_questions: 1, competency_id: C.SAFE_QUALITY_CARE },
+      { name: 'Skill 8-1 · Dry, Sterile Dressing', weight: 30, min_questions: 1 },
+      { name: 'Skill 6-2 · Deep Breathing, Coughing, and Splinting', weight: 25, min_questions: 1 },
+      { name: 'Skill 14-2 · Incentive Spirometer Teaching', weight: 20, min_questions: 1 },
+      { name: 'Skill 10-1 · Promoting Patient Comfort', weight: 25, min_questions: 1 },
     ],
     questions: [
       {
@@ -840,7 +786,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 1,
         explanation: 'Skill 8-1, step 17: clean the wound from top to bottom and from the center to the outside, using new gauze for each wipe. Dry it the same way (step 18).',
         criterion: 0,
-        competency_ids: [C.SAFE_QUALITY_CARE],
       },
       {
         content: 'The old dressing sticks to Rafael’s wound. What does the nurse do?',
@@ -853,7 +798,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 3,
         explanation: 'Skill 8-1, step 11: remove the soiled dressing carefully. If any part sticks to the underlying skin, use small amounts of sterile saline to loosen it; a silicone-based adhesive remover helps with resistant tape.',
         criterion: 0,
-        competency_ids: [C.SAFE_QUALITY_CARE],
       },
       {
         content: 'At what point in the dressing change does the nurse put on sterile gloves?',
@@ -866,7 +810,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 0,
         explanation: 'Skill 8-1, steps 10–16: clean gloves remove the old dressing and are then discarded (10–12). The nurse inspects the wound (13), prepares a sterile field (14), opens the cleaning solution (15), and only then puts on sterile gloves (16).',
         criterion: 0,
-        competency_ids: [C.SAFE_QUALITY_CARE],
       },
       {
         content: 'During deep breathing exercises, how long does Rafael hold each breath?',
@@ -874,7 +817,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 2,
         explanation: 'Skill 6-2, steps 8c–d: breathe in through the nose as deeply as possible, hold for 3 seconds, then exhale through the mouth with pursed lips. Practise three times, every 1 to 2 hours for the first 24 hours after surgery (8e).',
         criterion: 1,
-        competency_ids: [C.HEALTH_EDUCATION],
       },
       {
         content: 'Why does Rafael press a folded blanket or pillow against his abdomen before he coughs?',
@@ -887,7 +829,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 0,
         explanation: 'Skill 6-2, step 9a: in semi-Fowler’s, apply a folded bath blanket or pillow against the incision to support it while coughing, repeated every 2 hours while awake (9e). Confirm understanding with a return demonstration (step 10).',
         criterion: 1,
-        competency_ids: [C.HEALTH_EDUCATION, C.SAFE_QUALITY_CARE],
       },
       {
         content: 'Which instruction describes correct incentive spirometer use?',
@@ -900,7 +841,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 3,
         explanation: 'Skill 14-2, steps 8–10: exhale normally, place the lips securely around the mouthpiece, inhale slowly and as deeply as possible without using the nose, then hold the breath and count to three.',
         criterion: 2,
-        competency_ids: [C.HEALTH_EDUCATION],
       },
       {
         content: 'How often should Rafael use the incentive spirometer, and what does he do if he feels light-headed?',
@@ -913,7 +853,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 1,
         explanation: 'Skill 14-2, steps 11–12: if the patient becomes light-headed, stop and take a few normal breaths before resuming. Encourage 5 to 10 breaths every 1 to 2 hours, if possible.',
         criterion: 2,
-        competency_ids: [C.HEALTH_EDUCATION, C.SAFE_QUALITY_CARE],
       },
       {
         content: 'After giving Rafael’s analgesic and repositioning him, how does the nurse evaluate the effect?',
@@ -926,7 +865,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 2,
         explanation: 'Skill 10-1, step 23: evaluate the response by reassessing discomfort or pain with the original assessment tools, then alter the plan of care as appropriate. Step 4 set the baseline with an appropriate scale.',
         criterion: 3,
-        competency_ids: [C.SAFE_QUALITY_CARE, C.PHARMACOLOGY],
       },
       {
         content: 'Which relaxation technique for pain is part of promoting patient comfort?',
@@ -939,7 +877,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 0,
         explanation: 'Skill 10-1, step 16: with hands on the stomach and eyes closed, the patient inhales slowly and deeply so the abdomen expands, holds briefly, then exhales slowly through puckered lips, counting to keep a steady rhythm. Practise twice a day for 10 minutes.',
         criterion: 3,
-        competency_ids: [C.SAFE_QUALITY_CARE, C.HEALTH_EDUCATION],
       },
       {
         content: 'Which environmental measures promote Rafael’s comfort?',
@@ -952,7 +889,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 3,
         explanation: 'Skill 10-1, steps 6–7: adjust the room temperature to the patient’s preference, reduce harsh lighting and noise, close the door or curtain, keep the room ventilated, and group activities so there are undisturbed rest periods.',
         criterion: 3,
-        competency_ids: [C.SAFE_QUALITY_CARE, C.MANAGEMENT_RESOURCES],
       },
     ],
   },
@@ -966,10 +902,10 @@ const QUIZZES: QuizSeed[] = [
     time_limit_seconds: 900,
     total_questions: 6,
     criteria: [
-      { name: 'Skill 18-3 · Capillary Blood Glucose', weight: 30, min_questions: 1, competency_id: C.SAFE_QUALITY_CARE },
-      { name: 'Skill 5-4 · Removing Medication From a Vial', weight: 20, min_questions: 1, competency_id: C.PHARMACOLOGY },
-      { name: 'Skill 5-7 · Subcutaneous Injection', weight: 25, min_questions: 1, competency_id: C.PHARMACOLOGY },
-      { name: 'Skill 5-11 · Piggyback Intermittent IV Infusion', weight: 25, min_questions: 1, competency_id: C.PHARMACOLOGY },
+      { name: 'Skill 18-3 · Capillary Blood Glucose', weight: 30, min_questions: 1 },
+      { name: 'Skill 5-4 · Removing Medication From a Vial', weight: 20, min_questions: 1 },
+      { name: 'Skill 5-7 · Subcutaneous Injection', weight: 25, min_questions: 1 },
+      { name: 'Skill 5-11 · Piggyback Intermittent IV Infusion', weight: 25, min_questions: 1 },
     ],
     questions: [
       {
@@ -983,7 +919,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 3,
         explanation: 'Skill 18-3, step 16: encourage bleeding by lowering the hand and lightly stroking the finger if necessary. Don’t squeeze the finger or the puncture site, and don’t touch the site or the blood. Wipe away the first drop if the monitor’s manufacturer recommends it (step 15).',
         criterion: 0,
-        competency_ids: [C.SAFE_QUALITY_CARE],
       },
       {
         content: 'How is the fingertip prepared before the puncture?',
@@ -996,7 +931,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 1,
         explanation: 'Skill 18-3, step 13: have the patient wash with soap and warm water and dry thoroughly, or cleanse with an alcohol swab and allow the skin to dry completely. Then hold the lancet perpendicular to the skin and pierce (step 14).',
         criterion: 0,
-        competency_ids: [C.SAFE_QUALITY_CARE],
       },
       {
         content: 'Once the blood is on the strip, what is used to apply pressure to the puncture site?',
@@ -1004,7 +938,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 2,
         explanation: 'Skill 18-3, step 19: apply pressure with a cotton ball or dry gauze, not an alcohol wipe. Read the result, document it at the bedside, and tell the patient (step 20).',
         criterion: 0,
-        competency_ids: [C.SAFE_QUALITY_CARE, C.RECORDS_MANAGEMENT],
       },
       {
         content: 'Before drawing insulin from a vial, the nurse injects air equal to the dose. Where does the air go?',
@@ -1017,7 +950,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 0,
         explanation: 'Skill 5-4, steps 11–12: draw back air equal to the dose, pierce the center of the stopper with the vial on a flat surface, and inject the air into the space above the solution, not into it. Then invert the vial and withdraw the dose at eye level (steps 13–14).',
         criterion: 1,
-        competency_ids: [C.PHARMACOLOGY],
       },
       {
         content: 'A multidose insulin vial has just been opened. What must be done before it is stored?',
@@ -1030,7 +962,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 3,
         explanation: 'Skill 5-4, step 19: when a multidose vial is used, label it with the date and time opened and store it according to facility policy, after rechecking the label against the CMAR/MAR (step 18).',
         criterion: 1,
-        competency_ids: [C.PHARMACOLOGY, C.RECORDS_MANAGEMENT],
       },
       {
         content: 'At what angle is a subcutaneous injection given?',
@@ -1038,7 +969,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 1,
         explanation: 'Skill 5-7, step 26: hold the syringe between thumb and forefinger and inject the needle quickly at a 45- to 90-degree angle, after bunching or spreading the skin at the site (step 25).',
         criterion: 2,
-        competency_ids: [C.PHARMACOLOGY],
       },
       {
         content: 'How fast is the medication injected subcutaneously?',
@@ -1051,7 +981,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 0,
         explanation: 'Skill 5-7, step 28: inject the medication slowly, at a rate of 10 seconds per mL, keeping the syringe steady with the nondominant hand (step 27).',
         criterion: 2,
-        competency_ids: [C.PHARMACOLOGY],
       },
       {
         content: 'What does the nurse do after withdrawing the needle from a subcutaneous insulin injection?',
@@ -1064,7 +993,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 2,
         explanation: 'Skill 5-7, steps 30–31: apply gentle pressure with a gauze square and do not massage the site. Don’t recap the used needle; engage the safety shield or needle guard and discard it in the proper receptacle.',
         criterion: 2,
-        competency_ids: [C.PHARMACOLOGY, C.SAFE_QUALITY_CARE],
       },
       {
         content: 'Where is the piggyback antibiotic bag hung in relation to the primary IV bag?',
@@ -1077,7 +1005,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 1,
         explanation: 'Skill 5-11, step 21: hang the piggyback higher than the primary IV per the manufacturer, using the hook to lower the primary container. When the infusion ends, return the primary to its original height and check its rate (step 28).',
         criterion: 3,
-        competency_ids: [C.PHARMACOLOGY],
       },
       {
         content: 'What does the nurse assess immediately before connecting the piggyback antibiotic?',
@@ -1090,7 +1017,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 0,
         explanation: 'Skill 5-11, step 18: assess the IV site for inflammation or infiltration before connecting, and monitor the site at intervals afterward (step 31). Clean the access port with an antimicrobial swab before connecting (step 24).',
         criterion: 3,
-        competency_ids: [C.PHARMACOLOGY, C.SAFE_QUALITY_CARE],
       },
     ],
   },
@@ -1104,9 +1030,9 @@ const QUIZZES: QuizSeed[] = [
     time_limit_seconds: 900,
     total_questions: 6,
     criteria: [
-      { name: 'Skill 3-1 · Fall Prevention', weight: 35, min_questions: 2, competency_id: C.MANAGEMENT_RESOURCES },
-      { name: 'Skill 9-7 · Assisting a Patient With Ambulation', weight: 35, min_questions: 1, competency_id: C.SAFE_QUALITY_CARE },
-      { name: 'Skill 18-9 · Venipuncture for Routine Testing', weight: 30, min_questions: 1, competency_id: C.SAFE_QUALITY_CARE },
+      { name: 'Skill 3-1 · Fall Prevention', weight: 35, min_questions: 2 },
+      { name: 'Skill 9-7 · Assisting a Patient With Ambulation', weight: 35, min_questions: 1 },
+      { name: 'Skill 18-9 · Venipuncture for Routine Testing', weight: 30, min_questions: 1 },
     ],
     questions: [
       {
@@ -1120,7 +1046,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 2,
         explanation: 'Skill 3-1, steps 20–21: keep the bed in the lowest position during use and make sure the bed or wheelchair locks are secured at all times. Bed rails are used according to facility policy (step 22), not as a default.',
         criterion: 0,
-        competency_ids: [C.MANAGEMENT_RESOURCES, C.SAFE_QUALITY_CARE],
       },
       {
         content: 'Nadine went lightheaded standing up this morning. What should the nurse teach her?',
@@ -1133,7 +1058,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 0,
         explanation: 'Skill 3-1, step 17: encourage the patient to rise or change position slowly and sit for several minutes before standing. Step 3: explain the reason for each fall-prevention measure to her and her family.',
         criterion: 0,
-        competency_ids: [C.MANAGEMENT_RESOURCES, C.HEALTH_EDUCATION],
       },
       {
         content: 'Which items should always be within Nadine’s reach?',
@@ -1146,7 +1070,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 3,
         explanation: 'Skill 3-1, step 13: ensure the call bell, bedside table, telephone, and other personal items are within reach at all times. A commode, if used, stays near the bed (step 12).',
         criterion: 0,
-        competency_ids: [C.MANAGEMENT_RESOURCES],
       },
       {
         content: 'How often should nursing rounds be made for a patient at risk of falling?',
@@ -1159,7 +1082,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 1,
         explanation: 'Skill 3-1, step 27: increase observation with 1- or 2-hour nursing rounds that include pain assessment, toileting assistance, comfort, personal items in reach, and patient needs. Step 23: anticipate needs rather than waiting to be asked.',
         criterion: 0,
-        competency_ids: [C.MANAGEMENT_RESOURCES, C.SAFE_QUALITY_CARE],
       },
       {
         content: 'Nadine sits on the edge of the bed before walking. What is the nurse assessing during this pause?',
@@ -1172,7 +1094,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 3,
         explanation: 'Skill 9-7, step 6: have the patient sit on the side of the bed for several minutes and assess for dizziness or lightheadedness, staying seated until she feels secure. Step 3: ask her to report dizziness, weakness, or shortness of breath while walking.',
         criterion: 1,
-        competency_ids: [C.SAFE_QUALITY_CARE],
       },
       {
         content: 'Where does a single nurse stand to assist ambulation?',
@@ -1185,7 +1106,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 0,
         explanation: 'Skill 9-7, step 10: a nurse assisting alone stands to the side and slightly behind the patient, supporting her by the waist or a gait (transfer) belt.',
         criterion: 1,
-        competency_ids: [C.SAFE_QUALITY_CARE],
       },
       {
         content: 'On standing, Nadine says her legs feel weak and she is unsteady. What does the nurse do?',
@@ -1198,7 +1118,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 2,
         explanation: 'Skill 9-7, step 9: after helping the patient stand, assess balance and leg strength. If she is weak or unsteady, return her to the bed or assist her to a chair.',
         criterion: 1,
-        competency_ids: [C.SAFE_QUALITY_CARE],
       },
       {
         content: 'When is the tourniquet released during venipuncture?',
@@ -1211,7 +1130,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 1,
         explanation: 'Skill 18-9, step 18: remove the tourniquet as soon as blood flows adequately into the tube. It is applied 3 to 4 inches above the site, tight enough to impede venous but not arterial flow (step 14).',
         criterion: 2,
-        competency_ids: [C.SAFE_QUALITY_CARE],
       },
       {
         content: 'At what angle is the venipuncture needle inserted?',
@@ -1219,7 +1137,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 3,
         explanation: 'Skill 18-9, step 16: tell the patient she will feel a pinch, then insert the needle bevel up at a 15-degree angle to the skin, while the nondominant thumb holds traction below the site (step 15).',
         criterion: 2,
-        competency_ids: [C.SAFE_QUALITY_CARE],
       },
       {
         content: 'After the needle is out, how long is pressure held on the site?',
@@ -1232,7 +1149,6 @@ const QUIZZES: QuizSeed[] = [
         correct_index: 0,
         explanation: 'Skill 18-9, steps 20–22: place gauze over the site but don’t press until the needle is fully removed, then apply gentle pressure for 2 to 3 minutes or until bleeding stops, and apply a bandage. Check the site for a hematoma afterward (step 27).',
         criterion: 2,
-        competency_ids: [C.SAFE_QUALITY_CARE],
       },
     ],
   },
@@ -1289,9 +1205,30 @@ function validate(quiz: QuizSeed): string[] {
     if (q.correct_index < 0 || q.correct_index >= q.options.length) {
       problems.push(`question ${i + 1} has correct_index outside its options`);
     }
-    // The citation is what makes a question checkable against the book.
-    if (!/^Skills? \d+-\d+/.test(q.explanation)) {
+    // The citation is what makes a question checkable against the book, and
+    // what decides its competency tag.
+    const cited = citedSkill(q);
+    if (!cited) {
       problems.push(`question ${i + 1} does not open its explanation with the Taylor's skill it cites`);
+    } else if (q.criterion >= 0 && q.criterion < quiz.criteria.length) {
+      if (!criterionSkills(quiz.criteria[q.criterion]).includes(cited)) {
+        problems.push(`question ${i + 1} cites Skill ${cited}, which its criterion does not cover`);
+      }
+    }
+  });
+
+  // A criterion's competency is its skills' chapter, so they must share one.
+  quiz.criteria.forEach((c) => {
+    const skills = criterionSkills(c);
+    if (skills.length === 0) {
+      problems.push(`"${c.name}" does not name the Taylor's skill it covers`);
+      return;
+    }
+    try {
+      const chapters = new Set(skills.map((skill) => chapterOfSkill(skill).chapter));
+      if (chapters.size > 1) problems.push(`"${c.name}" spans more than one Taylor's chapter`);
+    } catch (err) {
+      problems.push(`"${c.name}": ${(err as Error).message}`);
     }
   });
 
@@ -1323,15 +1260,18 @@ async function main() {
     process.exit(1);
   }
 
-  // The competency taxonomy has to exist: assessment_criteria.competency_id
-  // is NOT NULL, and these ids are the ones migration 009 seeds.
-  const { data: competencies } = await supabase.from('competency_areas').select('id');
-  const known = new Set((competencies ?? []).map((c) => c.id));
-  const missing = [...new Set(Object.values(C))].filter((id) => !known.has(id));
-  if (missing.length > 0) {
+  // The competency areas have to be the Taylor's chapters, under the ids
+  // taylors-chapters.ts gives them: assessment_criteria.competency_id is NOT
+  // NULL, and a criterion pointing at a mismatched row would score the wrong
+  // area without complaint.
+  const { data: competencies } = await supabase.from('competency_areas').select('id, name');
+  const nameById = new Map((competencies ?? []).map((c) => [c.id, c.name]));
+  const mismatched = TAYLORS_CHAPTERS.filter((c) => nameById.get(c.id) !== c.name);
+  if (mismatched.length > 0) {
     console.error(
-      `competency_areas is missing ${missing.length} of the 12 ids these quizzes reference.\n` +
-        'Restore it before seeding — re-running migration 009 mints new ids and will not match.',
+      `competency_areas lacks ${mismatched.length} of the 18 Taylor's chapters ` +
+        `(${mismatched.map((c) => c.name).join(', ')}).\n` +
+        'Apply migration 041_taylors_competency_areas.sql before seeding.',
     );
     process.exit(1);
   }
@@ -1415,7 +1355,7 @@ async function main() {
           assessment_id: assessmentId,
           name: c.name,
           weight: c.weight,
-          competency_id: c.competency_id,
+          competency_id: chapterOfSkill(criterionSkills(c)[0]).id,
           min_questions: c.min_questions,
           sort_order: i,
         })),
@@ -1454,12 +1394,12 @@ async function main() {
     }
 
     const byPosition = [...questions].sort((a, b) => a.position - b.position);
-    const links = quiz.questions.flatMap((q, i) =>
-      q.competency_ids.map((competency_id) => ({
-        question_id: byPosition[i].id,
-        competency_id,
-      })),
-    );
+    // One tag per question: the chapter of the skill it cites. validate()
+    // has already guaranteed every question cites one.
+    const links = quiz.questions.map((q, i) => ({
+      question_id: byPosition[i].id,
+      competency_id: chapterOfSkill(citedSkill(q)!).id,
+    }));
     const { error: lErr } = await supabase.from('question_competencies').insert(links);
     if (lErr) {
       console.error(`  ✗ "${quiz.title}" — competency links failed:`, lErr.message);

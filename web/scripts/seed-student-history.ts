@@ -17,7 +17,7 @@
  *
  *   It has structure. Each student carries an ability and a list of
  *   competencies they are weak or strong at, and answers are drawn against
- *   that — so a student who is weak at Pharmacology misses medication
+ *   that — so a student who is weak at Medications misses medication
  *   questions consistently, across every quiz, the way a real one would.
  *   Uniform random answers would give the recommender nothing to find.
  *
@@ -76,7 +76,12 @@ interface Profile {
   sex: 'male' | 'female';
   /** Baseline chance of answering a question correctly. */
   ability: number;
-  /** Competency names this student reliably misses, and reliably gets. */
+  /**
+   * Competency areas — Taylor's chapters — this student reliably misses, and
+   * reliably gets. Only chapters their section's quizzes test have any
+   * effect: BSN 1102's cases cover Laboratory Specimen Collection,
+   * Medications, Asepsis and Infection Control, and Oxygenation.
+   */
   weakAt: string[];
   strongAt: string[];
   /** Share of a scenario's task points they complete before it is finalized. */
@@ -106,7 +111,7 @@ const PROFILES: Profile[] = [
     sex: 'male',
     ability: 0.88,
     weakAt: [],
-    strongAt: ['Safe and Quality Nursing Care', 'Records Management'],
+    strongAt: ['Vital Signs', 'Laboratory Specimen Collection'],
     taskCompletion: 1,
     engagement: 1,
   },
@@ -116,8 +121,8 @@ const PROFILES: Profile[] = [
     section: 'BSN 1102',
     sex: 'male',
     ability: 0.72,
-    weakAt: ['Pharmacology'],
-    strongAt: ['Communication'],
+    weakAt: ['Medications'],
+    strongAt: ['Oxygenation'],
     taskCompletion: 0.85,
     engagement: 1,
   },
@@ -127,7 +132,7 @@ const PROFILES: Profile[] = [
     section: 'BSN 1102',
     sex: 'male',
     ability: 0.45,
-    weakAt: ['Pharmacology', 'Safe and Quality Nursing Care'],
+    weakAt: ['Medications', 'Laboratory Specimen Collection'],
     strongAt: [],
     taskCompletion: 0.5,
     engagement: 1,
@@ -138,8 +143,8 @@ const PROFILES: Profile[] = [
     section: 'BSN 1102',
     sex: 'male',
     ability: 0.63,
-    weakAt: ['Quality Improvement'],
-    strongAt: ['Health Education'],
+    weakAt: ['Asepsis and Infection Control'],
+    strongAt: ['Oxygenation'],
     taskCompletion: 0.7,
     engagement: 1,
   },
@@ -152,7 +157,7 @@ const PROFILES: Profile[] = [
     sex: 'female',
     ability: 0.81,
     weakAt: [],
-    strongAt: ['Health Education', 'Communication'],
+    strongAt: ['Perioperative Nursing', 'Health Assessment'],
     taskCompletion: 0.95,
     engagement: 1,
   },
@@ -162,7 +167,7 @@ const PROFILES: Profile[] = [
     section: 'BSN 1101',
     sex: 'male',
     ability: 0.66,
-    weakAt: ['Records Management'],
+    weakAt: ['Laboratory Specimen Collection'],
     strongAt: [],
     taskCompletion: 0.75,
     engagement: 1,
@@ -173,7 +178,7 @@ const PROFILES: Profile[] = [
     section: 'BSN 1101',
     sex: 'female',
     ability: 0.52,
-    weakAt: ['Pharmacology'],
+    weakAt: ['Medications'],
     strongAt: [],
     taskCompletion: 0.6,
     // Stopped after the first two. The gap is the point.
@@ -185,7 +190,7 @@ const PROFILES: Profile[] = [
     section: 'BSN 1101',
     sex: 'male',
     ability: 0.38,
-    weakAt: ['Safe and Quality Nursing Care', 'Quality Improvement'],
+    weakAt: ['Vital Signs', 'Asepsis and Infection Control'],
     strongAt: [],
     taskCompletion: 0.4,
     engagement: 0.34,
@@ -196,8 +201,8 @@ const PROFILES: Profile[] = [
     section: 'BSN 1101',
     sex: 'female',
     ability: 0.74,
-    weakAt: ['Communication'],
-    strongAt: ['Safe and Quality Nursing Care'],
+    weakAt: ['Health Assessment'],
+    strongAt: ['Vital Signs'],
     taskCompletion: 0.9,
     engagement: 1,
   },
@@ -210,7 +215,7 @@ const PROFILES: Profile[] = [
     sex: 'male',
     ability: 0.85,
     weakAt: [],
-    strongAt: ['Pharmacology', 'Safe and Quality Nursing Care'],
+    strongAt: ['Medications', 'Laboratory Specimen Collection'],
     taskCompletion: 1,
     engagement: 1,
   },
@@ -220,7 +225,7 @@ const PROFILES: Profile[] = [
     section: 'BSN 1102',
     sex: 'female',
     ability: 0.58,
-    weakAt: ['Health Education'],
+    weakAt: ['Oxygenation'],
     strongAt: [],
     taskCompletion: 0.65,
     engagement: 1,
@@ -231,7 +236,7 @@ const PROFILES: Profile[] = [
     section: 'BSN 1102',
     sex: 'male',
     ability: 0.41,
-    weakAt: ['Pharmacology', 'Quality Improvement'],
+    weakAt: ['Medications', 'Asepsis and Infection Control'],
     strongAt: [],
     taskCompletion: 0.45,
     engagement: 0.67,
@@ -243,7 +248,7 @@ const PROFILES: Profile[] = [
     sex: 'female',
     ability: 0.69,
     weakAt: [],
-    strongAt: ['Records Management'],
+    strongAt: ['Laboratory Specimen Collection'],
     taskCompletion: 0.8,
     engagement: 1,
   },
@@ -253,7 +258,7 @@ const PROFILES: Profile[] = [
     section: 'BSN 1102',
     sex: 'male',
     ability: 0.33,
-    weakAt: ['Safe and Quality Nursing Care', 'Pharmacology', 'Health Education'],
+    weakAt: ['Laboratory Specimen Collection', 'Medications', 'Oxygenation'],
     strongAt: [],
     taskCompletion: 0.3,
     // Barely engaged: one piece of work, done badly. The clearest at-risk case.
@@ -268,7 +273,7 @@ const PROFILES: Profile[] = [
     sex: 'female',
     ability: 0.84,
     weakAt: [],
-    strongAt: ['Health Education'],
+    strongAt: ['Perioperative Nursing'],
     taskCompletion: 0.95,
     engagement: 1,
   },
@@ -278,7 +283,7 @@ const PROFILES: Profile[] = [
     section: 'BSN 1103',
     sex: 'male',
     ability: 0.61,
-    weakAt: ['Quality Improvement'],
+    weakAt: ['Asepsis and Infection Control'],
     strongAt: [],
     taskCompletion: 0.7,
     engagement: 1,
@@ -289,7 +294,7 @@ const PROFILES: Profile[] = [
     section: 'BSN 1103',
     sex: 'female',
     ability: 0.47,
-    weakAt: ['Pharmacology', 'Health Education'],
+    weakAt: ['Medications', 'Perioperative Nursing'],
     strongAt: [],
     taskCompletion: 0.55,
     engagement: 0.67,
@@ -300,7 +305,7 @@ const PROFILES: Profile[] = [
     section: 'BSN 1103',
     sex: 'male',
     ability: 0.36,
-    weakAt: ['Safe and Quality Nursing Care', 'Quality Improvement'],
+    weakAt: ['Vital Signs', 'Asepsis and Infection Control'],
     strongAt: [],
     taskCompletion: 0.4,
     engagement: 0.34,
@@ -312,7 +317,7 @@ const PROFILES: Profile[] = [
     sex: 'female',
     ability: 0.77,
     weakAt: [],
-    strongAt: ['Records Management'],
+    strongAt: ['Laboratory Specimen Collection'],
     taskCompletion: 0.9,
     engagement: 1,
   },
@@ -323,7 +328,7 @@ const PROFILES: Profile[] = [
     sex: 'male',
     ability: 0.9,
     weakAt: [],
-    strongAt: ['Safe and Quality Nursing Care', 'Pharmacology'],
+    strongAt: ['Vital Signs', 'Medications'],
     taskCompletion: 1,
     engagement: 1,
   },
@@ -333,7 +338,7 @@ const PROFILES: Profile[] = [
     section: 'BSN 1104',
     sex: 'female',
     ability: 0.68,
-    weakAt: ['Communication'],
+    weakAt: ['Health Assessment'],
     strongAt: [],
     taskCompletion: 0.8,
     engagement: 1,
@@ -344,7 +349,7 @@ const PROFILES: Profile[] = [
     section: 'BSN 1104',
     sex: 'male',
     ability: 0.54,
-    weakAt: ['Pharmacology'],
+    weakAt: ['Medications'],
     strongAt: [],
     taskCompletion: 0.6,
     engagement: 1,
@@ -355,7 +360,7 @@ const PROFILES: Profile[] = [
     section: 'BSN 1104',
     sex: 'female',
     ability: 0.4,
-    weakAt: ['Quality Improvement', 'Records Management'],
+    weakAt: ['Asepsis and Infection Control', 'Laboratory Specimen Collection'],
     strongAt: [],
     taskCompletion: 0.45,
     engagement: 0.67,
@@ -367,7 +372,7 @@ const PROFILES: Profile[] = [
     sex: 'male',
     ability: 0.73,
     weakAt: [],
-    strongAt: ['Communication'],
+    strongAt: ['Health Assessment'],
     taskCompletion: 0.85,
     engagement: 1,
   },
@@ -377,7 +382,7 @@ const PROFILES: Profile[] = [
     section: 'BSN 1104',
     sex: 'female',
     ability: 0.31,
-    weakAt: ['Safe and Quality Nursing Care', 'Pharmacology', 'Health Education'],
+    weakAt: ['Vital Signs', 'Medications', 'Perioperative Nursing'],
     strongAt: [],
     taskCompletion: 0.3,
     engagement: 0.34,
@@ -389,7 +394,7 @@ const PROFILES: Profile[] = [
     sex: 'male',
     ability: 0.8,
     weakAt: [],
-    strongAt: ['Quality Improvement'],
+    strongAt: ['Asepsis and Infection Control'],
     taskCompletion: 0.9,
     engagement: 1,
   },
@@ -399,7 +404,7 @@ const PROFILES: Profile[] = [
     section: 'BSN 1105',
     sex: 'female',
     ability: 0.57,
-    weakAt: ['Records Management'],
+    weakAt: ['Laboratory Specimen Collection'],
     strongAt: [],
     taskCompletion: 0.65,
     engagement: 1,
@@ -410,7 +415,7 @@ const PROFILES: Profile[] = [
     section: 'BSN 1105',
     sex: 'male',
     ability: 0.44,
-    weakAt: ['Health Education'],
+    weakAt: ['Perioperative Nursing'],
     strongAt: [],
     taskCompletion: 0.5,
     engagement: 0.67,
@@ -422,7 +427,7 @@ const PROFILES: Profile[] = [
     sex: 'female',
     ability: 0.86,
     weakAt: [],
-    strongAt: ['Safe and Quality Nursing Care'],
+    strongAt: ['Vital Signs'],
     taskCompletion: 1,
     engagement: 1,
   },
@@ -650,6 +655,17 @@ async function main() {
   const scenarioByTitle = new Map((scenarios ?? []).map((s) => [s.title, s.id]));
   const assessmentByTitle = new Map((assessments ?? []).map((a) => [a.title, a.id]));
   const competencyName = new Map((competencies ?? []).map((c) => [c.id, c.name]));
+
+  // Strengths and weaknesses are matched to question tags by name, so a name
+  // that is not a competency area would silently change nothing.
+  const areaNames = new Set(competencyName.values());
+  const unknown = PROFILES.flatMap((p) =>
+    [...p.weakAt, ...p.strongAt].filter((name) => !areaNames.has(name)).map((name) => `${p.email}: "${name}"`),
+  );
+  if (unknown.length > 0) {
+    console.error(`Profiles name competencies that do not exist:\n  ${unknown.join('\n  ')}`);
+    process.exit(1);
+  }
 
   // Faculty who teach each section, for assigned_by / finalized_by.
   const { data: facultyLinks } = await supabase

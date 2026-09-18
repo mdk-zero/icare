@@ -2,7 +2,7 @@
 
 Item side: each published assessment becomes a TF-IDF document over its
 questions' competency tags (a tag token per question-competency link), so
-an assessment dominated by "Safe and Quality Nursing Care" items weighs
+an assessment dominated by "Medications" items weighs
 that tag highly and rare tags are up-weighted across the catalog.
 
 Student side: a weakness profile over the same tag vocabulary —
