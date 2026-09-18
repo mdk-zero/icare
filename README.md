@@ -50,5 +50,5 @@
 # Client Recommendations
 
 - [ ] Scenario and Quiz data should use fundamental topics for nursing from the book sent in the e-mail.
-- [ ] The review for grading scenarios should be flexible and not a fixed score. (Adding criteria within each task depending on scenario)
-- [ ]
+- [ ] The scenarios are graded with verbal feedback and not a fixed score. (Adding criteria within each task depending on scenario)
+- [ ] Scenario generation should also allow the importing of a document for connecting to the topics within the document.
