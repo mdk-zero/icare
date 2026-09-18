@@ -122,7 +122,7 @@ export function TrendLegend({ series }: { series: TrendSeries[] }) {
     <ul className="mb-3 flex flex-wrap gap-x-4 gap-y-1.5" aria-label="Sections">
       {series.map((s) => (
         <li key={s.id} className="flex items-center gap-1.5 text-xs text-gray-600">
-          <span className="h-0.5 w-3.5 rounded-full" style={{ backgroundColor: s.color }} />
+          <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: s.color }} />
           {s.name}
         </li>
       ))}
@@ -377,7 +377,7 @@ export function TrendLineChart({
               const p = s.points.find((q) => q.week_start === hoverBucket);
               return (
                 <li key={s.id} className="flex items-center gap-2 text-xs">
-                  <span className="h-0.5 w-3 shrink-0 rounded-full" style={{ backgroundColor: s.color }} />
+                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: s.color }} />
                   <span className="font-semibold tabular-nums text-gray-900">
                     {p ? `${p.average_score}%` : "—"}
                   </span>
@@ -418,7 +418,7 @@ export function TrendTable({
             {series.map((s) => (
               <th key={s.id} scope="col" className="px-3 py-2 text-right font-medium">
                 <span className="inline-flex items-center gap-1.5">
-                  <span className="h-0.5 w-3 rounded-full" style={{ backgroundColor: s.color }} />
+                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: s.color }} />
                   {s.name}
                 </span>
               </th>
