@@ -113,7 +113,7 @@ const PROFILES: Profile[] = [
     weakAt: ['Pharmacology'],
     strongAt: ['Communication'],
     taskCompletion: 0.85,
-    retakes: ['Asthma Assessment and Inhaler Technique'],
+    retakes: ['Pulse Oximetry, Inhalers, Nebulizers, and Nasal Cannula'],
     engagement: 1,
   },
   {
@@ -125,7 +125,7 @@ const PROFILES: Profile[] = [
     weakAt: ['Pharmacology', 'Safe and Quality Nursing Care'],
     strongAt: [],
     taskCompletion: 0.5,
-    retakes: ['Urinary Tract Infection Care'],
+    retakes: ['Clean-Catch Urine, Oral Medications, and Handwashing'],
     engagement: 1,
   },
   {
@@ -163,7 +163,7 @@ const PROFILES: Profile[] = [
     weakAt: ['Records Management'],
     strongAt: [],
     taskCompletion: 0.75,
-    retakes: ['Fever Assessment and Management'],
+    retakes: ['Temperature, Pulse, Respiration, and Nasopharyngeal Swab'],
     engagement: 1,
   },
   {
@@ -226,7 +226,7 @@ const PROFILES: Profile[] = [
     weakAt: ['Health Education'],
     strongAt: [],
     taskCompletion: 0.65,
-    retakes: ['Skin Infection and Diabetes Care'],
+    retakes: ['Capillary Glucose, Insulin Injection, and IV Piggyback'],
     engagement: 1,
   },
   {
@@ -289,7 +289,7 @@ const PROFILES: Profile[] = [
     weakAt: ['Quality Improvement'],
     strongAt: [],
     taskCompletion: 0.7,
-    retakes: ['Fever Assessment and Management'],
+    retakes: ['Temperature, Pulse, Respiration, and Nasopharyngeal Swab'],
     engagement: 1,
   },
   {
@@ -361,7 +361,7 @@ const PROFILES: Profile[] = [
     weakAt: ['Pharmacology'],
     strongAt: [],
     taskCompletion: 0.6,
-    retakes: ['Fluid Balance and Dehydration'],
+    retakes: ['Peripheral IV Therapy, Stool Culture, and PPE'],
     engagement: 1,
   },
   {
@@ -433,7 +433,7 @@ const PROFILES: Profile[] = [
     weakAt: ['Health Education'],
     strongAt: [],
     taskCompletion: 0.5,
-    retakes: ['Anaemia Care and Falls Prevention'],
+    retakes: ['Fall Prevention, Assisted Ambulation, and Venipuncture'],
     engagement: 0.67,
   },
   {
@@ -459,14 +459,14 @@ const PROFILES: Profile[] = [
  */
 const SECTION_WORK: Record<string, { scenario: string; quiz: string }[]> = {
   'BSN 1101': [
-    { scenario: 'Mild Fever: Comfort and Monitoring', quiz: 'Fever Assessment and Management' },
-    { scenario: 'Mild Dehydration: Fluid Balance Basics', quiz: 'Fluid Balance and Dehydration' },
-    { scenario: 'Day One After Surgery: Wound, Pain, Mobility', quiz: 'Post-Operative Care Fundamentals' },
+    { scenario: 'Fever Workup: Vital Signs and a Nasopharyngeal Swab', quiz: 'Temperature, Pulse, Respiration, and Nasopharyngeal Swab' },
+    { scenario: 'Dehydration: Peripheral IV and Stool Culture', quiz: 'Peripheral IV Therapy, Stool Culture, and PPE' },
+    { scenario: 'Post-Op Day One: Dressing, Breathing Exercises and Comfort', quiz: 'Wound Dressing, Post-Op Breathing Exercises, and Pain Relief' },
   ],
   'BSN 1102': [
-    { scenario: 'Uncomplicated UTI: Antibiotics and Teaching', quiz: 'Urinary Tract Infection Care' },
-    { scenario: 'Mild Asthma: Breathing and Inhaler Technique', quiz: 'Asthma Assessment and Inhaler Technique' },
-    { scenario: 'Cellulitis in Diabetes: Skin and Sugar', quiz: 'Skin Infection and Diabetes Care' },
+    { scenario: 'UTI: Clean-Catch Urine and Oral Antibiotics', quiz: 'Clean-Catch Urine, Oral Medications, and Handwashing' },
+    { scenario: 'Asthma: Pulse Oximetry, Inhaler and Nebulizer', quiz: 'Pulse Oximetry, Inhalers, Nebulizers, and Nasal Cannula' },
+    { scenario: 'Cellulitis with Diabetes: Glucose, Insulin and IV Antibiotic', quiz: 'Capillary Glucose, Insulin Injection, and IV Piggyback' },
   ],
   // Michael Smith's other three sections. There are eight scenarios and five
   // sections needing three apiece, so cases are reused — but only across
@@ -475,19 +475,19 @@ const SECTION_WORK: Record<string, { scenario: string; quiz: string }[]> = {
   // reusing within one faculty's sections keeps Drei Cachola's three to her,
   // and nothing of hers crosses over.
   'BSN 1103': [
-    { scenario: 'High Blood Pressure: Measure It Properly', quiz: 'Blood Pressure Measurement and Hypertension Teaching' },
-    { scenario: 'Anaemia and Fatigue: Safety First', quiz: 'Anaemia Care and Falls Prevention' },
-    { scenario: 'Mild Fever: Comfort and Monitoring', quiz: 'Fever Assessment and Management' },
+    { scenario: 'New Hypertension: Accurate BP and Cardiovascular Assessment', quiz: 'Blood Pressure, Cardiovascular Assessment, and 12-Lead ECG' },
+    { scenario: 'Anaemia and Dizziness: Fall Prevention and Safe Ambulation', quiz: 'Fall Prevention, Assisted Ambulation, and Venipuncture' },
+    { scenario: 'Fever Workup: Vital Signs and a Nasopharyngeal Swab', quiz: 'Temperature, Pulse, Respiration, and Nasopharyngeal Swab' },
   ],
   'BSN 1104': [
-    { scenario: 'Mild Dehydration: Fluid Balance Basics', quiz: 'Fluid Balance and Dehydration' },
-    { scenario: 'Day One After Surgery: Wound, Pain, Mobility', quiz: 'Post-Operative Care Fundamentals' },
-    { scenario: 'High Blood Pressure: Measure It Properly', quiz: 'Blood Pressure Measurement and Hypertension Teaching' },
+    { scenario: 'Dehydration: Peripheral IV and Stool Culture', quiz: 'Peripheral IV Therapy, Stool Culture, and PPE' },
+    { scenario: 'Post-Op Day One: Dressing, Breathing Exercises and Comfort', quiz: 'Wound Dressing, Post-Op Breathing Exercises, and Pain Relief' },
+    { scenario: 'New Hypertension: Accurate BP and Cardiovascular Assessment', quiz: 'Blood Pressure, Cardiovascular Assessment, and 12-Lead ECG' },
   ],
   'BSN 1105': [
-    { scenario: 'Anaemia and Fatigue: Safety First', quiz: 'Anaemia Care and Falls Prevention' },
-    { scenario: 'Mild Fever: Comfort and Monitoring', quiz: 'Fever Assessment and Management' },
-    { scenario: 'Mild Dehydration: Fluid Balance Basics', quiz: 'Fluid Balance and Dehydration' },
+    { scenario: 'Anaemia and Dizziness: Fall Prevention and Safe Ambulation', quiz: 'Fall Prevention, Assisted Ambulation, and Venipuncture' },
+    { scenario: 'Fever Workup: Vital Signs and a Nasopharyngeal Swab', quiz: 'Temperature, Pulse, Respiration, and Nasopharyngeal Swab' },
+    { scenario: 'Dehydration: Peripheral IV and Stool Culture', quiz: 'Peripheral IV Therapy, Stool Culture, and PPE' },
   ],
 };
 

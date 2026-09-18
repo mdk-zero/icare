@@ -14,6 +14,15 @@
  * Hand-authored scenarios drift from their patient the moment either is
  * edited; these cannot.
  *
+ * What each scenario asks the student to DO comes from one source: the skill
+ * checklists in Lynn & LeBon, "Skill Checklists for Taylor's Clinical Nursing
+ * Skills: A Nursing Process Approach", 3rd ed. (Wolters Kluwer / LWW, 2011),
+ * shipped in docs/. Each case names the Taylor's skills its patient calls
+ * for, and every case-specific task is one of those skills, condensed from its
+ * checklist steps and titled with the skill number so a student or evaluator
+ * can open the checklist and grade against it. seed-scenario-quizzes.ts builds
+ * each paired quiz from the same skills.
+ *
  * Safe to re-run: patients upsert on (subject_id, hadm_id), rooms are matched
  * by room_number within the campus, and a scenario is matched by title — its
  * tasks are replaced rather than duplicated.
@@ -72,6 +81,13 @@ interface CaseSeed {
     learning_objectives: string[];
     /** Case-specific work, on top of the two checks every case shares. */
     tasks: TaskSeed[];
+    /**
+     * The title this scenario had before it was rebuilt on the Taylor's
+     * checklists. A re-run finds the old row by it and renames it in place, so
+     * the scenario keeps its id — and seed-student-history.ts, which clears
+     * assignments by scenario id, still finds and rebuilds the old ones.
+     */
+    formerly?: string;
   };
 }
 
@@ -114,7 +130,7 @@ const PLAN_H = 3;
 const SHARED_TASKS: TaskSeed[] = [
   {
     title: 'Assess Patient Vital Signs',
-    description: 'Take a full set of vitals — temperature, pulse, respirations, blood pressure, and oxygen saturation — and record them in the Vitals screen.',
+    description: 'Take a full set of vitals — temperature, pulse, respirations, blood pressure, and oxygen saturation (Taylor’s Skills 1-1, 1-4, 1-6, 1-7, 14-1) — and record them in the Vitals screen.',
     category: 'assessment',
     points: 10,
     verification: 'system',
@@ -122,7 +138,7 @@ const SHARED_TASKS: TaskSeed[] = [
   },
   {
     title: 'Document Your Findings',
-    description: 'Write a progress note covering what you assessed, what you did, and how the patient responded.',
+    description: 'Write a progress note covering what you assessed, what you did, and how the patient responded. Any medication you gave is documented immediately after administration (Taylor’s Skill 5-1, step 21).',
     category: 'documentation',
     points: 10,
     verification: 'system',
@@ -143,23 +159,26 @@ const CASES: CaseSeed[] = [
     vitals: { heart_rate: 96, blood_pressure: '118/74', temperature: 38.2, respiratory_rate: 20, oxygen_saturation: 98 },
     labs: { 'White Blood Cells': 11.2, Hemoglobin: 13.1, 'Platelet Count': 245, Sodium: 138, Potassium: 4.1, Creatinine: 0.8 },
     scenario: {
-      title: 'Mild Fever: Comfort and Monitoring',
+      title: 'Fever Workup: Vital Signs and a Nasopharyngeal Swab',
+      formerly: 'Mild Fever: Comfort and Monitoring',
       description:
-        'A young adult admitted overnight with a two-day history of fever, sore throat, and body aches. She is alert, talking in full sentences, and asking when she can go home. Nothing here is unstable — the work is a careful set of vitals, sensible comfort measures, and noticing if the picture changes.',
+        'A young adult admitted overnight with a two-day history of fever, sore throat, and body aches. She is alert, talking in full sentences, and asking when she can go home. Nothing here is unstable. The work is Chapter 1 of Taylor’s done properly: an accurate oral temperature, a palpated pulse, and a respiratory rate counted without her noticing. After that, a nasopharyngeal swab for the viral panel, collected so it is not contaminated, and a PRN antipyretic given with every check. Taylor’s Skills 1-1, 1-4, 1-6, 18-5, 5-1.',
       category: 'General',
       chief_complaint: 'Fever and body aches for two days',
       physical_exam: 'Alert and cooperative. Flushed, warm to touch, mildly dry lips. Throat red without exudate. Chest clear on auscultation. No rash, no neck stiffness.',
-      treatment_plan: 'Paracetamol for fever, oral fluids, four-hourly vitals, tepid sponging if temperature rises above 38.5 °C. Escalate for difficulty breathing, confusion, or a fever that will not come down.',
+      treatment_plan: 'Temperature (oral), pulse, and respirations every 4 hours. Nasopharyngeal swab for respiratory viral panel this morning, sent to the laboratory immediately. Paracetamol 500 mg orally every 6 hours as needed for temperature above 38.0 °C, with a recheck after the dose. Encourage oral fluids. Escalate for difficulty breathing, confusion, or a fever that will not come down.',
       learning_objectives: [
-        'Take and record a complete, accurate set of vital signs',
-        'Recognise a fever pattern that is expected versus one that needs escalation',
-        'Apply non-pharmacological comfort measures and explain them to the patient',
-        'Document assessment findings in clear, objective language',
+        'Measure an oral temperature with the probe in the posterior sublingual pocket (Taylor’s Skill 1-1)',
+        'Palpate a radial pulse, counting a full minute whenever rate, rhythm, or amplitude is abnormal (Skill 1-4)',
+        'Count respirations with the fingers still on the pulse, noting depth and rhythm (Skill 1-6)',
+        'Collect and label a nasopharyngeal swab without contaminating it, and send it promptly (Skill 18-5)',
+        'Give an oral antipyretic with the identification, bedside, and documentation checks of Skill 5-1',
       ],
       tasks: [
-        { title: 'Provide Comfort Measures', description: 'Offer oral fluids, adjust bedding and clothing, and perform tepid sponging if the temperature climbs above 38.5 °C.', category: 'intervention', points: 15, verification: 'faculty', system_trigger: null },
-        { title: 'Administer Antipyretic as Ordered', description: 'Give the ordered paracetamol using the rights of medication administration, then recheck the temperature after 60 minutes.', category: 'medication', points: 20, verification: 'faculty', system_trigger: null },
-        { title: 'Explain Fever Care to the Patient', description: 'Teach the patient why fluids and rest matter, and which symptoms she should report to the nurse straight away.', category: 'communication', points: 15, verification: 'faculty', system_trigger: null },
+        { title: 'Measure an Oral Temperature (Skill 1-1)', description: 'Cover the probe, place it in the posterior sublingual pocket with her lips closed around it, hold it until the beep, and discard the cover by the release button without touching it.', category: 'assessment', points: 15, verification: 'faculty', system_trigger: null },
+        { title: 'Obtain a Nasopharyngeal Swab (Skill 18-5)', description: 'Check the swab’s expiry date and the label against her ID band, put on gloves, have her cough and tip her head back, pass the swab about 6 inches through one naris, rotate it, and leave it 15–30 seconds. Bag it and send it immediately.', category: 'intervention', points: 20, verification: 'faculty', system_trigger: null },
+        { title: 'Give the PRN Paracetamol (Skill 5-1)', description: 'Check the order against the MAR and her allergies, identify her by two methods, stay until the tablet is swallowed, document immediately, and recheck the temperature to evaluate the dose.', category: 'medication', points: 20, verification: 'faculty', system_trigger: null },
+        { title: 'Explain the Swab Before Collecting It (Skill 18-5)', description: 'Tell her why the swab is needed and what she will feel, then answer her questions before you start.', category: 'communication', points: 10, verification: 'faculty', system_trigger: null },
       ],
     },
   },
@@ -175,23 +194,25 @@ const CASES: CaseSeed[] = [
     vitals: { heart_rate: 102, blood_pressure: '106/68', temperature: 37.8, respiratory_rate: 18, oxygen_saturation: 99 },
     labs: { Sodium: 134, Potassium: 3.4, Creatinine: 1.1, 'Urea Nitrogen': 22, Hemoglobin: 14.2, 'White Blood Cells': 9.4 },
     scenario: {
-      title: 'Mild Dehydration: Fluid Balance Basics',
+      title: 'Dehydration: Peripheral IV and Stool Culture',
+      formerly: 'Mild Dehydration: Fluid Balance Basics',
       description:
-        'A previously well adult with two days of loose stools and vomiting. He is thirsty and a little tachycardic but fully alert, and tolerating sips. This is a fluid-balance case: measure what goes in and what comes out, and notice that the potassium is drifting low.',
+        'A previously well adult with two days of loose stools and vomiting. He is thirsty and a little tachycardic, and his potassium is drifting low. The orders are Chapter 15 and Chapter 18 work: start a peripheral IV, then watch the site and the infusion every hour. Collect a stool specimen for culture. Until the organism is known, gown and glove correctly for contact precautions. Taylor’s Skills 15-1, 15-3, 18-2, 4-7.',
       category: 'Medical-Surgical',
       chief_complaint: 'Loose stools and vomiting for two days',
       physical_exam: 'Alert, mildly weak. Dry mucous membranes, skin turgor slightly reduced. Abdomen soft with active bowel sounds, mild generalised tenderness. Capillary refill under 3 seconds.',
-      treatment_plan: 'Oral rehydration salts after each loose stool, IV maintenance fluid as ordered, strict intake and output charting, monitor for worsening weakness or reduced urine output.',
+      treatment_plan: 'Insert a peripheral IV and start PNSS at the ordered rate. Check the site and flow 30 minutes after starting, then at least hourly. Stool specimen for culture, sent while still warm. Contact precautions per facility policy pending the culture. Strict intake and output; report urine output under 30 mL/hr or worsening weakness.',
       learning_objectives: [
-        'Record an accurate intake and output chart over a shift',
-        'Identify the clinical signs of mild versus severe dehydration',
-        'Relate a low potassium result to what you observe at the bedside',
-        'Teach oral rehydration technique in language the patient understands',
+        'Initiate a peripheral IV infusion with aseptic technique, a correctly placed tourniquet, and a 10–15° insertion angle (Taylor’s Skill 15-1)',
+        'Monitor an IV site and infusion hourly, recognising infiltration, phlebitis, infection, and fluid overload (Skill 15-3)',
+        'Collect a stool specimen for culture free of urine and deliver it while still warm (Skill 18-2)',
+        'Put on and remove gown, mask, eyewear, and gloves in the correct sequence (Skill 4-7)',
       ],
       tasks: [
-        { title: 'Start an Intake and Output Chart', description: 'Record every oral intake, IV volume, emesis, and stool for the shift, then total the balance at the end.', category: 'assessment', points: 20, verification: 'faculty', system_trigger: null },
-        { title: 'Administer Oral Rehydration', description: 'Prepare and give oral rehydration salts correctly, and show the patient how to take it in small frequent sips.', category: 'intervention', points: 15, verification: 'faculty', system_trigger: null },
-        { title: 'Report the Low Potassium', description: 'Recognise the potassium of 3.4 mmol/L as below range and hand it over to the nurse in charge with the relevant bedside findings.', category: 'communication', points: 15, verification: 'faculty', system_trigger: null },
+        { title: 'Initiate the Peripheral IV (Skill 15-1)', description: 'Verify the order, prime the tubing, apply the tourniquet 3–4 inches above the site, scrub with chlorhexidine for 30 seconds and let it dry, and insert bevel up at 10–15°. Label the dressing with date, time, site, and gauge, and return in 30 minutes to check it.', category: 'intervention', points: 20, verification: 'faculty', system_trigger: null },
+        { title: 'Monitor the IV Site and Infusion (Skill 15-3)', description: 'Hourly: check the rate, tubing, and clamps, then inspect the site. Swelling, coolness, or pallor means infiltration; redness, heat, or induration means phlebitis. Keep the intake and output chart current.', category: 'assessment', points: 15, verification: 'faculty', system_trigger: null },
+        { title: 'Collect the Stool Specimen (Skill 18-2)', description: 'Have him void first and keep toilet paper out of the specimen. Take a sample free of blood and urine with tongue blades, label it against his ID band, bag it, and send it while it is still warm.', category: 'intervention', points: 15, verification: 'faculty', system_trigger: null },
+        { title: 'Use PPE for Contact Precautions (Skill 4-7)', description: 'Put on the gown first and the gloves last, over the gown cuffs. At the doorway, remove the gloves first and roll the gown inside out, then perform hand hygiene immediately.', category: 'intervention', points: 10, verification: 'faculty', system_trigger: null },
       ],
     },
   },
@@ -207,23 +228,25 @@ const CASES: CaseSeed[] = [
     vitals: { heart_rate: 92, blood_pressure: '122/78', temperature: 38.0, respiratory_rate: 18, oxygen_saturation: 99 },
     labs: { 'White Blood Cells': 12.8, Hemoglobin: 12.6, Creatinine: 0.9, Sodium: 139, Potassium: 4.0 },
     scenario: {
-      title: 'Uncomplicated UTI: Antibiotics and Teaching',
+      title: 'UTI: Clean-Catch Urine and Oral Antibiotics',
+      formerly: 'Uncomplicated UTI: Antibiotics and Teaching',
       description:
-        'A young woman admitted with burning on urination, frequency, and a low-grade fever. She is comfortable at rest and has no flank pain. The teaching here matters as much as the medication — she has had this twice before.',
+        'A young woman admitted with burning on urination, frequency, and a low-grade fever. She has had this twice before. Before the first antibiotic dose she needs a clean-catch midstream urine for urinalysis and culture, and she will collect it herself, so the teaching decides whether the result can be trusted. Then give the oral antibiotic with every check in place. Taylor’s Skills 18-7, 5-1, 4-1.',
       category: 'Infection Management',
       chief_complaint: 'Burning on urination and needing to pass urine frequently',
       physical_exam: 'Alert and comfortable. Suprapubic tenderness on light palpation. No costovertebral angle tenderness. Urine cloudy with a strong odour.',
-      treatment_plan: 'Oral antibiotic as ordered, increase fluid intake to 2–3 litres daily, paracetamol for discomfort, monitor temperature four-hourly.',
+      treatment_plan: 'Clean-catch midstream urine for urinalysis and culture before the first antibiotic dose, sent promptly or refrigerated. Oral antibiotic as ordered once the specimen is collected. Oral fluids 2–3 litres daily, paracetamol for discomfort, temperature every 4 hours.',
       learning_objectives: [
-        'Administer an oral antibiotic safely using the rights of medication administration',
-        'Explain why a full antibiotic course must be finished',
-        'Teach hygiene and hydration measures that reduce recurrence',
-        'Document the response to treatment objectively',
+        'Teach and supervise a clean-catch midstream urine collection that avoids contamination (Taylor’s Skill 18-7)',
+        'Label a urine specimen correctly and refrigerate it if transport is delayed (Skill 18-7)',
+        'Perform and teach handwashing with soap and water, with at least 15 seconds of friction (Skill 4-1)',
+        'Administer an oral antibiotic with the checks, identifiers, and documentation Skill 5-1 requires',
       ],
       tasks: [
-        { title: 'Administer the Oral Antibiotic', description: 'Give the ordered antibiotic on time, confirm the patient swallows it, and chart the dose.', category: 'medication', points: 20, verification: 'faculty', system_trigger: null },
-        { title: 'Encourage and Track Fluid Intake', description: 'Set an achievable hourly target with the patient and record what she actually drinks.', category: 'intervention', points: 15, verification: 'faculty', system_trigger: null },
-        { title: 'Teach Recurrence Prevention', description: 'Cover hygiene, hydration, not delaying urination, and completing the full course — and check her understanding by asking her to repeat it back.', category: 'communication', points: 20, verification: 'faculty', system_trigger: null },
+        { title: 'Teach the Clean-Catch Technique (Skill 18-7)', description: 'Have her wash her hands, separate the labia, and clean each side of the meatus and then the centre, front to back, with a new wipe each stroke. She voids a little into the toilet, then collects 10–20 mL midstream without touching the inside of the cup.', category: 'communication', points: 20, verification: 'faculty', system_trigger: null },
+        { title: 'Label and Send the Urine Specimen (Skill 18-7)', description: 'Check the label against her ID band, bag the container in a sealable biohazard bag, and send it as soon as possible, refrigerating it if it cannot go straight away.', category: 'documentation', points: 10, verification: 'faculty', system_trigger: null },
+        { title: 'Administer the Oral Antibiotic (Skill 5-1)', description: 'Check the order against the MAR and her allergies, identify her by two methods, stay until she has swallowed it, and document immediately afterwards.', category: 'medication', points: 20, verification: 'faculty', system_trigger: null },
+        { title: 'Wash Hands with Soap and Water (Skill 4-1)', description: 'Before and after the collection: hands lower than elbows, friction over every surface for at least 15 seconds, rinse toward the fingertips, and turn the tap off with a paper towel.', category: 'intervention', points: 10, verification: 'faculty', system_trigger: null },
       ],
     },
   },
@@ -239,23 +262,25 @@ const CASES: CaseSeed[] = [
     vitals: { heart_rate: 78, blood_pressure: '152/94', temperature: 36.8, respiratory_rate: 16, oxygen_saturation: 99 },
     labs: { Sodium: 141, Potassium: 4.3, Creatinine: 1.0, 'Total Cholesterol': 232, Glucose: 104, Hemoglobin: 15.1 },
     scenario: {
-      title: 'High Blood Pressure: Measure It Properly',
+      title: 'New Hypertension: Accurate BP and Cardiovascular Assessment',
+      formerly: 'High Blood Pressure: Measure It Properly',
       description:
-        'A middle-aged man admitted for observation after a high reading at a community screening. He feels completely well and says the machine at the mall "must be broken". The skill under test is an accurate manual blood pressure and a conversation that lands.',
+        'A middle-aged man admitted for observation after a high reading at a community screening. He feels completely well and says the machine at the mall “must be broken.” The answer is a reading nobody can argue with: Taylor’s brachial blood pressure technique, step by step. Add a general survey, a cardiovascular examination, and a baseline 12-lead ECG explained so that it does not frighten him. Taylor’s Skills 1-7, 2-1, 2-6, 16-1.',
       category: 'Patient Education',
       chief_complaint: 'No symptoms — referred after a high reading at a screening',
       physical_exam: 'Well-looking, no distress. Heart sounds normal, no murmurs. No peripheral oedema. No visual disturbance or headache.',
-      treatment_plan: 'Blood pressure twice daily in both arms using correct technique, low-salt diet counselling, smoking cessation referral, lifestyle diary before considering medication.',
+      treatment_plan: 'Manual blood pressure twice daily in both arms, seated and rested, per Skill 1-7. General survey with weight, height, BMI, and waist circumference. Cardiovascular assessment. Baseline 12-lead ECG. Low-salt diet counselling and a smoking cessation referral.',
       learning_objectives: [
-        'Measure blood pressure manually with the correct cuff size and technique',
-        'Explain what the two numbers mean in plain language',
-        'Identify modifiable risk factors from a patient history',
-        'Counsel a patient who does not believe he is unwell',
+        'Measure brachial blood pressure accurately: cuff placement, a palpated systolic estimate, and deflation at 2–3 mm Hg per second (Taylor’s Skill 1-7)',
+        'Complete a general survey including BMI and waist circumference (Skill 2-1)',
+        'Palpate the carotids one at a time and auscultate the heart from the aortic to the mitral area (Skill 2-6)',
+        'Record a 12-lead ECG with correct limb and chest electrode placement, explaining it first (Skill 16-1)',
       ],
       tasks: [
-        { title: 'Take a Manual Blood Pressure in Both Arms', description: 'Use the correct cuff size, rest the patient five minutes first, and record both arms with the patient seated and supported.', category: 'assessment', points: 20, verification: 'faculty', system_trigger: null },
-        { title: 'Identify Modifiable Risk Factors', description: 'Work through his history and name the factors he can change — smoking, activity, salt intake — and which he cannot.', category: 'assessment', points: 15, verification: 'faculty', system_trigger: null },
-        { title: 'Counsel on Lifestyle Change', description: 'Explain the reading in plain language and agree one realistic change with him rather than listing everything at once.', category: 'communication', points: 20, verification: 'faculty', system_trigger: null },
+        { title: 'Measure Blood Pressure Manually (Skill 1-7)', description: 'Confirm he has rested several minutes, seated with legs uncrossed and the arm supported at heart level. Centre the cuff bladder over the brachial artery 1–2 inches above the elbow crease. Estimate systolic by palpation, then inflate 30 mm Hg above it and deflate at 2–3 mm Hg per second.', category: 'assessment', points: 20, verification: 'faculty', system_trigger: null },
+        { title: 'Perform a General Survey (Skill 2-1)', description: 'Observe appearance, body structure, mobility, and behaviour. Weigh and measure him with shoes off, calculate his BMI, and measure waist circumference at the level of the umbilicus.', category: 'assessment', points: 15, verification: 'faculty', system_trigger: null },
+        { title: 'Assess the Cardiovascular System (Skill 2-6)', description: 'Head of bed at 30–45°. Palpate one carotid at a time, inspect for jugular venous distention, and auscultate the aortic, pulmonic, Erb’s point, tricuspid, and mitral areas in that order.', category: 'assessment', points: 15, verification: 'faculty', system_trigger: null },
+        { title: 'Record a Baseline 12-Lead ECG (Skill 16-1)', description: 'Tell him no electricity enters his body and that it takes about 5 minutes. Place the limb leads and V1–V6 correctly, then have him lie still and not talk while it records.', category: 'intervention', points: 15, verification: 'faculty', system_trigger: null },
       ],
     },
   },
@@ -271,23 +296,26 @@ const CASES: CaseSeed[] = [
     vitals: { heart_rate: 98, blood_pressure: '124/80', temperature: 36.9, respiratory_rate: 22, oxygen_saturation: 95 },
     labs: { 'White Blood Cells': 8.1, Hemoglobin: 12.9, Sodium: 140, Potassium: 3.9 },
     scenario: {
-      title: 'Mild Asthma: Breathing and Inhaler Technique',
+      title: 'Asthma: Pulse Oximetry, Inhaler and Nebulizer',
+      formerly: 'Mild Asthma: Breathing and Inhaler Technique',
       description:
-        'A student nurse of the same age, admitted after wheezing through the night. She is speaking in full sentences and her saturation is 95% on room air — mild, and improving. Watch the respiratory rate and check how she actually uses her inhaler.',
+        'A student nurse of the same age, admitted after wheezing through the night. She is speaking in full sentences with a saturation of 95% on room air: mild, and improving. The orders are Taylor’s Chapter 14 and the inhaled-medication skills of Chapter 5: pulse oximetry, salbutamol by metered-dose inhaler with a spacer, a nebulizer if that is not enough, and nasal cannula oxygen on standby. Taylor’s Skills 14-1, 5-23, 5-24, 14-3.',
       category: 'Respiratory Emergency',
       chief_complaint: 'Wheezing and tight chest since last night',
       physical_exam: 'Alert, speaking full sentences. Mild expiratory wheeze on both sides. No accessory muscle use, no cyanosis. Sitting upright by preference.',
-      treatment_plan: 'Salbutamol via metered-dose inhaler with spacer as ordered, upright positioning, monitor respiratory rate and saturation before and after each dose, avoid known triggers on the ward.',
+      treatment_plan: 'Pulse oximetry with alarms set; move the sensor on schedule. Salbutamol 2 puffs via MDI with spacer every 4 hours and as needed; salbutamol by small-volume nebulizer if the wheeze persists. Oxygen by nasal cannula at 2 L/min if SpO₂ stays below 95% after the bronchodilator. Reassess respirations, lung sounds, and SpO₂ after every dose.',
       learning_objectives: [
-        'Count a respiratory rate accurately over a full minute',
-        'Assess the effect of a bronchodilator by comparing before and after',
-        'Demonstrate and correct metered-dose inhaler technique with a spacer',
-        'Recognise the signs that a mild exacerbation is becoming severe',
+        'Choose, prepare, and check a pulse oximeter sensor site, and set its alarms (Taylor’s Skill 14-1)',
+        'Coach metered-dose inhaler use with a spacer, including the breath-hold and the wait between puffs (Skill 5-23)',
+        'Set up a small-volume nebulizer and continue until all the medication is aerosolized (Skill 5-24)',
+        'Apply oxygen by nasal cannula with the safety precautions Skill 14-3 requires',
+        'Evaluate the response by reassessing lung sounds, SpO₂, and respirations after each dose (Skills 5-23, 5-24)',
       ],
       tasks: [
-        { title: 'Assess Breathing Before and After the Inhaler', description: 'Record respiratory rate, saturation, and wheeze before the dose and again 15 minutes after, then compare.', category: 'assessment', points: 20, verification: 'faculty', system_trigger: null },
-        { title: 'Position the Patient Upright', description: 'Sit the patient upright and well supported to ease the work of breathing, and explain why the position helps.', category: 'intervention', points: 10, verification: 'faculty', system_trigger: null },
-        { title: 'Check and Correct Inhaler Technique', description: 'Have her demonstrate her own inhaler and spacer technique, then correct what she gets wrong.', category: 'communication', points: 20, verification: 'faculty', system_trigger: null },
+        { title: 'Apply Pulse Oximetry (Skill 14-1)', description: 'Use an index, middle, or ring finger with a good proximal pulse and capillary refill. Remove nail polish if needed, align the emitter and receiver opposite each other, set the alarm limits, and move a clip sensor every 2 hours.', category: 'assessment', points: 15, verification: 'faculty', system_trigger: null },
+        { title: 'Coach the MDI with Spacer (Skill 5-23)', description: 'Shake the inhaler and spacer, release one puff into the spacer, and have her breathe in slowly and deeply. She holds 5–10 seconds, exhales through pursed lips, and waits 1–5 minutes before the next puff, then rinses her mouth.', category: 'medication', points: 20, verification: 'faculty', system_trigger: null },
+        { title: 'Give the Nebulized Dose if Ordered (Skill 5-24)', description: 'Place the unit dose in the cup, check for a fine mist, and have her breathe slowly and deeply through the mouthpiece until the cup is empty (about 15 minutes).', category: 'medication', points: 15, verification: 'faculty', system_trigger: null },
+        { title: 'Reassess After Each Dose (Skills 5-23, 5-24)', description: 'Reassess lung sounds, SpO₂, and respirations. If saturation stays below target, apply nasal cannula oxygen per Skill 14-3, with the “No Smoking” precautions explained.', category: 'assessment', points: 10, verification: 'faculty', system_trigger: null },
       ],
     },
   },
@@ -303,23 +331,25 @@ const CASES: CaseSeed[] = [
     vitals: { heart_rate: 88, blood_pressure: '118/72', temperature: 37.6, respiratory_rate: 18, oxygen_saturation: 98 },
     labs: { 'White Blood Cells': 10.6, Hemoglobin: 13.4, 'Platelet Count': 288, Sodium: 139, Potassium: 4.2, Creatinine: 0.9 },
     scenario: {
-      title: 'Day One After Surgery: Wound, Pain, Mobility',
+      title: 'Post-Op Day One: Dressing, Breathing Exercises and Comfort',
+      formerly: 'Day One After Surgery: Wound, Pain, Mobility',
       description:
-        'A young man on his first day after a straightforward appendectomy. A low-grade temperature on day one is expected; the job is to check the wound properly, get his pain under control, and get him walking.',
+        'A young man on his first day after a straightforward laparoscopic appendectomy, guarding his abdomen and reluctant to move. A low-grade temperature on day one is expected. The work spans four chapters of Taylor’s: a dry sterile dressing change, deep breathing and splinted coughing, incentive spirometry, and the pain relief that makes the rest possible. Taylor’s Skills 8-1, 6-2, 14-2, 10-1.',
       category: 'Medical-Surgical',
       chief_complaint: 'Pain around the surgical site, reluctant to move',
       physical_exam: 'Alert, guarding the abdomen. Three laparoscopic port sites clean and dry, no redness or discharge. Bowel sounds present but sluggish. Pain 5/10 on movement, 2/10 at rest.',
-      treatment_plan: 'Analgesia as ordered before mobilising, wound inspection each shift, early ambulation, deep breathing exercises, monitor for fever above 38.5 °C or wound discharge.',
+      treatment_plan: 'Analgesia as ordered before dressing changes and exercises. Clean the port sites and apply dry sterile dressings daily and as needed. Deep breathing every 1–2 hours, and splinted coughing every 2 hours while awake. Incentive spirometer 5–10 breaths every 1–2 hours. Early ambulation. Report a temperature above 38.5 °C or wound discharge.',
       learning_objectives: [
-        'Inspect a surgical wound and describe it in objective terms',
-        'Assess pain with a scale and re-assess after giving analgesia',
-        'Explain why early mobilisation prevents post-operative complications',
-        'Distinguish an expected day-one temperature from a developing infection',
+        'Clean a surgical wound and apply a dry sterile dressing without contaminating it (Taylor’s Skill 8-1)',
+        'Teach deep breathing, coughing, and incisional splinting, and obtain a return demonstration (Skill 6-2)',
+        'Teach incentive spirometer use and the frequency it should be done (Skill 14-2)',
+        'Assess pain with a scale, combine medication with non-drug comfort measures, and reassess with the same tool (Skill 10-1)',
       ],
       tasks: [
-        { title: 'Inspect the Surgical Wound', description: 'Check each port site for redness, swelling, warmth, and discharge, and describe what you find without using the word "normal".', category: 'assessment', points: 20, verification: 'faculty', system_trigger: null },
-        { title: 'Assess and Manage Pain', description: 'Score the pain before analgesia, give the ordered dose, and score it again 30 minutes later.', category: 'medication', points: 20, verification: 'faculty', system_trigger: null },
-        { title: 'Assist with First Ambulation', description: 'Walk the patient safely to the end of the bay and back, supporting the wound, and stop if he becomes dizzy.', category: 'intervention', points: 20, verification: 'faculty', system_trigger: null },
+        { title: 'Change the Port-Site Dressings (Skill 8-1)', description: 'Give analgesia first if needed. Remove the old dressing with clean gloves and note any drainage, then inspect the wound. With sterile gloves, clean top to bottom and centre outward with a new gauze for each wipe, dress the wound, and label it with the date and time.', category: 'intervention', points: 20, verification: 'faculty', system_trigger: null },
+        { title: 'Teach Deep Breathing and Splinted Coughing (Skill 6-2)', description: 'Sit him in semi-Fowler’s with a pillow against the incision. He breathes in through the nose, holds for 3 seconds, and exhales through pursed lips, then coughs while splinting. Get a return demonstration.', category: 'communication', points: 15, verification: 'faculty', system_trigger: null },
+        { title: 'Coach the Incentive Spirometer (Skill 14-2)', description: 'He exhales normally, seals his lips on the mouthpiece, inhales slowly and as deeply as he can, and holds for a count of three. Aim for 5–10 breaths every 1–2 hours.', category: 'intervention', points: 15, verification: 'faculty', system_trigger: null },
+        { title: 'Assess and Relieve Pain (Skill 10-1)', description: 'Rate his pain with a scale and give the ordered analgesic. Add a non-drug measure (positioning, relaxation breathing, a quieter room), then reassess with the same tool.', category: 'medication', points: 15, verification: 'faculty', system_trigger: null },
       ],
     },
   },
@@ -335,24 +365,25 @@ const CASES: CaseSeed[] = [
     vitals: { heart_rate: 94, blood_pressure: '126/80', temperature: 38.1, respiratory_rate: 18, oxygen_saturation: 98 },
     labs: { 'White Blood Cells': 13.4, Glucose: 168, 'Hemoglobin A1c': 7.8, Creatinine: 1.0, Sodium: 138, Potassium: 4.4 },
     scenario: {
-      title: 'Cellulitis in Diabetes: Skin and Sugar',
+      title: 'Cellulitis with Diabetes: Glucose, Insulin and IV Antibiotic',
+      formerly: 'Cellulitis in Diabetes: Skin and Sugar',
       description:
-        'An older woman with a warm, red, tender area on her left shin after a gardening scratch. She is systemically well apart from a low fever. Her diabetes is what makes this worth watching — and her glucose is running high.',
+        'An older woman with type 2 diabetes and a warm, red, tender area on her left shin after a gardening scratch. She has a low fever and a glucose of 168 mg/dL. This case is medication-heavy: capillary glucose checks, correctional insulin drawn from a vial and given subcutaneously, and an IV antibiotic hung as a piggyback. Taylor’s Skills 18-3, 5-4, 5-7, 5-11.',
       category: 'Infection Management',
       chief_complaint: 'Red, painful, swollen area on the left lower leg',
       physical_exam: 'Alert and comfortable at rest. Left shin with a well-demarcated area of redness roughly 8 cm across, warm and tender, no fluctuance or pus. Pedal pulses present. Sensation intact.',
-      treatment_plan: 'Mark the border of the redness and review each shift, elevate the limb, oral antibiotics as ordered, monitor capillary blood glucose, daily foot and skin inspection.',
+      treatment_plan: 'Capillary blood glucose before meals and at bedtime. Regular insulin subcutaneously per the correctional scale when glucose is above target. IV antibiotic by piggyback as ordered; assess the IV site before each dose. Mark the border of the redness and re-measure each shift; keep the limb elevated.',
       learning_objectives: [
-        'Assess and document a skin infection including its extent over time',
-        'Explain why diabetes slows wound healing and raises infection risk',
-        'Perform a capillary blood glucose check correctly',
-        'Teach daily foot care to a patient with diabetes',
+        'Obtain a capillary blood glucose sample without squeezing the puncture site (Taylor’s Skill 18-3)',
+        'Withdraw insulin from a vial with sterile technique, injecting air into the space above the solution (Skill 5-4)',
+        'Give a subcutaneous injection at the correct angle and rate, without massaging the site (Skill 5-7)',
+        'Hang and run an IV piggyback antibiotic after assessing the IV site (Skill 5-11)',
       ],
       tasks: [
-        { title: 'Mark and Measure the Affected Area', description: 'Outline the border of the redness with a skin marker and record its size so the next shift can tell whether it is spreading.', category: 'assessment', points: 20, verification: 'faculty', system_trigger: null },
-        { title: 'Check Capillary Blood Glucose', description: 'Perform a fingerstick glucose using correct technique and record the result with the time taken.', category: 'assessment', points: 15, verification: 'faculty', system_trigger: null },
-        { title: 'Elevate the Limb and Give Antibiotics', description: 'Elevate the leg above heart level to reduce swelling and administer the ordered antibiotic on schedule.', category: 'intervention', points: 20, verification: 'faculty', system_trigger: null },
-        { title: 'Teach Daily Foot Care', description: 'Walk her through inspecting her feet daily, keeping skin intact, and when to come back — gardening included.', category: 'communication', points: 15, verification: 'faculty', system_trigger: null },
+        { title: 'Check Capillary Blood Glucose (Skill 18-3)', description: 'Have her wash with soap and warm water, or swab the finger and let it dry. Pierce with the lancet perpendicular to the skin, lower the hand to encourage bleeding without squeezing, touch the drop to the strip, and press with dry gauze, not alcohol.', category: 'assessment', points: 15, verification: 'faculty', system_trigger: null },
+        { title: 'Draw Up and Give Correctional Insulin (Skills 5-4, 5-7)', description: 'Inject air equal to the dose into the vial’s air space, withdraw the dose at eye level, and recheck it against the MAR. Inject at 45–90° at 10 seconds per mL, do not massage the site, and engage the needle guard.', category: 'medication', points: 20, verification: 'faculty', system_trigger: null },
+        { title: 'Hang the IV Antibiotic Piggyback (Skill 5-11)', description: 'Assess the IV site first. Spike and prime the secondary set, hang it higher than the primary, and clean the access port. Run it at the ordered rate, then return the primary bag to its original height and check its rate.', category: 'medication', points: 20, verification: 'faculty', system_trigger: null },
+        { title: 'Explain Why Glucose Is Monitored (Skill 18-3)', description: 'Explain the procedure and why her glucose is being checked while she has an infection, and tell her the result each time.', category: 'communication', points: 10, verification: 'faculty', system_trigger: null },
       ],
     },
   },
@@ -368,24 +399,25 @@ const CASES: CaseSeed[] = [
     vitals: { heart_rate: 96, blood_pressure: '108/66', temperature: 36.6, respiratory_rate: 18, oxygen_saturation: 99 },
     labs: { Hemoglobin: 9.2, Hematocrit: 28.4, 'Red Blood Cells': 3.6, Ferritin: 8, 'White Blood Cells': 6.8, 'Platelet Count': 312 },
     scenario: {
-      title: 'Anaemia and Fatigue: Safety First',
+      title: 'Anaemia and Dizziness: Fall Prevention and Safe Ambulation',
+      formerly: 'Anaemia and Fatigue: Safety First',
       description:
-        'A young woman admitted for investigation of tiredness and breathlessness climbing stairs. She is stable, but her haemoglobin is 9.2 and she went lightheaded standing up this morning. Falls prevention and iron teaching are the substance of this one.',
+        'A young woman admitted for investigation of tiredness and breathlessness climbing stairs. She is stable, but her haemoglobin is 9.2 and she went lightheaded standing up this morning, which makes her a falls risk. Put Taylor’s fall-prevention measures in place, walk her safely with a gait belt, and draw the follow-up blood count by venipuncture. Taylor’s Skills 3-1, 9-7, 18-9.',
       category: 'Medical-Surgical',
       chief_complaint: 'Tired all the time and short of breath on exertion',
       physical_exam: 'Alert, visibly pale conjunctivae and nail beds. Mild tachycardia at rest. Reports dizziness on standing. No active bleeding. Chest clear.',
-      treatment_plan: 'Oral iron with vitamin C as ordered, sit-to-stand precautions and falls risk assessment, dietary counselling, monitor for worsening breathlessness or chest pain.',
+      treatment_plan: 'Fall precautions: bed in the lowest position with locks on, call bell and personal items within reach, nonskid footwear, rise slowly and sit before standing, rounding every 1–2 hours. Ambulate with assistance and a gait belt. Repeat CBC and ferritin by venipuncture in the morning. Oral iron with vitamin C as ordered. Escalate for chest pain or breathlessness at rest.',
       learning_objectives: [
-        'Relate a low haemoglobin to the symptoms the patient reports',
-        'Carry out a falls risk assessment and put precautions in place',
-        'Explain how to take oral iron so it is actually absorbed',
-        'Recognise when anaemia stops being stable and needs escalation',
+        'Put Taylor’s fall-prevention measures in place and explain them to the patient and family (Skill 3-1)',
+        'Assist ambulation with a gait belt, checking for dizziness at the bedside first (Skill 9-7)',
+        'Recognise when weakness or unsteadiness means returning the patient to bed or a chair (Skill 9-7)',
+        'Collect a venous blood sample with correct tourniquet use, insertion angle, and site care (Skill 18-9)',
       ],
       tasks: [
-        { title: 'Complete a Falls Risk Assessment', description: 'Assess her risk including the postural dizziness, then put the matching precautions in place at the bedside.', category: 'assessment', points: 20, verification: 'faculty', system_trigger: null },
-        { title: 'Teach Safe Position Changes', description: 'Show her how to move from lying to sitting to standing in stages, and have her demonstrate it back.', category: 'intervention', points: 15, verification: 'faculty', system_trigger: null },
-        { title: 'Administer Oral Iron Correctly', description: 'Give the ordered iron with vitamin C, away from tea, coffee, and dairy, and explain why the timing matters.', category: 'medication', points: 20, verification: 'faculty', system_trigger: null },
-        { title: 'Counsel on Iron-Rich Diet', description: 'Work out realistic iron sources that fit a vegetarian diet rather than telling her to eat red meat.', category: 'communication', points: 15, verification: 'faculty', system_trigger: null },
+        { title: 'Put Fall Precautions in Place (Skill 3-1)', description: 'Bed in the lowest position with locks on, call bell and belongings within reach, a clear path to the bathroom, nonskid footwear, and a night light. Explain the reasons to her and her family.', category: 'intervention', points: 20, verification: 'faculty', system_trigger: null },
+        { title: 'Teach Slow Position Changes (Skill 3-1)', description: 'Teach her to rise slowly and sit for several minutes before standing, and to call for help rather than getting up alone.', category: 'communication', points: 10, verification: 'faculty', system_trigger: null },
+        { title: 'Assist Ambulation with a Gait Belt (Skill 9-7)', description: 'Sit her on the edge of the bed for several minutes and check for dizziness. Fit footwear and a gait belt, stand to her side and slightly behind, and return her to bed or a chair if she becomes weak or unsteady.', category: 'intervention', points: 20, verification: 'faculty', system_trigger: null },
+        { title: 'Draw the Morning Blood Sample (Skill 18-9)', description: 'Check the label against her ID band. Tourniquet 3–4 inches above the site, clean the skin and let it dry, and insert bevel up at 15°. Release the tourniquet once blood flows, and hold pressure 2–3 minutes after the needle is out.', category: 'assessment', points: 15, verification: 'faculty', system_trigger: null },
       ],
     },
   },
@@ -560,12 +592,13 @@ async function main() {
     };
 
     // No natural key on scenarios, so title is the handle. Keeps a re-run
-    // from stacking a second copy of every case.
-    const { data: existing } = await supabase
-      .from('scenarios')
-      .select('id')
-      .eq('title', seed.scenario.title)
-      .maybeSingle();
+    // from stacking a second copy of every case. The former title is tried
+    // too, so a renamed case is updated in place rather than duplicated; the
+    // current title wins if somehow both exist.
+    const titles = [seed.scenario.title, ...(seed.scenario.formerly ? [seed.scenario.formerly] : [])];
+    const { data: matches } = await supabase.from('scenarios').select('id, title').in('title', titles);
+    const existing =
+      (matches ?? []).find((m) => m.title === seed.scenario.title) ?? (matches ?? [])[0] ?? null;
 
     let scenarioId: string;
     if (existing) {
