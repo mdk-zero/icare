@@ -419,7 +419,7 @@ function wrapLabel(label: string, perLine = 14, maxLines = 2): string[] {
 function CompetencyBarChart({ items }: { items: { key: string; label: string; value: number }[] }) {
   // The card is half the page wide, and a viewBox scales its text along with
   // the box: at 640 the labels rendered around 5px. Narrower box, same fonts.
-  const W = 460;
+  const W = 1000;
   const H = 300;
   const padL = 36;
   const padR = 12;
@@ -1003,7 +1003,7 @@ export default function FacultyAnalyticsClient() {
           icon: <FontAwesomeIcon icon={faChartBar} className="w-3.5 h-3.5" />,
           label: "Warehouse Analytics",
         }}
-        title="Cohort Analytics"
+        title="Analytics"
         subtitle="Performance and clinical training data from the iCARE++ warehouse"
       />
 
@@ -1130,7 +1130,11 @@ export default function FacultyAnalyticsClient() {
                   {BUCKET_LABEL[bucket]}
                 </span>
                 {trendSeries.length > 0 && (
-                  <div className="flex rounded-lg border border-hairline p-0.5" role="group" aria-label="View">
+                  <div
+                    className="flex rounded-lg border border-hairline p-0.5"
+                    role="group"
+                    aria-label="View"
+                  >
                     {(["chart", "table"] as const).map((view) => (
                       <button
                         key={view}
@@ -1175,10 +1179,10 @@ export default function FacultyAnalyticsClient() {
               <div className="rounded-xl bg-amber-500/10 p-2.5">
                 <FontAwesomeIcon icon={faTrophy} className="h-5 w-5 text-amber-600" />
               </div>
-              <h3 className="font-semibold text-gray-900">Top 5 Performing Students</h3>
+              <h3 className="font-semibold text-gray-900">Top Performing Students</h3>
             </div>
             <div className="flex-1 flex flex-col justify-center">
-              <Leaderboard students={topStudents.slice(0, 5)} />
+              <Leaderboard students={topStudents.slice(0, 7)} />
             </div>
             {topStudents.length > 0 && (
               <div className="mt-4 flex justify-end border-t border-hairline pt-3">
@@ -1193,25 +1197,7 @@ export default function FacultyAnalyticsClient() {
           </Card>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4 items-stretch">
-          <Card padding="md" className="flex flex-col">
-            <div className="flex items-center gap-2.5 mb-5">
-              <div className="rounded-xl bg-brand-500/10 p-2.5">
-                <FontAwesomeIcon icon={faUsers} className="h-5 w-5 text-brand-500" />
-              </div>
-              <h3 className="font-semibold text-gray-900">Active Students by Section</h3>
-            </div>
-            <div className="flex-1 flex flex-col justify-center">
-              {sectionsWithActivity.length === 0 ? (
-                <p className="text-gray-400 text-sm py-12 text-center">
-                  No sections in scope — pick a section above, or ask an admin to assign you one.
-                </p>
-              ) : (
-                <SectionBarChart sections={sectionsWithActivity} />
-              )}
-            </div>
-          </Card>
-
+        <div className="grid grid-cols-1 lg:grid-cols-1 gap-4 mb-4 items-stretch">
           <Card padding="md" className="flex flex-col">
             <div className="flex items-center gap-2.5 mb-5">
               <div className="rounded-xl bg-brand-600/10 p-2.5">
