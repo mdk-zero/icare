@@ -10,7 +10,6 @@ import {
   faCircleCheck,
   faClipboardCheck,
 } from "@fortawesome/free-solid-svg-icons";
-import { toast } from "../../../components/Toast";
 import {
   resolveCompetencies,
   COMPETENCY_LEVEL_LABEL,
@@ -24,11 +23,8 @@ import {
   logAuditAction,
   getCurrentFacultyUser,
   fetchStudentScenarioHistory,
-  fetchCompetencyAreas,
   fetchCompetencyScores,
-  recordCompetencyScore,
   generateStudentSummary,
-  CompetencyArea,
   CompetencyScore,
   StudentAISummary,
 } from "../../../lib/api";
@@ -59,7 +55,6 @@ interface ScenarioPerformanceRecord {
 const NO_PERFORMANCE_HISTORY: PerformanceHistory[] = [];
 const NO_SCENARIO_HISTORY: ScenarioPerformanceRecord[] = [];
 const NO_COMPETENCIES: ResolvedCompetency[] = [];
-const NO_COMPETENCY_AREAS: CompetencyArea[] = [];
 const NO_SCORE_HISTORY: CompetencyScore[] = [];
 
 export default function StudentDetailClient() {
@@ -67,9 +62,6 @@ export default function StudentDetailClient() {
   const params = useParams();
   const studentId = params?.id as string;
   
-  const [validateForm, setValidateForm] = useState({ competency_id: "", score: "", remarks: "" });
-  const [validateError, setValidateError] = useState<string | null>(null);
-  const [validating, setValidating] = useState(false);
   const [activeTab, setActiveTab] = useState("performance");
   const [aiSummary, setAiSummary] = useState<StudentAISummary | null>(null);
   const [summaryGeneratedAt, setSummaryGeneratedAt] = useState<string | null>(null);
@@ -103,26 +95,19 @@ export default function StudentDetailClient() {
 
   // Keyed by student, so stepping back to the roster and into the same student
   // again reads the whole profile from memory.
-  const {
-    data,
-    loading,
-    refresh: loadCompetencyData,
-  } = usePageData(studentId ? `faculty:student:${studentId}` : null, async () => {
-    const [detail, riskPrediction, scenarioHistory, competencyAreas, scoreHistory] =
-      await Promise.all([
-        fetchFacultyStudentDetail(studentId),
-        fetchLatestPrediction(studentId),
-        fetchStudentScenarioHistory(studentId),
-        fetchCompetencyAreas(),
-        fetchCompetencyScores(studentId),
-      ]);
+  const { data, loading } = usePageData(studentId ? `faculty:student:${studentId}` : null, async () => {
+    const [detail, riskPrediction, scenarioHistory, scoreHistory] = await Promise.all([
+      fetchFacultyStudentDetail(studentId),
+      fetchLatestPrediction(studentId),
+      fetchStudentScenarioHistory(studentId),
+      fetchCompetencyScores(studentId),
+    ]);
 
     return {
       student: detail?.student ?? null,
       performanceHistory: detail?.performance_history ?? NO_PERFORMANCE_HISTORY,
       riskPrediction,
       scenarioHistory,
-      competencyAreas,
       scoreHistory,
       // A faculty validation outranks a quiz result; assessment-derived scores
       // fill every competency nobody has reviewed by hand.
@@ -134,7 +119,6 @@ export default function StudentDetailClient() {
   const performanceHistory = data?.performanceHistory ?? NO_PERFORMANCE_HISTORY;
   const scenarioHistory = data?.scenarioHistory ?? NO_SCENARIO_HISTORY;
   const competencies = data?.competencies ?? NO_COMPETENCIES;
-  const competencyAreas = data?.competencyAreas ?? NO_COMPETENCY_AREAS;
   const scoreHistory = data?.scoreHistory ?? NO_SCORE_HISTORY;
   const riskPrediction = data?.riskPrediction ?? null;
 
@@ -162,34 +146,6 @@ export default function StudentDetailClient() {
         target_id: studentId,
       });
     }
-  };
-
-  const handleValidate = async () => {
-    setValidateError(null);
-    const scoreValue = Number(validateForm.score);
-    if (!validateForm.competency_id) {
-      setValidateError("Select a competency area.");
-      return;
-    }
-    if (validateForm.score.trim() === "" || Number.isNaN(scoreValue) || scoreValue < 0 || scoreValue > 100) {
-      setValidateError("Score must be a number between 0 and 100.");
-      return;
-    }
-    setValidating(true);
-    const result = await recordCompetencyScore({
-      student_id: studentId,
-      competency_id: validateForm.competency_id,
-      score: scoreValue,
-      remarks: validateForm.remarks.trim() || null,
-    });
-    setValidating(false);
-    if (result.error) {
-      setValidateError(result.error);
-      return;
-    }
-    setValidateForm({ competency_id: "", score: "", remarks: "" });
-    toast("Competency score recorded");
-    await loadCompetencyData();
   };
 
   const riskChipClass = riskPrediction
@@ -580,54 +536,6 @@ export default function StudentDetailClient() {
                   </div>
                 </>
               )}
-
-              <div className="p-5 bg-brand-600/5 border border-brand-600/20 rounded-xl">
-                <h3 className="font-semibold text-gray-900 mb-3">Validate competency</h3>
-                {validateError && (
-                  <div className="mb-3 p-3 bg-rose-50 border border-rose-200 rounded-xl text-sm text-rose-700">
-                    {validateError}
-                  </div>
-                )}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <select
-                    value={validateForm.competency_id}
-                    onChange={(e) =>
-                      setValidateForm((f) => ({ ...f, competency_id: e.target.value }))
-                    }
-                    className="px-3 py-2 bg-surface border border-gray-300 rounded-xl text-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600"
-                  >
-                    <option value="">Select competency…</option>
-                    {competencyAreas.map((area) => (
-                      <option key={area.id} value={area.id}>
-                        {area.name}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    placeholder="Score (0–100)"
-                    value={validateForm.score}
-                    onChange={(e) => setValidateForm((f) => ({ ...f, score: e.target.value }))}
-                    className="px-3 py-2 bg-surface border border-gray-300 rounded-xl text-gray-900 placeholder:text-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600"
-                  />
-                  <button
-                    onClick={handleValidate}
-                    disabled={validating}
-                    className="px-4 py-2 bg-brand-600 text-white rounded-lg font-medium text-sm hover:bg-brand-700 transition-all disabled:opacity-50 shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
-                  >
-                    {validating ? "Saving…" : "Record Score"}
-                  </button>
-                </div>
-                <input
-                  type="text"
-                  placeholder="Remarks (optional)"
-                  value={validateForm.remarks}
-                  onChange={(e) => setValidateForm((f) => ({ ...f, remarks: e.target.value }))}
-                  className="mt-3 w-full px-3 py-2 bg-surface border border-gray-300 rounded-xl text-gray-900 placeholder:text-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600"
-                />
-              </div>
 
               {scoreHistory.length > 0 && (
                 <div>
