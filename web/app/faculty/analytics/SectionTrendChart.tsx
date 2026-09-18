@@ -131,11 +131,12 @@ export function TrendLegend({ series }: { series: TrendSeries[] }) {
 }
 
 /**
- * Drawn at the card's real pixel width and a fixed height, rather than scaled
- * from a fixed viewBox — scaling made text and lines grow with the card, so a
- * wide card got a tall, heavy chart.
+ * Drawn at the real pixel size of the space it's given, rather than scaled
+ * from a fixed viewBox — scaling made text and lines grow with the card. In a
+ * flex column it grows to fill the card (a row stretched by a taller
+ * neighbour leaves no dead band), and never draws shorter than this.
  */
-const H = 240;
+const MIN_H = 240;
 /** Tick labels ("Aug 24") need about this much room each. */
 const TICK_SPACING = 72;
 const PAD_L = 32;
@@ -157,16 +158,22 @@ export function TrendLineChart({
   const boxRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const [hover, setHover] = useState<number | null>(null);
-  const [width, setWidth] = useState<number | null>(null);
+  const [size, setSize] = useState<{ w: number; h: number } | null>(null);
 
   useEffect(() => {
     const box = boxRef.current;
     if (!box) return;
-    const observer = new ResizeObserver(([entry]) => setWidth(Math.floor(entry.contentRect.width)));
+    const observer = new ResizeObserver(([entry]) =>
+      setSize({
+        w: Math.floor(entry.contentRect.width),
+        h: Math.floor(entry.contentRect.height),
+      }),
+    );
     observer.observe(box);
     return () => observer.disconnect();
   }, []);
-  const W = width ?? 0;
+  const W = size?.w ?? 0;
+  const H = Math.max(size?.h ?? MIN_H, MIN_H);
 
   const buckets = bucketsOf(series);
   const n = buckets.length;
@@ -179,16 +186,15 @@ export function TrendLineChart({
   const yRaw = (v: number) => 1 - Math.min(Math.max(v, 0), 100) / 100;
   const ends = series.map((s) => s.points[s.points.length - 1]);
   const endSlots = ends.map((p) => yRaw(p.average_score)).sort((a, b) => a - b);
-  const plotHFixed = H - PAD_T - PAD_B;
+  const plotH = H - PAD_T - PAD_B;
   const labelEnds =
     series.length >= 2 &&
     series.length <= 4 &&
     ends.every((p) => indexOf.get(p.week_start) === last) &&
-    endSlots.every((v, i) => i === 0 || (v - endSlots[i - 1]) * plotHFixed >= LABEL_MIN_GAP);
+    endSlots.every((v, i) => i === 0 || (v - endSlots[i - 1]) * plotH >= LABEL_MIN_GAP);
 
   const padR = labelEnds ? LABEL_ROOM : 16;
   const plotW = W - PAD_L - padR;
-  const plotH = plotHFixed;
   const x = (i: number) => PAD_L + (n === 1 ? plotW / 2 : (i / (n - 1)) * plotW);
   const y = (v: number) => PAD_T + yRaw(v) * plotH;
   const grid = [0, 25, 50, 75, 100];
@@ -225,15 +231,16 @@ export function TrendLineChart({
   const flip = hoverX > W * 0.6;
 
   return (
-    // Holds the chart's height before the first measurement, so nothing jumps.
-    <div ref={boxRef} className="relative" style={{ height: H }}>
-      {width !== null && (
+    // The box takes its size from the layout alone — the SVG is positioned
+    // over it, so a drawn chart never props the card open once it can shrink.
+    <div ref={boxRef} className="relative min-h-60 flex-1">
+      {size !== null && (
         <svg
           ref={svgRef}
           width={W}
           height={H}
           viewBox={`0 0 ${W} ${H}`}
-          className="block overflow-visible"
+          className="absolute inset-0 block overflow-visible"
           role="img"
           aria-label={`Average quiz score over time for ${series.map((s) => s.name).join(", ")}. Use the table view for exact values.`}
           tabIndex={0}
