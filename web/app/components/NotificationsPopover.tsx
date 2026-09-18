@@ -130,8 +130,8 @@ export default function NotificationsPopover({ variant }: { variant: Variant }) 
         aria-expanded={open}
         className={
           variant === "sidebar"
-            ? "relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/[0.05] ring-1 ring-white/10 text-white/65 transition-all hover:text-white hover:bg-white/[0.11] hover:ring-white/20 outline-none focus-visible:ring-2 focus-visible:ring-[#5eead4]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0b3d3d]"
-            : "relative p-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-brand-600/70"
+            ? "relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/[0.05] ring-1 ring-white/10 text-white/65 transition-all hover:text-white hover:bg-white/[0.11] hover:ring-white/20 outline-none focus-visible:ring-2 focus-visible:ring-[#5eead4]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0b3d3d] cursor-pointer"
+            : "relative p-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-brand-600/70 cursor-pointer"
         }
       >
         <FontAwesomeIcon
