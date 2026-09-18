@@ -15,6 +15,9 @@ import {
   faClock,
   faShieldHalved,
   faTriangleExclamation,
+  faStethoscope,
+  faListCheck,
+  faFileLines,
 } from "@fortawesome/free-solid-svg-icons";
 import {
   resolveCompetencies,
@@ -483,39 +486,66 @@ export default function StudentDetailClient() {
         </Card>
       </div>
 
-        <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden">
-          <div className="border-b border-hairline">
-            <div className="flex gap-4 px-4">
-            {['performance', 'scenarios', 'competencies'].map((tab) => (
+        <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          {([
+            { key: 'performance', label: 'Performance', hint: 'Quiz results', count: performanceHistory.length, unit: 'quizzes', icon: faChartLine },
+            { key: 'scenarios', label: 'Scenarios', hint: 'Simulation runs', count: scenarioHistory.length, unit: 'runs', icon: faStethoscope },
+            { key: 'competencies', label: 'Competencies', hint: 'Skill mastery', count: competencies.length, unit: 'areas', icon: faListCheck },
+          ] as const).map((tab) => {
+            const active = activeTab === tab.key;
+            return (
               <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`py-4 font-medium border-b-2 transition-colors ${
-                  activeTab === tab
-                    ? 'border-brand-600 text-brand-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                aria-pressed={active}
+                className={`group relative flex items-center gap-4 overflow-hidden rounded-2xl border p-4 text-left transition-all duration-200 ${
+                  active
+                    ? 'border-[#1b6b7b] bg-gradient-to-br from-[#1b6b7b] to-[#124a52] text-white shadow-[0_8px_20px_-6px_rgba(27,107,123,0.5)]'
+                    : 'border-hairline bg-surface text-gray-900 hover:-translate-y-0.5 hover:border-brand-600/40 hover:shadow-tile-hover'
                 }`}
               >
-                {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                <span
+                  className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl transition-colors ${
+                    active ? 'bg-white/20 text-white' : 'bg-brand-600/10 text-brand-600 group-hover:bg-brand-600/15'
+                  }`}
+                >
+                  <FontAwesomeIcon icon={tab.icon} className="h-5 w-5" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-base font-bold leading-tight">{tab.label}</span>
+                  <span className={`block text-xs ${active ? 'text-white/70' : 'text-gray-500'}`}>{tab.hint}</span>
+                </span>
+                <span className="shrink-0 text-right">
+                  <span className="block text-2xl font-bold leading-none tabular-nums">{tab.count}</span>
+                  <span className={`block text-[11px] ${active ? 'text-white/70' : 'text-gray-400'}`}>{tab.unit}</span>
+                </span>
               </button>
-            ))}
-          </div>
+            );
+          })}
         </div>
 
+        <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden">
         <div className="p-6">
           {activeTab === 'performance' && (
             <div className="space-y-2">
-              {performanceHistory.map((record, idx) => (
-                <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                  <div>
-                    <p className="font-medium text-gray-900">{record.quiz_title}</p>
-                    <p className="text-sm text-gray-500">{record.date} • {record.time_taken} min</p>
+              {performanceHistory.length === 0 ? (
+                <p className="text-gray-500 text-center py-8">No quiz attempts yet</p>
+              ) : (
+                performanceHistory.map((record, idx) => (
+                  <div key={idx} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-600/10 text-brand-600">
+                      <FontAwesomeIcon icon={faFileLines} className="h-4 w-4" />
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-gray-900 truncate">{record.quiz_title}</p>
+                      <p className="text-sm text-gray-500">{record.date} • {record.time_taken} min</p>
+                    </div>
+                    <div className={`text-xl font-bold shrink-0 ${getScoreColor(record.score)}`}>
+                      {record.score}%
+                    </div>
                   </div>
-                  <div className={`text-xl font-bold ${getScoreColor(record.score)}`}>
-                    {record.score}%
-                  </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           )}
 
@@ -525,13 +555,16 @@ export default function StudentDetailClient() {
                 <p className="text-gray-500 text-center py-8">No scenario performance records yet</p>
               ) : (
                 scenarioHistory.map((record) => (
-                  <div key={record.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <div>
-                      <p className="font-medium text-gray-900">{record.scenario_title}</p>
+                  <div key={record.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-purple-100 text-purple-600">
+                      <FontAwesomeIcon icon={faStethoscope} className="h-4 w-4" />
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-gray-900 truncate">{record.scenario_title}</p>
                       <p className="text-sm text-gray-500">{record.completed_at} • {Math.floor(record.time_taken / 60)}m {record.time_taken % 60}s</p>
                       <p className="text-xs text-gray-400 mt-1">{record.completed_tasks?.length || 0} / {record.total_tasks || 0} tasks completed</p>
                     </div>
-                    <div className={`text-xl font-bold ${getScoreColor(record.score)}`}>
+                    <div className={`text-xl font-bold shrink-0 ${getScoreColor(record.score)}`}>
                       {record.score}%
                     </div>
                   </div>
