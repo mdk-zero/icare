@@ -11,12 +11,12 @@ import {
   faEye,
   faEyeSlash,
   faCheck,
-  faCircleNotch,
   faBolt,
   faChartColumn,
   faHeart,
 } from "@fortawesome/free-solid-svg-icons";
 import logo_white from "../../public/logo-white-no-bg.png";
+import { EcgLoader } from "../components/EcgLoader";
 
 /** Shared with login/signup so the three auth surfaces read as one screen. */
 const FIELD_CLASS =
@@ -305,7 +305,7 @@ export default function ForgotPasswordPage() {
                 <button type="submit" disabled={isLoading} className={SUBMIT_CLASS}>
                   {isLoading ? (
                     <>
-                      <FontAwesomeIcon icon={faCircleNotch} className="animate-spin h-5 w-5" />
+                      <EcgLoader />
                       Sending code...
                     </>
                   ) : (
@@ -342,7 +342,7 @@ export default function ForgotPasswordPage() {
                 >
                   {isLoading ? (
                     <>
-                      <FontAwesomeIcon icon={faCircleNotch} className="animate-spin h-5 w-5" />
+                      <EcgLoader />
                       Verifying...
                     </>
                   ) : (
@@ -412,7 +412,7 @@ export default function ForgotPasswordPage() {
                 <button type="submit" disabled={isLoading} className={SUBMIT_CLASS}>
                   {isLoading ? (
                     <>
-                      <FontAwesomeIcon icon={faCircleNotch} className="animate-spin h-5 w-5" />
+                      <EcgLoader />
                       Resetting...
                     </>
                   ) : (

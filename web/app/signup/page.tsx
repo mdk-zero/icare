@@ -14,13 +14,13 @@ import {
   faLock,
   faEye,
   faEyeSlash,
-  faCircleNotch,
   faBolt,
   faChartColumn,
   faHeart,
 } from "@fortawesome/free-solid-svg-icons";
 import { register, StudentSex, User } from "../lib/api";
 import logo_white from "../../public/logo-white-no-bg.png";
+import { EcgLoader } from "../components/EcgLoader";
 
 export default function SignUpPage() {
   const router = useRouter();
@@ -338,7 +338,7 @@ export default function SignUpPage() {
               >
                 {isLoading ? (
                   <>
-                    <FontAwesomeIcon icon={faCircleNotch} className="animate-spin h-5 w-5" />
+                    <EcgLoader />
                     Creating account...
                   </>
                 ) : (

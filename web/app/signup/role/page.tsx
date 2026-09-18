@@ -21,6 +21,7 @@ import {
   User,
 } from "../../lib/api";
 import logo_white from "../../../public/logo-white-no-bg.png";
+import { EcgLoader } from "../../components/EcgLoader";
 
 const roles: {
   id: User["role"];
@@ -89,7 +90,7 @@ export default function SelectRolePage() {
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-gradient-to-r from-[#0D7377] via-30% via-[#0A4A4D] to-[#050c0d]">
-        <div className="w-8 h-8 border-4 border-[#7DD3D8] border-t-transparent rounded-full animate-spin" />
+        <EcgLoader size="lg" className="text-[#7DD3D8]" />
       </div>
     );
   }

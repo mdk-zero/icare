@@ -7,7 +7,6 @@ import {
   faChevronLeft,
   faChevronRight,
   faPlus,
-  faSpinner,
   faTimes,
   faArrowLeft,
   faUserCheck,
@@ -50,6 +49,7 @@ import {
   type ShiftAttendanceStatus,
   type ShiftType,
 } from "../../lib/shifts";
+import { EcgLoader } from "../../components/EcgLoader";
 
 const NO_SHIFTS: FacultyShift[] = [];
 const NO_SECTIONS: Section[] = [];
@@ -185,7 +185,7 @@ export default function AttendanceClient() {
 
       {loading ? (
         <div className="flex items-center justify-center p-12">
-          <FontAwesomeIcon icon={faSpinner} spin className="h-8 w-8 text-brand-600" />
+          <EcgLoader size="lg" className="text-brand-600" />
         </div>
       ) : shifts.length === 0 ? (
         <div className="rounded-xl border border-hairline bg-surface p-12 text-center shadow-tile">
@@ -799,7 +799,7 @@ function ScheduleShiftModal({
               disabled={saving || sections.length === 0}
               className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-700 disabled:opacity-60"
             >
-              {saving && <FontAwesomeIcon icon={faSpinner} spin className="h-4 w-4" />}
+              {saving && <EcgLoader />}
               Schedule
             </button>
           </div>
@@ -879,7 +879,7 @@ function ShiftRoster({
   if (loading) {
     return (
       <div className="flex items-center justify-center p-16">
-        <FontAwesomeIcon icon={faSpinner} spin className="h-8 w-8 text-brand-600" />
+        <EcgLoader size="lg" className="text-brand-600" />
       </div>
     );
   }
@@ -930,7 +930,7 @@ function ShiftRoster({
             className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-700 disabled:opacity-40"
           >
             {bulkSaving ? (
-              <FontAwesomeIcon icon={faSpinner} spin className="h-3.5 w-3.5" />
+              <EcgLoader />
             ) : (
               <FontAwesomeIcon icon={faUserCheck} className="h-3.5 w-3.5" />
             )}
@@ -988,7 +988,7 @@ function ShiftRoster({
 
                 <div className="flex items-center gap-1">
                   {savingId === entry.id ? (
-                    <FontAwesomeIcon icon={faSpinner} spin className="h-4 w-4 text-brand-600" />
+                    <EcgLoader className="text-brand-600" />
                   ) : (
                     MARKABLE.map((status) => (
                       <button

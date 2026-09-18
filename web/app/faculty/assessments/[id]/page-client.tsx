@@ -6,7 +6,6 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faPlus,
   faTimes,
-  faSpinner,
   faTrash,
   faCheck,
   faArrowLeft,
@@ -22,6 +21,7 @@ import { SkeletonQuestionCard } from "../../../components/skeletons";
 import { toast } from "../../../components/Toast";
 import ConfirmModal from "../../../components/ConfirmModal";
 import { fetchSections, type Section, apiFetch } from "../../../lib/api";
+import { EcgLoader } from "../../../components/EcgLoader";
 
 const inputClassName =
   "w-full px-4 py-3 bg-surface border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 focus:bg-surface transition-all text-sm shadow-sm";
@@ -1108,7 +1108,7 @@ export default function AssessmentQuestionsClient({
                     className="flex items-center gap-2 px-5 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 disabled:opacity-60 transition-colors"
                   >
                     {savingDetails ? (
-                      <><FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" /> Saving…</>
+                      <><EcgLoader /> Saving…</>
                     ) : (
                       <><FontAwesomeIcon icon={faCheck} className="w-4 h-4" /> Save</>
                     )}
@@ -1448,7 +1448,7 @@ export default function AssessmentQuestionsClient({
                           className="flex items-center gap-1 px-2.5 py-1 bg-brand-600 text-white rounded-lg text-xs font-medium hover:bg-brand-700 disabled:opacity-60 transition-colors shrink-0"
                         >
                           {savingQuestions[q.id] ? (
-                            <FontAwesomeIcon icon={faSpinner} spin className="w-3 h-3" />
+                            <EcgLoader size="xs" />
                           ) : (
                             <FontAwesomeIcon icon={faCheck} className="w-3 h-3" />
                           )}
@@ -1682,7 +1682,7 @@ export default function AssessmentQuestionsClient({
                 className="flex items-center justify-center gap-2 px-6 py-3 bg-brand-600 text-white rounded-xl text-sm font-medium hover:bg-brand-700 disabled:opacity-60 transition-colors"
               >
                 {aiGenerating ? (
-                  <><FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" /> Generating…</>
+                  <><EcgLoader /> Generating…</>
                 ) : (
                   <><FontAwesomeIcon icon={faWandMagicSparkles} className="w-4 h-4" /> Generate</>
                 )}
@@ -1709,7 +1709,7 @@ export default function AssessmentQuestionsClient({
               className="flex items-center gap-2 px-6 py-3 bg-brand-600 text-white rounded-xl text-sm font-medium hover:bg-brand-700 disabled:opacity-60 transition-colors"
             >
               {savingAll ? (
-                <><FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" /> Saving All…</>
+                <><EcgLoader /> Saving All…</>
               ) : (
                 <><FontAwesomeIcon icon={faCheck} className="w-4 h-4" /> Save All</>
               )}

@@ -2,13 +2,10 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import {
-  faSpinner,
-} from "@fortawesome/free-solid-svg-icons";
 import { fetchSections, type Section, apiFetch } from "../../../lib/api";
 import { toast } from "../../../components/Toast";
 import { usePageData } from "../../../lib/use-page-data";
+import { EcgLoader } from "../../../components/EcgLoader";
 
 /** Stable empty fallback, so nothing downstream sees a new array each render. */
 const NO_SECTIONS: Section[] = [];
@@ -229,7 +226,7 @@ export default function AssessmentNewClient() {
             className="flex items-center gap-2 px-6 py-2 bg-brand-600 text-white rounded-lg text-sm hover:bg-brand-700 disabled:opacity-60"
           >
             {busy ? (
-              <><FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" /> Creating…</>
+              <><EcgLoader /> Creating…</>
             ) : (
               "Create Assessment"
             )}

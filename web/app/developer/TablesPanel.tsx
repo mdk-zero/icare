@@ -8,7 +8,6 @@ import {
   faArrowsRotate,
   faMagnifyingGlass,
   faPlus,
-  faSpinner,
   faXmark,
 } from "@fortawesome/free-solid-svg-icons";
 import RowEditor from "./RowEditor";
@@ -20,6 +19,7 @@ import {
   type Row,
   type TablePage,
 } from "./types";
+import { EcgLoader } from "../components/EcgLoader";
 
 interface Filter {
   column: string;
@@ -261,10 +261,11 @@ export default function TablesPanel() {
               )}
               <div className="ml-auto flex items-center gap-2">
                 <button className="dc-btn" onClick={() => void load()} disabled={loading}>
-                  <FontAwesomeIcon
-                    icon={loading ? faSpinner : faArrowsRotate}
-                    className={`h-3 w-3 ${loading ? "animate-spin" : ""}`}
-                  />
+                  {loading ? (
+                    <EcgLoader size="xs" />
+                  ) : (
+                    <FontAwesomeIcon icon={faArrowsRotate} className="h-3 w-3" />
+                  )}
                   Refresh
                 </button>
                 <button

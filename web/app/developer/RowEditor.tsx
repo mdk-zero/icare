@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faSpinner, faTrash, faXmark } from "@fortawesome/free-solid-svg-icons";
+import { faTrash, faXmark } from "@fortawesome/free-solid-svg-icons";
 import {
   devFetch,
   editValue,
@@ -10,6 +10,7 @@ import {
   type DevColumn,
   type Row,
 } from "./types";
+import { EcgLoader } from "../components/EcgLoader";
 
 interface RowEditorProps {
   schema: string;
@@ -247,7 +248,7 @@ export default function RowEditor({
         )}
         <div className="flex items-center gap-2">
           <button className="dc-btn dc-btn-accent" onClick={save} disabled={busy || !writable}>
-            {busy && <FontAwesomeIcon icon={faSpinner} className="h-3 w-3 animate-spin" />}
+            {busy && <EcgLoader size="xs" />}
             {inserting ? "Insert row" : "Save changes"}
           </button>
           <button className="dc-btn" onClick={onClose} disabled={busy}>

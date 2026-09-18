@@ -11,7 +11,6 @@ import {
   faFileLines,
   faFlask,
   faClockRotateLeft,
-  faSpinner,
   faTriangleExclamation,
   faCircleCheck,
   faBed,
@@ -43,6 +42,7 @@ import {
 } from "../lib/api";
 import { usePageData } from "../lib/use-page-data";
 import { summarizeAnomalyReasons } from "../lib/vitals/rules";
+import { EcgLoader } from "./EcgLoader";
 
 /**
  * One patient's chart: demographics, the vitals trend, TPR/IVF/notes, and the
@@ -495,7 +495,7 @@ export default function PatientChart({
   if (loading) {
     return (
       <div className="flex items-center justify-center p-16">
-        <FontAwesomeIcon icon={faSpinner} spin className="h-8 w-8 text-brand-600" />
+        <EcgLoader size="lg" className="text-brand-600" />
       </div>
     );
   }
@@ -765,11 +765,11 @@ export default function PatientChart({
                               disabled={draftingId === summary.id}
                               className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-brand-700 disabled:opacity-60"
                             >
-                              <FontAwesomeIcon
-                                icon={draftingId === summary.id ? faSpinner : faWandMagicSparkles}
-                                spin={draftingId === summary.id}
-                                className="h-3 w-3"
-                              />
+                              {draftingId === summary.id ? (
+                                <EcgLoader size="xs" />
+                              ) : (
+                                <FontAwesomeIcon icon={faWandMagicSparkles} className="h-3 w-3" />
+                              )}
                               {draftingId === summary.id ? "Drafting..." : "Draft with AI"}
                             </button>
                           </div>
@@ -939,7 +939,7 @@ export default function PatientChart({
                         className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-800 transition-colors hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-800 disabled:opacity-60"
                       >
                         {reviewingId === record.id ? (
-                          <FontAwesomeIcon icon={faSpinner} spin className="h-2.5 w-2.5" />
+                          <EcgLoader size="xs" />
                         ) : (
                           <FontAwesomeIcon icon={faCircleCheck} className="h-2.5 w-2.5" />
                         )}

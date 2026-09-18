@@ -4,7 +4,6 @@ import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
-  faSpinner,
   faArrowLeft,
   faSearch,
   faCheck,
@@ -23,6 +22,7 @@ import {
 import PageHeader from "../../../components/PageHeader";
 import { toast } from "../../../components/Toast";
 import { usePageData } from "../../../lib/use-page-data";
+import { EcgLoader } from "../../../components/EcgLoader";
 
 // Stable empty fallbacks, so the filter memos are not invalidated every render.
 const NO_SCENARIOS: SimulationScenario[] = [];
@@ -236,7 +236,7 @@ export default function LinkPatientsClient() {
           <div className="max-h-[440px] overflow-y-auto custom-scrollbar">
             {loading ? (
               <div className="p-8 text-center">
-                <FontAwesomeIcon icon={faSpinner} spin className="w-6 h-6 text-brand-600" />
+                <EcgLoader size="md" className="text-brand-600" />
               </div>
             ) : scenarios.length === 0 ? (
               <div className="p-6 text-center text-sm text-gray-500">No scenarios yet.</div>
@@ -348,7 +348,7 @@ export default function LinkPatientsClient() {
             <div className="max-h-[368px] overflow-y-auto custom-scrollbar">
               {loading ? (
                 <div className="p-8 text-center">
-                  <FontAwesomeIcon icon={faSpinner} spin className="w-6 h-6 text-brand-600" />
+                  <EcgLoader size="md" className="text-brand-600" />
                 </div>
               ) : filteredPatients.length === 0 ? (
                 <div className="p-6 text-center text-sm text-gray-500">No patients match.</div>
@@ -399,7 +399,7 @@ export default function LinkPatientsClient() {
           disabled={saving || assignedCount === 0}
           className="inline-flex items-center gap-2 px-5 py-2.5 bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white font-medium rounded-lg transition-colors shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
         >
-          {saving && <FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" />}
+          {saving && <EcgLoader />}
           Link {assignedCount > 0 ? assignedCount : ""}
         </button>
       </div>

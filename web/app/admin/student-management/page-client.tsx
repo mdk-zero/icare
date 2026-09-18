@@ -10,7 +10,6 @@ import {
   faPlus,
   faXmark,
   faTrashCan,
-  faSpinner,
   faCircleCheck,
   faCircleXmark,
   faUsers,
@@ -26,6 +25,7 @@ import ConfirmModal from "../../components/ConfirmModal";
 import { fetchSections, runMlJob, Section, apiFetch } from "../../lib/api";
 import { usePageData } from "../../lib/use-page-data";
 import Avatar from "../../components/Avatar";
+import { EcgLoader } from "../../components/EcgLoader";
 
 interface StudentPerformance {
   id: string;
@@ -263,11 +263,7 @@ function EnrollSectionModal({
                   />
                   <span className="mt-2 flex w-5 shrink-0 justify-center">
                     {row.status === "creating" && (
-                      <FontAwesomeIcon
-                        icon={faSpinner}
-                        spin
-                        className="h-3.5 w-3.5 text-brand-600"
-                      />
+                      <EcgLoader size="xs" className="text-brand-600" />
                     )}
                     {row.status === "created" && (
                       <FontAwesomeIcon
@@ -379,7 +375,7 @@ function EnrollSectionModal({
               disabled={submitting || sections.length === 0}
               className="flex items-center gap-2 rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white shadow-[0_2px_8px_-1px_rgb(27_107_123_/_0.35)] transition-all hover:bg-brand-700 disabled:opacity-60"
             >
-              {submitting && <FontAwesomeIcon icon={faSpinner} spin className="h-4 w-4" />}
+              {submitting && <EcgLoader />}
               {submitting
                 ? "Enrolling…"
                 : `Enroll ${filled.length || ""} student${filled.length === 1 ? "" : "s"}`.trim()}
@@ -550,7 +546,7 @@ function SectionFormModal({
               disabled={saving || !trimmed || isDuplicate}
               className="flex items-center gap-2 rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white shadow-[0_2px_8px_-1px_rgb(27_107_123_/_0.35)] transition-all hover:bg-brand-700 disabled:opacity-60"
             >
-              {saving && <FontAwesomeIcon icon={faSpinner} spin className="h-4 w-4" />}
+              {saving && <EcgLoader />}
               {section ? "Save name" : "Create section"}
             </button>
           </div>
@@ -636,7 +632,7 @@ function DeleteSectionModal({
         <div className="space-y-3 p-5">
           {impact === null ? (
             <p className="flex items-center gap-2 text-sm text-gray-500">
-              <FontAwesomeIcon icon={faSpinner} spin className="h-3.5 w-3.5" />
+              <EcgLoader />
               Checking what is attached…
             </p>
           ) : (
@@ -717,7 +713,7 @@ function DeleteSectionModal({
               disabled={deleting}
               className="flex items-center gap-2 rounded-lg bg-rose-600 px-5 py-2.5 text-sm font-semibold text-white shadow-[0_2px_8px_-1px_rgb(225_29_72_/_0.35)] transition-all hover:bg-rose-700 disabled:opacity-60"
             >
-              {deleting && <FontAwesomeIcon icon={faSpinner} spin className="h-4 w-4" />}
+              {deleting && <EcgLoader />}
               {deleting ? "Deleting…" : "Delete section"}
             </button>
           </div>
@@ -952,12 +948,10 @@ export default function StudentManagementClient() {
         title="Student Management"
         subtitle="Enroll and monitor nursing students by section"
         action={{
-          icon: (
-            <FontAwesomeIcon
-              icon={runningMl ? faSpinner : faBrain}
-              spin={runningMl}
-              className="h-4 w-4"
-            />
+          icon: runningMl ? (
+            <EcgLoader />
+          ) : (
+            <FontAwesomeIcon icon={faBrain} className="h-4 w-4" />
           ),
           onClick: handleRunMl,
           text: runningMl ? "Running…" : "",

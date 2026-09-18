@@ -7,7 +7,6 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import {
   faFileLines,
-  faSpinner,
   faDownload,
   faSearch,
   faUserTie,
@@ -17,6 +16,7 @@ import {
   faFileCsv,
   faBuilding,
 } from "@fortawesome/free-solid-svg-icons";
+import { EcgLoader } from "../../components/EcgLoader";
 
 type ReportType = "faculty" | "rooms" | "users" | "summary";
 type Format = "pdf" | "csv";
@@ -262,11 +262,11 @@ export default function AdminReportsClient() {
             disabled={busy !== null}
             className="mt-4 inline-flex items-center gap-2 rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white shadow-[0_2px_8px_-1px_rgb(27_107_123_/_0.35)] transition-all hover:bg-brand-700 disabled:opacity-60"
           >
-            <FontAwesomeIcon
-              icon={busy ? faSpinner : faDownload}
-              spin={busy !== null}
-              className="h-3.5 w-3.5"
-            />
+            {busy ? (
+              <EcgLoader />
+            ) : (
+              <FontAwesomeIcon icon={faDownload} className="h-3.5 w-3.5" />
+            )}
             {busy ? "Generating…" : `Generate ${format.toUpperCase()}`}
           </button>
         </div>
@@ -291,11 +291,11 @@ export default function AdminReportsClient() {
               disabled={busy !== null}
               className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white shadow-[0_2px_8px_-1px_rgb(27_107_123_/_0.35)] transition-all hover:bg-brand-700 disabled:opacity-60"
             >
-              <FontAwesomeIcon
-                icon={busy === "all" ? faSpinner : faDownload}
-                spin={busy === "all"}
-                className="h-3.5 w-3.5"
-              />
+              {busy === "all" ? (
+                <EcgLoader />
+              ) : (
+                <FontAwesomeIcon icon={faDownload} className="h-3.5 w-3.5" />
+              )}
               {busy === "all" ? "Generating…" : `Export All ${active.label} (${targets.length})`}
             </button>
           </div>
@@ -338,11 +338,11 @@ export default function AdminReportsClient() {
                             disabled={busy !== null}
                             className="inline-flex items-center gap-2 rounded-lg border border-brand-600/30 px-3 py-1.5 text-sm font-medium text-brand-700 transition-colors hover:bg-brand-50 disabled:opacity-50"
                           >
-                            <FontAwesomeIcon
-                              icon={busy === target.id ? faSpinner : faDownload}
-                              spin={busy === target.id}
-                              className="h-3.5 w-3.5"
-                            />
+                            {busy === target.id ? (
+                              <EcgLoader />
+                            ) : (
+                              <FontAwesomeIcon icon={faDownload} className="h-3.5 w-3.5" />
+                            )}
                             {busy === target.id ? "Generating…" : format.toUpperCase()}
                           </button>
                         </td>

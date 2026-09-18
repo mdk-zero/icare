@@ -9,6 +9,7 @@ import {
   StartedAttempt,
   AttemptResult,
 } from "../../../lib/api";
+import { EcgLoader } from "../../../components/EcgLoader";
 
 export default function TakeQuizPage() {
   const router = useRouter();
@@ -94,7 +95,7 @@ export default function TakeQuizPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-24">
-        <div className="w-8 h-8 border-4 border-brand-600 border-t-transparent rounded-full animate-spin" />
+        <EcgLoader size="lg" className="text-brand-600" />
       </div>
     );
   }

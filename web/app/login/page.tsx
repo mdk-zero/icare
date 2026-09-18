@@ -12,13 +12,13 @@ import {
   faLock,
   faEye,
   faEyeSlash,
-  faCircleNotch,
   faBolt,
   faChartColumn,
   faHeart,
 } from "@fortawesome/free-solid-svg-icons";
 import { login, isAuthenticated, refreshCurrentUser, User, logAuditAction } from "../lib/api";
 import logo_white from "../../public/logo-white-no-bg.png";
+import { EcgLoader } from "../components/EcgLoader";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -370,7 +370,7 @@ export default function LoginPage() {
               >
                 {isLoading ? (
                   <>
-                    <FontAwesomeIcon icon={faCircleNotch} className="animate-spin h-5 w-5" />
+                    <EcgLoader />
                     Signing in...
                   </>
                 ) : (
@@ -392,10 +392,7 @@ export default function LoginPage() {
             <div ref={googleButtonRef} className="w-full flex justify-center overflow-hidden">
               {isGoogleLoading ? (
                 <div className="w-full h-[44px] border border-white/10 rounded-xl flex items-center justify-center gap-2.5 text-white/60 bg-white/5 text-sm">
-                  <FontAwesomeIcon
-                    icon={faCircleNotch}
-                    className="animate-spin h-4 w-4 text-[#7DD3D8]"
-                  />
+                  <EcgLoader className="text-[#7DD3D8]" />
                   Signing in with Google...
                 </div>
               ) : (

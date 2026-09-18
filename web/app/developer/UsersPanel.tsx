@@ -5,7 +5,6 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faCopy,
   faMagnifyingGlass,
-  faSpinner,
   faTriangleExclamation,
   faUserSecret,
   faXmark,
@@ -13,6 +12,7 @@ import {
 import { refreshCurrentUser } from "@/app/lib/api";
 import { clearRequestCache } from "@/app/lib/request-cache";
 import { devFetch, type DevUser, type UserReference } from "./types";
+import { EcgLoader } from "../components/EcgLoader";
 
 const ROLES = ["student", "faculty", "admin"] as const;
 
@@ -389,7 +389,7 @@ function UserDrawer({
             onClick={saveRole}
             disabled={!dirty || busy !== null}
           >
-            {busy === "role" && <FontAwesomeIcon icon={faSpinner} className="h-3 w-3 animate-spin" />}
+            {busy === "role" && <EcgLoader size="xs" />}
             Save
           </button>
         </Block>
@@ -412,7 +412,7 @@ function UserDrawer({
           </label>
           <button className="dc-btn mt-2" onClick={setPassword} disabled={busy !== null}>
             {busy === "password" && (
-              <FontAwesomeIcon icon={faSpinner} className="h-3 w-3 animate-spin" />
+              <EcgLoader size="xs" />
             )}
             {newPassword ? "Set this password" : "Generate and set"}
           </button>
@@ -448,7 +448,7 @@ function UserDrawer({
           </p>
           <button className="dc-btn" onClick={impersonate} disabled={busy !== null}>
             {busy === "impersonate" ? (
-              <FontAwesomeIcon icon={faSpinner} className="h-3 w-3 animate-spin" />
+              <EcgLoader size="xs" />
             ) : (
               <FontAwesomeIcon icon={faUserSecret} className="h-3 w-3" />
             )}
@@ -460,7 +460,7 @@ function UserDrawer({
           {references === null ? (
             <button className="dc-btn" onClick={loadReferences} disabled={busy !== null}>
               {busy === "references" && (
-                <FontAwesomeIcon icon={faSpinner} className="h-3 w-3 animate-spin" />
+                <EcgLoader size="xs" />
               )}
               Show what this would take with it
             </button>
@@ -507,7 +507,7 @@ function UserDrawer({
               </p>
               <button className="dc-btn dc-btn-danger" onClick={hardDelete} disabled={busy !== null}>
                 {busy === "delete" && (
-                  <FontAwesomeIcon icon={faSpinner} className="h-3 w-3 animate-spin" />
+                  <EcgLoader size="xs" />
                 )}
                 Delete {user.email} permanently
               </button>

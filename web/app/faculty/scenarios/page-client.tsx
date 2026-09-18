@@ -9,7 +9,6 @@ import {
   faSearch,
   faFilter,
   faTimes,
-  faSpinner,
   faEye,
   faUserPlus,
   faBookOpen,
@@ -55,6 +54,7 @@ import StatTile from "../../components/StatTile";
 import Card from "../../components/Card";
 import Avatar from "../../components/Avatar";
 import ActionsMenu from "../../components/ActionsMenu";
+import { EcgLoader } from "../../components/EcgLoader";
 
 const SCENARIO_CATEGORIES = [
   "Cardiac Emergency",
@@ -925,7 +925,7 @@ export default function FacultyScenariosClient() {
                   className="px-5 py-2.5 bg-rose-600 text-white rounded-lg font-medium hover:bg-rose-700 transition-all disabled:opacity-50 flex items-center gap-2 shadow-[0_2px_6px_rgba(225,29,72,0.25)]"
                 >
                   {deleting ? (
-                    <FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" />
+                    <EcgLoader />
                   ) : (
                     <FontAwesomeIcon icon={faTrash} className="w-4 h-4" />
                   )}
@@ -1114,7 +1114,7 @@ export default function FacultyScenariosClient() {
                   {batchGenerating && (
                     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
                       <div className="bg-surface rounded-xl w-full max-w-md p-8 text-center shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-hairline">
-                        <FontAwesomeIcon icon={faSpinner} spin className="w-10 h-10 text-brand-600 mb-4" />
+                        <EcgLoader size="xl" className="text-brand-600 mb-4" />
                         <p className="text-base font-semibold text-gray-900 mb-2">
                           {batchCancelling ? "Stopping…" : "Generating Scenarios"}
                         </p>
@@ -1133,7 +1133,7 @@ export default function FacultyScenariosClient() {
                         >
                           {batchCancelling ? (
                             <>
-                              <FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" />
+                              <EcgLoader />
                               Stopping…
                             </>
                           ) : (
@@ -1251,7 +1251,7 @@ export default function FacultyScenariosClient() {
                   >
                     {batchCancelling ? (
                       <>
-                        <FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" />
+                        <EcgLoader />
                         Stopping…
                       </>
                     ) : (
@@ -1289,7 +1289,7 @@ export default function FacultyScenariosClient() {
                   >
                     {batchSaving ? (
                       <>
-                        <FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" />
+                        <EcgLoader />
                         Saving {batchSavedCount}/{batchSelected.length}…
                       </>
                     ) : (
@@ -1669,7 +1669,7 @@ export default function FacultyScenariosClient() {
                   disabled={selectedStudents.length === 0 || !assignDeadline || assigning}
                   className="px-5 py-2.5 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
                 >
-                  {assigning && <FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" />}
+                  {assigning && <EcgLoader />}
                   Assign to {selectedStudents.length} Student
                   {selectedStudents.length !== 1 ? "s" : ""}
                 </button>
@@ -1767,7 +1767,7 @@ export default function FacultyScenariosClient() {
                 <div className="max-h-[260px] overflow-y-auto custom-scrollbar">
                   {loadingPatients ? (
                     <div className="p-8 text-center">
-                      <FontAwesomeIcon icon={faSpinner} spin className="w-6 h-6 text-brand-600" />
+                      <EcgLoader size="md" className="text-brand-600" />
                       <p className="text-sm text-gray-500 mt-2">Loading patients...</p>
                     </div>
                   ) : linkModalFilteredPatients.length === 0 ? (
@@ -1852,7 +1852,7 @@ export default function FacultyScenariosClient() {
                 disabled={savingPatientLink}
                 className="px-5 py-2.5 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
               >
-                {savingPatientLink && <FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" />}
+                {savingPatientLink && <EcgLoader />}
                 Save
               </button>
             </div>

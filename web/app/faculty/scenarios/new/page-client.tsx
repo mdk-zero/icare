@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faRobot,
-  faSpinner,
   faArrowLeft,
   faSearch,
   faCheck,
@@ -28,6 +27,7 @@ import {
 import { roomStatus, ROOM_STATUS_LABEL, ROOM_STATUS_TONE } from "../../../lib/rooms";
 import PageHeader from "../../../components/PageHeader";
 import { usePageData } from "../../../lib/use-page-data";
+import { EcgLoader } from "../../../components/EcgLoader";
 
 // Stable empty fallbacks, so the occupancy memo is not invalidated every render.
 const NO_PATIENTS: FacultyPatient[] = [];
@@ -264,11 +264,11 @@ export default function NewScenarioClient() {
               disabled={generating || !aiPrompt.trim()}
               className="inline-flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-lg transition-all disabled:opacity-50"
             >
-              <FontAwesomeIcon
-                icon={generating ? faSpinner : faRobot}
-                spin={generating}
-                className="w-4 h-4 text-[#5eead4]"
-              />
+              {generating ? (
+                <EcgLoader className="text-[#5eead4]" />
+              ) : (
+                <FontAwesomeIcon icon={faRobot} className="w-4 h-4 text-[#5eead4]" />
+              )}
               {generating ? "Generating…" : "Generate"}
             </button>
           </div>
@@ -418,7 +418,7 @@ export default function NewScenarioClient() {
             <div className="max-h-[280px] overflow-y-auto custom-scrollbar">
               {loadingData ? (
                 <div className="p-8 text-center">
-                  <FontAwesomeIcon icon={faSpinner} spin className="w-6 h-6 text-brand-600" />
+                  <EcgLoader size="md" className="text-brand-600" />
                 </div>
               ) : filteredPatients.length === 0 ? (
                 <div className="p-6 text-center text-sm text-gray-500">No patients match.</div>
@@ -562,7 +562,7 @@ export default function NewScenarioClient() {
           className="inline-flex items-center gap-2 px-5 py-2.5 bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white font-medium rounded-lg transition-colors shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
         >
           {saving ? (
-            <FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" />
+            <EcgLoader />
           ) : (
             <FontAwesomeIcon icon={faSave} className="w-4 h-4" />
           )}

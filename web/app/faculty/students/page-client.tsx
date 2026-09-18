@@ -11,7 +11,6 @@ import {
   faXmark,
   faUser,
   faEnvelope,
-  faSpinner,
   faTrashCan,
   faFileCsv,
   faDownload,
@@ -49,6 +48,7 @@ import Card from "../../components/Card";
 import Avatar from "../../components/Avatar";
 import { SkeletonSectionGrid, SkeletonTable } from "../../components/skeletons";
 import { usePageData } from "../../lib/use-page-data";
+import { EcgLoader } from "../../components/EcgLoader";
 
 /** Minimal CSV parser: quoted fields, "" escapes, \r\n or \n row breaks. */
 function parseCsv(text: string): string[][] {
@@ -729,12 +729,10 @@ export default function FacultyStudentsClient() {
         title="My Students"
         subtitle="Manage and monitor students under your supervision"
         action={{
-          icon: (
-            <FontAwesomeIcon
-              icon={runningMl ? faSpinner : faBrain}
-              spin={runningMl}
-              className="h-4 w-4"
-            />
+          icon: runningMl ? (
+            <EcgLoader />
+          ) : (
+            <FontAwesomeIcon icon={faBrain} className="h-4 w-4" />
           ),
           onClick: handleRunMl,
           text: runningMl ? "Running…" : "",
@@ -1077,7 +1075,7 @@ export default function FacultyStudentsClient() {
                 >
                   {isSubmitting ? (
                     <>
-                      <FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" />
+                      <EcgLoader />
                       Creating...
                     </>
                   ) : (
@@ -1545,7 +1543,7 @@ export default function FacultyStudentsClient() {
                                 </span>
                               ) : row.status === "creating" ? (
                                 <span className="inline-flex items-center gap-1.5 text-xs text-brand-600">
-                                  <FontAwesomeIcon icon={faSpinner} spin className="w-3.5 h-3.5" />
+                                  <EcgLoader />
                                   Creating…
                                 </span>
                               ) : row.status === "created" ? (
@@ -1613,7 +1611,7 @@ export default function FacultyStudentsClient() {
                 >
                   {isBulkImporting ? (
                     <>
-                      <FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" />
+                      <EcgLoader />
                       Importing…
                     </>
                   ) : (
@@ -1750,7 +1748,7 @@ export default function FacultyStudentsClient() {
                 >
                   {isUpdating ? (
                     <>
-                      <FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" />
+                      <EcgLoader />
                       Updating...
                     </>
                   ) : (
@@ -1811,7 +1809,7 @@ export default function FacultyStudentsClient() {
               >
                 {isDeleting ? (
                   <>
-                    <FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" />
+                    <EcgLoader />
                     Deleting...
                   </>
                 ) : (

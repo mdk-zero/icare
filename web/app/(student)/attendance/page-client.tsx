@@ -3,7 +3,6 @@
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faCalendarCheck,
-  faSpinner,
   faPercent,
   faUserCheck,
   faUserXmark,
@@ -18,6 +17,7 @@ import {
   SHIFT_TYPE_LABEL,
   formatShiftTimeRange,
 } from "../../lib/shifts";
+import { EcgLoader } from "../../components/EcgLoader";
 
 export default function StudentAttendanceClient() {
   const { data, loading } = usePageData("student:attendance", fetchMyAttendance);
@@ -60,7 +60,7 @@ export default function StudentAttendanceClient() {
 
       {loading ? (
         <div className="flex items-center justify-center p-12">
-          <FontAwesomeIcon icon={faSpinner} spin className="h-8 w-8 text-brand-600" />
+          <EcgLoader size="lg" className="text-brand-600" />
         </div>
       ) : rows.length === 0 ? (
         <div className="rounded-xl border border-hairline bg-surface p-12 text-center shadow-tile">

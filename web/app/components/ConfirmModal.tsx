@@ -4,9 +4,9 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faTrash,
   faTriangleExclamation,
-  faSpinner,
 } from "@fortawesome/free-solid-svg-icons";
 import type { ReactNode } from "react";
+import { EcgLoader } from "./EcgLoader";
 
 export interface ConfirmConfig {
   title: string;
@@ -73,7 +73,7 @@ export default function ConfirmModal({
               }`}
             >
               {loading ? (
-                <FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" />
+                <EcgLoader />
               ) : isDanger ? (
                 <FontAwesomeIcon icon={faTrash} className="w-4 h-4" />
               ) : null}

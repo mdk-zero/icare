@@ -6,6 +6,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faChevronLeft, faTrash } from "@fortawesome/free-solid-svg-icons";
+import { EcgLoader } from "../../../components/EcgLoader";
 
 interface Section {
   id: string;
@@ -190,7 +191,7 @@ export default function AssignSectionsClient() {
 
       {loading ? (
         <div className="flex items-center justify-center h-64">
-          <div className="w-10 h-10 border-4 border-brand-600 border-t-transparent rounded-full animate-spin" />
+          <EcgLoader size="xl" className="text-brand-600" />
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

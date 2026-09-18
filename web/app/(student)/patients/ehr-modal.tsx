@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faNotesMedical, faSpinner, faTimes } from "@fortawesome/free-solid-svg-icons";
+import { faNotesMedical, faTimes } from "@fortawesome/free-solid-svg-icons";
 import {
   fetchMyEhrRecords,
   createEhrRecord,
@@ -10,6 +10,7 @@ import {
   EhrRecord,
   EhrType,
 } from "../../lib/api";
+import { EcgLoader } from "../../components/EcgLoader";
 
 const inputClass =
   "w-full px-3 py-2 bg-surface border border-gray-300 rounded-xl text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 text-sm";
@@ -160,7 +161,7 @@ export default function EhrModal({
           <div>
             <h3 className="text-sm font-semibold text-gray-900 mb-2">Your entries</h3>
             {loading ? (
-              <FontAwesomeIcon icon={faSpinner} spin className="w-5 h-5 text-brand-600" />
+              <EcgLoader className="text-brand-600" />
             ) : records.length === 0 ? (
               <p className="text-sm text-gray-400">No entries yet for this patient.</p>
             ) : (

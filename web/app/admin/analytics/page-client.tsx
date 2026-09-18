@@ -7,7 +7,6 @@ import {
   faUsers,
   faDoorOpen,
   faExclamationTriangle,
-  faSpinner,
   faRotate,
   faHeartbeat,
   faNotesMedical,
@@ -17,6 +16,7 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import { fetchAnalyticsSummary, runWarehouseEtl } from "../../lib/api";
 import { usePageData } from "../../lib/use-page-data";
+import { EcgLoader } from "../../components/EcgLoader";
 
 export default function AdminAnalyticsClient() {
   const [refreshing, setRefreshing] = useState(false);
@@ -66,7 +66,7 @@ export default function AdminAnalyticsClient() {
               disabled={refreshing}
               className="px-4 py-2 bg-brand-600 text-white font-medium rounded-lg hover:bg-brand-700 transition-all duration-200 flex items-center gap-2 shadow-[0_2px_6px_rgba(27,107,123,0.2)] disabled:opacity-50"
             >
-              <FontAwesomeIcon icon={refreshing ? faSpinner : faRotate} spin={refreshing} className="w-4 h-4" />
+              {refreshing ? <EcgLoader /> : <FontAwesomeIcon icon={faRotate} className="w-4 h-4" />}
               {refreshing ? "Refreshing…" : "Refresh Warehouse"}
             </button>
           </div>
@@ -80,7 +80,7 @@ export default function AdminAnalyticsClient() {
 
       {loading ? (
         <div className="flex items-center justify-center p-16">
-          <FontAwesomeIcon icon={faSpinner} spin className="w-8 h-8 text-brand-600" />
+          <EcgLoader size="lg" className="text-brand-600" />
         </div>
       ) : (
         <>

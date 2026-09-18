@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faPenToSquare,
-  faSpinner,
   faArrowLeft,
   faSearch,
   faCheck,
@@ -29,6 +28,7 @@ import {
 import { roomStatus, ROOM_STATUS_LABEL, ROOM_STATUS_TONE } from "../../../../lib/rooms";
 import { toast } from "../../../../components/Toast";
 import PageHeader from "../../../../components/PageHeader";
+import { EcgLoader } from "../../../../components/EcgLoader";
 
 const inputClassName =
   "w-full px-4 py-3 bg-surface border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 focus:bg-surface transition-all text-sm shadow-sm";
@@ -224,7 +224,7 @@ export default function EditScenarioClient({ scenarioId }: { scenarioId: string 
           subtitle="Loading the scenario…"
         />
         <div className="p-12 text-center">
-          <FontAwesomeIcon icon={faSpinner} spin className="w-6 h-6 text-brand-600" />
+          <EcgLoader size="md" className="text-brand-600" />
         </div>
       </div>
     );
@@ -564,7 +564,7 @@ export default function EditScenarioClient({ scenarioId }: { scenarioId: string 
           className="inline-flex items-center gap-2 px-5 py-2.5 bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white font-medium rounded-lg transition-colors shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
         >
           {saving ? (
-            <FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" />
+            <EcgLoader />
           ) : (
             <FontAwesomeIcon icon={faSave} className="w-4 h-4" />
           )}

@@ -5,7 +5,6 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faSearch,
   faFilter,
-  faSpinner,
   faHeartbeat,
   faLungs,
   faThermometerHalf,
@@ -32,6 +31,7 @@ import {
 } from "../../lib/api";
 import { usePageData } from "../../lib/use-page-data";
 import EhrModal from "./ehr-modal";
+import { EcgLoader } from "../../components/EcgLoader";
 
 // Stable empty fallbacks, so the cleaning memo is not invalidated every render.
 const NO_PATIENTS: Patient[] = [];
@@ -270,7 +270,7 @@ export default function StudentPatientsPage() {
       <div className="bg-surface rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center p-12">
-            <FontAwesomeIcon icon={faSpinner} spin className="w-8 h-8 text-brand-600" />
+            <EcgLoader size="lg" className="text-brand-600" />
           </div>
         ) : cleanedPatients.length === 0 ? (
           <div className="p-12 text-center">
@@ -860,7 +860,7 @@ function LogVitalsModal({
             disabled={submitting || !hasAnyValue}
             className="px-4 py-2.5 bg-brand-600 text-white rounded-xl font-medium hover:bg-brand-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
-            {submitting && <FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" />}
+            {submitting && <EcgLoader />}
             Save Reading
           </button>
         </div>

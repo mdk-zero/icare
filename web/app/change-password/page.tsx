@@ -3,8 +3,9 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faLock, faCircleExclamation, faCircleNotch } from "@fortawesome/free-solid-svg-icons";
+import { faLock, faCircleExclamation } from "@fortawesome/free-solid-svg-icons";
 import { getCurrentUser, refreshCurrentUser, User, apiFetch } from "../lib/api";
+import { EcgLoader } from "../components/EcgLoader";
 
 function useAuthUser(): User | null {
   const [user] = useState<User | null>(() => {
@@ -76,7 +77,7 @@ export default function ChangePasswordPage() {
   if (!user || !user.force_password_change) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-canvas">
-        <div className="w-8 h-8 border-4 border-brand-600 border-t-transparent rounded-full animate-spin" />
+        <EcgLoader size="lg" className="text-brand-600" />
       </div>
     );
   }
@@ -157,7 +158,7 @@ export default function ChangePasswordPage() {
           >
             {isSubmitting ? (
               <>
-                <FontAwesomeIcon icon={faCircleNotch} className="animate-spin h-5 w-5" />
+                <EcgLoader />
                 Updating...
               </>
             ) : (

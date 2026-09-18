@@ -3,7 +3,6 @@
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faBell,
-  faSpinner,
   faCheckDouble,
   faExclamationTriangle,
   faCircleInfo,
@@ -11,6 +10,7 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import { FacultyNotification } from "../../lib/api";
 import { useNotifications } from "../../lib/notifications-live";
+import { EcgLoader } from "../../components/EcgLoader";
 
 const TYPE_STYLES: Record<FacultyNotification["type"], { icon: typeof faBell; classes: string }> = {
   alert: { icon: faExclamationTriangle, classes: "bg-rose-50 text-rose-600" },
@@ -51,7 +51,7 @@ export default function StudentNotificationsPage() {
 
       {loading ? (
         <div className="flex items-center justify-center p-12">
-          <FontAwesomeIcon icon={faSpinner} spin className="w-8 h-8 text-brand-600" />
+          <EcgLoader size="lg" className="text-brand-600" />
         </div>
       ) : notifications.length === 0 ? (
         <div className="bg-surface rounded-2xl p-12 text-center border border-gray-100">

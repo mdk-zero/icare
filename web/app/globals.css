@@ -126,6 +126,58 @@
 }
 
 /*
+ * EcgLoader (components/EcgLoader.tsx). The trace scrolls left one beat per
+ * loop; the mask dissolves its trailing edge like a monitor sweep. Lengths are
+ * SVG user units, which is what px means inside an SVG.
+ */
+.ecg-loader {
+  overflow: hidden;
+  mask-image: linear-gradient(to right, transparent 8%, #000 60%);
+}
+
+.ecg-trace {
+  animation: ecgSweep 1.4s linear infinite;
+}
+
+@keyframes ecgSweep {
+  to {
+    transform: translateX(-56px);
+  }
+}
+
+/*
+ * The dot sits at x=50 of a 56-wide beat (6/56 = 10.7% from the end), so it
+ * sees beat fraction f at (f + 10.7%) of the loop: the spike's breakpoints at
+ * 0.34…0.62 land at 44.7%…72.7%. Linear between stops, like the trace itself.
+ */
+.ecg-dot {
+  animation: ecgDot 1.4s linear infinite;
+}
+
+@keyframes ecgDot {
+  0%,
+  44.7% {
+    transform: translateY(0);
+  }
+  50.7% {
+    transform: translateY(-3px);
+  }
+  55.7% {
+    transform: translateY(8px);
+  }
+  60.7% {
+    transform: translateY(-12px);
+  }
+  66.7% {
+    transform: translateY(4px);
+  }
+  72.7%,
+  100% {
+    transform: translateY(0);
+  }
+}
+
+/*
  * ---------------------------------------------------------------------------
  * Dark theme
  * ---------------------------------------------------------------------------

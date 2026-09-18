@@ -3,7 +3,6 @@
 import { useMemo, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
-  faSpinner,
   faTimes,
   faPen,
   faTrash,
@@ -38,6 +37,7 @@ import {
 import { usePageData } from "../../lib/use-page-data";
 import { FloorPlanEditor, layoutFromRooms, Layout, Rect } from "../../components/FloorPlan";
 import { toast } from "../../components/Toast";
+import { EcgLoader } from "../../components/EcgLoader";
 
 // Stable empty fallbacks, so nothing downstream sees a new array each render.
 const NO_ROOMS: Room[] = [];
@@ -257,7 +257,7 @@ export default function RoomsClient() {
                 className="inline-flex items-center gap-2 px-4 py-2.5 bg-brand-600 text-white font-medium rounded-xl hover:bg-brand-700 transition-all disabled:opacity-40"
               >
                 {savingLayout ? (
-                  <FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" />
+                  <EcgLoader />
                 ) : (
                   <FontAwesomeIcon icon={faSave} className="w-4 h-4" />
                 )}
@@ -313,11 +313,11 @@ export default function RoomsClient() {
 
       {view === "plan" && loading ? (
         <div className="flex items-center justify-center p-12">
-          <FontAwesomeIcon icon={faSpinner} spin className="w-8 h-8 text-brand-600" />
+          <EcgLoader size="lg" className="text-brand-600" />
         </div>
       ) : view === "plan" ? null : loading ? (
         <div className="flex items-center justify-center p-12">
-          <FontAwesomeIcon icon={faSpinner} spin className="w-8 h-8 text-brand-600" />
+          <EcgLoader size="lg" className="text-brand-600" />
         </div>
       ) : filteredRooms.length === 0 ? (
         <div className="bg-surface rounded-xl p-12 text-center border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)]">
@@ -610,7 +610,7 @@ function RoomFormModal({
             disabled={saving}
             className="px-4 py-2.5 bg-brand-600 text-white rounded-xl font-medium hover:bg-brand-700 transition-all disabled:opacity-50 flex items-center gap-2"
           >
-            {saving && <FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" />}
+            {saving && <EcgLoader />}
             {room ? "Save Changes" : "Create Room"}
           </button>
         </div>
@@ -698,7 +698,7 @@ function RoomStudentsModal({
 
           {loading ? (
             <div className="flex items-center justify-center p-8">
-              <FontAwesomeIcon icon={faSpinner} spin className="w-6 h-6 text-brand-600" />
+              <EcgLoader size="md" className="text-brand-600" />
             </div>
           ) : (
             <>
@@ -783,7 +783,7 @@ function RoomStudentsModal({
                         disabled={saving || selectedIds.length === 0}
                         className="flex-1 px-4 py-2 bg-brand-600 text-white rounded-xl font-medium text-sm hover:bg-brand-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                       >
-                        {saving && <FontAwesomeIcon icon={faSpinner} spin className="w-4 h-4" />}
+                        {saving && <EcgLoader />}
                         Assign {selectedIds.length > 0 ? `(${selectedIds.length})` : ""}
                       </button>
                     </div>

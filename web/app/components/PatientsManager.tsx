@@ -11,7 +11,6 @@ import {
   faPlus,
   faPen,
   faTrash,
-  faSpinner,
   faSearch,
   faTimes,
   faSave,
@@ -46,6 +45,7 @@ import ConfirmModal from "./ConfirmModal";
 import type { ConfirmConfig } from "./ConfirmModal";
 import { toast } from "./Toast";
 import { usePageData } from "../lib/use-page-data";
+import { EcgLoader } from "./EcgLoader";
 
 const inputClassName =
   "w-full px-4 py-3 bg-surface border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 focus:bg-surface transition-all text-sm shadow-sm";
@@ -1264,10 +1264,7 @@ export default function PatientsManager({
                               title="Delete patient"
                             >
                               {deletingId === patient.id ? (
-                                <FontAwesomeIcon
-                                  icon={faSpinner}
-                                  className="w-4 h-4 animate-spin"
-                                />
+                                <EcgLoader size="xs" />
                               ) : (
                                 <FontAwesomeIcon icon={faTrash} className="w-4 h-4" />
                               )}
@@ -1492,7 +1489,7 @@ export default function PatientsManager({
                     className="inline-flex items-center gap-2 px-5 py-2.5 bg-brand-600 hover:bg-[#145a68] disabled:opacity-60 text-white font-medium rounded-lg transition-colors shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
                   >
                     {saving && (
-                      <FontAwesomeIcon icon={faSpinner} className="w-4 h-4 animate-spin" />
+                      <EcgLoader />
                     )}
                     <FontAwesomeIcon icon={faSave} className="w-4 h-4" />
                     {saving ? "Admitting..." : "Admit Patient"}
@@ -1564,7 +1561,7 @@ export default function PatientsManager({
                   className="inline-flex items-center gap-2 px-5 py-2.5 bg-brand-600 hover:bg-[#145a68] disabled:opacity-60 text-white font-medium rounded-lg transition-colors shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
                 >
                   {checkInBusy && (
-                    <FontAwesomeIcon icon={faSpinner} className="w-4 h-4 animate-spin" />
+                    <EcgLoader />
                   )}
                   <FontAwesomeIcon icon={faRightToBracket} className="w-4 h-4" />
                   {checkInBusy ? "Checking In..." : "Check In"}

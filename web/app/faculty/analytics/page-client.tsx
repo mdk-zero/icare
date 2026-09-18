@@ -34,6 +34,7 @@ import Card, { CardLabel } from "../../components/Card";
 import Avatar from "../../components/Avatar";
 import { usePageData } from "../../lib/use-page-data";
 import { MODEL_EVAL_SNAPSHOT, DEFAULT_MODEL_KIND } from "../../lib/model-eval-snapshot";
+import { EcgLoader } from "../../components/EcgLoader";
 
 /** Stable empty fallback, so nothing downstream sees a new array each render. */
 const NO_SECTIONS: Section[] = [];
@@ -826,10 +827,11 @@ function NarrativeCard({
             }
             className="flex items-center gap-2 rounded-lg bg-brand-600 px-3.5 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            <FontAwesomeIcon
-              icon={faArrowsRotate}
-              className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`}
-            />
+            {loading ? (
+              <EcgLoader />
+            ) : (
+              <FontAwesomeIcon icon={faArrowsRotate} className="h-3.5 w-3.5" />
+            )}
             {loading
               ? "Reading…"
               : error
@@ -1215,7 +1217,7 @@ export default function FacultyAnalyticsClient() {
           <div className="ml-auto flex items-center gap-3">
             <div className="flex items-center gap-2 text-xs text-gray-400">
               {refreshing && (
-                <span className="h-3 w-3 animate-spin rounded-full border-2 border-brand-200 border-t-brand-600" />
+                <EcgLoader size="xs" className="text-brand-600" />
               )}
               <span className="tabular-nums">{formatRange(from, to)}</span>
             </div>

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faSpinner, faUserSecret } from "@fortawesome/free-solid-svg-icons";
+import { faUserSecret } from "@fortawesome/free-solid-svg-icons";
 import { refreshCurrentUser } from "../lib/api";
 import { clearRequestCache } from "../lib/request-cache";
 import {
@@ -10,6 +10,7 @@ import {
   IMPERSONATION_FLAG_COOKIE,
   type ImpersonationFlag,
 } from "../lib/dev/impersonation";
+import { EcgLoader } from "./EcgLoader";
 
 function readFlag(): ImpersonationFlag | null {
   if (typeof document === "undefined") return null;
@@ -70,7 +71,7 @@ export default function ImpersonationBanner() {
         disabled={leaving}
         className="inline-flex items-center gap-1.5 rounded-md bg-orange-100/15 px-2 py-0.5 font-semibold transition-colors hover:bg-orange-100/25 disabled:opacity-60"
       >
-        {leaving && <FontAwesomeIcon icon={faSpinner} className="h-3 w-3 animate-spin" />}
+        {leaving && <EcgLoader size="xs" />}
         Return to yourself
       </button>
     </div>

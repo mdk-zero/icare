@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import ClientAdminLayout from "./layout-client";
+import { EcgLoader } from "../components/EcgLoader";
 
 export const metadata: Metadata = {
   title: "Admin | iCARE++",
@@ -15,7 +16,7 @@ export default function AdminLayout({
     <Suspense
       fallback={
         <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-          <div className="w-8 h-8 border-4 border-brand-600 border-t-transparent rounded-full animate-spin" />
+          <EcgLoader size="lg" className="text-brand-600" />
         </div>
       }
     >
