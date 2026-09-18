@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, type SelectHTMLAttributes } from "react";
 import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -15,6 +15,7 @@ import {
   faSearch,
   faUsers,
   faChartSimple,
+  faChevronDown,
 } from "@fortawesome/free-solid-svg-icons";
 import PageHeader from "../../components/PageHeader";
 import { SkeletonAssessmentCard } from "../../components/skeletons";
@@ -27,7 +28,21 @@ const inputClassName =
   "w-full px-4 py-3 bg-surface border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 focus:bg-surface transition-all text-sm shadow-sm";
 const labelClassName = "block text-sm font-bold text-gray-800 mb-2";
 const filterSelectClassName =
-  "cursor-pointer px-4 py-2.5 bg-surface border border-gray-400 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 transition-all";
+  "cursor-pointer appearance-none pl-4 pr-9 py-2.5 bg-surface border border-gray-400 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 transition-all";
+
+/** A native `<select>` with its own chevron, pulled in a bit from the edge
+ * rather than the browser's default arrow flush against the border. */
+function FilterSelect({ className = "", ...props }: SelectHTMLAttributes<HTMLSelectElement>) {
+  return (
+    <div className="relative">
+      <select {...props} className={`${filterSelectClassName} ${className}`} />
+      <FontAwesomeIcon
+        icon={faChevronDown}
+        className="pointer-events-none absolute right-3.5 top-1/2 h-3 w-3 -translate-y-1/2 text-gray-500"
+      />
+    </div>
+  );
+}
 
 type Difficulty = "beginner" | "intermediate" | "advanced";
 
@@ -362,33 +377,32 @@ export default function FacultyAssessmentsClient() {
       </div>
 
       <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-3">
-        <select
+        <FilterSelect
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value as "all" | "published" | "draft")}
           aria-label="Filter by status"
-          className={filterSelectClassName}
+          className="min-w-[150px]"
         >
           <option value="all">All statuses</option>
           <option value="published">Published</option>
           <option value="draft">Draft</option>
-        </select>
-        <select
+        </FilterSelect>
+        <FilterSelect
           value={difficultyFilter}
           onChange={(e) => setDifficultyFilter(e.target.value as Difficulty | "all")}
           aria-label="Filter by difficulty"
-          className={filterSelectClassName}
+          className="min-w-[150px]"
         >
           <option value="all">Any difficulty</option>
           <option value="beginner">Beginner</option>
           <option value="intermediate">Intermediate</option>
           <option value="advanced">Advanced</option>
-        </select>
+        </FilterSelect>
         {categoryOptions.length > 1 && (
-          <select
+          <FilterSelect
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value)}
             aria-label="Filter by category"
-            className={filterSelectClassName}
           >
             <option value="all">All categories</option>
             {categoryOptions.map((category) => (
@@ -396,14 +410,13 @@ export default function FacultyAssessmentsClient() {
                 {category}
               </option>
             ))}
-          </select>
+          </FilterSelect>
         )}
         {sections.length > 1 && (
-          <select
+          <FilterSelect
             value={sectionFilter}
             onChange={(e) => setSectionFilter(e.target.value)}
             aria-label="Filter by section"
-            className={filterSelectClassName}
           >
             <option value="all">All sections</option>
             {sections.map((s) => (
@@ -411,7 +424,7 @@ export default function FacultyAssessmentsClient() {
                 Section {s.name}
               </option>
             ))}
-          </select>
+          </FilterSelect>
         )}
         {filtersActive && (
           <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600 sm:ml-auto">
