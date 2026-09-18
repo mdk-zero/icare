@@ -27,7 +27,11 @@ import {
   AnalyticsBucket,
   Section,
 } from "../../lib/api";
-import { SkeletonStatCard, SkeletonChartArea, SkeletonCompetencyGrid } from "../../components/skeletons";
+import {
+  SkeletonStatCard,
+  SkeletonChartArea,
+  SkeletonCompetencyGrid,
+} from "../../components/skeletons";
 import PageHeader from "../../components/PageHeader";
 import { toast } from "../../components/Toast";
 import Card, { CardLabel } from "../../components/Card";
@@ -36,11 +40,10 @@ import { MODEL_EVAL_SNAPSHOT, DEFAULT_MODEL_KIND } from "../../lib/model-eval-sn
 import { EcgLoader } from "../../components/EcgLoader";
 import { Leaderboard } from "./Leaderboard";
 import { parseDay, formatRange } from "./dates";
+import { buildTrendSeries, TrendLegend, TrendLineChart, TrendTable } from "./SectionTrendChart";
 
 /** Stable empty fallback, so nothing downstream sees a new array each render. */
 const NO_SECTIONS: Section[] = [];
-
-const BRAND = "#1B6B7B";
 
 // The warehouse ETL can nudge cohort numbers every few minutes with nothing
 // meaningfully new to say, so a changed AI-summary data signature waits out
@@ -138,14 +141,6 @@ const BUCKET_LABEL: Record<AnalyticsBucket, string> = {
   year: "yearly",
 };
 
-/** X-axis tick text, tightened as the buckets get coarser. */
-function formatBucket(value: string, bucket: AnalyticsBucket): string {
-  const d = parseDay(value);
-  if (bucket === "year") return `${d.getFullYear()}`;
-  if (bucket === "month") return d.toLocaleDateString(undefined, { month: "short", year: "2-digit" });
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-}
-
 /** The same number of days immediately before `from`, for a "vs last period"
  * comparison — mirrors the reference dashboard's KPI cards. */
 function previousRange(from: string, to: string): { from: string; to: string } {
@@ -161,125 +156,13 @@ function previousRange(from: string, to: string): { from: string; to: string } {
 
 /** Percent change, `null` when there's nothing sensible to divide by — the
  * card then shows a dash instead of a misleading 0%/∞%. */
-function pctChange(curr: number | null | undefined, prev: number | null | undefined): number | null {
+function pctChange(
+  curr: number | null | undefined,
+  prev: number | null | undefined,
+): number | null {
   if (curr == null || prev == null) return null;
   if (prev === 0) return curr === 0 ? 0 : null;
   return ((curr - prev) / prev) * 100;
-}
-
-/* --------------------------------------------------------------- charts */
-
-/** Score trend over time — a smooth spline + area chart. */
-function TrendLineChart({
-  data,
-  bucket,
-}: {
-  data: { week_start: string; average_score: number; attempts: number }[];
-  bucket: AnalyticsBucket;
-}) {
-  // Sized for the half-width column this sits in — see CompetencyBarChart.
-  const W = 460;
-  const H = 240;
-  const padL = 32;
-  const padR = 16;
-  const padT = 16;
-  const padB = 36;
-  const plotW = W - padL - padR;
-  const plotH = H - padT - padB;
-  const n = data.length;
-  const x = (i: number) => padL + (n === 1 ? plotW / 2 : (i / (n - 1)) * plotW);
-  const y = (v: number) => padT + (1 - Math.min(Math.max(v, 0), 100) / 100) * plotH;
-  const pts = data.map((d, i) => ({ x: x(i), y: y(d.average_score) }));
-  const grid = [0, 25, 50, 75, 100];
-  const tickStep = Math.max(1, Math.ceil(n / 8));
-  const isTick = (i: number) => i % tickStep === 0 || i === n - 1;
-
-  // Catmull-Rom → cubic bezier for a smooth curve without overshoot
-  const smoothPath = (points: { x: number; y: number }[]): string => {
-    if (points.length < 2) return "";
-    if (points.length === 2)
-      return `M ${points[0].x},${points[0].y} L ${points[1].x},${points[1].y}`;
-    let d = `M ${points[0].x},${points[0].y}`;
-    for (let i = 1; i < points.length - 1; i++) {
-      const p0 = points[i - 1];
-      const p1 = points[i];
-      const p2 = points[i + 1];
-      const cp1x = p1.x + (p2.x - p0.x) / 6;
-      const cp1y = p1.y + (p2.y - p0.y) / 6;
-      const cp2x = p2.x - (p2.x - p0.x) / 6;
-      const cp2y = p2.y - (p2.y - p0.y) / 6;
-      d += ` C ${cp1x},${cp1y} ${cp2x},${cp2y} ${p2.x},${p2.y}`;
-    }
-    return d;
-  };
-
-  const lineD = smoothPath(pts);
-  const areaD =
-    n > 1
-      ? lineD + ` L ${pts[n - 1].x},${padT + plotH} L ${pts[0].x},${padT + plotH} Z`
-      : "";
-
-  return (
-    <div className="relative">
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full overflow-visible">
-        <defs>
-          <linearGradient id="trendArea" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={BRAND} stopOpacity="0.25" />
-            <stop offset="100%" stopColor={BRAND} stopOpacity="0.02" />
-          </linearGradient>
-          <filter id="glow">
-            <feGaussianBlur stdDeviation="2" result="blur" />
-            <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
-          </filter>
-        </defs>
-        {grid.map((g) => (
-          <g key={g}>
-            <line x1={padL} y1={y(g)} x2={W - padR} y2={y(g)} stroke="#e2e8f0" strokeWidth="1" strokeDasharray="3 3" />
-            <text x={padL - 6} y={y(g) + 3} textAnchor="end" fontSize="10" fill="#94a3b8" className="tabular-nums">
-              {g}
-            </text>
-          </g>
-        ))}
-        {n > 1 && <path d={areaD} fill="url(#trendArea)" />}
-        {n > 1 && (
-          <path d={lineD} fill="none" stroke={BRAND} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-        )}
-        {/* Glow layer under dots */}
-        {n <= 40 && data.map((d, i) => (
-          <circle key={`g-${d.week_start}`} cx={pts[i].x} cy={pts[i].y} r={5} fill={BRAND} opacity="0.15" filter="url(#glow)" />
-        ))}
-        {data.map((d, i) => (
-          <circle
-            key={d.week_start}
-            cx={pts[i].x}
-            cy={pts[i].y}
-            r={n > 40 ? 2 : 4}
-            fill="#fff"
-            stroke={BRAND}
-            strokeWidth="2.5"
-          >
-            <title>
-              {`${formatBucket(d.week_start, bucket)} — ${d.average_score}% · ${d.attempts} attempt${d.attempts === 1 ? "" : "s"}`}
-            </title>
-          </circle>
-        ))}
-        {data.map((d, i) =>
-          isTick(i) ? (
-            <text
-              key={`t-${d.week_start}`}
-              x={pts[i].x}
-              y={H - 8}
-              textAnchor={i === 0 && n > 1 ? "start" : i === n - 1 && n > 1 ? "end" : "middle"}
-              fontSize="10"
-              fill="#94a3b8"
-            >
-              {formatBucket(d.week_start, bucket)}
-            </text>
-          ) : null,
-        )}
-      </svg>
-    </div>
-  );
 }
 
 /* -------------------------------------------------------------- filters */
@@ -444,7 +327,13 @@ function SectionBarChart({
             strokeWidth="1"
             strokeDasharray="3 3"
           />
-          <text x={padL - 8} y={y(t) + 3} textAnchor="end" fontSize="10" className="fill-gray-400 tabular-nums">
+          <text
+            x={padL - 8}
+            y={y(t) + 3}
+            textAnchor="end"
+            fontSize="10"
+            className="fill-gray-400 tabular-nums"
+          >
             {t}
           </text>
         </g>
@@ -475,9 +364,7 @@ function SectionBarChart({
               rx={6}
               className="fill-brand-500 transition-all duration-700 ease-out"
             >
-              <title>
-                {`${s.name}: ${active} active of ${s.students} enrolled`}
-              </title>
+              <title>{`${s.name}: ${active} active of ${s.students} enrolled`}</title>
             </rect>
             <text
               x={x + barW / 2}
@@ -529,11 +416,7 @@ function wrapLabel(label: string, perLine = 14, maxLines = 2): string[] {
  * read as mastery. Colours are the same grade thresholds the rest of the
  * page uses, so a red bar means the same thing here as anywhere else.
  */
-function CompetencyBarChart({
-  items,
-}: {
-  items: { key: string; label: string; value: number }[];
-}) {
+function CompetencyBarChart({ items }: { items: { key: string; label: string; value: number }[] }) {
   // The card is half the page wide, and a viewBox scales its text along with
   // the box: at 640 the labels rendered around 5px. Narrower box, same fonts.
   const W = 460;
@@ -573,7 +456,13 @@ function CompetencyBarChart({
             strokeWidth="1"
             strokeDasharray="3 3"
           />
-          <text x={padL - 8} y={y(t) + 3} textAnchor="end" fontSize="10" className="fill-gray-400 tabular-nums">
+          <text
+            x={padL - 8}
+            y={y(t) + 3}
+            textAnchor="end"
+            fontSize="10"
+            className="fill-gray-400 tabular-nums"
+          >
             {t}
           </text>
         </g>
@@ -656,8 +545,12 @@ function KpiCard({
   return (
     <div className="flex flex-col rounded-2xl border border-hairline bg-surface p-4 shadow-tile">
       <div className="flex items-start justify-between gap-2">
-        <span className="min-w-0 text-xs font-bold uppercase tracking-wider text-gray-400">{label}</span>
-        <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full ${iconBg} ${iconColor}`}>
+        <span className="min-w-0 text-xs font-bold uppercase tracking-wider text-gray-400">
+          {label}
+        </span>
+        <span
+          className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full ${iconBg} ${iconColor}`}
+        >
           <FontAwesomeIcon icon={icon} className="h-11 w-11" />
         </span>
       </div>
@@ -730,7 +623,10 @@ function NarrativeCard({
                 pendingUpdate ? "bg-amber-50 text-amber-700" : "bg-gray-100 text-gray-500"
               }`}
             >
-              <FontAwesomeIcon icon={pendingUpdate ? faArrowsRotate : faCheck} className="h-2.5 w-2.5" />
+              <FontAwesomeIcon
+                icon={pendingUpdate ? faArrowsRotate : faCheck}
+                className="h-2.5 w-2.5"
+              />
               {pendingUpdate ? "New data available" : "No changes since last summary"}
             </span>
           )}
@@ -809,7 +705,9 @@ function NarrativeCard({
                       <ul className="space-y-2">
                         {list.items.map((item, idx) => (
                           <li key={idx} className="flex items-start gap-2 text-sm text-gray-600">
-                            <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${list.dot}`} />
+                            <span
+                              className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${list.dot}`}
+                            />
                             {item}
                           </li>
                         ))}
@@ -821,7 +719,8 @@ function NarrativeCard({
 
               {generatedAt && (
                 <p className="border-t border-hairline pt-3 text-xs text-gray-400">
-                  AI-generated {new Date(generatedAt).toLocaleString()} — review before acting on it.
+                  AI-generated {new Date(generatedAt).toLocaleString()} — review before acting on
+                  it.
                 </p>
               )}
             </div>
@@ -839,7 +738,6 @@ function NarrativeCard({
 }
 
 export default function FacultyAnalyticsClient() {
-
   const [sectionIds, setSectionIds] = useState<string[]>([]);
   const [preset, setPreset] = useState<PresetId>("3m");
   // Lazily initialised so `new Date()` never runs during a server render —
@@ -860,7 +758,11 @@ export default function FacultyAnalyticsClient() {
   // rather than on whatever the user has since selected, which is what the
   // abort controller here used to be for; and re-selecting a range already
   // looked at costs nothing.
-  const { data: analytics, loading, revalidating: refreshing } = usePageData(
+  const {
+    data: analytics,
+    loading,
+    revalidating: refreshing,
+  } = usePageData(
     `faculty:analytics:${sectionKey}:${from}:${to}`,
     () => fetchAnalyticsSummary({ sectionIds, from, to }),
     { keepPreviousData: true },
@@ -904,6 +806,9 @@ export default function FacultyAnalyticsClient() {
   /* --- AI narrative -------------------------------------------------- */
 
   const [showNarrative, setShowNarrative] = useState(true);
+  // The table carries the same numbers as the performance chart, for readers
+  // who can't hover or can't tell the lighter section colours apart.
+  const [trendView, setTrendView] = useState<"chart" | "table">("chart");
 
   // Keyed by the numbers themselves rather than the filter selection, so
   // picking a section/range that happens to produce the same figures — or
@@ -962,13 +867,17 @@ export default function FacultyAnalyticsClient() {
     loading: narrativeLoading,
     revalidating: narrativeRevalidating,
     refresh: reloadActiveNarrative,
-  } = usePageData(activeNarrativeKey, narrativeLoader, { freshFor: Infinity, keepPreviousData: true });
+  } = usePageData(activeNarrativeKey, narrativeLoader, {
+    freshFor: Infinity,
+    keepPreviousData: true,
+  });
 
   const narrative = narrativeResult?.narrative ?? null;
   const narrativeAt = narrativeResult?.generated_at ?? null;
-  const narrativeError = narrativeResult && !narrativeResult.narrative
-    ? (narrativeResult.error ?? "Unable to generate summary")
-    : null;
+  const narrativeError =
+    narrativeResult && !narrativeResult.narrative
+      ? (narrativeResult.error ?? "Unable to generate summary")
+      : null;
   const narrativeBusy = narrativeLoading || narrativeRevalidating;
 
   // Pending data jumps the cooldown, and a failed attempt is always worth
@@ -1014,7 +923,7 @@ export default function FacultyAnalyticsClient() {
   }
 
   const atRisk = summary?.risk_distribution?.at_risk ?? 0;
-  const trend = summary?.weekly_trend ?? [];
+  const trendSeries = buildTrendSeries(summary, sections);
   const competencies = Object.entries(summary?.competency_breakdown ?? {}).sort(
     (a, b) => b[1] - a[1],
   );
@@ -1052,7 +961,10 @@ export default function FacultyAnalyticsClient() {
       icon: faUsers,
       value: `${summary?.cohort.active_students_30d ?? 0}/${summary?.cohort.total_students ?? 0}`,
       label: "Active Students",
-      change: pctChange(summary?.cohort.active_students_30d, prevSummary?.cohort.active_students_30d),
+      change: pctChange(
+        summary?.cohort.active_students_30d,
+        prevSummary?.cohort.active_students_30d,
+      ),
       comparisonLabel,
       goodDirection: "up" as const,
       iconBg: "bg-purple-50",
@@ -1085,9 +997,7 @@ export default function FacultyAnalyticsClient() {
     <div>
       <PageHeader
         badge={{
-          icon: (
-            <FontAwesomeIcon icon={faChartBar} className="w-3.5 h-3.5" />
-          ),
+          icon: <FontAwesomeIcon icon={faChartBar} className="w-3.5 h-3.5" />,
           label: "Warehouse Analytics",
         }}
         title="Cohort Analytics"
@@ -1152,9 +1062,7 @@ export default function FacultyAnalyticsClient() {
 
           <div className="ml-auto flex items-center gap-3">
             <div className="flex items-center gap-2 text-xs text-gray-400">
-              {refreshing && (
-                <EcgLoader size="xs" className="text-brand-600" />
-              )}
+              {refreshing && <EcgLoader size="xs" className="text-brand-600" />}
               <span className="tabular-nums">{formatRange(from, to)}</span>
             </div>
           </div>
@@ -1200,19 +1108,57 @@ export default function FacultyAnalyticsClient() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4 items-stretch">
           <Card padding="md" className="flex flex-col">
-            <div className="flex items-center gap-2.5 mb-5">
-              <div className="rounded-xl bg-brand-500/10 p-2.5">
-                <FontAwesomeIcon icon={faUsers} className="h-5 w-5 text-brand-500" />
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center gap-2.5">
+                <div className="rounded-xl bg-brand-600/10 p-2.5">
+                  <FontAwesomeIcon icon={faChartBar} className="h-5 w-5 text-brand-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-900">Classroom Performance Overview</h3>
+                  <p className="text-xs text-gray-400">
+                    {trendSeries.length === 1 && trendSeries[0].id !== "all"
+                      ? `Average quiz score over time — ${trendSeries[0].name}`
+                      : "Average quiz score over time, by section"}
+                  </p>
+                </div>
               </div>
-              <h3 className="font-semibold text-gray-900">Active Students by Section</h3>
+              <div className="flex shrink-0 items-center gap-3">
+                <span className="font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-slate-400">
+                  {BUCKET_LABEL[bucket]}
+                </span>
+                {trendSeries.length > 0 && (
+                  <div className="flex rounded-lg border border-hairline p-0.5" role="group" aria-label="View">
+                    {(["chart", "table"] as const).map((view) => (
+                      <button
+                        key={view}
+                        type="button"
+                        onClick={() => setTrendView(view)}
+                        aria-pressed={trendView === view}
+                        className={`rounded-md px-2 py-0.5 text-xs capitalize transition-colors ${
+                          trendView === view
+                            ? "bg-brand-600 text-white"
+                            : "text-gray-500 hover:bg-subtle hover:text-gray-900"
+                        }`}
+                      >
+                        {view}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
             <div className="flex-1 flex flex-col justify-center">
-              {sectionsWithActivity.length === 0 ? (
-                <p className="text-gray-400 text-sm py-12 text-center">
-                  No sections in scope — pick a section above, or ask an admin to assign you one.
+              {trendSeries.length === 0 ? (
+                <p className="text-gray-400 text-sm py-16 text-center">
+                  No submitted attempts in {formatRange(from, to)}.
                 </p>
+              ) : trendView === "table" ? (
+                <TrendTable series={trendSeries} bucket={bucket} />
               ) : (
-                <SectionBarChart sections={sectionsWithActivity} />
+                <>
+                  <TrendLegend series={trendSeries} />
+                  <TrendLineChart series={trendSeries} bucket={bucket} />
+                </>
               )}
             </div>
           </Card>
@@ -1242,27 +1188,19 @@ export default function FacultyAnalyticsClient() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4 items-stretch">
           <Card padding="md" className="flex flex-col">
-            <div className="flex items-center justify-between mb-5">
-              <div className="flex items-center gap-2.5">
-                <div className="rounded-xl bg-brand-600/10 p-2.5">
-                  <FontAwesomeIcon icon={faChartBar} className="h-5 w-5 text-brand-600" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900">Classroom Performance Overview</h3>
-                  <p className="text-xs text-gray-400">Line chart — average quiz score over time</p>
-                </div>
+            <div className="flex items-center gap-2.5 mb-5">
+              <div className="rounded-xl bg-brand-500/10 p-2.5">
+                <FontAwesomeIcon icon={faUsers} className="h-5 w-5 text-brand-500" />
               </div>
-              <span className="font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-slate-400">
-                {BUCKET_LABEL[bucket]}
-              </span>
+              <h3 className="font-semibold text-gray-900">Active Students by Section</h3>
             </div>
             <div className="flex-1 flex flex-col justify-center">
-              {trend.length === 0 ? (
-                <p className="text-gray-400 text-sm py-16 text-center">
-                  No submitted attempts in {formatRange(from, to)}.
+              {sectionsWithActivity.length === 0 ? (
+                <p className="text-gray-400 text-sm py-12 text-center">
+                  No sections in scope — pick a section above, or ask an admin to assign you one.
                 </p>
               ) : (
-                <TrendLineChart data={trend} bucket={bucket} />
+                <SectionBarChart sections={sectionsWithActivity} />
               )}
             </div>
           </Card>

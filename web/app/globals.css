@@ -59,6 +59,27 @@
   --animate-rise: rise 0.45s cubic-bezier(0.22, 0.61, 0.36, 1) backwards;
 }
 
+/*
+ * Categorical chart series, in fixed order: slot N always belongs to the same
+ * entity (e.g. a faculty member's Nth section) so filtering never repaints a
+ * line. Order and steps validated for colour-blind separation against the
+ * surface token; three light slots sit under 3:1, so charts using them ship a
+ * table view. The .dark block restates all eight for the dark surface.
+ *
+ * Plain custom properties, not @theme: charts read them through var(), and
+ * Tailwind drops @theme colours that no utility class references.
+ */
+:root {
+  --color-series-1: #2a78d6;
+  --color-series-2: #eb6834;
+  --color-series-3: #1baf7a;
+  --color-series-4: #eda100;
+  --color-series-5: #e87ba4;
+  --color-series-6: #008300;
+  --color-series-7: #4a3aa7;
+  --color-series-8: #e34948;
+}
+
 @keyframes fadeInUp {
   from {
     opacity: 0;
@@ -198,6 +219,16 @@
   --color-surface: #111d20;
   --color-hairline: #1f3237;
   --color-subtle: #16252a;
+
+  /* Same eight hues, stepped for the dark surface (all >= 3:1 on it). */
+  --color-series-1: #3987e5;
+  --color-series-2: #d95926;
+  --color-series-3: #199e70;
+  --color-series-4: #c98500;
+  --color-series-5: #d55181;
+  --color-series-6: #008300;
+  --color-series-7: #9085e9;
+  --color-series-8: #e66767;
 
   /*
    * Brand lifts in dark, but only to mid-teal. 600 has to serve two masters:

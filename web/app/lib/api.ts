@@ -1214,6 +1214,15 @@ export interface AnalyticsSummary {
     active_students_30d: number;
   };
   weekly_trend: { week_start: string; average_score: number; attempts: number }[];
+  /** `weekly_trend` split by section (migration 039), attached by the API route.
+   * Null when the warehouse doesn't have it yet — draw the cohort line instead. */
+  section_trend?: {
+    section_id: string;
+    section_name: string;
+    week_start: string;
+    average_score: number;
+    attempts: number;
+  }[] | null;
   competency_breakdown: Record<string, number>;
   competency_detail: {
     name: string;
