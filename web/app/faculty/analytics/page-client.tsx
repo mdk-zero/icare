@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import Link from "next/link";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faChartBar,
@@ -24,17 +25,17 @@ import {
   generateAnalyticsNarrative,
   AnalyticsNarrative,
   AnalyticsBucket,
-  AnalyticsSummary,
   Section,
 } from "../../lib/api";
 import { SkeletonStatCard, SkeletonChartArea, SkeletonCompetencyGrid } from "../../components/skeletons";
 import PageHeader from "../../components/PageHeader";
 import { toast } from "../../components/Toast";
 import Card, { CardLabel } from "../../components/Card";
-import Avatar from "../../components/Avatar";
 import { usePageData } from "../../lib/use-page-data";
 import { MODEL_EVAL_SNAPSHOT, DEFAULT_MODEL_KIND } from "../../lib/model-eval-snapshot";
 import { EcgLoader } from "../../components/EcgLoader";
+import { Leaderboard } from "./Leaderboard";
+import { parseDay, formatRange } from "./dates";
 
 /** Stable empty fallback, so nothing downstream sees a new array each render. */
 const NO_SECTIONS: Section[] = [];
@@ -95,11 +96,6 @@ function isoDay(d: Date): string {
   return `${d.getFullYear()}-${m}-${day}`;
 }
 
-/** Parsed as local midnight, so a bucket start never renders as the day before. */
-function parseDay(value: string): Date {
-  return new Date(`${value}T00:00:00`);
-}
-
 type PresetId = "7d" | "30d" | "3m" | "12m" | "ytd" | "custom";
 
 const PRESETS: { id: PresetId; label: string }[] = [
@@ -148,19 +144,6 @@ function formatBucket(value: string, bucket: AnalyticsBucket): string {
   if (bucket === "year") return `${d.getFullYear()}`;
   if (bucket === "month") return d.toLocaleDateString(undefined, { month: "short", year: "2-digit" });
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-}
-
-function formatRange(from: string, to: string): string {
-  const a = parseDay(from);
-  const b = parseDay(to);
-  const sameYear = a.getFullYear() === b.getFullYear();
-  const left = a.toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    ...(sameYear ? {} : { year: "numeric" }),
-  });
-  const right = b.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
-  return `${left} – ${right}`;
 }
 
 /** The same number of days immediately before `from`, for a "vs last period"
@@ -696,60 +679,6 @@ function KpiCard({
   );
 }
 
-/** Ranked list of top scorers — a leaderboard, not a plain table, so rank
- * and magnitude are both legible at a glance (medal badge + a proportional
- * fill bar behind each row). */
-function Leaderboard({ students }: { students: AnalyticsSummary["top_students"] }) {
-  if (students.length === 0) {
-    return (
-      <p className="text-gray-400 text-sm py-12 text-center">
-        No submitted attempts in range yet — scores will rank here once students start.
-      </p>
-    );
-  }
-  const max = Math.max(...students.map((s) => s.average_score), 1);
-  const rankStyle = (rank: number) => {
-    if (rank === 1) return "bg-gradient-to-br from-amber-300 to-amber-500 text-white shadow-sm";
-    if (rank === 2) return "bg-gradient-to-br from-slate-300 to-slate-400 text-white shadow-sm";
-    if (rank === 3) return "bg-gradient-to-br from-orange-300 to-orange-500 text-white shadow-sm";
-    return "bg-gray-100 text-gray-500";
-  };
-  return (
-    <div className="space-y-2">
-      {students.map((s, i) => {
-        const rank = i + 1;
-        return (
-          <div
-            key={s.student_key}
-            className="relative flex items-center gap-3 overflow-hidden rounded-xl border border-hairline bg-surface p-3"
-          >
-            <div
-              className="absolute inset-y-0 left-0 bg-brand-600/[0.06] transition-all duration-700 ease-out"
-              style={{ width: `${(s.average_score / max) * 100}%` }}
-              aria-hidden
-            />
-            <span
-              className={`relative z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${rankStyle(rank)}`}
-            >
-              {rank}
-            </span>
-            <Avatar name={s.name} size="sm" tone="brand" className="relative z-10" />
-            <div className="relative z-10 min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold text-gray-900">{s.name}</p>
-              <p className="truncate text-xs text-gray-400">
-                {s.section ?? "No section"} · {s.attempts} attempt{s.attempts === 1 ? "" : "s"}
-              </p>
-            </div>
-            <span className="relative z-10 shrink-0 text-sm font-bold text-brand-700 tabular-nums">
-              {s.average_score}%
-            </span>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 /** Plain-language reading of whatever the filters currently select. */
 function NarrativeCard({
   narrative,
@@ -1090,6 +1019,13 @@ export default function FacultyAnalyticsClient() {
     (a, b) => b[1] - a[1],
   );
   const topStudents = summary?.top_students ?? [];
+  // The card shows the podium and a little more; the full ranking opens on
+  // its own page with the same scope, so it lists the same students in order.
+  const leaderboardHref = `/faculty/analytics/leaderboard?${new URLSearchParams({
+    ...(sectionIds.length > 0 ? { sections: sectionIds.join(",") } : {}),
+    from,
+    to,
+  })}`;
   const sectionsWithActivity = summary?.sections ?? [];
 
   // No ground-truth outcome column exists to score live predictions against,
@@ -1286,11 +1222,21 @@ export default function FacultyAnalyticsClient() {
               <div className="rounded-xl bg-amber-500/10 p-2.5">
                 <FontAwesomeIcon icon={faTrophy} className="h-5 w-5 text-amber-600" />
               </div>
-              <h3 className="font-semibold text-gray-900">Top Performing Students</h3>
+              <h3 className="font-semibold text-gray-900">Top 5 Performing Students</h3>
             </div>
             <div className="flex-1 flex flex-col justify-center">
-              <Leaderboard students={topStudents} />
+              <Leaderboard students={topStudents.slice(0, 5)} />
             </div>
+            {topStudents.length > 0 && (
+              <div className="mt-4 flex justify-end border-t border-hairline pt-3">
+                <Link
+                  href={leaderboardHref}
+                  className="text-sm font-medium text-brand-600 transition-colors hover:text-brand-700"
+                >
+                  View full leaderboard →
+                </Link>
+              </div>
+            )}
           </Card>
         </div>
 

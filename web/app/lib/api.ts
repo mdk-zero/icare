@@ -1294,6 +1294,36 @@ export async function fetchAnalyticsSummary(
   }
 }
 
+/**
+ * Every student in scope, in `top_students` order — the full list behind the
+ * dashboard's top-5 card. Null when the request fails, so the page can tell
+ * "nobody has submitted yet" apart from "couldn't load".
+ */
+export async function fetchStudentLeaderboard(
+  filters: AnalyticsFilters = {},
+): Promise<AnalyticsSummary['top_students'] | null> {
+  const params = new URLSearchParams();
+  if (filters.sectionIds?.length) params.set('section_ids', filters.sectionIds.join(','));
+  if (filters.from) params.set('from', filters.from);
+  if (filters.to) params.set('to', filters.to);
+  const query = params.toString();
+
+  try {
+    const res = await apiFetch(`/api/analytics/leaderboard${query ? `?${query}` : ''}`, {
+      credentials: 'include',
+    });
+    if (!res.ok) {
+      console.error('fetchStudentLeaderboard() failed', res.status);
+      return null;
+    }
+    const json = (await res.json()) as { students?: AnalyticsSummary['top_students'] };
+    return json.students ?? [];
+  } catch (err) {
+    console.error('fetchStudentLeaderboard() failed', err);
+    return null;
+  }
+}
+
 /** Plain-language reading of the dashboard, for the same filters. */
 export interface AnalyticsNarrative {
   headline: string;
