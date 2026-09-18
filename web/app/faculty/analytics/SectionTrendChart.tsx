@@ -408,48 +408,53 @@ export function TrendTable({
   const buckets = bucketsOf(series);
   const at = series.map((s) => new Map(s.points.map((p) => [p.week_start, p])));
   return (
-    <div className="max-h-72 overflow-auto rounded-lg border border-hairline">
-      <table className="w-full text-sm">
-        <thead className="sticky top-0 bg-subtle text-xs text-gray-500">
-          <tr>
-            <th scope="col" className="px-3 py-2 text-left font-medium">
-              Period
-            </th>
-            {series.map((s) => (
-              <th key={s.id} scope="col" className="px-3 py-2 text-right font-medium">
-                <span className="inline-flex items-center gap-1.5">
-                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: s.color }} />
-                  {s.name}
-                </span>
+    // Fills the card like the chart does, scrolling inside it when there are
+    // more periods than fit — the table is positioned over its box, so a long
+    // one never stretches the card past its row.
+    <div className="relative min-h-60 flex-1">
+      <div className="absolute inset-0 overflow-auto rounded-lg border border-hairline">
+        <table className="w-full text-sm">
+          <thead className="sticky top-0 bg-subtle text-xs text-gray-500">
+            <tr>
+              <th scope="col" className="px-3 py-2 text-left font-medium">
+                Period
               </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-hairline">
-          {buckets.map((b) => (
-            <tr key={b}>
-              <th scope="row" className="px-3 py-1.5 text-left font-normal text-gray-600">
-                {formatBucket(b, bucket)}
-              </th>
-              {at.map((m, i) => {
-                const p = m.get(b);
-                return (
-                  <td key={series[i].id} className="px-3 py-1.5 text-right tabular-nums text-gray-900">
-                    {p ? (
-                      <>
-                        {p.average_score}%
-                        <span className="ml-1.5 text-xs text-gray-400">{p.attempts}×</span>
-                      </>
-                    ) : (
-                      <span className="text-gray-400">—</span>
-                    )}
-                  </td>
-                );
-              })}
+              {series.map((s) => (
+                <th key={s.id} scope="col" className="px-3 py-2 text-right font-medium">
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: s.color }} />
+                    {s.name}
+                  </span>
+                </th>
+              ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody className="divide-y divide-hairline">
+            {buckets.map((b) => (
+              <tr key={b}>
+                <th scope="row" className="px-3 py-1.5 text-left font-normal text-gray-600">
+                  {formatBucket(b, bucket)}
+                </th>
+                {at.map((m, i) => {
+                  const p = m.get(b);
+                  return (
+                    <td key={series[i].id} className="px-3 py-1.5 text-right tabular-nums text-gray-900">
+                      {p ? (
+                        <>
+                          {p.average_score}%
+                          <span className="ml-1.5 text-xs text-gray-400">{p.attempts}×</span>
+                        </>
+                      ) : (
+                        <span className="text-gray-400">—</span>
+                      )}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
