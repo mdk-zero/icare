@@ -44,3 +44,11 @@
 - [ ] Privacy Policy
 - [ ] FAQ and Troubleshooting Guide — marketing FAQ on the landing page only, no troubleshooting guide
 - [ ] Contact Support and Feedback Form
+
+---
+
+# Client Recommendations
+
+- [ ] Scenario and Quiz data should use fundamental topics for nursing from the book sent in the e-mail.
+- [ ] The review for grading scenarios should be flexible and not a fixed score. (Adding criteria within each task depending on scenario)
+- [ ]
