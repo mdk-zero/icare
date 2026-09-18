@@ -35,27 +35,36 @@ export default function SettingsClient() {
         subtitle="Manage system configuration and institutional settings"
       />
 
-      <div className="flex flex-col lg:flex-row gap-6">
-        <div className="lg:w-64 flex-shrink-0">
-          <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] p-2">
-            {sections.map((section) => (
-              <button
-                key={section.id}
-                onClick={() => setActiveSection(section.id)}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all duration-300 ${
-                  activeSection === section.id
-                    ? "bg-brand-600 text-white shadow-md"
-                    : "text-gray-600 hover:bg-gray-50 hover:text-brand-600"
-                }`}
-              >
-                <FontAwesomeIcon icon={section.icon} className="w-5 h-5" />
-                <span className="font-medium">{section.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
+      {/* Tabs rather than a side rail, so each section — the profile above all —
+          gets the page's full width instead of a column beside the menu. */}
+      <div
+        role="tablist"
+        aria-label="Settings sections"
+        className="mb-5 flex gap-1 overflow-x-auto overflow-y-hidden shadow-[inset_0_-1px_0_var(--color-hairline)]"
+      >
+        {sections.map((section) => {
+          const active = activeSection === section.id;
+          return (
+            <button
+              key={section.id}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => setActiveSection(section.id)}
+              className={`flex shrink-0 items-center gap-2 border-b-2 px-3.5 py-2.5 text-sm font-medium transition-colors ${
+                active
+                  ? "border-brand-600 text-brand-700"
+                  : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-800"
+              }`}
+            >
+              <FontAwesomeIcon icon={section.icon} className="h-3.5 w-3.5" />
+              {section.label}
+            </button>
+          );
+        })}
+      </div>
 
-        <div className="flex-1">
+      <div role="tabpanel">
           {activeSection === "profile" && (
             <ProfileEditor changePasswordHref="/admin/settings/change-password" />
           )}
@@ -211,7 +220,6 @@ export default function SettingsClient() {
               </div>
             </div>
           )}
-        </div>
       </div>
     </div>
   );

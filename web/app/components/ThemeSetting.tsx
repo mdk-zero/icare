@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faDesktop, faSun, faMoon, faCheck } from "@fortawesome/free-solid-svg-icons";
+import { faDesktop, faSun, faMoon, faCheck, faCircleHalfStroke } from "@fortawesome/free-solid-svg-icons";
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import {
   getStoredTheme,
@@ -19,7 +19,7 @@ const options: {
   hint: string;
   icon: IconDefinition;
 }[] = [
-  { value: "system", label: "System", hint: "Match your device", icon: faDesktop },
+  { value: "system", label: "System", hint: "Follows your device", icon: faDesktop },
   { value: "light", label: "Light", hint: "Always light", icon: faSun },
   { value: "dark", label: "Dark", hint: "Always dark", icon: faMoon },
 ];
@@ -30,7 +30,7 @@ function Preview({ mode }: { mode: "light" | "dark" }) {
   return (
     <span
       aria-hidden
-      className="block h-9 w-14 shrink-0 overflow-hidden rounded-md"
+      className="block h-16 w-full overflow-hidden rounded-lg"
       style={{
         backgroundColor: dark ? "#0a1214" : "#f5f8f9",
         boxShadow: `inset 0 0 0 1px ${dark ? "#1f3237" : "#e6edef"}`,
@@ -60,7 +60,13 @@ function Preview({ mode }: { mode: "light" | "dark" }) {
   );
 }
 
-export default function ThemeSetting({ className = "" }: { className?: string }) {
+export default function ThemeSetting({
+  className = "",
+  style,
+}: {
+  className?: string;
+  style?: React.CSSProperties;
+}) {
   const [preference, setPreference] = useState<ThemePreference>("system");
   const [resolved, setResolved] = useState<"light" | "dark">("light");
   // Rendered on the server as "system"; only trust the DOM after mount.
@@ -105,69 +111,78 @@ export default function ThemeSetting({ className = "" }: { className?: string })
 
   return (
     <section
-      className={`rounded-xl border border-hairline bg-surface p-4 shadow-tile ${className}`}
+      className={`animate-rise rounded-2xl border border-hairline bg-surface p-5 shadow-tile ${className}`}
+      style={style}
     >
-      <div className="flex items-baseline justify-between gap-2">
-        <h3 className="font-display text-base font-semibold tracking-[-0.01em] text-gray-900">
-          Appearance
-        </h3>
-        {mounted && preference === "system" && (
-          <span className="shrink-0 font-mono text-[10px] uppercase tracking-[0.12em] text-gray-400">
-            Now {resolved}
+      <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:gap-8">
+        <div className="flex items-start gap-3 lg:w-64 lg:shrink-0">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-600/10 text-brand-600">
+            <FontAwesomeIcon icon={faCircleHalfStroke} className="h-4 w-4" />
           </span>
-        )}
-      </div>
-      <p className="mt-0.5 text-sm text-gray-500">How iCARE++ looks on this device.</p>
+          <div className="min-w-0">
+            <h3 className="font-display text-base font-semibold tracking-[-0.01em] text-gray-900">
+              Appearance
+            </h3>
+            <p className="mt-0.5 text-sm text-gray-500">How iCARE++ looks on this device.</p>
+            {mounted && preference === "system" && (
+              <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.12em] text-gray-400">
+                Showing {resolved} now
+              </p>
+            )}
+          </div>
+        </div>
 
-      <div role="radiogroup" aria-label="Colour theme" className="mt-3 space-y-2">
-        {options.map((option) => {
-          const selected = mounted && preference === option.value;
-          const previewMode: "light" | "dark" =
-            option.value === "system" ? resolved : option.value;
-          return (
-            <button
-              key={option.value}
-              type="button"
-              role="radio"
-              aria-checked={selected}
-              onClick={() => choose(option.value)}
-              className={`flex w-full items-center gap-3 rounded-lg border p-2 text-left transition-all ${
-                selected
-                  ? "border-brand-600 bg-brand-50 ring-1 ring-brand-600/30"
-                  : "border-hairline hover:border-brand-300 hover:bg-subtle"
-              }`}
-            >
-              <Preview mode={previewMode} />
-              <span className="min-w-0 flex-1">
-                <span className="flex items-center gap-1.5">
+        <div
+          role="radiogroup"
+          aria-label="Colour theme"
+          className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-3"
+        >
+          {options.map((option) => {
+            const selected = mounted && preference === option.value;
+            const previewMode: "light" | "dark" =
+              option.value === "system" ? resolved : option.value;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                onClick={() => choose(option.value)}
+                className={`group rounded-xl border p-2 text-left transition-all ${
+                  selected
+                    ? "border-brand-600 bg-brand-50 ring-1 ring-brand-600/30"
+                    : "border-hairline hover:border-brand-300 hover:bg-subtle"
+                }`}
+              >
+                <Preview mode={previewMode} />
+                <span className="mt-2 flex items-center gap-2 px-1 pb-0.5">
                   <FontAwesomeIcon
                     icon={option.icon}
-                    className={`h-3 w-3 shrink-0 ${
-                      selected ? "text-brand-600" : "text-gray-400"
-                    }`}
+                    className={`h-3 w-3 shrink-0 ${selected ? "text-brand-600" : "text-gray-400"}`}
                   />
+                  <span className="min-w-0 flex-1">
+                    <span
+                      className={`block truncate text-sm font-semibold ${
+                        selected ? "text-brand-700" : "text-gray-700"
+                      }`}
+                    >
+                      {option.label}
+                    </span>
+                    <span className="block truncate text-xs text-gray-500">{option.hint}</span>
+                  </span>
                   <span
-                    className={`truncate text-sm font-semibold ${
-                      selected ? "text-brand-700" : "text-gray-700"
+                    aria-hidden
+                    className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full ${
+                      selected ? "bg-brand-600 text-white" : "border border-gray-300"
                     }`}
                   >
-                    {option.label}
+                    {selected && <FontAwesomeIcon icon={faCheck} className="h-2 w-2" />}
                   </span>
                 </span>
-                <span className="mt-0.5 block truncate text-xs text-gray-500">
-                  {option.hint}
-                </span>
-              </span>
-              {selected && (
-                <FontAwesomeIcon
-                  icon={faCheck}
-                  className="h-3 w-3 shrink-0 text-brand-600"
-                  aria-hidden
-                />
-              )}
-            </button>
-          );
-        })}
+              </button>
+            );
+          })}
+        </div>
       </div>
     </section>
   );
