@@ -618,7 +618,7 @@ export default function FacultyScenariosClient() {
       <PageHeader
         badge={{
           icon: <FontAwesomeIcon icon={faNotesMedical} className="w-3.5 h-3.5" />,
-          label: "Simulation Scenarios",
+          label: "Scenario Management",
         }}
         title="Simulation Scenarios"
         subtitle="Manage clinical simulation scenarios for student training"

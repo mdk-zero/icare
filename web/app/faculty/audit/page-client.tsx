@@ -86,7 +86,7 @@ export default function FacultyAuditClient() {
           icon: (
             <FontAwesomeIcon icon={faClipboardCheck} className="w-3.5 h-3.5" />
           ),
-          label: "Audit Trail",
+          label: "Activity Log",
         }}
         title="Audit Trail"
         subtitle="Complete history of all faculty activities and interactions"
