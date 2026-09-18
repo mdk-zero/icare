@@ -764,7 +764,7 @@ export default function FacultyAnalyticsClient() {
     revalidating: refreshing,
   } = usePageData(
     `faculty:analytics:${sectionKey}:${from}:${to}`,
-    () => fetchAnalyticsSummary({ sectionIds, from, to }),
+    () => fetchAnalyticsSummary({ sectionIds, from, to, sectionTrend: true }),
     { keepPreviousData: true },
   );
 
@@ -924,6 +924,9 @@ export default function FacultyAnalyticsClient() {
 
   const atRisk = summary?.risk_distribution?.at_risk ?? 0;
   const trendSeries = buildTrendSeries(summary, sections);
+  // The split failed to load (the summary itself did) — say so rather than
+  // drawing one merged line in its place.
+  const trendUnavailable = summary != null && summary.section_trend == null;
   const competencies = Object.entries(summary?.competency_breakdown ?? {}).sort(
     (a, b) => b[1] - a[1],
   );
@@ -1106,8 +1109,8 @@ export default function FacultyAnalyticsClient() {
           ))}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4 items-stretch">
-          <Card padding="md" className="flex flex-col">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4 items-stretch">
+          <Card padding="md" className="flex flex-col lg:col-span-2">
             <div className="flex items-center justify-between mb-5">
               <div className="flex items-center gap-2.5">
                 <div className="rounded-xl bg-brand-600/10 p-2.5">
@@ -1116,9 +1119,9 @@ export default function FacultyAnalyticsClient() {
                 <div>
                   <h3 className="font-semibold text-gray-900">Classroom Performance Overview</h3>
                   <p className="text-xs text-gray-400">
-                    {trendSeries.length === 1 && trendSeries[0].id !== "all"
+                    {trendSeries.length === 1
                       ? `Average quiz score over time — ${trendSeries[0].name}`
-                      : "Average quiz score over time, by section"}
+                      : "Average quiz score over time, one line per section"}
                   </p>
                 </div>
               </div>
@@ -1148,7 +1151,11 @@ export default function FacultyAnalyticsClient() {
               </div>
             </div>
             <div className="flex-1 flex flex-col justify-center">
-              {trendSeries.length === 0 ? (
+              {trendUnavailable ? (
+                <p className="text-gray-400 text-sm py-16 text-center">
+                  The per-section breakdown couldn&apos;t be loaded. Refresh to try again.
+                </p>
+              ) : trendSeries.length === 0 ? (
                 <p className="text-gray-400 text-sm py-16 text-center">
                   No submitted attempts in {formatRange(from, to)}.
                 </p>
