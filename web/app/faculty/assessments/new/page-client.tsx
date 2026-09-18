@@ -6,6 +6,7 @@ import { fetchSections, type Section, apiFetch } from "../../../lib/api";
 import { toast } from "../../../components/Toast";
 import { usePageData } from "../../../lib/use-page-data";
 import { EcgLoader } from "../../../components/EcgLoader";
+import LiveClock from "../../../components/LiveClock";
 
 /** Stable empty fallback, so nothing downstream sees a new array each render. */
 const NO_SECTIONS: Section[] = [];
@@ -93,11 +94,14 @@ export default function AssessmentNewClient() {
       <header className="animate-rise relative overflow-hidden bg-surface rounded-2xl border border-hairline shadow-tile p-5 sm:p-6 mb-6">
         <div aria-hidden className="pointer-events-none absolute inset-0" style={{ backgroundImage: "radial-gradient(70% 130% at 100% 0%, rgb(27 107 123 / 0.07) 0%, transparent 70%)" }} />
         <span aria-hidden className="absolute left-0 top-0 h-full w-[3px] bg-gradient-to-b from-brand-400 via-brand-600 to-brand-800" />
-        <div className="relative">
-          <h1 className="font-display text-[32px] sm:text-[38px] font-bold leading-[1.08] tracking-[-0.02em] text-gray-900">
-            New Assessment
-          </h1>
-          <p className="mt-2 text-sm text-gray-500">Create a new quiz and add questions</p>
+        <div className="relative flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h1 className="font-display text-[32px] sm:text-[38px] font-bold leading-[1.08] tracking-[-0.02em] text-gray-900">
+              New Assessment
+            </h1>
+            <p className="mt-2 text-sm text-gray-500">Create a new quiz and add questions</p>
+          </div>
+          <LiveClock className="shrink-0" />
         </div>
       </header>
 

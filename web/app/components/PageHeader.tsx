@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import LiveClock from "./LiveClock";
 
 interface PageHeaderProps {
   /**
@@ -83,24 +84,30 @@ export default function PageHeader({ badge, title, subtitle, action }: PageHeade
           </p>
         </div>
 
-        {action && (
-          <button
-            onClick={action.onClick}
-            disabled={action.disabled}
-            aria-label={action.label}
-            title={action.label}
-            style={step(3)}
-            className={`animate-rise group inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-lg bg-brand-600 text-sm font-semibold text-white transition-colors duration-150 hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-offset-2 focus-visible:ring-offset-canvas disabled:opacity-45 disabled:hover:bg-brand-600 ${
-              action.text ? "w-10 px-0 sm:w-auto sm:px-4" : "w-10"
-            }`}
-          >
-            <span className="transition-transform duration-150 group-hover:scale-110 group-disabled:scale-100">
-              {action.icon}
-            </span>
-            {action.text && <span className="hidden sm:inline">{action.text}</span>}
-          </button>
-        )}
+        <div className="flex shrink-0 items-start gap-5">
+          {/* The wall clock lives with each page's title rather than in the
+              sidebar, where it was small and easy to miss. */}
+          <LiveClock variant="full" className="animate-rise hidden sm:block" style={step(3)} />
+          {action && (
+            <button
+              onClick={action.onClick}
+              disabled={action.disabled}
+              aria-label={action.label}
+              title={action.label}
+              style={step(3)}
+              className={`animate-rise group inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-lg bg-brand-600 text-sm font-semibold text-white transition-colors duration-150 hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-offset-2 focus-visible:ring-offset-canvas disabled:opacity-45 disabled:hover:bg-brand-600 ${
+                action.text ? "w-10 px-0 sm:w-auto sm:px-4" : "w-10"
+              }`}
+            >
+              <span className="transition-transform duration-150 group-hover:scale-110 group-disabled:scale-100">
+                {action.icon}
+              </span>
+              {action.text && <span className="hidden sm:inline">{action.text}</span>}
+            </button>
+          )}
+        </div>
       </div>
+      <LiveClock variant="compact" className="animate-rise mt-3 block sm:hidden" style={step(3)} />
     </header>
   );
 }

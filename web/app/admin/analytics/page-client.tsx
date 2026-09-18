@@ -17,6 +17,7 @@ import {
 import { fetchAnalyticsSummary, runWarehouseEtl } from "../../lib/api";
 import { usePageData } from "../../lib/use-page-data";
 import { EcgLoader } from "../../components/EcgLoader";
+import LiveClock from "../../components/LiveClock";
 
 export default function AdminAnalyticsClient() {
   const [refreshing, setRefreshing] = useState(false);
@@ -60,7 +61,8 @@ export default function AdminAnalyticsClient() {
                 ` · last refreshed ${new Date(summary.etl.last_run_at).toLocaleString()}`}
             </p>
           </div>
-          <div className="flex items-center gap-3 shrink-0">
+          <div className="flex items-center gap-4 shrink-0">
+            <LiveClock />
             <button
               onClick={handleRefresh}
               disabled={refreshing}

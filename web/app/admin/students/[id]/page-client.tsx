@@ -15,6 +15,7 @@ import {
 import Avatar from "../../../components/Avatar";
 import { usePageData } from "../../../lib/use-page-data";
 import { EcgLoader } from "../../../components/EcgLoader";
+import LiveClock from "../../../components/LiveClock";
 
 interface AttemptRow {
   id: string;
@@ -162,7 +163,7 @@ export default function StudentDetailClient() {
 
   return (
     <div>
-      <div className="mb-6">
+      <div className="mb-6 flex items-center justify-between gap-4">
         <button
           onClick={() => router.push("/admin/student-management")}
           className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
@@ -170,6 +171,7 @@ export default function StudentDetailClient() {
           <FontAwesomeIcon icon={faChevronLeft} className="w-5 h-5" />
           Back to Students
         </button>
+        <LiveClock variant="compact" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">

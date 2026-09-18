@@ -22,6 +22,7 @@ import {
 import { toast } from "../../../components/Toast";
 import Avatar from "../../../components/Avatar";
 import { usePageData } from "../../../lib/use-page-data";
+import LiveClock from "../../../components/LiveClock";
 
 // Stable empty fallbacks, so the filter memos are not invalidated every render.
 const NO_ASSIGNMENTS: ScenarioAssignment[] = [];
@@ -257,11 +258,14 @@ export default function FacultyScenarioReviewClient() {
               Verify hands-on tasks &amp; finalize scenario scores
             </p>
           </div>
-          {awaitingCount > 0 && (
-            <span className="ml-auto shrink-0 rounded-full bg-brand-500/12 px-3.5 py-1.5 text-sm font-semibold tabular-nums text-brand-700 dark:text-brand-300">
-              {awaitingCount} awaiting
-            </span>
-          )}
+          <div className="ml-auto flex shrink-0 items-center gap-4">
+            {awaitingCount > 0 && (
+              <span className="shrink-0 rounded-full bg-brand-500/12 px-3.5 py-1.5 text-sm font-semibold tabular-nums text-brand-700 dark:text-brand-300">
+                {awaitingCount} awaiting
+              </span>
+            )}
+            <LiveClock variant="compact" className="hidden sm:block" />
+          </div>
         </div>
       </header>
 

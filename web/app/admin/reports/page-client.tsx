@@ -17,6 +17,7 @@ import {
   faBuilding,
 } from "@fortawesome/free-solid-svg-icons";
 import { EcgLoader } from "../../components/EcgLoader";
+import LiveClock from "../../components/LiveClock";
 
 type ReportType = "faculty" | "rooms" | "users" | "summary";
 type Format = "pdf" | "csv";
@@ -170,7 +171,7 @@ export default function AdminReportsClient() {
   return (
     <div>
       <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] p-4 sm:p-5 mb-4">
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 px-3 py-1 bg-gray-100 text-brand-600 rounded-full text-xs sm:text-sm font-medium w-fit mb-3">
               <FontAwesomeIcon icon={faFileLines} className="w-3.5 h-3.5" />
@@ -179,6 +180,7 @@ export default function AdminReportsClient() {
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Reports & Export</h1>
             <p className="text-gray-500 mt-1">Generate admin reports for faculty, rooms, and users</p>
           </div>
+          <LiveClock className="shrink-0" />
         </div>
       </div>
 

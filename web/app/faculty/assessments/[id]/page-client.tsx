@@ -22,6 +22,7 @@ import { toast } from "../../../components/Toast";
 import ConfirmModal from "../../../components/ConfirmModal";
 import { fetchSections, type Section, apiFetch } from "../../../lib/api";
 import { EcgLoader } from "../../../components/EcgLoader";
+import LiveClock from "../../../components/LiveClock";
 
 const inputClassName =
   "w-full px-4 py-3 bg-surface border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 focus:bg-surface transition-all text-sm shadow-sm";
@@ -1186,6 +1187,7 @@ export default function AssessmentQuestionsClient({
               </div>
             )}
           </div>
+          <LiveClock variant="full" className="hidden shrink-0 border-l border-hairline pl-4 lg:block" />
         </div>
       </header>
 

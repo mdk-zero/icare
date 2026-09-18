@@ -32,6 +32,7 @@ import {
 import { usePageData } from "../../lib/use-page-data";
 import EhrModal from "./ehr-modal";
 import { EcgLoader } from "../../components/EcgLoader";
+import LiveClock from "../../components/LiveClock";
 
 // Stable empty fallbacks, so the cleaning memo is not invalidated every render.
 const NO_PATIENTS: Patient[] = [];
@@ -190,14 +191,17 @@ export default function StudentPatientsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900 mb-2 flex items-center gap-3">
-          <FontAwesomeIcon icon={faHospitalUser} className="text-brand-600" />
-          Patient Records
-        </h1>
-        <p className="text-gray-500">
-          Simulated EHR data from MIMIC-IV, cleaned and validated for training
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2 flex items-center gap-3">
+            <FontAwesomeIcon icon={faHospitalUser} className="text-brand-600" />
+            Patient Records
+          </h1>
+          <p className="text-gray-500">
+            Simulated EHR data from MIMIC-IV, cleaned and validated for training
+          </p>
+        </div>
+        <LiveClock className="shrink-0" />
       </div>
 
       {/* Stats */}

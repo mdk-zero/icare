@@ -11,6 +11,7 @@ import {
 import { FacultyNotification } from "../../lib/api";
 import { useNotifications } from "../../lib/notifications-live";
 import { EcgLoader } from "../../components/EcgLoader";
+import LiveClock from "../../components/LiveClock";
 
 const TYPE_STYLES: Record<FacultyNotification["type"], { icon: typeof faBell; classes: string }> = {
   alert: { icon: faExclamationTriangle, classes: "bg-rose-50 text-rose-600" },
@@ -36,6 +37,7 @@ export default function StudentNotificationsPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <LiveClock variant="full" className="mr-2 hidden md:block" />
           <LiveIndicator connected={connected} />
           {unread > 0 && (
             <button

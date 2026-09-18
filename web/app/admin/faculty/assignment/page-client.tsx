@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faChevronLeft, faTrash } from "@fortawesome/free-solid-svg-icons";
 import { EcgLoader } from "../../../components/EcgLoader";
+import LiveClock from "../../../components/LiveClock";
 
 interface Section {
   id: string;
@@ -181,6 +182,7 @@ export default function AssignSectionsClient() {
           <h1 className="text-2xl font-bold text-gray-900">Sections</h1>
           <p className="text-gray-500">Manage sections and assign them to faculty</p>
         </div>
+        <LiveClock className="ml-auto shrink-0" />
       </div>
 
       {message && (
