@@ -35,7 +35,7 @@ const ROLE_BADGE: Record<string, string> = {
 function detailsText(details: Record<string, unknown>): string {
   if (typeof details.message === "string") return details.message;
   const parts = Object.entries(details)
-    .filter(([key, value]) => key !== "migrated_from" && key !== "actor_name" && value != null)
+    .filter(([key, value]) => key !== "migrated_from" && key !== "actor_name" && key !== "target_id" && value != null)
     .map(([key, value]) => `${key}: ${typeof value === "object" ? JSON.stringify(value) : String(value)}`);
   return parts.join(", ");
 }

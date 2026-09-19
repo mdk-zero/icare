@@ -76,7 +76,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         action: 'report.generate',
         entityType: type,
         entityId: id || session.uid,
-        details: { report: type, format, subject: result.subject },
+        // target_id is what "Generate again" on the Reports page replays.
+        details: { report: type, format, subject: result.subject, target_id: id || null },
       },
       request,
     );

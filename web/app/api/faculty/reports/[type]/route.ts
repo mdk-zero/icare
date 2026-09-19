@@ -4,6 +4,7 @@ import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { logAudit } from '@/app/lib/audit';
 import { renderReport, type ReportMeta } from '@/app/lib/reports/kit';
 import { slugify } from '@/app/lib/reports/csv';
+import { getFacultySectionIds, isStudentInFacultySections } from '@/app/lib/roster';
 import {
   REPORT_NEEDS_TARGET,
   buildAssessmentReport,
@@ -49,6 +50,13 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     const supabase = getSupabaseAdmin();
 
+    // Faculty report only on their own sections and the students in them;
+    // admins see everything. Out of scope answers exactly like a missing id,
+    // so the endpoint can't be used to learn which ids exist.
+    if (session.role === 'faculty' && (await outOfScope(supabase, session.uid, type, id))) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
+
     const { data: faculty } = await supabase.from('users').select('name').eq('id', session.uid).maybeSingle();
     const { data: campus } = await supabase.from('campuses').select('name').limit(1).maybeSingle();
 
@@ -93,7 +101,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         action: 'report.generate',
         entityType: type,
         entityId: id || session.uid,
-        details: { report: type, format, subject: result.subject },
+        // target_id is what "Generate again" on the Reports page replays;
+        // entity_id can't carry it, since whole-scope reports log the actor there.
+        details: { report: type, format, subject: result.subject, target_id: id || null },
       },
       request,
     );
@@ -120,4 +130,22 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     console.error(`Generate ${type} report failed`, err);
     return NextResponse.json({ error: 'Unable to generate report' }, { status: 500 });
   }
+}
+
+/**
+ * Scenarios and assessments are listed app-wide, and a discharge summary is
+ * reached from the patient chart, so only the section-bound subjects are
+ * checked here.
+ */
+async function outOfScope(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  facultyId: string,
+  type: string,
+  id: string,
+): Promise<boolean> {
+  if (type === 'student') return !(await isStudentInFacultySections(supabase, facultyId, id));
+  if (type === 'section' || type === 'attendance') {
+    return !(await getFacultySectionIds(supabase, facultyId)).includes(id);
+  }
+  return false;
 }
