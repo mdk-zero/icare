@@ -1033,6 +1033,62 @@ export interface FacultyStats {
   completed_reviews: number;
   active_scenarios: number;
   pending_scenarios: number;
+  /** Scenario submissions handed in and not yet finalized. */
+  awaiting_review: number;
+  /** Assignments past their deadline and not handed in. */
+  overdue_assignments: number;
+  /** Students with at least one overdue assignment. */
+  students_behind: number;
+}
+
+/** The rest of the faculty landing page — see buildFacultyOverview on the server. */
+export interface FacultyOverview {
+  sections: {
+    id: string;
+    name: string;
+    students: number;
+    at_risk: number;
+    overdue: number;
+    completion: number | null;
+    avg_recent: number | null;
+    avg_prior: number | null;
+    weekly: { week_start: string; average: number | null }[];
+  }[];
+  attention: {
+    id: string;
+    name: string;
+    section: string | null;
+    picture_url: string | null;
+    risk: string | null;
+    probability: number | null;
+    overdue: number;
+    recent_avg: number | null;
+    last_activity: string | null;
+    open_assistance: number;
+  }[];
+  attention_total: number;
+  review_queue: {
+    total: number;
+    items: { assignment_id: string; student_id: string; student_name: string; scenario_title: string; submitted_at: string }[];
+  };
+  upcoming_shifts: {
+    id: string;
+    label: string | null;
+    shift_type: string;
+    starts_at: string;
+    ends_at: string;
+    section: string | null;
+    room: string | null;
+    rostered: number;
+    checked_in: number;
+    absent: number;
+  }[];
+  due_soon: { kind: 'scenario' | 'quiz'; id: string; title: string; deadline: string; open: number }[];
+  overdue_assignments: number;
+  students_behind: number;
+  cohort_avg_recent: number | null;
+  cohort_avg_prior: number | null;
+  scored_at: string | null;
 }
 
 export interface CreateStudentResponse {
@@ -1532,19 +1588,28 @@ export async function runFacultyMlJob(
 }
 
 // Faculty API Functions
-export async function fetchFacultyDashboard(): Promise<{ stats: FacultyStats; recent_activities: AuditLog[] } | null> {
+export async function fetchFacultyDashboard(): Promise<{
+  stats: FacultyStats;
+  recent_activities: AuditLog[];
+  overview: FacultyOverview | null;
+} | null> {
   try {
     const res = await apiFetch('/api/faculty/dashboard', { credentials: 'include' });
     const json = (await res.json()) as {
       stats?: FacultyStats;
       recent_activities?: AuditLog[];
+      overview?: FacultyOverview;
       error?: string;
     };
     if (!res.ok || !json.stats) {
       console.error('fetchFacultyDashboard() failed', json.error ?? res.status);
       return null;
     }
-    return { stats: json.stats, recent_activities: json.recent_activities ?? [] };
+    return {
+      stats: json.stats,
+      recent_activities: json.recent_activities ?? [],
+      overview: json.overview ?? null,
+    };
   } catch (err) {
     console.error('fetchFacultyDashboard() failed', err);
     return null;

@@ -1,386 +1,252 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import type { CSSProperties } from "react";
+import Link from "next/link";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
-  fetchFacultyDashboard,
+  faClipboardCheck,
+  faClock,
+  faHouse,
+  faTriangleExclamation,
+  faUsers,
+} from "@fortawesome/free-solid-svg-icons";
+import {
   fetchFacultyAlerts,
-  fetchFacultyStudents,
+  fetchFacultyDashboard,
   refreshCurrentUser,
+  type FacultyOverview,
+  type FacultyStats,
 } from "../lib/api";
 import { usePageData } from "../lib/use-page-data";
-import {
-  SkeletonStatCard,
-  SkeletonStudentRow,
-  SkeletonActivityItem,
-} from "../components/skeletons";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faHouse, faUsers, faTriangleExclamation, faBell, faCheckCircle } from "@fortawesome/free-solid-svg-icons";
+import { SkeletonActivityItem, SkeletonStatTile, SkeletonStudentRow } from "../components/skeletons";
 import PageHeader from "../components/PageHeader";
 import StatTile from "../components/StatTile";
-import Avatar from "../components/Avatar";
+import { CardLabel } from "../components/Card";
+import AttentionList from "./_overview/AttentionList";
+import DutyCard from "./_overview/DutyCard";
+import WaitingCard from "./_overview/WaitingCard";
+import SectionMonitor from "./_overview/SectionMonitor";
+import AlertFeed from "./_overview/AlertFeed";
+import ActivityFeed from "./_overview/ActivityFeed";
+import { clockTime, greeting, listSentence, plural, relativeDay, timeAgo } from "./_overview/format";
 
 /**
- * Keyed by the risk_level enum the ML service actually writes
- * (public.risk_level = 'safe' | 'at_risk'); `default` covers students the
- * model has never scored.
+ * The page continues the masthead's entrance cascade (four steps of 45ms)
+ * rather than starting its own, so the whole page arrives as one gesture.
  */
-const RISK_STYLES: Record<string, { badge: string; label: string }> = {
-  at_risk: {
-    badge: "bg-red-100 text-red-700 border-red-200",
-    label: "At risk",
-  },
-  safe: {
-    badge: "bg-emerald-100 text-emerald-700 border-emerald-200",
-    label: "On track",
-  },
-  default: {
-    badge: "bg-gray-100 text-gray-700 border-gray-200",
-    label: "No prediction",
-  },
+const STEP_MS = 45;
+const rise = (index: number): CSSProperties => ({ animationDelay: `${(4 + index) * STEP_MS}ms` });
+
+const EMPTY_OVERVIEW: FacultyOverview = {
+  sections: [],
+  attention: [],
+  attention_total: 0,
+  review_queue: { total: 0, items: [] },
+  upcoming_shifts: [],
+  due_soon: [],
+  overdue_assignments: 0,
+  students_behind: 0,
+  cohort_avg_recent: null,
+  cohort_avg_prior: null,
+  scored_at: null,
 };
 
-/** "3h ago" for anything recent, an absolute date once it stops being useful. */
-function timeAgo(iso: string | null | undefined): string {
-  if (!iso) return "No activity yet";
-  const then = new Date(iso).getTime();
-  if (Number.isNaN(then)) return "";
-  const minutes = Math.round((Date.now() - then) / 60000);
-  if (minutes < 1) return "Just now";
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.round(hours / 24);
-  if (days < 7) return `${days}d ago`;
-  return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+/** The masthead's standfirst: the day in one or two sentences, not a slogan. */
+function briefing(stats: FacultyStats | null, overview: FacultyOverview, now: number): string {
+  const parts: string[] = [];
+  const flagged = overview.attention_total;
+  if (flagged > 0) parts.push(`${plural(flagged, "student")} ${flagged === 1 ? "needs" : "need"} a look`);
+  const review = stats?.awaiting_review ?? 0;
+  if (review > 0) parts.push(`${plural(review, "submission")} ${review === 1 ? "is" : "are"} waiting for review`);
+  const overdue = stats?.overdue_assignments ?? 0;
+  if (overdue > 0) parts.push(`${plural(overdue, "assignment")} ${overdue === 1 ? "is" : "are"} overdue`);
+
+  let text = parts.length > 0 ? `${listSentence(parts)}.` : "Everyone is on track and nothing is waiting on you.";
+  text = text.charAt(0).toUpperCase() + text.slice(1);
+
+  const next = overview.upcoming_shifts[0];
+  if (next) {
+    const live = Date.parse(next.starts_at) <= now;
+    const day = relativeDay(next.starts_at);
+    // Mid-sentence, "Today" and "Tomorrow" lose their capital; weekdays keep theirs.
+    const when = day === "Today" || day === "Tomorrow" ? day.toLowerCase() : day;
+    const withSection = next.section ? ` with ${next.section}` : "";
+    text += live
+      ? ` You're on duty now${withSection}.`
+      : ` Next on duty: ${when} at ${clockTime(next.starts_at)}${withSection}.`;
+  }
+  return text;
 }
 
 export default function FacultyDashboard() {
-  const router = useRouter();
   const { data, loading } = usePageData("faculty:overview", async () => {
-    const [dashboardData, alertsData, studentsData, user] = await Promise.all([
+    const [dashboard, alertsData, user] = await Promise.all([
       fetchFacultyDashboard(),
       fetchFacultyAlerts(),
-      fetchFacultyStudents(),
       refreshCurrentUser(),
     ]);
-
     return {
-      stats: dashboardData?.stats ?? null,
-      activities: dashboardData?.recent_activities ?? [],
-      // The table shows the newest few; the badge must still count them all.
-      alerts: alertsData?.alerts.slice(0, 5) ?? [],
-      pendingAlerts: alertsData?.pending ?? 0,
-      students: studentsData?.slice(0, 5) ?? [],
+      stats: dashboard?.stats ?? null,
+      activities: dashboard?.recent_activities ?? [],
+      overview: dashboard?.overview ?? EMPTY_OVERVIEW,
+      alerts: alertsData?.alerts ?? [],
       firstName: user?.name ? user.name.split(" ")[0] : null,
+      // Everything on the page is as of this moment, so "live" and "overdue"
+      // can't disagree with each other across a re-render.
+      loadedAt: Date.now(),
     };
   });
 
-  const stats = data?.stats ?? null;
-  const activities = data?.activities ?? [];
-  const alerts = data?.alerts ?? [];
-  const pendingAlerts = data?.pendingAlerts ?? 0;
-  const students = data?.students ?? [];
-  const firstName = data?.firstName ?? null;
+  if (loading || !data) return <OverviewSkeleton />;
 
-  const getRisk = (risk?: string | null) => RISK_STYLES[risk ?? "default"] ?? RISK_STYLES.default;
-
-  const getSeverityColor = (severity: string) => {
-    switch (severity) {
-      case 'high': return 'text-red-600 bg-red-50';
-      case 'medium': return 'text-amber-600 bg-amber-50';
-      case 'low': return 'text-emerald-600 bg-emerald-50';
-      default: return 'text-gray-600 bg-gray-50';
-    }
-  };
-
-  const getActivityMeta = (type: string) => {
-    if (type.toLowerCase().includes('alert')) {
-      return {
-        path: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z',
-        dot: 'bg-red-600',
-        ring: 'ring-red-100',
-      };
-    } else if (type.toLowerCase().includes('scenario')) {
-      return {
-        path: 'M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.414 1.414.586 3.414-1.414 3.414H12m8 0h2a2 2 0 002-2v-4a2 2 0 00-2-2h-2',
-        dot: 'bg-brand-600',
-        ring: 'ring-teal-100',
-      };
-    }
-    return {
-      path: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4',
-      dot: 'bg-emerald-600',
-      ring: 'ring-emerald-100',
-    };
-  };
-
-  if (loading) {
-    return (
-      <div className="space-y-4">
-        <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] p-4 sm:p-5 mb-4 animate-pulse">
-          <div className="space-y-3">
-            <div className="h-5 w-32 bg-gray-200 rounded-full" />
-            <div className="h-8 w-48 bg-gray-200 rounded" />
-            <div className="h-4 w-72 bg-gray-200 rounded" />
-          </div>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <SkeletonStatCard key={i} />
-          ))}
-        </div>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div className="lg:col-span-2 bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden animate-pulse">
-            <div className="p-3 border-b border-gray-100">
-              <div className="h-5 w-28 bg-gray-200 rounded" />
-              <div className="h-4 w-44 bg-gray-200 rounded mt-1" />
-            </div>
-            <div className="divide-y divide-hairline">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <SkeletonStudentRow key={i} />
-              ))}
-            </div>
-          </div>
-          <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden animate-pulse">
-            <div className="p-3 border-b border-gray-100">
-              <div className="h-5 w-32 bg-gray-200 rounded" />
-              <div className="h-4 w-44 bg-gray-200 rounded mt-1" />
-            </div>
-            <div className="p-3 space-y-2">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <SkeletonActivityItem key={i} />
-              ))}
-            </div>
-          </div>
-        </div>
-        <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden animate-pulse">
-          <div className="p-3 border-b border-gray-100">
-            <div className="h-5 w-28 bg-gray-200 rounded" />
-            <div className="h-4 w-44 bg-gray-200 rounded mt-1" />
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-100">
-                <tr>
-                  {Array.from({ length: 6 }).map((_, i) => (
-                    <th key={i} className="px-5 py-3">
-                      <div className="h-3 w-16 bg-gray-200 rounded" />
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-hairline">
-                {Array.from({ length: 4 }).map((_, i) => (
-                  <tr key={i}>
-                    {Array.from({ length: 6 }).map((_, j) => (
-                      <td key={j} className="px-4 py-3">
-                        <div className={`h-4 ${["w-24", "w-20", "w-16", "w-20", "w-16", "w-12"][j]} bg-gray-200 rounded`} />
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
+  const { stats, activities, overview, alerts, firstName, loadedAt } = data;
   const total = stats?.total_students ?? 0;
   const atRisk = stats?.at_risk_students ?? 0;
+  const review = stats?.awaiting_review ?? 0;
+  const overdue = stats?.overdue_assignments ?? 0;
+
+  // One scale for every monitor, so equal heights mean equal scores.
+  const observed = overview.sections.flatMap((s) => [
+    ...s.weekly.map((w) => w.average),
+    s.avg_recent,
+  ]).filter((v): v is number => v != null);
+  const domain = {
+    min: observed.length > 0 ? Math.max(0, Math.floor((Math.min(...observed) - 5) / 10) * 10) : 0,
+    max: 100,
+  };
 
   return (
-    <div className="space-y-4">
+    <div>
       <PageHeader
-        badge={{
-          icon: <FontAwesomeIcon icon={faHouse} className="w-3.5 h-3.5" />,
-          label: "Dashboard",
-        }}
-        title={firstName ? `Welcome back, ${firstName}!` : "Welcome back!"}
-        subtitle="Here's what's happening with your students today."
+        badge={{ icon: <FontAwesomeIcon icon={faHouse} className="h-3.5 w-3.5" />, label: "Dashboard" }}
+        title={`${greeting()}${firstName ? `, ${firstName}` : ""}`}
+        subtitle={briefing(stats, overview, loadedAt)}
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatTile
-          icon={<FontAwesomeIcon icon={faUsers} className="w-5 h-5" />}
-          iconBg="bg-brand-600/10"
-          iconColor="text-brand-600"
-          value={total}
-          label="Total Students"
-          caption="Enrolled under you"
-        />
-        <StatTile
-          icon={<FontAwesomeIcon icon={faTriangleExclamation} className="w-5 h-5" />}
-          iconBg="bg-red-50"
-          iconColor="text-red-600"
-          value={atRisk}
-          label="At-Risk Students"
-          caption={total > 0 ? `${Math.round((atRisk / total) * 100)}% of total` : "No students yet"}
-        />
-        <StatTile
-          icon={<FontAwesomeIcon icon={faBell} className="w-5 h-5" />}
-          iconBg="bg-amber-50"
-          iconColor="text-amber-600"
-          value={stats?.active_alerts ?? 0}
-          label="Active Alerts"
-          caption="Awaiting your review"
-        />
-        <StatTile
-          icon={<FontAwesomeIcon icon={faCheckCircle} className="w-5 h-5" />}
-          iconBg="bg-emerald-50"
-          iconColor="text-emerald-600"
-          value={stats?.active_scenarios ?? 0}
-          label="Active Scenarios"
-          caption="Currently in progress"
-        />
-      </div>
+      <div className="space-y-4">
+        <div className="animate-rise grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4" style={rise(0)}>
+          <StatTile
+            href="/faculty/students"
+            icon={<FontAwesomeIcon icon={faUsers} className="h-5 w-5" />}
+            value={total}
+            label="Students"
+            caption={overview.sections.length > 0 ? `Across ${plural(overview.sections.length, "section")}` : "No sections yet"}
+          />
+          <StatTile
+            href="/faculty/students"
+            icon={<FontAwesomeIcon icon={faTriangleExclamation} className="h-5 w-5" />}
+            iconBg="bg-red-50"
+            iconColor="text-red-600"
+            value={atRisk}
+            label="At risk"
+            caption={
+              overview.scored_at
+                ? `${total > 0 ? Math.round((atRisk / total) * 100) : 0}% · scored ${timeAgo(overview.scored_at).toLowerCase()}`
+                : "Not scored yet"
+            }
+          />
+          <StatTile
+            href="/faculty/scenarios/review"
+            icon={<FontAwesomeIcon icon={faClipboardCheck} className="h-5 w-5" />}
+            iconBg="bg-brand-600/10"
+            iconColor="text-brand-600"
+            value={review}
+            label="To review"
+            caption={review > 0 ? "Scenario submissions" : "Queue is clear"}
+          />
+          <StatTile
+            href="/faculty/students"
+            icon={<FontAwesomeIcon icon={faClock} className="h-5 w-5" />}
+            iconBg="bg-amber-50"
+            iconColor="text-amber-600"
+            value={overdue}
+            label="Overdue"
+            caption={overdue > 0 ? `${plural(stats?.students_behind ?? 0, "student")} behind` : "Nothing overdue"}
+          />
+        </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2 bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden">
-          <div className="p-4 border-b border-gray-100 flex items-center justify-between">
-            <div>
-              <h2 className="text-lg font-semibold text-gray-900">My Students</h2>
-              <p className="text-sm text-gray-500 mt-0.5">Students under your supervision</p>
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <div className="animate-rise lg:col-span-2" style={rise(1)}>
+            <AttentionList students={overview.attention} total={overview.attention_total} roster={total} />
+          </div>
+          <div className="animate-rise flex flex-col gap-4" style={rise(2)}>
+            <DutyCard shifts={overview.upcoming_shifts} now={loadedAt} />
+            <WaitingCard review={overview.review_queue} dueSoon={overview.due_soon} />
+          </div>
+        </div>
+
+        {overview.sections.length > 0 && (
+          <section className="pt-2">
+            <div className="animate-rise mb-3 flex items-end justify-between gap-4" style={rise(3)}>
+              <div>
+                <CardLabel>Section monitors</CardLabel>
+                <h2 className="mt-1 font-display text-[19px] font-semibold tracking-[-0.015em] text-slate-900">
+                  How each section is doing
+                </h2>
+              </div>
+              <Link href="/faculty/analytics" className="shrink-0 text-sm font-medium text-brand-600 hover:text-brand-700">
+                Open analytics →
+              </Link>
             </div>
-            <button 
-              onClick={() => router.push('/faculty/students')}
-              className="text-sm text-brand-600 font-medium hover:text-brand-700 transition-colors"
-            >
-              View All →
-            </button>
-          </div>
-          <div className="divide-y divide-hairline">
-            {students.map((student) => {
-              const risk = getRisk(student.risk_level);
-              return (
-                <div key={student.id} className="flex items-center gap-3 p-4">
-                  <Avatar name={student.name} src={student.picture_url} size="md" tone="solid" />
-                  <div className="min-w-0 flex-1">
-                    <p className="font-medium text-gray-900 truncate">{student.name}</p>
-                    <p className="text-sm text-gray-500 truncate">{student.email}</p>
-                  </div>
-                  <div className="flex flex-col items-end gap-1 shrink-0">
-                    <span className={`px-2.5 py-1 rounded-full text-xs font-medium border ${risk.badge}`}>
-                      {risk.label}
-                    </span>
-                    <span className="text-xs text-gray-400">{timeAgo(student.last_activity)}</span>
-                  </div>
-                </div>
-              );
-            })}
-            {students.length === 0 && (
-              <div className="p-10 text-center">
-                <p className="text-gray-500 font-medium">No students assigned yet</p>
-                <p className="text-sm text-gray-400 mt-1">Students you supervise will show up here.</p>
-              </div>
-            )}
-          </div>
-        </div>
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(250px,1fr))] gap-4">
+              {overview.sections.map((section, i) => (
+                <SectionMonitor key={section.id} section={section} domain={domain} style={rise(4 + i)} />
+              ))}
+            </div>
+          </section>
+        )}
 
-        <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden">
-          <div className="p-4 border-b border-gray-100">
-            <h2 className="text-lg font-semibold text-gray-900">Recent Activity</h2>
-            <p className="text-sm text-gray-500 mt-0.5">Latest updates and actions</p>
+        <div className="grid grid-cols-1 gap-4 pt-2 lg:grid-cols-5">
+          <div className="animate-rise lg:col-span-3" style={rise(5 + overview.sections.length)}>
+            <AlertFeed alerts={alerts} />
           </div>
-          <div className="p-4">
-            <ol className="relative space-y-5 before:absolute before:left-[15px] before:top-2 before:bottom-2 before:w-px before:bg-gray-100">
-              {activities.slice(0, 4).map((activity) => {
-                const meta = getActivityMeta(activity.action);
-                return (
-                  <li key={activity.id} className="relative flex gap-3">
-                    <span className={`relative z-10 w-8 h-8 shrink-0 rounded-full bg-surface ring-4 ${meta.ring} flex items-center justify-center`}>
-                      <span className={`w-2 h-2 rounded-full ${meta.dot}`} />
-                    </span>
-                    <div className="flex-1 min-w-0 pb-0.5">
-                      <p className="font-medium text-gray-900 text-sm">{activity.action}</p>
-                      <p className="text-xs text-gray-500 truncate">{activity.details}</p>
-                      <p className="text-[11px] text-gray-400 mt-1">{timeAgo(activity.created_at)}</p>
-                    </div>
-                  </li>
-                );
-              })}
-            </ol>
-            {activities.length === 0 && (
-              <div className="text-center text-gray-500 py-4">
-                No recent activity
-              </div>
-            )}
+          <div className="animate-rise lg:col-span-2" style={rise(6 + overview.sections.length)}>
+            <ActivityFeed activities={activities} />
           </div>
         </div>
       </div>
+    </div>
+  );
+}
 
-      <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden">
-        <div className="p-4 border-b border-gray-100 flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900">Pending Alerts</h2>
-            <p className="text-sm text-gray-500 mt-0.5">Alerts requiring your attention</p>
+function OverviewSkeleton() {
+  const panel = "rounded-xl border border-hairline bg-surface shadow-tile";
+  return (
+    <div className="space-y-4">
+      <div className="mb-5 animate-pulse space-y-3 border-b border-hairline pb-5">
+        <div className="h-3 w-24 rounded-full bg-gray-200" />
+        <div className="h-9 w-72 rounded bg-gray-200" />
+        <div className="h-4 w-[28rem] max-w-full rounded bg-gray-200" />
+      </div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <SkeletonStatTile key={i} />
+        ))}
+      </div>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className={`${panel} animate-pulse overflow-hidden lg:col-span-2`}>
+          <div className="border-b border-hairline p-4">
+            <div className="h-5 w-44 rounded bg-gray-200" />
           </div>
-          {pendingAlerts > 0 && (
-            <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-600">
-              {pendingAlerts} pending
-            </span>
-          )}
+          {Array.from({ length: 5 }).map((_, i) => (
+            <SkeletonStudentRow key={i} />
+          ))}
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-subtle border-b border-gray-100">
-              <tr>
-                <th className="px-5 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Student</th>
-                <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Alert Type</th>
-                <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Severity</th>
-                <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Date</th>
-                <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-                <th className="px-5 py-2.5 text-right text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-hairline">
-              {alerts.map((alert) => (
-                <tr key={alert.id} className="hover:bg-subtle transition-colors">
-                  <td className="px-5 py-3.5">
-                    <p className="font-medium text-gray-900">{alert.student_name}</p>
-                  </td>
-                  <td className="px-4 py-3.5">
-                    <p className="text-gray-600">{alert.alert_type}</p>
-                  </td>
-                  <td className="px-4 py-3.5">
-                    <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${getSeverityColor(alert.severity)}`}>
-                      {alert.severity.charAt(0).toUpperCase() + alert.severity.slice(1)}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3.5">
-                    <p className="text-gray-500 text-sm">{timeAgo(alert.created_at)}</p>
-                  </td>
-                  <td className="px-4 py-3.5">
-                    <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${
-                      alert.status === 'pending' ? 'bg-amber-100 text-amber-700' :
-                      alert.status === 'reviewed' ? 'bg-blue-100 text-blue-700' :
-                      'bg-emerald-100 text-emerald-700'
-                    }`}>
-                      {alert.status.charAt(0).toUpperCase() + alert.status.slice(1)}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3.5 text-right">
-                    <button
-                      onClick={() => router.push(`/faculty/students/${alert.student_id}`)}
-                      className="text-sm text-brand-600 font-medium hover:text-brand-700 transition-colors"
-                    >
-                      Review
-                    </button>
-                  </td>
-                </tr>
+        <div className="flex flex-col gap-4">
+          {Array.from({ length: 2 }).map((_, i) => (
+            <div key={i} className={`${panel} animate-pulse space-y-2 p-4`}>
+              <div className="h-4 w-28 rounded bg-gray-200" />
+              {Array.from({ length: 2 }).map((__, j) => (
+                <SkeletonActivityItem key={j} />
               ))}
-              {alerts.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-5 py-10 text-center">
-                    <p className="text-gray-500 font-medium">No pending alerts</p>
-                    <p className="text-sm text-gray-400 mt-1">You&apos;re all caught up.</p>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+            </div>
+          ))}
         </div>
+      </div>
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(250px,1fr))] gap-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className={`${panel} h-52 animate-pulse`} />
+        ))}
       </div>
     </div>
   );

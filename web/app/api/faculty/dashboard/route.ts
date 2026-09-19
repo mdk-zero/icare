@@ -5,6 +5,7 @@ import {
   getScopedStudents,
   getLatestRiskByStudent,
   buildFacultyAlerts,
+  buildFacultyOverview,
 } from '@/app/lib/faculty-dashboard';
 
 /**
@@ -13,8 +14,15 @@ import {
  * used to ship with.
  *
  * `recent_activities` mirrors /api/faculty/audit: faculty see their own trail,
- * admins see everyone's.
+ * admins see everyone's — less sign-ins and page views, which are most of the
+ * trail and none of what anyone wants to see on arrival.
+ *
+ * `overview` carries the rest of the landing page: see buildFacultyOverview.
  */
+
+/** Trail entries that record looking or arriving, not doing. */
+const NOISE = /^(login|logout|view[_ .])/i;
+const ACTIVITY_SHOWN = 8;
 
 interface AuditRow {
   id: string;
@@ -50,7 +58,7 @@ export async function GET() {
       .from('audit_logs')
       .select('id, actor_id, action, details, created_at, actor:users(name)')
       .order('created_at', { ascending: false })
-      .limit(10);
+      .limit(40);
     if (session.role === 'faculty') {
       auditQuery = auditQuery.eq('actor_id', session.uid);
     }
@@ -76,6 +84,8 @@ export async function GET() {
       if (prediction.risk === 'at_risk') atRisk += 1;
     }
 
+    const overview = await buildFacultyOverview(supabase, session, students, risks, alerts);
+
     const statuses = (assignments.data ?? []).map((a) => a.status);
     const stats = {
       total_students: students.length,
@@ -84,19 +94,27 @@ export async function GET() {
       completed_reviews: reviewed.count ?? 0,
       active_scenarios: statuses.filter((s) => s === 'pending' || s === 'in_progress').length,
       pending_scenarios: statuses.filter((s) => s === 'pending').length,
+      awaiting_review: overview.review_queue.total,
+      overdue_assignments: overview.overdue_assignments,
+      students_behind: overview.students_behind,
     };
 
-    const recent_activities = ((audit.data ?? []) as unknown as AuditRow[]).map((row) => ({
-      id: row.id,
-      faculty_id: row.actor_id ?? '',
-      faculty_name: row.actor?.name ?? 'System',
-      tab: 'overview',
-      action: row.action,
-      details: detailsText(row.details),
-      created_at: row.created_at,
-    }));
+    const recent_activities = ((audit.data ?? []) as unknown as AuditRow[])
+      .filter((row) => !NOISE.test(row.action))
+      .slice(0, ACTIVITY_SHOWN)
+      .map((row) => ({
+        id: row.id,
+        faculty_id: row.actor_id ?? '',
+        faculty_name: row.actor?.name ?? 'System',
+        tab: 'overview',
+        action: row.action,
+        details: detailsText(row.details),
+        // The structured form too, so the feed can phrase entries it knows.
+        metadata: row.details,
+        created_at: row.created_at,
+      }));
 
-    return NextResponse.json({ stats, recent_activities });
+    return NextResponse.json({ stats, recent_activities, overview });
   } catch (err) {
     console.error('Fetch faculty dashboard failed', err);
     return NextResponse.json({ error: 'Unable to fetch dashboard' }, { status: 500 });
