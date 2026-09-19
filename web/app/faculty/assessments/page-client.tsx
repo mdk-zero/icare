@@ -18,7 +18,8 @@ import {
   faChevronDown,
 } from "@fortawesome/free-solid-svg-icons";
 import PageHeader from "../../components/PageHeader";
-import { SkeletonAssessmentCard } from "../../components/skeletons";
+import { SkeletonAssessmentCard, SkeletonStatTile } from "../../components/skeletons";
+import StatTile from "../../components/StatTile";
 import { fetchFacultySections, type Section, apiFetch } from "../../lib/api";
 import { toast } from "../../components/Toast";
 import ConfirmModal from "../../components/ConfirmModal";
@@ -119,6 +120,8 @@ export default function FacultyAssessmentsClient() {
   const assessments = data?.assessments ?? NO_ASSESSMENTS;
   const students = data?.students ?? NO_STUDENTS;
   const sections = data?.sections ?? NO_SECTIONS;
+  const publishedCount = assessments.filter((a) => a.is_published).length;
+  const bankSize = assessments.reduce((sum, a) => sum + a.question_count, 0);
   const [busy, setBusy] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "published" | "draft">("all");
@@ -340,18 +343,40 @@ export default function FacultyAssessmentsClient() {
       />
 
       {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {[
-          { label: "Total Assessments", value: assessments.length, color: "text-gray-800" },
-          { label: "Published", value: assessments.filter((a) => a.is_published).length, color: "text-green-700" },
-          { label: "Draft", value: assessments.filter((a) => !a.is_published).length, color: "text-gray-500" },
-        ].map((stat) => (
-          <div key={stat.label} className="bg-surface rounded-xl border border-hairline p-4 shadow-tile">
-            <p className="text-sm text-gray-500">{stat.label}</p>
-            <p className={`text-2xl font-semibold ${stat.color} mt-0.5`}>{stat.value}</p>
-          </div>
-        ))}
-      </div>
+      {loading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <SkeletonStatTile key={i} />
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <StatTile
+            icon={faListCheck}
+            value={assessments.length}
+            label="Total Assessments"
+            caption={`${bankSize} question${bankSize === 1 ? "" : "s"} in the bank`}
+            iconBg="bg-brand-600/10"
+            iconColor="text-brand-600"
+          />
+          <StatTile
+            icon={faGlobe}
+            value={publishedCount}
+            label="Published"
+            caption="Visible to students"
+            iconBg="bg-emerald-50"
+            iconColor="text-emerald-600"
+          />
+          <StatTile
+            icon={faEyeSlash}
+            value={assessments.length - publishedCount}
+            label="Draft"
+            caption="Hidden from students"
+            iconBg="bg-gray-100"
+            iconColor="text-gray-600"
+          />
+        </div>
+      )}
 
       <div className="flex items-center justify-between gap-4">
         <div className="relative flex-1">
