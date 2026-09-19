@@ -1710,17 +1710,29 @@ export async function createScenario(scenario: Partial<SimulationScenario>): Pro
   }
 }
 
+/** A lesson file, when given, grounds the scenario in its content; the prompt may then be empty. */
 export async function generateAIScenario(
   prompt: string,
   patientId?: string,
+  lesson?: File | null,
 ): Promise<Partial<SimulationScenario> | { error: string }> {
   try {
-    const res = await apiFetch('/api/faculty/scenarios/generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ prompt, patient_id: patientId }),
-    });
+    let init: RequestInit;
+    if (lesson) {
+      const formData = new FormData();
+      formData.append('prompt', prompt);
+      if (patientId) formData.append('patient_id', patientId);
+      formData.append('file', lesson);
+      init = { method: 'POST', credentials: 'include', body: formData };
+    } else {
+      init = {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ prompt, patient_id: patientId }),
+      };
+    }
+    const res = await apiFetch('/api/faculty/scenarios/generate', init);
 
     const json = (await res.json()) as { scenario?: Partial<SimulationScenario>; error?: string };
     if (!res.ok || !json.scenario) {

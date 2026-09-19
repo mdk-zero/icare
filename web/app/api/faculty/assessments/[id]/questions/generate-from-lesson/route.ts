@@ -2,16 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { callAI, aiErrorResponse } from '@/app/lib/ai/generate';
-import { PDFParse } from 'pdf-parse';
-import mammoth from 'mammoth';
+import { readLessonUpload } from '@/app/lib/ai/lesson';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
 }
 
 const MAX_QUESTIONS = 20;
-const MAX_LESSON_CHARS = 15_000;
-const MAX_FILE_BYTES = 15 * 1024 * 1024; // 15MB
 
 type QuestionType = 'multiple_choice' | 'short_answer';
 
@@ -24,28 +21,6 @@ interface GeneratedDraft {
   explanation: string;
   competency_ids: string[];
   criteria_id: string | null;
-}
-
-/** Pulls plain text out of a lesson upload — PDF and DOCX go through their
- * respective parsers, everything else (.txt, .md) is read as-is. */
-async function extractLessonText(file: File): Promise<string> {
-  const name = file.name.toLowerCase();
-  const buffer = Buffer.from(await file.arrayBuffer());
-
-  if (name.endsWith('.pdf')) {
-    const parser = new PDFParse({ data: buffer });
-    try {
-      const result = await parser.getText();
-      return result.text;
-    } finally {
-      await parser.destroy();
-    }
-  }
-  if (name.endsWith('.docx')) {
-    const result = await mammoth.extractRawText({ buffer });
-    return result.value;
-  }
-  return buffer.toString('utf-8');
 }
 
 function buildPrompt(
@@ -266,23 +241,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   if (!(file instanceof File) || file.size === 0) {
     return NextResponse.json({ error: 'A lesson file is required' }, { status: 400 });
   }
-  if (file.size > MAX_FILE_BYTES) {
-    return NextResponse.json({ error: 'Lesson file is too large (max 15MB)' }, { status: 400 });
-  }
-
-  const lowerName = file.name.toLowerCase();
-  if (lowerName.endsWith('.doc') && !lowerName.endsWith('.docx')) {
-    return NextResponse.json(
-      { error: 'Legacy .doc files are not supported — please save as .docx, PDF, or plain text' },
-      { status: 400 },
-    );
-  }
-  const allowedExt = ['.pdf', '.docx', '.txt', '.md'];
-  if (!allowedExt.some((ext) => lowerName.endsWith(ext))) {
-    return NextResponse.json(
-      { error: 'Unsupported file type — use a PDF, Word (.docx), or plain text file' },
-      { status: 400 },
-    );
+  const lesson = await readLessonUpload(file);
+  if ('error' in lesson) {
+    return NextResponse.json({ error: lesson.error }, { status: lesson.status });
   }
 
   const rawTypes = String(formData.get('questionTypes') ?? '')
@@ -313,33 +274,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Assessment not found' }, { status: 404 });
     }
 
-    let lessonText: string;
-    try {
-      lessonText = (await extractLessonText(file)).trim();
-    } catch (err) {
-      console.error('Failed to extract lesson text', err);
-      return NextResponse.json(
-        { error: "Could not read that file — check it isn't corrupted or password-protected" },
-        { status: 400 },
-      );
-    }
-
-    if (lessonText.length < 50) {
-      return NextResponse.json(
-        { error: 'Could not find enough readable text in that file' },
-        { status: 400 },
-      );
-    }
-    if (lessonText.length > MAX_LESSON_CHARS) {
-      lessonText = lessonText.slice(0, MAX_LESSON_CHARS);
-    }
-
     const competencyList = (competencies ?? []) as { id: string; name: string }[];
     const generated = await callAI(
       buildPrompt(
         assessment as { title: string; description: string; category: string; difficulty: string },
         competencyList.map((c) => c.name),
-        lessonText,
+        lesson.text,
         questionTypes,
         count,
       ),

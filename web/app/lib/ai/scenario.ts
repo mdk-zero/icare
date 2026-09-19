@@ -176,14 +176,37 @@ export const SCENARIO_GUIDELINES = `- If a patient record is provided, base vita
 - Keep the scenario clinically plausible and safe for educational use.
 - Treat this as the patient's first recorded encounter: medical_history must describe only pre-existing background (chronic conditions, current medications, allergies, prior surgeries before this admission) — do not reference any previous hospital visits, prior scenarios, or prior nursing encounters in the system.`;
 
-/** Prompt for a single scenario, optionally grounded in a patient record. */
-export function buildScenarioPrompt(userPrompt: string, patient?: PatientContext | null): string {
+/**
+ * The lesson a scenario must teach from. The faculty request, when there is
+ * one, picks which part of the lesson the case centres on; the patient record,
+ * when there is one, stays the patient the lesson is applied to.
+ */
+function lessonBlock(lessonText: string, hasRequest: boolean, hasPatient: boolean): string {
+  return `
+Lesson material the scenario must teach from:
+"""
+${lessonText}
+"""
+
+Ground the scenario in this lesson. Choose a clinical situation in which a nurse has to apply what the lesson teaches${hasRequest ? ', centred on the part of the lesson the faculty request points to' : ''}. The learning_objectives and the nursing actions in treatment_plan must come from the lesson's own content — the assessments, procedures, interventions and teaching points it covers — and nothing in the scenario may contradict the lesson. Where the lesson is silent (patient background, baseline vitals, history), fill in clinically plausible details. Students read every field, so write the case as a real clinical situation and never mention the lesson, checklist, or provided material.${hasPatient ? " Keep the patient record's diagnosis and vitals, and apply the lesson to this patient's care." : ''}
+`;
+}
+
+/** Prompt for a single scenario, optionally grounded in a patient record and/or a lesson. */
+export function buildScenarioPrompt(
+  userPrompt: string,
+  patient?: PatientContext | null,
+  lessonText?: string | null,
+): string {
   const patientBlock = patient ? `\nUse ${patientRecordBlock(patient, 'patient record as the basis for the scenario')}\n` : '';
+  const request = userPrompt
+    ? `Faculty request: "${userPrompt.replace(/"/g, '\\"')}"`
+    : 'Faculty request: build a case that puts the lesson below into practice.';
 
   return `You are a clinical nursing education expert. Create a realistic simulation scenario for nursing students based on the faculty request below.
 
-Faculty request: "${userPrompt.replace(/"/g, '\\"')}"
-${patientBlock}
+${request}
+${patientBlock}${lessonText ? lessonBlock(lessonText, Boolean(userPrompt), Boolean(patient)) : ''}
 
 Return ONLY a valid JSON object with this exact structure (no markdown, no explanations):
 

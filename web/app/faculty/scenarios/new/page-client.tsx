@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -12,6 +12,8 @@ import {
   faChevronDown,
   faDoorOpen,
   faTriangleExclamation,
+  faFileImport,
+  faTimes,
 } from "@fortawesome/free-solid-svg-icons";
 import {
   createScenario,
@@ -75,6 +77,9 @@ export default function NewScenarioClient() {
   const [aiError, setAiError] = useState<string | null>(null);
   const [aiPatientCase, setAiPatientCase] = useState<Record<string, unknown> | null>(null);
   const [aiGenerated, setAiGenerated] = useState(false);
+  // An imported lesson grounds the AI draft; the prompt then just steers it.
+  const [lessonFile, setLessonFile] = useState<File | null>(null);
+  const lessonInputRef = useRef<HTMLInputElement>(null);
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -117,10 +122,10 @@ export default function NewScenarioClient() {
   };
 
   const handleGenerate = async () => {
-    if (!aiPrompt.trim()) return;
+    if (!aiPrompt.trim() && !lessonFile) return;
     setGenerating(true);
     setAiError(null);
-    const preview = await generateAIScenario(aiPrompt, form.patientId || undefined);
+    const preview = await generateAIScenario(aiPrompt, form.patientId || undefined, lessonFile);
     if ("error" in preview) {
       setAiError(preview.error);
     } else {
@@ -247,30 +252,86 @@ export default function NewScenarioClient() {
               )}
             </div>
             <p className="text-xs text-gray-500">
-              Describe the case; AI fills the fields (grounded on the selected patient, if any). You
-              can edit everything before saving.
+              Describe the case, import a lesson to build it from, or both; AI fills the fields
+              (grounded on the selected patient, if any). You can edit everything before saving.
             </p>
             <textarea
               value={aiPrompt}
               onChange={(e) => setAiPrompt(e.target.value)}
-              placeholder="e.g. Acute MI in a 68-year-old with chest pain and diaphoresis"
+              placeholder={
+                lessonFile
+                  ? "Optional — e.g. focus on the post-operative wound assessment"
+                  : "e.g. Acute MI in a 68-year-old with chest pain and diaphoresis"
+              }
               rows={2}
               className={inputClassName + " resize-none"}
             />
+            {lessonFile && (
+              <div className="flex items-center gap-2 px-3 py-2 bg-surface border border-brand-600/30 rounded-lg text-sm text-gray-700">
+                <FontAwesomeIcon icon={faFileImport} className="w-3.5 h-3.5 text-brand-600 shrink-0" />
+                <span className="truncate flex-1" title={lessonFile.name}>
+                  {lessonFile.name}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLessonFile(null);
+                    setAiError(null);
+                  }}
+                  disabled={generating}
+                  aria-label="Remove lesson"
+                  className="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-50"
+                >
+                  <FontAwesomeIcon icon={faTimes} className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
             {aiError && <p className="text-xs text-red-600">{aiError}</p>}
-            <button
-              type="button"
-              onClick={handleGenerate}
-              disabled={generating || !aiPrompt.trim()}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-lg transition-all disabled:opacity-50"
-            >
-              {generating ? (
-                <EcgLoader className="text-[#5eead4]" />
-              ) : (
-                <FontAwesomeIcon icon={faRobot} className="w-4 h-4 text-[#5eead4]" />
-              )}
-              {generating ? "Generating…" : "Generate"}
-            </button>
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={handleGenerate}
+                disabled={generating || (!aiPrompt.trim() && !lessonFile)}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-lg transition-all disabled:opacity-50"
+              >
+                {generating ? (
+                  <EcgLoader className="text-[#5eead4]" />
+                ) : (
+                  <FontAwesomeIcon icon={faRobot} className="w-4 h-4 text-[#5eead4]" />
+                )}
+                {generating ? "Generating…" : lessonFile ? "Generate from lesson" : "Generate"}
+              </button>
+              <button
+                type="button"
+                onClick={() => lessonInputRef.current?.click()}
+                disabled={generating}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-surface border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-all disabled:opacity-50"
+              >
+                <FontAwesomeIcon icon={faFileImport} className="w-4 h-4" />
+                {lessonFile ? "Change lesson" : "Import Lesson"}
+              </button>
+              <input
+                ref={lessonInputRef}
+                type="file"
+                accept=".pdf,.doc,.docx,.txt,.md,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    setLessonFile(file);
+                    setAiError(null);
+                  }
+                  // Cleared so picking the same file again after removing it still fires.
+                  e.target.value = "";
+                }}
+              />
+            </div>
+            {lessonFile && (
+              <p className="text-xs text-gray-500">
+                The case, its nursing actions and learning objectives are drawn from the lesson
+                (.pdf, .docx, .txt or .md); the description above narrows what it focuses on.
+              </p>
+            )}
           </div>
 
           {/* Details */}
