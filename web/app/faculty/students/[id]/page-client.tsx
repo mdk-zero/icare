@@ -42,6 +42,17 @@ import Avatar from "../../../components/Avatar";
 import StatTile from "../../../components/StatTile";
 import { usePageData } from "../../../lib/use-page-data";
 import LiveClock from "../../../components/LiveClock";
+import AiThinking from "../../../components/AiThinking";
+
+/** Shown in turn while the summary is written, following what it draws on. */
+const STUDENT_SUMMARY_PHRASES = [
+  "Thinking…",
+  "Reviewing quiz scores…",
+  "Going through scenarios…",
+  "Analyzing competencies…",
+  "Checking the risk prediction…",
+  "Drafting recommendations…",
+];
 
 interface PerformanceHistory {
   quiz_title: string;
@@ -419,11 +430,11 @@ export default function StudentDetailClient() {
           )}
 
           {summaryLoading && (
-            <div className="mt-3 space-y-2 animate-pulse">
-              <div className="h-4 w-3/4 bg-gray-200 rounded" />
-              <div className="h-4 w-full bg-gray-200 rounded" />
-              <div className="h-4 w-2/3 bg-gray-200 rounded" />
-            </div>
+            <AiThinking
+              phrases={STUDENT_SUMMARY_PHRASES}
+              label="Generating the AI performance summary"
+              className="mt-3"
+            />
           )}
 
           {!summaryLoading && aiSummary && (

@@ -36,6 +36,7 @@ import Card, { CardLabel } from "../../components/Card";
 import { usePageData } from "../../lib/use-page-data";
 import { MODEL_EVAL_SNAPSHOT, DEFAULT_MODEL_KIND } from "../../lib/model-eval-snapshot";
 import { EcgLoader } from "../../components/EcgLoader";
+import AiThinking from "../../components/AiThinking";
 import { Leaderboard } from "./Leaderboard";
 import { parseDay, formatRange } from "./dates";
 import { buildTrendSeries, TrendLegend, TrendLineChart, TrendTable } from "./SectionTrendChart";
@@ -59,6 +60,16 @@ const NARRATIVE_COOLDOWN_MS = 10 * 60 * 1000;
 const NARRATIVE_STORAGE_PREFIX = "icare:analytics-narrative:";
 const NARRATIVE_STORAGE_INDEX_KEY = "icare:analytics-narrative:index";
 const NARRATIVE_STORAGE_MAX_ENTRIES = 15;
+
+/** Shown in turn while the summary is written — it reads the figures below. */
+const ANALYTICS_SUMMARY_PHRASES = [
+  "Thinking…",
+  "Reading the figures…",
+  "Analyzing trends…",
+  "Comparing sections…",
+  "Spotting what stands out…",
+  "Drafting the summary…",
+];
 
 type NarrativeResult = Awaited<ReturnType<typeof generateAnalyticsNarrative>>;
 
@@ -621,11 +632,11 @@ function NarrativeCard({
           )}
 
           {loading && (
-            <div className="mt-4 animate-pulse space-y-2">
-              <div className="h-5 w-2/3 rounded bg-gray-200" />
-              <div className="h-4 w-full rounded bg-gray-200" />
-              <div className="h-4 w-5/6 rounded bg-gray-200" />
-            </div>
+            <AiThinking
+              phrases={ANALYTICS_SUMMARY_PHRASES}
+              label="Generating the AI summary"
+              className="mt-4"
+            />
           )}
 
           {!loading && narrative && (

@@ -57,6 +57,7 @@
   --animate-float-slow: floatSlow 6s ease-in-out infinite;
   --animate-float-medium: floatMedium 4.5s ease-in-out infinite;
   --animate-rise: rise 0.45s cubic-bezier(0.22, 0.61, 0.36, 1) backwards;
+  --animate-phrase-in: phraseIn 0.4s ease-out;
 }
 
 /*
@@ -128,6 +129,19 @@
   from {
     opacity: 0;
     transform: translate3d(0, 10px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* AiThinking's phrase swap: a nudge, not a reveal — it repeats every couple
+   of seconds while an AI answer is written, so it has to stay subtle. */
+@keyframes phraseIn {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 4px, 0);
   }
   to {
     opacity: 1;
