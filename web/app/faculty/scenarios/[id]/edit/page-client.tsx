@@ -29,6 +29,8 @@ import { roomStatus, ROOM_STATUS_LABEL, ROOM_STATUS_TONE } from "../../../../lib
 import { toast } from "../../../../components/Toast";
 import PageHeader from "../../../../components/PageHeader";
 import { EcgLoader } from "../../../../components/EcgLoader";
+import CategoryPicker from "../../../../components/CategoryPicker";
+import { useScenarioCategories } from "../../../../lib/use-scenario-categories";
 
 const inputClassName =
   "w-full px-4 py-3 bg-surface border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 focus:bg-surface transition-all text-sm shadow-sm";
@@ -37,19 +39,6 @@ const labelClassName = "block text-sm font-bold text-gray-800 mb-2";
 
 const selectClassName =
   "w-full px-4 py-3 bg-surface border border-gray-400 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 focus:bg-surface transition-all text-sm appearance-none shadow-sm cursor-pointer";
-
-const SCENARIO_CATEGORIES = [
-  "Cardiac Emergency",
-  "Respiratory Emergency",
-  "Neurological Emergency",
-  "Trauma",
-  "Medical-Surgical",
-  "Patient Education",
-  "Infection Management",
-  "Critical Care",
-  "Medication Safety",
-  "General",
-] as const;
 
 const emptyForm = {
   title: "",
@@ -70,7 +59,7 @@ export default function EditScenarioClient({ scenarioId }: { scenarioId: string 
   const [loadingData, setLoadingData] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [patientSearch, setPatientSearch] = useState("");
-  const [customCategory, setCustomCategory] = useState(false);
+  const { categories, loading: loadingCategories } = useScenarioCategories();
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -103,12 +92,6 @@ export default function EditScenarioClient({ scenarioId }: { scenarioId: string 
       // keeps them there.
       roomId: linked?.room_id ?? "",
     });
-    // A category off the preset list — an AI draft or one typed by hand — has
-    // to stay editable as free text, or saving would silently rewrite it.
-    const cat = scenarioData.category ?? "";
-    if (cat && !SCENARIO_CATEGORIES.includes(cat as (typeof SCENARIO_CATEGORIES)[number])) {
-      setCustomCategory(true);
-    }
     setLoadingData(false);
   }, [scenarioId]);
 
@@ -324,55 +307,12 @@ export default function EditScenarioClient({ scenarioId }: { scenarioId: string 
               </div>
               <div>
                 <label className={labelClassName}>Category</label>
-                {customCategory ? (
-                  <div>
-                    <input
-                      type="text"
-                      value={form.category}
-                      onChange={(e) => setForm({ ...form, category: e.target.value })}
-                      placeholder="New category name"
-                      maxLength={60}
-                      className={inputClassName}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setCustomCategory(false);
-                        setForm((f) => ({ ...f, category: "" }));
-                      }}
-                      className="mt-1.5 text-xs font-medium text-brand-600 hover:text-brand-700"
-                    >
-                      Choose from a preset instead
-                    </button>
-                  </div>
-                ) : (
-                  <div className="relative">
-                    <select
-                      value={form.category}
-                      onChange={(e) => {
-                        if (e.target.value === "__new__") {
-                          setCustomCategory(true);
-                          setForm((f) => ({ ...f, category: "" }));
-                        } else {
-                          setForm({ ...form, category: e.target.value });
-                        }
-                      }}
-                      className={selectClassName + " pr-10"}
-                    >
-                      <option value="">Select category</option>
-                      {SCENARIO_CATEGORIES.map((cat) => (
-                        <option key={cat} value={cat}>
-                          {cat}
-                        </option>
-                      ))}
-                      <option value="__new__">➕ Create new category…</option>
-                    </select>
-                    <FontAwesomeIcon
-                      icon={faChevronDown}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none"
-                    />
-                  </div>
-                )}
+                <CategoryPicker
+                  value={form.category}
+                  onChange={(category) => setForm((prev) => ({ ...prev, category }))}
+                  categories={categories}
+                  loading={loadingCategories}
+                />
               </div>
             </div>
             <div>

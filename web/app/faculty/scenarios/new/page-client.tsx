@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -13,10 +13,10 @@ import {
   faDoorOpen,
   faTriangleExclamation,
   faFileImport,
-  faTimes,
 } from "@fortawesome/free-solid-svg-icons";
 import {
   createScenario,
+  createScenarioCategories,
   generateAIScenario,
   fetchFacultyPatients,
   fetchRooms,
@@ -30,6 +30,9 @@ import { roomStatus, ROOM_STATUS_LABEL, ROOM_STATUS_TONE } from "../../../lib/ro
 import PageHeader from "../../../components/PageHeader";
 import { usePageData } from "../../../lib/use-page-data";
 import { EcgLoader } from "../../../components/EcgLoader";
+import CategoryPicker from "../../../components/CategoryPicker";
+import { LessonPanel, useLessonImport } from "../../../components/LessonImport";
+import { useScenarioCategories } from "../../../lib/use-scenario-categories";
 
 // Stable empty fallbacks, so the occupancy memo is not invalidated every render.
 const NO_PATIENTS: FacultyPatient[] = [];
@@ -42,19 +45,6 @@ const labelClassName = "block text-sm font-bold text-gray-800 mb-2";
 
 const selectClassName =
   "w-full px-4 py-3 bg-surface border border-gray-400 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 focus:bg-surface transition-all text-sm appearance-none shadow-sm cursor-pointer";
-
-const SCENARIO_CATEGORIES = [
-  "Cardiac Emergency",
-  "Respiratory Emergency",
-  "Neurological Emergency",
-  "Trauma",
-  "Medical-Surgical",
-  "Patient Education",
-  "Infection Management",
-  "Critical Care",
-  "Medication Safety",
-  "General",
-] as const;
 
 const emptyForm = {
   title: "",
@@ -70,16 +60,28 @@ export default function NewScenarioClient() {
   const router = useRouter();
   const [form, setForm] = useState(emptyForm);
   const [patientSearch, setPatientSearch] = useState("");
-  const [customCategory, setCustomCategory] = useState(false);
 
   const [aiPrompt, setAiPrompt] = useState("");
   const [generating, setGenerating] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const [aiPatientCase, setAiPatientCase] = useState<Record<string, unknown> | null>(null);
   const [aiGenerated, setAiGenerated] = useState(false);
-  // An imported lesson grounds the AI draft; the prompt then just steers it.
-  const [lessonFile, setLessonFile] = useState<File | null>(null);
-  const lessonInputRef = useRef<HTMLInputElement>(null);
+  const { categories, loading: loadingCategories, setCategories } = useScenarioCategories();
+  // An imported lesson grounds the AI draft (the prompt then just steers it),
+  // and its topics are offered as categories.
+  const lessonImport = useLessonImport({
+    // The lesson's main topic is preselected when it is already a category
+    // and nothing has been picked; a new one waits for the faculty to save it.
+    onAnalyzed: (imported) => {
+      const main = imported.topics[0];
+      if (main && !main.is_new) {
+        setForm((prev) => (prev.category ? prev : { ...prev, category: main.category }));
+      }
+    },
+  });
+  const { lesson, analyzing, selectedTopics } = lessonImport;
+  const newTopics = selectedTopics.filter((t) => t.is_new);
+  const [savingTopics, setSavingTopics] = useState(false);
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -121,11 +123,49 @@ export default function NewScenarioClient() {
     setForm((prev) => ({ ...prev, patientId, roomId: picked?.room_id ?? "" }));
   };
 
+  /**
+   * Creates the ticked topics that aren't categories yet, then files this
+   * scenario under the first ticked topic — the lesson's most central one.
+   */
+  const saveTopicCategories = async () => {
+    const first = selectedTopics[0];
+    if (!first) return;
+    setSavingTopics(true);
+    setAiError(null);
+    let category = first.category;
+    if (newTopics.length > 0) {
+      const result = await createScenarioCategories(
+        newTopics.map((t) => t.category),
+        "lesson",
+      );
+      if ("error" in result) {
+        setAiError(result.error);
+        setSavingTopics(false);
+        return;
+      }
+      lessonImport.markCreated(result.created);
+      setCategories(result.categories);
+      category =
+        result.created.find((c) => c.toLowerCase() === first.category.toLowerCase()) ?? category;
+    }
+    setForm((prev) => ({ ...prev, category }));
+    setSavingTopics(false);
+  };
+
   const handleGenerate = async () => {
-    if (!aiPrompt.trim() && !lessonFile) return;
+    if (!aiPrompt.trim() && !lesson) return;
     setGenerating(true);
     setAiError(null);
-    const preview = await generateAIScenario(aiPrompt, form.patientId || undefined, lessonFile);
+    // When the chosen category is one of the lesson's topics, the case is
+    // centred on it; otherwise the model picks the category.
+    const topicCategory = lesson?.topics.some((t) => !t.is_new && t.category === form.category)
+      ? form.category
+      : null;
+    const preview = await generateAIScenario(
+      aiPrompt,
+      form.patientId || undefined,
+      lesson ? { text: lesson.lessonText, category: topicCategory } : null,
+    );
     if ("error" in preview) {
       setAiError(preview.error);
     } else {
@@ -139,11 +179,6 @@ export default function NewScenarioClient() {
       }));
       setAiPatientCase((preview.patient_case as Record<string, unknown>) ?? null);
       setAiGenerated(true);
-      // If the model produced a category outside the presets, show it as custom.
-      const cat = preview.category ?? "";
-      if (cat && !SCENARIO_CATEGORIES.includes(cat as (typeof SCENARIO_CATEGORIES)[number])) {
-        setCustomCategory(true);
-      }
     }
     setGenerating(false);
   };
@@ -259,39 +294,39 @@ export default function NewScenarioClient() {
               value={aiPrompt}
               onChange={(e) => setAiPrompt(e.target.value)}
               placeholder={
-                lessonFile
+                lesson || analyzing
                   ? "Optional — e.g. focus on the post-operative wound assessment"
                   : "e.g. Acute MI in a 68-year-old with chest pain and diaphoresis"
               }
               rows={2}
               className={inputClassName + " resize-none"}
             />
-            {lessonFile && (
-              <div className="flex items-center gap-2 px-3 py-2 bg-surface border border-brand-600/30 rounded-lg text-sm text-gray-700">
-                <FontAwesomeIcon icon={faFileImport} className="w-3.5 h-3.5 text-brand-600 shrink-0" />
-                <span className="truncate flex-1" title={lessonFile.name}>
-                  {lessonFile.name}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setLessonFile(null);
-                    setAiError(null);
-                  }}
-                  disabled={generating}
-                  aria-label="Remove lesson"
-                  className="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-50"
-                >
-                  <FontAwesomeIcon icon={faTimes} className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            )}
+            <LessonPanel lessonImport={lessonImport} disabled={generating || savingTopics}>
+              <p className="text-xs text-gray-500">
+                Ticked topics are kept as scenario categories, and this scenario is filed under the
+                first one.
+              </p>
+              {selectedTopics.length > 0 &&
+                (newTopics.length > 0 || form.category !== selectedTopics[0].category) && (
+                  <button
+                    type="button"
+                    onClick={saveTopicCategories}
+                    disabled={generating || savingTopics}
+                    className="inline-flex items-center gap-2 px-3 py-1.5 bg-surface border border-brand-600/40 text-brand-700 text-xs font-semibold rounded-lg hover:bg-brand-600/5 transition-all disabled:opacity-50"
+                  >
+                    {savingTopics && <EcgLoader className="text-brand-600" />}
+                    {newTopics.length > 0
+                      ? `Save ${newTopics.length} new categor${newTopics.length === 1 ? "y" : "ies"}`
+                      : `Use “${selectedTopics[0].category}” for this scenario`}
+                  </button>
+                )}
+            </LessonPanel>
             {aiError && <p className="text-xs text-red-600">{aiError}</p>}
             <div className="flex items-center gap-2 flex-wrap">
               <button
                 type="button"
                 onClick={handleGenerate}
-                disabled={generating || (!aiPrompt.trim() && !lessonFile)}
+                disabled={generating || savingTopics || !!analyzing || (!aiPrompt.trim() && !lesson)}
                 className="inline-flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-lg transition-all disabled:opacity-50"
               >
                 {generating ? (
@@ -299,34 +334,20 @@ export default function NewScenarioClient() {
                 ) : (
                   <FontAwesomeIcon icon={faRobot} className="w-4 h-4 text-[#5eead4]" />
                 )}
-                {generating ? "Generating…" : lessonFile ? "Generate from lesson" : "Generate"}
+                {generating ? "Generating…" : lesson ? "Generate from lesson" : "Generate"}
               </button>
               <button
                 type="button"
-                onClick={() => lessonInputRef.current?.click()}
-                disabled={generating}
+                onClick={lessonImport.pick}
+                disabled={generating || savingTopics}
                 className="inline-flex items-center gap-2 px-4 py-2 bg-surface border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-all disabled:opacity-50"
               >
                 <FontAwesomeIcon icon={faFileImport} className="w-4 h-4" />
-                {lessonFile ? "Change lesson" : "Import Lesson"}
+                {lesson || analyzing ? "Change lesson" : "Import Lesson"}
               </button>
-              <input
-                ref={lessonInputRef}
-                type="file"
-                accept=".pdf,.doc,.docx,.txt,.md,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown"
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) {
-                    setLessonFile(file);
-                    setAiError(null);
-                  }
-                  // Cleared so picking the same file again after removing it still fires.
-                  e.target.value = "";
-                }}
-              />
+              {lessonImport.fileInput}
             </div>
-            {lessonFile && (
+            {lesson && (
               <p className="text-xs text-gray-500">
                 The case, its nursing actions and learning objectives are drawn from the lesson
                 (.pdf, .docx, .txt or .md); the description above narrows what it focuses on.
@@ -379,55 +400,12 @@ export default function NewScenarioClient() {
               </div>
               <div>
                 <label className={labelClassName}>Category</label>
-                {customCategory ? (
-                  <div>
-                    <input
-                      type="text"
-                      value={form.category}
-                      onChange={(e) => setForm({ ...form, category: e.target.value })}
-                      placeholder="New category name"
-                      maxLength={60}
-                      className={inputClassName}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setCustomCategory(false);
-                        setForm((f) => ({ ...f, category: "" }));
-                      }}
-                      className="mt-1.5 text-xs font-medium text-brand-600 hover:text-brand-700"
-                    >
-                      Choose from a preset instead
-                    </button>
-                  </div>
-                ) : (
-                  <div className="relative">
-                    <select
-                      value={form.category}
-                      onChange={(e) => {
-                        if (e.target.value === "__new__") {
-                          setCustomCategory(true);
-                          setForm((f) => ({ ...f, category: "" }));
-                        } else {
-                          setForm({ ...form, category: e.target.value });
-                        }
-                      }}
-                      className={selectClassName + " pr-10"}
-                    >
-                      <option value="">Select category</option>
-                      {SCENARIO_CATEGORIES.map((cat) => (
-                        <option key={cat} value={cat}>
-                          {cat}
-                        </option>
-                      ))}
-                      <option value="__new__">➕ Create new category…</option>
-                    </select>
-                    <FontAwesomeIcon
-                      icon={faChevronDown}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none"
-                    />
-                  </div>
-                )}
+                <CategoryPicker
+                  value={form.category}
+                  onChange={(category) => setForm((prev) => ({ ...prev, category }))}
+                  categories={categories}
+                  loading={loadingCategories}
+                />
               </div>
             </div>
             <div>

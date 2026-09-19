@@ -28,11 +28,13 @@ import {
   faPenToSquare,
   faTrash,
   faTriangleExclamation,
+  faFileImport,
 } from "@fortawesome/free-solid-svg-icons";
 import { toast } from "../../components/Toast";
 import {
   fetchFacultyScenarios,
   createScenario,
+  createScenarioCategories,
   updateScenario,
   deleteScenario,
   generateScenarioBatch,
@@ -55,19 +57,8 @@ import Card from "../../components/Card";
 import Avatar from "../../components/Avatar";
 import ActionsMenu from "../../components/ActionsMenu";
 import { EcgLoader } from "../../components/EcgLoader";
-
-const SCENARIO_CATEGORIES = [
-  "Cardiac Emergency",
-  "Respiratory Emergency",
-  "Neurological Emergency",
-  "Trauma",
-  "Medical-Surgical",
-  "Patient Education",
-  "Infection Management",
-  "Critical Care",
-  "Medication Safety",
-  "General",
-] as const;
+import { LessonPanel, useLessonImport } from "../../components/LessonImport";
+import { useScenarioCategories } from "../../lib/use-scenario-categories";
 
 const inputClassName =
   "w-full px-4 py-3 bg-surface border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 focus:bg-surface transition-all text-sm shadow-sm";
@@ -133,6 +124,18 @@ export default function FacultyScenariosClient() {
   const [batchSavedCount, setBatchSavedCount] = useState(0);
   const [batchError, setBatchError] = useState<string | null>(null);
   const [batchWarning, setBatchWarning] = useState<string | null>(null);
+  const { categories: allCategories, setCategories: setAllCategories } = useScenarioCategories();
+  // A lesson grounds every scenario in the library, and its ticked topics
+  // replace the category picker — one scenario per topic to start with.
+  const batchLesson = useLessonImport({
+    onAnalyzed: (imported) => {
+      if (imported.topics.length > 0) {
+        setBatchCount(imported.topics.length);
+        setBatchCountInput(String(imported.topics.length));
+      }
+    },
+  });
+  const batchUsesTopics = (batchLesson.lesson?.topics.length ?? 0) > 0;
 
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedScenario, setSelectedScenario] = useState<SimulationScenario | null>(null);
@@ -253,6 +256,7 @@ export default function FacultyScenariosClient() {
     setBatchSavedCount(0);
     setBatchProgress(0);
     setBatchCancelling(false);
+    batchLesson.remove();
     setShowBatchModal(true);
     if (patients.length === 0) void loadPatientsForSelector();
   };
@@ -292,6 +296,30 @@ export default function FacultyScenariosClient() {
     setBatchDrafts(null);
     setBatchProgress(0);
 
+    // With lesson topics, the ticked ones are the categories. New ones are
+    // created first, so the drafts can be saved under them.
+    let categories = batchCategories;
+    if (batchUsesTopics) {
+      const topics = batchLesson.selectedTopics;
+      const fresh = topics.filter((t) => t.is_new);
+      const stored = new Map<string, string>();
+      if (fresh.length > 0) {
+        const result = await createScenarioCategories(
+          fresh.map((t) => t.category),
+          "lesson",
+        );
+        if ("error" in result) {
+          setBatchError(result.error);
+          setBatchGenerating(false);
+          return;
+        }
+        batchLesson.markCreated(result.created);
+        setAllCategories(result.categories);
+        fresh.forEach((t, i) => stored.set(t.category.toLowerCase(), result.created[i]));
+      }
+      categories = topics.map((t) => stored.get(t.category.toLowerCase()) ?? t.category);
+    }
+
     const total = Math.max(1, batchCount);
     const collected: ScenarioDraft[] = [];
     const warnings: string[] = [];
@@ -307,10 +335,11 @@ export default function FacultyScenariosClient() {
       const result = await generateScenarioBatch(
         {
           count: chunkCount,
-          categories: batchCategories,
+          categories,
           difficulty: batchDifficulty || undefined,
           topic: batchTopic.trim() || undefined,
           usePatients: batchUsePatients,
+          lessonText: batchLesson.lesson?.lessonText,
           avoidTitles: collected.map((s) => s.title),
         },
         controller.signal,
@@ -411,7 +440,12 @@ export default function FacultyScenariosClient() {
           details: `AI generated and saved ${saved} scenario${saved === 1 ? "" : "s"}`,
           target_type: "scenario",
           target_id: "",
-          metadata: { count: saved, requested: batchCount, topic: batchTopic.trim() || null },
+          metadata: {
+            count: saved,
+            requested: batchCount,
+            topic: batchTopic.trim() || null,
+            lesson: batchLesson.lesson?.fileName ?? null,
+          },
         });
       }
       toast(`Saved ${saved} scenario${saved === 1 ? "" : "s"}`);
@@ -966,6 +1000,35 @@ export default function FacultyScenariosClient() {
               {!batchDrafts ? (
                 <>
                   <div>
+                    <label className={labelClassName}>Lesson (optional)</label>
+                    <div className="space-y-2">
+                      <button
+                        type="button"
+                        onClick={batchLesson.pick}
+                        disabled={batchGenerating}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-surface border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-all disabled:opacity-50"
+                      >
+                        <FontAwesomeIcon icon={faFileImport} className="w-4 h-4" />
+                        {batchLesson.lesson || batchLesson.analyzing ? "Change lesson" : "Import Lesson"}
+                      </button>
+                      {batchLesson.fileInput}
+                      <LessonPanel lessonImport={batchLesson} disabled={batchGenerating}>
+                        <p className="text-xs text-gray-500">
+                          The library cycles through the ticked topics as its categories, and every
+                          scenario applies the lesson. Ticked new categories are created when you
+                          generate.
+                        </p>
+                      </LessonPanel>
+                      {!batchLesson.lesson && !batchLesson.analyzing && (
+                        <p className="text-xs text-gray-500">
+                          Build the library from a lesson (.pdf, .docx, .txt or .md) — the topics it
+                          covers become the categories.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
                     <label className={labelClassName}>How many scenarios?</label>
                     <input
                       type="number"
@@ -988,31 +1051,33 @@ export default function FacultyScenariosClient() {
                     </p>
                   </div>
 
-                  <div>
-                    <label className={labelClassName}>Categories</label>
-                    <div className="flex flex-wrap gap-2">
-                      {SCENARIO_CATEGORIES.map((cat) => (
-                        <button
-                          key={cat}
-                          type="button"
-                          onClick={() => toggleBatchCategory(cat)}
-                          disabled={batchGenerating}
-                          className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all disabled:opacity-50 ${
-                            batchCategories.includes(cat)
-                              ? "bg-brand-100 text-brand-700 border-brand-300"
-                              : "bg-surface text-gray-600 border-gray-300 hover:border-brand-300"
-                          }`}
-                        >
-                          {cat}
-                        </button>
-                      ))}
+                  {!batchUsesTopics && (
+                    <div>
+                      <label className={labelClassName}>Categories</label>
+                      <div className="flex flex-wrap gap-2">
+                        {allCategories.map((cat) => (
+                          <button
+                            key={cat}
+                            type="button"
+                            onClick={() => toggleBatchCategory(cat)}
+                            disabled={batchGenerating}
+                            className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all disabled:opacity-50 ${
+                              batchCategories.includes(cat)
+                                ? "bg-brand-100 text-brand-700 border-brand-300"
+                                : "bg-surface text-gray-600 border-gray-300 hover:border-brand-300"
+                            }`}
+                          >
+                            {cat}
+                          </button>
+                        ))}
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1.5">
+                        {batchCategories.length === 0
+                          ? "None selected — the batch will be spread across every category."
+                          : `The batch cycles through the ${batchCategories.length} selected categor${batchCategories.length === 1 ? "y" : "ies"}.`}
+                      </p>
                     </div>
-                    <p className="text-xs text-gray-500 mt-1.5">
-                      {batchCategories.length === 0
-                        ? "None selected — the batch will be spread across every category."
-                        : `The batch cycles through the ${batchCategories.length} selected categor${batchCategories.length === 1 ? "y" : "ies"}.`}
-                    </p>
-                  </div>
+                  )}
 
                   <div>
                     <label className={labelClassName}>Difficulty</label>
@@ -1265,7 +1330,11 @@ export default function FacultyScenariosClient() {
                   <button
                     type="button"
                     onClick={handleGenerateBatch}
-                    className="px-5 py-2.5 bg-gradient-to-r from-brand-600 to-brand-800 text-white rounded-lg font-medium hover:from-brand-700 hover:to-brand-900 transition-all flex items-center gap-2 shadow-lg shadow-[0_4px_14px_-2px_rgb(27_107_123_/_0.45)]"
+                    disabled={
+                      !!batchLesson.analyzing ||
+                      (batchUsesTopics && batchLesson.selectedTopics.length === 0)
+                    }
+                    className="px-5 py-2.5 bg-gradient-to-r from-brand-600 to-brand-800 text-white rounded-lg font-medium hover:from-brand-700 hover:to-brand-900 transition-all flex items-center gap-2 shadow-lg shadow-[0_4px_14px_-2px_rgb(27_107_123_/_0.45)] disabled:opacity-50"
                   >
                     <FontAwesomeIcon icon={faLayerGroup} className="w-4 h-4" />
                     Generate {batchCount} Scenarios

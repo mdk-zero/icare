@@ -105,16 +105,22 @@ export interface SanitizedScenario {
   title: string;
   description: string;
   difficulty: ScenarioDifficulty;
-  category: ScenarioCategory;
+  category: string;
   patient_case: PatientCase;
   learning_objectives: string[];
 }
 
 /**
  * Coerces a raw AI object into something the scenarios table will accept.
- * difficulty/category must land on the DB enums or the insert is rejected.
+ * difficulty must land on its enum and category on an existing category
+ * (matched ignoring case, returned in its stored spelling), or the insert is
+ * rejected.
  */
-export function sanitizeScenario(input: Record<string, unknown>): SanitizedScenario {
+export function sanitizeScenario(
+  input: Record<string, unknown>,
+  categories: readonly string[] = VALID_CATEGORIES,
+): SanitizedScenario {
+  const rawCategory = typeof input.category === 'string' ? input.category.trim().toLowerCase() : '';
   const learningObjectives = Array.isArray(input.learning_objectives)
     ? input.learning_objectives.filter((o): o is string => typeof o === 'string')
     : [];
@@ -123,7 +129,7 @@ export function sanitizeScenario(input: Record<string, unknown>): SanitizedScena
     title: typeof input.title === 'string' ? input.title : 'AI Generated Scenario',
     description: typeof input.description === 'string' ? input.description : '',
     difficulty: isValidDifficulty(input.difficulty) ? input.difficulty : 'intermediate',
-    category: isValidCategory(input.category) ? input.category : 'General',
+    category: categories.find((c) => c.toLowerCase() === rawCategory) ?? 'General',
     patient_case: sanitizePatientCase(input.patient_case),
     learning_objectives:
       learningObjectives.length > 0
@@ -177,36 +183,58 @@ export const SCENARIO_GUIDELINES = `- If a patient record is provided, base vita
 - Treat this as the patient's first recorded encounter: medical_history must describe only pre-existing background (chronic conditions, current medications, allergies, prior surgeries before this admission) — do not reference any previous hospital visits, prior scenarios, or prior nursing encounters in the system.`;
 
 /**
- * The lesson a scenario must teach from. The faculty request, when there is
- * one, picks which part of the lesson the case centres on; the patient record,
- * when there is one, stays the patient the lesson is applied to.
+ * The lesson a scenario must teach from, and the rules that hold for every
+ * case built on one. Callers add what the case centres on — a faculty request,
+ * a topic category, a patient.
  */
-function lessonBlock(lessonText: string, hasRequest: boolean, hasPatient: boolean): string {
+export function lessonBlock(lessonText: string): string {
   return `
 Lesson material the scenario must teach from:
 """
 ${lessonText}
 """
 
-Ground the scenario in this lesson. Choose a clinical situation in which a nurse has to apply what the lesson teaches${hasRequest ? ', centred on the part of the lesson the faculty request points to' : ''}. The learning_objectives and the nursing actions in treatment_plan must come from the lesson's own content — the assessments, procedures, interventions and teaching points it covers — and nothing in the scenario may contradict the lesson. Where the lesson is silent (patient background, baseline vitals, history), fill in clinically plausible details. Students read every field, so write the case as a real clinical situation and never mention the lesson, checklist, or provided material.${hasPatient ? " Keep the patient record's diagnosis and vitals, and apply the lesson to this patient's care." : ''}
+Ground each scenario you write in this lesson. Choose a clinical situation in which a nurse has to apply what the lesson teaches. The learning_objectives and the nursing actions in treatment_plan must come from the lesson's own content — the assessments, procedures, interventions and teaching points it covers — and nothing in the scenario may contradict the lesson. Where the lesson is silent (patient background, baseline vitals, history), fill in clinically plausible details. Students read every field, so write the case as a real clinical situation and never mention the lesson, checklist, or provided material.
 `;
+}
+
+/** Tells the model which category to file the case under, or which to pick from. */
+function categoryInstruction(category: string | null, categories: readonly string[]): string {
+  return category
+    ? `Set "category" to exactly "${category}" and centre the case on that topic.`
+    : `Set "category" to exactly one of: ${categories.map((c) => `"${c}"`).join(', ')}.`;
+}
+
+export interface ScenarioPromptOptions {
+  lessonText?: string | null;
+  /** The category the case must be filed under; otherwise the model picks from `categories`. */
+  category?: string | null;
+  /** Categories the model may pick from. Defaults to the ten presets. */
+  categories?: readonly string[];
 }
 
 /** Prompt for a single scenario, optionally grounded in a patient record and/or a lesson. */
 export function buildScenarioPrompt(
   userPrompt: string,
   patient?: PatientContext | null,
-  lessonText?: string | null,
+  { lessonText = null, category = null, categories = VALID_CATEGORIES }: ScenarioPromptOptions = {},
 ): string {
   const patientBlock = patient ? `\nUse ${patientRecordBlock(patient, 'patient record as the basis for the scenario')}\n` : '';
   const request = userPrompt
     ? `Faculty request: "${userPrompt.replace(/"/g, '\\"')}"`
     : 'Faculty request: build a case that puts the lesson below into practice.';
+  const lessonFocus = [
+    userPrompt && 'Centre the case on the part of the lesson the faculty request points to.',
+    patient && "Keep the patient record's diagnosis and vitals, and apply the lesson to this patient's care.",
+  ]
+    .filter(Boolean)
+    .join(' ');
 
   return `You are a clinical nursing education expert. Create a realistic simulation scenario for nursing students based on the faculty request below.
 
 ${request}
-${patientBlock}${lessonText ? lessonBlock(lessonText, Boolean(userPrompt), Boolean(patient)) : ''}
+${patientBlock}${lessonText ? `${lessonBlock(lessonText)}${lessonFocus ? `${lessonFocus}\n` : ''}` : ''}
+${categoryInstruction(category, categories)}
 
 Return ONLY a valid JSON object with this exact structure (no markdown, no explanations):
 

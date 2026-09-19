@@ -21,7 +21,9 @@ const nextConfig: NextConfig = {
   // shipped explicitly to the routes that read lessons.
   serverExternalPackages: ["pdf-parse"],
   outputFileTracingIncludes: {
-    "/api/faculty/scenarios/generate": ["./node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs"],
+    "/api/faculty/scenarios/analyze-lesson": [
+      "./node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs",
+    ],
     "/api/faculty/assessments/*/questions/generate-from-lesson": [
       "./node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs",
     ],

@@ -2,17 +2,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { callAI, aiErrorResponse } from '@/app/lib/ai/generate';
+import { MAX_LESSON_CHARS } from '@/app/lib/ai/lesson';
+import { listCategories, matchCategory } from '@/app/lib/scenario-categories';
 import {
   PATIENT_CONTEXT_COLUMNS,
   SCENARIO_GUIDELINES,
   SCENARIO_JSON_SHAPE,
-  VALID_CATEGORIES,
-  isValidCategory,
   isValidDifficulty,
+  lessonBlock,
   patientRecordBlock,
   sanitizeScenario,
   type PatientContext,
-  type ScenarioCategory,
   type ScenarioDifficulty,
   type SanitizedScenario,
 } from '@/app/lib/ai/scenario';
@@ -27,7 +27,7 @@ const DIFFICULTY_CYCLE: ScenarioDifficulty[] = ['beginner', 'intermediate', 'adv
 
 /** One scenario the AI has been asked to write, with the slot it must fill. */
 interface PlannedSlot {
-  category: ScenarioCategory;
+  category: string;
   difficulty: ScenarioDifficulty;
   patient: PatientContext | null;
 }
@@ -55,11 +55,12 @@ function shuffle<T>(items: T[]): T[] {
  */
 function planSlots(
   count: number,
-  categories: ScenarioCategory[],
+  categories: string[],
+  allCategories: string[],
   difficulty: ScenarioDifficulty | null,
   patients: PatientContext[],
 ): PlannedSlot[] {
-  const categoryPool = categories.length > 0 ? categories : shuffle([...VALID_CATEGORIES]);
+  const categoryPool = categories.length > 0 ? categories : shuffle(allCategories);
 
   return Array.from({ length: count }, (_, i) => ({
     category: categoryPool[i % categoryPool.length],
@@ -68,7 +69,12 @@ function planSlots(
   }));
 }
 
-function buildBatchPrompt(slots: PlannedSlot[], topic: string, existingTitles: string[]): string {
+function buildBatchPrompt(
+  slots: PlannedSlot[],
+  topic: string,
+  existingTitles: string[],
+  lessonText: string,
+): string {
   const briefs = slots
     .map((slot, i) => {
       const patientBlock = slot.patient
@@ -82,6 +88,12 @@ function buildBatchPrompt(slots: PlannedSlot[], topic: string, existingTitles: s
     ? `\nEvery scenario must relate to this teaching focus: "${topic.replace(/"/g, '\\"')}".\n`
     : '';
 
+  // With a lesson, the briefs' categories are the lesson topics the faculty
+  // member picked — one scenario per topic, each applying the lesson.
+  const lesson = lessonText
+    ? `${lessonBlock(lessonText)}Each brief's category is the lesson topic its scenario centres on. Where a brief includes a patient record, keep that patient's diagnosis and vitals and apply the lesson to their care.\n`
+    : '';
+
   const avoidBlock =
     existingTitles.length > 0
       ? `\nThese scenarios already exist in the library — do not repeat their clinical situations or titles:\n${existingTitles.map((t) => `- ${t}`).join('\n')}\n`
@@ -90,7 +102,7 @@ function buildBatchPrompt(slots: PlannedSlot[], topic: string, existingTitles: s
   return `You are a clinical nursing education expert building a library of simulation scenarios for nursing students.
 
 Write ${slots.length} DISTINCT scenarios. Each must cover a different clinical situation — no two may share a diagnosis or chief complaint.
-${topicBlock}${avoidBlock}
+${topicBlock}${lesson}${avoidBlock}
 Write one scenario for each numbered brief below, in the same order:
 
 ${briefs}
@@ -114,8 +126,9 @@ async function generateChunk(
   slots: PlannedSlot[],
   topic: string,
   existingTitles: string[],
+  lessonText: string,
 ): Promise<(SanitizedScenario & { patient_id: string | null })[]> {
-  const raw = await callAI(buildBatchPrompt(slots, topic, existingTitles));
+  const raw = await callAI(buildBatchPrompt(slots, topic, existingTitles, lessonText));
   const list = Array.isArray(raw.scenarios) ? raw.scenarios : [];
 
   if (list.length === 0) {
@@ -149,6 +162,7 @@ export async function POST(request: NextRequest) {
     topic?: unknown;
     use_patients?: unknown;
     avoid_titles?: unknown;
+    lesson_text?: unknown;
   };
   try {
     body = await request.json();
@@ -162,15 +176,27 @@ export async function POST(request: NextRequest) {
   }
   const count = Math.min(requestedCount, MAX_BATCH);
 
-  const categories = Array.isArray(body.categories)
-    ? body.categories.filter(isValidCategory)
-    : [];
   const difficulty = isValidDifficulty(body.difficulty) ? body.difficulty : null;
   const topic = typeof body.topic === 'string' ? body.topic.trim().slice(0, 500) : '';
   const usePatients = body.use_patients !== false;
+  const lessonText =
+    typeof body.lesson_text === 'string' ? body.lesson_text.trim().slice(0, MAX_LESSON_CHARS) : '';
 
   try {
     const supabase = getSupabaseAdmin();
+
+    const allCategories = await listCategories(supabase);
+    // Unknown names are dropped; known ones take their stored spelling.
+    const categories = Array.isArray(body.categories)
+      ? Array.from(
+          new Set(
+            body.categories
+              .filter((c): c is string => typeof c === 'string')
+              .map((c) => matchCategory(allCategories, c.trim()))
+              .filter((c): c is string => c !== null),
+          ),
+        )
+      : [];
 
     let patients: PatientContext[] = [];
     if (usePatients) {
@@ -198,7 +224,7 @@ export async function POST(request: NextRequest) {
       ...avoidTitles,
     ];
 
-    const slots = planSlots(count, categories, difficulty, patients);
+    const slots = planSlots(count, categories, allCategories, difficulty, patients);
 
     const scenarios: (SanitizedScenario & { patient_id: string | null })[] = [];
     const failures: string[] = [];
@@ -207,10 +233,12 @@ export async function POST(request: NextRequest) {
     for (let i = 0; i < slots.length; i += CHUNK_SIZE) {
       const chunk = slots.slice(i, i + CHUNK_SIZE);
       try {
-        const generated = await generateChunk(chunk, topic, [
-          ...existingTitles,
-          ...scenarios.map((s) => s.title),
-        ]);
+        const generated = await generateChunk(
+          chunk,
+          topic,
+          [...existingTitles, ...scenarios.map((s) => s.title)],
+          lessonText,
+        );
         scenarios.push(...generated);
       } catch (err) {
         console.error(`Batch chunk starting at ${i} failed`, err);

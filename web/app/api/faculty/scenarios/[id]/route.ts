@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { ensureCategories } from '@/app/lib/scenario-categories';
 
 const validDifficulties = ['beginner', 'intermediate', 'advanced'] as const;
 
@@ -64,11 +65,6 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     updateData.difficulty = difficulty;
   }
 
-  if (category !== undefined) {
-    // Free-form categories (preset or custom): trim, cap length, default.
-    updateData.category =
-      typeof category === 'string' && category.trim() ? category.trim().slice(0, 60) : 'General';
-  }
 
   if (patient_case !== undefined) {
     updateData.patient_case = patient_case && typeof patient_case === 'object' ? patient_case : {};
@@ -87,7 +83,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       : [];
   }
 
-  if (Object.keys(updateData).length === 0) {
+  // Resolved against the category table further down, once the caller is
+  // known to own the scenario — a refused edit mustn't create a category.
+  if (Object.keys(updateData).length === 0 && category === undefined) {
     return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
   }
 
@@ -107,6 +105,19 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     if (session.role !== 'admin' && existing.created_by !== session.uid) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    if (category !== undefined) {
+      const resolved = await ensureCategories(
+        supabase,
+        [typeof category === 'string' && category.trim() ? category : 'General'],
+        'faculty',
+        session.uid,
+      );
+      if ('error' in resolved) {
+        return NextResponse.json({ error: resolved.error }, { status: resolved.status });
+      }
+      updateData.category = resolved.names[0];
     }
 
     if (typeof updateData.patient_id === 'string') {

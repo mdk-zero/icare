@@ -1,18 +1,17 @@
-import { PDFParse } from 'pdf-parse';
-import mammoth from 'mammoth';
-
 /** Lesson text past this is dropped, keeping the prompt inside the models' input budget. */
 export const MAX_LESSON_CHARS = 15_000;
 const MAX_FILE_BYTES = 15 * 1024 * 1024; // 15MB
 const ALLOWED_EXTENSIONS = ['.pdf', '.docx', '.txt', '.md'];
 
 /** Pulls plain text out of a lesson upload — PDF and DOCX go through their
- * respective parsers, everything else (.txt, .md) is read as-is. */
+ * respective parsers, everything else (.txt, .md) is read as-is. The parsers
+ * load on first use, so importing MAX_LESSON_CHARS doesn't pull in pdf.js. */
 async function extractLessonText(file: File): Promise<string> {
   const name = file.name.toLowerCase();
   const buffer = Buffer.from(await file.arrayBuffer());
 
   if (name.endsWith('.pdf')) {
+    const { PDFParse } = await import('pdf-parse');
     const parser = new PDFParse({ data: buffer });
     try {
       const result = await parser.getText();
@@ -22,6 +21,7 @@ async function extractLessonText(file: File): Promise<string> {
     }
   }
   if (name.endsWith('.docx')) {
+    const { default: mammoth } = await import('mammoth');
     const result = await mammoth.extractRawText({ buffer });
     return result.value;
   }

@@ -1710,29 +1710,103 @@ export async function createScenario(scenario: Partial<SimulationScenario>): Pro
   }
 }
 
-/** A lesson file, when given, grounds the scenario in its content; the prompt may then be empty. */
+/** Scenario categories, alphabetical with General last. */
+export async function fetchScenarioCategories(): Promise<string[]> {
+  try {
+    const res = await apiFetch('/api/faculty/scenarios/categories', { credentials: 'include' });
+    const json = (await res.json()) as { categories?: string[] };
+    return res.ok ? (json.categories ?? []) : [];
+  } catch (err) {
+    console.error('fetchScenarioCategories() failed', err);
+    return [];
+  }
+}
+
+/**
+ * Creates categories, reusing any that already exist in another case.
+ * `created` is each requested name's stored spelling, in order.
+ */
+export async function createScenarioCategories(
+  names: string[],
+  source: 'lesson' | 'faculty',
+): Promise<{ created: string[]; categories: string[] } | { error: string }> {
+  try {
+    const res = await apiFetch('/api/faculty/scenarios/categories', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ names, source }),
+    });
+    const json = (await res.json()) as { created?: string[]; categories?: string[]; error?: string };
+    if (!res.ok || !json.created) return { error: json.error || `Request failed (${res.status})` };
+    return { created: json.created, categories: json.categories ?? [] };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : 'Unable to create categories' };
+  }
+}
+
+/** A topic detected in a lesson, with the category it maps to. */
+export interface LessonTopic {
+  topic: string;
+  /** An existing category's stored spelling, or a proposed new one. */
+  category: string;
+  is_new: boolean;
+}
+
+export interface AnalyzedLesson {
+  /** The lesson's extracted text, sent back when generating from it. */
+  lessonText: string;
+  topics: LessonTopic[];
+  /** Set when topic detection came back empty or failed; the text is still usable. */
+  warning?: string;
+}
+
+/** Uploads a lesson, returning its text and the topics (candidate categories) it covers. */
+export async function analyzeLesson(file: File): Promise<AnalyzedLesson | { error: string }> {
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await apiFetch('/api/faculty/scenarios/analyze-lesson', {
+      method: 'POST',
+      credentials: 'include',
+      body: formData,
+    });
+    const json = (await res.json()) as {
+      lesson_text?: string;
+      topics?: LessonTopic[];
+      warning?: string;
+      error?: string;
+    };
+    if (!res.ok || typeof json.lesson_text !== 'string') {
+      return { error: json.error || `Request failed (${res.status})` };
+    }
+    return { lessonText: json.lesson_text, topics: json.topics ?? [], warning: json.warning };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : 'Unable to read the lesson' };
+  }
+}
+
+/**
+ * A lesson, when given, grounds the scenario in its text (the prompt may then
+ * be empty); its category, when set, is the topic the case must centre on.
+ */
 export async function generateAIScenario(
   prompt: string,
   patientId?: string,
-  lesson?: File | null,
+  lesson?: { text: string; category?: string | null } | null,
 ): Promise<Partial<SimulationScenario> | { error: string }> {
   try {
-    let init: RequestInit;
-    if (lesson) {
-      const formData = new FormData();
-      formData.append('prompt', prompt);
-      if (patientId) formData.append('patient_id', patientId);
-      formData.append('file', lesson);
-      init = { method: 'POST', credentials: 'include', body: formData };
-    } else {
-      init = {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ prompt, patient_id: patientId }),
-      };
-    }
-    const res = await apiFetch('/api/faculty/scenarios/generate', init);
+    const res = await apiFetch('/api/faculty/scenarios/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        prompt,
+        patient_id: patientId,
+        lesson_text: lesson?.text,
+        category: lesson?.category ?? undefined,
+      }),
+    });
 
     const json = (await res.json()) as { scenario?: Partial<SimulationScenario>; error?: string };
     if (!res.ok || !json.scenario) {
@@ -1765,6 +1839,8 @@ export interface ScenarioBatchOptions {
   usePatients?: boolean;
   /** Titles to steer away from — used to chain sub-batches without repeats. */
   avoidTitles?: string[];
+  /** Extracted lesson text; every scenario is then grounded in it. */
+  lessonText?: string;
 }
 
 /** An unsaved scenario returned by batch generation, ready for review. */
@@ -1796,6 +1872,7 @@ export async function generateScenarioBatch(
         topic: options.topic,
         use_patients: options.usePatients,
         avoid_titles: options.avoidTitles,
+        lesson_text: options.lessonText,
       }),
     });
 

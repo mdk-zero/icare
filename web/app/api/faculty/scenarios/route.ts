@@ -2,17 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { seedScenarioTasks } from '@/app/lib/scenario-default-tasks';
+import { ensureCategories } from '@/app/lib/scenario-categories';
 import {
   getFacultyStudentIdSet,
   scenarioVisibleToFaculty,
 } from '@/app/lib/scenario-visibility';
 
 const validDifficulties = ['beginner', 'intermediate', 'advanced'] as const;
-
-/** Categories are free-form (preset or custom): trim, cap length, default. */
-function cleanCategory(value: unknown): string {
-  return typeof value === 'string' && value.trim() ? value.trim().slice(0, 60) : 'General';
-}
 
 function forbiddenResponse() {
   return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -164,6 +160,19 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // A category typed on the form (or confirmed from a lesson) is created
+    // here if it's new; one matching an existing category in another case
+    // takes that category's spelling.
+    const resolved = await ensureCategories(
+      supabase,
+      [typeof category === 'string' && category.trim() ? category : 'General'],
+      'faculty',
+      session.uid,
+    );
+    if ('error' in resolved) {
+      return NextResponse.json({ error: resolved.error }, { status: resolved.status });
+    }
+
     const { data: scenario, error } = await supabase
       .from('scenarios')
       .insert({
@@ -172,7 +181,7 @@ export async function POST(request: NextRequest) {
         title: title.trim(),
         description: typeof description === 'string' ? description.trim() : '',
         difficulty: difficulty as typeof validDifficulties[number],
-        category: cleanCategory(category),
+        category: resolved.names[0],
         patient_case: patient_case && typeof patient_case === 'object' ? patient_case : {},
         learning_objectives: sanitizedLearningObjectives,
         is_ai_generated: typeof is_ai_generated === 'boolean' ? is_ai_generated : false,
