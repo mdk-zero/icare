@@ -370,8 +370,53 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       q.criteria_id = competencyId ? (criteriaByCompetency.get(competencyId) ?? null) : null;
     }
 
-    // Drafts only — nothing is persisted until faculty reviews and saves each one.
-    return NextResponse.json({ questions });
+    if (formData.get('save') !== 'true') {
+      return NextResponse.json({ questions });
+    }
+
+    const { count: existingCount } = await supabase
+      .from('questions')
+      .select('id', { count: 'exact', head: true })
+      .eq('assessment_id', assessmentId);
+
+    const { data: inserted, error: insertError } = await supabase
+      .from('questions')
+      .insert(
+        questions.map((q, i) => ({
+          assessment_id: assessmentId,
+          position: (existingCount ?? 0) + i,
+          content: q.content,
+          options: q.options,
+          correct_index: q.correct_index,
+          question_type: q.question_type,
+          points: q.points,
+          explanation: q.explanation,
+          criteria_id: q.criteria_id,
+        })),
+      )
+      .select('id');
+    if (insertError || !inserted) {
+      console.error('Failed to save generated questions', insertError);
+      return NextResponse.json({ error: 'Unable to save the generated questions' }, { status: 500 });
+    }
+
+    const tags = inserted.flatMap((row, i) =>
+      questions[i].competency_ids.map((competency_id) => ({ question_id: row.id, competency_id })),
+    );
+    if (tags.length > 0) {
+      const { error: tagError } = await supabase.from('question_competencies').insert(tags);
+      if (tagError) console.error('Failed to tag generated question competencies', tagError);
+    }
+
+    // Serve every generated question per attempt unless faculty already chose a number.
+    const { error: totalError } = await supabase
+      .from('assessments')
+      .update({ total_questions: (existingCount ?? 0) + inserted.length })
+      .eq('id', assessmentId)
+      .is('total_questions', null);
+    if (totalError) console.error('Failed to set questions per attempt', totalError);
+
+    return NextResponse.json({ questions, saved: inserted.length });
   } catch (err) {
     console.error('Generate questions from lesson failed', err);
     const { error, status } = aiErrorResponse(err, 'questions');
