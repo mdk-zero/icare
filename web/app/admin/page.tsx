@@ -329,7 +329,7 @@ export default async function AdminDashboard() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatTile
-          icon={<FontAwesomeIcon icon={faUsers} className="w-5 h-5" />}
+          icon={faUsers}
           iconBg="bg-brand-600/10"
           iconColor="text-brand-600"
           value={totalStudents}
@@ -337,7 +337,7 @@ export default async function AdminDashboard() {
           caption={`${facultyCount} faculty · ${totalUsers} accounts`}
         />
         <StatTile
-          icon={<FontAwesomeIcon icon={faTriangleExclamation} className="w-5 h-5" />}
+          icon={faTriangleExclamation}
           iconBg="bg-red-50"
           iconColor="text-red-600"
           value={atRiskCount}
@@ -349,7 +349,7 @@ export default async function AdminDashboard() {
           }
         />
         <StatTile
-          icon={<FontAwesomeIcon icon={faCircleCheck} className="w-5 h-5" />}
+          icon={faCircleCheck}
           iconBg="bg-emerald-50"
           iconColor="text-emerald-600"
           value={averageScore !== null ? `${averageScore}%` : "—"}
@@ -363,7 +363,7 @@ export default async function AdminDashboard() {
           }
         />
         <StatTile
-          icon={<FontAwesomeIcon icon={faClipboardCheck} className="w-5 h-5" />}
+          icon={faClipboardCheck}
           iconBg="bg-amber-50"
           iconColor="text-amber-600"
           value={totalQuizzes}
@@ -375,28 +375,28 @@ export default async function AdminDashboard() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatTile
           href="/admin/rooms"
-          icon={<FontAwesomeIcon icon={faBuilding} className="w-5 h-5" />}
+          icon={faBuilding}
           value={activeRoomCount}
           label="Active Rooms"
           caption="Manage rooms"
         />
         <StatTile
           href="/admin/faculty"
-          icon={<FontAwesomeIcon icon={faUserTie} className="w-5 h-5" />}
+          icon={faUserTie}
           value={facultyCount}
           label="Faculty"
           caption="Faculty roster"
         />
         <StatTile
           href="/admin/users"
-          icon={<FontAwesomeIcon icon={faUsers} className="w-5 h-5" />}
+          icon={faUsers}
           value={totalUsers}
           label="User Accounts"
           caption="All accounts"
         />
         <StatTile
           href="/admin/analytics"
-          icon={<FontAwesomeIcon icon={faChartColumn} className="w-5 h-5" />}
+          icon={faChartColumn}
           value={`${safeCount}/${totalStudents}`}
           label="Students on Track"
           caption="Program analytics"

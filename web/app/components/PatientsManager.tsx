@@ -789,7 +789,7 @@ export default function PatientsManager({
         ) : (
           <>
             <StatTile
-              icon={<FontAwesomeIcon icon={faUsers} className="w-5 h-5" />}
+              icon={faUsers}
               value={patients.length}
               label="Total Patients"
               caption={
@@ -801,7 +801,7 @@ export default function PatientsManager({
               iconColor="text-brand-600"
             />
             <StatTile
-              icon={<FontAwesomeIcon icon={faTriangleExclamation} className="w-5 h-5" />}
+              icon={faTriangleExclamation}
               value={rosterStatus.critical}
               label="Critical Vitals"
               caption="Outside reference range"
@@ -811,7 +811,7 @@ export default function PatientsManager({
               className={filters.status === "critical" ? "ring-2 ring-red-500/40" : ""}
             />
             <StatTile
-              icon={<FontAwesomeIcon icon={faHeartPulse} className="w-5 h-5" />}
+              icon={faHeartPulse}
               value={rosterStatus.stable}
               label="Stable"
               caption={
@@ -825,7 +825,7 @@ export default function PatientsManager({
               className={filters.status === "stable" ? "ring-2 ring-emerald-500/40" : ""}
             />
             <StatTile
-              icon={<FontAwesomeIcon icon={faFlask} className="w-5 h-5" />}
+              icon={faFlask}
               value={labsOnFile}
               label="Lab Results Available"
               caption={

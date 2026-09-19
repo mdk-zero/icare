@@ -248,7 +248,7 @@ export default function AssessmentResultsClient({ assessmentId }: { assessmentId
         <>
           <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <StatTile
-              icon={<FontAwesomeIcon icon={faCircleCheck} className="h-5 w-5" />}
+              icon={faCircleCheck}
               value={summary?.submitted ?? 0}
               label="Completed"
               caption={`of ${summary?.total ?? 0} student${summary?.total === 1 ? "" : "s"}`}
@@ -256,7 +256,7 @@ export default function AssessmentResultsClient({ assessmentId }: { assessmentId
               iconColor="text-emerald-600"
             />
             <StatTile
-              icon={<FontAwesomeIcon icon={faHourglassHalf} className="h-5 w-5" />}
+              icon={faHourglassHalf}
               value={summary?.in_progress ?? 0}
               label="In Progress"
               caption="Started, not submitted"
@@ -264,7 +264,7 @@ export default function AssessmentResultsClient({ assessmentId }: { assessmentId
               iconColor="text-amber-600"
             />
             <StatTile
-              icon={<FontAwesomeIcon icon={faCircleMinus} className="h-5 w-5" />}
+              icon={faCircleMinus}
               value={summary?.not_started ?? 0}
               label="Not Started"
               caption="No attempt yet"
@@ -272,7 +272,7 @@ export default function AssessmentResultsClient({ assessmentId }: { assessmentId
               iconColor="text-gray-600"
             />
             <StatTile
-              icon={<FontAwesomeIcon icon={faChartSimple} className="h-5 w-5" />}
+              icon={faChartSimple}
               value={summary?.average_score === null ? "—" : `${summary?.average_score ?? 0}%`}
               label="Average Score"
               caption="Best attempt per student"

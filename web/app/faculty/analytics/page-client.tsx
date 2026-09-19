@@ -15,10 +15,7 @@ import {
   faChevronUp,
   faBullseye,
   faTrophy,
-  faArrowUp,
-  faArrowDown,
 } from "@fortawesome/free-solid-svg-icons";
-import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import {
   fetchAnalyticsSummary,
   fetchFacultySections,
@@ -28,11 +25,12 @@ import {
   Section,
 } from "../../lib/api";
 import {
-  SkeletonStatCard,
+  SkeletonStatTile,
   SkeletonChartArea,
   SkeletonCompetencyGrid,
 } from "../../components/skeletons";
 import PageHeader from "../../components/PageHeader";
+import StatTile from "../../components/StatTile";
 import { toast } from "../../components/Toast";
 import Card, { CardLabel } from "../../components/Card";
 import { usePageData } from "../../lib/use-page-data";
@@ -514,64 +512,6 @@ function CompetencyBarChart({ items }: { items: { key: string; label: string; va
   );
 }
 
-/**
- * KPI tile with a label + icon header, a large value, and a "vs last period"
- * trend badge — the shape of the reference dashboard's cards, sized to fill
- * its grid cell rather than hugging its content.
- */
-function KpiCard({
-  label,
-  value,
-  icon,
-  iconBg,
-  iconColor,
-  change,
-  comparisonLabel,
-  /** Whether an increasing value is the good outcome (revenue, scores) or
-   * the bad one (at-risk count) — flips which direction is colored green. */
-  goodDirection = "up",
-}: {
-  label: string;
-  value: string;
-  icon: IconDefinition;
-  iconBg: string;
-  iconColor: string;
-  change: number | null;
-  comparisonLabel: string;
-  goodDirection?: "up" | "down";
-}) {
-  const isUp = (change ?? 0) >= 0;
-  const isGood = change == null ? null : goodDirection === "up" ? isUp : !isUp;
-  return (
-    <div className="flex flex-col rounded-2xl border border-hairline bg-surface p-4 shadow-tile">
-      <div className="flex items-start justify-between gap-2">
-        <span className="min-w-0 text-xs font-bold uppercase tracking-wider text-gray-400">
-          {label}
-        </span>
-        <span
-          className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full ${iconBg} ${iconColor}`}
-        >
-          <FontAwesomeIcon icon={icon} className="h-11 w-11" />
-        </span>
-      </div>
-      <p className="mt-2 font-display text-4xl font-bold tabular-nums text-gray-900">{value}</p>
-      <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs">
-        {change != null ? (
-          <span
-            className={`flex items-center gap-1 font-semibold ${isGood ? "text-emerald-600" : "text-rose-600"}`}
-          >
-            <FontAwesomeIcon icon={isUp ? faArrowUp : faArrowDown} className="h-2.5 w-2.5" />
-            {Math.abs(change).toFixed(1)}%
-          </span>
-        ) : (
-          <span className="font-semibold text-gray-400">—</span>
-        )}
-        <span className="text-gray-400">{comparisonLabel}</span>
-      </div>
-    </div>
-  );
-}
-
 /** Plain-language reading of whatever the filters currently select. */
 function NarrativeCard({
   narrative,
@@ -908,7 +848,7 @@ export default function FacultyAnalyticsClient() {
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
           {Array.from({ length: 4 }).map((_, i) => (
-            <SkeletonStatCard key={i} />
+            <SkeletonStatTile key={i} />
           ))}
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
@@ -1095,13 +1035,13 @@ export default function FacultyAnalyticsClient() {
       <div className={`transition-opacity duration-200 ${refreshing ? "opacity-60" : ""}`}>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4 items-stretch">
           {statCards.map((card) => (
-            <KpiCard
+            <StatTile
               key={card.label}
               icon={card.icon}
               value={card.value}
               label={card.label}
               change={card.change}
-              comparisonLabel={card.comparisonLabel}
+              caption={card.comparisonLabel}
               goodDirection={card.goodDirection}
               iconBg={card.iconBg}
               iconColor={card.iconColor}

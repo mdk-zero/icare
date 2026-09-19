@@ -1,43 +1,13 @@
-export function SkeletonStatCard() {
-  return (
-    <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04)] p-4 animate-pulse">
-      <div className="flex items-center gap-3">
-        <div className="w-9 h-9 bg-gray-100 rounded-lg" />
-        <div className="space-y-2">
-          <div className="h-5 w-12 bg-gray-100 rounded" />
-          <div className="h-3 w-16 bg-gray-100 rounded" />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-export function SkeletonInlineStatCard() {
-  return (
-    <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04)] p-3.5 animate-pulse">
-      <div className="flex items-center gap-3">
-        <div className="w-9 h-9 bg-gray-100 rounded-lg" />
-        <div className="space-y-1.5">
-          <div className="h-5 w-12 bg-gray-100 rounded" />
-          <div className="h-3 w-16 bg-gray-100 rounded" />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/** Mirrors StatTile: h-10 icon, value + label row, caption. */
+/** Mirrors StatTile: label beside a round icon, a display-size value, caption. */
 export function SkeletonStatTile() {
   return (
-    <div className="flex items-center gap-3.5 overflow-hidden rounded-xl border border-hairline bg-surface p-3.5 shadow-tile animate-pulse">
-      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gray-100" />
-      <span className="min-w-0 flex-1 space-y-2">
-        <span className="flex items-baseline gap-2">
-          <span className="block h-6 w-10 rounded bg-gray-100" />
-          <span className="block h-3 w-20 rounded bg-gray-100" />
-        </span>
-        <span className="block h-2.5 w-24 rounded bg-gray-100" />
-      </span>
+    <div className="flex flex-col rounded-2xl border border-hairline bg-surface p-4 shadow-tile animate-pulse">
+      <div className="flex items-start justify-between gap-2">
+        <div className="mt-0.5 h-3 w-24 rounded bg-gray-100" />
+        <div className="h-12 w-12 shrink-0 rounded-full bg-gray-100" />
+      </div>
+      <div className="mt-2 h-9 w-20 rounded bg-gray-100" />
+      <div className="mt-2.5 h-3 w-28 rounded bg-gray-100" />
     </div>
   );
 }
@@ -212,12 +182,9 @@ export function SkeletonProfileHeader() {
           <div className="h-3 w-28 bg-gray-100 rounded" />
         </div>
       </div>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="text-center p-3 bg-gray-50 rounded-lg space-y-1.5">
-            <div className="h-6 w-10 bg-gray-100 rounded mx-auto" />
-            <div className="h-3 w-14 bg-gray-100 rounded mx-auto" />
-          </div>
+          <SkeletonStatTile key={i} />
         ))}
       </div>
     </div>

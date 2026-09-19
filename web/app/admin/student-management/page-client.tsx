@@ -1015,27 +1015,27 @@ export default function StudentManagementClient() {
 
       <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatTile
-          icon={<FontAwesomeIcon icon={faUsers} className="h-5 w-5" />}
+          icon={faUsers}
           value={students.length}
           label="Total Students"
           caption={`${sections.length} section${sections.length === 1 ? "" : "s"}`}
         />
         <StatTile
-          icon={<FontAwesomeIcon icon={faCircleCheck} className="h-5 w-5" />}
+          icon={faCircleCheck}
           value={students.filter((s) => !s.at_risk).length}
           label="Safe"
           iconBg="bg-emerald-50"
           iconColor="text-emerald-600"
         />
         <StatTile
-          icon={<FontAwesomeIcon icon={faTriangleExclamation} className="h-5 w-5" />}
+          icon={faTriangleExclamation}
           value={students.filter((s) => s.at_risk).length}
           label="At Risk"
           iconBg="bg-rose-50"
           iconColor="text-rose-600"
         />
         <StatTile
-          icon={<FontAwesomeIcon icon={faLayerGroup} className="h-5 w-5" />}
+          icon={faLayerGroup}
           value={students.filter((s) => !s.section_id).length}
           label="Unassigned"
           caption="No section yet"

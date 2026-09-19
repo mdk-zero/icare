@@ -94,21 +94,21 @@ export default function FacultyAuditClient() {
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
         <StatTile
-          icon={<FontAwesomeIcon icon={faClipboard} className="w-5 h-5" />}
+          icon={faClipboard}
           value={auditLogs.length}
           label="Total Activities"
           iconBg="bg-brand-600/10"
           iconColor="text-brand-600"
         />
         <StatTile
-          icon={<FontAwesomeIcon icon={faTriangleExclamation} className="w-5 h-5" />}
+          icon={faTriangleExclamation}
           value={auditLogs.filter(a => a.action.toLowerCase().includes('alert')).length}
           label="Alert Activities"
           iconBg="bg-red-50"
           iconColor="text-red-600"
         />
         <StatTile
-          icon={<FontAwesomeIcon icon={faFlask} className="w-5 h-5" />}
+          icon={faFlask}
           value={auditLogs.filter(a => a.action.toLowerCase().includes('scenario')).length}
           label="Scenario Activities"
           iconBg="bg-purple-50"

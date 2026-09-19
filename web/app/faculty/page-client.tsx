@@ -127,14 +127,14 @@ export default function FacultyDashboard() {
         <div className="animate-rise grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4" style={rise(0)}>
           <StatTile
             href="/faculty/students"
-            icon={<FontAwesomeIcon icon={faUsers} className="h-5 w-5" />}
+            icon={faUsers}
             value={total}
             label="Students"
             caption={overview.sections.length > 0 ? `Across ${plural(overview.sections.length, "section")}` : "No sections yet"}
           />
           <StatTile
             href="/faculty/students"
-            icon={<FontAwesomeIcon icon={faTriangleExclamation} className="h-5 w-5" />}
+            icon={faTriangleExclamation}
             iconBg="bg-red-50"
             iconColor="text-red-600"
             value={atRisk}
@@ -147,7 +147,7 @@ export default function FacultyDashboard() {
           />
           <StatTile
             href="/faculty/scenarios/review"
-            icon={<FontAwesomeIcon icon={faClipboardCheck} className="h-5 w-5" />}
+            icon={faClipboardCheck}
             iconBg="bg-brand-600/10"
             iconColor="text-brand-600"
             value={review}
@@ -156,7 +156,7 @@ export default function FacultyDashboard() {
           />
           <StatTile
             href="/faculty/students"
-            icon={<FontAwesomeIcon icon={faClock} className="h-5 w-5" />}
+            icon={faClock}
             iconBg="bg-amber-50"
             iconColor="text-amber-600"
             value={overdue}

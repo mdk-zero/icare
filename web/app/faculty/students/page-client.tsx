@@ -732,7 +732,7 @@ export default function FacultyStudentsClient() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
         <StatTile
-          icon={<FontAwesomeIcon icon={faUser} className="w-5 h-5" />}
+          icon={faUser}
           value={students.length}
           label="Total Students"
           caption="Enrolled under you"
@@ -740,7 +740,7 @@ export default function FacultyStudentsClient() {
           iconColor="text-brand-600"
         />
         <StatTile
-          icon={<FontAwesomeIcon icon={faTriangleExclamation} className="w-5 h-5" />}
+          icon={faTriangleExclamation}
           value={atRiskCount}
           label="At Risk"
           caption={pctOfRoster(atRiskCount)}
@@ -748,7 +748,7 @@ export default function FacultyStudentsClient() {
           iconColor="text-red-600"
         />
         <StatTile
-          icon={<FontAwesomeIcon icon={faCircleCheck} className="w-5 h-5" />}
+          icon={faCircleCheck}
           value={safeCount}
           label="Safe"
           caption={pctOfRoster(safeCount)}
@@ -756,7 +756,7 @@ export default function FacultyStudentsClient() {
           iconColor="text-emerald-600"
         />
         <StatTile
-          icon={<FontAwesomeIcon icon={faHourglassHalf} className="w-5 h-5" />}
+          icon={faHourglassHalf}
           value={pendingCount}
           label="No Prediction"
           caption="Awaiting ML assessment"

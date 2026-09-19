@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import {
   faChevronLeft,
   faBolt,
@@ -40,6 +39,7 @@ import {
 import { SkeletonProfileHeader, SkeletonRiskPredictionCard, SkeletonTabContent } from "../../../components/skeletons";
 import Card from "../../../components/Card";
 import Avatar from "../../../components/Avatar";
+import StatTile from "../../../components/StatTile";
 import { usePageData } from "../../../lib/use-page-data";
 import LiveClock from "../../../components/LiveClock";
 
@@ -66,36 +66,6 @@ const NO_PERFORMANCE_HISTORY: PerformanceHistory[] = [];
 const NO_SCENARIO_HISTORY: ScenarioPerformanceRecord[] = [];
 const NO_COMPETENCIES: ResolvedCompetency[] = [];
 const NO_SCORE_HISTORY: CompetencyScore[] = [];
-
-/** One header stat tile — icon, big value, label — sized to match its
- * siblings in the grid rather than hugging its own content. */
-function StatTile({
-  icon,
-  iconBg,
-  iconColor,
-  value,
-  valueColor = "text-gray-900",
-  label,
-}: {
-  icon: IconDefinition;
-  iconBg: string;
-  iconColor: string;
-  value: string;
-  valueColor?: string;
-  label: string;
-}) {
-  return (
-    <div className="flex h-full flex-col justify-center gap-4 rounded-xl bg-gray-50 p-5">
-      <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full ${iconBg} ${iconColor}`}>
-        <FontAwesomeIcon icon={icon} className="h-5 w-5" />
-      </span>
-      <div>
-        <p className={`text-2xl font-bold leading-tight ${valueColor}`}>{value}</p>
-        <p className="text-sm font-medium text-gray-500">{label}</p>
-      </div>
-    </div>
-  );
-}
 
 export default function StudentDetailClient() {
   const router = useRouter();
@@ -279,7 +249,7 @@ export default function StudentDetailClient() {
               </div>
             </div>
             
-            <div className="grid flex-1 grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="grid flex-1 grid-cols-1 sm:grid-cols-2 gap-3">
               <StatTile
                 icon={faChartLine}
                 iconBg="bg-brand-600/10"
@@ -289,14 +259,14 @@ export default function StudentDetailClient() {
               />
               <StatTile
                 icon={faClipboardList}
-                iconBg="bg-indigo-100"
-                iconColor="text-indigo-600"
+                iconBg="bg-purple-50"
+                iconColor="text-purple-600"
                 value={String(student.quiz_count ?? 0)}
                 label="Quizzes"
               />
               <StatTile
                 icon={faClock}
-                iconBg="bg-amber-100"
+                iconBg="bg-amber-50"
                 iconColor="text-amber-600"
                 value={
                   student.last_activity
@@ -320,8 +290,8 @@ export default function StudentDetailClient() {
                   !riskPrediction
                     ? "bg-gray-100"
                     : riskPrediction.risk === "at_risk"
-                      ? "bg-red-100"
-                      : "bg-emerald-100"
+                      ? "bg-red-50"
+                      : "bg-emerald-50"
                 }
                 iconColor={
                   !riskPrediction

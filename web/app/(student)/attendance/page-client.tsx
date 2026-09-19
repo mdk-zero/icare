@@ -35,7 +35,7 @@ export default function StudentAttendanceClient() {
 
       <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatTile
-          icon={<FontAwesomeIcon icon={faPercent} className="h-5 w-5" />}
+          icon={faPercent}
           value={tally?.rate == null ? "—" : `${tally.rate}%`}
           label="Attendance rate"
           caption="Present or late, of shifts marked"
@@ -43,13 +43,13 @@ export default function StudentAttendanceClient() {
           iconColor="text-emerald-600"
         />
         <StatTile
-          icon={<FontAwesomeIcon icon={faUserCheck} className="h-5 w-5" />}
+          icon={faUserCheck}
           value={(tally?.present ?? 0) + (tally?.late ?? 0)}
           label="Shifts attended"
           caption={tally?.late ? `${tally.late} marked late` : undefined}
         />
         <StatTile
-          icon={<FontAwesomeIcon icon={faUserXmark} className="h-5 w-5" />}
+          icon={faUserXmark}
           value={tally?.absent ?? 0}
           label="Absences"
           caption={tally?.excused ? `${tally.excused} excused` : undefined}

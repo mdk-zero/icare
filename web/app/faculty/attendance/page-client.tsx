@@ -150,7 +150,7 @@ export default function AttendanceClient() {
 
       <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatTile
-          icon={<FontAwesomeIcon icon={faClipboardList} className="h-5 w-5" />}
+          icon={faClipboardList}
           value={shifts.length}
           label="Shifts scheduled"
           caption={
@@ -158,7 +158,7 @@ export default function AttendanceClient() {
           }
         />
         <StatTile
-          icon={<FontAwesomeIcon icon={faPercent} className="h-5 w-5" />}
+          icon={faPercent}
           value={overall.rate === null ? "—" : `${overall.rate}%`}
           label="Attendance rate"
           caption="Present or late, of those marked"
@@ -166,7 +166,7 @@ export default function AttendanceClient() {
           iconColor="text-emerald-600"
         />
         <StatTile
-          icon={<FontAwesomeIcon icon={faUserCheck} className="h-5 w-5" />}
+          icon={faUserCheck}
           value={overall.present + overall.late}
           label="Attended"
           caption={overall.late > 0 ? `${overall.late} late` : undefined}
@@ -174,7 +174,7 @@ export default function AttendanceClient() {
           iconColor="text-brand-600"
         />
         <StatTile
-          icon={<FontAwesomeIcon icon={faUsers} className="h-5 w-5" />}
+          icon={faUsers}
           value={overall.absent}
           label="Absent"
           caption={overall.excused > 0 ? `${overall.excused} excused separately` : undefined}

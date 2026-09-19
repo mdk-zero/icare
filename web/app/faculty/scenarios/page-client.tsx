@@ -48,7 +48,7 @@ import {
   FacultyPatient,
 } from "../../lib/api";
 import { usePageData } from "../../lib/use-page-data";
-import { SkeletonInlineStatCard, SkeletonScenarioCard } from "../../components/skeletons";
+import { SkeletonStatTile, SkeletonScenarioCard } from "../../components/skeletons";
 import PageHeader from "../../components/PageHeader";
 import StatTile from "../../components/StatTile";
 import Card from "../../components/Card";
@@ -628,27 +628,27 @@ export default function FacultyScenariosClient() {
       {loading ? (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
           {Array.from({ length: 3 }).map((_, i) => (
-            <SkeletonInlineStatCard key={i} />
+            <SkeletonStatTile key={i} />
           ))}
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
           <StatTile
-            icon={<FontAwesomeIcon icon={faNotesMedical} className="w-5 h-5" />}
+            icon={faNotesMedical}
             value={scenarios.length}
             label="Total Scenarios"
             iconBg="bg-brand-600/10"
             iconColor="text-brand-600"
           />
           <StatTile
-            icon={<FontAwesomeIcon icon={faRobot} className="w-5 h-5" />}
+            icon={faRobot}
             value={scenarios.filter((s) => s.is_ai_generated).length}
             label="AI Generated"
             iconBg="bg-brand-50"
             iconColor="text-brand-600"
           />
           <StatTile
-            icon={<FontAwesomeIcon icon={faUsers} className="w-5 h-5" />}
+            icon={faUsers}
             value={scenarios.reduce((sum, s) => sum + s.student_count, 0)}
             label="Students Assigned"
             iconBg="bg-emerald-50"
