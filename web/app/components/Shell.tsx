@@ -591,7 +591,12 @@ export default function Shell({ role, navItems, isActive, children }: ShellProps
             </div>
           </div>
 
-          <div className="flex-1 p-3 lg:p-5 overflow-y-auto h-full custom-scrollbar">
+          {/* `relative` makes this the containing block for any absolutely
+              positioned descendant without a closer one (an `sr-only` list,
+              say). Otherwise that element anchors to the viewport, escapes
+              this scroller, and stretches the document past the h-screen
+              shell — the page then scrolls on into bare body background. */}
+          <div className="relative flex-1 p-3 lg:p-5 overflow-y-auto h-full custom-scrollbar">
             {children}
           </div>
         </div>
