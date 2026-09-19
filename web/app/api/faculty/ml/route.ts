@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { logAudit } from '@/app/lib/audit';
-import { callMlService, isMlAction } from '@/app/lib/ml';
+import { isMlAction, streamMlRun } from '@/app/lib/ml';
 import { getFacultyStudentIds } from '@/app/lib/roster';
 
 /**
@@ -15,6 +15,7 @@ import { getFacultyStudentIds } from '@/app/lib/roster';
  *
  * The roster is resolved server-side from the session, never from the
  * request, so this cannot be pointed at another faculty member's students.
+ * Responds with the run's progress stream; see streamMlRun.
  */
 export async function POST(request: NextRequest) {
   const session = await readSession();
@@ -53,22 +54,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const outcome = await callMlService(action, studentIds);
-    if (!outcome.ok) {
-      return NextResponse.json({ error: outcome.error }, { status: outcome.status });
-    }
-
-    await logAudit(
-      session,
-      {
-        action: action === 'predict' ? 'ml.predict_run' : 'ml.recommend_run',
-        entityType: 'ml_service',
-        details: { ...outcome.result, scope: 'faculty_sections', students: studentIds.length },
-      },
-      request,
+    return await streamMlRun(action, studentIds, (result) =>
+      logAudit(
+        session,
+        {
+          action: action === 'predict' ? 'ml.predict_run' : 'ml.recommend_run',
+          entityType: 'ml_service',
+          details: { ...result, scope: 'faculty_sections', students: studentIds.length },
+        },
+        request,
+      ),
     );
-
-    return NextResponse.json({ result: outcome.result, students: studentIds.length });
   } catch (err) {
     console.error('Faculty ML run failed', err);
     return NextResponse.json({ error: 'ML run failed' }, { status: 500 });

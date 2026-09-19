@@ -56,6 +56,11 @@ All endpoints except `/health` require header `X-ICARE-ML-KEY: $ML_SERVICE_SECRE
 | `POST /recommend/refresh` `{student_ids?, k?}` | recompute + persist `learning_recommendations` |
 | `GET /recommend/{student_id}?k=5` | ad-hoc ranking (not persisted) |
 
+Both `POST` jobs answer with plain JSON by default. With
+`Accept: application/x-ndjson` they stream progress instead: `{"done", "total"}`
+lines as the run advances, then one `{"result"}` or `{"error"}` line. The web
+app asks for the stream to show a percentage; the nightly workflow doesn't.
+
 ## Models
 
 - **Features** (`app/schema.py`): `SHARED_FEATURES` are computable from both

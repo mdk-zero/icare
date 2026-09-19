@@ -4,21 +4,32 @@ Auth: every endpoint except /health requires the X-ICARE-ML-KEY header to
 match ML_SERVICE_SECRET — only the Next.js server (and the nightly
 scheduler in this process) may trigger scoring runs. The service is not
 meant to be exposed to browsers.
+
+The two batch jobs answer with plain JSON, or, for a caller that sends
+`Accept: application/x-ndjson`, stream their progress: `{"done", "total"}`
+lines as the run advances, then one `{"result"}` or `{"error"}` line. The
+Next.js routes ask for the stream to drive a progress bar; the nightly
+workflow's curl doesn't, and gets the same JSON body it always has.
 """
 
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
+from typing import Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from .config import get_settings
 from .db import Db
 from .predictor import run_batch_predictions
+from .progress import Report
 from .recommender import recommendations_for_student, refresh_recommendations
 from .registry import ensure_baselines_registered, list_models, promote_model
 
@@ -103,23 +114,79 @@ def promote(model_id: str) -> dict:
         db.close()
 
 
+NDJSON = "application/x-ndjson"
+
+Job = Callable[[Db, Report | None], dict[str, Any]]
+
+# Streamed jobs run as tasks the response doesn't await, and the event loop
+# holds tasks only weakly: without this a job could be collected mid-run.
+_streamed_jobs: set[asyncio.Task[None]] = set()
+
+
+async def _run(job: Job, accept: str | None) -> dict[str, Any] | StreamingResponse:
+    if NDJSON in (accept or ""):
+        return StreamingResponse(
+            _stream(job),
+            media_type=NDJSON,
+            # Keeps a buffering proxy from holding every line until the end.
+            headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"},
+        )
+    db = Db()
+    try:
+        return await asyncio.to_thread(job, db, None)
+    except RuntimeError as error:
+        raise HTTPException(status_code=409, detail=str(error))
+    finally:
+        db.close()
+
+
+async def _stream(job: Job) -> AsyncIterator[str]:
+    loop = asyncio.get_running_loop()
+    events: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
+
+    def report(done: int, total: int) -> None:
+        # Runs on the job's worker thread.
+        loop.call_soon_threadsafe(events.put_nowait, {"done": done, "total": total})
+
+    async def run() -> None:
+        db = Db()
+        try:
+            result = await asyncio.to_thread(job, db, report)
+            events.put_nowait({"result": result})
+        except RuntimeError as error:
+            events.put_nowait({"error": str(error)})
+        except Exception:
+            logger.exception("streamed ML job failed")
+            events.put_nowait({"error": "ML job failed"})
+        finally:
+            db.close()
+            events.put_nowait(None)
+
+    # The job runs to completion even if the caller disconnects: its writes
+    # are already under way, and a thread can't be cancelled anyway.
+    task = asyncio.create_task(run())
+    _streamed_jobs.add(task)
+    task.add_done_callback(_streamed_jobs.discard)
+
+    while (event := await events.get()) is not None:
+        yield json.dumps(event) + "\n"
+
+
 class PredictRequest(BaseModel):
     student_ids: list[str] | None = None
 
 
 @app.post("/predict/at-risk", dependencies=[Depends(verify_secret)])
-async def predict_at_risk(body: PredictRequest | None = None) -> dict:
-    db = Db()
-    try:
+async def predict_at_risk(
+    body: PredictRequest | None = None, accept: str | None = Header(default=None)
+) -> Any:
+    student_ids = body.student_ids if body else None
+
+    def job(db: Db, report: Report | None) -> dict[str, Any]:
         ensure_baselines_registered(db)
-        try:
-            return await asyncio.to_thread(
-                run_batch_predictions, db, body.student_ids if body else None
-            )
-        except RuntimeError as error:
-            raise HTTPException(status_code=409, detail=str(error))
-    finally:
-        db.close()
+        return run_batch_predictions(db, student_ids, report)
+
+    return await _run(job, accept)
 
 
 class RecommendRefreshRequest(BaseModel):
@@ -128,17 +195,16 @@ class RecommendRefreshRequest(BaseModel):
 
 
 @app.post("/recommend/refresh", dependencies=[Depends(verify_secret)])
-async def recommend_refresh(body: RecommendRefreshRequest | None = None) -> dict:
-    db = Db()
-    try:
-        return await asyncio.to_thread(
-            refresh_recommendations,
-            db,
-            body.student_ids if body else None,
-            body.k if body else None,
-        )
-    finally:
-        db.close()
+async def recommend_refresh(
+    body: RecommendRefreshRequest | None = None, accept: str | None = Header(default=None)
+) -> Any:
+    student_ids = body.student_ids if body else None
+    k = body.k if body else None
+
+    def job(db: Db, report: Report | None) -> dict[str, Any]:
+        return refresh_recommendations(db, student_ids, k, report)
+
+    return await _run(job, accept)
 
 
 @app.get("/recommend/{student_id}", dependencies=[Depends(verify_secret)])

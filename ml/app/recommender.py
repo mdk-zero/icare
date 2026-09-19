@@ -22,7 +22,8 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 
 from .config import get_settings
 from .db import Db
-from .features import StudentFeatures, build_student_features
+from .features import FEATURE_STEPS, StudentFeatures, build_student_features
+from .progress import Progress, Report
 from .registry import ensure_recommender_registered
 
 NEUTRAL_WEAKNESS = 0.5
@@ -162,14 +163,21 @@ class RecommenderContext:
 
 
 def refresh_recommendations(
-    db: Db, student_ids: list[str] | None = None, k: int | None = None
+    db: Db,
+    student_ids: list[str] | None = None,
+    k: int | None = None,
+    report: Report | None = None,
 ) -> dict[str, Any]:
     settings = get_settings()
     k = k or settings.recommend_k
+    # The validated-score read, then one step per student: each student's list
+    # is rewritten with its own delete and insert, which is where a large
+    # cohort spends its time.
+    progress = Progress(FEATURE_STEPS + 1, steps_per_student=1, report=report)
     model_id = ensure_recommender_registered(db)
     context = RecommenderContext(db)
 
-    features = build_student_features(db, student_ids)
+    features = build_student_features(db, student_ids, progress)
     if not features:
         return {"students": 0, "recommendations": 0}
 
@@ -177,6 +185,7 @@ def refresh_recommendations(
         "competency_scores", "student_id,competency_id,score,created_at",
         order="created_at.desc",
     )
+    progress.step()
     validated: dict[str, dict[str, float]] = {}
     for row in validated_rows:
         validated.setdefault(row["student_id"], {}).setdefault(
@@ -211,6 +220,7 @@ def refresh_recommendations(
                 ],
             )
             written += len(recs)
+        progress.step()
     return {"students": len(features), "recommendations": written}
 
 

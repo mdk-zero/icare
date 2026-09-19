@@ -24,7 +24,8 @@ import numpy as np
 
 from .config import get_settings
 from .db import Db
-from .features import StudentFeatures, build_student_features
+from .features import FEATURE_STEPS, StudentFeatures, build_student_features
+from .progress import Progress, Report
 from .registry import get_active_model, load_artifact
 
 TOP_EXPLANATIONS = 3
@@ -138,8 +139,13 @@ def _notify_at_risk_transitions(db: Db, newly_at_risk: list[str]) -> int:
     return len(notifications)
 
 
-def run_batch_predictions(db: Db, student_ids: list[str] | None = None) -> dict[str, Any]:
+def run_batch_predictions(
+    db: Db, student_ids: list[str] | None = None, report: Report | None = None
+) -> dict[str, Any]:
     settings = get_settings()
+    # After the features: reading prior risk, saving, notifying. Scoring itself
+    # is one in-memory matrix pass, too quick to be worth a step.
+    progress = Progress(FEATURE_STEPS + 3, report=report)
 
     model_row = get_active_model(db, settings.primary_model_kind)
     if model_row is None:
@@ -156,7 +162,9 @@ def run_batch_predictions(db: Db, student_ids: list[str] | None = None) -> dict[
     model = bundle["model"]
     scaler = bundle.get("scaler")
 
-    features_by_student: dict[str, StudentFeatures] = build_student_features(db, student_ids)
+    features_by_student: dict[str, StudentFeatures] = build_student_features(
+        db, student_ids, progress
+    )
     if not features_by_student:
         return {"model": model_row["version"], "scored": 0, "at_risk": 0, "notifications": 0}
 
@@ -167,6 +175,7 @@ def run_batch_predictions(db: Db, student_ids: list[str] | None = None) -> dict[
     probabilities = model.predict_proba(matrix)[:, 1]
 
     previous_risk = _latest_risk_by_student(db)
+    progress.step()
     cohort_missed = round(float(np.mean([s.work_missed for s in students])), 3)
 
     rows = []
@@ -213,7 +222,9 @@ def run_batch_predictions(db: Db, student_ids: list[str] | None = None) -> dict[
         })
 
     db.insert("performance_predictions", rows)
+    progress.step()
     notified = _notify_at_risk_transitions(db, newly_at_risk)
+    progress.step()
 
     return {
         "model": f"{model_row['kind']} v{model_row['version']}",

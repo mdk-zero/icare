@@ -1,3 +1,5 @@
+import type { MlEvent } from './ml';
+import { NDJSON, readNdjson } from './ndjson';
 import { cachedFetch, clearRequestCache } from './request-cache';
 import type { AttendanceTally, ShiftAttendanceStatus } from './shifts';
 
@@ -1546,10 +1548,14 @@ export async function dismissRecommendation(id: string): Promise<boolean> {
   }
 }
 
+/** Fraction of an ML job done, 0 to 1, as the service reports its steps. */
+export type MlProgressHandler = (fraction: number) => void;
+
 async function postMlJob(
   path: string,
   action: 'predict' | 'recommend',
-): Promise<{ result?: Record<string, unknown>; students?: number; error?: string }> {
+  onProgress?: MlProgressHandler,
+): Promise<{ result?: Record<string, unknown>; error?: string }> {
   try {
     const res = await apiFetch(path, {
       method: 'POST',
@@ -1557,13 +1563,18 @@ async function postMlJob(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action }),
     });
-    const json = (await res.json()) as {
-      result?: Record<string, unknown>;
-      students?: number;
-      error?: string;
-    };
-    if (!res.ok) return { error: json.error || 'ML run failed' };
-    return { result: json.result, students: json.students };
+    // Failures before the run starts are plain JSON; a started run streams.
+    if (!res.ok || !res.body || !res.headers.get('content-type')?.includes(NDJSON)) {
+      const json = (await res.json().catch(() => ({}))) as { error?: string };
+      return { error: json.error || 'ML run failed' };
+    }
+    for await (const line of readNdjson(res.body)) {
+      const event = line as MlEvent;
+      if ('error' in event) return { error: event.error };
+      if ('result' in event) return { result: event.result };
+      if (event.total > 0) onProgress?.(event.done / event.total);
+    }
+    return { error: 'ML run ended without a result. Please try again.' };
   } catch (err) {
     console.error('postMlJob() failed', path, err);
     return { error: 'ML run failed. Please try again.' };
@@ -1573,18 +1584,17 @@ async function postMlJob(
 /** Admin: runs across the whole cohort. */
 export async function runMlJob(
   action: 'predict' | 'recommend',
+  onProgress?: MlProgressHandler,
 ): Promise<{ result?: Record<string, unknown>; error?: string }> {
-  return postMlJob('/api/admin/ml', action);
+  return postMlJob('/api/admin/ml', action, onProgress);
 }
 
-/**
- * Faculty: the same jobs, scoped server-side to the caller's own sections.
- * `students` reports how many that run covered.
- */
+/** Faculty: the same jobs, scoped server-side to the caller's own sections. */
 export async function runFacultyMlJob(
   action: 'predict' | 'recommend',
-): Promise<{ result?: Record<string, unknown>; students?: number; error?: string }> {
-  return postMlJob('/api/faculty/ml', action);
+  onProgress?: MlProgressHandler,
+): Promise<{ result?: Record<string, unknown>; error?: string }> {
+  return postMlJob('/api/faculty/ml', action, onProgress);
 }
 
 // Faculty API Functions

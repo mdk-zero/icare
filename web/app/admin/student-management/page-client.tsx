@@ -26,6 +26,7 @@ import { fetchSections, runMlJob, Section, apiFetch } from "../../lib/api";
 import { usePageData } from "../../lib/use-page-data";
 import Avatar from "../../components/Avatar";
 import { EcgLoader } from "../../components/EcgLoader";
+import MlRunProgress, { type MlRun, mlRunFraction } from "../../components/MlRunProgress";
 
 interface StudentPerformance {
   id: string;
@@ -746,7 +747,8 @@ export default function StudentManagementClient() {
   const [batchDeleteError, setBatchDeleteError] = useState<string | null>(null);
 
   // On-demand ML runs across the whole cohort.
-  const [runningMl, setRunningMl] = useState(false);
+  const [mlRun, setMlRun] = useState<MlRun | null>(null);
+  const runningMl = mlRun !== null;
   const [mlStatus, setMlStatus] = useState<string | null>(null);
   const [mlError, setMlError] = useState<string | null>(null);
 
@@ -776,20 +778,25 @@ export default function StudentManagementClient() {
    * the flag on every row are what this has just rewritten.
    */
   const handleRunMl = async () => {
-    setRunningMl(true);
+    setMlRun({ job: "predict", fraction: 0 });
     setMlError(null);
     setMlStatus(null);
 
-    const predictions = await runMlJob("predict");
+    const predictions = await runMlJob("predict", (fraction) =>
+      setMlRun({ job: "predict", fraction }),
+    );
     if (predictions.error) {
       setMlError(predictions.error);
-      setRunningMl(false);
+      setMlRun(null);
       return;
     }
-    const recommendations = await runMlJob("recommend");
+    setMlRun({ job: "recommend", fraction: 0 });
+    const recommendations = await runMlJob("recommend", (fraction) =>
+      setMlRun({ job: "recommend", fraction }),
+    );
     if (recommendations.error) {
       setMlError(recommendations.error);
-      setRunningMl(false);
+      setMlRun(null);
       return;
     }
 
@@ -801,7 +808,7 @@ export default function StudentManagementClient() {
         `recommendation${recs === 1 ? "" : "s"}. Run Refresh Warehouse on Analytics to fold the ` +
         "new predictions into the charts.",
     );
-    setRunningMl(false);
+    setMlRun(null);
     await refresh();
   };
 
@@ -954,13 +961,15 @@ export default function StudentManagementClient() {
             <FontAwesomeIcon icon={faBrain} className="h-4 w-4" />
           ),
           onClick: handleRunMl,
-          text: runningMl ? "Running…" : "",
+          text: mlRun ? `${Math.round(mlRunFraction(mlRun) * 100)}%` : "",
           disabled: runningMl,
           label: runningMl
             ? "Running ML jobs…"
             : "Run ML Jobs — score every student for risk and refresh their quiz recommendations",
         }}
       />
+
+      {mlRun && <MlRunProgress run={mlRun} />}
 
       {notice && (
         <div className="mb-4 flex items-start justify-between gap-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">

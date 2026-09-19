@@ -49,6 +49,8 @@ import Avatar from "../../components/Avatar";
 import { SkeletonSectionGrid, SkeletonTable } from "../../components/skeletons";
 import { usePageData } from "../../lib/use-page-data";
 import { EcgLoader } from "../../components/EcgLoader";
+import ProgressBar from "../../components/ProgressBar";
+import MlRunProgress, { type MlRun, mlRunFraction } from "../../components/MlRunProgress";
 
 /** Minimal CSV parser: quoted fields, "" escapes, \r\n or \n row breaks. */
 function parseCsv(text: string): string[][] {
@@ -161,7 +163,8 @@ export default function FacultyStudentsClient() {
   const [riskFilter, setRiskFilter] = useState("all");
 
   // On-demand ML runs, scoped by the server to this faculty member's sections.
-  const [runningMl, setRunningMl] = useState(false);
+  const [mlRun, setMlRun] = useState<MlRun | null>(null);
+  const runningMl = mlRun !== null;
   const [mlStatus, setMlStatus] = useState<string | null>(null);
   const [mlError, setMlError] = useState<string | null>(null);
   /** Section whose roster is open; null shows the section cards. */
@@ -192,20 +195,25 @@ export default function FacultyStudentsClient() {
    * below is exactly what this has just rewritten.
    */
   const handleRunMl = async () => {
-    setRunningMl(true);
+    setMlRun({ job: "predict", fraction: 0 });
     setMlError(null);
     setMlStatus(null);
 
-    const predictions = await runFacultyMlJob("predict");
+    const predictions = await runFacultyMlJob("predict", (fraction) =>
+      setMlRun({ job: "predict", fraction }),
+    );
     if (predictions.error) {
       setMlError(predictions.error);
-      setRunningMl(false);
+      setMlRun(null);
       return;
     }
-    const recommendations = await runFacultyMlJob("recommend");
+    setMlRun({ job: "recommend", fraction: 0 });
+    const recommendations = await runFacultyMlJob("recommend", (fraction) =>
+      setMlRun({ job: "recommend", fraction }),
+    );
     if (recommendations.error) {
       setMlError(recommendations.error);
-      setRunningMl(false);
+      setMlRun(null);
       return;
     }
 
@@ -217,7 +225,7 @@ export default function FacultyStudentsClient() {
         recs === 1 ? "" : "s"
       }. Predictions reach the Analytics charts after the warehouse is refreshed.`,
     );
-    setRunningMl(false);
+    setMlRun(null);
     await refresh();
   };
 
@@ -269,6 +277,11 @@ export default function FacultyStudentsClient() {
   const [bulkFinished, setBulkFinished] = useState(false);
   const [bulkDefaultSectionId, setBulkDefaultSectionId] = useState("");
   const csvInputRef = useRef<HTMLInputElement>(null);
+  // Rows that failed validation are never sent, so they count toward neither.
+  const bulkImportableCount = bulkRows.filter((r) => !r.invalidReason).length;
+  const bulkProcessedCount = bulkRows.filter(
+    (r) => r.status === "created" || r.status === "warning" || r.status === "failed",
+  ).length;
 
   const closeBulkModal = () => {
     if (isBulkImporting) return;
@@ -826,10 +839,18 @@ export default function FacultyStudentsClient() {
             className="px-4 py-2.5 bg-surface border border-brand-600/30 text-brand-600 font-medium rounded-lg hover:bg-brand-600/5 transition-all flex items-center gap-2 disabled:opacity-45 disabled:hover:bg-surface disabled:cursor-not-allowed"
           >
             {runningMl ? <EcgLoader /> : <FontAwesomeIcon icon={faBrain} className="w-5 h-5" />}
-            {runningMl ? "Running…" : "Assess"}
+            {mlRun ? (
+              <span className="tabular-nums">
+                Running… {Math.round(mlRunFraction(mlRun) * 100)}%
+              </span>
+            ) : (
+              "Assess"
+            )}
           </button>
         </div>
       </div>
+
+      {mlRun && <MlRunProgress run={mlRun} />}
 
       {(mlStatus || mlError) && (
         <div
@@ -1586,6 +1607,13 @@ export default function FacultyStudentsClient() {
             </div>
 
             <div className="flex items-center justify-end gap-3 px-5 py-3 border-t border-hairline bg-subtle flex-shrink-0">
+              {isBulkImporting && (
+                <ProgressBar
+                  className="flex-1 min-w-0 mr-2"
+                  value={bulkProcessedCount / bulkImportableCount}
+                  label={`Registering students — ${bulkProcessedCount} of ${bulkImportableCount} done`}
+                />
+              )}
               <button
                 type="button"
                 onClick={closeBulkModal}
@@ -1610,7 +1638,9 @@ export default function FacultyStudentsClient() {
                   {isBulkImporting ? (
                     <>
                       <EcgLoader />
-                      Importing…
+                      <span className="tabular-nums">
+                        Importing… {Math.round((bulkProcessedCount / bulkImportableCount) * 100)}%
+                      </span>
                     </>
                   ) : (
                     `Import ${bulkRows.filter((r) => !r.invalidReason).length} Student${bulkRows.filter((r) => !r.invalidReason).length === 1 ? "" : "s"}`

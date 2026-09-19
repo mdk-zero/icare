@@ -15,6 +15,7 @@ from typing import Any
 import numpy as np
 
 from .db import Db
+from .progress import Progress
 from .schema import (
     ACTIVITY_RECENCY_CAP_DAYS,
     ENGAGEMENT_SATURATION_EVENTS,
@@ -22,6 +23,9 @@ from .schema import (
 )
 
 MIN_ANSWERS_PER_COMPETENCY = 3
+
+# One step for the roster read, then one per table load in build_student_features.
+FEATURE_STEPS = 11
 
 
 @dataclass
@@ -55,33 +59,43 @@ def _due_state(done: bool, status: str, deadline: datetime | None, now: datetime
     return False, False
 
 
-def build_student_features(db: Db, student_ids: list[str] | None = None) -> dict[str, StudentFeatures]:
+def build_student_features(
+    db: Db, student_ids: list[str] | None = None, progress: Progress | None = None
+) -> dict[str, StudentFeatures]:
+    progress = progress or Progress(FEATURE_STEPS)
     filters: list[tuple[str, str, Any]] = [("role", "eq", "student")]
     if student_ids:
         filters.append(("id", "in", student_ids))
     students = db.select("users", "id", filters)
     ids = [s["id"] for s in students]
+    progress.students(len(ids))
+    progress.step()
     if not ids:
         return {}
     id_set = set(ids)
 
-    attempts = db.select(
+    def load(table: str, columns: str) -> list[dict[str, Any]]:
+        rows = db.select(table, columns)
+        progress.step()
+        return rows
+
+    attempts = load(
         "assessment_attempts",
         "id,student_id,assessment_id,assignment_id,status,started_at,submitted_at,score,time_taken_seconds",
     )
-    assignments = db.select(
+    assignments = load(
         "assessment_assignments", "id,student_id,assessment_id,status,deadline"
     )
-    assessments = db.select("assessments", "id,time_limit_seconds,deadline")
-    scenario_assignments = db.select(
+    assessments = load("assessments", "id,time_limit_seconds,deadline")
+    scenario_assignments = load(
         "scenario_assignments", "student_id,status,deadline,submitted_at"
     )
-    answers = db.select("attempt_answers", "attempt_id,question_id,is_correct")
-    question_comps = db.select("question_competencies", "question_id,competency_id")
-    vitals = db.select("vital_sign_readings", "recorded_by,recorded_at")
-    tpr = db.select("tpr_records", "recorded_by,created_at")
-    ivf = db.select("ivf_records", "recorded_by,created_at")
-    notes = db.select("progress_notes", "author_id,created_at")
+    answers = load("attempt_answers", "attempt_id,question_id,is_correct")
+    question_comps = load("question_competencies", "question_id,competency_id")
+    vitals = load("vital_sign_readings", "recorded_by,recorded_at")
+    tpr = load("tpr_records", "recorded_by,created_at")
+    ivf = load("ivf_records", "recorded_by,created_at")
+    notes = load("progress_notes", "author_id,created_at")
 
     time_limits = {a["id"]: a.get("time_limit_seconds") for a in assessments}
     assessment_deadlines = {a["id"]: _parse_ts(a.get("deadline")) for a in assessments}

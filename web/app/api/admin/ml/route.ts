@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { logAudit } from '@/app/lib/audit';
-import { callMlService, isMlAction } from '@/app/lib/ml';
+import { isMlAction, streamMlRun } from '@/app/lib/ml';
 
 /**
  * On-demand ML runs across the whole cohort (Phase 3.5/3.8).
@@ -11,6 +11,7 @@ import { callMlService, isMlAction } from '@/app/lib/ml';
  * own sections via /api/faculty/ml.
  *
  * Requires ML_SERVICE_URL and ML_SERVICE_SECRET in the web environment.
+ * Responds with the run's progress stream; see streamMlRun.
  */
 export async function POST(request: NextRequest) {
   const session = await readSession();
@@ -32,20 +33,15 @@ export async function POST(request: NextRequest) {
   }
 
   // No student_ids: the cohort-wide run is the point of this route.
-  const outcome = await callMlService(action);
-  if (!outcome.ok) {
-    return NextResponse.json({ error: outcome.error }, { status: outcome.status });
-  }
-
-  await logAudit(
-    session,
-    {
-      action: action === 'predict' ? 'ml.predict_run' : 'ml.recommend_run',
-      entityType: 'ml_service',
-      details: { ...outcome.result, scope: 'cohort' },
-    },
-    request,
+  return streamMlRun(action, undefined, (result) =>
+    logAudit(
+      session,
+      {
+        action: action === 'predict' ? 'ml.predict_run' : 'ml.recommend_run',
+        entityType: 'ml_service',
+        details: { ...result, scope: 'cohort' },
+      },
+      request,
+    ),
   );
-
-  return NextResponse.json({ result: outcome.result });
 }
