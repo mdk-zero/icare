@@ -3,14 +3,22 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import {
   faChevronLeft,
   faBolt,
   faWandMagicSparkles,
   faCircleCheck,
   faClipboardCheck,
+  faChartLine,
+  faClipboardList,
+  faClock,
+  faShieldHalved,
+  faTriangleExclamation,
+  faStethoscope,
+  faListCheck,
+  faFileLines,
 } from "@fortawesome/free-solid-svg-icons";
-import { toast } from "../../../components/Toast";
 import {
   resolveCompetencies,
   COMPETENCY_LEVEL_LABEL,
@@ -24,11 +32,8 @@ import {
   logAuditAction,
   getCurrentFacultyUser,
   fetchStudentScenarioHistory,
-  fetchCompetencyAreas,
   fetchCompetencyScores,
-  recordCompetencyScore,
   generateStudentSummary,
-  CompetencyArea,
   CompetencyScore,
   StudentAISummary,
 } from "../../../lib/api";
@@ -60,17 +65,43 @@ interface ScenarioPerformanceRecord {
 const NO_PERFORMANCE_HISTORY: PerformanceHistory[] = [];
 const NO_SCENARIO_HISTORY: ScenarioPerformanceRecord[] = [];
 const NO_COMPETENCIES: ResolvedCompetency[] = [];
-const NO_COMPETENCY_AREAS: CompetencyArea[] = [];
 const NO_SCORE_HISTORY: CompetencyScore[] = [];
+
+/** One header stat tile — icon, big value, label — sized to match its
+ * siblings in the grid rather than hugging its own content. */
+function StatTile({
+  icon,
+  iconBg,
+  iconColor,
+  value,
+  valueColor = "text-gray-900",
+  label,
+}: {
+  icon: IconDefinition;
+  iconBg: string;
+  iconColor: string;
+  value: string;
+  valueColor?: string;
+  label: string;
+}) {
+  return (
+    <div className="flex h-full flex-col justify-center gap-4 rounded-xl bg-gray-50 p-5">
+      <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full ${iconBg} ${iconColor}`}>
+        <FontAwesomeIcon icon={icon} className="h-5 w-5" />
+      </span>
+      <div>
+        <p className={`text-2xl font-bold leading-tight ${valueColor}`}>{value}</p>
+        <p className="text-sm font-medium text-gray-500">{label}</p>
+      </div>
+    </div>
+  );
+}
 
 export default function StudentDetailClient() {
   const router = useRouter();
   const params = useParams();
   const studentId = params?.id as string;
   
-  const [validateForm, setValidateForm] = useState({ competency_id: "", score: "", remarks: "" });
-  const [validateError, setValidateError] = useState<string | null>(null);
-  const [validating, setValidating] = useState(false);
   const [activeTab, setActiveTab] = useState("performance");
   const [aiSummary, setAiSummary] = useState<StudentAISummary | null>(null);
   const [summaryGeneratedAt, setSummaryGeneratedAt] = useState<string | null>(null);
@@ -104,38 +135,33 @@ export default function StudentDetailClient() {
 
   // Keyed by student, so stepping back to the roster and into the same student
   // again reads the whole profile from memory.
-  const {
-    data,
-    loading,
-    refresh: loadCompetencyData,
-  } = usePageData(studentId ? `faculty:student:${studentId}` : null, async () => {
-    const [detail, riskPrediction, scenarioHistory, competencyAreas, scoreHistory] =
-      await Promise.all([
+  const { data, loading } = usePageData(
+    studentId ? `faculty:student:${studentId}` : null,
+    async () => {
+      const [detail, riskPrediction, scenarioHistory, scoreHistory] = await Promise.all([
         fetchFacultyStudentDetail(studentId),
         fetchLatestPrediction(studentId),
         fetchStudentScenarioHistory(studentId),
-        fetchCompetencyAreas(),
         fetchCompetencyScores(studentId),
       ]);
 
-    return {
-      student: detail?.student ?? null,
-      performanceHistory: detail?.performance_history ?? NO_PERFORMANCE_HISTORY,
-      riskPrediction,
-      scenarioHistory,
-      competencyAreas,
-      scoreHistory,
-      // A faculty validation outranks a quiz result; assessment-derived scores
-      // fill every competency nobody has reviewed by hand.
-      competencies: resolveCompetencies(scoreHistory),
-    };
-  });
+      return {
+        student: detail?.student ?? null,
+        performanceHistory: detail?.performance_history ?? NO_PERFORMANCE_HISTORY,
+        riskPrediction,
+        scenarioHistory,
+        scoreHistory,
+        // A faculty validation outranks a quiz result; assessment-derived scores
+        // fill every competency nobody has reviewed by hand.
+        competencies: resolveCompetencies(scoreHistory),
+      };
+    },
+  );
 
   const student = data?.student ?? null;
   const performanceHistory = data?.performanceHistory ?? NO_PERFORMANCE_HISTORY;
   const scenarioHistory = data?.scenarioHistory ?? NO_SCENARIO_HISTORY;
   const competencies = data?.competencies ?? NO_COMPETENCIES;
-  const competencyAreas = data?.competencyAreas ?? NO_COMPETENCY_AREAS;
   const scoreHistory = data?.scoreHistory ?? NO_SCORE_HISTORY;
   const riskPrediction = data?.riskPrediction ?? null;
 
@@ -164,40 +190,6 @@ export default function StudentDetailClient() {
       });
     }
   };
-
-  const handleValidate = async () => {
-    setValidateError(null);
-    const scoreValue = Number(validateForm.score);
-    if (!validateForm.competency_id) {
-      setValidateError("Select a competency area.");
-      return;
-    }
-    if (validateForm.score.trim() === "" || Number.isNaN(scoreValue) || scoreValue < 0 || scoreValue > 100) {
-      setValidateError("Score must be a number between 0 and 100.");
-      return;
-    }
-    setValidating(true);
-    const result = await recordCompetencyScore({
-      student_id: studentId,
-      competency_id: validateForm.competency_id,
-      score: scoreValue,
-      remarks: validateForm.remarks.trim() || null,
-    });
-    setValidating(false);
-    if (result.error) {
-      setValidateError(result.error);
-      return;
-    }
-    setValidateForm({ competency_id: "", score: "", remarks: "" });
-    toast("Competency score recorded");
-    await loadCompetencyData();
-  };
-
-  const riskChipClass = riskPrediction
-    ? riskPrediction.risk === 'at_risk'
-      ? 'bg-red-100 text-red-700 border-red-200'
-      : 'bg-emerald-100 text-emerald-700 border-emerald-200'
-    : 'bg-gray-100 text-gray-700 border-gray-200';
 
   const featureLabel = (feature: string) =>
     feature.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
@@ -267,7 +259,7 @@ export default function StudentDetailClient() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
         <div className="lg:col-span-2">
-          <Card padding="sm">
+          <Card padding="sm" className="flex h-full flex-col">
             <div className="flex items-center gap-4 mb-6">
               <Avatar name={student.name} src={student.picture_url} size="xl" tone="solid" />
               <div>
@@ -287,40 +279,72 @@ export default function StudentDetailClient() {
               </div>
             </div>
             
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div className="text-center p-4 bg-gray-50 rounded-xl">
-                <p className="text-2xl font-bold text-gray-900">
-                  {student.average_score != null ? `${student.average_score}%` : "—"}
-                </p>
-                <p className="text-sm text-gray-500">Avg Score</p>
-              </div>
-              <div className="text-center p-4 bg-gray-50 rounded-xl">
-                <p className="text-2xl font-bold text-gray-900">{student.quiz_count ?? 0}</p>
-                <p className="text-sm text-gray-500">Quizzes</p>
-              </div>
-              <div className="text-center p-4 bg-gray-50 rounded-xl">
-                <p className="text-2xl font-bold text-gray-900">
-                  {student.last_activity
+            <div className="grid flex-1 grid-cols-2 sm:grid-cols-4 gap-3">
+              <StatTile
+                icon={faChartLine}
+                iconBg="bg-brand-600/10"
+                iconColor="text-brand-600"
+                value={student.average_score != null ? `${student.average_score}%` : "—"}
+                label="Avg Score"
+              />
+              <StatTile
+                icon={faClipboardList}
+                iconBg="bg-indigo-100"
+                iconColor="text-indigo-600"
+                value={String(student.quiz_count ?? 0)}
+                label="Quizzes"
+              />
+              <StatTile
+                icon={faClock}
+                iconBg="bg-amber-100"
+                iconColor="text-amber-600"
+                value={
+                  student.last_activity
                     ? new Date(student.last_activity).toLocaleDateString(undefined, {
                         month: "short",
                         day: "numeric",
                       })
-                    : "Never"}
-                </p>
-                <p className="text-sm text-gray-500">Last Active</p>
-              </div>
-              <div className="text-center p-4 bg-gray-50 rounded-xl">
-                <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${riskChipClass}`}>
-                  {riskPrediction
-                    ? riskPrediction.risk === 'at_risk' ? 'At Risk' : 'Safe'
-                    : 'Not Scored'}
-                </span>
-              </div>
+                    : "Never"
+                }
+                label="Last Active"
+              />
+              <StatTile
+                icon={
+                  !riskPrediction
+                    ? faShieldHalved
+                    : riskPrediction.risk === "at_risk"
+                      ? faTriangleExclamation
+                      : faShieldHalved
+                }
+                iconBg={
+                  !riskPrediction
+                    ? "bg-gray-100"
+                    : riskPrediction.risk === "at_risk"
+                      ? "bg-red-100"
+                      : "bg-emerald-100"
+                }
+                iconColor={
+                  !riskPrediction
+                    ? "text-gray-500"
+                    : riskPrediction.risk === "at_risk"
+                      ? "text-red-600"
+                      : "text-emerald-600"
+                }
+                value={riskPrediction ? (riskPrediction.risk === "at_risk" ? "At Risk" : "Safe") : "Not Scored"}
+                valueColor={
+                  !riskPrediction
+                    ? "text-gray-500"
+                    : riskPrediction.risk === "at_risk"
+                      ? "text-red-600"
+                      : "text-emerald-600"
+                }
+                label="Risk Status"
+              />
             </div>
           </Card>
         </div>
 
-        <Card padding="sm">
+        <Card padding="sm" className="h-full">
           <div className="flex items-center gap-2 mb-4">
             <div className="p-2 bg-purple-100 rounded-lg">
               <FontAwesomeIcon icon={faBolt} className="w-5 h-5 text-purple-600" />
@@ -464,39 +488,66 @@ export default function StudentDetailClient() {
         </Card>
       </div>
 
-        <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden">
-          <div className="border-b border-hairline">
-            <div className="flex gap-4 px-4">
-            {['performance', 'scenarios', 'competencies'].map((tab) => (
+        <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          {([
+            { key: 'performance', label: 'Performance', hint: 'Quiz results', count: performanceHistory.length, unit: 'quizzes', icon: faChartLine },
+            { key: 'scenarios', label: 'Scenarios', hint: 'Simulation runs', count: scenarioHistory.length, unit: 'runs', icon: faStethoscope },
+            { key: 'competencies', label: 'Competencies', hint: 'Skill mastery', count: competencies.length, unit: 'areas', icon: faListCheck },
+          ] as const).map((tab) => {
+            const active = activeTab === tab.key;
+            return (
               <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`py-4 font-medium border-b-2 transition-colors ${
-                  activeTab === tab
-                    ? 'border-brand-600 text-brand-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                aria-pressed={active}
+                className={`group relative flex items-center gap-4 overflow-hidden rounded-2xl border p-4 text-left transition-all duration-200 ${
+                  active
+                    ? 'border-[#1b6b7b] bg-gradient-to-br from-[#1b6b7b] to-[#124a52] text-white shadow-[0_8px_20px_-6px_rgba(27,107,123,0.5)]'
+                    : 'border-hairline bg-surface text-gray-900 hover:-translate-y-0.5 hover:border-brand-600/40 hover:shadow-tile-hover'
                 }`}
               >
-                {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                <span
+                  className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl transition-colors ${
+                    active ? 'bg-white/20 text-white' : 'bg-brand-600/10 text-brand-600 group-hover:bg-brand-600/15'
+                  }`}
+                >
+                  <FontAwesomeIcon icon={tab.icon} className="h-5 w-5" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-base font-bold leading-tight">{tab.label}</span>
+                  <span className={`block text-xs ${active ? 'text-white/70' : 'text-gray-500'}`}>{tab.hint}</span>
+                </span>
+                <span className="shrink-0 text-right">
+                  <span className="block text-2xl font-bold leading-none tabular-nums">{tab.count}</span>
+                  <span className={`block text-[11px] ${active ? 'text-white/70' : 'text-gray-400'}`}>{tab.unit}</span>
+                </span>
               </button>
-            ))}
-          </div>
+            );
+          })}
         </div>
 
+        <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden">
         <div className="p-6">
           {activeTab === 'performance' && (
             <div className="space-y-2">
-              {performanceHistory.map((record, idx) => (
-                <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                  <div>
-                    <p className="font-medium text-gray-900">{record.quiz_title}</p>
-                    <p className="text-sm text-gray-500">{record.date} • {record.time_taken} min</p>
+              {performanceHistory.length === 0 ? (
+                <p className="text-gray-500 text-center py-8">No quiz attempts yet</p>
+              ) : (
+                performanceHistory.map((record, idx) => (
+                  <div key={idx} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-600/10 text-brand-600">
+                      <FontAwesomeIcon icon={faFileLines} className="h-4 w-4" />
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-gray-900 truncate">{record.quiz_title}</p>
+                      <p className="text-sm text-gray-500">{record.date} • {record.time_taken} min</p>
+                    </div>
+                    <div className={`text-xl font-bold shrink-0 ${getScoreColor(record.score)}`}>
+                      {record.score}%
+                    </div>
                   </div>
-                  <div className={`text-xl font-bold ${getScoreColor(record.score)}`}>
-                    {record.score}%
-                  </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           )}
 
@@ -506,13 +557,16 @@ export default function StudentDetailClient() {
                 <p className="text-gray-500 text-center py-8">No scenario performance records yet</p>
               ) : (
                 scenarioHistory.map((record) => (
-                  <div key={record.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <div>
-                      <p className="font-medium text-gray-900">{record.scenario_title}</p>
+                  <div key={record.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-purple-100 text-purple-600">
+                      <FontAwesomeIcon icon={faStethoscope} className="h-4 w-4" />
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-gray-900 truncate">{record.scenario_title}</p>
                       <p className="text-sm text-gray-500">{record.completed_at} • {Math.floor(record.time_taken / 60)}m {record.time_taken % 60}s</p>
                       <p className="text-xs text-gray-400 mt-1">{record.completed_tasks?.length || 0} / {record.total_tasks || 0} tasks completed</p>
                     </div>
-                    <div className={`text-xl font-bold ${getScoreColor(record.score)}`}>
+                    <div className={`text-xl font-bold shrink-0 ${getScoreColor(record.score)}`}>
                       {record.score}%
                     </div>
                   </div>
@@ -582,54 +636,6 @@ export default function StudentDetailClient() {
                   </div>
                 </>
               )}
-
-              <div className="p-5 bg-brand-600/5 border border-brand-600/20 rounded-xl">
-                <h3 className="font-semibold text-gray-900 mb-3">Validate competency</h3>
-                {validateError && (
-                  <div className="mb-3 p-3 bg-rose-50 border border-rose-200 rounded-xl text-sm text-rose-700">
-                    {validateError}
-                  </div>
-                )}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <select
-                    value={validateForm.competency_id}
-                    onChange={(e) =>
-                      setValidateForm((f) => ({ ...f, competency_id: e.target.value }))
-                    }
-                    className="px-3 py-2 bg-surface border border-gray-300 rounded-xl text-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600"
-                  >
-                    <option value="">Select competency…</option>
-                    {competencyAreas.map((area) => (
-                      <option key={area.id} value={area.id}>
-                        {area.name}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    placeholder="Score (0–100)"
-                    value={validateForm.score}
-                    onChange={(e) => setValidateForm((f) => ({ ...f, score: e.target.value }))}
-                    className="px-3 py-2 bg-surface border border-gray-300 rounded-xl text-gray-900 placeholder:text-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600"
-                  />
-                  <button
-                    onClick={handleValidate}
-                    disabled={validating}
-                    className="px-4 py-2 bg-brand-600 text-white rounded-lg font-medium text-sm hover:bg-brand-700 transition-all disabled:opacity-50 shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
-                  >
-                    {validating ? "Saving…" : "Record Score"}
-                  </button>
-                </div>
-                <input
-                  type="text"
-                  placeholder="Remarks (optional)"
-                  value={validateForm.remarks}
-                  onChange={(e) => setValidateForm((f) => ({ ...f, remarks: e.target.value }))}
-                  className="mt-3 w-full px-3 py-2 bg-surface border border-gray-300 rounded-xl text-gray-900 placeholder:text-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600"
-                />
-              </div>
 
               {scoreHistory.length > 0 && (
                 <div>

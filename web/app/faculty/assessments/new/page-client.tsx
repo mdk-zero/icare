@@ -1,19 +1,34 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type SelectHTMLAttributes } from "react";
 import { useRouter } from "next/navigation";
-import { fetchSections, type Section, apiFetch } from "../../../lib/api";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faListCheck, faChevronDown } from "@fortawesome/free-solid-svg-icons";
+import { apiFetch } from "../../../lib/api";
 import { toast } from "../../../components/Toast";
-import { usePageData } from "../../../lib/use-page-data";
 import { EcgLoader } from "../../../components/EcgLoader";
-import LiveClock from "../../../components/LiveClock";
-
-/** Stable empty fallback, so nothing downstream sees a new array each render. */
-const NO_SECTIONS: Section[] = [];
+import PageHeader from "../../../components/PageHeader";
 
 const inputClassName =
   "w-full px-4 py-3 bg-surface border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 focus:bg-surface transition-all text-sm shadow-sm";
 const labelClassName = "block text-sm font-bold text-gray-800 mb-2";
+
+/** A native `<select>` with its own chevron pulled in from the edge, rather
+ * than the browser's default arrow flush against the border. */
+function SelectField({
+  className = "",
+  ...props
+}: SelectHTMLAttributes<HTMLSelectElement>) {
+  return (
+    <div className="relative">
+      <select {...props} className={`${inputClassName} appearance-none pr-9 ${className}`} />
+      <FontAwesomeIcon
+        icon={faChevronDown}
+        className="pointer-events-none absolute right-3.5 top-1/2 h-3 w-3 -translate-y-1/2 text-gray-500"
+      />
+    </div>
+  );
+}
 
 const CATEGORIES = [
   "Cardiac Emergency",
@@ -41,11 +56,7 @@ export default function AssessmentNewClient() {
     difficulty: "beginner" as Difficulty,
     category: "General" as (typeof CATEGORIES)[number],
     time_limit_minutes: "",
-    target_sections: [] as string[],
   });
-
-  const { data: sectionsData } = usePageData("faculty:sections", fetchSections);
-  const sections = sectionsData ?? NO_SECTIONS;
 
   const handleCreate = async () => {
     if (!form.title.trim()) {
@@ -68,8 +79,6 @@ export default function AssessmentNewClient() {
           time_limit_seconds: form.time_limit_minutes
             ? Number(form.time_limit_minutes) * 60
             : null,
-          target_sections:
-            form.target_sections.length > 0 ? form.target_sections : null,
         }),
       });
 
@@ -91,19 +100,14 @@ export default function AssessmentNewClient() {
 
   return (
     <div className="space-y-6">
-      <header className="animate-rise relative overflow-hidden bg-surface rounded-2xl border border-hairline shadow-tile p-5 sm:p-6 mb-6">
-        <div aria-hidden className="pointer-events-none absolute inset-0" style={{ backgroundImage: "radial-gradient(70% 130% at 100% 0%, rgb(27 107 123 / 0.07) 0%, transparent 70%)" }} />
-        <span aria-hidden className="absolute left-0 top-0 h-full w-[3px] bg-gradient-to-b from-brand-400 via-brand-600 to-brand-800" />
-        <div className="relative flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h1 className="font-display text-[32px] sm:text-[38px] font-bold leading-[1.08] tracking-[-0.02em] text-gray-900">
-              New Assessment
-            </h1>
-            <p className="mt-2 text-sm text-gray-500">Create a new quiz and add questions</p>
-          </div>
-          <LiveClock className="shrink-0" />
-        </div>
-      </header>
+      <PageHeader
+        badge={{
+          icon: <FontAwesomeIcon icon={faListCheck} className="h-4 w-4" />,
+          label: "Assessments",
+        }}
+        title="New Assessment"
+        subtitle="Create a new quiz and add questions"
+      />
 
       {error && (
         <div className="bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-xl text-sm">
@@ -133,7 +137,7 @@ export default function AssessmentNewClient() {
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className={labelClassName}>Difficulty</label>
-            <select
+            <SelectField
               value={form.difficulty}
               onChange={(e) =>
                 setForm((f) => ({
@@ -141,16 +145,15 @@ export default function AssessmentNewClient() {
                   difficulty: e.target.value as Difficulty,
                 }))
               }
-              className={inputClassName}
             >
               <option value="beginner">Beginner</option>
               <option value="intermediate">Intermediate</option>
               <option value="advanced">Advanced</option>
-            </select>
+            </SelectField>
           </div>
           <div>
             <label className={labelClassName}>Category</label>
-            <select
+            <SelectField
               value={form.category}
               onChange={(e) =>
                 setForm((f) => ({
@@ -158,14 +161,13 @@ export default function AssessmentNewClient() {
                   category: e.target.value as (typeof CATEGORIES)[number],
                 }))
               }
-              className={inputClassName}
             >
               {CATEGORIES.map((c) => (
                 <option key={c} value={c}>
                   {c}
                 </option>
               ))}
-            </select>
+            </SelectField>
           </div>
         </div>
         <div>
@@ -180,42 +182,6 @@ export default function AssessmentNewClient() {
             placeholder="No limit"
             className={inputClassName}
           />
-        </div>
-        <div>
-          <label className={labelClassName}>Published to sections</label>
-          {sections.length === 0 ? (
-            <p className="text-sm text-gray-500">
-              No sections exist yet — this assessment will be visible to all students.
-            </p>
-          ) : (
-            <div className="flex flex-wrap gap-3">
-              {sections.map((s) => (
-                <label
-                  key={s.id}
-                  className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer"
-                >
-                  <input
-                    type="checkbox"
-                    checked={form.target_sections.includes(s.name)}
-                    onChange={(e) =>
-                      setForm((f) => ({
-                        ...f,
-                        target_sections: e.target.checked
-                          ? [...f.target_sections, s.name]
-                          : f.target_sections.filter((x) => x !== s.name),
-                      }))
-                    }
-                    className="w-4 h-4 accent-brand-600"
-                  />
-                  Section {s.name}
-                </label>
-              ))}
-            </div>
-          )}
-          <p className="text-xs text-gray-400 mt-1">
-            Leave all unchecked to publish to all sections. You can change this later from the
-            assessment&apos;s details.
-          </p>
         </div>
         <div className="flex justify-end gap-2 pt-2">
           <button

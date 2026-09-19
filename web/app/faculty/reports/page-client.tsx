@@ -184,7 +184,7 @@ export default function FacultyReportsClient() {
   return (
     <div>
       <PageHeader
-        badge={{ icon: <FontAwesomeIcon icon={faFileLines} className="w-3 h-3" />, label: "Reports" }}
+        badge={{ icon: <FontAwesomeIcon icon={faFileLines} className="w-3 h-3" />, label: "Report Center" }}
         title="Reports"
         subtitle="Generate PDF or CSV reports for students, sections, scenarios and assessments"
       />
