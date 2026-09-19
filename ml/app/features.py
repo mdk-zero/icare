@@ -32,12 +32,27 @@ class StudentFeatures:
     competency_accuracy: dict[str, float] = field(default_factory=dict)
     attempted_assessment_ids: set[str] = field(default_factory=set)
     assigned_assessment_ids: set[str] = field(default_factory=set)
+    # Participation across quizzes and scenarios: work that has come due
+    # (deadline passed, or already completed) and how much of it was missed.
+    work_due: int = 0
+    work_missed: int = 0
 
 
 def _parse_ts(value: str | None) -> datetime | None:
     if not value:
         return None
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+def _due_state(done: bool, status: str, deadline: datetime | None, now: datetime) -> tuple[bool, bool]:
+    """(has come due, was missed) for one assignment. Work that is neither
+    done nor past its deadline has not come due: not having started it yet
+    is not the same as having failed to do it."""
+    if done:
+        return True, False
+    if status == "overdue" or (deadline is not None and deadline < now):
+        return True, True
+    return False, False
 
 
 def build_student_features(db: Db, student_ids: list[str] | None = None) -> dict[str, StudentFeatures]:
@@ -57,7 +72,10 @@ def build_student_features(db: Db, student_ids: list[str] | None = None) -> dict
     assignments = db.select(
         "assessment_assignments", "id,student_id,assessment_id,status,deadline"
     )
-    assessments = db.select("assessments", "id,time_limit_seconds")
+    assessments = db.select("assessments", "id,time_limit_seconds,deadline")
+    scenario_assignments = db.select(
+        "scenario_assignments", "student_id,status,deadline,submitted_at"
+    )
     answers = db.select("attempt_answers", "attempt_id,question_id,is_correct")
     question_comps = db.select("question_competencies", "question_id,competency_id")
     vitals = db.select("vital_sign_readings", "recorded_by,recorded_at")
@@ -66,6 +84,7 @@ def build_student_features(db: Db, student_ids: list[str] | None = None) -> dict
     notes = db.select("progress_notes", "author_id,created_at")
 
     time_limits = {a["id"]: a.get("time_limit_seconds") for a in assessments}
+    assessment_deadlines = {a["id"]: _parse_ts(a.get("deadline")) for a in assessments}
     deadlines = {a["id"]: _parse_ts(a.get("deadline")) for a in assignments}
     attempt_owner = {a["id"]: a["student_id"] for a in attempts}
     question_to_comps: dict[str, list[str]] = {}
@@ -80,8 +99,10 @@ def build_student_features(db: Db, student_ids: list[str] | None = None) -> dict
             "submitted": [],       # (submitted_at, score, time_taken, assignment_id)
             "attempted_assessments": set(),
             "assigned_assessments": set(),
-            "assignments_total": 0,
-            "assignments_completed": 0,
+            "quizzes_due": 0,
+            "quizzes_completed": 0,
+            "work_due": 0,
+            "work_missed": 0,
             "comp_answers": {},    # competency_id -> [is_correct...]
             "all_answers": [],
             "clinical_count": 0,
@@ -121,9 +142,29 @@ def build_student_features(db: Db, student_ids: list[str] | None = None) -> dict
         if st is None:
             continue
         st["assigned_assessments"].add(asg["assessment_id"])
-        st["assignments_total"] += 1
-        if asg["status"] == "completed":
-            st["assignments_completed"] += 1
+        done = asg["status"] == "completed"
+        # Effective deadline, as the attempt gate enforces it (migration 029).
+        deadline = deadlines.get(asg["id"]) or assessment_deadlines.get(asg["assessment_id"])
+        due, missed = _due_state(done, asg["status"], deadline, now)
+        if due:
+            st["quizzes_due"] += 1
+            st["work_due"] += 1
+        if done:
+            st["quizzes_completed"] += 1
+        if missed:
+            st["work_missed"] += 1
+
+    for asg in scenario_assignments:
+        st = by_student.get(asg["student_id"])
+        if st is None:
+            continue
+        # Handed in counts as done even before faculty finalize it.
+        done = asg["status"] == "completed" or bool(asg.get("submitted_at"))
+        due, missed = _due_state(done, asg["status"], _parse_ts(asg.get("deadline")), now)
+        if due:
+            st["work_due"] += 1
+        if missed:
+            st["work_missed"] += 1
 
     for ans in answers:
         sid = attempt_owner.get(ans["attempt_id"])
@@ -156,9 +197,8 @@ def build_student_features(db: Db, student_ids: list[str] | None = None) -> dict
         else:
             score_trend = 0.0
 
-        total_assigned = st["assignments_total"]
         completion_rate = (
-            st["assignments_completed"] / total_assigned if total_assigned else 1.0
+            st["quizzes_completed"] / st["quizzes_due"] if st["quizzes_due"] else 1.0
         )
 
         with_deadline = 0
@@ -221,5 +261,7 @@ def build_student_features(db: Db, student_ids: list[str] | None = None) -> dict
             competency_accuracy=comp_accuracy,
             attempted_assessment_ids=st["attempted_assessments"],
             assigned_assessment_ids=st["assigned_assessments"],
+            work_due=st["work_due"],
+            work_missed=st["work_missed"],
         )
     return out

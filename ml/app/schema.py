@@ -14,7 +14,7 @@ SHARED_FEATURES = [
     "avg_score",                 # mean submitted quiz score, 0-100
     "score_trend",               # OLS slope of scores over attempt order, clipped to [-50, 50]
     "attempts_count",            # number of submitted attempts
-    "completion_rate",           # completed assignments / assigned, 0-1 (1.0 when nothing assigned)
+    "completion_rate",           # completed assignments / assignments come due, 0-1 (1.0 when nothing is due)
     "lateness_rate",             # late submissions / deadline'd submissions, 0-1
     "engagement_index",          # saturating activity volume over the last 60 days, 0-1
     "days_since_last_activity",  # capped at 60

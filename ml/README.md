@@ -74,6 +74,16 @@ All endpoints except `/health` require header `X-ICARE-ML-KEY: $ML_SERVICE_SECRE
 
   Reproduce: download OULAD, then
   `python -m training.train_baseline_oulad --raw-dir <dir>`.
+- **Participation weighting** — OULAD labels empty activity as a withdrawal,
+  so on its own the baseline flags every student who simply hasn't started
+  (80-99%). The batch run therefore weights the model's probability by
+  graded attempts (full weight at 3) and fills the rest from participation:
+  the share of due quizzes and scenarios missed, starting from half the risk
+  threshold when nothing has been missed. `completion_rate` likewise only
+  counts work whose deadline has passed. Each prediction stores
+  `model_probability`, `evidence_weight`, `work_due` and `work_missed` in its
+  feature snapshot, and leads its explanations with `missed_deadlines`
+  while the evidence is partial.
 - **Retraining (Phase 3.4)** — once faculty validations accumulate:
   `python -m training.train_icare` labels students by mean validated
   competency score vs the 75 passing mark, trains on `EXTENDED_FEATURES`,

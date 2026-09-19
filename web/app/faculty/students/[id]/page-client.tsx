@@ -399,6 +399,13 @@ export default function StudentDetailClient() {
                   </div>
                 </div>
               )}
+              {riskPrediction.features.evidence_weight != null && riskPrediction.features.evidence_weight < 1 && (
+                <p className="text-xs text-gray-500">
+                  {riskPrediction.features.attempts_count
+                    ? `Only ${riskPrediction.features.attempts_count} graded ${riskPrediction.features.attempts_count === 1 ? 'quiz' : 'quizzes'} so far, so this rating leans on missed deadlines until there are 3.`
+                    : 'No graded quizzes yet, so this rating is based on missed deadlines rather than scores.'}
+                </p>
+              )}
               <p className="text-xs text-gray-400 border-t border-hairline pt-3">
                 {riskPrediction.ml_models
                   ? `${riskPrediction.ml_models.kind.replace(/_/g, ' ')} v${riskPrediction.ml_models.version}${riskPrediction.ml_models.is_baseline ? ' (pre-trained baseline)' : ''}`
