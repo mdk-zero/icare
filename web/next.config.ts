@@ -14,6 +14,18 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: path.join(__dirname),
   },
+  // pdf.js starts its worker by importing a pdf.worker.mjs beside itself at
+  // runtime. Bundled into a server chunk, that file is left behind and every
+  // lesson PDF fails to parse, so pdf-parse loads from node_modules instead —
+  // and the worker, which file tracing can't see through a runtime import, is
+  // shipped explicitly to the routes that read lessons.
+  serverExternalPackages: ["pdf-parse"],
+  outputFileTracingIncludes: {
+    "/api/faculty/scenarios/generate": ["./node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs"],
+    "/api/faculty/assessments/*/questions/generate-from-lesson": [
+      "./node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs",
+    ],
+  },
   experimental: {
     // Hold route segments in the client router cache instead of re-requesting
     // the RSC payload on every navigation. Without this `dynamic` is 0s, so
