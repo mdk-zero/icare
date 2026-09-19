@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -14,7 +14,6 @@ import {
   faLayerGroup,
   faChevronDown,
   faWandMagicSparkles,
-  faFileImport,
   faTriangleExclamation,
 } from "@fortawesome/free-solid-svg-icons";
 import { SkeletonQuestionCard } from "../../../components/skeletons";
@@ -140,20 +139,11 @@ export default function AssessmentQuestionsClient({
   const markClean = (qId: string) => setDirtyQuestions((prev) => { const next = new Set(prev); next.delete(qId); return next; });
   const [editingQuestions, setEditingQuestions] = useState<Set<string>>(new Set());
   const toggleEdit = (qId: string) => setEditingQuestions((prev) => { const next = new Set(prev); if (next.has(qId)) next.delete(qId); else next.add(qId); return next; });
-  // AI generation + lesson import
+  // AI generation
   const [showAIPanel, setShowAIPanel] = useState(false);
   const [aiTopic, setAiTopic] = useState("");
   const [aiCount, setAiCount] = useState(5);
   const [aiGenerating, setAiGenerating] = useState(false);
-  const [showLessonPanel, setShowLessonPanel] = useState(false);
-  const [lessonFile, setLessonFile] = useState<File | null>(null);
-  const [lessonTypes, setLessonTypes] = useState<Set<"multiple_choice" | "short_answer">>(
-    new Set(["multiple_choice"]),
-  );
-  const [lessonCount, setLessonCount] = useState(5);
-  const [lessonGenerating, setLessonGenerating] = useState(false);
-  const [lessonError, setLessonError] = useState<string | null>(null);
-  const lessonInputRef = useRef<HTMLInputElement>(null);
 
   // criteria editor
   const [criteria, setCriteria] = useState<AssessmentCriteria[]>([]);
@@ -336,23 +326,6 @@ export default function AssessmentQuestionsClient({
       if (!res.ok) return;
       const json = (await res.json()) as { blockers?: PublishBlocker[] };
       setBlockers(json.blockers ?? []);
-    } catch {
-      // Advisory only — a failed refresh must not interrupt editing.
-    }
-  }, [assessmentId]);
-
-  /** Re-reads just the criteria list — used after lesson generation, which
-   * may have created new criteria server-side for uncovered competencies.
-   * Deliberately narrower than `loadData`: that also resets `questions` from
-   * the server, which would wipe the unsaved drafts this just added. */
-  const refreshCriteria = useCallback(async () => {
-    try {
-      const res = await apiFetch(`/api/faculty/assessments/${assessmentId}/criteria`, {
-        credentials: "include",
-      });
-      if (!res.ok) return;
-      const json = (await res.json()) as { criteria?: AssessmentCriteria[] };
-      setCriteria(json.criteria ?? []);
     } catch {
       // Advisory only — a failed refresh must not interrupt editing.
     }
@@ -656,73 +629,6 @@ export default function AssessmentQuestionsClient({
       toast("Failed to generate questions");
     } finally {
       setAiGenerating(false);
-    }
-  };
-
-  // ---------- lesson import ----------
-
-  const toggleLessonType = (type: "multiple_choice" | "short_answer") => {
-    setLessonTypes((prev) => {
-      const next = new Set(prev);
-      if (next.has(type)) {
-        // At least one type must stay selected.
-        if (next.size > 1) next.delete(type);
-      } else {
-        next.add(type);
-      }
-      return next;
-    });
-  };
-
-  const handleGenerateFromLesson = async () => {
-    const file = lessonFile;
-    if (!file) {
-      toast("Choose a lesson file first");
-      return;
-    }
-    setLessonGenerating(true);
-    setLessonError(null);
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("questionTypes", Array.from(lessonTypes).join(","));
-      formData.append("count", String(lessonCount));
-
-      const res = await fetch(
-        `/api/faculty/assessments/${assessmentId}/questions/generate-from-lesson`,
-        { method: "POST", credentials: "include", body: formData },
-      );
-      const json = (await res.json()) as {
-        questions?: QuestionFormData[];
-        error?: string;
-      };
-      if (!res.ok || !json.questions) {
-        const message = json.error ?? "Failed to generate questions from the lesson";
-        setLessonError(message);
-        toast(message);
-        return;
-      }
-      appendDraftQuestions(
-        json.questions.map((q) => ({
-          ...q,
-          criteria_id: q.criteria_id ?? criterionForCompetency(q.competency_ids?.[0]),
-        })),
-      );
-      // The lesson route may have just created criteria for competencies this
-      // assessment didn't have one for yet — pick those up without disturbing
-      // the drafts just added (loadData() would reset them from the server).
-      void refreshCriteria();
-      void refreshBlockers();
-      setShowLessonPanel(false);
-      setLessonFile(null);
-      toast(
-        `Generated ${json.questions.length} draft question${json.questions.length !== 1 ? "s" : ""} from the lesson — review and save each one`,
-      );
-    } catch {
-      setLessonError("Failed to generate questions from the lesson");
-      toast("Failed to generate questions from the lesson");
-    } finally {
-      setLessonGenerating(false);
     }
   };
 
@@ -1643,120 +1549,6 @@ export default function AssessmentQuestionsClient({
           </div>
         )}
 
-        {showLessonPanel && (
-          <div className="bg-surface rounded-xl border border-brand-600/30 shadow-sm p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <FontAwesomeIcon icon={faFileImport} className="w-4 h-4 text-brand-600" />
-                <span className="font-semibold text-gray-800">Generate questions from a lesson</span>
-              </div>
-              <button
-                onClick={() => {
-                  setShowLessonPanel(false);
-                  setLessonError(null);
-                }}
-                className="p-1 text-gray-400 hover:text-gray-600"
-              >
-                <FontAwesomeIcon icon={faTimes} className="w-4 h-4" />
-              </button>
-            </div>
-
-            {lessonError && (
-              <div className="flex items-start gap-2 px-3 py-2.5 bg-rose-50 border border-rose-200 rounded-lg text-sm text-rose-700">
-                <FontAwesomeIcon icon={faTriangleExclamation} className="w-4 h-4 mt-0.5 shrink-0" />
-                <span>{lessonError}</span>
-              </div>
-            )}
-
-            <button
-              onClick={() => lessonInputRef.current?.click()}
-              disabled={lessonGenerating}
-              className="flex w-full items-center gap-2 px-4 py-3 border border-dashed border-gray-300 rounded-xl text-sm text-gray-600 hover:border-brand-600/50 hover:bg-brand-600/5 transition-colors disabled:opacity-60"
-            >
-              <FontAwesomeIcon icon={faFileImport} className="w-4 h-4 text-gray-400 shrink-0" />
-              <span className="truncate">
-                {lessonFile ? lessonFile.name : "Choose a lesson file (.pdf, .docx, .txt, .md)"}
-              </span>
-            </button>
-            <input
-              ref={lessonInputRef}
-              type="file"
-              accept=".pdf,.doc,.docx,.txt,.md,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown"
-              className="hidden"
-              onChange={(e) => {
-                setLessonFile(e.target.files?.[0] ?? null);
-                setLessonError(null);
-              }}
-            />
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <p className="text-xs font-medium text-gray-600 mb-1.5">Question types</p>
-                <div className="flex flex-wrap gap-2">
-                  {(
-                    [
-                      { key: "multiple_choice", label: "Multiple choice" },
-                      { key: "short_answer", label: "Identification" },
-                    ] as const
-                  ).map((opt) => (
-                    <label
-                      key={opt.key}
-                      className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm cursor-pointer transition-colors ${
-                        lessonTypes.has(opt.key)
-                          ? "border-brand-600 bg-brand-600/5 text-brand-700"
-                          : "border-gray-300 text-gray-600 hover:bg-gray-50"
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={lessonTypes.has(opt.key)}
-                        onChange={() => toggleLessonType(opt.key)}
-                        disabled={lessonGenerating}
-                        className="w-3.5 h-3.5 accent-brand-600"
-                      />
-                      {opt.label}
-                    </label>
-                  ))}
-                </div>
-                <p className="text-[11px] text-gray-400 mt-1">Check both to get a mix of the two.</p>
-              </div>
-              <div>
-                <p className="text-xs font-medium text-gray-600 mb-1.5">Number of items</p>
-                <input
-                  type="number"
-                  min={1}
-                  max={20}
-                  value={lessonCount}
-                  onChange={(e) =>
-                    setLessonCount(
-                      Math.min(20, Math.max(1, Number(e.target.value) || 1)),
-                    )
-                  }
-                  className={inputClassName}
-                  disabled={lessonGenerating}
-                />
-              </div>
-            </div>
-
-            <button
-              onClick={() => handleGenerateFromLesson()}
-              disabled={lessonGenerating || !lessonFile}
-              className="flex w-full sm:w-auto items-center justify-center gap-2 px-6 py-3 bg-brand-600 text-white rounded-xl text-sm font-medium hover:bg-brand-700 disabled:opacity-60 transition-colors"
-            >
-              {lessonGenerating ? (
-                <><EcgLoader /> Generating…</>
-              ) : (
-                <><FontAwesomeIcon icon={faFileImport} className="w-4 h-4" /> Generate from lesson</>
-              )}
-            </button>
-
-            <p className="text-xs text-gray-500">
-              Questions are generated strictly from the uploaded lesson&apos;s content and added as unsaved drafts —
-              review, edit, and save each one before it reaches students.
-            </p>
-          </div>
-        )}
-
         <div className="flex items-center justify-center gap-3 pt-2 flex-wrap">
           <button
             onClick={handleAddQuestion}
@@ -1784,13 +1576,6 @@ export default function AssessmentQuestionsClient({
           >
             <FontAwesomeIcon icon={faWandMagicSparkles} className="w-4 h-4" />
             Generate with AI
-          </button>
-          <button
-            onClick={() => setShowLessonPanel((v) => !v)}
-            className="flex items-center gap-2 px-6 py-3 bg-surface border border-gray-300 text-gray-700 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors"
-          >
-            <FontAwesomeIcon icon={faFileImport} className="w-4 h-4" />
-            Import Lesson
           </button>
         </div>
       </div>
