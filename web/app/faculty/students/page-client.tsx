@@ -726,7 +726,7 @@ export default function FacultyStudentsClient() {
           icon: <FontAwesomeIcon icon={faGraduationCap} className="w-3.5 h-3.5" />,
           label: "Student Management",
         }}
-        title="My Students"
+        title="Students"
         subtitle="Manage and monitor students under your supervision"
       />
 

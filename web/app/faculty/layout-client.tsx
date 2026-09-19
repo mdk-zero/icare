@@ -33,7 +33,7 @@ const navItems: NavItem[] = [
   { id: "overview", label: "Overview", href: "/faculty", icon: faHouse, section: "General" },
   {
     id: "students",
-    label: "My Students",
+    label: "Students",
     href: "/faculty/students",
     icon: faUsers,
     section: "Teaching",
