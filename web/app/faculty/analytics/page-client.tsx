@@ -12,9 +12,9 @@ import {
   faLayerGroup,
   faWandMagicSparkles,
   faArrowsRotate,
-  faChevronUp,
   faBullseye,
   faTrophy,
+  faXmark,
 } from "@fortawesome/free-solid-svg-icons";
 import {
   fetchAnalyticsSummary,
@@ -31,7 +31,6 @@ import {
 } from "../../components/skeletons";
 import PageHeader from "../../components/PageHeader";
 import StatTile from "../../components/StatTile";
-import { toast } from "../../components/Toast";
 import Card, { CardLabel } from "../../components/Card";
 import { usePageData } from "../../lib/use-page-data";
 import { MODEL_EVAL_SNAPSHOT, DEFAULT_MODEL_KIND } from "../../lib/model-eval-snapshot";
@@ -43,11 +42,6 @@ import { buildTrendSeries, TrendLegend, TrendLineChart, TrendTable } from "./Sec
 
 /** Stable empty fallback, so nothing downstream sees a new array each render. */
 const NO_SECTIONS: Section[] = [];
-
-// The warehouse ETL can nudge cohort numbers every few minutes with nothing
-// meaningfully new to say, so a changed AI-summary data signature waits out
-// this cooldown before it's actually spent on a fresh (slow) AI call.
-const NARRATIVE_COOLDOWN_MS = 10 * 60 * 1000;
 
 /**
  * Successful narratives survive a hard refresh (not just client-side nav) via
@@ -176,6 +170,15 @@ function pctChange(
 
 /* -------------------------------------------------------------- filters */
 
+/** "All sections", a single section's name, or "3 sections". */
+function sectionScopeLabel(sections: Section[], selected: string[]): string {
+  // Empty selection means "everything I manage" — the same thing the API does
+  // when no section_ids are sent.
+  if (selected.length === 0 || selected.length === sections.length) return "All sections";
+  if (selected.length === 1) return sections.find((s) => s.id === selected[0])?.name ?? "1 section";
+  return `${selected.length} sections`;
+}
+
 /** Multi-select over the sections the faculty member manages. */
 function SectionPicker({
   sections,
@@ -207,14 +210,8 @@ function SectionPicker({
     };
   }, [open]);
 
-  // Empty selection means "everything I manage" — the same thing the API does
-  // when no section_ids are sent.
   const allSelected = selected.length === 0 || selected.length === sections.length;
-  const summary = allSelected
-    ? "All sections"
-    : selected.length === 1
-      ? (sections.find((s) => s.id === selected[0])?.name ?? "1 section")
-      : `${selected.length} sections`;
+  const summary = sectionScopeLabel(sections, selected);
 
   const toggle = (id: string) => {
     const base = selected.length === 0 ? sections.map((s) => s.id) : selected;
@@ -523,28 +520,36 @@ function CompetencyBarChart({ items }: { items: { key: string; label: string; va
   );
 }
 
-/** Plain-language reading of whatever the filters currently select. */
-function NarrativeCard({
+/**
+ * Plain-language reading of the figures, in a popup. It only opens on
+ * request, so an AI call is spent only when someone actually wants one.
+ */
+function NarrativeModal({
   narrative,
   generatedAt,
   loading,
   error,
-  pendingUpdate,
-  show,
-  onToggle,
-  onGenerate,
+  scope,
+  onRetry,
+  onClose,
 }: {
   narrative: AnalyticsNarrative | null;
   generatedAt: string | null;
   loading: boolean;
   error: string | null;
-  /** Newer data has arrived but the summary is holding off a beat rather
-   * than spending an AI call on every minor warehouse tick. */
-  pendingUpdate: boolean;
-  show: boolean;
-  onToggle: () => void;
-  onGenerate: () => void;
+  /** The sections and range the summary reads, e.g. "All sections · Jun 1 – Sep 19". */
+  scope: string;
+  onRetry: () => void;
+  onClose: () => void;
 }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   const lists = narrative
     ? [
         { title: "Highlights", items: narrative.highlights, dot: "bg-emerald-600" },
@@ -553,94 +558,55 @@ function NarrativeCard({
       ].filter((l) => l.items.length > 0)
     : [];
 
+  // Closing mid-generation is fine: the request finishes in the background
+  // and reopening picks up its result instead of asking again.
   return (
-    <Card padding="md" className="mb-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          <div className="rounded-lg bg-brand-600/10 p-2">
-            <FontAwesomeIcon icon={faWandMagicSparkles} className="h-4 w-4 text-brand-600" />
-          </div>
-          <div>
-            <h3 className="font-semibold text-gray-900">AI Summary</h3>
-            <p className="text-xs text-gray-400">
-              Reads the figures below for the sections and range you&apos;ve selected
-            </p>
-          </div>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          {!loading && !error && (pendingUpdate || narrative) && (
-            <span
-              className={`hidden items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium sm:flex ${
-                pendingUpdate ? "bg-amber-50 text-amber-700" : "bg-gray-100 text-gray-500"
-              }`}
-            >
-              <FontAwesomeIcon
-                icon={pendingUpdate ? faArrowsRotate : faCheck}
-                className="h-2.5 w-2.5"
-              />
-              {pendingUpdate ? "New data available" : "No changes since last summary"}
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="ai-summary-title"
+        className="flex max-h-[88vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-hairline bg-surface shadow-overlay"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between gap-3 border-b border-hairline bg-subtle px-5 py-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-600/10">
+              <FontAwesomeIcon icon={faWandMagicSparkles} className="h-4 w-4 text-brand-600" />
             </span>
-          )}
+            <div className="min-w-0">
+              <h2 id="ai-summary-title" className="font-display text-lg font-semibold text-gray-900">
+                AI Summary
+              </h2>
+              <p className="truncate text-sm text-gray-500">{scope}</p>
+            </div>
+          </div>
           <button
             type="button"
-            onClick={onToggle}
-            title={show ? "Collapse" : "Expand"}
-            className={`flex items-center justify-center rounded-lg border bg-surface px-3 py-2 text-gray-500 transition-colors hover:bg-gray-50 ${show ? "border-gray-300" : "border-brand-600/40 text-brand-600"}`}
+            onClick={onClose}
+            className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+            aria-label="Close"
           >
-            <FontAwesomeIcon
-              icon={faChevronUp}
-              className={`h-4 w-4 transition-transform ${show ? "" : "rotate-180"}`}
-            />
-          </button>
-          <button
-            type="button"
-            onClick={onGenerate}
-            disabled={loading || (!pendingUpdate && !error && Boolean(narrative))}
-            title={
-              !loading && !pendingUpdate && !error && narrative
-                ? "No new data yet — regenerating now would spend the same (limited) AI quota on a near-identical answer."
-                : undefined
-            }
-            className="flex items-center gap-2 rounded-lg bg-brand-600 px-3.5 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {loading ? (
-              <EcgLoader />
-            ) : (
-              <FontAwesomeIcon icon={faArrowsRotate} className="h-3.5 w-3.5" />
-            )}
-            {loading
-              ? "Reading…"
-              : error
-                ? "Retry"
-                : pendingUpdate
-                  ? "Refresh now"
-                  : narrative
-                    ? "Up to date"
-                    : "Generate"}
+            <FontAwesomeIcon icon={faXmark} className="h-5 w-5" />
           </button>
         </div>
-      </div>
 
-      {!show && narrative ? (
-        <p className="mt-4 text-sm text-gray-400">AI summary hidden.</p>
-      ) : show ? (
-        <>
-          {error && (
-            <p className="mt-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
+        <div className="min-h-0 flex-1 overflow-y-auto p-5">
+          {error && !loading && (
+            <p className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
               {error}
             </p>
           )}
 
           {loading && (
-            <AiThinking
-              phrases={ANALYTICS_SUMMARY_PHRASES}
-              label="Generating the AI summary"
-              className="mt-4"
-            />
+            <AiThinking phrases={ANALYTICS_SUMMARY_PHRASES} label="Generating the AI summary" />
           )}
 
           {!loading && narrative && (
-            <div className="mt-4 space-y-4">
+            <div className="space-y-4">
               {narrative.headline && (
                 <p className="font-display text-lg font-semibold leading-snug text-gray-900">
                   {narrative.headline}
@@ -667,24 +633,38 @@ function NarrativeCard({
                   ))}
                 </div>
               )}
-
-              {generatedAt && (
-                <p className="border-t border-hairline pt-3 text-xs text-gray-400">
-                  AI-generated {new Date(generatedAt).toLocaleString()} — review before acting on
-                  it.
-                </p>
-              )}
             </div>
           )}
+        </div>
 
-          {!loading && !narrative && !error && (
-            <p className="mt-4 text-sm text-gray-400">
-              Generate a plain-language reading of the current selection.
-            </p>
-          )}
-        </>
-      ) : null}
-    </Card>
+        <div className="flex items-center justify-between gap-3 border-t border-hairline px-5 py-3">
+          <p className="text-xs text-gray-400">
+            {!loading && narrative && generatedAt
+              ? `AI-generated ${new Date(generatedAt).toLocaleString()} — review before acting on it.`
+              : null}
+          </p>
+          <div className="flex shrink-0 items-center gap-2">
+            {error && !loading && (
+              <button
+                type="button"
+                onClick={onRetry}
+                className="flex items-center gap-2 rounded-lg bg-brand-600 px-3.5 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-700"
+              >
+                <FontAwesomeIcon icon={faArrowsRotate} className="h-3.5 w-3.5" />
+                Retry
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg border border-gray-200 bg-surface px-3.5 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -754,12 +734,11 @@ export default function FacultyAnalyticsClient() {
     return counts;
   }, [summary]);
 
-  /* --- AI narrative -------------------------------------------------- */
-
-  const [showNarrative, setShowNarrative] = useState(true);
   // The table carries the same numbers as the performance chart, for readers
   // who can't hover or can't tell the lighter section colours apart.
   const [trendView, setTrendView] = useState<"chart" | "table">("chart");
+
+  /* --- AI narrative -------------------------------------------------- */
 
   // Keyed by the numbers themselves rather than the filter selection, so
   // picking a section/range that happens to produce the same figures — or
@@ -781,47 +760,33 @@ export default function FacultyAnalyticsClient() {
     : null;
   const narrativeKey = dataSignature ? `faculty:analytics:narrative:${dataSignature}` : null;
 
-  // The warehouse ETL can nudge these numbers every few minutes with nothing
-  // meaningfully new to say, so a changed signature doesn't switch the AI
-  // summary over immediately — only after a cooldown, so a session left open
-  // doesn't spend a slow AI call on every minor tick. `activeNarrativeKey` is
-  // what's actually handed to usePageData; `narrativeKey` above is just
-  // "what the data looks like right now."
-  const [activeNarrativeKey, setActiveNarrativeKey] = useState<string | null>(null);
-  const lastAutoSwitchAt = useRef(0);
-
-  useEffect(() => {
-    if (narrativeKey === null || narrativeKey === activeNarrativeKey) return;
-    const elapsed = Date.now() - lastAutoSwitchAt.current;
-    if (activeNarrativeKey === null || elapsed >= NARRATIVE_COOLDOWN_MS) {
-      lastAutoSwitchAt.current = Date.now();
-      setActiveNarrativeKey(narrativeKey);
-    }
-    // Otherwise leave the older key active; `pendingUpdate` below surfaces
-    // that newer data exists, and Regenerate can always jump the cooldown.
-  }, [narrativeKey, activeNarrativeKey]);
-
-  const pendingUpdate = narrativeKey !== null && narrativeKey !== activeNarrativeKey;
+  // Nothing is generated until the AI Summary button is clicked. The click
+  // pins the key and filters it was made for, so a warehouse refresh landing
+  // while the popup is open can't quietly start (and pay for) a second call.
+  const [narrativeRequest, setNarrativeRequest] = useState<{
+    key: string;
+    sectionIds: string[];
+    from: string;
+    to: string;
+  } | null>(null);
+  const [narrativeOpen, setNarrativeOpen] = useState(false);
 
   const narrativeLoader = useCallback(async () => {
-    if (activeNarrativeKey) {
-      const stored = readStoredNarrative(activeNarrativeKey);
-      if (stored) return stored;
-    }
-    const result = await generateAnalyticsNarrative({ sectionIds, from, to });
-    if (activeNarrativeKey && result.narrative) writeStoredNarrative(activeNarrativeKey, result);
+    if (!narrativeRequest) return {};
+    const stored = readStoredNarrative(narrativeRequest.key);
+    if (stored) return stored;
+    const { key, ...filters } = narrativeRequest;
+    const result = await generateAnalyticsNarrative(filters);
+    if (result.narrative) writeStoredNarrative(key, result);
     return result;
-  }, [activeNarrativeKey, sectionIds, from, to]);
+  }, [narrativeRequest]);
 
   const {
     data: narrativeResult,
     loading: narrativeLoading,
     revalidating: narrativeRevalidating,
-    refresh: reloadActiveNarrative,
-  } = usePageData(activeNarrativeKey, narrativeLoader, {
-    freshFor: Infinity,
-    keepPreviousData: true,
-  });
+    refresh: reloadNarrative,
+  } = usePageData(narrativeRequest?.key ?? null, narrativeLoader, { freshFor: Infinity });
 
   const narrative = narrativeResult?.narrative ?? null;
   const narrativeAt = narrativeResult?.generated_at ?? null;
@@ -831,21 +796,19 @@ export default function FacultyAnalyticsClient() {
       : null;
   const narrativeBusy = narrativeLoading || narrativeRevalidating;
 
-  // Pending data jumps the cooldown, and a failed attempt is always worth
-  // retrying — both are real reasons to spend another AI call. Clicking this
-  // with neither reason true would just re-ask about numbers we already have
-  // a good answer for, burning the same (limited) quota for a near-identical
-  // reply, so that case is a no-op instead.
-  const regenerateNarrative = () => {
-    if (pendingUpdate) {
-      lastAutoSwitchAt.current = Date.now();
-      setActiveNarrativeKey(narrativeKey);
-    } else if (narrativeError) {
-      void reloadActiveNarrative();
-    } else {
-      toast("No new data yet — this summary is already current.", "info");
+  const openNarrative = () => {
+    if (!narrativeKey) return;
+    setNarrativeOpen(true);
+    if (narrativeRequest?.key === narrativeKey) {
+      // Same figures as last time: show what's held, unless that was a
+      // failure — clicking again is a request to try once more.
+      if (narrativeError && !narrativeBusy) void reloadNarrative();
+      return;
     }
+    setNarrativeRequest({ key: narrativeKey, sectionIds, from, to });
   };
+
+  const closeNarrative = useCallback(() => setNarrativeOpen(false), []);
 
   if (loading) {
     return (
@@ -958,88 +921,116 @@ export default function FacultyAnalyticsClient() {
         subtitle="Performance and clinical training data from the iCARE++ warehouse"
       />
 
-      <div className="mb-4 rounded-xl border border-hairline bg-surface shadow-tile">
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-3 px-4 py-3">
-          <div className="flex items-center gap-2.5">
-            <CardLabel>Sections</CardLabel>
-            <SectionPicker
-              sections={sections}
-              selected={sectionIds}
-              counts={studentsBySection}
-              onChange={setSectionIds}
-            />
-          </div>
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-stretch">
+        <div className="min-w-0 flex-1 rounded-xl border border-hairline bg-surface shadow-tile">
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-3 px-4 py-3">
+            <div className="flex items-center gap-2.5">
+              <CardLabel>Sections</CardLabel>
+              <SectionPicker
+                sections={sections}
+                selected={sectionIds}
+                counts={studentsBySection}
+                onChange={setSectionIds}
+              />
+            </div>
 
-          <span className="hidden h-6 w-px bg-hairline sm:block" />
+            <span className="hidden h-6 w-px bg-hairline sm:block" />
 
-          <div className="flex items-center gap-2.5">
-            <CardLabel>Range</CardLabel>
-            <div className="flex flex-wrap items-center gap-1">
-              {PRESETS.map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => applyPreset(p.id)}
-                  className={`rounded-lg px-2.5 py-1.5 text-sm transition-colors ${
-                    preset === p.id
-                      ? "bg-brand-600 text-white"
-                      : "text-gray-600 hover:bg-subtle hover:text-gray-900"
-                  }`}
-                >
-                  {p.label}
-                </button>
-              ))}
+            <div className="flex items-center gap-2.5">
+              <CardLabel>Range</CardLabel>
+              <div className="flex flex-wrap items-center gap-1">
+                {PRESETS.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => applyPreset(p.id)}
+                    className={`rounded-lg px-2.5 py-1.5 text-sm transition-colors ${
+                      preset === p.id
+                        ? "bg-brand-600 text-white"
+                        : "text-gray-600 hover:bg-subtle hover:text-gray-900"
+                    }`}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {preset === "custom" && (
+              <div className="flex items-center gap-2">
+                <input
+                  type="date"
+                  value={draft.from}
+                  max={draft.to || undefined}
+                  onChange={(e) => setCustom("from", e.target.value)}
+                  className="rounded-lg border border-hairline bg-surface px-2.5 py-1.5 text-sm text-gray-700"
+                  aria-label="Range start"
+                />
+                <span className="text-gray-400">–</span>
+                <input
+                  type="date"
+                  value={draft.to}
+                  min={draft.from || undefined}
+                  onChange={(e) => setCustom("to", e.target.value)}
+                  className="rounded-lg border border-hairline bg-surface px-2.5 py-1.5 text-sm text-gray-700"
+                  aria-label="Range end"
+                />
+              </div>
+            )}
+
+            <div className="ml-auto flex items-center gap-3">
+              <div className="flex items-center gap-2 text-xs text-gray-400">
+                {refreshing && <EcgLoader size="xs" className="text-brand-600" />}
+                <span className="tabular-nums">{formatRange(from, to)}</span>
+              </div>
             </div>
           </div>
 
-          {preset === "custom" && (
-            <div className="flex items-center gap-2">
-              <input
-                type="date"
-                value={draft.from}
-                max={draft.to || undefined}
-                onChange={(e) => setCustom("from", e.target.value)}
-                className="rounded-lg border border-hairline bg-surface px-2.5 py-1.5 text-sm text-gray-700"
-                aria-label="Range start"
-              />
-              <span className="text-gray-400">–</span>
-              <input
-                type="date"
-                value={draft.to}
-                min={draft.from || undefined}
-                onChange={(e) => setCustom("to", e.target.value)}
-                className="rounded-lg border border-hairline bg-surface px-2.5 py-1.5 text-sm text-gray-700"
-                aria-label="Range end"
-              />
-            </div>
+          {sections.length === 0 && (
+            <p className="border-t border-hairline px-4 py-2.5 text-xs text-amber-700">
+              You don&apos;t manage any sections yet, so there is nothing to report on. An admin
+              assigns sections from Admin → Faculty.
+            </p>
           )}
-
-          <div className="ml-auto flex items-center gap-3">
-            <div className="flex items-center gap-2 text-xs text-gray-400">
-              {refreshing && <EcgLoader size="xs" className="text-brand-600" />}
-              <span className="tabular-nums">{formatRange(from, to)}</span>
-            </div>
-          </div>
         </div>
 
-        {sections.length === 0 && (
-          <p className="border-t border-hairline px-4 py-2.5 text-xs text-amber-700">
-            You don&apos;t manage any sections yet, so there is nothing to report on. An admin
-            assigns sections from Admin → Faculty.
-          </p>
-        )}
+        {/* Beside the filters rather than in them: it reads whatever they
+            select, but isn't itself a filter. Held while a filter change is
+            still loading, so the summary can't be filed under the old figures. */}
+        <button
+          type="button"
+          onClick={openNarrative}
+          disabled={!narrativeKey || refreshing}
+          title={
+            refreshing
+              ? "Waiting for the latest figures…"
+              : "Generate a plain-language reading of the current selection"
+          }
+          className="flex items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-brand-600 px-4 py-3 text-sm font-medium text-white shadow-tile transition-colors hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {narrativeBusy ? (
+            <EcgLoader />
+          ) : (
+            <FontAwesomeIcon icon={faWandMagicSparkles} className="h-3.5 w-3.5" />
+          )}
+          AI Summary
+        </button>
       </div>
 
-      <NarrativeCard
-        narrative={narrative}
-        generatedAt={narrativeAt}
-        loading={narrativeBusy}
-        error={narrativeError}
-        pendingUpdate={pendingUpdate}
-        show={showNarrative}
-        onToggle={() => setShowNarrative((v) => !v)}
-        onGenerate={regenerateNarrative}
-      />
+      {narrativeOpen && narrativeRequest && (
+        <NarrativeModal
+          narrative={narrative}
+          generatedAt={narrativeAt}
+          loading={narrativeBusy}
+          error={narrativeError}
+          scope={`${sectionScopeLabel(sections, narrativeRequest.sectionIds)} · ${formatRange(
+            narrativeRequest.from,
+            narrativeRequest.to,
+          )}`}
+          onRetry={() => void reloadNarrative()}
+          onClose={closeNarrative}
+        />
+      )}
 
       {/* Refetches dim the panels in place rather than tearing the page down
           to skeletons, so changing a filter doesn't make the layout jump. */}
