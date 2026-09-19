@@ -826,7 +826,7 @@ export default function FacultyStudentsClient() {
             className="px-4 py-2.5 bg-surface border border-brand-600/30 text-brand-600 font-medium rounded-lg hover:bg-brand-600/5 transition-all flex items-center gap-2 disabled:opacity-45 disabled:hover:bg-surface disabled:cursor-not-allowed"
           >
             {runningMl ? <EcgLoader /> : <FontAwesomeIcon icon={faBrain} className="w-5 h-5" />}
-            {runningMl ? "Running…" : "Run ML Jobs"}
+            {runningMl ? "Running…" : "Assess"}
           </button>
         </div>
       </div>
