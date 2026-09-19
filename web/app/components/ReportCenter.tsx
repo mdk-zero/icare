@@ -104,6 +104,13 @@ const PAGE = 50;
 
 const NO_TARGETS: Target[] = [];
 
+/** "just now", "3h ago", "on Sep 7" — reads after "Pulled" or "Last pulled". */
+export function sinceLabel(iso: string): string {
+  const text = timeAgo(iso);
+  if (text === "Just now") return "just now";
+  return text.endsWith(" ago") ? text : `on ${text}`;
+}
+
 function isTyping(el: EventTarget | null): boolean {
   if (!(el instanceof HTMLElement)) return false;
   return ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName) || el.isContentEditable;
@@ -350,7 +357,7 @@ export default function ReportCenter({
 
   const pulledNote = (type: string, targetId: string | null) => {
     const last = lastPulled(type, targetId);
-    return last ? `Pulled ${timeAgo(last.created_at).toLowerCase()}` : null;
+    return last ? `Pulled ${sinceLabel(last.created_at)}` : null;
   };
 
   const row = (t: Target, key: string, targetId: string | null) => {
