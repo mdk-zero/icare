@@ -119,7 +119,9 @@ export default function NotificationsPopover({ variant }: { variant: Variant }) 
     router.push("/faculty/notifications");
   };
 
-  const preview = notifications.slice(0, 5);
+  // Read items live on the notifications page only; the popup is for what
+  // still needs attention.
+  const preview = notifications.filter((n) => !n.is_read).slice(0, 5);
 
   return (
     <>
@@ -236,17 +238,12 @@ export default function NotificationsPopover({ variant }: { variant: Variant }) 
                 ) : (
                   preview.map((notification, i) => {
                     const meta = TYPE_META[notification.type] ?? TYPE_META.info;
-                    const unreadItem = !notification.is_read;
                     return (
                       <button
                         key={notification.id}
                         onClick={() => markRead(notification.id)}
                         style={{ animationDelay: `${Math.min(i, 5) * 30}ms` }}
-                        className={`flex w-full animate-rise items-start gap-2.5 rounded-xl px-2.5 py-2.5 text-left transition-colors ${
-                          unreadItem
-                            ? "bg-brand-500/[0.05] hover:bg-brand-500/[0.09]"
-                            : "border-hairline bg-surface hover:bg-subtle"
-                        }`}
+                        className="flex w-full animate-rise items-start gap-2.5 rounded-xl bg-brand-500/[0.05] px-2.5 py-2.5 text-left transition-colors hover:bg-brand-500/[0.09]"
                       >
                         <span
                           className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${meta.chip}`}
@@ -255,13 +252,7 @@ export default function NotificationsPopover({ variant }: { variant: Variant }) 
                         </span>
                         <span className="min-w-0 flex-1">
                           <span className="flex items-baseline gap-2">
-                            <span
-                              className={`min-w-0 flex-1 truncate text-[13px] leading-snug ${
-                                unreadItem
-                                  ? "font-semibold text-foreground"
-                                  : "font-medium text-foreground/70"
-                              }`}
-                            >
+                            <span className="min-w-0 flex-1 truncate text-[13px] font-semibold leading-snug text-foreground">
                               {notification.title}
                             </span>
                             <span className="shrink-0 text-[11px] leading-none text-foreground/40">
@@ -272,12 +263,10 @@ export default function NotificationsPopover({ variant }: { variant: Variant }) 
                             {notification.message}
                           </span>
                         </span>
-                        {unreadItem && (
-                          <span
-                            title="Unread"
-                            className="mt-1 h-2 w-2 shrink-0 rounded-full bg-brand-500"
-                          />
-                        )}
+                        <span
+                          title="Unread"
+                          className="mt-1 h-2 w-2 shrink-0 rounded-full bg-brand-500"
+                        />
                       </button>
                     );
                   })
