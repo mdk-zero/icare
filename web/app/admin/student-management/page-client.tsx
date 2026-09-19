@@ -26,7 +26,15 @@ import { fetchSections, runMlJob, Section, apiFetch } from "../../lib/api";
 import { usePageData } from "../../lib/use-page-data";
 import Avatar from "../../components/Avatar";
 import { EcgLoader } from "../../components/EcgLoader";
-import MlRunProgress, { type MlRun, mlRunFraction } from "../../components/MlRunProgress";
+import MlRunProgress, {
+  type MlRun,
+  mlRunFraction,
+  mlRunLabel,
+} from "../../components/MlRunProgress";
+import { toast } from "../../components/Toast";
+
+/** The run summary is a couple of sentences; the default toast is gone before it can be read. */
+const ML_TOAST_MS = 8000;
 
 interface StudentPerformance {
   id: string;
@@ -749,8 +757,6 @@ export default function StudentManagementClient() {
   // On-demand ML runs across the whole cohort.
   const [mlRun, setMlRun] = useState<MlRun | null>(null);
   const runningMl = mlRun !== null;
-  const [mlStatus, setMlStatus] = useState<string | null>(null);
-  const [mlError, setMlError] = useState<string | null>(null);
 
   // Sections carry names into the roster, so the two load and refresh together.
   const { data, loading, refresh } = usePageData("admin:student-management", async () => {
@@ -779,14 +785,12 @@ export default function StudentManagementClient() {
    */
   const handleRunMl = async () => {
     setMlRun({ job: "predict", fraction: 0 });
-    setMlError(null);
-    setMlStatus(null);
 
     const predictions = await runMlJob("predict", (fraction) =>
       setMlRun({ job: "predict", fraction }),
     );
     if (predictions.error) {
-      setMlError(predictions.error);
+      toast(predictions.error, "error", ML_TOAST_MS);
       setMlRun(null);
       return;
     }
@@ -795,7 +799,7 @@ export default function StudentManagementClient() {
       setMlRun({ job: "recommend", fraction }),
     );
     if (recommendations.error) {
-      setMlError(recommendations.error);
+      toast(recommendations.error, "error", ML_TOAST_MS);
       setMlRun(null);
       return;
     }
@@ -803,10 +807,12 @@ export default function StudentManagementClient() {
     const scored = Number(predictions.result?.scored ?? 0);
     const atRisk = Number(predictions.result?.at_risk ?? 0);
     const recs = Number(recommendations.result?.recommendations ?? 0);
-    setMlStatus(
+    toast(
       `Scored ${scored} student${scored === 1 ? "" : "s"} (${atRisk} at risk) and wrote ${recs} ` +
         `recommendation${recs === 1 ? "" : "s"}. Run Refresh Warehouse on Analytics to fold the ` +
         "new predictions into the charts.",
+      "success",
+      ML_TOAST_MS,
     );
     setMlRun(null);
     await refresh();
@@ -963,13 +969,12 @@ export default function StudentManagementClient() {
           onClick: handleRunMl,
           text: mlRun ? `${Math.round(mlRunFraction(mlRun) * 100)}%` : "",
           disabled: runningMl,
-          label: runningMl
-            ? "Running ML jobs…"
+          label: mlRun
+            ? mlRunLabel(mlRun)
             : "Run ML Jobs — score every student for risk and refresh their quiz recommendations",
+          below: mlRun && <MlRunProgress run={mlRun} />,
         }}
       />
-
-      {mlRun && <MlRunProgress run={mlRun} />}
 
       {notice && (
         <div className="mb-4 flex items-start justify-between gap-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
@@ -980,18 +985,6 @@ export default function StudentManagementClient() {
           >
             Dismiss
           </button>
-        </div>
-      )}
-
-      {(mlStatus || mlError) && (
-        <div
-          className={`mb-4 rounded-xl border px-4 py-3 text-sm ${
-            mlError
-              ? "border-rose-200 bg-rose-50 text-rose-700"
-              : "border-emerald-200 bg-emerald-50 text-emerald-800"
-          }`}
-        >
-          {mlError ?? mlStatus}
         </div>
       )}
 

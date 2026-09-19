@@ -13,22 +13,23 @@ interface ToastItem {
 }
 
 let nextId = 0;
-let addToastFn: ((text: string, type?: ToastType) => void) | null = null;
+let addToastFn: ((text: string, type: ToastType, durationMs: number) => void) | null = null;
 
-export function toast(text: string, type: ToastType = "success") {
-  addToastFn?.(text, type);
+/** `durationMs` is for a message too long to read in the default four seconds. */
+export function toast(text: string, type: ToastType = "success", durationMs = 4000) {
+  addToastFn?.(text, type, durationMs);
 }
 
 export default function ToastContainer() {
   const [items, setItems] = useState<ToastItem[]>([]);
 
   useEffect(() => {
-    addToastFn = (text: string, type: ToastType = "success") => {
+    addToastFn = (text, type, durationMs) => {
       const id = nextId++;
       setItems((prev) => [...prev, { id, text, type }]);
       setTimeout(() => {
         setItems((prev) => prev.filter((t) => t.id !== id));
-      }, 4000);
+      }, durationMs);
     };
     return () => { addToastFn = null; };
   }, []);

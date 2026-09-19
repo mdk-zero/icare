@@ -50,7 +50,14 @@ import { SkeletonSectionGrid, SkeletonTable } from "../../components/skeletons";
 import { usePageData } from "../../lib/use-page-data";
 import { EcgLoader } from "../../components/EcgLoader";
 import ProgressBar from "../../components/ProgressBar";
-import MlRunProgress, { type MlRun, mlRunFraction } from "../../components/MlRunProgress";
+import MlRunProgress, {
+  type MlRun,
+  mlRunFraction,
+  mlRunLabel,
+} from "../../components/MlRunProgress";
+
+/** The run summary is a couple of sentences; the default toast is gone before it can be read. */
+const ML_TOAST_MS = 8000;
 
 /** Minimal CSV parser: quoted fields, "" escapes, \r\n or \n row breaks. */
 function parseCsv(text: string): string[][] {
@@ -165,8 +172,6 @@ export default function FacultyStudentsClient() {
   // On-demand ML runs, scoped by the server to this faculty member's sections.
   const [mlRun, setMlRun] = useState<MlRun | null>(null);
   const runningMl = mlRun !== null;
-  const [mlStatus, setMlStatus] = useState<string | null>(null);
-  const [mlError, setMlError] = useState<string | null>(null);
   /** Section whose roster is open; null shows the section cards. */
   const [selectedSectionKey, setSelectedSectionKey] = useState<string | null>(null);
 
@@ -196,14 +201,12 @@ export default function FacultyStudentsClient() {
    */
   const handleRunMl = async () => {
     setMlRun({ job: "predict", fraction: 0 });
-    setMlError(null);
-    setMlStatus(null);
 
     const predictions = await runFacultyMlJob("predict", (fraction) =>
       setMlRun({ job: "predict", fraction }),
     );
     if (predictions.error) {
-      setMlError(predictions.error);
+      toast(predictions.error, "error", ML_TOAST_MS);
       setMlRun(null);
       return;
     }
@@ -212,7 +215,7 @@ export default function FacultyStudentsClient() {
       setMlRun({ job: "recommend", fraction }),
     );
     if (recommendations.error) {
-      setMlError(recommendations.error);
+      toast(recommendations.error, "error", ML_TOAST_MS);
       setMlRun(null);
       return;
     }
@@ -220,10 +223,12 @@ export default function FacultyStudentsClient() {
     const scored = Number(predictions.result?.scored ?? 0);
     const atRisk = Number(predictions.result?.at_risk ?? 0);
     const recs = Number(recommendations.result?.recommendations ?? 0);
-    setMlStatus(
+    toast(
       `Scored ${scored} of your students (${atRisk} at risk) and wrote ${recs} recommendation${
         recs === 1 ? "" : "s"
       }. Predictions reach the Analytics charts after the warehouse is refreshed.`,
+      "success",
+      ML_TOAST_MS,
     );
     setMlRun(null);
     await refresh();
@@ -828,41 +833,38 @@ export default function FacultyStudentsClient() {
             <FontAwesomeIcon icon={faFileCsv} className="w-5 h-5" />
             Import CSV
           </button>
-          <button
-            onClick={handleRunMl}
-            disabled={runningMl || sections.length === 0}
-            title={
-              sections.length === 0
-                ? "You need at least one section before the jobs have anyone to run against"
-                : "Score your students for risk and refresh their quiz recommendations"
-            }
-            className="px-4 py-2.5 bg-surface border border-brand-600/30 text-brand-600 font-medium rounded-lg hover:bg-brand-600/5 transition-all flex items-center gap-2 disabled:opacity-45 disabled:hover:bg-surface disabled:cursor-not-allowed"
-          >
-            {runningMl ? <EcgLoader /> : <FontAwesomeIcon icon={faBrain} className="w-5 h-5" />}
-            {mlRun ? (
-              <span className="tabular-nums">
-                Running… {Math.round(mlRunFraction(mlRun) * 100)}%
-              </span>
-            ) : (
-              "Assess"
+          <div className="relative flex">
+            <button
+              onClick={handleRunMl}
+              disabled={runningMl || sections.length === 0}
+              title={
+                mlRun
+                  ? mlRunLabel(mlRun)
+                  : sections.length === 0
+                    ? "You need at least one section before the jobs have anyone to run against"
+                    : "Score your students for risk and refresh their quiz recommendations"
+              }
+              className="px-4 py-2.5 bg-surface border border-brand-600/30 text-brand-600 font-medium rounded-lg hover:bg-brand-600/5 transition-all flex items-center gap-2 disabled:opacity-45 disabled:hover:bg-surface disabled:cursor-not-allowed"
+            >
+              {runningMl ? <EcgLoader /> : <FontAwesomeIcon icon={faBrain} className="w-5 h-5" />}
+              {mlRun ? (
+                <span className="tabular-nums">
+                  Running… {Math.round(mlRunFraction(mlRun) * 100)}%
+                </span>
+              ) : (
+                "Assess"
+              )}
+            </button>
+            {/* Absolute, so it sits in the toolbar's bottom margin rather than
+                pushing the roster down. */}
+            {mlRun && (
+              <div className="absolute inset-x-0 top-full mt-1.5">
+                <MlRunProgress run={mlRun} />
+              </div>
             )}
-          </button>
+          </div>
         </div>
       </div>
-
-      {mlRun && <MlRunProgress run={mlRun} />}
-
-      {(mlStatus || mlError) && (
-        <div
-          className={`mb-4 rounded-xl border px-4 py-3 text-sm ${
-            mlError
-              ? "border-rose-200 bg-rose-50 text-rose-700"
-              : "border-emerald-200 bg-emerald-50 text-emerald-800"
-          }`}
-        >
-          {mlError ?? mlStatus}
-        </div>
-      )}
 
       {showCreateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">

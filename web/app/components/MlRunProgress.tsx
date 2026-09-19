@@ -16,7 +16,8 @@ export function mlRunFraction(run: MlRun): number {
   return ((run.job === "recommend" ? 1 : 0) + run.fraction) / 2;
 }
 
-function label(run: MlRun): string {
+/** The step in words, for the run button's tooltip and the bar's name. */
+export function mlRunLabel(run: MlRun): string {
   if (run.job === "recommend") return "Step 2 of 2 · Refreshing quiz recommendations";
   // Nothing reported yet: the service is still starting, which on a sleeping
   // free instance can take most of a minute.
@@ -24,11 +25,10 @@ function label(run: MlRun): string {
   return "Step 1 of 2 · Scoring students for risk";
 }
 
-/** The progress panel both run buttons (faculty Students, admin Student Management) show under their header. */
+/**
+ * A thin bar for under the run button (faculty Students, admin Student
+ * Management). The button carries the percentage; the step is the tooltip.
+ */
 export default function MlRunProgress({ run }: { run: MlRun }) {
-  return (
-    <div className="mb-4 rounded-xl border border-hairline bg-surface px-4 py-3">
-      <ProgressBar value={mlRunFraction(run)} label={label(run)} />
-    </div>
-  );
+  return <ProgressBar compact value={mlRunFraction(run)} label={mlRunLabel(run)} />;
 }
