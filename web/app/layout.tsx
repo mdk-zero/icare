@@ -3,6 +3,7 @@ import { Geist, Geist_Mono, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 import { THEME_INIT_SCRIPT } from "./lib/theme";
 import ImpersonationBanner from "./components/ImpersonationBanner";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -53,6 +54,7 @@ export default function RootLayout({
             indistinguishable from a real one without it. */}
         <ImpersonationBanner />
         {children}
+        <SpeedInsights />
       </body>
     </html>
   );
