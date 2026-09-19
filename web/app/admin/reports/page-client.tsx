@@ -1,371 +1,356 @@
 "use client";
 
+import { useMemo } from "react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faBuilding,
+  faDoorOpen,
+  faFileLines,
+  faUserSlash,
+  faUserTie,
+  faUsers,
+} from "@fortawesome/free-solid-svg-icons";
 import { apiFetch } from "@/app/lib/api";
 import { usePageData } from "@/app/lib/use-page-data";
-import { useState, useMemo } from "react";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
-import {
-  faFileLines,
-  faDownload,
-  faSearch,
-  faUserTie,
-  faDoorOpen,
-  faUsers,
-  faFilePdf,
-  faFileCsv,
-  faBuilding,
-} from "@fortawesome/free-solid-svg-icons";
-import { EcgLoader } from "../../components/EcgLoader";
-import LiveClock from "../../components/LiveClock";
+import type { RecentReport } from "@/app/lib/reports/types";
+import PageHeader from "../../components/PageHeader";
+import ReportCenter, {
+  defineReportType,
+  sinceLabel,
+  type Suggestion,
+  type Target,
+} from "../../components/ReportCenter";
+import { daysSince, plural } from "../../faculty/_overview/format";
 
-type ReportType = "faculty" | "rooms" | "users" | "summary";
-type Format = "pdf" | "csv";
+/** No sign-in for this long reads as "dormant". */
+const DORMANT_DAYS = 30;
 
-interface ReportKind {
-  type: ReportType;
-  label: string;
-  blurb: string;
-  icon: IconDefinition;
-  hasList: boolean;
-  targetNoun: string;
-}
+/** A whole-scope report older than this is worth suggesting again. */
+const STALE_DAYS = 7;
 
-const KINDS: ReportKind[] = [
-  {
-    type: "faculty",
-    label: "Faculty",
-    blurb: "Individual faculty profile with assigned sections and student counts.",
-    icon: faUserTie,
-    hasList: true,
-    targetNoun: "faculty members",
-  },
-  {
-    type: "rooms",
-    label: "Rooms",
-    blurb: "Room details, capacity, occupancy, and current assignments.",
-    icon: faDoorOpen,
-    hasList: true,
-    targetNoun: "rooms",
-  },
-  {
-    type: "users",
-    label: "Users",
-    blurb: "User account details, role, and activity summary.",
-    icon: faUsers,
-    hasList: true,
-    targetNoun: "users",
-  },
-  {
-    type: "summary",
-    label: "Admin Summary",
-    blurb: "Overview of all faculty, rooms, and users.",
-    icon: faBuilding,
-    hasList: false,
-    targetNoun: "",
-  },
-];
-
-interface Target {
+interface FacultyRow {
   id: string;
-  label: string;
-  sub: string;
+  name: string;
+  email: string;
+  sections: { id: string; name: string }[];
+  student_count: number;
 }
 
-/** Stable empty fallback, so the filter memo is not invalidated every render. */
-const NO_TARGETS: Target[] = [];
+interface RoomRow {
+  id: string;
+  name: string;
+  room_number: string;
+  capacity: number;
+  status: string;
+  students_assigned: number;
+}
+
+interface UserRow {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  created_at: string;
+  last_login_at: string | null;
+}
+
+async function getJson<T>(url: string, key: string): Promise<T[]> {
+  const res = await apiFetch(url, { credentials: "include" });
+  if (!res.ok) throw new Error(`Unable to load ${key}`);
+  const json = (await res.json()) as Record<string, T[] | undefined>;
+  return json[key] ?? [];
+}
+
+// Module-level loaders, so the cache sees one stable function per key.
+const loadFaculty = () => getJson<FacultyRow>("/api/admin/faculty", "faculty");
+const loadRooms = () => getJson<RoomRow>("/api/admin/rooms", "rooms");
+const loadUsers = () => getJson<UserRow>("/api/admin/users?role=all", "users");
+
+interface FacultyTarget extends Target {
+  sections: number;
+  students: number;
+}
+
+interface RoomTarget extends Target {
+  number: string;
+  /** Occupied share of capacity; 0 for a room with no capacity set. */
+  fill: number;
+  full: boolean;
+  status: string;
+}
+
+interface UserTarget extends Target {
+  role: string;
+  createdAt: string;
+  /** Days since last sign-in; null when they never have. */
+  idleDays: number | null;
+}
+
+const byName = (a: Target, b: Target) => a.label.localeCompare(b.label);
+
+const ROLE_LABEL: Record<string, string> = { student: "Student", faculty: "Faculty", admin: "Admin" };
+
+/** What's worth pulling now — from the lists already on the page, no AI. */
+function suggestFor(
+  faculty: FacultyTarget[] | undefined,
+  rooms: RoomTarget[] | undefined,
+  users: UserTarget[] | undefined,
+  recent: RecentReport[] | undefined,
+): Suggestion[] {
+  const out: Suggestion[] = [];
+
+  const unassigned = (faculty ?? []).filter((f) => f.sections === 0);
+  if (unassigned.length > 0) {
+    out.push({
+      id: "faculty",
+      icon: faUserTie,
+      tone: "amber",
+      title:
+        unassigned.length === 1
+          ? `${unassigned[0].label} has no sections`
+          : `${unassigned.length} faculty without sections`,
+      detail: "They can't see or report on any students until they're assigned.",
+      cta: "Show them",
+      action: { kind: "filter", type: "faculty", filter: "no-sections" },
+    });
+  }
+
+  const full = (rooms ?? []).filter((r) => r.full);
+  if (full.length === 1) {
+    out.push({
+      id: "rooms",
+      icon: faDoorOpen,
+      tone: "rose",
+      title: `${full[0].label} is full`,
+      detail: "Occupancy and current occupants in one report.",
+      cta: "Preview room report",
+      action: { kind: "preview", type: "rooms", targetId: full[0].id, subject: full[0].label },
+    });
+  } else if (full.length > 1) {
+    out.push({
+      id: "rooms",
+      icon: faDoorOpen,
+      tone: "rose",
+      title: `${full.length} rooms at capacity`,
+      detail: "No beds left for new admissions in these rooms.",
+      cta: "Show them",
+      action: { kind: "filter", type: "rooms", filter: "full" },
+    });
+  }
+
+  const never = (users ?? []).filter((u) => u.idleDays === null);
+  if (never.length > 0) {
+    out.push({
+      id: "users",
+      icon: faUserSlash,
+      tone: "amber",
+      title: `${plural(never.length, "user")} never signed in`,
+      detail: "Accounts that exist but have never been used.",
+      cta: "Show them",
+      action: { kind: "filter", type: "users", filter: "never" },
+    });
+  }
+
+  // Wait for history before judging the summary stale, or it flashes "never".
+  if (recent) {
+    const last = recent.find((r) => r.type === "summary");
+    const age = last ? daysSince(last.created_at) : null;
+    if (!last || (age !== null && age >= STALE_DAYS)) {
+      out.push({
+        id: "summary",
+        icon: faBuilding,
+        tone: "brand",
+        title: "Admin summary",
+        detail: last
+          ? `Last pulled ${sinceLabel(last.created_at)}.`
+          : "Faculty, rooms and users on one page.",
+        cta: "Preview",
+        action: { kind: "preview", type: "summary", targetId: null, subject: "Admin summary" },
+      });
+    }
+  }
+
+  return out;
+}
 
 export default function AdminReportsClient() {
-  const [kind, setKind] = useState<ReportType>("faculty");
-  const [format, setFormat] = useState<Format>("pdf");
-  const [search, setSearch] = useState("");
-  const [busy, setBusy] = useState<string | null>(null);
-  const [generateError, setGenerateError] = useState<string | null>(null);
+  const faculty = usePageData("admin:reports:faculty", loadFaculty);
+  const rooms = usePageData("admin:reports:rooms", loadRooms);
+  const users = usePageData("admin:reports:users", loadUsers);
 
-  const active = KINDS.find((k) => k.type === kind)!;
-
-  // One list per report type, kept once loaded, so switching back and forth
-  // between types does not refetch either of them.
-  const { data, loading, error: loadError } = usePageData<Target[]>(
-    `admin:report-targets:${kind}`,
-    async () => {
-      if (kind === "faculty") {
-        const res = await apiFetch("/api/admin/faculty", { credentials: "include" });
-        const json = (await res.json()) as {
-          faculty?: { id: string; name: string; email: string; sections: { id: string; name: string }[]; student_count: number }[];
-        };
-        return (json.faculty ?? []).map((f) => ({
-          id: f.id,
-          label: f.name,
-          sub: `${f.email} · ${f.sections.length} section${f.sections.length === 1 ? "" : "s"}`,
-        }));
-      }
-      if (kind === "rooms") {
-        const res = await apiFetch("/api/admin/rooms", { credentials: "include" });
-        const json = (await res.json()) as {
-          rooms?: { id: string; name: string; room_number: string; capacity: number; status: string; students_assigned: number }[];
-        };
-        return (json.rooms ?? []).map((r) => ({
-          id: r.id,
-          label: `${r.name} (${r.room_number})`,
-          sub: `${r.students_assigned}/${r.capacity} occupied · ${r.status}`,
-        }));
-      }
-      if (kind === "users") {
-        const res = await apiFetch("/api/admin/users?role=all", { credentials: "include" });
-        const json = (await res.json()) as {
-          users?: { id: string; name: string; email: string; role: string }[];
-        };
-        return (json.users ?? []).map((u) => ({
-          id: u.id,
-          label: u.name,
-          sub: `${u.email} · ${u.role}`,
-        }));
-      }
-      return [];
-    },
+  const facultyTargets = useMemo<FacultyTarget[] | undefined>(
+    () =>
+      faculty.data?.map((f) => ({
+        id: f.id,
+        label: f.name,
+        sub: [
+          f.email,
+          f.sections.length > 0 ? f.sections.map((s) => s.name).join(", ") : null,
+          plural(f.student_count, "student"),
+        ]
+          .filter(Boolean)
+          .join(" · "),
+        badges: f.sections.length === 0 ? [{ text: "No sections", tone: "amber" as const }] : [],
+        sections: f.sections.length,
+        students: f.student_count,
+      })),
+    [faculty.data],
   );
 
-  const targets = data ?? NO_TARGETS;
-  const error =
-    generateError ?? (loadError ? "Unable to load the list for this report type." : null);
+  const roomTargets = useMemo<RoomTarget[] | undefined>(
+    () =>
+      rooms.data?.map((r) => {
+        const full = r.capacity > 0 && r.students_assigned >= r.capacity;
+        const badges: RoomTarget["badges"] = [];
+        if (full) badges.push({ text: "Full", tone: "rose" });
+        if (r.status !== "active") {
+          badges.push({ text: r.status.charAt(0).toUpperCase() + r.status.slice(1), tone: "slate" });
+        }
+        return {
+          id: r.id,
+          label: `${r.name} (${r.room_number})`,
+          sub: `${r.students_assigned} of ${r.capacity} occupied`,
+          badges,
+          number: r.room_number,
+          fill: r.capacity > 0 ? r.students_assigned / r.capacity : 0,
+          full,
+          status: r.status,
+        };
+      }),
+    [rooms.data],
+  );
 
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase();
-    return targets.filter((t) => !q || t.label.toLowerCase().includes(q) || t.sub.toLowerCase().includes(q));
-  }, [targets, search]);
+  const userTargets = useMemo<UserTarget[] | undefined>(
+    () =>
+      users.data?.map((u) => {
+        const idleDays = daysSince(u.last_login_at);
+        const badges: UserTarget["badges"] = [];
+        if (idleDays === null) badges.push({ text: "Never signed in", tone: "amber" });
+        else if (idleDays >= DORMANT_DAYS) badges.push({ text: `No sign-in ${idleDays}d`, tone: "slate" });
+        return {
+          id: u.id,
+          label: u.name,
+          sub: [
+            u.email,
+            ROLE_LABEL[u.role] ?? u.role,
+            u.last_login_at ? `signed in ${sinceLabel(u.last_login_at)}` : null,
+          ]
+            .filter(Boolean)
+            .join(" · "),
+          badges,
+          role: u.role,
+          createdAt: u.created_at,
+          idleDays,
+        };
+      }),
+    [users.data],
+  );
 
-  const generate = async (target?: Target) => {
-    const key = target?.id ?? "all";
-    setGenerateError(null);
-    setBusy(key);
-    try {
-      const query = new URLSearchParams({ format });
-      if (target) query.set("id", target.id);
-      const res = await apiFetch(`/api/admin/reports/${kind}?${query}`, { credentials: "include" });
-
-      if (!res.ok) {
-        const json = (await res.json().catch(() => ({}))) as { error?: string };
-        setGenerateError(json.error || `Unable to generate this ${active.label.toLowerCase()} report`);
-        return;
-      }
-
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      const disposition = res.headers.get("Content-Disposition") ?? "";
-      const match = disposition.match(/filename="([^"]+)"/);
-      link.download = match?.[1] ?? `icare-admin-${kind}-report.${format}`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
-    } catch {
-      setGenerateError("Unable to generate report");
-    } finally {
-      setBusy(null);
-    }
-  };
+  const types = [
+    defineReportType<FacultyTarget>({
+      type: "faculty",
+      label: "Faculty",
+      icon: faUserTie,
+      blurb: "A faculty member's sections and the students under them.",
+      contents: ["Section and student counts", "Assigned sections"],
+      noun: "faculty",
+      list: {
+        items: facultyTargets,
+        loading: faculty.loading,
+        failed: Boolean(faculty.error),
+        filters: [{ id: "no-sections", label: "No sections", test: (t) => t.sections === 0 }],
+        sorts: [
+          { id: "students", label: "Most students", compare: (a, b) => b.students - a.students || byName(a, b) },
+          { id: "name", label: "A–Z", compare: byName },
+        ],
+        all: { label: "All faculty" },
+      },
+    }),
+    defineReportType<RoomTarget>({
+      type: "rooms",
+      label: "Rooms",
+      icon: faDoorOpen,
+      blurb: "A room's capacity, occupancy and who is in it now.",
+      contents: ["Capacity and occupancy", "Current occupants"],
+      noun: "rooms",
+      list: {
+        items: roomTargets,
+        loading: rooms.loading,
+        failed: Boolean(rooms.error),
+        filters: [
+          { id: "full", label: "Full", test: (t) => t.full },
+          { id: "available", label: "Has space", test: (t) => !t.full && t.status === "active" },
+          { id: "offline", label: "Inactive / maintenance", test: (t) => t.status !== "active" },
+        ],
+        sorts: [
+          { id: "fill", label: "Fullest", compare: (a, b) => b.fill - a.fill || byName(a, b) },
+          {
+            id: "number",
+            label: "Room no.",
+            compare: (a, b) => a.number.localeCompare(b.number, undefined, { numeric: true }),
+          },
+        ],
+        all: { label: "All rooms" },
+      },
+    }),
+    defineReportType<UserTarget>({
+      type: "users",
+      label: "Users",
+      icon: faUsers,
+      blurb: "An account's role, sign-in history and activity.",
+      contents: ["Role and join date", "Sign-in history", "Assessment attempts"],
+      noun: "users",
+      list: {
+        items: userTargets,
+        loading: users.loading,
+        failed: Boolean(users.error),
+        filters: [
+          { id: "never", label: "Never signed in", test: (t) => t.idleDays === null },
+          {
+            id: "dormant",
+            label: `No sign-in ${DORMANT_DAYS}d+`,
+            test: (t) => t.idleDays !== null && t.idleDays >= DORMANT_DAYS,
+          },
+        ],
+        sorts: [
+          { id: "name", label: "A–Z", compare: byName },
+          { id: "newest", label: "Newest", compare: (a, b) => b.createdAt.localeCompare(a.createdAt) },
+        ],
+        facet: {
+          label: "Role",
+          options: Object.entries(ROLE_LABEL).map(([id, label]) => ({ id, label })),
+          valueOf: (t) => t.role,
+        },
+        all: { label: "All users" },
+      },
+    }),
+    defineReportType({
+      type: "summary",
+      label: "Admin summary",
+      icon: faBuilding,
+      blurb: "Faculty, rooms and users on one page — nothing to pick.",
+      contents: ["Headcount by role", "Faculty roster", "Room roster"],
+      noun: "records",
+      scope:
+        facultyTargets && roomTargets && userTargets
+          ? `Covers ${plural(facultyTargets.length, "faculty member")}, ${plural(roomTargets.length, "room")} and ${plural(userTargets.length, "user")}.`
+          : undefined,
+    }),
+  ];
 
   return (
     <div>
-      <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] p-4 sm:p-5 mb-4">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0">
-            <div className="flex items-center gap-1.5 px-3 py-1 bg-gray-100 text-brand-600 rounded-full text-xs sm:text-sm font-medium w-fit mb-3">
-              <FontAwesomeIcon icon={faFileLines} className="w-3.5 h-3.5" />
-              Reports
-            </div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Reports & Export</h1>
-            <p className="text-gray-500 mt-1">Generate admin reports for faculty, rooms, and users</p>
-          </div>
-          <LiveClock className="shrink-0" />
-        </div>
-      </div>
-
-      {/* Report type */}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 mb-3">
-        {KINDS.map((k) => {
-          const selected = k.type === kind;
-          return (
-            <button
-              key={k.type}
-              onClick={() => {
-                setKind(k.type);
-                setSearch("");
-              }}
-              aria-pressed={selected}
-              className={`rounded-xl border p-3 text-left transition-all ${
-                selected
-                  ? "border-brand-600 bg-brand-50 ring-1 ring-brand-600/30"
-                  : "border-hairline bg-surface hover:border-brand-300 hover:bg-subtle"
-              }`}
-            >
-              <FontAwesomeIcon
-                icon={k.icon}
-                className={`w-4 h-4 ${selected ? "text-brand-600" : "text-gray-400"}`}
-              />
-              <p
-                className={`mt-2 text-sm font-semibold ${
-                  selected ? "text-brand-700" : "text-gray-700"
-                }`}
-              >
-                {k.label}
-              </p>
-            </button>
-          );
-        })}
-      </div>
-
-      <div className="rounded-xl border border-hairline bg-surface p-4 shadow-tile mb-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm text-gray-600 max-w-xl">{active.blurb}</p>
-          <div
-            role="radiogroup"
-            aria-label="Output format"
-            className="flex shrink-0 items-center gap-1 rounded-lg bg-subtle p-1"
-          >
-            {(["pdf", "csv"] as Format[]).map((f) => (
-              <button
-                key={f}
-                role="radio"
-                aria-checked={format === f}
-                onClick={() => setFormat(f)}
-                className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-all ${
-                  format === f
-                    ? "bg-surface text-brand-700 shadow-tile"
-                    : "text-gray-500 hover:text-gray-700"
-                }`}
-              >
-                <FontAwesomeIcon icon={f === "pdf" ? faFilePdf : faFileCsv} className="w-3.5 h-3.5" />
-                {f.toUpperCase()}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {error && (
-        <div className="mb-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
-          {error}
-        </div>
-      )}
-
-      {!active.hasList ? (
-        <div className="rounded-xl border border-hairline bg-surface p-8 text-center shadow-tile">
-          <FontAwesomeIcon icon={faBuilding} className="mb-3 h-8 w-8 text-brand-600/40" />
-          <p className="font-display text-lg font-semibold text-gray-900">Admin Summary</p>
-          <p className="mx-auto mt-1 max-w-md text-sm text-gray-500">
-            One {format.toUpperCase()} covering all faculty, rooms, and users.
-          </p>
-          <button
-            onClick={() => generate()}
-            disabled={busy !== null}
-            className="mt-4 inline-flex items-center gap-2 rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white shadow-[0_2px_8px_-1px_rgb(27_107_123_/_0.35)] transition-all hover:bg-brand-700 disabled:opacity-60"
-          >
-            {busy ? (
-              <EcgLoader />
-            ) : (
-              <FontAwesomeIcon icon={faDownload} className="h-3.5 w-3.5" />
-            )}
-            {busy ? "Generating…" : `Generate ${format.toUpperCase()}`}
-          </button>
-        </div>
-      ) : (
-        <>
-          <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-            <div className="relative w-full lg:w-96">
-              <FontAwesomeIcon
-                icon={faSearch}
-                className="absolute left-3 top-1/2 w-4 h-4 -translate-y-1/2 text-gray-500"
-              />
-              <input
-                type="text"
-                placeholder={`Search ${active.targetNoun}…`}
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full rounded-xl border border-gray-300 bg-surface py-2.5 pl-10 pr-4 text-sm text-gray-900 shadow-sm placeholder:text-gray-500 focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30"
-              />
-            </div>
-            <button
-              onClick={() => generate()}
-              disabled={busy !== null}
-              className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white shadow-[0_2px_8px_-1px_rgb(27_107_123_/_0.35)] transition-all hover:bg-brand-700 disabled:opacity-60"
-            >
-              {busy === "all" ? (
-                <EcgLoader />
-              ) : (
-                <FontAwesomeIcon icon={faDownload} className="h-3.5 w-3.5" />
-              )}
-              {busy === "all" ? "Generating…" : `Export All ${active.label} (${targets.length})`}
-            </button>
-          </div>
-
-          {loading ? (
-            <div className="rounded-xl border border-hairline bg-surface p-8 shadow-tile">
-              <div className="animate-pulse space-y-3">
-                {[...Array(5)].map((_, i) => (
-                  <div key={i} className="flex items-center gap-4">
-                    <div className="h-4 bg-gray-200 rounded w-1/3" />
-                    <div className="h-4 bg-gray-200 rounded w-1/4 ml-auto" />
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div className="overflow-hidden rounded-xl border border-hairline bg-surface shadow-tile">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="border-b border-gray-100 bg-subtle">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-500">
-                        {active.label}
-                      </th>
-                      <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-gray-500">
-                        Report
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-hairline">
-                    {filtered.map((target) => (
-                      <tr key={target.id} className="transition-colors hover:bg-subtle">
-                        <td className="px-4 py-3">
-                          <p className="font-semibold text-gray-800">{target.label}</p>
-                          <p className="text-xs text-gray-500">{target.sub}</p>
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <button
-                            onClick={() => generate(target)}
-                            disabled={busy !== null}
-                            className="inline-flex items-center gap-2 rounded-lg border border-brand-600/30 px-3 py-1.5 text-sm font-medium text-brand-700 transition-colors hover:bg-brand-50 disabled:opacity-50"
-                          >
-                            {busy === target.id ? (
-                              <EcgLoader />
-                            ) : (
-                              <FontAwesomeIcon icon={faDownload} className="h-3.5 w-3.5" />
-                            )}
-                            {busy === target.id ? "Generating…" : format.toUpperCase()}
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                    {filtered.length === 0 && (
-                      <tr>
-                        <td colSpan={2} className="py-8 text-center text-gray-500">
-                          {search
-                            ? `No ${active.targetNoun} match your search`
-                            : `No ${active.targetNoun} available yet`}
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-        </>
-      )}
+      <PageHeader
+        badge={{ icon: <FontAwesomeIcon icon={faFileLines} className="h-3 w-3" />, label: "Report Center" }}
+        title="Reports"
+        subtitle="Preview and export PDF or CSV reports on faculty, rooms and users"
+      />
+      <ReportCenter
+        endpoint="/api/admin/reports"
+        cachePrefix="admin"
+        types={types}
+        suggest={(recent) => suggestFor(facultyTargets, roomTargets, userTargets, recent)}
+      />
     </div>
   );
 }
