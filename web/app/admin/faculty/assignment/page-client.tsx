@@ -5,9 +5,9 @@ import { usePageData } from "@/app/lib/use-page-data";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faChevronLeft, faTrash } from "@fortawesome/free-solid-svg-icons";
+import { faArrowLeft, faTrash, faUsers } from "@fortawesome/free-solid-svg-icons";
 import { EcgLoader } from "../../../components/EcgLoader";
-import LiveClock from "../../../components/LiveClock";
+import PageHeader from "../../../components/PageHeader";
 
 interface Section {
   id: string;
@@ -174,15 +174,23 @@ export default function AssignSectionsClient() {
 
   return (
     <div>
-      <div className="flex items-center gap-4 mb-6">
-        <button onClick={handleBack} className="p-2 hover:bg-gray-100 rounded-xl transition-colors">
-          <FontAwesomeIcon icon={faChevronLeft} className="w-5 h-5 text-gray-600" />
+      <PageHeader
+        badge={{
+          icon: <FontAwesomeIcon icon={faUsers} className="w-3.5 h-3.5" />,
+          label: "Faculty Management",
+        }}
+        title="Sections"
+        subtitle="Manage sections and assign them to faculty"
+      />
+
+      <div className="mb-4">
+        <button
+          onClick={handleBack}
+          className="inline-flex items-center gap-2 px-3 py-2 bg-surface border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-all"
+        >
+          <FontAwesomeIcon icon={faArrowLeft} className="w-3.5 h-3.5" />
+          Back to faculty
         </button>
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Sections</h1>
-          <p className="text-gray-500">Manage sections and assign them to faculty</p>
-        </div>
-        <LiveClock className="ml-auto shrink-0" />
       </div>
 
       {message && (
