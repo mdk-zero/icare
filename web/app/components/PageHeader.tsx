@@ -89,7 +89,7 @@ export default function PageHeader({ badge, title, subtitle, action }: PageHeade
           </p>
         </div>
 
-        <div className="flex shrink-0 items-start gap-5">
+        <div className="flex shrink-0 flex-col items-end gap-3">
           {/* The wall clock lives with each page's title rather than in the
               sidebar, where it was small and easy to miss. */}
           <LiveClock variant="full" className="animate-rise hidden sm:block" style={step(3)} />
