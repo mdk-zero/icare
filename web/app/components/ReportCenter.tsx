@@ -620,6 +620,10 @@ export default function ReportCenter({
                 )}
               </div>
 
+              {/* Scrolls on its own once the list grows, so the type rail and
+                  Recent panel beside it stay put instead of the whole page
+                  growing with every "show more" click. */}
+              <div className="max-h-[32rem] overflow-y-auto">
               {list.items === undefined && list.loading ? (
                 <ul className="divide-y divide-hairline" aria-hidden>
                   {Array.from({ length: 5 }).map((_, i) => (
@@ -696,6 +700,7 @@ export default function ReportCenter({
                   </button>
                 </div>
               )}
+              </div>
             </>
           )}
         </div>
