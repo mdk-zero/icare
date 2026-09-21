@@ -6,6 +6,7 @@ import { useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faUsers, faPlus, faPencil, faTrash } from "@fortawesome/free-solid-svg-icons";
 import PageHeader from "../../components/PageHeader";
+import FilterSelect from "../../components/FilterSelect";
 
 interface UserAccount {
   id: string;
@@ -153,7 +154,7 @@ export default function UsersClient() {
           ),
           label: "User Management",
         }}
-        title="User Management"
+        title="Users"
         subtitle="Manage user accounts, roles, and access permissions"
       />
 
@@ -204,16 +205,12 @@ export default function UsersClient() {
       </div>
 
       <div className="flex flex-wrap items-center gap-4 mb-6">
-        <select
-          value={userRoleFilter}
-          onChange={(e) => setUserRoleFilter(e.target.value)}
-          className="px-4 py-2.5 bg-surface border border-gray-200 rounded-xl text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-600/50 focus:border-brand-600 transition-all cursor-pointer"
-        >
+        <FilterSelect value={userRoleFilter} onChange={(e) => setUserRoleFilter(e.target.value)}>
           <option value="all">All Roles</option>
           <option value="student">Student</option>
           <option value="faculty">Faculty</option>
           <option value="admin">Administrator</option>
-        </select>
+        </FilterSelect>
         <button
           onClick={() => setShowAddModal(true)}
           className="flex items-center gap-2 px-4 py-2.5 bg-brand-600 text-white font-medium rounded-xl hover:bg-brand-700 hover:shadow-lg transition-all duration-300 ml-auto"

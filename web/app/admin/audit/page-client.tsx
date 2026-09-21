@@ -6,6 +6,7 @@ import { useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faClock, faMagnifyingGlass } from "@fortawesome/free-solid-svg-icons";
 import PageHeader from "../../components/PageHeader";
+import FilterSelect from "../../components/FilterSelect";
 
 interface AuditRow {
   id: string;
@@ -138,7 +139,7 @@ export default function AdminAuditClient() {
           ),
           label: "Activity Log",
         }}
-        title="Activity Log"
+        title="Audit Trail"
         subtitle="Append-only audit trail of every action across all roles"
       />
 
@@ -162,20 +163,18 @@ export default function AdminAuditClient() {
               className="w-full pl-11 pr-4 py-2.5 bg-surface border border-gray-200 rounded-xl text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-600/50 focus:border-brand-600 transition-all"
             />
           </form>
-          <select
+          <FilterSelect
             value={roleFilter}
             onChange={(e) => withPageReset(setRoleFilter)(e.target.value)}
-            className="px-3 py-2.5 bg-surface border border-gray-200 rounded-xl text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-600/50 focus:border-brand-600 transition-all cursor-pointer"
           >
             <option value="all">All Roles</option>
             <option value="admin">Admin</option>
             <option value="faculty">Faculty</option>
             <option value="student">Student</option>
-          </select>
-          <select
+          </FilterSelect>
+          <FilterSelect
             value={entityFilter}
             onChange={(e) => withPageReset(setEntityFilter)(e.target.value)}
-            className="px-3 py-2.5 bg-surface border border-gray-200 rounded-xl text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-600/50 focus:border-brand-600 transition-all cursor-pointer"
           >
             <option value="all">All Entities</option>
             {entityTypes.map((t) => (
@@ -183,7 +182,7 @@ export default function AdminAuditClient() {
                 {t.replaceAll("_", " ")}
               </option>
             ))}
-          </select>
+          </FilterSelect>
           <input
             type="date"
             value={fromDate}

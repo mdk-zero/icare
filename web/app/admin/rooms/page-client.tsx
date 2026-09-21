@@ -18,6 +18,8 @@ import {
   faRotateLeft,
 } from "@fortawesome/free-solid-svg-icons";
 import PageHeader from "../../components/PageHeader";
+import FilterSelect from "../../components/FilterSelect";
+import StatTile from "../../components/StatTile";
 import { roomStatus, ROOM_STATUS_LABEL, ROOM_STATUS_TONE } from "../../lib/rooms";
 import {
   fetchRooms,
@@ -160,48 +162,24 @@ export default function RoomsClient() {
           ),
           label: "Room Management",
         }}
-        title="Room Management"
+        title="Rooms"
         subtitle="Manage clinical rooms, track occupancy, and assign students"
       />
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        <div className="bg-surface rounded-xl p-4 border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-brand-600/10 rounded-lg flex items-center justify-center">
-              <FontAwesomeIcon icon={faDoorOpen} className="w-5 h-5 text-brand-600" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-800">{rooms.length}</p>
-              <p className="text-xs text-gray-500">Total Rooms</p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-surface rounded-xl p-4 border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
-              <FontAwesomeIcon icon={faCheckCircle} className="w-5 h-5 text-green-600" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-800">
-                {rooms.filter((r) => r.status === "active").length}
-              </p>
-              <p className="text-xs text-gray-500">Active Rooms</p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-surface rounded-xl p-4 border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-brand-600/20 rounded-xl flex items-center justify-center">
-              <FontAwesomeIcon icon={faUsers} className="w-5 h-5 text-brand-700" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-800">
-                {rooms.reduce((sum, r) => sum + r.students_assigned, 0)}
-              </p>
-              <p className="text-xs text-gray-500">Students Assigned</p>
-            </div>
-          </div>
-        </div>
+        <StatTile icon={faDoorOpen} value={rooms.length} label="Total Rooms" />
+        <StatTile
+          icon={faCheckCircle}
+          value={rooms.filter((r) => r.status === "active").length}
+          label="Active Rooms"
+          iconBg="bg-emerald-100"
+          iconColor="text-emerald-600"
+        />
+        <StatTile
+          icon={faUsers}
+          value={rooms.reduce((sum, r) => sum + r.students_assigned, 0)}
+          label="Students Assigned"
+        />
       </div>
 
       <div className="flex flex-wrap items-center gap-3 mb-6">
@@ -228,16 +206,12 @@ export default function RoomsClient() {
         </div>
 
         {view === "cards" && (
-          <select
-            value={roomFilter}
-            onChange={(e) => setRoomFilter(e.target.value)}
-            className="px-4 py-2.5 bg-surface border border-gray-200 rounded-xl text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-600/50 focus:border-brand-600 transition-all cursor-pointer"
-          >
+          <FilterSelect value={roomFilter} onChange={(e) => setRoomFilter(e.target.value)}>
             <option value="all">All Rooms</option>
             <option value="active">Active</option>
             <option value="inactive">Inactive</option>
             <option value="maintenance">Maintenance</option>
-          </select>
+          </FilterSelect>
         )}
 
         <div className="ml-auto flex items-center gap-2">

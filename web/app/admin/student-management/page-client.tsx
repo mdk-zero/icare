@@ -20,6 +20,7 @@ import {
   faBrain,
 } from "@fortawesome/free-solid-svg-icons";
 import PageHeader from "../../components/PageHeader";
+import FilterSelect from "../../components/FilterSelect";
 import StatTile from "../../components/StatTile";
 import ConfirmModal from "../../components/ConfirmModal";
 import { fetchSections, runMlJob, Section, apiFetch } from "../../lib/api";
@@ -958,7 +959,7 @@ export default function StudentManagementClient() {
           icon: <FontAwesomeIcon icon={faLayerGroup} className="h-3 w-3" />,
           label: "Student Management",
         }}
-        title="Student Management"
+        title="Students"
         subtitle="Enroll and monitor nursing students by section"
         action={{
           icon: runningMl ? (
@@ -1060,15 +1061,11 @@ export default function StudentManagementClient() {
             className="w-full rounded-xl border border-gray-200 bg-surface py-2.5 pl-11 pr-4 text-gray-700 transition-all placeholder:text-gray-400 focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/40"
           />
         </div>
-        <select
-          value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value)}
-          className="cursor-pointer rounded-xl border border-gray-200 bg-surface px-4 py-2.5 text-gray-700 transition-all focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/40"
-        >
+        <FilterSelect value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
           <option value="all">All Students</option>
           <option value="at-risk">At Risk</option>
           <option value="safe">Safe</option>
-        </select>
+        </FilterSelect>
         <button
           onClick={() => setSectionForm({ section: null })}
           className="flex shrink-0 items-center justify-center gap-2 rounded-xl border border-gray-200 bg-surface px-4 py-2.5 text-sm font-medium text-gray-700 transition-all hover:border-brand-300 hover:text-brand-700"

@@ -5,8 +5,10 @@ import { usePageData } from "@/app/lib/use-page-data";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faUsers, faPlus, faChevronDown } from "@fortawesome/free-solid-svg-icons";
+import { faUsers, faPlus } from "@fortawesome/free-solid-svg-icons";
 import PageHeader from "../../components/PageHeader";
+import FilterSelect from "../../components/FilterSelect";
+import StatTile from "../../components/StatTile";
 
 interface SectionRef {
   id: string;
@@ -154,7 +156,7 @@ export default function FacultyClient() {
           icon: <FontAwesomeIcon icon={faUsers} className="w-3.5 h-3.5" />,
           label: "Faculty Management",
         }}
-        title="Faculty Management"
+        title="Faculty"
         subtitle="Manage faculty accounts and their handled sections"
         action={{
           icon: <FontAwesomeIcon icon={faPlus} className="h-4 w-4" />,
@@ -187,43 +189,19 @@ export default function FacultyClient() {
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
-        {[
-          { label: "Total Faculty", count: faculty.length },
-          { label: "Sections", count: sections.length },
-          { label: "Faculty Without Sections", count: facultyWithoutSections },
-        ].map((stat) => (
-          <div
-            key={stat.label}
-            className="bg-surface rounded-xl p-5 border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200"
-          >
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-brand-600/10 rounded-xl flex items-center justify-center">
-                <FontAwesomeIcon icon={faUsers} className="w-6 h-6 text-brand-600" />
-              </div>
-              <div>
-                <p className="text-3xl font-bold text-gray-800">{stat.count}</p>
-                <p className="text-xs text-gray-500 font-medium">{stat.label}</p>
-              </div>
-            </div>
-          </div>
-        ))}
+        <StatTile icon={faUsers} value={faculty.length} label="Total Faculty" />
+        <StatTile icon={faUsers} value={sections.length} label="Sections" />
+        <StatTile icon={faUsers} value={facultyWithoutSections} label="Faculty Without Sections" />
       </div>
 
       <div className="flex items-center gap-3 mb-3">
-        <div className="relative">
-          <select
-            value={filterSection}
-            onChange={(e) => setFilterSection(e.target.value)}
-            className="appearance-none px-4 py-2 pr-10 border border-gray-200 rounded-xl text-sm text-gray-700 bg-surface focus:outline-none focus:ring-2 focus:ring-brand-600 focus:border-brand-600"
-          >
-            <option value="">All Sections</option>
-            <option value="__none__">No Section</option>
-            {sections.map((s) => (
-              <option key={s.id} value={s.id}>Section {s.name}</option>
-            ))}
-          </select>
-          <FontAwesomeIcon icon={faChevronDown} className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
-        </div>
+        <FilterSelect value={filterSection} onChange={(e) => setFilterSection(e.target.value)}>
+          <option value="">All Sections</option>
+          <option value="__none__">No Section</option>
+          {sections.map((s) => (
+            <option key={s.id} value={s.id}>Section {s.name}</option>
+          ))}
+        </FilterSelect>
 
         {filterSection && (
           <button
