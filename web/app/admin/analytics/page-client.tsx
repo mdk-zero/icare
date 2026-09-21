@@ -11,13 +11,12 @@ import {
   faHeartbeat,
   faNotesMedical,
   faClipboardCheck,
-  faCircleCheck,
   faGraduationCap,
 } from "@fortawesome/free-solid-svg-icons";
 import { fetchAnalyticsSummary, runWarehouseEtl } from "../../lib/api";
 import { usePageData } from "../../lib/use-page-data";
 import { EcgLoader } from "../../components/EcgLoader";
-import LiveClock from "../../components/LiveClock";
+import PageHeader from "../../components/PageHeader";
 
 export default function AdminAnalyticsClient() {
   const [refreshing, setRefreshing] = useState(false);
@@ -47,38 +46,31 @@ export default function AdminAnalyticsClient() {
 
   return (
     <div>
-      <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] p-4 sm:p-5 mb-4">
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-          <div className="min-w-0">
-            <div className="flex items-center gap-1.5 px-3 py-1 bg-gray-100 text-brand-600 rounded-full text-xs sm:text-sm font-medium w-fit mb-3">
-              <FontAwesomeIcon icon={faChartBar} className="w-3.5 h-3.5" />
-              Analytics
-            </div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Analytics Dashboard</h1>
-            <p className="text-gray-500 mt-1">
-              Cohort analytics from the iCARE++ star-schema warehouse
-              {summary?.etl?.last_run_at &&
-                ` · last refreshed ${new Date(summary.etl.last_run_at).toLocaleString()}`}
-            </p>
-          </div>
-          <div className="flex items-center gap-4 shrink-0">
-            <LiveClock />
-            <button
-              onClick={handleRefresh}
-              disabled={refreshing}
-              className="px-4 py-2 bg-brand-600 text-white font-medium rounded-lg hover:bg-brand-700 transition-all duration-200 flex items-center gap-2 shadow-[0_2px_6px_rgba(27,107,123,0.2)] disabled:opacity-50"
-            >
-              {refreshing ? <EcgLoader /> : <FontAwesomeIcon icon={faRotate} className="w-4 h-4" />}
-              {refreshing ? "Refreshing…" : "Refresh Warehouse"}
-            </button>
-          </div>
+      <PageHeader
+        badge={{
+          icon: <FontAwesomeIcon icon={faChartBar} className="w-3.5 h-3.5" />,
+          label: "Warehouse Analytics",
+        }}
+        title="Analytics Dashboard"
+        subtitle={
+          summary?.etl?.last_run_at
+            ? `Cohort analytics from the iCARE++ star-schema warehouse · last refreshed ${new Date(summary.etl.last_run_at).toLocaleString()}`
+            : "Cohort analytics from the iCARE++ star-schema warehouse"
+        }
+        action={{
+          icon: refreshing ? <EcgLoader /> : <FontAwesomeIcon icon={faRotate} className="w-4 h-4" />,
+          onClick: handleRefresh,
+          label: "Refresh Warehouse",
+          text: refreshing ? "Refreshing…" : "Refresh Warehouse",
+          disabled: refreshing,
+        }}
+      />
+
+      {error && (
+        <div className="mb-4 p-3 bg-rose-50 border border-rose-200 rounded-xl text-sm text-rose-700">
+          {error}
         </div>
-        {error && (
-          <div className="mt-4 p-3 bg-rose-50 border border-rose-200 rounded-xl text-sm text-rose-700">
-            {error}
-          </div>
-        )}
-      </div>
+      )}
 
       {loading ? (
         <div className="flex items-center justify-center p-16">
