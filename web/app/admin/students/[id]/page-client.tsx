@@ -3,7 +3,17 @@
 import { useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faChevronLeft, faBolt } from "@fortawesome/free-solid-svg-icons";
+import {
+  faArrowLeft,
+  faBolt,
+  faChartLine,
+  faClipboardList,
+  faClock,
+  faShieldHalved,
+  faTriangleExclamation,
+  faStethoscope,
+  faListCheck,
+} from "@fortawesome/free-solid-svg-icons";
 import {
   fetchLatestPrediction,
   fetchStudentScenarioHistory,
@@ -13,9 +23,11 @@ import {
   apiFetch,
 } from "../../../lib/api";
 import Avatar from "../../../components/Avatar";
+import Card from "../../../components/Card";
+import StatTile from "../../../components/StatTile";
+import PageHeader from "../../../components/PageHeader";
 import { usePageData } from "../../../lib/use-page-data";
 import { EcgLoader } from "../../../components/EcgLoader";
-import LiveClock from "../../../components/LiveClock";
 
 interface AttemptRow {
   id: string;
@@ -113,16 +125,6 @@ export default function StudentDetailClient() {
       : "low"
     : null;
 
-  const getRiskColor = (risk: string) => {
-    switch (risk) {
-      case "high":
-        return "bg-red-100 text-red-700 border-red-200";
-      case "low":
-        return "bg-emerald-100 text-emerald-700 border-emerald-200";
-      default:
-        return "bg-gray-100 text-gray-700 border-gray-200";
-    }
-  };
 
   const getScoreColor = (score: number) => {
     if (score >= 80) return "text-emerald-600";
@@ -163,24 +165,32 @@ export default function StudentDetailClient() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between gap-4">
+      <PageHeader
+        badge={{
+          icon: <FontAwesomeIcon icon={faListCheck} className="w-3.5 h-3.5" />,
+          label: "Student Management",
+        }}
+        title={student.name}
+        subtitle={student.email}
+      />
+
+      <div className="mb-4">
         <button
           onClick={() => router.push("/admin/student-management")}
-          className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
+          className="inline-flex items-center gap-2 px-3 py-2 bg-surface border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-all"
         >
-          <FontAwesomeIcon icon={faChevronLeft} className="w-5 h-5" />
-          Back to Students
+          <FontAwesomeIcon icon={faArrowLeft} className="w-3.5 h-3.5" />
+          Back to students
         </button>
-        <LiveClock variant="compact" />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
         <div className="lg:col-span-2">
-          <div className="bg-surface rounded-xl p-6 border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)]">
+          <Card padding="sm" className="flex h-full flex-col">
             <div className="flex items-center gap-4 mb-6">
               <Avatar name={student.name} src={student.picture_url} size="xl" tone="solid" />
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">{student.name}</h1>
+                <h2 className="text-xl font-bold text-gray-900">{student.name}</h2>
                 <p className="text-gray-500">{student.email}</p>
                 <p className="text-sm text-gray-400">
                   Enrolled {new Date(student.created_at).toLocaleDateString("en-US", { month: "long", year: "numeric" })}
@@ -188,35 +198,29 @@ export default function StudentDetailClient() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <div className="text-center p-4 bg-gray-50 rounded-xl">
-                <p className="text-2xl font-bold text-gray-900">
-                  {student.average_score !== null ? `${student.average_score}%` : "—"}
-                </p>
-                <p className="text-sm text-gray-500">Avg Score</p>
-              </div>
-              <div className="text-center p-4 bg-gray-50 rounded-xl">
-                <p className="text-2xl font-bold text-gray-900">{student.quizzes_completed}</p>
-                <p className="text-sm text-gray-500">Quizzes</p>
-              </div>
-              <div className="text-center p-4 bg-gray-50 rounded-xl">
-                <p className="text-2xl font-bold text-gray-900">{formatLastActive(student.last_login_at)}</p>
-                <p className="text-sm text-gray-500">Last Active</p>
-              </div>
-              <div className="text-center p-4 bg-gray-50 rounded-xl flex items-center justify-center">
-                {riskLevel ? (
-                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${getRiskColor(riskLevel)}`}>
-                    {riskLevel === "high" ? "At Risk" : "On Track"}
-                  </span>
-                ) : (
-                  <span className="text-sm text-gray-400">No prediction yet</span>
-                )}
-              </div>
+            <div className="grid flex-1 grid-cols-2 sm:grid-cols-4 gap-3">
+              <StatTile
+                icon={faChartLine}
+                value={student.average_score !== null ? `${student.average_score}%` : "—"}
+                label="Avg Score"
+              />
+              <StatTile icon={faClipboardList} value={student.quizzes_completed} label="Quizzes" />
+              <StatTile icon={faClock} value={formatLastActive(student.last_login_at)} label="Last Active" />
+              <StatTile
+                icon={riskLevel === "high" ? faTriangleExclamation : faShieldHalved}
+                value={riskLevel ? (riskLevel === "high" ? "At Risk" : "On Track") : "Not Scored"}
+                valueColor={
+                  riskLevel === "high" ? "text-red-600" : riskLevel === "low" ? "text-emerald-600" : "text-gray-500"
+                }
+                iconBg={riskLevel === "high" ? "bg-red-100" : riskLevel === "low" ? "bg-emerald-100" : "bg-gray-100"}
+                iconColor={riskLevel === "high" ? "text-red-600" : riskLevel === "low" ? "text-emerald-600" : "text-gray-500"}
+                label="Risk Status"
+              />
             </div>
-          </div>
+          </Card>
         </div>
 
-        <div className="bg-surface rounded-xl p-6 border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)]">
+        <Card padding="sm" className="h-full">
           <div className="flex items-center gap-2 mb-4">
             <div className="p-2 bg-purple-100 rounded-lg">
               <FontAwesomeIcon icon={faBolt} className="w-5 h-5 text-purple-600" />
@@ -272,28 +276,48 @@ export default function StudentDetailClient() {
               )}
             </div>
           )}
-        </div>
+        </Card>
+      </div>
+
+      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        {([
+          { key: "performance", label: "Performance", hint: "Quiz results", count: attempts.length, unit: "quizzes", icon: faChartLine },
+          { key: "scenarios", label: "Scenarios", hint: "Simulation runs", count: scenarioHistory.length, unit: "runs", icon: faStethoscope },
+          { key: "competencies", label: "Competencies", hint: "Skill mastery", count: Object.keys(competencies).length, unit: "areas", icon: faListCheck },
+        ] as const).map((tab) => {
+          const active = activeTab === tab.key;
+          return (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              aria-pressed={active}
+              className={`group relative flex items-center gap-4 overflow-hidden rounded-2xl border p-4 text-left transition-all duration-200 ${
+                active
+                  ? "border-[#1b6b7b] bg-gradient-to-br from-[#1b6b7b] to-[#124a52] text-white shadow-[0_8px_20px_-6px_rgba(27,107,123,0.5)]"
+                  : "border-hairline bg-surface text-gray-900 hover:-translate-y-0.5 hover:border-brand-600/40 hover:shadow-tile-hover"
+              }`}
+            >
+              <span
+                className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl transition-colors ${
+                  active ? "bg-white/20 text-white" : "bg-brand-600/10 text-brand-600 group-hover:bg-brand-600/15"
+                }`}
+              >
+                <FontAwesomeIcon icon={tab.icon} className="h-5 w-5" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-base font-bold leading-tight">{tab.label}</span>
+                <span className={`block text-xs ${active ? "text-white/70" : "text-gray-500"}`}>{tab.hint}</span>
+              </span>
+              <span className="shrink-0 text-right">
+                <span className="block text-2xl font-bold leading-none tabular-nums">{tab.count}</span>
+                <span className={`block text-[11px] ${active ? "text-white/70" : "text-gray-400"}`}>{tab.unit}</span>
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden">
-        <div className="border-b border-hairline">
-          <div className="flex gap-6 px-6">
-            {["performance", "scenarios", "competencies"].map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`py-4 font-medium border-b-2 transition-colors ${
-                  activeTab === tab
-                    ? "border-brand-600 text-brand-600"
-                    : "border-transparent text-gray-500 hover:text-gray-700"
-                }`}
-              >
-                {tab.charAt(0).toUpperCase() + tab.slice(1)}
-              </button>
-            ))}
-          </div>
-        </div>
-
         <div className="p-6">
           {activeTab === "performance" && (
             <div className="space-y-4">
