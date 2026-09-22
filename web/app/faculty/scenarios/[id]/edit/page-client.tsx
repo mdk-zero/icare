@@ -134,6 +134,10 @@ export default function EditScenarioClient({ scenarioId }: { scenarioId: string 
       setError("Title is required.");
       return;
     }
+    if (!form.patientId) {
+      setError("Select a patient for this scenario before saving.");
+      return;
+    }
     setSaving(true);
     setError(null);
 
@@ -335,17 +339,12 @@ export default function EditScenarioClient({ scenarioId }: { scenarioId: string 
           <div className="rounded-xl border border-hairline bg-surface overflow-hidden shadow-[0_1px_3px_0_rgba(0,0,0,0.04)]">
             <div className="p-3 border-b border-hairline bg-subtle">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-bold text-gray-800">Patient</span>
-                {form.patientId ? (
-                  <button
-                    onClick={() => setForm((prev) => ({ ...prev, patientId: "", roomId: "" }))}
-                    className="text-xs font-medium text-brand-700 hover:text-brand-900"
-                  >
-                    Clear
-                  </button>
-                ) : (
-                  <span className="text-xs text-gray-500">No patient linked</span>
-                )}
+                <span className="text-sm font-bold text-gray-800">
+                  Patient <span className="font-normal text-red-600">*</span>
+                </span>
+                <span className="text-xs text-gray-500">
+                  {form.patientId ? "Click another to switch" : "Required — pick one below"}
+                </span>
               </div>
               <div className="relative">
                 <FontAwesomeIcon
@@ -363,7 +362,9 @@ export default function EditScenarioClient({ scenarioId }: { scenarioId: string 
             </div>
             <div className="max-h-[280px] overflow-y-auto custom-scrollbar">
               {filteredPatients.length === 0 ? (
-                <div className="p-6 text-center text-sm text-gray-500">No patients match.</div>
+                <div className="p-6 text-center text-sm text-gray-500">
+                  {patients.length === 0 ? "No patients in the roster yet." : "No patients match."}
+                </div>
               ) : (
                 <table className="w-full">
                   <tbody className="divide-y divide-hairline">
@@ -500,7 +501,8 @@ export default function EditScenarioClient({ scenarioId }: { scenarioId: string 
         </button>
         <button
           onClick={handleSave}
-          disabled={saving || !form.title.trim()}
+          disabled={saving || !form.title.trim() || !form.patientId}
+          title={!form.patientId ? "Select a patient first" : undefined}
           className="inline-flex items-center gap-2 px-5 py-2.5 bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white font-medium rounded-lg transition-colors shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
         >
           {saving ? (

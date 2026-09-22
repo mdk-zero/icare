@@ -21,7 +21,6 @@ import {
   faNotesMedical,
   faExclamationTriangle,
   faUsers,
-  faCheck,
   faUser,
   faChevronDown,
   faLayerGroup,
@@ -108,7 +107,6 @@ export default function FacultyScenariosClient() {
   const [batchCategories, setBatchCategories] = useState<string[]>([]);
   const [batchDifficulty, setBatchDifficulty] = useState("");
   const [batchTopic, setBatchTopic] = useState("");
-  const [batchUsePatients, setBatchUsePatients] = useState(true);
   // How the library's grounded patients are placed into rooms on save.
   const [batchRoomMode, setBatchRoomMode] = useState<"fill" | "spread">("fill");
   const [batchDrafts, setBatchDrafts] = useState<ScenarioDraft[] | null>(null);
@@ -338,7 +336,6 @@ export default function FacultyScenariosClient() {
           categories,
           difficulty: batchDifficulty || undefined,
           topic: batchTopic.trim() || undefined,
-          usePatients: batchUsePatients,
           lessonText: batchLesson.lesson?.lessonText,
           avoidTitles: collected.map((s) => s.title),
         },
@@ -557,11 +554,13 @@ export default function FacultyScenariosClient() {
   };
 
   const handleSavePatientLink = async () => {
-    if (!linkPatientTarget) return;
+    // Every scenario needs a patient, so this only ever switches to a
+    // different one — the picker offers no "no linked patient" option.
+    if (!linkPatientTarget || !linkPatientId) return;
 
     setSavingPatientLink(true);
     const updated = await updateScenario(linkPatientTarget.id, {
-      patient_id: linkPatientId || null,
+      patient_id: linkPatientId,
     });
 
     if (updated) {
@@ -573,15 +572,13 @@ export default function FacultyScenariosClient() {
           faculty_name: faculty.name,
           tab: "scenarios",
           action: "link_scenario_patient",
-          details: linkPatientId
-            ? `Linked scenario "${linkPatientTarget.title}" to a patient`
-            : `Unlinked patient from scenario "${linkPatientTarget.title}"`,
+          details: `Linked scenario "${linkPatientTarget.title}" to a patient`,
           target_type: "scenario",
           target_id: linkPatientTarget.id,
-          metadata: { scenario_title: linkPatientTarget.title, patient_id: linkPatientId || null },
+          metadata: { scenario_title: linkPatientTarget.title, patient_id: linkPatientId },
         });
       }
-      toast(linkPatientId ? "Patient linked" : "Patient unlinked");
+      toast("Patient linked");
     }
 
     setSavingPatientLink(false);
@@ -760,16 +757,6 @@ export default function FacultyScenariosClient() {
               className="w-4 h-4 text-brand-600 transition-transform group-hover:scale-110"
             />
             Generate Library
-          </button>
-          <button
-            onClick={() => router.push("/faculty/scenarios/link")}
-            className="group flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl border border-gray-300 bg-surface px-4 py-2.5 text-sm font-semibold text-gray-700 transition-all hover:border-brand-300 hover:bg-brand-50"
-          >
-            <FontAwesomeIcon
-              icon={faHospitalUser}
-              className="w-4 h-4 text-brand-600 transition-transform group-hover:scale-110"
-            />
-            Link patients
           </button>
           <button
             onClick={() => router.push("/faculty/scenarios/review")}
@@ -1112,59 +1099,54 @@ export default function FacultyScenariosClient() {
                     />
                   </div>
 
-                  <label className="flex items-start gap-3 p-3 rounded-xl border border-gray-200 hover:bg-subtle cursor-pointer transition-colors">
-                    <input
-                      type="checkbox"
-                      checked={batchUsePatients}
-                      onChange={(e) => setBatchUsePatients(e.target.checked)}
-                      disabled={batchGenerating}
-                      className="mt-0.5 w-4 h-4 accent-brand-600"
+                  <div className="flex items-start gap-3 p-3 rounded-xl border border-gray-200 bg-subtle/60">
+                    <FontAwesomeIcon
+                      icon={faHospitalUser}
+                      className="mt-0.5 w-4 h-4 text-brand-600 shrink-0"
                     />
                     <span>
                       <span className="block text-sm font-semibold text-gray-800">
-                        Base each scenario on a real MIMIC patient
+                        Every scenario is based on a real MIMIC patient
                       </span>
                       <span className="block text-xs text-gray-500 mt-0.5">
-                        Links every scenario to a patient record so students can chart vitals and
-                        EHR data for the case.
+                        Each one links to a patient record so students can chart vitals and EHR
+                        data for the case.
                       </span>
                     </span>
-                  </label>
+                  </div>
 
-                  {batchUsePatients && (
-                    <div>
-                      <label className={labelClassName}>Room placement</label>
-                      <div className="flex gap-2">
-                        {(
-                          [
-                            ["fill", "Fill rooms", "Pack rooms to capacity, one at a time"],
-                            ["spread", "Spread evenly", "Balance patients across rooms"],
-                          ] as const
-                        ).map(([mode, title, hint]) => (
-                          <button
-                            key={mode}
-                            type="button"
-                            onClick={() => setBatchRoomMode(mode)}
-                            disabled={batchGenerating}
-                            className={`flex-1 rounded-xl border px-3 py-2.5 text-left transition-all disabled:opacity-50 ${
-                              batchRoomMode === mode
-                                ? "border-brand-600 bg-brand-50 ring-1 ring-brand-600/20"
-                                : "border-gray-300 bg-surface hover:border-brand-300"
-                            }`}
-                          >
-                            <span className="block text-sm font-semibold text-gray-800">
-                              {title}
-                            </span>
-                            <span className="block text-xs text-gray-500">{hint}</span>
-                          </button>
-                        ))}
-                      </div>
-                      <p className="text-xs text-gray-500 mt-1.5">
-                        Saved scenarios&apos; patients are placed into rooms without exceeding
-                        capacity; any overflow stays unassigned.
-                      </p>
+                  <div>
+                    <label className={labelClassName}>Room placement</label>
+                    <div className="flex gap-2">
+                      {(
+                        [
+                          ["fill", "Fill rooms", "Pack rooms to capacity, one at a time"],
+                          ["spread", "Spread evenly", "Balance patients across rooms"],
+                        ] as const
+                      ).map(([mode, title, hint]) => (
+                        <button
+                          key={mode}
+                          type="button"
+                          onClick={() => setBatchRoomMode(mode)}
+                          disabled={batchGenerating}
+                          className={`flex-1 rounded-xl border px-3 py-2.5 text-left transition-all disabled:opacity-50 ${
+                            batchRoomMode === mode
+                              ? "border-brand-600 bg-brand-50 ring-1 ring-brand-600/20"
+                              : "border-gray-300 bg-surface hover:border-brand-300"
+                          }`}
+                        >
+                          <span className="block text-sm font-semibold text-gray-800">
+                            {title}
+                          </span>
+                          <span className="block text-xs text-gray-500">{hint}</span>
+                        </button>
+                      ))}
                     </div>
-                  )}
+                    <p className="text-xs text-gray-500 mt-1.5">
+                      Saved scenarios&apos; patients are placed into rooms without exceeding
+                      capacity; any overflow stays unassigned.
+                    </p>
+                  </div>
 
                   {batchError && (
                     <div className="p-3 rounded-lg text-sm border bg-red-50 text-red-700 border-red-200 flex items-start gap-2">
@@ -1758,7 +1740,9 @@ export default function FacultyScenariosClient() {
                   <FontAwesomeIcon icon={faHospitalUser} className="text-brand-600 w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-gray-900">Link Patient</h3>
+                  <h3 className="text-lg font-bold text-gray-900">
+                    {linkPatientTarget.patient_id ? "Switch Patient" : "Link Patient"}
+                  </h3>
                   <p className="text-sm text-gray-500 line-clamp-1">{linkPatientTarget.title}</p>
                 </div>
               </div>
@@ -1772,26 +1756,9 @@ export default function FacultyScenariosClient() {
 
             <div className="p-4 space-y-3 overflow-y-auto flex-1">
               <p className="text-sm text-gray-500">
-                Students only see patients linked to their assigned scenarios — pick one so it shows
-                up for anyone already assigned this scenario.
+                Every scenario needs a patient so students can chart vitals and EHR data for the
+                case — pick one below.
               </p>
-
-              <button
-                type="button"
-                onClick={() => setLinkPatientId("")}
-                className={`w-full flex items-center justify-between p-3 rounded-xl border-2 transition-all ${
-                  linkPatientId === ""
-                    ? "border-brand-600 bg-brand-600/5"
-                    : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
-                }`}
-              >
-                <span className="text-sm font-medium text-gray-700">No linked patient</span>
-                {linkPatientId === "" && (
-                  <div className="w-6 h-6 bg-brand-600 rounded-full flex items-center justify-center">
-                    <FontAwesomeIcon icon={faCheck} className="w-3.5 h-3.5 text-white" />
-                  </div>
-                )}
-              </button>
 
               {linkPatientSelected && (
                 <div className="p-3 bg-teal-50 border border-teal-200 rounded-xl flex items-center justify-between">
@@ -1918,7 +1885,7 @@ export default function FacultyScenariosClient() {
               </button>
               <button
                 onClick={handleSavePatientLink}
-                disabled={savingPatientLink}
+                disabled={savingPatientLink || !linkPatientId}
                 className="px-5 py-2.5 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
               >
                 {savingPatientLink && <EcgLoader />}

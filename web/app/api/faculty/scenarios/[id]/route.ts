@@ -70,11 +70,17 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     updateData.patient_case = patient_case && typeof patient_case === 'object' ? patient_case : {};
   }
 
+  // patient_id can switch a scenario to a different patient, but — since every
+  // scenario must have one — never clear it; omit the field entirely to leave
+  // it unchanged.
   if (patient_id !== undefined) {
-    if (patient_id !== null && typeof patient_id !== 'string') {
-      return NextResponse.json({ error: 'Invalid patient_id' }, { status: 400 });
+    if (typeof patient_id !== 'string' || patient_id.trim().length === 0) {
+      return NextResponse.json(
+        { error: 'A scenario always needs a patient — pick a different one instead of removing it' },
+        { status: 400 },
+      );
     }
-    updateData.patient_id = typeof patient_id === 'string' && patient_id.trim() ? patient_id.trim() : null;
+    updateData.patient_id = patient_id.trim();
   }
 
   if (learning_objectives !== undefined) {

@@ -154,6 +154,10 @@ export default function NewScenarioClient() {
 
   const handleGenerate = async () => {
     if (!aiPrompt.trim() && !lesson) return;
+    if (!form.patientId) {
+      setAiError("Select a patient first — the case is grounded on their record.");
+      return;
+    }
     setGenerating(true);
     setAiError(null);
     // When the chosen category is one of the lesson's topics, the case is
@@ -186,6 +190,10 @@ export default function NewScenarioClient() {
   const handleSave = async () => {
     if (!form.title.trim()) {
       setError("Title is required.");
+      return;
+    }
+    if (!form.patientId) {
+      setError("Select a patient for this scenario before saving.");
       return;
     }
     setSaving(true);
@@ -287,8 +295,9 @@ export default function NewScenarioClient() {
               )}
             </div>
             <p className="text-xs text-gray-500">
-              Describe the case, import a lesson to build it from, or both; AI fills the fields
-              (grounded on the selected patient, if any). You can edit everything before saving.
+              Pick a patient on the right first — every case is grounded on a real record. Then
+              describe the case, import a lesson to build it from, or both; AI fills the fields.
+              You can edit everything before saving.
             </p>
             <textarea
               value={aiPrompt}
@@ -326,7 +335,14 @@ export default function NewScenarioClient() {
               <button
                 type="button"
                 onClick={handleGenerate}
-                disabled={generating || savingTopics || !!analyzing || (!aiPrompt.trim() && !lesson)}
+                disabled={
+                  generating ||
+                  savingTopics ||
+                  !!analyzing ||
+                  !form.patientId ||
+                  (!aiPrompt.trim() && !lesson)
+                }
+                title={!form.patientId ? "Select a patient first" : undefined}
                 className="inline-flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-lg transition-all disabled:opacity-50"
               >
                 {generating ? (
@@ -428,7 +444,9 @@ export default function NewScenarioClient() {
           <div className="rounded-xl border border-hairline bg-surface overflow-hidden shadow-[0_1px_3px_0_rgba(0,0,0,0.04)]">
             <div className="p-3 border-b border-hairline bg-subtle">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-bold text-gray-800">Patient</span>
+                <span className="text-sm font-bold text-gray-800">
+                  Patient <span className="font-normal text-red-600">*</span>
+                </span>
                 {form.patientId ? (
                   <button
                     onClick={() => setForm((prev) => ({ ...prev, patientId: "", roomId: "" }))}
@@ -437,7 +455,7 @@ export default function NewScenarioClient() {
                     Clear
                   </button>
                 ) : (
-                  <span className="text-xs text-gray-500">No patient linked</span>
+                  <span className="text-xs text-gray-500">Required — pick one below</span>
                 )}
               </div>
               <div className="relative">
@@ -460,7 +478,11 @@ export default function NewScenarioClient() {
                   <EcgLoader size="md" className="text-brand-600" />
                 </div>
               ) : filteredPatients.length === 0 ? (
-                <div className="p-6 text-center text-sm text-gray-500">No patients match.</div>
+                <div className="p-6 text-center text-sm text-gray-500">
+                  {patients.length === 0
+                    ? "No patients in the roster yet — add one before creating a scenario."
+                    : "No patients match."}
+                </div>
               ) : (
                 <table className="w-full">
                   <tbody className="divide-y divide-hairline">
@@ -597,7 +619,8 @@ export default function NewScenarioClient() {
         </button>
         <button
           onClick={handleSave}
-          disabled={saving || !form.title.trim()}
+          disabled={saving || !form.title.trim() || !form.patientId}
+          title={!form.patientId ? "Select a patient first" : undefined}
           className="inline-flex items-center gap-2 px-5 py-2.5 bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white font-medium rounded-lg transition-colors shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
         >
           {saving ? (

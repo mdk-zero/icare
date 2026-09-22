@@ -1846,8 +1846,6 @@ export interface ScenarioBatchOptions {
   /** Omit to cycle beginner → intermediate → advanced. */
   difficulty?: string;
   topic?: string;
-  /** Ground each scenario in a real MIMIC patient record. */
-  usePatients?: boolean;
   /** Titles to steer away from — used to chain sub-batches without repeats. */
   avoidTitles?: string[];
   /** Extracted lesson text; every scenario is then grounded in it. */
@@ -1881,7 +1879,6 @@ export async function generateScenarioBatch(
         categories: options.categories,
         difficulty: options.difficulty,
         topic: options.topic,
-        use_patients: options.usePatients,
         avoid_titles: options.avoidTitles,
         lesson_text: options.lessonText,
       }),

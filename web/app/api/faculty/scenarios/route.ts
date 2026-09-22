@@ -141,23 +141,24 @@ export async function POST(request: NextRequest) {
     ? learning_objectives.filter((o): o is string => typeof o === 'string')
     : [];
 
-  if (patient_id !== undefined && patient_id !== null && typeof patient_id !== 'string') {
-    return NextResponse.json({ error: 'Invalid patient_id' }, { status: 400 });
+  // Every scenario is grounded on a real patient record, whether it was typed
+  // by hand or generated (with or without AI) — that's what lets students
+  // chart vitals and EHR data against it.
+  if (typeof patient_id !== 'string' || patient_id.trim().length === 0) {
+    return NextResponse.json({ error: 'Select a patient for this scenario' }, { status: 400 });
   }
 
   try {
     const supabase = getSupabaseAdmin();
 
-    const linkedPatientId = typeof patient_id === 'string' && patient_id.trim() ? patient_id.trim() : null;
-    if (linkedPatientId) {
-      const { data: patient } = await supabase
-        .from('patients')
-        .select('id')
-        .eq('id', linkedPatientId)
-        .maybeSingle();
-      if (!patient) {
-        return NextResponse.json({ error: 'Patient not found' }, { status: 400 });
-      }
+    const linkedPatientId = patient_id.trim();
+    const { data: patient } = await supabase
+      .from('patients')
+      .select('id')
+      .eq('id', linkedPatientId)
+      .maybeSingle();
+    if (!patient) {
+      return NextResponse.json({ error: 'Patient not found' }, { status: 400 });
     }
 
     // A category typed on the form (or confirmed from a lesson) is created

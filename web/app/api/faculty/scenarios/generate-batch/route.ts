@@ -160,7 +160,6 @@ export async function POST(request: NextRequest) {
     categories?: unknown;
     difficulty?: unknown;
     topic?: unknown;
-    use_patients?: unknown;
     avoid_titles?: unknown;
     lesson_text?: unknown;
   };
@@ -178,7 +177,6 @@ export async function POST(request: NextRequest) {
 
   const difficulty = isValidDifficulty(body.difficulty) ? body.difficulty : null;
   const topic = typeof body.topic === 'string' ? body.topic.trim().slice(0, 500) : '';
-  const usePatients = body.use_patients !== false;
   const lessonText =
     typeof body.lesson_text === 'string' ? body.lesson_text.trim().slice(0, MAX_LESSON_CHARS) : '';
 
@@ -198,13 +196,19 @@ export async function POST(request: NextRequest) {
         )
       : [];
 
-    let patients: PatientContext[] = [];
-    if (usePatients) {
-      const { data } = await supabase
-        .from('patients')
-        .select(PATIENT_CONTEXT_COLUMNS)
-        .limit(100);
-      patients = shuffle((data ?? []) as unknown as PatientContext[]).slice(0, count);
+    // Every scenario in the library is grounded on a real patient record — a
+    // slot reuses one (planSlots cycles i % patients.length) rather than going
+    // ungrounded when the roster is smaller than the batch.
+    const { data: patientRows } = await supabase
+      .from('patients')
+      .select(PATIENT_CONTEXT_COLUMNS)
+      .limit(100);
+    const patients = shuffle((patientRows ?? []) as unknown as PatientContext[]).slice(0, count);
+    if (patients.length === 0) {
+      return NextResponse.json(
+        { error: 'No patients available. Add patients to the roster before generating scenarios.' },
+        { status: 400 },
+      );
     }
 
     const { data: existing } = await supabase
