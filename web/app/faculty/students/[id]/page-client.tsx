@@ -17,6 +17,8 @@ import {
   faStethoscope,
   faListCheck,
   faFileLines,
+  faXmark,
+  faArrowsRotate,
 } from "@fortawesome/free-solid-svg-icons";
 import {
   resolveCompetencies,
@@ -54,35 +56,43 @@ const STUDENT_SUMMARY_PHRASES = [
 ];
 
 /**
- * Successful summaries survive a hard refresh (not just client-side nav) via
- * localStorage, keyed by the same data signature as the in-memory cache — the
- * same scheme the Analytics AI Summary uses. A failed generation is
- * deliberately never persisted, so a retry after a transient error or rate
- * limit tries again rather than replaying the failure. Capped so a semester
- * of student profiles doesn't grow this without bound.
+ * One slot per student, surviving a hard refresh via localStorage. Each entry
+ * remembers the data signature it was generated for, so opening the modal
+ * can tell whether the student's quizzes/scenarios/competencies/risk
+ * prediction have moved on since. A failed generation is never persisted, so
+ * a retry after a transient error or rate limit tries again instead of
+ * replaying the failure. Capped so a semester-long roster doesn't grow this
+ * without bound.
  */
 const SUMMARY_STORAGE_PREFIX = "icare:student-summary:";
 const SUMMARY_STORAGE_INDEX_KEY = "icare:student-summary:index";
-const SUMMARY_STORAGE_MAX_ENTRIES = 30;
+const SUMMARY_STORAGE_MAX_ENTRIES = 100;
+/** How often figures that have changed are allowed to spend a new AI call. */
+const SUMMARY_REFRESH_THROTTLE_MS = 10 * 60 * 1000;
 
 type SummaryResult = Awaited<ReturnType<typeof generateStudentSummary>>;
 
-function readStoredSummary(key: string): SummaryResult | null {
+interface StoredSummary {
+  signature: string;
+  result: SummaryResult;
+}
+
+function readStoredSummary(studentId: string): StoredSummary | null {
   try {
-    const raw = localStorage.getItem(SUMMARY_STORAGE_PREFIX + key);
-    return raw ? (JSON.parse(raw) as SummaryResult) : null;
+    const raw = localStorage.getItem(SUMMARY_STORAGE_PREFIX + studentId);
+    return raw ? (JSON.parse(raw) as StoredSummary) : null;
   } catch {
     // Private browsing, disabled storage, or corrupt JSON — just miss the cache.
     return null;
   }
 }
 
-function writeStoredSummary(key: string, result: SummaryResult) {
+function writeStoredSummary(studentId: string, entry: StoredSummary) {
   try {
-    localStorage.setItem(SUMMARY_STORAGE_PREFIX + key, JSON.stringify(result));
+    localStorage.setItem(SUMMARY_STORAGE_PREFIX + studentId, JSON.stringify(entry));
     const raw = localStorage.getItem(SUMMARY_STORAGE_INDEX_KEY);
     const index: string[] = raw ? (JSON.parse(raw) as string[]) : [];
-    const next = [...index.filter((k) => k !== key), key];
+    const next = [...index.filter((id) => id !== studentId), studentId];
     while (next.length > SUMMARY_STORAGE_MAX_ENTRIES) {
       const evicted = next.shift();
       if (evicted) localStorage.removeItem(SUMMARY_STORAGE_PREFIX + evicted);
@@ -116,6 +126,175 @@ const NO_PERFORMANCE_HISTORY: PerformanceHistory[] = [];
 const NO_SCENARIO_HISTORY: ScenarioPerformanceRecord[] = [];
 const NO_COMPETENCIES: ResolvedCompetency[] = [];
 const NO_SCORE_HISTORY: CompetencyScore[] = [];
+
+/**
+ * Plain-language reading of this student's record, in a popup opened from
+ * the profile card. It only opens on request, so an AI call is spent only
+ * when someone actually wants one.
+ */
+function StudentSummaryModal({
+  studentName,
+  summary,
+  generatedAt,
+  loading,
+  error,
+  stale,
+  onRetry,
+  onClose,
+}: {
+  studentName: string;
+  summary: NonNullable<SummaryResult["summary"]> | null;
+  generatedAt: string | null;
+  loading: boolean;
+  error: string | null;
+  /** True when newer activity exists but the 10-minute cooldown held this back. */
+  stale: boolean;
+  onRetry: () => void;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const lists = summary
+    ? [
+        { title: "Strengths", items: summary.strengths, dot: "bg-emerald-600" },
+        {
+          title: "Areas for Improvement",
+          items: summary.areas_for_improvement,
+          dot: "bg-amber-600",
+        },
+        { title: "Recommendations", items: summary.recommendations, dot: "bg-brand-600" },
+      ]
+    : [];
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="student-summary-title"
+        className="flex max-h-[88vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-hairline bg-surface shadow-overlay"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between gap-3 border-b border-hairline bg-subtle px-5 py-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-600/10">
+              <FontAwesomeIcon
+                icon={faWandMagicSparkles}
+                className="h-4 w-4 text-brand-600"
+              />
+            </span>
+            <div className="min-w-0">
+              <h2
+                id="student-summary-title"
+                className="font-display text-lg font-semibold text-gray-900"
+              >
+                AI Performance Summary
+              </h2>
+              <p className="truncate text-sm text-gray-500">{studentName}</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+            aria-label="Close"
+          >
+            <FontAwesomeIcon icon={faXmark} className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto p-5">
+          {error && !loading && (
+            <p className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
+              {error}
+            </p>
+          )}
+
+          {loading && (
+            <AiThinking
+              phrases={STUDENT_SUMMARY_PHRASES}
+              label="Generating the AI performance summary"
+            />
+          )}
+
+          {!loading && summary && (
+            <div className="space-y-4">
+              <p className="text-sm leading-relaxed text-gray-700">{summary.overview}</p>
+
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                {lists.map((list) => (
+                  <div key={list.title} className="rounded-xl bg-subtle p-4">
+                    <p className="mb-2 text-sm font-semibold text-gray-900">{list.title}</p>
+                    {list.items.length === 0 ? (
+                      <p className="text-sm text-gray-400">Nothing noted.</p>
+                    ) : (
+                      <ul className="space-y-2">
+                        {list.items.map((item, idx) => (
+                          <li
+                            key={idx}
+                            className="flex items-start gap-2 text-sm text-gray-600"
+                          >
+                            <span
+                              className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${list.dot}`}
+                            />
+                            {item}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center justify-between gap-3 border-t border-hairline px-5 py-3">
+          <p className="text-xs text-gray-400">
+            {!loading && summary && generatedAt
+              ? `AI-generated ${new Date(generatedAt).toLocaleString()} — review before acting on it.${
+                  stale
+                    ? " Newer activity is on the way in — this refreshes automatically once the 10-minute cooldown clears."
+                    : ""
+                }`
+              : null}
+          </p>
+          <div className="flex shrink-0 items-center gap-2">
+            {error && !loading && (
+              <button
+                type="button"
+                onClick={onRetry}
+                className="flex items-center gap-2 rounded-lg bg-brand-600 px-3.5 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-700"
+              >
+                <FontAwesomeIcon
+                  icon={faArrowsRotate}
+                  className="h-3.5 w-3.5"
+                />
+                Retry
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg border border-gray-200 bg-surface px-3.5 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function StudentDetailClient() {
   const router = useRouter();
@@ -176,11 +355,10 @@ export default function StudentDetailClient() {
 
   /* --- AI summary ------------------------------------------------------ */
 
-  // Keyed by the figures themselves rather than just the student id, so
-  // reopening a profile whose quizzes, scenarios, competencies, and risk
-  // prediction haven't changed — including a hard refresh — reuses the
-  // cached reading instead of spending another AI call to describe activity
-  // that hasn't moved. Same scheme as the Analytics AI Summary.
+  // A signature of the figures the summary would describe. Reopening the
+  // modal for a profile whose quizzes, scenarios, competencies, and risk
+  // prediction haven't changed reuses the cached reading instead of spending
+  // another AI call to describe activity that hasn't moved.
   const summaryDataSignature = data
     ? JSON.stringify({
         quizzes: performanceHistory.map((h) => [h.quiz_title, h.score, h.date]),
@@ -191,47 +369,64 @@ export default function StudentDetailClient() {
           : null,
       })
     : null;
-  const summaryKey = summaryDataSignature
-    ? `faculty:student-summary:${studentId}:${summaryDataSignature}`
-    : null;
 
-  // Nothing is generated until "Generate Summary" is clicked. The click pins
-  // the key it was made for, so background revalidation of the profile data
-  // can't quietly start (and pay for) a second call on its own.
-  const [summaryRequest, setSummaryRequest] = useState<{
-    key: string;
-    studentId: string;
-  } | null>(null);
+  const [summaryOpen, setSummaryOpen] = useState(false);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryResult, setSummaryResult] = useState<SummaryResult | null>(null);
+  // True when the figures have moved on since this reading was generated,
+  // but the 10-minute cooldown held back a new AI call for it.
+  const [summaryStale, setSummaryStale] = useState(false);
 
-  const summaryLoader = useCallback(async () => {
-    if (!summaryRequest) return {};
-    const stored = readStoredSummary(summaryRequest.key);
-    if (stored) return stored;
-    const result = await generateStudentSummary(summaryRequest.studentId);
-    if (result.summary) {
-      writeStoredSummary(summaryRequest.key, result);
-      const faculty = getCurrentFacultyUser();
-      if (faculty) {
-        logAuditAction({
-          faculty_id: faculty.id,
-          faculty_name: faculty.name,
-          tab: 'student_detail',
-          action: 'generate_student_summary',
-          details: 'Generated AI performance summary',
-          target_type: 'student',
-          target_id: summaryRequest.studentId,
-        });
+  // Opens the modal and, unless a cached reading already covers the current
+  // figures (or the last real call was under 10 minutes ago), spends one AI
+  // call to write a fresh one. Runs every time the button is clicked, not
+  // just the first, so activity from later in the session is picked up.
+  // `force` skips the cache/cooldown check entirely — used to retry after an
+  // error, so it can't silently resurface an unrelated stale reading instead.
+  const requestSummary = (opts?: { force?: boolean }) => {
+    setSummaryOpen(true);
+    if (!summaryDataSignature) return;
+
+    const stored = opts?.force ? null : readStoredSummary(studentId);
+    if (stored) {
+      const sameData = stored.signature === summaryDataSignature;
+      const generatedAtMs = stored.result.generated_at
+        ? new Date(stored.result.generated_at).getTime()
+        : 0;
+      const withinThrottle = Date.now() - generatedAtMs < SUMMARY_REFRESH_THROTTLE_MS;
+      if (sameData || withinThrottle) {
+        setSummaryResult(stored.result);
+        setSummaryStale(!sameData);
+        setSummaryLoading(false);
+        return;
       }
     }
-    return result;
-  }, [summaryRequest]);
 
-  const {
-    data: summaryResult,
-    loading: summaryLoading,
-    revalidating: summaryRevalidating,
-    refresh: retrySummary,
-  } = usePageData(summaryRequest?.key ?? null, summaryLoader, { freshFor: Infinity });
+    setSummaryLoading(true);
+    setSummaryStale(false);
+    void (async () => {
+      const result = await generateStudentSummary(studentId);
+      setSummaryLoading(false);
+      setSummaryResult(result);
+      if (result.summary) {
+        writeStoredSummary(studentId, { signature: summaryDataSignature, result });
+        const faculty = getCurrentFacultyUser();
+        if (faculty) {
+          logAuditAction({
+            faculty_id: faculty.id,
+            faculty_name: faculty.name,
+            tab: 'student_detail',
+            action: 'generate_student_summary',
+            details: 'Generated AI performance summary',
+            target_type: 'student',
+            target_id: studentId,
+          });
+        }
+      }
+    })();
+  };
+
+  const closeSummary = useCallback(() => setSummaryOpen(false), []);
 
   const aiSummary = summaryResult?.summary ?? null;
   const summaryGeneratedAt = summaryResult?.generated_at ?? null;
@@ -239,16 +434,6 @@ export default function StudentDetailClient() {
     summaryResult && !summaryResult.summary
       ? (summaryResult.error ?? "Unable to generate summary")
       : null;
-  const summaryBusy = summaryLoading || summaryRevalidating;
-  // The figures have moved on since this reading was generated — offer a
-  // refresh rather than silently paying for a new call on its own.
-  const summaryStale =
-    summaryRequest != null && summaryKey != null && summaryRequest.key !== summaryKey;
-
-  const requestSummary = () => {
-    if (!summaryKey || summaryRequest?.key === summaryKey) return;
-    setSummaryRequest({ key: summaryKey, studentId });
-  };
 
   const featureLabel = (feature: string) =>
     feature.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
@@ -319,25 +504,34 @@ export default function StudentDetailClient() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
         <div className="lg:col-span-2">
           <Card padding="sm" className="flex h-full flex-col">
-            <div className="flex items-center gap-4 mb-6">
-              <Avatar name={student.name} src={student.picture_url} size="xl" tone="solid" />
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">{student.name}</h1>
-                <p className="text-gray-500">{student.email}</p>
-                <div className="flex items-center gap-2">
-                  {student.section ? (
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-brand-600/10 text-brand-600 border border-brand-600/20">
-                      Section {student.section}
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500 border border-gray-200">
-                      No section
-                    </span>
-                  )}
+            <div className="mb-6 flex items-start justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <Avatar name={student.name} src={student.picture_url} size="xl" tone="solid" />
+                <div>
+                  <h1 className="text-2xl font-bold text-gray-900">{student.name}</h1>
+                  <p className="text-gray-500">{student.email}</p>
+                  <div className="flex items-center gap-2">
+                    {student.section ? (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-brand-600/10 text-brand-600 border border-brand-600/20">
+                        Section {student.section}
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500 border border-gray-200">
+                        No section
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
+              <button
+                onClick={() => requestSummary()}
+                className="flex shrink-0 items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white shadow-[0_2px_6px_rgba(27,107,123,0.2)] transition-all hover:bg-brand-700"
+              >
+                <FontAwesomeIcon icon={faWandMagicSparkles} className="h-4 w-4" />
+                AI Summary
+              </button>
             </div>
-            
+
             <div className="grid flex-1 grid-cols-1 sm:grid-cols-2 gap-3">
               <StatTile
                 icon={faChartLine}
@@ -472,109 +666,6 @@ export default function StudentDetailClient() {
                 {' · '}
                 {new Date(riskPrediction.predicted_at).toLocaleString()}
               </p>
-            </div>
-          )}
-        </Card>
-      </div>
-
-      <div className="mb-4">
-        <Card padding="sm">
-          <div className="flex items-center justify-between gap-3 mb-1">
-            <div className="flex items-center gap-2">
-              <div className="p-2 bg-brand-600/10 rounded-lg">
-                <FontAwesomeIcon icon={faWandMagicSparkles} className="w-5 h-5 text-brand-600" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-gray-900">AI Performance Summary</h3>
-                <p className="text-xs text-gray-400">
-                  Generated from quizzes, scenarios, competencies, and the ML risk prediction
-                </p>
-              </div>
-            </div>
-            {!summaryBusy && !summaryRequest && (
-              <button
-                onClick={requestSummary}
-                className="px-4 py-2 bg-brand-600 text-white rounded-lg font-medium text-sm hover:bg-brand-700 transition-all shadow-[0_2px_6px_rgba(27,107,123,0.2)] shrink-0"
-              >
-                Generate Summary
-              </button>
-            )}
-            {!summaryBusy && summaryRequest && summaryError && (
-              <button
-                onClick={() => void retrySummary()}
-                className="px-4 py-2 bg-brand-600 text-white rounded-lg font-medium text-sm hover:bg-brand-700 transition-all shadow-[0_2px_6px_rgba(27,107,123,0.2)] shrink-0"
-              >
-                Retry
-              </button>
-            )}
-            {!summaryBusy && summaryRequest && !summaryError && summaryStale && (
-              <button
-                onClick={requestSummary}
-                className="px-4 py-2 bg-brand-600 text-white rounded-lg font-medium text-sm hover:bg-brand-700 transition-all shadow-[0_2px_6px_rgba(27,107,123,0.2)] shrink-0"
-              >
-                Refresh
-              </button>
-            )}
-          </div>
-
-          {!summaryRequest && (
-            <p className="mt-3 rounded-xl border border-dashed border-hairline py-6 text-center text-sm text-gray-400">
-              Click &ldquo;Generate Summary&rdquo; for a plain-language reading of this
-              student&rsquo;s quizzes, scenarios, competencies, and risk prediction.
-            </p>
-          )}
-
-          {summaryRequest && summaryError && !summaryBusy && (
-            <div className="mt-3 p-3 bg-rose-50 border border-rose-200 rounded-xl text-sm text-rose-700">
-              {summaryError}
-            </div>
-          )}
-
-          {summaryRequest && summaryBusy && (
-            <AiThinking
-              phrases={STUDENT_SUMMARY_PHRASES}
-              label="Generating the AI performance summary"
-              className="mt-3"
-            />
-          )}
-
-          {summaryRequest && !summaryBusy && aiSummary && (
-            <div className="mt-3 space-y-4">
-              <p className="text-sm text-gray-700 leading-relaxed">{aiSummary.overview}</p>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                {[
-                  { title: "Strengths", items: aiSummary.strengths, dot: "bg-emerald-600" },
-                  { title: "Areas for Improvement", items: aiSummary.areas_for_improvement, dot: "bg-amber-600" },
-                  { title: "Recommendations", items: aiSummary.recommendations, dot: "bg-brand-600" },
-                ].map((section) => (
-                  <div key={section.title} className="p-4 bg-gray-50 rounded-xl">
-                    <p className="text-sm font-semibold text-gray-900 mb-2">{section.title}</p>
-                    {section.items.length === 0 ? (
-                      <p className="text-sm text-gray-400">Nothing noted.</p>
-                    ) : (
-                      <ul className="space-y-2">
-                        {section.items.map((item, idx) => (
-                          <li key={idx} className="flex items-start gap-2 text-sm text-gray-600">
-                            <span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${section.dot}`} />
-                            {item}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                ))}
-              </div>
-
-              {summaryGeneratedAt && (
-                <p className="text-xs text-gray-400 border-t border-hairline pt-3">
-                  AI-generated {new Date(summaryGeneratedAt).toLocaleString()} — review before
-                  acting on it.
-                  {summaryStale
-                    ? " There&rsquo;s new activity since this was generated — click Refresh for an updated reading."
-                    : ""}
-                </p>
-              )}
             </div>
           )}
         </Card>
@@ -759,6 +850,19 @@ export default function StudentDetailClient() {
           )}
         </div>
       </div>
+
+      {summaryOpen && (
+        <StudentSummaryModal
+          studentName={student.name}
+          summary={aiSummary}
+          generatedAt={summaryGeneratedAt}
+          loading={summaryLoading}
+          error={summaryError}
+          stale={summaryStale}
+          onRetry={() => requestSummary({ force: true })}
+          onClose={closeSummary}
+        />
+      )}
     </div>
   );
 }
