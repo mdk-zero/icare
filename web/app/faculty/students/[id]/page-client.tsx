@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -34,7 +34,6 @@ import {
   fetchCompetencyScores,
   generateStudentSummary,
   CompetencyScore,
-  StudentAISummary,
 } from "../../../lib/api";
 import { SkeletonProfileHeader, SkeletonRiskPredictionCard, SkeletonTabContent } from "../../../components/skeletons";
 import Card from "../../../components/Card";
@@ -53,6 +52,46 @@ const STUDENT_SUMMARY_PHRASES = [
   "Checking the risk prediction…",
   "Drafting recommendations…",
 ];
+
+/**
+ * Successful summaries survive a hard refresh (not just client-side nav) via
+ * localStorage, keyed by the same data signature as the in-memory cache — the
+ * same scheme the Analytics AI Summary uses. A failed generation is
+ * deliberately never persisted, so a retry after a transient error or rate
+ * limit tries again rather than replaying the failure. Capped so a semester
+ * of student profiles doesn't grow this without bound.
+ */
+const SUMMARY_STORAGE_PREFIX = "icare:student-summary:";
+const SUMMARY_STORAGE_INDEX_KEY = "icare:student-summary:index";
+const SUMMARY_STORAGE_MAX_ENTRIES = 30;
+
+type SummaryResult = Awaited<ReturnType<typeof generateStudentSummary>>;
+
+function readStoredSummary(key: string): SummaryResult | null {
+  try {
+    const raw = localStorage.getItem(SUMMARY_STORAGE_PREFIX + key);
+    return raw ? (JSON.parse(raw) as SummaryResult) : null;
+  } catch {
+    // Private browsing, disabled storage, or corrupt JSON — just miss the cache.
+    return null;
+  }
+}
+
+function writeStoredSummary(key: string, result: SummaryResult) {
+  try {
+    localStorage.setItem(SUMMARY_STORAGE_PREFIX + key, JSON.stringify(result));
+    const raw = localStorage.getItem(SUMMARY_STORAGE_INDEX_KEY);
+    const index: string[] = raw ? (JSON.parse(raw) as string[]) : [];
+    const next = [...index.filter((k) => k !== key), key];
+    while (next.length > SUMMARY_STORAGE_MAX_ENTRIES) {
+      const evicted = next.shift();
+      if (evicted) localStorage.removeItem(SUMMARY_STORAGE_PREFIX + evicted);
+    }
+    localStorage.setItem(SUMMARY_STORAGE_INDEX_KEY, JSON.stringify(next));
+  } catch {
+    // Storage full or unavailable — the in-memory cache still covers this tab.
+  }
+}
 
 interface PerformanceHistory {
   quiz_title: string;
@@ -84,12 +123,7 @@ export default function StudentDetailClient() {
   const studentId = params?.id as string;
   
   const [activeTab, setActiveTab] = useState("performance");
-  const [aiSummary, setAiSummary] = useState<StudentAISummary | null>(null);
-  const [summaryGeneratedAt, setSummaryGeneratedAt] = useState<string | null>(null);
-  const [summaryLoading, setSummaryLoading] = useState(true);
-  const [summaryError, setSummaryError] = useState<string | null>(null);
   const loggedRef = useRef(false);
-  const summaryRequestedRef = useRef(false);
 
   useEffect(() => {
     if (!studentId || loggedRef.current) return;
@@ -106,12 +140,6 @@ export default function StudentDetailClient() {
         target_id: studentId,
       });
     }
-  }, [studentId]);
-
-  useEffect(() => {
-    if (!studentId || summaryRequestedRef.current) return;
-    summaryRequestedRef.current = true;
-    handleGenerateSummary();
   }, [studentId]);
 
   // Keyed by student, so stepping back to the roster and into the same student
@@ -146,30 +174,80 @@ export default function StudentDetailClient() {
   const scoreHistory = data?.scoreHistory ?? NO_SCORE_HISTORY;
   const riskPrediction = data?.riskPrediction ?? null;
 
-  const handleGenerateSummary = async () => {
-    setSummaryLoading(true);
-    setSummaryError(null);
-    const result = await generateStudentSummary(studentId);
-    setSummaryLoading(false);
-    if (result.error || !result.summary) {
-      setSummaryError(result.error ?? "Unable to generate summary");
-      return;
-    }
-    setAiSummary(result.summary);
-    setSummaryGeneratedAt(result.generated_at ?? new Date().toISOString());
+  /* --- AI summary ------------------------------------------------------ */
 
-    const faculty = getCurrentFacultyUser();
-    if (faculty) {
-      logAuditAction({
-        faculty_id: faculty.id,
-        faculty_name: faculty.name,
-        tab: 'student_detail',
-        action: 'generate_student_summary',
-        details: 'Generated AI performance summary',
-        target_type: 'student',
-        target_id: studentId,
-      });
+  // Keyed by the figures themselves rather than just the student id, so
+  // reopening a profile whose quizzes, scenarios, competencies, and risk
+  // prediction haven't changed — including a hard refresh — reuses the
+  // cached reading instead of spending another AI call to describe activity
+  // that hasn't moved. Same scheme as the Analytics AI Summary.
+  const summaryDataSignature = data
+    ? JSON.stringify({
+        quizzes: performanceHistory.map((h) => [h.quiz_title, h.score, h.date]),
+        scenarios: scenarioHistory.map((s) => [s.id, s.score, s.completed_at]),
+        competencies: scoreHistory.map((c) => [c.competency_id, c.score, c.source, c.created_at]),
+        risk: riskPrediction
+          ? [riskPrediction.risk, riskPrediction.probability, riskPrediction.predicted_at]
+          : null,
+      })
+    : null;
+  const summaryKey = summaryDataSignature
+    ? `faculty:student-summary:${studentId}:${summaryDataSignature}`
+    : null;
+
+  // Nothing is generated until "Generate Summary" is clicked. The click pins
+  // the key it was made for, so background revalidation of the profile data
+  // can't quietly start (and pay for) a second call on its own.
+  const [summaryRequest, setSummaryRequest] = useState<{
+    key: string;
+    studentId: string;
+  } | null>(null);
+
+  const summaryLoader = useCallback(async () => {
+    if (!summaryRequest) return {};
+    const stored = readStoredSummary(summaryRequest.key);
+    if (stored) return stored;
+    const result = await generateStudentSummary(summaryRequest.studentId);
+    if (result.summary) {
+      writeStoredSummary(summaryRequest.key, result);
+      const faculty = getCurrentFacultyUser();
+      if (faculty) {
+        logAuditAction({
+          faculty_id: faculty.id,
+          faculty_name: faculty.name,
+          tab: 'student_detail',
+          action: 'generate_student_summary',
+          details: 'Generated AI performance summary',
+          target_type: 'student',
+          target_id: summaryRequest.studentId,
+        });
+      }
     }
+    return result;
+  }, [summaryRequest]);
+
+  const {
+    data: summaryResult,
+    loading: summaryLoading,
+    revalidating: summaryRevalidating,
+    refresh: retrySummary,
+  } = usePageData(summaryRequest?.key ?? null, summaryLoader, { freshFor: Infinity });
+
+  const aiSummary = summaryResult?.summary ?? null;
+  const summaryGeneratedAt = summaryResult?.generated_at ?? null;
+  const summaryError =
+    summaryResult && !summaryResult.summary
+      ? (summaryResult.error ?? "Unable to generate summary")
+      : null;
+  const summaryBusy = summaryLoading || summaryRevalidating;
+  // The figures have moved on since this reading was generated — offer a
+  // refresh rather than silently paying for a new call on its own.
+  const summaryStale =
+    summaryRequest != null && summaryKey != null && summaryRequest.key !== summaryKey;
+
+  const requestSummary = () => {
+    if (!summaryKey || summaryRequest?.key === summaryKey) return;
+    setSummaryRequest({ key: summaryKey, studentId });
   };
 
   const featureLabel = (feature: string) =>
@@ -413,23 +491,46 @@ export default function StudentDetailClient() {
                 </p>
               </div>
             </div>
-            {!summaryLoading && (
+            {!summaryBusy && !summaryRequest && (
               <button
-                onClick={handleGenerateSummary}
+                onClick={requestSummary}
                 className="px-4 py-2 bg-brand-600 text-white rounded-lg font-medium text-sm hover:bg-brand-700 transition-all shadow-[0_2px_6px_rgba(27,107,123,0.2)] shrink-0"
               >
-                {summaryError ? "Retry" : "Regenerate"}
+                Generate Summary
+              </button>
+            )}
+            {!summaryBusy && summaryRequest && summaryError && (
+              <button
+                onClick={() => void retrySummary()}
+                className="px-4 py-2 bg-brand-600 text-white rounded-lg font-medium text-sm hover:bg-brand-700 transition-all shadow-[0_2px_6px_rgba(27,107,123,0.2)] shrink-0"
+              >
+                Retry
+              </button>
+            )}
+            {!summaryBusy && summaryRequest && !summaryError && summaryStale && (
+              <button
+                onClick={requestSummary}
+                className="px-4 py-2 bg-brand-600 text-white rounded-lg font-medium text-sm hover:bg-brand-700 transition-all shadow-[0_2px_6px_rgba(27,107,123,0.2)] shrink-0"
+              >
+                Refresh
               </button>
             )}
           </div>
 
-          {summaryError && (
+          {!summaryRequest && (
+            <p className="mt-3 rounded-xl border border-dashed border-hairline py-6 text-center text-sm text-gray-400">
+              Click &ldquo;Generate Summary&rdquo; for a plain-language reading of this
+              student&rsquo;s quizzes, scenarios, competencies, and risk prediction.
+            </p>
+          )}
+
+          {summaryRequest && summaryError && !summaryBusy && (
             <div className="mt-3 p-3 bg-rose-50 border border-rose-200 rounded-xl text-sm text-rose-700">
               {summaryError}
             </div>
           )}
 
-          {summaryLoading && (
+          {summaryRequest && summaryBusy && (
             <AiThinking
               phrases={STUDENT_SUMMARY_PHRASES}
               label="Generating the AI performance summary"
@@ -437,7 +538,7 @@ export default function StudentDetailClient() {
             />
           )}
 
-          {!summaryLoading && aiSummary && (
+          {summaryRequest && !summaryBusy && aiSummary && (
             <div className="mt-3 space-y-4">
               <p className="text-sm text-gray-700 leading-relaxed">{aiSummary.overview}</p>
 
@@ -469,6 +570,9 @@ export default function StudentDetailClient() {
                 <p className="text-xs text-gray-400 border-t border-hairline pt-3">
                   AI-generated {new Date(summaryGeneratedAt).toLocaleString()} — review before
                   acting on it.
+                  {summaryStale
+                    ? " There&rsquo;s new activity since this was generated — click Refresh for an updated reading."
+                    : ""}
                 </p>
               )}
             </div>
