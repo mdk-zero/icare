@@ -15,6 +15,7 @@ import {
   ScenarioTask,
 } from '@/lib/api';
 import { isNetworkError } from '@/lib/client';
+import { scoreDescriptor, TASK_RATING_BADGE, TASK_RATING_LABEL } from '@/lib/task-ratings';
 
 const DIFFICULTY_VARIANT: Record<Scenario['difficulty'], 'success' | 'warning' | 'danger'> = {
   beginner: 'success',
@@ -200,7 +201,9 @@ export default function ScenarioBriefScreen() {
           <View style={styles.resultRow}>
             <View style={styles.resultStat}>
               <Text style={styles.resultValue}>{taskAssignment?.score ?? '—'}%</Text>
-              <Text style={styles.resultLabel}>Score</Text>
+              <Text style={styles.resultLabel}>
+                {taskAssignment?.score != null ? scoreDescriptor(taskAssignment.score) : 'Score'}
+              </Text>
             </View>
             <View style={styles.resultStat}>
               <Text style={styles.resultValue}>{formatTime(taskAssignment?.time_taken ?? 0)}</Text>
@@ -327,6 +330,12 @@ export default function ScenarioBriefScreen() {
                 />
               </View>
               <Text style={styles.checkDescription}>{task.description}</Text>
+              {task.rating && (
+                <View style={styles.ratingRow}>
+                  <Badge label={TASK_RATING_LABEL[task.rating]} variant={TASK_RATING_BADGE[task.rating]} size="sm" />
+                </View>
+              )}
+              {task.remarks ? <Text style={styles.remarks}>{task.remarks}</Text> : null}
               {task.is_completed ? (
                 <Text style={styles.doneHint}>
                   {task.completed_via === 'system' ? 'Auto-completed' : 'Verified by faculty'}
@@ -462,6 +471,16 @@ function createStyles(
   autoHint: { fontSize: 11, color: Accent.blue.fg, marginTop: 4 },
   facultyHint: { fontSize: 11, color: Palette.textMuted, marginTop: 4 },
   doneHint: { fontSize: 11, color: Accent.green.fg, marginTop: 4, fontWeight: '600' },
+  ratingRow: { flexDirection: 'row', marginTop: 6 },
+  remarks: {
+    fontSize: 12,
+    color: Palette.text,
+    lineHeight: 17,
+    marginTop: 6,
+    padding: Spacing.sm,
+    borderRadius: Radius.sm,
+    backgroundColor: Palette.borderLight,
+  },
   checkPoints: {
     fontSize: 11,
     fontWeight: '700',

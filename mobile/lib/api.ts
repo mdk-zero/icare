@@ -17,6 +17,7 @@ import {
   setToken,
 } from './client';
 import { evaluateVitals, VitalSignsInput, AnomalyReason } from './vitals-rules';
+import type { TaskRating } from './task-ratings';
 
 // ---------------------------------------------------------------
 // Auth (5.1)
@@ -434,6 +435,9 @@ export interface ScenarioTask {
   is_completed: boolean;
   completed_via: 'system' | 'faculty' | null;
   completed_at: string | null;
+  /** Instructor's verbal rating and note — sent only once the scenario is finalized. */
+  rating?: TaskRating | null;
+  remarks?: string | null;
 }
 
 export interface ScenarioTasksResult {
