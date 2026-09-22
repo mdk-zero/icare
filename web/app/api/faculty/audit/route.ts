@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { readSession } from '@/app/lib/auth/session';
-import { getSupabaseAdmin } from '@/app/lib/supabase/server';
-import { logAudit } from '@/app/lib/audit';
+import { NextRequest, NextResponse } from "next/server";
+import { readSession } from "@/app/lib/auth/session";
+import { getSupabaseAdmin } from "@/app/lib/supabase/server";
+import { logAudit } from "@/app/lib/audit";
+import { formatAuditDetails } from "@/app/lib/audit-details";
 
 // Backed by the canonical append-only audit_logs table (manuscript F7) —
 // reads and inserts only, no update or delete surface. Faculty see their
@@ -17,92 +18,102 @@ interface AuditLogRow {
   created_at: string;
 }
 
-/** Human-readable summary for the page's Details column. */
-function detailsText(details: Record<string, unknown>): string {
-  if (typeof details.message === 'string') return details.message;
-  const parts = Object.entries(details)
-    .filter(([key, value]) => key !== 'migrated_from' && key !== 'actor_name' && key !== 'target_id' && value != null)
-    .map(([key, value]) => `${key}: ${typeof value === 'object' ? JSON.stringify(value) : String(value)}`);
-  return parts.join(', ');
-}
-
 export async function GET(request: NextRequest) {
   const session = await readSession();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (!['faculty', 'admin'].includes(session.role)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  if (!session)
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!["faculty", "admin"].includes(session.role)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   try {
     const supabase = getSupabaseAdmin();
     const { searchParams } = new URL(request.url);
-    const action = searchParams.get('action');
+    const action = searchParams.get("action");
 
     // No `actor:users(...)` embed: actor_id carries no foreign key (031), so
     // the name is resolved separately once the rows are in hand.
     let query = supabase
-      .from('audit_logs')
-      .select('id, actor_id, action, entity_type, entity_id, details, created_at')
-      .order('created_at', { ascending: false })
+      .from("audit_logs")
+      .select(
+        "id, actor_id, action, entity_type, entity_id, details, created_at",
+      )
+      .order("created_at", { ascending: false })
       .limit(200);
 
-    if (session.role === 'faculty') {
-      query = query.eq('actor_id', session.uid);
+    if (session.role === "faculty") {
+      query = query.eq("actor_id", session.uid);
     }
-    if (action && action !== 'all') {
-      query = query.ilike('action', `%${action}%`);
+    if (action && action !== "all") {
+      query = query.ilike("action", `%${action}%`);
     }
 
     const { data, error } = await query;
 
     if (error) {
-      console.error('Failed to fetch audit logs', error);
-      return NextResponse.json({ error: 'Unable to fetch audit logs' }, { status: 500 });
+      console.error("Failed to fetch audit logs", error);
+      return NextResponse.json(
+        { error: "Unable to fetch audit logs" },
+        { status: 500 },
+      );
     }
 
     const rows = (data ?? []) as unknown as AuditLogRow[];
 
-    const actorIds = [...new Set(rows.map((r) => r.actor_id).filter((id): id is string => !!id))];
+    const actorIds = [
+      ...new Set(
+        rows.map((r) => r.actor_id).filter((id): id is string => !!id),
+      ),
+    ];
     const nameById = new Map<string, string>();
     if (actorIds.length > 0) {
-      const { data: actors } = await supabase.from('users').select('id, name').in('id', actorIds);
+      const { data: actors } = await supabase
+        .from("users")
+        .select("id, name")
+        .in("id", actorIds);
       for (const a of actors ?? []) nameById.set(a.id, a.name);
     }
 
     const logs = rows.map((row) => ({
       id: row.id,
-      faculty_id: row.actor_id ?? '',
+      faculty_id: row.actor_id ?? "",
       // A deleted actor leaves no user row, so the entry's own snapshot of
       // the name is what remains.
       faculty_name:
         (row.actor_id ? nameById.get(row.actor_id) : undefined) ??
-        (typeof row.details.actor_name === 'string' ? row.details.actor_name : 'System'),
-      tab: row.entity_type ?? 'general',
+        (typeof row.details.actor_name === "string"
+          ? row.details.actor_name
+          : "System"),
+      tab: row.entity_type ?? "general",
       action: row.action,
-      details: detailsText(row.details),
+      details: formatAuditDetails(row.details),
       target_id: row.entity_id,
       created_at: row.created_at,
     }));
 
     return NextResponse.json({ logs });
   } catch (err) {
-    console.error('Fetch audit logs failed', err);
-    return NextResponse.json({ error: 'Unable to fetch audit logs' }, { status: 500 });
+    console.error("Fetch audit logs failed", err);
+    return NextResponse.json(
+      { error: "Unable to fetch audit logs" },
+      { status: 500 },
+    );
   }
 }
 
 export async function POST(request: NextRequest) {
   const session = await readSession();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (!['faculty', 'admin'].includes(session.role)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  if (!session)
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!["faculty", "admin"].includes(session.role)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   let body: unknown;
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
   // The actor comes from the session — client-supplied identity is ignored.
@@ -115,9 +126,13 @@ export async function POST(request: NextRequest) {
     metadata?: unknown;
   };
 
-  if (typeof tab !== 'string' || typeof action !== 'string' || typeof details !== 'string') {
+  if (
+    typeof tab !== "string" ||
+    typeof action !== "string" ||
+    typeof details !== "string"
+  ) {
     return NextResponse.json(
-      { error: 'tab, action, and details are required' },
+      { error: "tab, action, and details are required" },
       { status: 400 },
     );
   }
@@ -127,11 +142,13 @@ export async function POST(request: NextRequest) {
     {
       action,
       entityType: tab,
-      entityId: typeof target_id === 'string' ? target_id : undefined,
+      entityId: typeof target_id === "string" ? target_id : undefined,
       details: {
         message: details,
-        ...(typeof target_type === 'string' ? { target_type } : {}),
-        ...(metadata && typeof metadata === 'object' ? (metadata as Record<string, unknown>) : {}),
+        ...(typeof target_type === "string" ? { target_type } : {}),
+        ...(metadata && typeof metadata === "object"
+          ? (metadata as Record<string, unknown>)
+          : {}),
       },
     },
     request,

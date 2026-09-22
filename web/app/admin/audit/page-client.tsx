@@ -7,6 +7,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faClock, faMagnifyingGlass } from "@fortawesome/free-solid-svg-icons";
 import PageHeader from "../../components/PageHeader";
 import FilterSelect from "../../components/FilterSelect";
+import { formatAuditDetails } from "../../lib/audit-details";
 
 interface AuditRow {
   id: string;
@@ -32,14 +33,6 @@ const ROLE_BADGE: Record<string, string> = {
   faculty: "bg-purple-50 text-purple-700",
   student: "bg-blue-50 text-blue-700",
 };
-
-function detailsText(details: Record<string, unknown>): string {
-  if (typeof details.message === "string") return details.message;
-  const parts = Object.entries(details)
-    .filter(([key, value]) => key !== "migrated_from" && key !== "actor_name" && key !== "target_id" && value != null)
-    .map(([key, value]) => `${key}: ${typeof value === "object" ? JSON.stringify(value) : String(value)}`);
-  return parts.join(", ");
-}
 
 function formatTimestamp(ts: string): string {
   return new Date(ts).toLocaleString("en-US", {
@@ -79,8 +72,11 @@ export default function AdminAuditClient() {
   // The query string is the key, so paging back to a page already looked at —
   // or clearing a filter — is served from memory.
   const { data, loading } = usePageData(`admin:audit:${query}`, async () => {
-    const res = await apiFetch(`/api/admin/audit?${query}`, { credentials: "include" });
-    if (!res.ok) return { logs: NO_LOGS, total: 0, entityTypes: NO_ENTITY_TYPES };
+    const res = await apiFetch(`/api/admin/audit?${query}`, {
+      credentials: "include",
+    });
+    if (!res.ok)
+      return { logs: NO_LOGS, total: 0, entityTypes: NO_ENTITY_TYPES };
     const json = (await res.json()) as {
       logs?: AuditRow[];
       total?: number;
@@ -98,13 +94,16 @@ export default function AdminAuditClient() {
   const entityTypes = data?.entityTypes ?? NO_ENTITY_TYPES;
 
   // Any filter change returns to the first page.
-  const withPageReset = <T,>(setter: (v: T) => void) => (value: T) => {
-    setter(value);
-    setPage(0);
-  };
+  const withPageReset =
+    <T,>(setter: (v: T) => void) =>
+    (value: T) => {
+      setter(value);
+      setPage(0);
+    };
 
   const exportCsv = () => {
-    const header = "timestamp,actor,role,action,entity_type,entity_id,details,ip";
+    const header =
+      "timestamp,actor,role,action,entity_type,entity_id,details,ip";
     const rows = logs.map((log) =>
       [
         log.created_at,
@@ -113,7 +112,7 @@ export default function AdminAuditClient() {
         log.action,
         log.entity_type ?? "",
         log.entity_id ?? "",
-        detailsText(log.details),
+        formatAuditDetails(log.details),
         log.ip_address ?? "",
       ]
         .map((v) => csvEscape(String(v)))
@@ -134,9 +133,7 @@ export default function AdminAuditClient() {
     <div>
       <PageHeader
         badge={{
-          icon: (
-            <FontAwesomeIcon icon={faClock} className="w-3.5 h-3.5" />
-          ),
+          icon: <FontAwesomeIcon icon={faClock} className="w-3.5 h-3.5" />,
           label: "Activity Log",
         }}
         title="Audit Trail"
@@ -154,7 +151,10 @@ export default function AdminAuditClient() {
               setPage(0);
             }}
           >
-            <FontAwesomeIcon icon={faMagnifyingGlass} className="w-5 h-5 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+            <FontAwesomeIcon
+              icon={faMagnifyingGlass}
+              className="w-5 h-5 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"
+            />
             <input
               type="text"
               placeholder="Search actions… (press Enter)"
@@ -203,7 +203,9 @@ export default function AdminAuditClient() {
       {/* Result bar */}
       <div className="flex items-center justify-between mb-4">
         <p className="text-sm text-gray-500">
-          {loading ? "Loading…" : `${total} event${total !== 1 ? "s" : ""} · page ${page + 1} of ${totalPages}`}
+          {loading
+            ? "Loading…"
+            : `${total} event${total !== 1 ? "s" : ""} · page ${page + 1} of ${totalPages}`}
         </p>
         <div className="flex items-center gap-2">
           <button
@@ -213,7 +215,9 @@ export default function AdminAuditClient() {
           >
             Export page as CSV
           </button>
-          <span className="text-xs text-gray-400">Append-only — entries cannot be edited or deleted</span>
+          <span className="text-xs text-gray-400">
+            Append-only — entries cannot be edited or deleted
+          </span>
         </div>
       </div>
 
@@ -223,12 +227,24 @@ export default function AdminAuditClient() {
           <table className="w-full">
             <thead className="bg-subtle border-b border-gray-100">
               <tr>
-                <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Timestamp</th>
-                <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Actor</th>
-                <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Action</th>
-                <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Entity</th>
-                <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Details</th>
-                <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">IP</th>
+                <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
+                  Timestamp
+                </th>
+                <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
+                  Actor
+                </th>
+                <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
+                  Action
+                </th>
+                <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
+                  Entity
+                </th>
+                <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
+                  Details
+                </th>
+                <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
+                  IP
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-hairline">
@@ -250,9 +266,12 @@ export default function AdminAuditClient() {
                 </tr>
               ) : (
                 logs.map((log) => {
-                  const details = detailsText(log.details);
+                  const details = formatAuditDetails(log.details);
                   return (
-                    <tr key={log.id} className="hover:bg-subtle transition-colors">
+                    <tr
+                      key={log.id}
+                      className="hover:bg-subtle transition-colors"
+                    >
                       <td className="py-3 px-4 text-gray-500 text-sm whitespace-nowrap">
                         {formatTimestamp(log.created_at)}
                       </td>
@@ -269,7 +288,9 @@ export default function AdminAuditClient() {
                                   : "System")}
                             </p>
                             {log.actor_role && (
-                              <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium ${ROLE_BADGE[log.actor_role] ?? "bg-gray-100 text-gray-600"}`}>
+                              <span
+                                className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium ${ROLE_BADGE[log.actor_role] ?? "bg-gray-100 text-gray-600"}`}
+                              >
                                 {log.actor_role}
                               </span>
                             )}
@@ -286,7 +307,10 @@ export default function AdminAuditClient() {
                           <>
                             {log.entity_type.replaceAll("_", " ")}
                             {log.entity_id && (
-                              <span className="text-gray-400 font-mono text-xs"> · {log.entity_id.slice(0, 8)}</span>
+                              <span className="text-gray-400 font-mono text-xs">
+                                {" "}
+                                · {log.entity_id.slice(0, 8)}
+                              </span>
                             )}
                           </>
                         ) : (
