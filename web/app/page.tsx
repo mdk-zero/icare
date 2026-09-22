@@ -397,8 +397,8 @@ export default function LandingPage() {
                 className="lp-enter mt-7 max-w-xl text-lg leading-relaxed text-gray-500 sm:text-xl"
                 style={delay(160)}
               >
-                A scalable machine learning&ndash;driven clinical competency assessment and
-                adaptive learning system for nursing students.
+                A scalable machine learning&ndash;driven clinical competency assessment and adaptive
+                learning system for nursing students.
               </p>
 
               <div className="lp-enter mt-10 flex flex-wrap items-center gap-3" style={delay(240)}>
@@ -415,24 +415,6 @@ export default function LandingPage() {
                   />
                 </a>
               </div>
-
-              <dl
-                className="lp-enter mt-14 grid max-w-md grid-cols-3 divide-x divide-hairline border-y border-hairline"
-                style={delay(320)}
-              >
-                {[
-                  ["18", "competency areas"],
-                  ["6", "rating levels per task"],
-                  ["3", "roles, one platform"],
-                ].map(([value, label]) => (
-                  <div key={label} className="flex flex-col-reverse px-4 py-4 first:pl-0">
-                    <dt className="mt-1 text-xs leading-snug text-gray-500">{label}</dt>
-                    <dd className="font-display text-3xl font-bold tracking-tight text-gray-900 tabular">
-                      {value}
-                    </dd>
-                  </div>
-                ))}
-              </dl>
             </div>
 
             {/* Illustration */}
@@ -516,7 +498,14 @@ export default function LandingPage() {
                   style={{ animationDelay: "-3s" }}
                 >
                   <svg viewBox="0 0 40 40" className="h-11 w-11 -rotate-90" aria-hidden="true">
-                    <circle cx="20" cy="20" r="16" fill="none" stroke="var(--color-brand-100)" strokeWidth="4.5" />
+                    <circle
+                      cx="20"
+                      cy="20"
+                      r="16"
+                      fill="none"
+                      stroke="var(--color-brand-100)"
+                      strokeWidth="4.5"
+                    />
                     <circle
                       cx="20"
                       cy="20"
@@ -553,7 +542,11 @@ export default function LandingPage() {
                     ].map(([task, rating, tone]) => (
                       <li key={task} className="flex items-center justify-between gap-2">
                         <span className="flex items-center gap-1.5 text-gray-700">
-                          <Icon d={ICONS.check} strokeWidth={2.5} className="h-3 w-3 text-brand-600" />
+                          <Icon
+                            d={ICONS.check}
+                            strokeWidth={2.5}
+                            className="h-3 w-3 text-brand-600"
+                          />
                           {task}
                         </span>
                         <span
@@ -566,38 +559,6 @@ export default function LandingPage() {
                   </ul>
                 </div>
               </div>
-            </div>
-          </div>
-        </section>
-
-        {/* ───────── Competency ticker ───────── */}
-        <section
-          aria-label="Competency areas"
-          className="relative bg-gradient-to-r from-[#0A5C5F] to-[#084A4D] text-white"
-        >
-          <div className="mx-auto flex max-w-7xl items-center gap-6 px-5 py-4 sm:px-8">
-            <p className="hidden shrink-0 font-mono text-[11px] uppercase leading-tight tracking-[0.2em] text-[#7DD3D8] md:block">
-              18 competency areas
-              <span className="block text-white/45">from Taylor’s skill checklists</span>
-            </p>
-            <div className="lp-marquee-track relative min-w-0 flex-1 overflow-hidden [mask-image:linear-gradient(90deg,transparent,#000_6%,#000_94%,transparent)]">
-              <ul className="lp-marquee flex w-max">
-                {[...TAYLORS_CHAPTERS, ...TAYLORS_CHAPTERS].map((c, i) => (
-                  <li
-                    key={`${c.id}-${i}`}
-                    aria-hidden={i >= TAYLORS_CHAPTERS.length || undefined}
-                    className="flex items-center gap-3 whitespace-nowrap pr-8 text-sm font-medium text-white/85"
-                  >
-                    <span className="font-mono text-[11px] text-[#7DD3D8]">
-                      {String(c.chapter).padStart(2, "0")}
-                    </span>
-                    {c.name}
-                    <span aria-hidden="true" className="pl-5 text-white/25">
-                      +
-                    </span>
-                  </li>
-                ))}
-              </ul>
             </div>
           </div>
         </section>
@@ -623,10 +584,9 @@ export default function LandingPage() {
                 <p className="leading-relaxed text-gray-500 sm:text-lg">
                   iCARE++ is a comprehensive clinical competency platform purpose-built for nursing
                   education. It combines adaptive learning, realistic patient simulation, and
-                  machine learning&ndash;driven assessment to help students develop and
-                  demonstrate clinical competence. Educators gain real-time visibility into student
-                  progress, while administrators get the tools they need to manage programs at
-                  scale.
+                  machine learning&ndash;driven assessment to help students develop and demonstrate
+                  clinical competence. Educators gain real-time visibility into student progress,
+                  while administrators get the tools they need to manage programs at scale.
                 </p>
                 <ol className="mt-10 divide-y divide-hairline border-y border-hairline">
                   {pillars.map((p, i) => (
@@ -658,8 +618,8 @@ export default function LandingPage() {
                 From assessment to mastery in three steps
               </h2>
               <p className="mt-4 leading-relaxed text-gray-500">
-                iCARE++ guides nursing students through a complete learning cycle powered by
-                machine learning.
+                iCARE++ guides nursing students through a complete learning cycle powered by machine
+                learning.
               </p>
             </Reveal>
 
@@ -686,11 +646,7 @@ export default function LandingPage() {
               </svg>
               <ol className="relative grid gap-14 md:grid-cols-3 md:gap-8">
                 {steps.map((step, i) => (
-                  <li
-                    key={step.step}
-                    className="lp-step text-center"
-                    style={delay(300 + i * 350)}
-                  >
+                  <li key={step.step} className="lp-step text-center" style={delay(300 + i * 350)}>
                     <div className="relative mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-hairline bg-surface text-brand-600 shadow-tile ring-[10px] ring-surface">
                       <Icon d={step.icon} className="h-7 w-7" />
                       <span className="absolute -right-1 -top-1 flex h-6 w-6 items-center justify-center rounded-full bg-brand-600 font-mono text-[10px] font-semibold text-white">
@@ -739,7 +695,10 @@ export default function LandingPage() {
                       multiple choice.
                     </p>
                   </div>
-                  <div aria-hidden="true" className="rounded-2xl border border-hairline bg-canvas p-4">
+                  <div
+                    aria-hidden="true"
+                    className="rounded-2xl border border-hairline bg-canvas p-4"
+                  >
                     <div className="rounded-xl border border-hairline bg-surface p-3.5 shadow-tile">
                       <p className="font-mono text-[10px] uppercase tracking-wider text-gray-400">
                         Post-op · Day 1
@@ -805,8 +764,7 @@ export default function LandingPage() {
                     Answers, Not Just Grades
                   </h3>
                   <p className="mt-3 text-sm leading-relaxed text-gray-500">
-                    Dashboards flag exactly which competencies are weak — days before an exam
-                    would.
+                    Dashboards flag exactly which competencies are weak — days before an exam would.
                   </p>
                   <div aria-hidden="true" className="mt-auto space-y-3 pt-7">
                     {[
@@ -827,7 +785,10 @@ export default function LandingPage() {
                           </span>
                         </div>
                         <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-gray-100">
-                          <div className={`h-full rounded-full ${bar}`} style={{ width: `${pct}%` }} />
+                          <div
+                            className={`h-full rounded-full ${bar}`}
+                            style={{ width: `${pct}%` }}
+                          />
                         </div>
                       </div>
                     ))}
@@ -1102,8 +1063,8 @@ export default function LandingPage() {
                   Common questions about <span className="whitespace-nowrap">iCARE++</span>
                 </h2>
                 <p className="mt-4 leading-relaxed text-gray-500">
-                  Everything you need to know about the platform, from who it serves to how
-                  student data is kept safe.
+                  Everything you need to know about the platform, from who it serves to how student
+                  data is kept safe.
                 </p>
               </div>
             </Reveal>
@@ -1162,14 +1123,14 @@ export default function LandingPage() {
                 </h2>
                 <p className="mt-6 max-w-lg leading-relaxed text-white/70">
                   iCARE++ started with a simple observation: nursing students are evaluated on
-                  real-world clinical judgment, yet most training still relies on textbooks,
-                  static exams, and feedback that arrives weeks too late to matter.
+                  real-world clinical judgment, yet most training still relies on textbooks, static
+                  exams, and feedback that arrives weeks too late to matter.
                 </p>
                 <p className="mt-5 max-w-lg leading-relaxed text-white/70">
                   We set out to build something different — a platform that practices the way
-                  clinical work actually happens, scores fairly and consistently, and gives
-                  students the instant, specific feedback they need to genuinely improve before
-                  they ever step into a hospital ward.
+                  clinical work actually happens, scores fairly and consistently, and gives students
+                  the instant, specific feedback they need to genuinely improve before they ever
+                  step into a hospital ward.
                 </p>
               </Reveal>
 
@@ -1200,8 +1161,8 @@ export default function LandingPage() {
                     Ready to sharpen clinical judgment?
                   </h3>
                   <p className="mt-2 text-white/65">
-                    Faculty and administrators can create an account today. Students sign in
-                    with the account from their program.
+                    Faculty and administrators can create an account today. Students sign in with
+                    the account from their program.
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-3">
@@ -1237,8 +1198,8 @@ export default function LandingPage() {
               <Image src={logo} alt="iCARE++" className="h-9 w-auto dark:hidden" />
               <Image src={logoWhite} alt="iCARE++" className="hidden h-9 w-auto dark:block" />
               <p className="mt-4 max-w-sm text-sm leading-relaxed text-gray-500">
-                A machine learning&ndash;driven clinical competency assessment and adaptive
-                learning system for nursing students.
+                A machine learning&ndash;driven clinical competency assessment and adaptive learning
+                system for nursing students.
               </p>
             </div>
             <nav
