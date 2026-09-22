@@ -1,5 +1,7 @@
 "use client";
 
+import { CACHE_CONSENT_CHANGE_EVENT, getCacheConsent } from "./cache-consent";
+
 /**
  * One process-wide cache for read requests, so a page the user has already
  * opened renders from memory instead of re-hitting the API.
@@ -16,7 +18,9 @@
  *    two components on the same key share one request.
  *
  * Both live in module scope, which means they die with the document: a full
- * page load, a logout redirect, or a session-expiry redirect all start clean.
+ * page load, a logout redirect, or a session-expiry redirect all start clean —
+ * unless the person has opted into persistence (see below), in which case the
+ * response cache survives by way of localStorage instead.
  */
 
 // ---------------------------------------------------------------------------
@@ -68,6 +72,7 @@ export function clearRequestCache() {
   generation += 1;
   responses.clear();
   inflight.clear();
+  clearPersistedResponses();
   for (const [key, entry] of pages) {
     pages.set(key, { ...entry, settledAt: 0 });
     notify(key);
@@ -103,6 +108,88 @@ const RESPONSE_TTL_MS = 5 * 60 * 1000;
 
 const responses = new Map<string, CachedResponse>();
 const inflight = new Map<string, Promise<CachedResponse>>();
+
+// ---------------------------------------------------------------------------
+// Persistence
+// ---------------------------------------------------------------------------
+
+/**
+ * Mirrors the response cache into localStorage so it survives a full page
+ * load — reopening a tab, or coming back the next day — instead of dying with
+ * the document like the rest of this module. Opt-in only: this is the one
+ * cache in the app whose contents outlive the session, so it is gated on
+ * explicit consent (asked once via `CacheConsentBanner`, changeable in
+ * settings via `LocalCacheSetting`) rather than the ambient consent implied by
+ * just using the app.
+ *
+ * One localStorage key per URL rather than a single blob, so a write costs one
+ * small `setItem` instead of re-serializing the whole cache.
+ */
+const PERSIST_PREFIX = "icare_cache:";
+
+function persistenceEnabled(): boolean {
+  return typeof window !== "undefined" && getCacheConsent() === "granted";
+}
+
+function persistResponse(url: string, entry: CachedResponse) {
+  if (!persistenceEnabled()) return;
+  try {
+    localStorage.setItem(PERSIST_PREFIX + url, JSON.stringify(entry));
+  } catch {
+    // Storage full or unavailable (private browsing) — the in-memory cache
+    // still works, it just won't survive a reload.
+  }
+}
+
+function persistedKeys(): string[] {
+  const keys: string[] = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key?.startsWith(PERSIST_PREFIX)) keys.push(key);
+  }
+  return keys;
+}
+
+/** Runs once at module load: brings last session's still-fresh responses into memory. */
+function loadPersistedResponses() {
+  if (!persistenceEnabled()) return;
+  try {
+    for (const key of persistedKeys()) {
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      const url = key.slice(PERSIST_PREFIX.length);
+      try {
+        const entry: CachedResponse = JSON.parse(raw);
+        if (Date.now() - entry.storedAt >= RESPONSE_TTL_MS) {
+          localStorage.removeItem(key);
+          continue;
+        }
+        responses.set(url, entry);
+      } catch {
+        localStorage.removeItem(key);
+      }
+    }
+  } catch {
+    // Storage unreadable — start from an empty cache, same as consent being off.
+  }
+}
+
+function clearPersistedResponses() {
+  if (typeof window === "undefined") return;
+  try {
+    for (const key of persistedKeys()) localStorage.removeItem(key);
+  } catch {
+    // Nothing to do — an unreadable store has nothing of ours to clear either.
+  }
+}
+
+if (typeof window !== "undefined") {
+  loadPersistedResponses();
+  window.addEventListener(CACHE_CONSENT_CHANGE_EVENT, () => {
+    if (getCacheConsent() === "granted") loadPersistedResponses();
+    else clearPersistedResponses();
+  });
+}
 
 /**
  * Authentication is exempt: `/api/auth/session` is the liveness check that
@@ -179,7 +266,10 @@ export async function cachedFetch(
       contentType,
       storedAt: Date.now(),
     };
-    if (startedAt === generation) responses.set(input, entry);
+    if (startedAt === generation) {
+      responses.set(input, entry);
+      persistResponse(input, entry);
+    }
     return entry;
   })();
 

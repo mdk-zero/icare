@@ -25,6 +25,7 @@ import { usePageData } from "../lib/use-page-data";
 import { initials } from "./Avatar";
 import { EcgLoader } from "./EcgLoader";
 import ThemeSetting from "./ThemeSetting";
+import LocalCacheSetting from "./LocalCacheSetting";
 import { toast } from "./Toast";
 
 interface ProfileEditorProps {
@@ -474,6 +475,7 @@ export default function ProfileEditor({
       </div>
 
       <ThemeSetting style={step(3)} />
+      <LocalCacheSetting style={step(4)} />
     </div>
   );
 }

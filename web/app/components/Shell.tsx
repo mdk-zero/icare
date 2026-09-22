@@ -22,6 +22,7 @@ import {
 } from "../lib/notifications-live";
 import ToastContainer, { toast } from "./Toast";
 import NotificationsPopover from "./NotificationsPopover";
+import CacheConsentBanner from "./CacheConsentBanner";
 import { onCacheClear } from "../lib/request-cache";
 
 export interface NavItem {
@@ -603,6 +604,7 @@ export default function Shell({ role, navItems, isActive, children }: ShellProps
       </div>
       {/* Mounted here so every role gets arrival toasts from one container. */}
       <ToastContainer />
+      <CacheConsentBanner />
     </>
   );
 }
