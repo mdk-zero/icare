@@ -9,9 +9,6 @@ import {
   faChevronLeft,
   faClipboardCheck,
   faClipboardList,
-  faCommentMedical,
-  faHandHoldingMedical,
-  faLaptopMedical,
   faLock,
   faMagnifyingGlass,
   faStopwatch,
@@ -20,20 +17,30 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import {
   ScenarioAssignment,
-  FacultyScenarioTask,
+  GradingTask,
   fetchScenarioAssignments,
   fetchFacultyAssignmentTasks,
   saveTaskRating,
+  saveStepRatings,
   finalizeScenarioAssignment,
 } from "../../../lib/api";
 import {
   TASK_RATINGS,
-  MAX_REMARKS_LENGTH,
   gradedScore,
   ratingLabel,
   scoreDescriptor,
   type TaskRating,
 } from "../../../lib/task-ratings";
+import GradingTable from "./grading-table";
+import {
+  RATING_STYLE,
+  checklistRows,
+  hasCompletion,
+  stepGrades,
+  taskLevel,
+  withRating,
+  withStepChanges,
+} from "./grading";
 import { toast } from "../../../components/Toast";
 import Avatar from "../../../components/Avatar";
 import PageHeader from "../../../components/PageHeader";
@@ -44,8 +51,8 @@ type Grading = NonNullable<Awaited<ReturnType<typeof fetchFacultyAssignmentTasks
 
 // Stable empty fallbacks, so the filter memos are not invalidated every render.
 const NO_ASSIGNMENTS: ScenarioAssignment[] = [];
-const NO_TASKS: FacultyScenarioTask[] = [];
-const NO_GRADING: Grading = { tasks: NO_TASKS, status: "pending", ratingsEnabled: true };
+const NO_TASKS: GradingTask[] = [];
+const NO_GRADING: Grading = { tasks: NO_TASKS, status: "pending", ratingsEnabled: true, stepsEnabled: true };
 
 type Filter = "awaiting" | "in_progress" | "completed" | "all";
 
@@ -55,50 +62,6 @@ const FILTERS: { key: Filter; label: string; title: string }[] = [
   { key: "completed", label: "Finalized", title: "Graded and locked" },
   { key: "all", label: "All", title: "Every submission" },
 ];
-
-/**
- * Color is reserved for the grade: each level keeps one hue from its chip to
- * its segment in the composition bar. Only ramps the dark theme remaps (50/100/
- * 200 fills, 600/700/800 inks) are used, so every pairing inverts cleanly.
- */
-const RATING_STYLE: Record<TaskRating, { idle: string; active: string; dot: string; rail: string }> = {
-  excellent: {
-    idle: "hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700",
-    active: "border-emerald-600 bg-emerald-100 text-emerald-800",
-    dot: "bg-emerald-500",
-    rail: "before:bg-emerald-500",
-  },
-  very_good: {
-    idle: "hover:border-teal-200 hover:bg-teal-50 hover:text-teal-700",
-    active: "border-teal-600 bg-teal-100 text-teal-800",
-    dot: "bg-teal-500",
-    rail: "before:bg-teal-500",
-  },
-  good: {
-    idle: "hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700",
-    active: "border-blue-600 bg-blue-100 text-blue-800",
-    dot: "bg-blue-500",
-    rail: "before:bg-blue-500",
-  },
-  fair: {
-    idle: "hover:border-amber-200 hover:bg-amber-50 hover:text-amber-700",
-    active: "border-amber-600 bg-amber-100 text-amber-800",
-    dot: "bg-amber-500",
-    rail: "before:bg-amber-500",
-  },
-  needs_improvement: {
-    idle: "hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700",
-    active: "border-rose-600 bg-rose-100 text-rose-800",
-    dot: "bg-rose-500",
-    rail: "before:bg-rose-500",
-  },
-  not_performed: {
-    idle: "hover:border-gray-300 hover:bg-gray-100 hover:text-gray-800",
-    active: "border-gray-500 bg-gray-200 text-gray-900",
-    dot: "bg-gray-400",
-    rail: "before:bg-gray-400",
-  },
-};
 
 function isAwaiting(a: ScenarioAssignment) {
   return Boolean(a.submitted_at) && a.status !== "completed";
@@ -113,36 +76,6 @@ function matchesFilter(a: ScenarioAssignment, filter: Filter) {
   if (filter === "in_progress") return isOngoing(a);
   if (filter === "completed") return a.status === "completed";
   return true;
-}
-
-/** A completion row exists — done by the student's charting, or rated by faculty. */
-const hasCompletion = (t: FacultyScenarioTask) => t.completed_via !== null;
-
-/**
- * The level a criterion scores at right now. An unrated completion keeps the
- * full credit a check-off always earned; an unrated criterion with nothing
- * recorded earns none.
- */
-function effectiveRating(t: FacultyScenarioTask): TaskRating | null {
-  if (t.rating) return t.rating;
-  return hasCompletion(t) ? "excellent" : null;
-}
-
-/** The task as it reads after the server applies `rating` (see the PUT route). */
-function withRating(t: FacultyScenarioTask, rating: TaskRating | null): FacultyScenarioTask {
-  if (rating === null) {
-    if (t.completed_via === "faculty") {
-      return { ...t, rating: null, remarks: null, is_completed: false, completed_via: null, completed_at: null };
-    }
-    return { ...t, rating: null, is_completed: hasCompletion(t) };
-  }
-  return {
-    ...t,
-    rating,
-    is_completed: rating !== "not_performed",
-    completed_via: t.completed_via ?? "faculty",
-    completed_at: t.completed_at ?? new Date().toISOString(),
-  };
 }
 
 const formatWhen = (iso: string) =>
@@ -206,7 +139,8 @@ export default function FacultyScenarioReviewClient() {
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [savingTaskIds, setSavingTaskIds] = useState<ReadonlySet<string>>(() => new Set());
+  // Checklist rows (sub-task ids, or task ids for tasks without sub-tasks) mid-save.
+  const [savingKeys, setSavingKeys] = useState<ReadonlySet<string>>(() => new Set());
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [finalizing, setFinalizing] = useState(false);
 
@@ -237,7 +171,8 @@ export default function FacultyScenarioReviewClient() {
   );
   const tasks = gradingData?.tasks ?? NO_TASKS;
   const ratingsEnabled = gradingData?.ratingsEnabled ?? true;
-  const setTasks = (update: (previous: FacultyScenarioTask[]) => FacultyScenarioTask[]) =>
+  const stepsEnabled = gradingData?.stepsEnabled ?? true;
+  const setTasks = (update: (previous: GradingTask[]) => GradingTask[]) =>
     setGradingData((previous) => {
       const base = previous ?? NO_GRADING;
       return { ...base, tasks: update(base.tasks) };
@@ -317,28 +252,35 @@ export default function FacultyScenarioReviewClient() {
   const projectedScore = gradedScore(
     tasks,
     new Map(tasks.filter(hasCompletion).map((t) => [t.id, { rating: t.rating }])),
+    new Map(tasks.map((t) => [t.id, stepGrades(t)])),
   );
   // Always the live grade from `tasks`, not the assignment record's stored
   // score — that only matters to the queue list and other pages, which
-  // `applyScore` keeps in sync after each edit (see handleRate/handleNoteBlur).
+  // `applyScore` keeps in sync after each edit (see handleRateTask/handleNoteBlur).
   const shownScore = projectedScore;
+  // Every gradable row on the sheet: each sub-task, or a task that has none.
+  const rows = tasks.flatMap(checklistRows);
   // Nothing recorded or rated yet: a 0% "Needs Improvement" would read as a verdict.
-  const ungraded = !finalized && tasks.every((t) => effectiveRating(t) === null);
+  const ungraded = !finalized && rows.every((r) => r.level === null);
   // shownScore now reads from `tasks` in every state, so loading gates it too.
   const gradePending = tasksLoading || ungraded;
-  // Before finalizing, a level only implied by an unrated check-off is drawn faded.
-  const faded = (t: FacultyScenarioTask) => !finalized && t.rating === null;
-  const ratedCount = tasks.filter((t) => t.rating !== null).length;
-  const unratedMissing = tasks.filter((t) => t.rating === null && !hasCompletion(t)).length;
-  const unratedDone = tasks.filter((t) => t.rating === null && hasCompletion(t)).length;
-  const weightOf = (t: FacultyScenarioTask) =>
-    totalPoints > 0 ? Math.round((t.points / totalPoints) * 100) : 0;
+  const ratedCount = rows.filter((r) => r.level !== null && !r.implied).length;
+  const unratedMissing = rows.filter((r) => r.level === null).length;
+  // Unrated rows that still count at their task's whole-task level, by level.
+  const impliedByLevel = TASK_RATINGS.flatMap((level) => {
+    const count = rows.filter((r) => r.implied && r.level === level.key).length;
+    return count > 0 ? [{ level: level.key, count }] : [];
+  });
+  const unratedImplied = impliedByLevel.reduce((sum, g) => sum + g.count, 0);
+  const rowNoun = (n: number) => (n === 1 ? "row" : "rows");
 
-  const markSaving = (taskId: string, saving: boolean) =>
-    setSavingTaskIds((prev) => {
+  const markSaving = (keys: readonly string[], saving: boolean) =>
+    setSavingKeys((prev) => {
       const next = new Set(prev);
-      if (saving) next.add(taskId);
-      else next.delete(taskId);
+      for (const key of keys) {
+        if (saving) next.add(key);
+        else next.delete(key);
+      }
       return next;
     });
 
@@ -350,10 +292,10 @@ export default function FacultyScenarioReviewClient() {
     setAssignments((prev) => prev.map((a) => (a.id === selectedId ? { ...a, score } : a)));
   };
 
-  const handleRate = async (task: FacultyScenarioTask, rating: TaskRating | null) => {
-    if (!selectedId || savingTaskIds.has(task.id)) return;
+  const handleRateTask = async (task: GradingTask, rating: TaskRating | null) => {
+    if (!selectedId || savingKeys.has(task.id)) return;
     const assignmentId = selectedId;
-    markSaving(task.id, true);
+    markSaving([task.id], true);
     setTasks((prev) => prev.map((t) => (t.id === task.id ? withRating(t, rating) : t)));
     const result = await saveTaskRating(assignmentId, task.id, { rating });
     if (result.ok) {
@@ -362,10 +304,30 @@ export default function FacultyScenarioReviewClient() {
       toast(result.error, "error");
       await reloadTasks();
     }
-    markSaving(task.id, false);
+    markSaving([task.id], false);
   };
 
-  const handleNoteBlur = async (task: FacultyScenarioTask) => {
+  const handleRateSteps = async (task: GradingTask, changes: Map<string, TaskRating | null>) => {
+    const keys = [...changes.keys()];
+    if (!selectedId || keys.length === 0 || keys.some((k) => savingKeys.has(k))) return;
+    const assignmentId = selectedId;
+    markSaving(keys, true);
+    setTasks((prev) => prev.map((t) => (t.id === task.id ? withStepChanges(t, changes) : t)));
+    const result = await saveStepRatings(
+      assignmentId,
+      task.id,
+      keys.map((stepId) => ({ step_id: stepId, rating: changes.get(stepId) ?? null })),
+    );
+    if (result.ok) {
+      applyScore(result.score);
+    } else {
+      toast(result.error, "error");
+      await reloadTasks();
+    }
+    markSaving(keys, false);
+  };
+
+  const handleNoteBlur = async (task: GradingTask) => {
     if (!selectedId) return;
     const draft = noteDrafts[task.id];
     if (draft === undefined) return;
@@ -432,7 +394,8 @@ export default function FacultyScenarioReviewClient() {
         )}
       </div>
 
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[340px_minmax(0,1fr)]">
+      {/* The queue narrows below 2xl so the checklist's six rating columns fit beside it. */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[280px_minmax(0,1fr)] 2xl:grid-cols-[340px_minmax(0,1fr)]">
         {/* Queue */}
         <aside className="lg:sticky lg:top-0 lg:self-start">
           {!selectedStudentId ? (
@@ -653,18 +616,18 @@ export default function FacultyScenarioReviewClient() {
                 </div>
               </div>
 
-              {/* How the grade is composed: one segment per criterion, as wide as its weight */}
+              {/* How the grade is composed: one segment per task, as wide as its weight */}
               {!tasksLoading && tasks.length > 0 && (
                 <div className="border-b border-hairline px-5 py-4 sm:px-6">
                   <div className="mb-2 flex items-center justify-between gap-3 text-xs">
                     <span className="font-semibold text-gray-700">
-                      {finalized ? "Grade breakdown" : `${ratedCount} of ${tasks.length} criteria rated`}
+                      {finalized ? "Grade breakdown" : `${ratedCount} of ${rows.length} checklist rows rated`}
                     </span>
-                    <span className="text-gray-400">Bar width = criterion weight</span>
+                    <span className="text-gray-400">Bar width = task weight</span>
                   </div>
                   <div className="flex h-2.5 gap-0.5 overflow-hidden rounded-full">
                     {tasks.map((t) => {
-                      const level = effectiveRating(t);
+                      const { level, implied } = taskLevel(t);
                       return (
                         <span
                           key={t.id}
@@ -672,20 +635,11 @@ export default function FacultyScenarioReviewClient() {
                           style={{ flexGrow: Math.max(t.points, 1) }}
                           className={`basis-0 transition-colors duration-300 ${
                             level ? RATING_STYLE[level].dot : "bg-gray-200"
-                          } ${level && faded(t) ? "opacity-45" : ""}`}
+                          } ${level && implied && !finalized ? "opacity-45" : ""}`}
                         />
                       );
                     })}
                   </div>
-                  <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-[11px] text-gray-500">
-                    {TASK_RATINGS.map((level) => (
-                      <li key={level.key} className="flex items-center gap-1.5">
-                        <span className={`h-2 w-2 rounded-full ${RATING_STYLE[level.key].dot}`} />
-                        {level.label}
-                        <span className="tabular-nums text-gray-400">{Math.round(level.credit * 100)}%</span>
-                      </li>
-                    ))}
-                  </ul>
                 </div>
               )}
 
@@ -698,154 +652,39 @@ export default function FacultyScenarioReviewClient() {
                   </p>
                 </div>
               )}
+              {ratingsEnabled && !stepsEnabled && (
+                <div className="mx-5 mt-5 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 sm:mx-6">
+                  <FontAwesomeIcon icon={faTriangleExclamation} className="mt-0.5 h-4 w-4 shrink-0" />
+                  <p>
+                    Sub-task checklists appear once database migration 044 (scenario task steps) is applied. Until
+                    then each task is rated as a whole.
+                  </p>
+                </div>
+              )}
 
-              {/* Criteria */}
-              <ol className="space-y-3 p-5 sm:p-6">
-                {tasksLoading &&
-                  [0, 1, 2, 3].map((i) => (
-                    <li key={i} className="h-[132px] animate-pulse rounded-xl border border-hairline bg-subtle" />
-                  ))}
-
-                {!tasksLoading && tasks.length === 0 && (
-                  <li className="py-6 text-center text-sm text-gray-500">This scenario has no criteria.</li>
-                )}
-
-                {!tasksLoading &&
-                  tasks.map((task, i) => {
-                    const isAuto = task.verification === "system";
-                    const level = effectiveRating(task);
-                    const saving = savingTaskIds.has(task.id);
-                    const noteOpen = openNotes.has(task.id) || Boolean(task.remarks);
-                    const noteValue = noteDrafts[task.id] ?? task.remarks ?? "";
-                    const trigger = task.system_trigger === "vitals" ? "recording vitals" : "charting";
-
-                    const evidence = isAuto
-                      ? task.completed_via === "system"
-                        ? `Auto-completed from the student's ${trigger}${task.completed_at ? ` · ${formatWhen(task.completed_at)}` : ""}`
-                        : `Not detected — completes from the student's ${trigger}`
-                      : "Hands-on — rate from your observation";
-
-                    const status =
-                      task.rating !== null
-                        ? null
-                        : hasCompletion(task)
-                          ? "Counts as Excellent until you rate it"
-                          : "Not rated — counts as Not Performed";
-
-                    return (
-                      <li
-                        key={task.id}
-                        style={{ animationDelay: `${Math.min(i, 10) * 30}ms` }}
-                        className={`relative animate-rise overflow-hidden rounded-xl border border-hairline bg-surface py-4 pl-5 pr-4 before:absolute before:inset-y-0 before:left-0 before:w-1 before:transition-colors ${
-                          level ? RATING_STYLE[level].rail : "before:bg-gray-200"
-                        } ${level && faded(task) ? "before:opacity-45" : ""}`}
-                      >
-                        <div className="flex items-start gap-3">
-                          <span className="mt-0.5 font-mono text-xs font-medium tabular-nums text-gray-400">
-                            {String(i + 1).padStart(2, "0")}
-                          </span>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                              <h3 className="font-semibold text-gray-900">{task.title}</h3>
-                              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium capitalize text-gray-600">
-                                {task.category}
-                              </span>
-                              <span className="flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">
-                                <FontAwesomeIcon
-                                  icon={isAuto ? faLaptopMedical : faHandHoldingMedical}
-                                  className="h-2.5 w-2.5"
-                                />
-                                {isAuto ? "Auto-tracked" : "Hands-on"}
-                              </span>
-                            </div>
-                            {task.description && <p className="mt-1 text-sm text-gray-500">{task.description}</p>}
-                            <p className="mt-1.5 text-xs text-gray-400">{evidence}</p>
-                          </div>
-                          <span
-                            title={`${task.points} of ${totalPoints} points`}
-                            className="shrink-0 text-right text-xs leading-tight text-gray-400"
-                          >
-                            <span className="block font-display text-base font-bold tabular-nums text-gray-700">
-                              {weightOf(task)}%
-                            </span>
-                            of grade
-                          </span>
-                        </div>
-
-                        <div className="mt-3.5 pl-7">
-                          <div
-                            role="radiogroup"
-                            aria-label={`Rating for ${task.title}`}
-                            className={`flex flex-wrap gap-1.5 transition-opacity ${saving ? "opacity-60" : ""}`}
-                          >
-                            {TASK_RATINGS.map((option) => {
-                              const checked = task.rating === option.key;
-                              return (
-                                <button
-                                  key={option.key}
-                                  role="radio"
-                                  aria-checked={checked}
-                                  disabled={saving}
-                                  onClick={() => handleRate(task, checked ? null : option.key)}
-                                  title={
-                                    checked
-                                      ? "Click again to clear"
-                                      : `${option.label} — earns ${Math.round(option.credit * 100)}% of this criterion`
-                                  }
-                                  className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600/40 ${
-                                    checked
-                                      ? RATING_STYLE[option.key].active
-                                      : `border-gray-200 bg-surface text-gray-600 ${RATING_STYLE[option.key].idle}`
-                                  }`}
-                                >
-                                  {checked ? (
-                                    <FontAwesomeIcon icon={faCheck} className="h-3 w-3" />
-                                  ) : (
-                                    <span className={`h-1.5 w-1.5 rounded-full ${RATING_STYLE[option.key].dot}`} />
-                                  )}
-                                  {option.label}
-                                </button>
-                              );
-                            })}
-                          </div>
-                          {status && <p className="mt-2 text-xs text-gray-400">{status}</p>}
-
-                          {/* Note */}
-                          {noteOpen && hasCompletion(task) ? (
-                            <textarea
-                              value={noteValue}
-                              autoFocus={openNotes.has(task.id) && !task.remarks}
-                              onChange={(e) => setNoteDrafts((d) => ({ ...d, [task.id]: e.target.value }))}
-                              onBlur={() => handleNoteBlur(task)}
-                              maxLength={MAX_REMARKS_LENGTH}
-                              rows={2}
-                              placeholder="What went well, and what to work on…"
-                              aria-label={`Note for ${task.title}`}
-                              className="mt-2.5 w-full resize-y rounded-lg border border-gray-200 bg-surface px-3 py-2 text-sm text-gray-800 outline-none transition-colors placeholder:text-gray-400 focus:border-brand-600 focus:ring-2 focus:ring-brand-600/30"
-                            />
-                          ) : hasCompletion(task) ? (
-                            <button
-                              onClick={() => setOpenNotes((s) => new Set(s).add(task.id))}
-                              className="mt-2 flex items-center gap-1.5 text-xs font-medium text-brand-600 hover:text-brand-700"
-                            >
-                              <FontAwesomeIcon icon={faCommentMedical} className="h-3 w-3" />
-                              Add note
-                            </button>
-                          ) : null}
-                        </div>
-                      </li>
-                    );
-                  })}
-              </ol>
+              {/* The checklist */}
+              <GradingTable
+                tasks={tasks}
+                loading={tasksLoading}
+                totalPoints={totalPoints}
+                savingKeys={savingKeys}
+                onRateTask={handleRateTask}
+                onRateSteps={handleRateSteps}
+                noteDrafts={noteDrafts}
+                openNotes={openNotes}
+                onOpenNote={(taskId) => setOpenNotes((open) => new Set(open).add(taskId))}
+                onNoteChange={(taskId, value) => setNoteDrafts((d) => ({ ...d, [taskId]: value }))}
+                onNoteBlur={handleNoteBlur}
+              />
 
               {/* Finalize — opaque, not translucent: this sits over the criteria
                   list while stuck mid-scroll, and a `bg-surface/NN` + blur let
                   that list show through it instead of reading as a solid bar.
                   `isolate` + an explicit z-index take it out of the ambiguous
-                  z-index:auto paint order it'd otherwise share with every
-                  criterion `<li>` (each is `position: relative`, for its own
-                  rail) — without them a fast scroll could momentarily paint
-                  a criterion on top of this bar instead of under it. */}
+                  z-index:auto paint order it'd otherwise share with the
+                  checklist's sticky first-column cells (each `position:
+                  sticky`) — without them a fast scroll could momentarily
+                  paint a row on top of this bar instead of under it. */}
               <div className="isolate z-10 bottom-0 flex flex-col gap-3 rounded-b-2xl border-t border-hairline bg-surface px-5 py-4 sm:sticky sm:flex-row sm:items-center sm:justify-between sm:px-6">
                 <div className="min-w-0 text-sm">
                   {finalized ? (
@@ -864,10 +703,12 @@ export default function FacultyScenarioReviewClient() {
                       </p>
                       <p className="text-xs text-gray-400">
                         {unratedMissing > 0
-                          ? `${unratedMissing} unrated ${unratedMissing === 1 ? "criterion counts" : "criteria count"} as Not Performed`
+                          ? `${unratedMissing} unrated ${rowNoun(unratedMissing)} ${unratedMissing === 1 ? "counts" : "count"} as Not Performed`
                           : !selected.submitted_at
                             ? "Not submitted yet — you can still grade it now"
-                            : "Every criterion has a grade"}
+                            : unratedImplied > 0
+                              ? `${unratedImplied} auto-completed ${rowNoun(unratedImplied)} still to confirm`
+                              : "Every row has a grade"}
                       </p>
                     </>
                   )}
@@ -904,20 +745,19 @@ export default function FacultyScenarioReviewClient() {
             loading: finalizing,
             onConfirm: handleFinalize,
             children:
-              unratedMissing + unratedDone > 0 ? (
+              unratedMissing + unratedImplied > 0 ? (
                 <ul className="mt-3 space-y-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
                   {unratedMissing > 0 && (
                     <li>
-                      {unratedMissing} unrated {unratedMissing === 1 ? "criterion" : "criteria"} will count as Not
-                      Performed.
+                      {unratedMissing} unrated checklist {rowNoun(unratedMissing)} will count as Not Performed.
                     </li>
                   )}
-                  {unratedDone > 0 && (
-                    <li>
-                      {unratedDone} checked-off {unratedDone === 1 ? "criterion" : "criteria"} without a rating will
-                      count as Excellent.
+                  {impliedByLevel.map(({ level, count }) => (
+                    <li key={level}>
+                      {count} {rowNoun(count)} you haven&apos;t rated will count as {ratingLabel(level)}, the level
+                      {count === 1 ? " its task has" : " their tasks have"} as a whole.
                     </li>
-                  )}
+                  ))}
                 </ul>
               ) : undefined,
           }}

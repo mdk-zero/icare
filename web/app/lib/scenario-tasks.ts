@@ -1,5 +1,12 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { isTaskRating, type TaskRating } from '@/app/lib/task-ratings';
+import {
+  gradedScore,
+  isTaskRating,
+  ratingForCredit,
+  taskCredit,
+  type StepGrades,
+  type TaskRating,
+} from '@/app/lib/task-ratings';
 
 export type ScenarioTaskTrigger = 'vitals' | 'charting';
 
@@ -65,6 +72,177 @@ export async function fetchTaskCompletions(
     remarks: null,
   }));
   return { rows, ratingsEnabled: false, error: legacy.error };
+}
+
+export interface TaskStepRow {
+  id: string;
+  task_id: string;
+  title: string;
+  source: string;
+  sort_order: number;
+}
+
+export interface StepRatingRow {
+  assignment_id: string;
+  step_id: string;
+  rating: TaskRating;
+}
+
+/**
+ * Before migration 044 the sub-task tables don't exist. Postgres reports an
+ * unknown table as 42P01; PostgREST, whose schema cache has never seen it, as
+ * PGRST205.
+ */
+export function isMissingStepTables(error: { code?: string; message?: string } | null): boolean {
+  return error?.code === '42P01' || error?.code === 'PGRST205';
+}
+
+export const STEPS_NEED_MIGRATION =
+  'Sub-task checklists need database migration 044 (scenario task steps) applied first.';
+
+/**
+ * The sub-tasks of the given tasks, in checklist order. `stepsEnabled` is
+ * false before migration 044, when every task reads as having none and is
+ * graded as a whole, as it always was.
+ */
+export async function fetchTaskSteps(
+  supabase: SupabaseClient,
+  taskIds: string[],
+): Promise<{ steps: TaskStepRow[]; stepsEnabled: boolean; error: { message?: string } | null }> {
+  if (taskIds.length === 0) return { steps: [], stepsEnabled: true, error: null };
+  const { data, error } = await supabase
+    .from('scenario_task_steps')
+    .select('id, task_id, title, source, sort_order')
+    .in('task_id', taskIds)
+    .order('sort_order', { ascending: true });
+  if (error) {
+    if (isMissingStepTables(error)) return { steps: [], stepsEnabled: false, error: null };
+    return { steps: [], stepsEnabled: true, error };
+  }
+  return { steps: (data ?? []) as TaskStepRow[], stepsEnabled: true, error: null };
+}
+
+/** Sub-task ratings for the given assignments; none before migration 044. */
+export async function fetchStepRatings(
+  supabase: SupabaseClient,
+  assignmentIds: string[],
+): Promise<{ rows: StepRatingRow[]; error: { message?: string } | null }> {
+  if (assignmentIds.length === 0) return { rows: [], error: null };
+  const { data, error } = await supabase
+    .from('scenario_task_step_ratings')
+    .select('assignment_id, step_id, rating')
+    .in('assignment_id', assignmentIds);
+  if (error) {
+    if (isMissingStepTables(error)) return { rows: [], error: null };
+    return { rows: [], error };
+  }
+  const rows = (data ?? []).filter((row): row is StepRatingRow => isTaskRating(row.rating));
+  return { rows, error: null };
+}
+
+/** Each task's sub-task count and the ratings one assignment gave them. */
+export function stepGradesByTask(
+  steps: readonly TaskStepRow[],
+  ratings: readonly StepRatingRow[],
+): Map<string, StepGrades> {
+  const ratingByStep = new Map(ratings.map((r) => [r.step_id, r.rating]));
+  const byTask = new Map<string, { total: number; ratings: TaskRating[] }>();
+  for (const step of steps) {
+    const entry = byTask.get(step.task_id) ?? { total: 0, ratings: [] };
+    entry.total += 1;
+    const rating = ratingByStep.get(step.id);
+    if (rating) entry.ratings.push(rating);
+    byTask.set(step.task_id, entry);
+  }
+  return byTask;
+}
+
+/**
+ * Everything that decides one assignment's grade, and the grade itself: each
+ * task's points scaled by its rating, or by its sub-tasks' ratings once any
+ * are rated. Shared by finalize and by edits to a finalized grade.
+ */
+export async function scoreAssignment(
+  supabase: SupabaseClient,
+  assignmentId: string,
+  scenarioId: string,
+): Promise<
+  | {
+      score: number;
+      completions: TaskCompletionRow[];
+      stepsByTask: Map<string, StepGrades>;
+      error: null;
+    }
+  | { error: { message?: string } }
+> {
+  const { data: tasks, error: tasksError } = await supabase
+    .from('scenario_tasks')
+    .select('id, points')
+    .eq('scenario_id', scenarioId);
+  if (tasksError) return { error: tasksError };
+
+  const [completions, steps, stepRatings] = await Promise.all([
+    fetchTaskCompletions(supabase, [assignmentId]),
+    fetchTaskSteps(supabase, (tasks ?? []).map((t) => t.id as string)),
+    fetchStepRatings(supabase, [assignmentId]),
+  ]);
+  const error = completions.error ?? steps.error ?? stepRatings.error;
+  if (error) return { error };
+
+  const stepsByTask = stepGradesByTask(steps.steps, stepRatings.rows);
+  const score = gradedScore(
+    tasks ?? [],
+    new Map(completions.rows.map((c) => [c.task_id, c])),
+    stepsByTask,
+  );
+  return { score, completions: completions.rows, stepsByTask, error: null };
+}
+
+/**
+ * Bring each sub-task-graded task's overall level, kept on its completion row
+ * for the readers that know only tasks, in line with its sub-tasks. Two
+ * ratings saved at the same moment can each write the level from the other's
+ * half-finished state, and a failed write can leave rated sub-tasks with no
+ * completion row at all; running this at finalize settles both before
+ * students see the grade.
+ */
+export async function syncStepGradedLevels(
+  supabase: SupabaseClient,
+  assignmentId: string,
+  completions: readonly TaskCompletionRow[],
+  stepsByTask: ReadonlyMap<string, StepGrades>,
+  ratedBy: string,
+): Promise<void> {
+  const completionByTask = new Map(completions.map((c) => [c.task_id, c]));
+  const writes: PromiseLike<{ error: { message?: string } | null }>[] = [];
+  for (const [taskId, steps] of stepsByTask) {
+    if (steps.ratings.length === 0) continue;
+    const completion = completionByTask.get(taskId);
+    const level = ratingForCredit(taskCredit(completion, steps));
+    if (!completion) {
+      writes.push(
+        supabase.from('scenario_task_completions').insert({
+          assignment_id: assignmentId,
+          task_id: taskId,
+          completed_by: ratedBy,
+          completed_via: 'faculty',
+          rating: level,
+          rated_by: ratedBy,
+        }),
+      );
+    } else if (completion.rating !== level) {
+      writes.push(
+        supabase
+          .from('scenario_task_completions')
+          .update({ rating: level })
+          .eq('assignment_id', assignmentId)
+          .eq('task_id', taskId),
+      );
+    }
+  }
+  for (const { error } of await Promise.all(writes)) {
+    if (error) console.error('Failed to sync a sub-task-graded task level', error);
+  }
 }
 
 /**

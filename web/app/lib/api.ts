@@ -2617,18 +2617,37 @@ export interface FacultyScenarioTask {
   remarks: string | null;
 }
 
+/** One row of a task's sub-task checklist, with this assignment's rating of it. */
+export interface GradingTaskStep {
+  id: string;
+  title: string;
+  /** The Taylor's checklist steps it condenses, e.g. "Skill 1-7, steps 12–15". */
+  source: string;
+  rating: TaskRating | null;
+}
+
+/** A task on the faculty grading sheet: its completion state plus its sub-tasks. */
+export interface GradingTask extends FacultyScenarioTask {
+  /** Empty for a task graded as a whole. */
+  steps: GradingTaskStep[];
+}
+
 /** A student assignment's scenario tasks with their completion state (faculty view). */
-export async function fetchFacultyAssignmentTasks(
-  assignmentId: string,
-): Promise<{ tasks: FacultyScenarioTask[]; status: string; ratingsEnabled: boolean } | null> {
+export async function fetchFacultyAssignmentTasks(assignmentId: string): Promise<{
+  tasks: GradingTask[];
+  status: string;
+  ratingsEnabled: boolean;
+  stepsEnabled: boolean;
+} | null> {
   try {
     const res = await apiFetch(`/api/faculty/scenarios/assignments/${assignmentId}/tasks`, {
       credentials: 'include',
     });
     const json = (await res.json()) as {
-      tasks?: FacultyScenarioTask[];
+      tasks?: GradingTask[];
       status?: string;
       ratings_enabled?: boolean;
+      steps_enabled?: boolean;
       error?: string;
     };
     if (!res.ok) {
@@ -2636,13 +2655,45 @@ export async function fetchFacultyAssignmentTasks(
       return null;
     }
     return {
-      tasks: json.tasks ?? [],
+      tasks: (json.tasks ?? []).map((t) => ({ ...t, steps: t.steps ?? [] })),
       status: json.status ?? 'pending',
       ratingsEnabled: json.ratings_enabled ?? true,
+      stepsEnabled: json.steps_enabled ?? true,
     };
   } catch (err) {
     console.error('fetchFacultyAssignmentTasks() failed', err);
     return null;
+  }
+}
+
+type GradeSaveResult =
+  | { ok: true; score?: number; rating: TaskRating | null }
+  | { ok: false; error: string };
+
+async function putTaskGrade(assignmentId: string, body: object, label: string): Promise<GradeSaveResult> {
+  try {
+    const res = await apiFetch(`/api/faculty/scenarios/assignments/${assignmentId}/tasks`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(body),
+    });
+    const json = (await res.json().catch(() => ({}))) as {
+      error?: string;
+      score?: number;
+      rating?: TaskRating | null;
+    };
+    if (!res.ok) {
+      console.error(`${label}() failed`, json.error);
+      return { ok: false, error: json.error ?? 'Unable to save rating' };
+    }
+    // `score` is present only when the assignment was already finalized — a
+    // correction to a locked grade, kept in sync with what students and
+    // analytics read. `rating` is the task's overall level after the save.
+    return { ok: true, score: json.score, rating: json.rating ?? null };
+  } catch (err) {
+    console.error(`${label}() failed`, err);
+    return { ok: false, error: 'Unable to save rating' };
   }
 }
 
@@ -2656,26 +2707,20 @@ export async function saveTaskRating(
   assignmentId: string,
   taskId: string,
   grade: { rating?: TaskRating | null; remarks?: string | null },
-): Promise<{ ok: true; score?: number } | { ok: false; error: string }> {
-  try {
-    const res = await apiFetch(`/api/faculty/scenarios/assignments/${assignmentId}/tasks`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ task_id: taskId, ...grade }),
-    });
-    const json = (await res.json().catch(() => ({}))) as { error?: string; score?: number };
-    if (!res.ok) {
-      console.error('saveTaskRating() failed', json.error);
-      return { ok: false, error: json.error ?? 'Unable to save rating' };
-    }
-    // Present only when the assignment was already finalized — a correction
-    // to a locked grade, kept in sync with what students and analytics read.
-    return { ok: true, score: json.score };
-  } catch (err) {
-    console.error('saveTaskRating() failed', err);
-    return { ok: false, error: 'Unable to save rating' };
-  }
+): Promise<GradeSaveResult> {
+  return putTaskGrade(assignmentId, { task_id: taskId, ...grade }, 'saveTaskRating');
+}
+
+/**
+ * Rate (or with `rating: null`, clear) some of a task's sub-tasks — one per
+ * click, or every one at once. The task's overall level follows from them.
+ */
+export async function saveStepRatings(
+  assignmentId: string,
+  taskId: string,
+  steps: { step_id: string; rating: TaskRating | null }[],
+): Promise<GradeSaveResult> {
+  return putTaskGrade(assignmentId, { task_id: taskId, steps }, 'saveStepRatings');
 }
 
 /** Lock the assignment and score it from each task's rated share of its points. */
