@@ -55,19 +55,19 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
         .limit(VITALS_LIMIT),
       supabase
         .from('tpr_records')
-        .select('*, users!tpr_records_recorded_by_fkey(name, email)')
+        .select('*, users!tpr_records_recorded_by_fkey(id, name, email, picture_url, sex)')
         .eq('patient_id', id)
         .order('created_at', { ascending: false })
         .limit(RECORDS_LIMIT),
       supabase
         .from('ivf_records')
-        .select('*, users!ivf_records_recorded_by_fkey(name, email)')
+        .select('*, users!ivf_records_recorded_by_fkey(id, name, email, picture_url, sex)')
         .eq('patient_id', id)
         .order('created_at', { ascending: false })
         .limit(RECORDS_LIMIT),
       supabase
         .from('progress_notes')
-        .select('*, users!progress_notes_author_id_fkey(name, email)')
+        .select('*, users!progress_notes_author_id_fkey(id, name, email, picture_url, sex)')
         .eq('patient_id', id)
         .order('created_at', { ascending: false })
         .limit(RECORDS_LIMIT),

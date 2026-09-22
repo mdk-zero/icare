@@ -7,12 +7,14 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faUsers, faPlus, faPencil, faTrash } from "@fortawesome/free-solid-svg-icons";
 import PageHeader from "../../components/PageHeader";
 import FilterSelect from "../../components/FilterSelect";
+import Avatar from "../../components/Avatar";
 
 interface UserAccount {
   id: string;
   name: string;
   email: string;
   role: "student" | "faculty" | "admin";
+  picture_url: string | null;
   /** Null until someone records it; drives the Mr./Ms. greeting in mobile. */
   sex: "male" | "female" | null;
   created_at: string;
@@ -250,9 +252,13 @@ export default function UsersClient() {
                   <tr key={user.id} className="hover:bg-subtle transition-colors">
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-brand-600/10 rounded-full flex items-center justify-center text-brand-600 font-semibold">
-                          {user.name.charAt(0)}
-                        </div>
+                        <Avatar
+                          name={user.name}
+                          src={user.picture_url}
+                          userId={user.id}
+                          sex={user.sex}
+                          size="md"
+                        />
                         <div>
                           <p className="font-semibold text-gray-800">{user.name}</p>
                           <p className="text-sm text-gray-500">{user.email}</p>

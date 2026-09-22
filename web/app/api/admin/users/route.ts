@@ -136,7 +136,7 @@ export async function POST(request: NextRequest) {
         picture_url: null,
         section_id: sectionId,
       })
-      .select('id, email, name, role, picture_url, created_at, last_login_at, section_id, sections(name)')
+      .select('id, email, name, role, picture_url, sex, created_at, last_login_at, section_id, sections(name)')
       .single();
 
     if (insertError || !user) {

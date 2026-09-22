@@ -42,6 +42,7 @@ interface StudentData {
   name: string;
   email: string;
   picture_url: string | null;
+  sex: "male" | "female" | null;
   created_at: string;
   last_login_at: string | null;
   quizzes_completed: number;
@@ -188,7 +189,14 @@ export default function StudentDetailClient() {
         <div className="lg:col-span-2">
           <Card padding="sm" className="flex h-full flex-col">
             <div className="flex items-center gap-4 mb-6">
-              <Avatar name={student.name} src={student.picture_url} size="xl" tone="solid" />
+              <Avatar
+                name={student.name}
+                src={student.picture_url}
+                userId={student.id}
+                sex={student.sex}
+                size="xl"
+                tone="solid"
+              />
               <div>
                 <h2 className="text-xl font-bold text-gray-900">{student.name}</h2>
                 <p className="text-gray-500">{student.email}</p>

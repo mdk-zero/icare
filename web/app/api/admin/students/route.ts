@@ -21,7 +21,7 @@ export async function GET() {
     const [studentsRes, attemptsRes, predictionsRes] = await Promise.all([
       supabase
         .from('users')
-        .select('id, email, name, picture_url, created_at, last_login_at, section_id, sections(name)')
+        .select('id, email, name, picture_url, sex, created_at, last_login_at, section_id, sections(name)')
         .eq('role', 'student')
         .order('name'),
       supabase
@@ -60,6 +60,7 @@ export async function GET() {
         name: s.name,
         email: s.email,
         picture_url: s.picture_url,
+        sex: s.sex ?? null,
         created_at: s.created_at,
         last_login_at: s.last_login_at,
         quizzes_completed: t?.count ?? 0,

@@ -8,6 +8,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faArrowLeft, faTrash, faUsers } from "@fortawesome/free-solid-svg-icons";
 import { EcgLoader } from "../../../components/EcgLoader";
 import PageHeader from "../../../components/PageHeader";
+import Avatar from "../../../components/Avatar";
 
 interface Section {
   id: string;
@@ -18,6 +19,8 @@ interface Faculty {
   id: string;
   name: string;
   email: string;
+  picture_url: string | null;
+  sex: "male" | "female" | null;
   sections: Section[];
   student_count: number;
 }
@@ -282,15 +285,15 @@ export default function AssignSectionsClient() {
                           : "hover:bg-gray-50 text-gray-800"
                       }`}
                     >
-                      <div
-                        className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold shrink-0 ${
-                          selectedFaculty?.id === member.id
-                            ? "bg-white/20 text-white"
-                            : "bg-brand-600/10 text-brand-600"
-                        }`}
-                      >
-                        {member.name.charAt(0)}
-                      </div>
+                      <Avatar
+                        name={member.name}
+                        src={member.picture_url}
+                        userId={member.id}
+                        sex={member.sex}
+                        size="md"
+                        tone={selectedFaculty?.id === member.id ? "solid" : "brand"}
+                        className={selectedFaculty?.id === member.id ? "ring-2 ring-white/40" : ""}
+                      />
                       <div className="min-w-0 flex-1">
                         <p className="font-medium truncate">{member.name}</p>
                         <p className={`text-sm truncate ${selectedFaculty?.id === member.id ? "text-white/70" : "text-gray-500"}`}>

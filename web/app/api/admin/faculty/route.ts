@@ -16,7 +16,7 @@ export async function GET() {
     const [facultyRes, linksRes, studentsRes] = await Promise.all([
       supabase
         .from('users')
-        .select('id, email, name, picture_url, created_at, last_login_at')
+        .select('id, email, name, picture_url, sex, created_at, last_login_at')
         .eq('role', 'faculty')
         .order('name'),
       supabase.from('faculty_sections').select('faculty_id, sections(id, name)'),

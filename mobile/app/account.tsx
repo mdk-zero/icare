@@ -15,7 +15,7 @@ import { Image } from 'expo-image';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { useAuth } from '@/hooks/useAuth';
-import { useAvatarPicker, useAvatarUrl } from '@/hooks/useAvatar';
+import { useAvatarImage, useAvatarPicker } from '@/hooks/useAvatar';
 import { updateProfile } from '@/lib/api';
 
 /** First letter of the first name plus the last — matches the web avatar. */
@@ -42,7 +42,7 @@ export default function AccountScreen() {
     [Palette, Accent, Shadow, Type],
   );
 
-  const avatarUrl = useAvatarUrl(user?.picture_url);
+  const { photoUrl: avatarUrl, source: avatarSource } = useAvatarImage(user);
   const initials = getInitials(user?.name);
   const { uploading, changeAvatar } = useAvatarPicker();
 
@@ -88,8 +88,8 @@ export default function AccountScreen() {
             hitSlop={6}
             style={({ pressed }) => [pressed && styles.pressed]}
           >
-            {avatarUrl ? (
-              <Image source={{ uri: avatarUrl }} style={styles.photo} contentFit="cover" />
+            {avatarSource ? (
+              <Image source={avatarSource} style={styles.photo} contentFit="cover" />
             ) : (
               <View style={[styles.photo, styles.photoFallback]}>
                 <Text style={styles.photoInitials}>{initials}</Text>

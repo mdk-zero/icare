@@ -15,6 +15,7 @@ import {
   logAuditAction,
   User,
 } from "../lib/api";
+import { defaultAvatarSrc } from "../lib/default-avatar";
 import {
   onNotificationArrival,
   stopNotificationStream,
@@ -210,7 +211,7 @@ export default function Shell({ role, navItems, isActive, children }: ShellProps
       setIsLoading(false);
       const url = await getDisplayAvatarUrl(fresh.picture_url);
       if (mounted) {
-        setAvatarUrl(url);
+        setAvatarUrl(url ?? defaultAvatarSrc(fresh.id, fresh.sex));
       }
     }
     init();

@@ -8,6 +8,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faUsers, faPlus } from "@fortawesome/free-solid-svg-icons";
 import PageHeader from "../../components/PageHeader";
 import FilterSelect from "../../components/FilterSelect";
+import Avatar from "../../components/Avatar";
 import StatTile from "../../components/StatTile";
 
 interface SectionRef {
@@ -19,6 +20,8 @@ interface Faculty {
   id: string;
   name: string;
   email: string;
+  picture_url: string | null;
+  sex: "male" | "female" | null;
   created_at: string;
   last_login_at: string | null;
   sections: SectionRef[];
@@ -97,7 +100,7 @@ export default function FacultyClient() {
     });
     setBusy(false);
     const json = (await res.json()) as {
-      user?: { id: string; name: string; email: string; created_at: string; last_login_at: string | null };
+      user?: Omit<Faculty, "sections" | "student_count">;
       password?: string;
       error?: string;
     };
@@ -245,9 +248,13 @@ export default function FacultyClient() {
                   >
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-brand-600/10 rounded-full flex items-center justify-center text-brand-600 font-semibold">
-                          {member.name.charAt(0)}
-                        </div>
+                        <Avatar
+                          name={member.name}
+                          src={member.picture_url}
+                          userId={member.id}
+                          sex={member.sex}
+                          size="md"
+                        />
                         <div>
                           <p className="font-semibold text-gray-800">{member.name}</p>
                           <p className="text-sm text-gray-500">{member.email}</p>

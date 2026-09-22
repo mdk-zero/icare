@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
-import { resolveSummaryArgs, type SummaryArgs } from '@/app/lib/analytics';
+import { resolveSummaryArgs, withStudentAvatars, type SummaryArgs } from '@/app/lib/analytics';
 
 /**
  * Dashboard analytics read from the star-schema warehouse
@@ -20,6 +20,7 @@ type Summary = {
   etl?: { last_run_at?: string | null };
   sections?: { id: string; name: string }[];
   weekly_trend?: { week_start: string; average_score: number; attempts: number }[];
+  top_students?: { student_key: string }[];
 } | null;
 
 /**
@@ -101,6 +102,10 @@ export async function GET(request: NextRequest) {
         const refreshed = await supabase.rpc('dw_analytics_summary', args);
         if (!refreshed.error && refreshed.data) summary = refreshed.data as Summary;
       }
+    }
+
+    if (summary?.top_students?.length) {
+      summary = { ...summary, top_students: await withStudentAvatars(supabase, summary.top_students) };
     }
 
     // Opt-in: only the performance chart needs the split, not the

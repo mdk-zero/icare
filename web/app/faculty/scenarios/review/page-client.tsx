@@ -187,12 +187,21 @@ export default function FacultyScenarioReviewClient() {
   const studentGroups = useMemo(() => {
     const byStudent = new Map<
       string,
-      { student_id: string; student_name: string; assignments: ScenarioAssignment[] }
+      Pick<ScenarioAssignment, "student_id" | "student_name" | "student_picture_url" | "student_sex"> & {
+        assignments: ScenarioAssignment[];
+      }
     >();
     for (const a of assignments) {
       const entry = byStudent.get(a.student_id);
       if (entry) entry.assignments.push(a);
-      else byStudent.set(a.student_id, { student_id: a.student_id, student_name: a.student_name, assignments: [a] });
+      else
+        byStudent.set(a.student_id, {
+          student_id: a.student_id,
+          student_name: a.student_name,
+          student_picture_url: a.student_picture_url,
+          student_sex: a.student_sex,
+          assignments: [a],
+        });
     }
     return Array.from(byStudent.values())
       .map((g) => ({
@@ -437,7 +446,14 @@ export default function FacultyScenarioReviewClient() {
                       style={{ animationDelay: `${Math.min(i, 8) * 35}ms` }}
                       className="flex w-full animate-rise items-center gap-3 rounded-xl border border-hairline bg-surface p-3 text-left shadow-tile transition-all hover:border-brand-300 hover:shadow-tile-hover"
                     >
-                      <Avatar name={g.student_name} size="md" tone="solid" />
+                      <Avatar
+                        name={g.student_name}
+                        src={g.student_picture_url}
+                        userId={g.student_id}
+                        sex={g.student_sex}
+                        size="md"
+                        tone="solid"
+                      />
                       <span className="min-w-0 flex-1">
                         <span className="block truncate font-semibold text-gray-900">{g.student_name}</span>
                         <span className="block truncate text-xs text-gray-500">
@@ -466,7 +482,14 @@ export default function FacultyScenarioReviewClient() {
                 className="mb-3 flex w-full items-center gap-2.5 rounded-xl border border-hairline bg-surface p-3 text-left shadow-tile transition-colors hover:border-brand-300"
               >
                 <FontAwesomeIcon icon={faChevronLeft} className="h-3.5 w-3.5 shrink-0 text-gray-400" />
-                <Avatar name={selectedStudent?.student_name} size="sm" tone="solid" />
+                <Avatar
+                  name={selectedStudent?.student_name}
+                  src={selectedStudent?.student_picture_url}
+                  userId={selectedStudent?.student_id}
+                  sex={selectedStudent?.student_sex}
+                  size="sm"
+                  tone="solid"
+                />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-semibold text-gray-900">
                     {selectedStudent?.student_name}
@@ -576,7 +599,14 @@ export default function FacultyScenarioReviewClient() {
               {/* Who, what, and the grade so far */}
               <div className="flex flex-col gap-5 border-b border-hairline p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
                 <div className="flex min-w-0 items-start gap-3.5">
-                  <Avatar name={selected.student_name} size="lg" tone="solid" />
+                  <Avatar
+                    name={selected.student_name}
+                    src={selected.student_picture_url}
+                    userId={selected.student_id}
+                    sex={selected.student_sex}
+                    size="lg"
+                    tone="solid"
+                  />
                   <div className="min-w-0">
                     <h2 className="truncate font-display text-xl font-bold tracking-tight text-gray-900">
                       {selected.student_name}

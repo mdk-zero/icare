@@ -70,13 +70,24 @@ export async function GET(request: NextRequest) {
     // account has since been deleted; the entry keeps its own record of who
     // they were in `details`, and the UI falls back to that.
     const actorIds = [...new Set((logs ?? []).map((l) => l.actor_id).filter((id): id is string => !!id))];
-    const actorsById = new Map<string, { name: string; email: string }>();
+    const actorsById = new Map<
+      string,
+      { id: string; name: string; email: string; picture_url: string | null; sex: string | null }
+    >();
     if (actorIds.length > 0) {
       const { data: actors } = await supabase
         .from('users')
-        .select('id, name, email')
+        .select('id, name, email, picture_url, sex')
         .in('id', actorIds);
-      for (const a of actors ?? []) actorsById.set(a.id, { name: a.name, email: a.email });
+      for (const a of actors ?? []) {
+        actorsById.set(a.id, {
+          id: a.id,
+          name: a.name,
+          email: a.email,
+          picture_url: a.picture_url ?? null,
+          sex: a.sex ?? null,
+        });
+      }
     }
 
     return NextResponse.json({

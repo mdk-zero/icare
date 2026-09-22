@@ -2,10 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { getDisplayAvatarUrl } from "../lib/api";
+import { defaultAvatarSrc } from "../lib/default-avatar";
 
 /**
  * Person avatar: their uploaded/Google picture when there is one, otherwise
- * their initials. Replaces seven hand-rolled copies that each did
+ * an illustrated stand-in matching their sex, otherwise their initials.
+ * Replaces seven hand-rolled copies that each did
  * `name.split(' ').map(n => n[0]).join('')` — which turns "Linux Mandrake S.
  * Adona" into "LMSA" — and none of which ever showed the picture.
  */
@@ -37,12 +39,17 @@ export function initials(name: string | null | undefined): string {
 export default function Avatar({
   name,
   src,
+  userId,
+  sex,
   size = "md",
   className = "",
   tone = "brand",
 }: {
   name: string | null | undefined;
   src?: string | null;
+  /** With `sex`, picks the stand-in illustration shown when there is no photo. */
+  userId?: string | null;
+  sex?: "male" | "female" | null;
   size?: AvatarSize;
   className?: string;
   /** `solid` for profile headers, `risk` to flag an at-risk student. */
@@ -50,27 +57,34 @@ export default function Avatar({
 }) {
   // A stale Google or storage URL would otherwise render as a broken image.
   const [failed, setFailed] = useState(false);
+  const [fallbackFailed, setFallbackFailed] = useState(false);
 
   // Uploaded avatars are stored as a bucket path ("avatars/<uid>/<file>"),
   // which only becomes loadable after it is exchanged for a signed URL;
   // Google pictures are already absolute and go straight through.
   const isStoragePath = Boolean(src?.startsWith("avatars/"));
-  const [signedUrl, setSignedUrl] = useState<string | null>(null);
+  const [signed, setSigned] = useState<{ path: string; url: string | null } | null>(null);
   useEffect(() => {
     if (!isStoragePath || !src) return;
     let cancelled = false;
     void (async () => {
       const url = await getDisplayAvatarUrl(src);
-      if (!cancelled) setSignedUrl(url);
+      if (!cancelled) setSigned({ path: src, url });
     })();
     return () => {
       cancelled = true;
     };
   }, [src, isStoragePath]);
 
-  const resolved = isStoragePath ? signedUrl : src;
+  // Until signing settles it is unknown whether a photo exists, so neither
+  // the stand-in nor the initials are drawn — either would flash and swap.
+  const signing = isStoragePath && signed?.path !== src;
+  const photo = failed ? null : isStoragePath ? (signed?.url ?? null) : src;
+  const fallback = fallbackFailed ? null : defaultAvatarSrc(userId, sex);
+  const resolved = signing ? null : photo || fallback;
   const { box, text } = SIZES[size];
-  const showImage = Boolean(resolved) && !failed;
+  const showImage = Boolean(resolved);
+  const onImageError = () => (resolved === photo ? setFailed(true) : setFallbackFailed(true));
 
   const TONES = {
     solid: "bg-gradient-to-br from-brand-600 to-brand-700 text-white",
@@ -82,7 +96,7 @@ export default function Avatar({
   return (
     <span
       className={`${box} shrink-0 overflow-hidden rounded-full flex items-center justify-center ${
-        showImage ? "bg-subtle" : fallbackTone
+        showImage || signing ? "bg-subtle" : fallbackTone
       } ${className}`}
     >
       {showImage ? (
@@ -91,10 +105,15 @@ export default function Avatar({
           src={resolved as string}
           alt=""
           className="w-full h-full object-cover"
-          onError={() => setFailed(true)}
+          // A server-rendered image that failed before hydration never fires
+          // onError, so check for one that has already given up.
+          ref={(img) => {
+            if (img?.complete && img.naturalWidth === 0) onImageError();
+          }}
+          onError={onImageError}
           referrerPolicy="no-referrer"
         />
-      ) : (
+      ) : signing ? null : (
         <span className={`${text} font-semibold leading-none`}>{initials(name)}</span>
       )}
     </span>

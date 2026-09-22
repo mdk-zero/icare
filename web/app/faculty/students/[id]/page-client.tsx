@@ -506,7 +506,14 @@ export default function StudentDetailClient() {
           <Card padding="sm" className="flex h-full flex-col">
             <div className="mb-6 flex items-start justify-between gap-4">
               <div className="flex items-center gap-4">
-                <Avatar name={student.name} src={student.picture_url} size="xl" tone="solid" />
+                <Avatar
+                  name={student.name}
+                  src={student.picture_url}
+                  userId={student.id}
+                  sex={student.sex}
+                  size="xl"
+                  tone="solid"
+                />
                 <div>
                   <h1 className="text-2xl font-bold text-gray-900">{student.name}</h1>
                   <p className="text-gray-500">{student.email}</p>

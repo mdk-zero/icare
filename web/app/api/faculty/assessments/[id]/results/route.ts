@@ -10,6 +10,7 @@ interface StudentRow {
   name: string;
   email: string;
   picture_url: string | null;
+  sex: 'male' | 'female' | null;
   sections: { name: string } | null;
 }
 
@@ -58,7 +59,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
     let studentQuery = supabase
       .from('users')
-      .select('id, name, email, picture_url, sections(name)')
+      .select('id, name, email, picture_url, sex, sections(name)')
       .eq('role', 'student')
       .order('name');
     if (scopedIds) studentQuery = studentQuery.in('id', scopedIds);
@@ -125,6 +126,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
         name: student.name,
         email: student.email,
         picture_url: student.picture_url,
+        sex: student.sex ?? null,
         section: student.sections?.name ?? null,
         status,
         attempt_count: attempts.length,

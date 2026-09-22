@@ -1242,7 +1242,13 @@ export default function FacultyStudentsClient() {
                       >
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-3">
-                            <Avatar name={user.name} src={user.picture_url} size="md" />
+                            <Avatar
+                              name={user.name}
+                              src={user.picture_url}
+                              userId={user.id}
+                              sex={user.sex}
+                              size="md"
+                            />
                             <p className="font-semibold text-gray-800">{user.name}</p>
                           </div>
                         </td>

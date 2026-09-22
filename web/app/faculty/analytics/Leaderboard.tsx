@@ -38,7 +38,15 @@ export function Leaderboard({ students }: { students: AnalyticsSummary["top_stud
             >
               {rank}
             </span>
-            <Avatar name={s.name} size="sm" tone="brand" className="relative z-10" />
+            <Avatar
+              name={s.name}
+              src={s.picture_url}
+              userId={s.student_key}
+              sex={s.sex}
+              size="sm"
+              tone="brand"
+              className="relative z-10"
+            />
             <div className="relative z-10 min-w-0 flex-1">
               <p className="truncate text-sm font-semibold text-gray-900">{s.name}</p>
               <p className="truncate text-xs text-gray-400">

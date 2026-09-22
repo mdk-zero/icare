@@ -17,6 +17,7 @@ export interface ScopedStudent {
   email: string;
   section_id: string | null;
   picture_url: string | null;
+  sex: 'male' | 'female' | null;
 }
 
 /**
@@ -29,7 +30,7 @@ export async function getScopedStudents(
 ): Promise<ScopedStudent[]> {
   let query = supabase
     .from('users')
-    .select('id, name, email, section_id, picture_url')
+    .select('id, name, email, section_id, picture_url, sex')
     .eq('role', 'student')
     .order('name');
 
@@ -295,6 +296,7 @@ export interface AttentionStudent {
   name: string;
   section: string | null;
   picture_url: string | null;
+  sex: 'male' | 'female' | null;
   risk: string | null;
   probability: number | null;
   overdue: number;
@@ -601,6 +603,7 @@ export async function buildFacultyOverview(
         name: s.name,
         section: s.section_id ? sectionName.get(s.section_id) ?? null : null,
         picture_url: s.picture_url,
+        sex: s.sex ?? null,
         risk: risk?.risk ?? null,
         probability: risk?.probability ?? null,
         overdue,

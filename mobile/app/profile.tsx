@@ -18,7 +18,7 @@ import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { SectionHeader } from '@/components/ui';
 import { useAuth } from '@/hooks/useAuth';
-import { useAvatarPicker, useAvatarUrl } from '@/hooks/useAvatar';
+import { useAvatarImage, useAvatarPicker } from '@/hooks/useAvatar';
 import { useApiData, allCached } from '@/hooks/useApiData';
 import { fetchProgress, fetchRecommendations } from '@/lib/api';
 import { clearCache } from '@/lib/client';
@@ -69,7 +69,7 @@ export default function ProfileScreen() {
   );
   const [progress, recommendations] = data ?? [null, []];
 
-  const avatarUrl = useAvatarUrl(user?.picture_url);
+  const { source: avatarSource } = useAvatarImage(user);
   const { uploading, changeAvatar } = useAvatarPicker();
 
   const handleClearCache = () => {
@@ -159,8 +159,8 @@ export default function ProfileScreen() {
           accessibilityLabel="Change profile photo"
           style={({ pressed }) => [styles.avatarRow, pressed && styles.pressedDim]}
         >
-          {avatarUrl ? (
-            <Image source={{ uri: avatarUrl }} style={styles.avatarLarge} contentFit="cover" />
+          {avatarSource ? (
+            <Image source={avatarSource} style={styles.avatarLarge} contentFit="cover" />
           ) : (
             <LinearGradient
               colors={[Teal.light, '#FFFFFF33', Teal.deep]}

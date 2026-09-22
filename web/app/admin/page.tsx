@@ -33,6 +33,7 @@ interface AtRiskRow {
   name: string;
   email: string;
   picture_url: string | null;
+  sex: "male" | "female" | null;
   average_score: number | null;
   quizzes_completed: number;
 }
@@ -48,6 +49,7 @@ interface StudentAverageRow {
   name: string;
   email: string;
   picture_url: string | null;
+  sex: "male" | "female" | null;
   average: number;
   count: number;
 }
@@ -170,7 +172,7 @@ async function loadDashboard(viewerId: string) {
 
   const [usersRes, attemptsRes, predictionsRes, roomsRes, activityRes] =
     await Promise.all([
-      supabase.from("users").select("id, name, email, role, picture_url"),
+      supabase.from("users").select("id, name, email, role, picture_url, sex"),
       supabase
         .from("assessment_attempts")
         .select("student_id, score, submitted_at")
@@ -221,6 +223,7 @@ async function loadDashboard(viewerId: string) {
         name: s.name,
         email: s.email,
         picture_url: s.picture_url,
+        sex: s.sex ?? null,
         average_score: t && t.count > 0 ? Math.round(t.sum / t.count) : null,
         quizzes_completed: t?.count ?? 0,
       };
@@ -248,6 +251,7 @@ async function loadDashboard(viewerId: string) {
         name: s.name,
         email: s.email,
         picture_url: s.picture_url,
+        sex: s.sex ?? null,
         average: Math.round(t.sum / t.count),
         count: t.count,
       };
@@ -539,7 +543,13 @@ export default async function AdminDashboard() {
                   <span className="tabular w-4 shrink-0 text-center text-xs font-semibold text-gray-400">
                     {idx + 1}
                   </span>
-                  <Avatar name={student.name} src={student.picture_url} size="md" />
+                  <Avatar
+                    name={student.name}
+                    src={student.picture_url}
+                    userId={student.id}
+                    sex={student.sex}
+                    size="md"
+                  />
                   <div className="min-w-0 flex-1">
                     <p className="font-medium text-gray-900 truncate">{student.name}</p>
                     <p className="text-sm text-gray-500 truncate">{quizLabel(student.count)}</p>
@@ -572,6 +582,8 @@ export default async function AdminDashboard() {
                   <Avatar
                     name={student.name}
                     src={student.picture_url}
+                    userId={student.id}
+                    sex={student.sex}
                     size="md"
                     tone={student.average < PASSING_SCORE ? "risk" : "brand"}
                   />
@@ -661,7 +673,14 @@ export default async function AdminDashboard() {
                 <tr key={student.id} className="hover:bg-subtle transition-colors">
                   <td className="px-5 py-3.5">
                     <div className="flex items-center gap-3 min-w-0">
-                      <Avatar name={student.name} src={student.picture_url} size="sm" tone="risk" />
+                      <Avatar
+                        name={student.name}
+                        src={student.picture_url}
+                        userId={student.id}
+                        sex={student.sex}
+                        size="sm"
+                        tone="risk"
+                      />
                       <p className="font-medium text-gray-900 truncate">{student.name}</p>
                     </div>
                   </td>

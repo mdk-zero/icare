@@ -21,6 +21,7 @@ import {
   uploadAvatar,
   User,
 } from "../lib/api";
+import { defaultAvatarSrc } from "../lib/default-avatar";
 import { usePageData } from "../lib/use-page-data";
 import { initials } from "./Avatar";
 import { EcgLoader } from "./EcgLoader";
@@ -145,7 +146,9 @@ export default function ProfileEditor({
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setUser(current);
     setName(current.name);
-    getDisplayAvatarUrl(current.picture_url).then(setAvatarUrl);
+    getDisplayAvatarUrl(current.picture_url).then((url) =>
+      setAvatarUrl(url ?? defaultAvatarSrc(current.id, current.sex)),
+    );
   }, []);
 
   // The same cache entry the analytics page reads, so this is usually free.

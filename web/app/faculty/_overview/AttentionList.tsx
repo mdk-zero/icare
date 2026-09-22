@@ -137,7 +137,14 @@ export default function AttentionList({
                     className={`absolute inset-y-2.5 left-0 w-[3px] rounded-r-full ${why[0]?.edge ?? "bg-slate-200"}`}
                   />
                   <span className="w-4 shrink-0 text-right font-mono text-[11px] text-slate-400">{i + 1}</span>
-                  <Avatar name={student.name} src={student.picture_url} size="sm" tone="solid" />
+                  <Avatar
+                    name={student.name}
+                    src={student.picture_url}
+                    userId={student.id}
+                    sex={student.sex}
+                    size="sm"
+                    tone="solid"
+                  />
                   <span className="min-w-0 flex-1">
                     <span className="flex items-baseline gap-2">
                       <span className="truncate font-medium text-slate-900">{student.name}</span>

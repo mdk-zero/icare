@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
-import { resolveSummaryArgs } from '@/app/lib/analytics';
+import { resolveSummaryArgs, withStudentAvatars } from '@/app/lib/analytics';
 
 /**
  * Every student in scope, ranked the way the analytics summary's
@@ -36,7 +36,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unable to fetch leaderboard' }, { status: 500 });
     }
 
-    return NextResponse.json({ students: data ?? [] });
+    const students = (data ?? []) as { student_key: string }[];
+    return NextResponse.json({ students: await withStudentAvatars(supabase, students) });
   } catch (err) {
     console.error('Fetch student leaderboard failed', err);
     return NextResponse.json({ error: 'Unable to fetch leaderboard' }, { status: 500 });

@@ -7,6 +7,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faClock, faMagnifyingGlass } from "@fortawesome/free-solid-svg-icons";
 import PageHeader from "../../components/PageHeader";
 import FilterSelect from "../../components/FilterSelect";
+import Avatar from "../../components/Avatar";
 import { formatAuditDetails } from "../../lib/audit-details";
 
 interface AuditRow {
@@ -19,7 +20,13 @@ interface AuditRow {
   details: Record<string, unknown>;
   ip_address: string | null;
   created_at: string;
-  actor: { name: string; email: string } | null;
+  actor: {
+    id: string;
+    name: string;
+    email: string;
+    picture_url: string | null;
+    sex: "male" | "female" | null;
+  } | null;
 }
 
 const PAGE_SIZE = 50;
@@ -277,9 +284,13 @@ export default function AdminAuditClient() {
                       </td>
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-2">
-                          <div className="w-7 h-7 bg-gray-100 rounded-full flex items-center justify-center text-xs font-medium text-gray-600 shrink-0">
-                            {(log.actor?.name ?? "S").charAt(0)}
-                          </div>
+                          <Avatar
+                            name={log.actor?.name ?? "System"}
+                            src={log.actor?.picture_url}
+                            userId={log.actor?.id}
+                            sex={log.actor?.sex}
+                            size="xs"
+                          />
                           <div className="min-w-0">
                             <p className="text-gray-800 text-sm font-medium truncate">
                               {log.actor?.name ??

@@ -917,7 +917,14 @@ export default function PatientChart({
                     many entries needs that before the clinical detail. */}
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex min-w-0 items-center gap-2.5">
-                    <Avatar name={record.users?.name} size="sm" tone="brand" />
+                    <Avatar
+                      name={record.users?.name}
+                      src={record.users?.picture_url}
+                      userId={record.users?.id}
+                      sex={record.users?.sex}
+                      size="sm"
+                      tone="brand"
+                    />
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold text-gray-900">
                         {record.users?.name ?? "Unknown"}

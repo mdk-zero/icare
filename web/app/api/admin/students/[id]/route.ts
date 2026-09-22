@@ -21,7 +21,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
 
     const { data: student, error } = await supabase
       .from('users')
-      .select('id, email, name, picture_url, created_at, last_login_at')
+      .select('id, email, name, picture_url, sex, created_at, last_login_at')
       .eq('id', id)
       .eq('role', 'student')
       .maybeSingle();

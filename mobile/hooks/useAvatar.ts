@@ -3,29 +3,50 @@ import { Alert, Linking } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 
-import { resolveAvatarUrl, uploadAvatar } from '@/lib/api';
+import { resolveAvatarUrl, uploadAvatar, type User } from '@/lib/api';
 import { isNetworkError } from '@/lib/client';
+import { defaultAvatarSource } from '@/lib/default-avatar';
 import { useAuth } from './useAuth';
 
 /**
+ * What to draw for a user's avatar. `photoUrl` is their own picture, if any —
+ * the Account screen words its "Add photo"/"Change photo" off that alone.
+ * `source` is what to render: the photo, else the stand-in illustration for
+ * their sex, else null for initials.
+ *
  * Uploaded avatars are stored as a private bucket path and need signing before
- * they can be displayed; a Google picture URL resolves to itself.
+ * they can be displayed; a Google picture URL resolves to itself. Until that
+ * settles `source` stays null, so a stranger's illustration never flashes up
+ * ahead of the person's own photo.
  */
-export function useAvatarUrl(pictureUrl: string | null | undefined): string | null {
-  const [url, setUrl] = React.useState<string | null>(null);
+export function useAvatarImage(
+  user: Pick<User, 'id' | 'sex' | 'picture_url'> | null | undefined,
+): { photoUrl: string | null; source: { uri: string } | number | null } {
+  const pictureUrl = user?.picture_url;
+  const [resolved, setResolved] = React.useState<{ from: string; url: string | null } | null>(
+    null,
+  );
 
   React.useEffect(() => {
+    if (!pictureUrl) return;
     let cancelled = false;
     void (async () => {
-      const resolved = await resolveAvatarUrl(pictureUrl);
-      if (!cancelled) setUrl(resolved);
+      const url = await resolveAvatarUrl(pictureUrl);
+      if (!cancelled) setResolved({ from: pictureUrl, url });
     })();
     return () => {
       cancelled = true;
     };
   }, [pictureUrl]);
 
-  return url;
+  const settled = !pictureUrl || resolved?.from === pictureUrl;
+  const photoUrl = pictureUrl && settled ? (resolved?.url ?? null) : null;
+  const source = photoUrl
+    ? { uri: photoUrl }
+    : settled
+      ? defaultAvatarSource(user?.id, user?.sex)
+      : null;
+  return { photoUrl, source };
 }
 
 /** The avatar is never shown above 96pt; 512px covers every screen density. */

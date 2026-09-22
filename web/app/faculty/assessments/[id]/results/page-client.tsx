@@ -27,6 +27,7 @@ interface StudentResult {
   name: string;
   email: string;
   picture_url: string | null;
+  sex: "male" | "female" | null;
   section: string | null;
   status: Status;
   attempt_count: number;
@@ -384,7 +385,13 @@ export default function AssessmentResultsClient({ assessmentId }: { assessmentId
                       >
                         <td className="px-4 py-4 sm:px-6">
                           <div className="flex items-center gap-3">
-                            <Avatar name={r.name} src={r.picture_url} size="md" />
+                            <Avatar
+                              name={r.name}
+                              src={r.picture_url}
+                              userId={r.student_id}
+                              sex={r.sex}
+                              size="md"
+                            />
                             <div className="min-w-0">
                               <p className="truncate font-semibold text-gray-800">{r.name}</p>
                               <p className="truncate text-sm text-gray-500">{r.email}</p>

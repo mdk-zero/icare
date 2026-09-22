@@ -70,7 +70,7 @@ export async function GET(request: NextRequest) {
     const scenarioIds = [...new Set(assignments.map((a) => a.scenario_id))];
     const [scenariosRes, studentsRes] = await Promise.all([
       supabase.from('scenarios').select('id, title').in('id', scenarioIds),
-      supabase.from('users').select('id, name').in('id', studentIds),
+      supabase.from('users').select('id, name, picture_url, sex').in('id', studentIds),
     ]);
 
     if (scenariosRes.error || studentsRes.error) {
@@ -79,14 +79,16 @@ export async function GET(request: NextRequest) {
     }
 
     const scenariosById = new Map(scenariosRes.data?.map((s) => [s.id, s.title]));
-    const studentsById = new Map(studentsRes.data?.map((s) => [s.id, s.name]));
+    const studentsById = new Map(studentsRes.data?.map((s) => [s.id, s]));
 
     const formatted = assignments.map((a) => ({
       id: a.id,
       scenario_id: a.scenario_id,
       scenario_title: scenariosById.get(a.scenario_id) ?? 'Unknown Scenario',
       student_id: a.student_id,
-      student_name: studentsById.get(a.student_id) ?? 'Unknown Student',
+      student_name: studentsById.get(a.student_id)?.name ?? 'Unknown Student',
+      student_picture_url: studentsById.get(a.student_id)?.picture_url ?? null,
+      student_sex: studentsById.get(a.student_id)?.sex ?? null,
       assigned_at: a.assigned_at,
       deadline: a.deadline,
       status: a.status,

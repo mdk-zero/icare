@@ -862,7 +862,14 @@ export interface EhrRecord {
   reviewed_at?: string | null;
   remarks?: string | null;
   patients?: { name: string; room_number: string | null } | null;
-  users?: { name: string; email: string } | null;
+  /** The recorder; the patient chart also embeds their id, picture and sex for the avatar. */
+  users?: {
+    id?: string;
+    name: string;
+    email: string;
+    picture_url?: string | null;
+    sex?: 'male' | 'female' | null;
+  } | null;
 }
 
 export async function fetchMyEhrRecords(type: EhrType, patientId?: string): Promise<EhrRecord[]> {
@@ -1064,6 +1071,7 @@ export interface FacultyOverview {
     name: string;
     section: string | null;
     picture_url: string | null;
+    sex: 'male' | 'female' | null;
     risk: string | null;
     probability: number | null;
     overdue: number;
@@ -1112,6 +1120,7 @@ export interface FacultyStudent {
   name: string;
   email: string;
   picture_url?: string | null;
+  sex?: 'male' | 'female' | null;
   section_id?: string | null;
   section?: string | null;
   /** Latest ML classification; null when the model has never scored them. */
@@ -1144,6 +1153,8 @@ export interface ScenarioAssignment {
   scenario_title: string;
   student_id: string;
   student_name: string;
+  student_picture_url?: string | null;
+  student_sex?: 'male' | 'female' | null;
   assigned_at: string;
   deadline: string;
   status: 'pending' | 'in_progress' | 'completed' | 'overdue';
@@ -1311,8 +1322,12 @@ export interface AnalyticsSummary {
   risk_distribution: Record<string, number>; // keys: 'safe' | 'at_risk'
   /** Ranked by average submitted score, same section/date scope as everything else. */
   top_students: {
+    /** = users.id */
     student_key: string;
     name: string;
+    /** Joined from users by the route; the warehouse keeps neither. */
+    picture_url?: string | null;
+    sex?: 'male' | 'female' | null;
     section: string | null;
     average_score: number;
     attempts: number;

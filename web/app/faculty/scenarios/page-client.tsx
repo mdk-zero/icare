@@ -1673,7 +1673,13 @@ export default function FacultyScenariosClient() {
                             </td>
                             <td className="py-2.5 px-4 text-sm text-gray-800">
                               <div className="flex items-center gap-2">
-                                <Avatar name={student.name} src={student.picture_url} size="xs" />
+                                <Avatar
+                                  name={student.name}
+                                  src={student.picture_url}
+                                  userId={student.id}
+                                  sex={student.sex}
+                                  size="xs"
+                                />
                                 {student.name}
                               </div>
                             </td>

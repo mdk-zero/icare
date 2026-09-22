@@ -17,7 +17,7 @@ import { Radius, Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
 import { SectionHeader, SkeletonScreen, SyncStatus } from "@/components/ui";
 import { useAuth } from "@/hooks/useAuth";
-import { useAvatarUrl } from "@/hooks/useAvatar";
+import { useAvatarImage } from "@/hooks/useAvatar";
 import { useApiData, allCached } from "@/hooks/useApiData";
 import {
   fetchScenarioAssignments,
@@ -160,7 +160,7 @@ export default function DashboardScreen() {
     [router],
   );
   const { user } = useAuth();
-  const avatarUrl = useAvatarUrl(user?.picture_url);
+  const { source: avatarSource } = useAvatarImage(user);
   const { Palette, Accent, Shadow, Type } = useTheme();
   const styles = React.useMemo(
     () => createStyles(Palette, Accent, Shadow, Type),
@@ -282,8 +282,8 @@ export default function DashboardScreen() {
           accessibilityRole="button"
           accessibilityLabel="Open profile"
         >
-          {avatarUrl ? (
-            <Image source={{ uri: avatarUrl }} style={styles.avatar} contentFit="cover" />
+          {avatarSource ? (
+            <Image source={avatarSource} style={styles.avatar} contentFit="cover" />
           ) : (
             <LinearGradient
               colors={[Teal.light, Teal.primary, Teal.deep]}

@@ -42,6 +42,7 @@ interface StudentPerformance {
   name: string;
   email: string;
   picture_url: string | null;
+  sex: "male" | "female" | null;
   quizzes_completed: number;
   average_score: number | null;
   at_risk: boolean;
@@ -1314,6 +1315,8 @@ export default function StudentManagementClient() {
                           <Avatar
                             name={student.name}
                             src={student.picture_url}
+                            userId={student.id}
+                            sex={student.sex}
                             size="md"
                             tone={student.at_risk ? "risk" : "brand"}
                           />

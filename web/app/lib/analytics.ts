@@ -78,3 +78,36 @@ export async function resolveSummaryArgs(
     p_bucket: deriveBucket(from, to),
   };
 }
+
+/** Ids per `in` filter — each is a URL-encoded query param, so keep it short. */
+const AVATAR_LOOKUP_CHUNK = 150;
+
+/**
+ * The warehouse carries no picture or sex, so ranked student rows are joined
+ * back to users for their avatars (student_key is users.id). A failed lookup
+ * leaves the rows as they were and the avatars fall back to initials.
+ */
+export async function withStudentAvatars<T extends { student_key: string }>(
+  supabase: SupabaseClient,
+  rows: T[],
+): Promise<(T & { picture_url?: string | null; sex?: 'male' | 'female' | null })[]> {
+  if (rows.length === 0) return rows;
+  const ids = rows.map((r) => r.student_key);
+  const chunks: string[][] = [];
+  for (let i = 0; i < ids.length; i += AVATAR_LOOKUP_CHUNK) {
+    chunks.push(ids.slice(i, i + AVATAR_LOOKUP_CHUNK));
+  }
+  const results = await Promise.all(
+    chunks.map((chunk) => supabase.from('users').select('id, picture_url, sex').in('id', chunk)),
+  );
+  const failed = results.find((r) => r.error);
+  if (failed) {
+    console.error('Failed to look up student avatars', failed.error);
+    return rows;
+  }
+  const byId = new Map(results.flatMap((r) => r.data ?? []).map((u) => [u.id as string, u]));
+  return rows.map((r) => {
+    const user = byId.get(r.student_key);
+    return user ? { ...r, picture_url: user.picture_url ?? null, sex: user.sex ?? null } : r;
+  });
+}
