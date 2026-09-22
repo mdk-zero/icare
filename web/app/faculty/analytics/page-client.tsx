@@ -33,12 +33,20 @@ import PageHeader from "../../components/PageHeader";
 import StatTile from "../../components/StatTile";
 import Card, { CardLabel } from "../../components/Card";
 import { usePageData } from "../../lib/use-page-data";
-import { MODEL_EVAL_SNAPSHOT, DEFAULT_MODEL_KIND } from "../../lib/model-eval-snapshot";
+import {
+  MODEL_EVAL_SNAPSHOT,
+  DEFAULT_MODEL_KIND,
+} from "../../lib/model-eval-snapshot";
 import { EcgLoader } from "../../components/EcgLoader";
 import AiThinking from "../../components/AiThinking";
 import { Leaderboard } from "./Leaderboard";
 import { parseDay, formatRange } from "./dates";
-import { buildTrendSeries, TrendLegend, TrendLineChart, TrendTable } from "./SectionTrendChart";
+import {
+  buildTrendSeries,
+  TrendLegend,
+  TrendLineChart,
+  TrendTable,
+} from "./SectionTrendChart";
 
 /** Stable empty fallback, so nothing downstream sees a new array each render. */
 const NO_SECTIONS: Section[] = [];
@@ -79,7 +87,10 @@ function readStoredNarrative(key: string): NarrativeResult | null {
 
 function writeStoredNarrative(key: string, result: NarrativeResult) {
   try {
-    localStorage.setItem(NARRATIVE_STORAGE_PREFIX + key, JSON.stringify(result));
+    localStorage.setItem(
+      NARRATIVE_STORAGE_PREFIX + key,
+      JSON.stringify(result),
+    );
     const raw = localStorage.getItem(NARRATIVE_STORAGE_INDEX_KEY);
     const index: string[] = raw ? (JSON.parse(raw) as string[]) : [];
     const next = [...index.filter((k) => k !== key), key];
@@ -114,7 +125,10 @@ const PRESETS: { id: PresetId; label: string }[] = [
 ];
 
 /** Ranges are inclusive of both ends, matching the SQL `>= from and <= to`. */
-function rangeForPreset(preset: Exclude<PresetId, "custom">): { from: string; to: string } {
+function rangeForPreset(preset: Exclude<PresetId, "custom">): {
+  from: string;
+  to: string;
+} {
   const today = new Date();
   const from = new Date(today);
   switch (preset) {
@@ -174,8 +188,10 @@ function pctChange(
 function sectionScopeLabel(sections: Section[], selected: string[]): string {
   // Empty selection means "everything I manage" — the same thing the API does
   // when no section_ids are sent.
-  if (selected.length === 0 || selected.length === sections.length) return "All sections";
-  if (selected.length === 1) return sections.find((s) => s.id === selected[0])?.name ?? "1 section";
+  if (selected.length === 0 || selected.length === sections.length)
+    return "All sections";
+  if (selected.length === 1)
+    return sections.find((s) => s.id === selected[0])?.name ?? "1 section";
   return `${selected.length} sections`;
 }
 
@@ -210,12 +226,15 @@ function SectionPicker({
     };
   }, [open]);
 
-  const allSelected = selected.length === 0 || selected.length === sections.length;
+  const allSelected =
+    selected.length === 0 || selected.length === sections.length;
   const summary = sectionScopeLabel(sections, selected);
 
   const toggle = (id: string) => {
     const base = selected.length === 0 ? sections.map((s) => s.id) : selected;
-    const next = base.includes(id) ? base.filter((s) => s !== id) : [...base, id];
+    const next = base.includes(id)
+      ? base.filter((s) => s !== id)
+      : [...base, id];
     onChange(next);
   };
 
@@ -227,9 +246,15 @@ function SectionPicker({
         disabled={sections.length === 0}
         className="flex items-center gap-2 rounded-lg border border-hairline bg-surface px-3 py-1.5 text-sm text-gray-700 transition-colors hover:border-brand-300 disabled:cursor-not-allowed disabled:opacity-50"
       >
-        <FontAwesomeIcon icon={faLayerGroup} className="w-3.5 h-3.5 text-brand-600" />
+        <FontAwesomeIcon
+          icon={faLayerGroup}
+          className="w-3.5 h-3.5 text-brand-600"
+        />
         <span className="font-medium">{summary}</span>
-        <FontAwesomeIcon icon={faChevronDown} className="w-3 h-3 text-gray-400" />
+        <FontAwesomeIcon
+          icon={faChevronDown}
+          className="w-3 h-3 text-gray-400"
+        />
       </button>
 
       {open && (
@@ -240,7 +265,12 @@ function SectionPicker({
             className="flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-sm text-gray-700 hover:bg-subtle"
           >
             <span className="font-medium">All sections</span>
-            {allSelected && <FontAwesomeIcon icon={faCheck} className="w-3 h-3 text-brand-600" />}
+            {allSelected && (
+              <FontAwesomeIcon
+                icon={faCheck}
+                className="w-3 h-3 text-brand-600"
+              />
+            )}
           </button>
           <div className="my-1 h-px bg-hairline" />
           {sections.map((section) => {
@@ -255,10 +285,14 @@ function SectionPicker({
                 <span className="flex items-center gap-2 truncate">
                   <span
                     className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
-                      on ? "border-brand-600 bg-brand-600 text-white" : "border-gray-300"
+                      on
+                        ? "border-brand-600 bg-brand-600 text-white"
+                        : "border-gray-300"
                     }`}
                   >
-                    {on && <FontAwesomeIcon icon={faCheck} className="w-2.5 h-2.5" />}
+                    {on && (
+                      <FontAwesomeIcon icon={faCheck} className="w-2.5 h-2.5" />
+                    )}
                   </span>
                   <span className="truncate">{section.name}</span>
                 </span>
@@ -297,7 +331,12 @@ function niceStep(roughStep: number): number {
 function SectionBarChart({
   sections,
 }: {
-  sections: { id: string; name: string; students: number; active_students?: number }[];
+  sections: {
+    id: string;
+    name: string;
+    students: number;
+    active_students?: number;
+  }[];
 }) {
   const W = 640;
   const H = 260;
@@ -316,7 +355,10 @@ function SectionBarChart({
   const y = (v: number) => padT + (1 - v / ceiling) * plotH;
 
   const barGap = 28;
-  const barW = Math.min(64, (plotW - barGap * Math.max(n - 1, 0)) / Math.max(n, 1));
+  const barW = Math.min(
+    64,
+    (plotW - barGap * Math.max(n - 1, 0)) / Math.max(n, 1),
+  );
   const rowW = barW * n + barGap * Math.max(n - 1, 0);
   const startX = padL + Math.max(0, (plotW - rowW) / 2);
 
@@ -422,7 +464,11 @@ function wrapLabel(label: string, perLine = 14, maxLines = 2): string[] {
  * read as mastery. Colours are the same grade thresholds the rest of the
  * page uses, so a red bar means the same thing here as anywhere else.
  */
-function CompetencyBarChart({ items }: { items: { key: string; label: string; value: number }[] }) {
+function CompetencyBarChart({
+  items,
+}: {
+  items: { key: string; label: string; value: number }[];
+}) {
   // The card is half the page wide, and a viewBox scales its text along with
   // the box: at 640 the labels rendered around 5px. Narrower box, same fonts.
   const W = 1000;
@@ -439,7 +485,10 @@ function CompetencyBarChart({ items }: { items: { key: string; label: string; va
   const y = (v: number) => padT + (1 - v / 100) * plotH;
 
   const barGap = n > 6 ? 12 : 24;
-  const barW = Math.min(56, (plotW - barGap * Math.max(n - 1, 0)) / Math.max(n, 1));
+  const barW = Math.min(
+    56,
+    (plotW - barGap * Math.max(n - 1, 0)) / Math.max(n, 1),
+  );
   const rowW = barW * n + barGap * Math.max(n - 1, 0);
   const startX = padL + Math.max(0, (plotW - rowW) / 2);
 
@@ -481,7 +530,14 @@ function CompetencyBarChart({ items }: { items: { key: string; label: string; va
           <g key={item.key}>
             {/* Faint full-height track, the same device the other bars on
                 this page use to show the distance left to 100%. */}
-            <rect x={x} y={padT} width={barW} height={plotH} rx={6} className="fill-gray-100" />
+            <rect
+              x={x}
+              y={padT}
+              width={barW}
+              height={plotH}
+              rx={6}
+              className="fill-gray-100"
+            />
             <rect
               x={x}
               y={barY}
@@ -552,9 +608,21 @@ function NarrativeModal({
 
   const lists = narrative
     ? [
-        { title: "Highlights", items: narrative.highlights, dot: "bg-emerald-600" },
-        { title: "Watch-outs", items: narrative.watchouts, dot: "bg-amber-600" },
-        { title: "Suggested Actions", items: narrative.actions, dot: "bg-brand-600" },
+        {
+          title: "Highlights",
+          items: narrative.highlights,
+          dot: "bg-emerald-600",
+        },
+        {
+          title: "Watch-outs",
+          items: narrative.watchouts,
+          dot: "bg-amber-600",
+        },
+        {
+          title: "Suggested Actions",
+          items: narrative.actions,
+          dot: "bg-brand-600",
+        },
       ].filter((l) => l.items.length > 0)
     : [];
 
@@ -575,10 +643,16 @@ function NarrativeModal({
         <div className="flex items-center justify-between gap-3 border-b border-hairline bg-subtle px-5 py-3">
           <div className="flex min-w-0 items-center gap-3">
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-600/10">
-              <FontAwesomeIcon icon={faWandMagicSparkles} className="h-4 w-4 text-brand-600" />
+              <FontAwesomeIcon
+                icon={faWandMagicSparkles}
+                className="h-4 w-4 text-brand-600"
+              />
             </span>
             <div className="min-w-0">
-              <h2 id="ai-summary-title" className="font-display text-lg font-semibold text-gray-900">
+              <h2
+                id="ai-summary-title"
+                className="font-display text-lg font-semibold text-gray-900"
+              >
                 AI Summary
               </h2>
               <p className="truncate text-sm text-gray-500">{scope}</p>
@@ -602,7 +676,10 @@ function NarrativeModal({
           )}
 
           {loading && (
-            <AiThinking phrases={ANALYTICS_SUMMARY_PHRASES} label="Generating the AI summary" />
+            <AiThinking
+              phrases={ANALYTICS_SUMMARY_PHRASES}
+              label="Generating the AI summary"
+            />
           )}
 
           {!loading && narrative && (
@@ -612,16 +689,23 @@ function NarrativeModal({
                   {narrative.headline}
                 </p>
               )}
-              <p className="text-sm leading-relaxed text-gray-700">{narrative.overview}</p>
+              <p className="text-sm leading-relaxed text-gray-700">
+                {narrative.overview}
+              </p>
 
               {lists.length > 0 && (
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                   {lists.map((list) => (
                     <div key={list.title} className="rounded-xl bg-subtle p-4">
-                      <p className="mb-2 text-sm font-semibold text-gray-900">{list.title}</p>
+                      <p className="mb-2 text-sm font-semibold text-gray-900">
+                        {list.title}
+                      </p>
                       <ul className="space-y-2">
                         {list.items.map((item, idx) => (
-                          <li key={idx} className="flex items-start gap-2 text-sm text-gray-600">
+                          <li
+                            key={idx}
+                            className="flex items-start gap-2 text-sm text-gray-600"
+                          >
                             <span
                               className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${list.dot}`}
                             />
@@ -650,7 +734,10 @@ function NarrativeModal({
                 onClick={onRetry}
                 className="flex items-center gap-2 rounded-lg bg-brand-600 px-3.5 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-700"
               >
-                <FontAwesomeIcon icon={faArrowsRotate} className="h-3.5 w-3.5" />
+                <FontAwesomeIcon
+                  icon={faArrowsRotate}
+                  className="h-3.5 w-3.5"
+                />
                 Retry
               </button>
             )}
@@ -673,13 +760,20 @@ export default function FacultyAnalyticsClient() {
   const [preset, setPreset] = useState<PresetId>("3m");
   // Lazily initialised so `new Date()` never runs during a server render —
   // the first paint is the skeleton, so there is nothing to mismatch.
-  const [range, setRange] = useState<{ from: string; to: string }>(() => rangeForPreset("3m"));
+  const [range, setRange] = useState<{ from: string; to: string }>(() =>
+    rangeForPreset("3m"),
+  );
   // What the custom date inputs show. Kept separate from `range` (the applied
   // query) so a half-typed or inverted range doesn't fire a request, while the
   // controlled inputs still track every keystroke.
-  const [draft, setDraft] = useState<{ from: string; to: string }>(() => rangeForPreset("3m"));
+  const [draft, setDraft] = useState<{ from: string; to: string }>(() =>
+    rangeForPreset("3m"),
+  );
 
-  const { data: sectionsData } = usePageData("faculty:sections", fetchFacultySections);
+  const { data: sectionsData } = usePageData(
+    "faculty:sections",
+    fetchFacultySections,
+  );
   const sections = sectionsData ?? NO_SECTIONS;
 
   const { from, to } = range;
@@ -707,7 +801,12 @@ export default function FacultyAnalyticsClient() {
   const prevRangeValue = useMemo(() => previousRange(from, to), [from, to]);
   const { data: prevAnalytics } = usePageData(
     `faculty:analytics:prev:${sectionKey}:${prevRangeValue.from}:${prevRangeValue.to}`,
-    () => fetchAnalyticsSummary({ sectionIds, from: prevRangeValue.from, to: prevRangeValue.to }),
+    () =>
+      fetchAnalyticsSummary({
+        sectionIds,
+        from: prevRangeValue.from,
+        to: prevRangeValue.to,
+      }),
     { keepPreviousData: true },
   );
   const prevSummary = prevAnalytics?.summary ?? null;
@@ -754,11 +853,21 @@ export default function FacultyAnalyticsClient() {
         competency: summary.competency_breakdown,
         // Both keys are undefined on a warehouse that hasn't run migration
         // 030 yet, hence the fallbacks — same as everywhere else these are read.
-        top: (summary.top_students ?? []).map((s) => [s.student_key, s.average_score, s.attempts]),
-        sections: (summary.sections ?? []).map((s) => [s.id, s.students, s.active_students ?? 0]),
+        top: (summary.top_students ?? []).map((s) => [
+          s.student_key,
+          s.average_score,
+          s.attempts,
+        ]),
+        sections: (summary.sections ?? []).map((s) => [
+          s.id,
+          s.students,
+          s.active_students ?? 0,
+        ]),
       })
     : null;
-  const narrativeKey = dataSignature ? `faculty:analytics:narrative:${dataSignature}` : null;
+  const narrativeKey = dataSignature
+    ? `faculty:analytics:narrative:${dataSignature}`
+    : null;
 
   // Nothing is generated until the AI Summary button is clicked. The click
   // pins the key and filters it was made for, so a warehouse refresh landing
@@ -786,7 +895,9 @@ export default function FacultyAnalyticsClient() {
     loading: narrativeLoading,
     revalidating: narrativeRevalidating,
     refresh: reloadNarrative,
-  } = usePageData(narrativeRequest?.key ?? null, narrativeLoader, { freshFor: Infinity });
+  } = usePageData(narrativeRequest?.key ?? null, narrativeLoader, {
+    freshFor: Infinity,
+  });
 
   const narrative = narrativeResult?.narrative ?? null;
   const narrativeAt = narrativeResult?.generated_at ?? null;
@@ -810,32 +921,6 @@ export default function FacultyAnalyticsClient() {
 
   const closeNarrative = useCallback(() => setNarrativeOpen(false), []);
 
-  if (loading) {
-    return (
-      <div>
-        <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] p-4 sm:p-5 mb-4 animate-pulse">
-          <div className="space-y-3">
-            <div className="h-5 w-32 bg-gray-200 rounded-full" />
-            <div className="h-8 w-64 bg-gray-200 rounded" />
-            <div className="h-4 w-96 bg-gray-200 rounded" />
-          </div>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <SkeletonStatTile key={i} />
-          ))}
-        </div>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
-          <div className="lg:col-span-2">
-            <SkeletonChartArea />
-          </div>
-          <SkeletonChartArea />
-        </div>
-        <SkeletonCompetencyGrid />
-      </div>
-    );
-  }
-
   const atRisk = summary?.risk_distribution?.at_risk ?? 0;
   const trendSeries = buildTrendSeries(summary, sections);
   // The split failed to load (the summary itself did) — say so rather than
@@ -847,18 +932,21 @@ export default function FacultyAnalyticsClient() {
   const topStudents = summary?.top_students ?? [];
   // The card shows the podium and a little more; the full ranking opens on
   // its own page with the same scope, so it lists the same students in order.
-  const leaderboardHref = `/faculty/analytics/leaderboard?${new URLSearchParams({
-    ...(sectionIds.length > 0 ? { sections: sectionIds.join(",") } : {}),
-    from,
-    to,
-  })}`;
+  const leaderboardHref = `/faculty/analytics/leaderboard?${new URLSearchParams(
+    {
+      ...(sectionIds.length > 0 ? { sections: sectionIds.join(",") } : {}),
+      from,
+      to,
+    },
+  )}`;
   const sectionsWithActivity = summary?.sections ?? [];
 
   // No ground-truth outcome column exists to score live predictions against,
   // so accuracy is a shipped offline-eval snapshot, labelled with whichever
   // model actually issued the most recent risk labels.
   const modelKind = summary?.active_model?.kind ?? DEFAULT_MODEL_KIND;
-  const modelEval = MODEL_EVAL_SNAPSHOT[modelKind] ?? MODEL_EVAL_SNAPSHOT[DEFAULT_MODEL_KIND];
+  const modelEval =
+    MODEL_EVAL_SNAPSHOT[modelKind] ?? MODEL_EVAL_SNAPSHOT[DEFAULT_MODEL_KIND];
 
   const prevAtRisk = prevSummary?.risk_distribution?.at_risk ?? null;
   const comparisonLabel = `vs ${formatRange(prevRangeValue.from, prevRangeValue.to)}`;
@@ -866,9 +954,15 @@ export default function FacultyAnalyticsClient() {
   const statCards = [
     {
       icon: faChartBar,
-      value: summary?.cohort.average_score != null ? `${summary.cohort.average_score}%` : "—",
+      value:
+        summary?.cohort.average_score != null
+          ? `${summary.cohort.average_score}%`
+          : "—",
       label: "Average Student Performance",
-      change: pctChange(summary?.cohort.average_score, prevSummary?.cohort.average_score),
+      change: pctChange(
+        summary?.cohort.average_score,
+        prevSummary?.cohort.average_score,
+      ),
       comparisonLabel,
       goodDirection: "up" as const,
       iconBg: "bg-blue-50",
@@ -980,7 +1074,9 @@ export default function FacultyAnalyticsClient() {
 
             <div className="ml-auto flex items-center gap-3">
               <div className="flex items-center gap-2 text-xs text-gray-400">
-                {refreshing && <EcgLoader size="xs" className="text-brand-600" />}
+                {refreshing && (
+                  <EcgLoader size="xs" className="text-brand-600" />
+                )}
                 <span className="tabular-nums">{formatRange(from, to)}</span>
               </div>
             </div>
@@ -988,8 +1084,8 @@ export default function FacultyAnalyticsClient() {
 
           {sections.length === 0 && (
             <p className="border-t border-hairline px-4 py-2.5 text-xs text-amber-700">
-              You don&apos;t manage any sections yet, so there is nothing to report on. An admin
-              assigns sections from Admin → Faculty.
+              You don&apos;t manage any sections yet, so there is nothing to
+              report on. An admin assigns sections from Admin → Faculty.
             </p>
           )}
         </div>
@@ -1011,7 +1107,10 @@ export default function FacultyAnalyticsClient() {
           {narrativeBusy ? (
             <EcgLoader />
           ) : (
-            <FontAwesomeIcon icon={faWandMagicSparkles} className="h-3.5 w-3.5" />
+            <FontAwesomeIcon
+              icon={faWandMagicSparkles}
+              className="h-3.5 w-3.5"
+            />
           )}
           AI Summary
         </button>
@@ -1033,141 +1132,186 @@ export default function FacultyAnalyticsClient() {
       )}
 
       {/* Refetches dim the panels in place rather than tearing the page down
-          to skeletons, so changing a filter doesn't make the layout jump. */}
-      <div className={`transition-opacity duration-200 ${refreshing ? "opacity-60" : ""}`}>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4 items-stretch">
-          {statCards.map((card) => (
-            <StatTile
-              key={card.label}
-              icon={card.icon}
-              value={card.value}
-              label={card.label}
-              change={card.change}
-              caption={card.comparisonLabel}
-              goodDirection={card.goodDirection}
-              iconBg={card.iconBg}
-              iconColor={card.iconColor}
-            />
-          ))}
+          to skeletons, so changing a filter doesn't make the layout jump —
+          only the very first load, with nothing cached yet, shows skeletons,
+          and even then the header and filters above stay live. */}
+      {loading ? (
+        <div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <SkeletonStatTile key={i} />
+            ))}
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+            <div className="lg:col-span-2">
+              <SkeletonChartArea />
+            </div>
+            <SkeletonChartArea />
+          </div>
+          <SkeletonCompetencyGrid />
         </div>
+      ) : (
+        <div
+          className={`transition-opacity duration-200 ${refreshing ? "opacity-60" : ""}`}
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4 items-stretch">
+            {statCards.map((card) => (
+              <StatTile
+                key={card.label}
+                icon={card.icon}
+                value={card.value}
+                label={card.label}
+                change={card.change}
+                caption={card.comparisonLabel}
+                goodDirection={card.goodDirection}
+                iconBg={card.iconBg}
+                iconColor={card.iconColor}
+              />
+            ))}
+          </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4 items-stretch">
-          <Card padding="md" className="flex flex-col lg:col-span-2">
-            <div className="flex items-center justify-between mb-5">
-              <div className="flex items-center gap-2.5">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4 items-stretch">
+            <Card padding="md" className="flex flex-col lg:col-span-2">
+              <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center gap-2.5">
+                  <div className="rounded-xl bg-brand-600/10 p-2.5">
+                    <FontAwesomeIcon
+                      icon={faChartBar}
+                      className="h-5 w-5 text-brand-600"
+                    />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-gray-900">
+                      Classroom Performance Overview
+                    </h3>
+                    <p className="text-xs text-gray-400">
+                      {trendSeries.length === 1
+                        ? `Average quiz score over time — ${trendSeries[0].name}`
+                        : "Average quiz score over time, one line per section"}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex shrink-0 items-center gap-3">
+                  <span className="font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-slate-400">
+                    {BUCKET_LABEL[bucket]}
+                  </span>
+                  {trendSeries.length > 0 && (
+                    <div
+                      className="flex rounded-lg border border-hairline p-0.5"
+                      role="group"
+                      aria-label="View"
+                    >
+                      {(["chart", "table"] as const).map((view) => (
+                        <button
+                          key={view}
+                          type="button"
+                          onClick={() => setTrendView(view)}
+                          aria-pressed={trendView === view}
+                          className={`rounded-md px-2 py-0.5 text-xs capitalize transition-colors ${
+                            trendView === view
+                              ? "bg-brand-600 text-white"
+                              : "text-gray-500 hover:bg-subtle hover:text-gray-900"
+                          }`}
+                        >
+                          {view}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="flex-1 flex flex-col justify-center">
+                {trendUnavailable ? (
+                  <p className="text-gray-400 text-sm py-16 text-center">
+                    The per-section breakdown couldn&apos;t be loaded. Refresh
+                    to try again.
+                  </p>
+                ) : trendSeries.length === 0 ? (
+                  <p className="text-gray-400 text-sm py-16 text-center">
+                    No submitted attempts in {formatRange(from, to)}.
+                  </p>
+                ) : trendView === "table" ? (
+                  <TrendTable series={trendSeries} bucket={bucket} />
+                ) : (
+                  <>
+                    <TrendLegend series={trendSeries} />
+                    <TrendLineChart series={trendSeries} bucket={bucket} />
+                  </>
+                )}
+              </div>
+            </Card>
+
+            <Card padding="md" className="flex flex-col">
+              <div className="flex items-center gap-2.5 mb-5">
+                <div className="rounded-xl bg-amber-500/10 p-2.5">
+                  <FontAwesomeIcon
+                    icon={faTrophy}
+                    className="h-5 w-5 text-amber-600"
+                  />
+                </div>
+                <h3 className="font-semibold text-gray-900">
+                  Top Performing Students
+                </h3>
+              </div>
+              <div className="flex-1 flex flex-col justify-center">
+                <Leaderboard students={topStudents.slice(0, 7)} />
+              </div>
+              {topStudents.length > 0 && (
+                <div className="mt-4 flex justify-end border-t border-hairline pt-3">
+                  <Link
+                    href={leaderboardHref}
+                    className="text-sm font-medium text-brand-600 transition-colors hover:text-brand-700"
+                  >
+                    View full leaderboard →
+                  </Link>
+                </div>
+              )}
+            </Card>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-1 gap-4 mb-4 items-stretch">
+            <Card padding="md" className="flex flex-col">
+              <div className="flex items-center gap-2.5 mb-5">
                 <div className="rounded-xl bg-brand-600/10 p-2.5">
-                  <FontAwesomeIcon icon={faChartBar} className="h-5 w-5 text-brand-600" />
+                  <FontAwesomeIcon
+                    icon={faLayerGroup}
+                    className="h-5 w-5 text-brand-600"
+                  />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-gray-900">Classroom Performance Overview</h3>
+                  <h3 className="font-semibold text-gray-900">
+                    Performance per Competency
+                  </h3>
                   <p className="text-xs text-gray-400">
-                    {trendSeries.length === 1
-                      ? `Average quiz score over time — ${trendSeries[0].name}`
-                      : "Average quiz score over time, one line per section"}
+                    Bar chart — average score by competency
                   </p>
                 </div>
               </div>
-              <div className="flex shrink-0 items-center gap-3">
-                <span className="font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-slate-400">
-                  {BUCKET_LABEL[bucket]}
-                </span>
-                {trendSeries.length > 0 && (
-                  <div
-                    className="flex rounded-lg border border-hairline p-0.5"
-                    role="group"
-                    aria-label="View"
-                  >
-                    {(["chart", "table"] as const).map((view) => (
-                      <button
-                        key={view}
-                        type="button"
-                        onClick={() => setTrendView(view)}
-                        aria-pressed={trendView === view}
-                        className={`rounded-md px-2 py-0.5 text-xs capitalize transition-colors ${
-                          trendView === view
-                            ? "bg-brand-600 text-white"
-                            : "text-gray-500 hover:bg-subtle hover:text-gray-900"
-                        }`}
-                      >
-                        {view}
-                      </button>
-                    ))}
-                  </div>
+              <div className="flex-1 flex flex-col justify-center">
+                {competencies.length === 0 ? (
+                  <p className="text-gray-400 text-sm py-12 text-center">
+                    No validated competency scores yet — record them from each
+                    student&apos;s profile.
+                  </p>
+                ) : (
+                  <CompetencyBarChart
+                    items={competencies.map(([name, value]) => ({
+                      key: name,
+                      label: name,
+                      value,
+                    }))}
+                  />
                 )}
               </div>
-            </div>
-            <div className="flex-1 flex flex-col justify-center">
-              {trendUnavailable ? (
-                <p className="text-gray-400 text-sm py-16 text-center">
-                  The per-section breakdown couldn&apos;t be loaded. Refresh to try again.
-                </p>
-              ) : trendSeries.length === 0 ? (
-                <p className="text-gray-400 text-sm py-16 text-center">
-                  No submitted attempts in {formatRange(from, to)}.
-                </p>
-              ) : trendView === "table" ? (
-                <TrendTable series={trendSeries} bucket={bucket} />
-              ) : (
-                <>
-                  <TrendLegend series={trendSeries} />
-                  <TrendLineChart series={trendSeries} bucket={bucket} />
-                </>
-              )}
-            </div>
-          </Card>
-
-          <Card padding="md" className="flex flex-col">
-            <div className="flex items-center gap-2.5 mb-5">
-              <div className="rounded-xl bg-amber-500/10 p-2.5">
-                <FontAwesomeIcon icon={faTrophy} className="h-5 w-5 text-amber-600" />
-              </div>
-              <h3 className="font-semibold text-gray-900">Top Performing Students</h3>
-            </div>
-            <div className="flex-1 flex flex-col justify-center">
-              <Leaderboard students={topStudents.slice(0, 7)} />
-            </div>
-            {topStudents.length > 0 && (
-              <div className="mt-4 flex justify-end border-t border-hairline pt-3">
-                <Link
-                  href={leaderboardHref}
-                  className="text-sm font-medium text-brand-600 transition-colors hover:text-brand-700"
-                >
-                  View full leaderboard →
-                </Link>
-              </div>
-            )}
-          </Card>
+            </Card>
+          </div>
         </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-1 gap-4 mb-4 items-stretch">
-          <Card padding="md" className="flex flex-col">
-            <div className="flex items-center gap-2.5 mb-5">
-              <div className="rounded-xl bg-brand-600/10 p-2.5">
-                <FontAwesomeIcon icon={faLayerGroup} className="h-5 w-5 text-brand-600" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-gray-900">Performance per Competency</h3>
-                <p className="text-xs text-gray-400">Bar chart — average score by competency</p>
-              </div>
-            </div>
-            <div className="flex-1 flex flex-col justify-center">
-              {competencies.length === 0 ? (
-                <p className="text-gray-400 text-sm py-12 text-center">
-                  No validated competency scores yet — record them from each student&apos;s profile.
-                </p>
-              ) : (
-                <CompetencyBarChart
-                  items={competencies.map(([name, value]) => ({ key: name, label: name, value }))}
-                />
-              )}
-            </div>
-          </Card>
-        </div>
-      </div>
+      )}
 
       {summary?.etl?.last_run_at && (
         <p className="text-xs text-gray-400">
-          Warehouse last refreshed {new Date(summary.etl.last_run_at).toLocaleString()}
+          Warehouse last refreshed{" "}
+          {new Date(summary.etl.last_run_at).toLocaleString()}
         </p>
       )}
     </div>
