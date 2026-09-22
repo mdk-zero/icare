@@ -56,14 +56,25 @@ const PANEL_HEIGHT = 430;
  * (re-anchored on every scroll/resize, never dropped); it closes on the
  * backdrop, Escape, or the footer link — which routes first — and the
  * transparent backdrop blocks any other navigation while it is open.
+ *
+ * `onOpenChange` lets the collapsible sidebar hold itself open while the cloud
+ * is up, since the cloud stays pointed at where the bell was when it opened.
  */
-export default function NotificationsPopover({ variant }: { variant: Variant }) {
+export default function NotificationsPopover({
+  variant,
+  onOpenChange,
+}: {
+  variant: Variant;
+  onOpenChange?: (open: boolean) => void;
+}) {
   const router = useRouter();
   const { notifications, unread, loading, markRead, markAllRead } = useNotifications();
 
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   const [anchor, setAnchor] = useState<Anchor | null>(null);
+
+  useEffect(() => onOpenChange?.(open), [open, onOpenChange]);
 
   const compute = (rect: DOMRect): Anchor => {
     const width = Math.min(368, window.innerWidth - 24);

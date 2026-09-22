@@ -406,25 +406,30 @@ export function SkeletonQuestionCard() {
   );
 }
 
-export function SkeletonSidebar() {
+/** `collapsed` mirrors the Shell's desktop icon rail, so the page doesn't jump when it loads. */
+export function SkeletonSidebar({ collapsed = false }: { collapsed?: boolean }) {
   return (
     <div className="h-screen bg-canvas flex overflow-hidden animate-pulse">
       <div
-        className="w-64 flex flex-col shrink-0"
+        className={`${collapsed ? 'w-64 md:w-[68px]' : 'w-64'} flex flex-col shrink-0`}
         style={{ background: 'linear-gradient(180deg, #0b3d3d 0%, #146464 50%, #0f5252 100%)' }}
       >
         {/* Brand */}
         <div className="flex items-center gap-2.5 px-4 pt-4 pb-3.5">
-          <div className="w-9 h-9 bg-white/10 rounded-[11px]" />
-          <div className="space-y-2">
+          <div className="w-9 h-9 shrink-0 bg-white/10 rounded-[11px]" />
+          <div className={`space-y-2 ${collapsed ? 'md:hidden' : ''}`}>
             <div className="h-3 w-16 bg-white/10 rounded" />
             <div className="h-2 w-20 bg-white/[0.06] rounded" />
           </div>
         </div>
         {/* Profile */}
-        <div className="mx-3 mb-2 flex items-center gap-2.5 rounded-xl bg-white/[0.05] px-2 py-2">
-          <div className="w-8 h-8 bg-white/10 rounded-full" />
-          <div className="space-y-2 flex-1">
+        <div
+          className={`mx-3 mb-2 flex items-center gap-2.5 rounded-xl bg-white/[0.05] px-2 py-2 ${
+            collapsed ? 'md:justify-center md:bg-transparent md:px-0' : ''
+          }`}
+        >
+          <div className="w-8 h-8 shrink-0 bg-white/10 rounded-full" />
+          <div className={`space-y-2 flex-1 ${collapsed ? 'md:hidden' : ''}`}>
             <div className="h-3 w-24 bg-white/10 rounded" />
             <div className="h-2 w-12 bg-white/[0.06] rounded" />
           </div>
@@ -434,7 +439,7 @@ export function SkeletonSidebar() {
           {[3, 3, 2].map((count, group) => (
             <div key={group} className="space-y-1.5">
               <div className="flex items-center gap-2 px-2.5 pb-1 pt-1">
-                <div className="h-2 w-14 bg-white/10 rounded" />
+                <div className={`h-2 w-14 bg-white/10 rounded ${collapsed ? 'md:hidden' : ''}`} />
                 <div className="h-px flex-1 bg-white/10" />
               </div>
               {Array.from({ length: count }).map((_, i) => (
