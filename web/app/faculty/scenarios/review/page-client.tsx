@@ -595,7 +595,10 @@ export default function FacultyScenarioReviewClient() {
               </p>
             </div>
           ) : (
-            <div className="rounded-2xl border border-hairline bg-surface shadow-tile">
+            <div className="overflow-clip rounded-2xl border border-hairline bg-surface shadow-tile">
+              {/* `overflow-clip`, not `-hidden`: it rounds off the square finalize
+                  bar at the panel's end without becoming a scroll container,
+                  which would pin that sticky bar to this box instead of the page. */}
               {/* Who, what, and the grade so far */}
               <div className="flex flex-col gap-5 border-b border-hairline p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
                 <div className="flex min-w-0 items-start gap-3.5">
@@ -714,8 +717,16 @@ export default function FacultyScenarioReviewClient() {
                   z-index:auto paint order it'd otherwise share with the
                   checklist's sticky first-column cells (each `position:
                   sticky`) — without them a fast scroll could momentarily
-                  paint a row on top of this bar instead of under it. */}
-              <div className="isolate z-10 bottom-0 flex flex-col gap-3 rounded-b-2xl border-t border-hairline bg-surface px-5 py-4 sm:sticky sm:flex-row sm:items-center sm:justify-between sm:px-6">
+                  paint a row on top of this bar instead of under it.
+
+                  A sticky inset counts from inside the scroller's padding, so
+                  `bottom-0` parked the bar one padding (Shell's `p-3 lg:p-5`)
+                  above the window's edge, and rows scrolled by in the strip
+                  beneath it. The negative inset cancels that padding, docking
+                  the bar flush with the edge; keep it in step with Shell's.
+                  Square corners, since docked mid-panel it meets the edge —
+                  the panel's `overflow-clip` rounds them off at its end. */}
+              <div className="isolate z-10 -bottom-3 flex flex-col gap-3 border-t border-hairline bg-surface px-5 py-4 sm:sticky sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:-bottom-5">
                 <div className="min-w-0 text-sm">
                   {finalized ? (
                     <p className="text-gray-600">
