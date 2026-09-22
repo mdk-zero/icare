@@ -840,8 +840,13 @@ export default function FacultyScenarioReviewClient() {
 
               {/* Finalize — opaque, not translucent: this sits over the criteria
                   list while stuck mid-scroll, and a `bg-surface/NN` + blur let
-                  that list show through it instead of reading as a solid bar. */}
-              <div className="bottom-0 flex flex-col gap-3 rounded-b-2xl border-t border-hairline bg-surface px-5 py-4 shadow-[0_-6px_16px_-8px_rgb(15_23_42_/_0.12)] sm:sticky sm:flex-row sm:items-center sm:justify-between sm:px-6">
+                  that list show through it instead of reading as a solid bar.
+                  `isolate` + an explicit z-index take it out of the ambiguous
+                  z-index:auto paint order it'd otherwise share with every
+                  criterion `<li>` (each is `position: relative`, for its own
+                  rail) — without them a fast scroll could momentarily paint
+                  a criterion on top of this bar instead of under it. */}
+              <div className="isolate z-10 bottom-0 flex flex-col gap-3 rounded-b-2xl border-t border-hairline bg-surface px-5 py-4 sm:sticky sm:flex-row sm:items-center sm:justify-between sm:px-6">
                 <div className="min-w-0 text-sm">
                   {finalized ? (
                     <p className="text-gray-600">
