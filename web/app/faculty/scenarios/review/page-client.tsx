@@ -318,10 +318,14 @@ export default function FacultyScenarioReviewClient() {
     tasks,
     new Map(tasks.filter(hasCompletion).map((t) => [t.id, { rating: t.rating }])),
   );
-  const shownScore = finalized ? (selected?.score ?? 0) : projectedScore;
+  // Always the live grade from `tasks`, not the assignment record's stored
+  // score — that only matters to the queue list and other pages, which
+  // `applyScore` keeps in sync after each edit (see handleRate/handleNoteBlur).
+  const shownScore = projectedScore;
   // Nothing recorded or rated yet: a 0% "Needs Improvement" would read as a verdict.
   const ungraded = !finalized && tasks.every((t) => effectiveRating(t) === null);
-  const gradePending = (tasksLoading && !finalized) || ungraded;
+  // shownScore now reads from `tasks` in every state, so loading gates it too.
+  const gradePending = tasksLoading || ungraded;
   // Before finalizing, a level only implied by an unrated check-off is drawn faded.
   const faded = (t: FacultyScenarioTask) => !finalized && t.rating === null;
   const ratedCount = tasks.filter((t) => t.rating !== null).length;
@@ -338,13 +342,23 @@ export default function FacultyScenarioReviewClient() {
       return next;
     });
 
+  // Finalizing doesn't lock grading — this patches the queue's stored score
+  // (and the student's) so a correction to an already-finalized grade shows
+  // up immediately everywhere, not just in the panel that's open.
+  const applyScore = (score: number | undefined) => {
+    if (score === undefined || !selectedId) return;
+    setAssignments((prev) => prev.map((a) => (a.id === selectedId ? { ...a, score } : a)));
+  };
+
   const handleRate = async (task: FacultyScenarioTask, rating: TaskRating | null) => {
-    if (finalized || !selectedId || savingTaskIds.has(task.id)) return;
+    if (!selectedId || savingTaskIds.has(task.id)) return;
     const assignmentId = selectedId;
     markSaving(task.id, true);
     setTasks((prev) => prev.map((t) => (t.id === task.id ? withRating(t, rating) : t)));
     const result = await saveTaskRating(assignmentId, task.id, { rating });
-    if (!result.ok) {
+    if (result.ok) {
+      applyScore(result.score);
+    } else {
       toast(result.error, "error");
       await reloadTasks();
     }
@@ -360,7 +374,9 @@ export default function FacultyScenarioReviewClient() {
     const assignmentId = selectedId;
     setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, remarks: next } : t)));
     const result = await saveTaskRating(assignmentId, task.id, { remarks: next });
-    if (!result.ok) {
+    if (result.ok) {
+      applyScore(result.score);
+    } else {
       toast(result.error, "error");
       await reloadTasks();
     }
@@ -631,7 +647,7 @@ export default function FacultyScenarioReviewClient() {
                       {finalized ? "Final grade" : "Projected grade"}
                     </p>
                     <p className="font-display text-2xl font-bold tracking-tight text-gray-900">
-                      {tasksLoading && !finalized ? "—" : ungraded ? "Not graded yet" : scoreDescriptor(shownScore)}
+                      {gradePending ? (ungraded ? "Not graded yet" : "—") : scoreDescriptor(shownScore)}
                     </p>
                   </div>
                 </div>
@@ -673,7 +689,7 @@ export default function FacultyScenarioReviewClient() {
                 </div>
               )}
 
-              {!ratingsEnabled && !finalized && (
+              {!ratingsEnabled && (
                 <div className="mx-5 mt-5 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 sm:mx-6">
                   <FontAwesomeIcon icon={faTriangleExclamation} className="mt-0.5 h-4 w-4 shrink-0" />
                   <p>
@@ -757,65 +773,45 @@ export default function FacultyScenarioReviewClient() {
                         </div>
 
                         <div className="mt-3.5 pl-7">
-                          {finalized ? (
-                            <span
-                              className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-semibold ${
-                                RATING_STYLE[level ?? "not_performed"].active
-                              }`}
-                            >
-                              <FontAwesomeIcon icon={faCheck} className="h-3 w-3" />
-                              {ratingLabel(level ?? "not_performed")}
-                            </span>
-                          ) : (
-                            <>
-                              <div
-                                role="radiogroup"
-                                aria-label={`Rating for ${task.title}`}
-                                className={`flex flex-wrap gap-1.5 transition-opacity ${saving ? "opacity-60" : ""}`}
-                              >
-                                {TASK_RATINGS.map((option) => {
-                                  const checked = task.rating === option.key;
-                                  return (
-                                    <button
-                                      key={option.key}
-                                      role="radio"
-                                      aria-checked={checked}
-                                      disabled={saving}
-                                      onClick={() => handleRate(task, checked ? null : option.key)}
-                                      title={
-                                        checked
-                                          ? "Click again to clear"
-                                          : `${option.label} — earns ${Math.round(option.credit * 100)}% of this criterion`
-                                      }
-                                      className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600/40 ${
-                                        checked
-                                          ? RATING_STYLE[option.key].active
-                                          : `border-gray-200 bg-surface text-gray-600 ${RATING_STYLE[option.key].idle}`
-                                      }`}
-                                    >
-                                      {checked ? (
-                                        <FontAwesomeIcon icon={faCheck} className="h-3 w-3" />
-                                      ) : (
-                                        <span className={`h-1.5 w-1.5 rounded-full ${RATING_STYLE[option.key].dot}`} />
-                                      )}
-                                      {option.label}
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                              {status && <p className="mt-2 text-xs text-gray-400">{status}</p>}
-                            </>
-                          )}
+                          <div
+                            role="radiogroup"
+                            aria-label={`Rating for ${task.title}`}
+                            className={`flex flex-wrap gap-1.5 transition-opacity ${saving ? "opacity-60" : ""}`}
+                          >
+                            {TASK_RATINGS.map((option) => {
+                              const checked = task.rating === option.key;
+                              return (
+                                <button
+                                  key={option.key}
+                                  role="radio"
+                                  aria-checked={checked}
+                                  disabled={saving}
+                                  onClick={() => handleRate(task, checked ? null : option.key)}
+                                  title={
+                                    checked
+                                      ? "Click again to clear"
+                                      : `${option.label} — earns ${Math.round(option.credit * 100)}% of this criterion`
+                                  }
+                                  className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600/40 ${
+                                    checked
+                                      ? RATING_STYLE[option.key].active
+                                      : `border-gray-200 bg-surface text-gray-600 ${RATING_STYLE[option.key].idle}`
+                                  }`}
+                                >
+                                  {checked ? (
+                                    <FontAwesomeIcon icon={faCheck} className="h-3 w-3" />
+                                  ) : (
+                                    <span className={`h-1.5 w-1.5 rounded-full ${RATING_STYLE[option.key].dot}`} />
+                                  )}
+                                  {option.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          {status && <p className="mt-2 text-xs text-gray-400">{status}</p>}
 
                           {/* Note */}
-                          {finalized ? (
-                            task.remarks && (
-                              <p className="mt-2.5 flex items-start gap-2 rounded-lg bg-subtle px-3 py-2 text-sm text-gray-600">
-                                <FontAwesomeIcon icon={faCommentMedical} className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gray-400" />
-                                {task.remarks}
-                              </p>
-                            )
-                          ) : noteOpen && hasCompletion(task) ? (
+                          {noteOpen && hasCompletion(task) ? (
                             <textarea
                               value={noteValue}
                               autoFocus={openNotes.has(task.id) && !task.remarks}
@@ -842,14 +838,16 @@ export default function FacultyScenarioReviewClient() {
                   })}
               </ol>
 
-              {/* Finalize */}
-              <div className="bottom-0 flex flex-col gap-3 rounded-b-2xl sm:sticky border-t border-hairline bg-surface/95 px-5 py-4 backdrop-blur sm:flex-row sm:items-center sm:justify-between sm:px-6">
+              {/* Finalize — opaque, not translucent: this sits over the criteria
+                  list while stuck mid-scroll, and a `bg-surface/NN` + blur let
+                  that list show through it instead of reading as a solid bar. */}
+              <div className="bottom-0 flex flex-col gap-3 rounded-b-2xl border-t border-hairline bg-surface px-5 py-4 shadow-[0_-6px_16px_-8px_rgb(15_23_42_/_0.12)] sm:sticky sm:flex-row sm:items-center sm:justify-between sm:px-6">
                 <div className="min-w-0 text-sm">
                   {finalized ? (
                     <p className="text-gray-600">
                       Graded <span className="font-semibold text-gray-900">{scoreDescriptor(shownScore)}</span>{" "}
-                      ({shownScore}%) and locked
-                      {selected.completed_at ? ` on ${formatDay(selected.completed_at)}` : ""}.
+                      ({shownScore}%){selected.completed_at ? ` on ${formatDay(selected.completed_at)}` : ""}. You
+                      can still adjust ratings above — the grade updates right away.
                     </p>
                   ) : (
                     <>

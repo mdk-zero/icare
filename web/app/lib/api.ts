@@ -2654,7 +2654,7 @@ export async function saveTaskRating(
   assignmentId: string,
   taskId: string,
   grade: { rating?: TaskRating | null; remarks?: string | null },
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<{ ok: true; score?: number } | { ok: false; error: string }> {
   try {
     const res = await apiFetch(`/api/faculty/scenarios/assignments/${assignmentId}/tasks`, {
       method: 'PUT',
@@ -2662,12 +2662,14 @@ export async function saveTaskRating(
       credentials: 'include',
       body: JSON.stringify({ task_id: taskId, ...grade }),
     });
+    const json = (await res.json().catch(() => ({}))) as { error?: string; score?: number };
     if (!res.ok) {
-      const j = (await res.json().catch(() => ({}))) as { error?: string };
-      console.error('saveTaskRating() failed', j.error);
-      return { ok: false, error: j.error ?? 'Unable to save rating' };
+      console.error('saveTaskRating() failed', json.error);
+      return { ok: false, error: json.error ?? 'Unable to save rating' };
     }
-    return { ok: true };
+    // Present only when the assignment was already finalized — a correction
+    // to a locked grade, kept in sync with what students and analytics read.
+    return { ok: true, score: json.score };
   } catch (err) {
     console.error('saveTaskRating() failed', err);
     return { ok: false, error: 'Unable to save rating' };

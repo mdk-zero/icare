@@ -7,7 +7,13 @@ import {
   isMissingRatingColumns,
   RATINGS_NEED_MIGRATION,
 } from '@/app/lib/scenario-tasks';
-import { isPerformed, isTaskRating, MAX_REMARKS_LENGTH, type TaskRating } from '@/app/lib/task-ratings';
+import {
+  gradedScore,
+  isPerformed,
+  isTaskRating,
+  MAX_REMARKS_LENGTH,
+  type TaskRating,
+} from '@/app/lib/task-ratings';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 interface RouteParams {
@@ -100,6 +106,12 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
 // the rating how well. Clearing a rating on an auto-completed task keeps the
 // completion (full credit again); clearing one faculty created removes the row.
 // A note needs a completion to hang on, so an unrated task is rated first.
+//
+// Finalizing doesn't lock grading — faculty can keep correcting ratings and
+// notes afterward. When the assignment is already finalized, this recomputes
+// and persists its score from the edit, so what students and analytics read
+// stays in sync; the response's `score` lets the client mirror that without
+// a second round trip.
 export async function PUT(request: NextRequest, { params }: RouteParams) {
   const session = await readSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -141,9 +153,6 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     const supabase = getSupabaseAdmin();
     const loaded = await loadAssignment(supabase, session.role, session.uid, assignmentId);
     if ('error' in loaded) return loaded.error;
-    if (loaded.assignment.status === 'completed') {
-      return NextResponse.json({ error: 'This scenario is already finalized' }, { status: 409 });
-    }
 
     const { data: task } = await supabase
       .from('scenario_tasks')
@@ -217,7 +226,26 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unable to save rating' }, { status: 500 });
     }
 
-    return NextResponse.json({ ok: true });
+    // Already finalized: keep the stored score current with this edit.
+    let score: number | undefined;
+    if (loaded.assignment.status === 'completed') {
+      const [tasksRes, completions] = await Promise.all([
+        supabase.from('scenario_tasks').select('id, points').eq('scenario_id', loaded.assignment.scenario_id),
+        fetchTaskCompletions(supabase, [assignmentId]),
+      ]);
+      if (!tasksRes.error && !completions.error) {
+        score = gradedScore(tasksRes.data ?? [], new Map(completions.rows.map((c) => [c.task_id, c])));
+        const { error: scoreError } = await supabase
+          .from('scenario_assignments')
+          .update({ score })
+          .eq('id', assignmentId);
+        if (scoreError) console.error('Failed to sync score after edit', scoreError);
+      } else {
+        console.error('Failed to recompute score after edit', tasksRes.error, completions.error);
+      }
+    }
+
+    return NextResponse.json({ ok: true, score });
   } catch (err) {
     console.error('Save task rating failed', err);
     return NextResponse.json({ error: 'Unable to save rating' }, { status: 500 });
