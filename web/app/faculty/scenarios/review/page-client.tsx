@@ -1,14 +1,21 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
+  faCalendarCheck,
   faCheck,
   faChevronLeft,
   faClipboardCheck,
   faClipboardList,
+  faCommentMedical,
+  faHandHoldingMedical,
+  faLaptopMedical,
+  faLock,
   faMagnifyingGlass,
+  faStopwatch,
+  faTriangleExclamation,
   faUserGraduate,
 } from "@fortawesome/free-solid-svg-icons";
 import {
@@ -16,82 +23,180 @@ import {
   FacultyScenarioTask,
   fetchScenarioAssignments,
   fetchFacultyAssignmentTasks,
-  setFacultyTaskChecked,
+  saveTaskRating,
   finalizeScenarioAssignment,
 } from "../../../lib/api";
+import {
+  TASK_RATINGS,
+  MAX_REMARKS_LENGTH,
+  gradedScore,
+  ratingLabel,
+  scoreDescriptor,
+  type TaskRating,
+} from "../../../lib/task-ratings";
 import { toast } from "../../../components/Toast";
 import Avatar from "../../../components/Avatar";
+import PageHeader from "../../../components/PageHeader";
+import ConfirmModal from "../../../components/ConfirmModal";
 import { usePageData } from "../../../lib/use-page-data";
-import LiveClock from "../../../components/LiveClock";
+
+type Grading = NonNullable<Awaited<ReturnType<typeof fetchFacultyAssignmentTasks>>>;
 
 // Stable empty fallbacks, so the filter memos are not invalidated every render.
 const NO_ASSIGNMENTS: ScenarioAssignment[] = [];
 const NO_TASKS: FacultyScenarioTask[] = [];
+const NO_GRADING: Grading = { tasks: NO_TASKS, status: "pending", ratingsEnabled: true };
 
 type Filter = "awaiting" | "in_progress" | "completed" | "all";
 
-/** `shortLabel` keeps all four tabs on one line in the 350px queue column;
- * `label` (the full phrase) still shows as the button's tooltip. */
-const FILTERS: { key: Filter; label: string; shortLabel?: string }[] = [
-  { key: "awaiting", label: "Awaiting review", shortLabel: "Awaiting" },
-  { key: "in_progress", label: "In progress", shortLabel: "Ongoing" },
-  { key: "completed", label: "Finalized", shortLabel: "Finalized" },
-  { key: "all", label: "All", shortLabel: "All" },
+const FILTERS: { key: Filter; label: string; title: string }[] = [
+  { key: "awaiting", label: "Awaiting", title: "Submitted, awaiting your review" },
+  { key: "in_progress", label: "Ongoing", title: "Not submitted yet" },
+  { key: "completed", label: "Finalized", title: "Graded and locked" },
+  { key: "all", label: "All", title: "Every submission" },
 ];
 
-function categoryChip(category: string) {
-  switch (category) {
-    case "assessment":
-      return "bg-blue-500/10 text-blue-600 dark:text-blue-300";
-    case "intervention":
-      return "bg-violet-500/10 text-violet-600 dark:text-violet-300";
-    case "medication":
-      return "bg-rose-500/10 text-rose-600 dark:text-rose-300";
-    case "communication":
-      return "bg-emerald-500/10 text-emerald-600 dark:text-emerald-300";
-    case "documentation":
-      return "bg-amber-500/10 text-amber-600 dark:text-amber-300";
-    default:
-      return "bg-foreground/10 text-foreground/60";
-  }
-}
+/**
+ * Color is reserved for the grade: each level keeps one hue from its chip to
+ * its segment in the composition bar. Only ramps the dark theme remaps (50/100/
+ * 200 fills, 600/700/800 inks) are used, so every pairing inverts cleanly.
+ */
+const RATING_STYLE: Record<TaskRating, { idle: string; active: string; dot: string; rail: string }> = {
+  excellent: {
+    idle: "hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700",
+    active: "border-emerald-600 bg-emerald-100 text-emerald-800",
+    dot: "bg-emerald-500",
+    rail: "before:bg-emerald-500",
+  },
+  very_good: {
+    idle: "hover:border-teal-200 hover:bg-teal-50 hover:text-teal-700",
+    active: "border-teal-600 bg-teal-100 text-teal-800",
+    dot: "bg-teal-500",
+    rail: "before:bg-teal-500",
+  },
+  good: {
+    idle: "hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700",
+    active: "border-blue-600 bg-blue-100 text-blue-800",
+    dot: "bg-blue-500",
+    rail: "before:bg-blue-500",
+  },
+  fair: {
+    idle: "hover:border-amber-200 hover:bg-amber-50 hover:text-amber-700",
+    active: "border-amber-600 bg-amber-100 text-amber-800",
+    dot: "bg-amber-500",
+    rail: "before:bg-amber-500",
+  },
+  needs_improvement: {
+    idle: "hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700",
+    active: "border-rose-600 bg-rose-100 text-rose-800",
+    dot: "bg-rose-500",
+    rail: "before:bg-rose-500",
+  },
+  not_performed: {
+    idle: "hover:border-gray-300 hover:bg-gray-100 hover:text-gray-800",
+    active: "border-gray-500 bg-gray-200 text-gray-900",
+    dot: "bg-gray-400",
+    rail: "before:bg-gray-400",
+  },
+};
 
 function isAwaiting(a: ScenarioAssignment) {
   return Boolean(a.submitted_at) && a.status !== "completed";
 }
 
-/** Circular percentage gauge in brand teal. */
-function ScoreRing({ value, tone }: { value: number; tone: "brand" | "emerald" }) {
-  const r = 30;
+function isOngoing(a: ScenarioAssignment) {
+  return a.status !== "completed" && !a.submitted_at;
+}
+
+function matchesFilter(a: ScenarioAssignment, filter: Filter) {
+  if (filter === "awaiting") return isAwaiting(a);
+  if (filter === "in_progress") return isOngoing(a);
+  if (filter === "completed") return a.status === "completed";
+  return true;
+}
+
+/** A completion row exists — done by the student's charting, or rated by faculty. */
+const hasCompletion = (t: FacultyScenarioTask) => t.completed_via !== null;
+
+/**
+ * The level a criterion scores at right now. An unrated completion keeps the
+ * full credit a check-off always earned; an unrated criterion with nothing
+ * recorded earns none.
+ */
+function effectiveRating(t: FacultyScenarioTask): TaskRating | null {
+  if (t.rating) return t.rating;
+  return hasCompletion(t) ? "excellent" : null;
+}
+
+/** The task as it reads after the server applies `rating` (see the PUT route). */
+function withRating(t: FacultyScenarioTask, rating: TaskRating | null): FacultyScenarioTask {
+  if (rating === null) {
+    if (t.completed_via === "faculty") {
+      return { ...t, rating: null, remarks: null, is_completed: false, completed_via: null, completed_at: null };
+    }
+    return { ...t, rating: null, is_completed: hasCompletion(t) };
+  }
+  return {
+    ...t,
+    rating,
+    is_completed: rating !== "not_performed",
+    completed_via: t.completed_via ?? "faculty",
+    completed_at: t.completed_at ?? new Date().toISOString(),
+  };
+}
+
+const formatWhen = (iso: string) =>
+  new Date(iso).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+
+const formatDay = (iso: string) => new Date(iso).toLocaleDateString([], { month: "short", day: "numeric" });
+
+function formatDuration(seconds: number) {
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes} min`;
+  const rest = minutes % 60;
+  return rest ? `${Math.floor(minutes / 60)}h ${rest}m` : `${Math.floor(minutes / 60)}h`;
+}
+
+/** Circular percentage gauge; `value` null draws an empty ring while loading. */
+function ScoreRing({ value, final }: { value: number | null; final: boolean }) {
+  const r = 34;
   const circ = 2 * Math.PI * r;
-  const clamped = Math.min(100, Math.max(0, value));
-  const offset = circ - (clamped / 100) * circ;
+  const clamped = Math.min(100, Math.max(0, value ?? 0));
   return (
-    <div className="relative h-[78px] w-[78px] shrink-0">
-      <svg viewBox="0 0 78 78" className="h-full w-full -rotate-90">
-        <circle cx="39" cy="39" r={r} fill="none" strokeWidth="6" className="stroke-hairline" />
+    <div className="relative h-[84px] w-[84px] shrink-0">
+      <svg viewBox="0 0 84 84" className="h-full w-full -rotate-90">
+        <circle cx="42" cy="42" r={r} fill="none" strokeWidth="7" className="stroke-hairline" />
         <circle
-          cx="39"
-          cy="39"
+          cx="42"
+          cy="42"
           r={r}
           fill="none"
-          strokeWidth="6"
+          strokeWidth="7"
           strokeLinecap="round"
           strokeDasharray={circ}
-          strokeDashoffset={offset}
-          className={`transition-[stroke-dashoffset] duration-700 ease-out ${tone === "emerald" ? "stroke-emerald-500" : "stroke-brand-600"}`}
+          strokeDashoffset={circ - (clamped / 100) * circ}
+          className={`transition-[stroke-dashoffset] duration-700 ease-out ${final ? "stroke-emerald-500" : "stroke-brand-600"}`}
         />
       </svg>
-      <span className="absolute inset-0 flex items-center justify-center font-display text-xl font-bold tabular-nums text-foreground">
-        {clamped}%
+      <span className="absolute inset-0 flex items-center justify-center font-display text-xl font-bold tabular-nums text-gray-900">
+        {value === null ? "—" : `${clamped}%`}
       </span>
     </div>
   );
 }
 
-const CheckIcon = ({ className = "h-4 w-4" }: { className?: string }) => (
-  <FontAwesomeIcon icon={faCheck} className={className} />
-);
+function EmptyPanel({ icon, title, body }: { icon: typeof faCheck; title: string; body: string }) {
+  return (
+    <div className="rounded-2xl border border-dashed border-hairline bg-surface px-4 py-10 text-center">
+      <div className="mx-auto mb-3 grid h-11 w-11 place-items-center rounded-full bg-subtle text-gray-400">
+        <FontAwesomeIcon icon={icon} className="h-5 w-5" />
+      </div>
+      <p className="text-sm font-medium text-gray-700">{title}</p>
+      <p className="mt-0.5 text-xs text-gray-500">{body}</p>
+    </div>
+  );
+}
 
 export default function FacultyScenarioReviewClient() {
   const router = useRouter();
@@ -101,8 +206,15 @@ export default function FacultyScenarioReviewClient() {
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [busyTaskId, setBusyTaskId] = useState<string | null>(null);
+  const [savingTaskIds, setSavingTaskIds] = useState<ReadonlySet<string>>(() => new Set());
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [finalizing, setFinalizing] = useState(false);
+
+  const gradingRef = useRef<HTMLElement>(null);
+
+  // Notes being typed, and the criteria whose note box was opened, per task.
+  const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
+  const [openNotes, setOpenNotes] = useState<Set<string>>(() => new Set());
 
   const { data: assignmentsData, loading, setData: setAssignmentsData } = usePageData(
     "faculty:scenario-review",
@@ -113,23 +225,23 @@ export default function FacultyScenarioReviewClient() {
     setAssignmentsData((previous) => update(previous ?? NO_ASSIGNMENTS));
 
   // Keyed by assignment, so clicking back through a list of submissions reads
-  // each one's checklist from memory after the first look.
+  // each one's rubric from memory after the first look.
   const {
-    data: tasksData,
+    data: gradingData,
     loading: tasksLoading,
     refresh: reloadTasks,
-    setData: setTasksData,
+    setData: setGradingData,
   } = usePageData(
-    selectedId ? `faculty:assignment-tasks:${selectedId}` : null,
-    async () => (await fetchFacultyAssignmentTasks(selectedId!))?.tasks ?? NO_TASKS,
+    selectedId ? `faculty:assignment-grading:${selectedId}` : null,
+    async () => (await fetchFacultyAssignmentTasks(selectedId!)) ?? NO_GRADING,
   );
-  const tasks = tasksData ?? NO_TASKS;
+  const tasks = gradingData?.tasks ?? NO_TASKS;
+  const ratingsEnabled = gradingData?.ratingsEnabled ?? true;
   const setTasks = (update: (previous: FacultyScenarioTask[]) => FacultyScenarioTask[]) =>
-    setTasksData((previous) => update(previous ?? NO_TASKS));
-
-  const selectAssignment = (id: string) => {
-    setSelectedId(id);
-  };
+    setGradingData((previous) => {
+      const base = previous ?? NO_GRADING;
+      return { ...base, tasks: update(base.tasks) };
+    });
 
   const selected = assignments.find((a) => a.id === selectedId) ?? null;
   const finalized = selected?.status === "completed";
@@ -151,7 +263,6 @@ export default function FacultyScenarioReviewClient() {
       .map((g) => ({
         ...g,
         awaiting: g.assignments.filter(isAwaiting).length,
-        inProgress: g.assignments.filter((a) => a.status !== "completed" && !a.submitted_at).length,
         completed: g.assignments.filter((a) => a.status === "completed").length,
       }))
       .sort((a, b) => b.awaiting - a.awaiting || a.student_name.localeCompare(b.student_name));
@@ -165,44 +276,94 @@ export default function FacultyScenarioReviewClient() {
 
   const selectedStudent = studentGroups.find((g) => g.student_id === selectedStudentId) ?? null;
 
+  const resetNotes = () => {
+    setNoteDrafts({});
+    setOpenNotes(new Set());
+  };
+
   const selectStudent = (studentId: string) => {
     setSelectedStudentId(studentId);
     setFilter("awaiting");
     setSelectedId(null);
+    resetNotes();
   };
 
   const backToStudents = () => {
     setSelectedStudentId(null);
     setSelectedId(null);
+    resetNotes();
   };
 
-  const visible = useMemo(() => {
-    return assignments.filter((a) => {
-      if (a.student_id !== selectedStudentId) return false;
-      if (filter === "awaiting") return isAwaiting(a);
-      if (filter === "in_progress") return a.status !== "completed" && !a.submitted_at;
-      if (filter === "completed") return a.status === "completed";
-      return true;
-    });
-  }, [assignments, filter, selectedStudentId]);
+  const selectAssignment = (id: string) => {
+    setSelectedId(id);
+    resetNotes();
+    // Stacked below the queue on narrow screens, the rubric would open out of sight.
+    if (!window.matchMedia("(min-width: 1024px)").matches) {
+      requestAnimationFrame(() => gradingRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+    }
+  };
 
+  const studentAssignments = useMemo(
+    () => assignments.filter((a) => a.student_id === selectedStudentId),
+    [assignments, selectedStudentId],
+  );
+  const visible = useMemo(
+    () => studentAssignments.filter((a) => matchesFilter(a, filter)),
+    [studentAssignments, filter],
+  );
+
+  // --- The grade, as it stands ------------------------------------------------
   const totalPoints = tasks.reduce((sum, t) => sum + t.points, 0);
-  const earnedPoints = tasks.filter((t) => t.is_completed).reduce((sum, t) => sum + t.points, 0);
-  const projectedScore = totalPoints > 0 ? Math.round((earnedPoints / totalPoints) * 100) : 0;
-  const doneCount = tasks.filter((t) => t.is_completed).length;
+  const projectedScore = gradedScore(
+    tasks,
+    new Map(tasks.filter(hasCompletion).map((t) => [t.id, { rating: t.rating }])),
+  );
+  const shownScore = finalized ? (selected?.score ?? 0) : projectedScore;
+  // Nothing recorded or rated yet: a 0% "Needs Improvement" would read as a verdict.
+  const ungraded = !finalized && tasks.every((t) => effectiveRating(t) === null);
+  const gradePending = (tasksLoading && !finalized) || ungraded;
+  // Before finalizing, a level only implied by an unrated check-off is drawn faded.
+  const faded = (t: FacultyScenarioTask) => !finalized && t.rating === null;
+  const ratedCount = tasks.filter((t) => t.rating !== null).length;
+  const unratedMissing = tasks.filter((t) => t.rating === null && !hasCompletion(t)).length;
+  const unratedDone = tasks.filter((t) => t.rating === null && hasCompletion(t)).length;
+  const weightOf = (t: FacultyScenarioTask) =>
+    totalPoints > 0 ? Math.round((t.points / totalPoints) * 100) : 0;
 
-  const handleToggle = async (task: FacultyScenarioTask) => {
-    if (finalized || task.verification !== "faculty" || !selectedId) return;
-    const next = !task.is_completed;
-    setBusyTaskId(task.id);
-    setTasks((prev) =>
-      prev.map((t) =>
-        t.id === task.id ? { ...t, is_completed: next, completed_via: next ? "faculty" : null } : t,
-      ),
-    );
-    const ok = await setFacultyTaskChecked(selectedId, task.id, next);
-    if (!ok) await reloadTasks();
-    setBusyTaskId(null);
+  const markSaving = (taskId: string, saving: boolean) =>
+    setSavingTaskIds((prev) => {
+      const next = new Set(prev);
+      if (saving) next.add(taskId);
+      else next.delete(taskId);
+      return next;
+    });
+
+  const handleRate = async (task: FacultyScenarioTask, rating: TaskRating | null) => {
+    if (finalized || !selectedId || savingTaskIds.has(task.id)) return;
+    const assignmentId = selectedId;
+    markSaving(task.id, true);
+    setTasks((prev) => prev.map((t) => (t.id === task.id ? withRating(t, rating) : t)));
+    const result = await saveTaskRating(assignmentId, task.id, { rating });
+    if (!result.ok) {
+      toast(result.error, "error");
+      await reloadTasks();
+    }
+    markSaving(task.id, false);
+  };
+
+  const handleNoteBlur = async (task: FacultyScenarioTask) => {
+    if (!selectedId) return;
+    const draft = noteDrafts[task.id];
+    if (draft === undefined) return;
+    const next = draft.trim() || null;
+    if (next === (task.remarks ?? null)) return;
+    const assignmentId = selectedId;
+    setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, remarks: next } : t)));
+    const result = await saveTaskRating(assignmentId, task.id, { remarks: next });
+    if (!result.ok) {
+      toast(result.error, "error");
+      await reloadTasks();
+    }
   };
 
   const handleFinalize = async () => {
@@ -213,17 +374,15 @@ export default function FacultyScenarioReviewClient() {
       setAssignments((prev) =>
         prev.map((a) =>
           a.id === selectedId
-            ? {
-                ...a,
-                status: "completed",
-                score: result.score,
-                completed_at: new Date().toISOString(),
-              }
+            ? { ...a, status: "completed", score: result.score, completed_at: new Date().toISOString() }
             : a,
         ),
       );
       await reloadTasks();
-      toast("Assignment finalized");
+      toast(`Finalized — ${scoreDescriptor(result.score)} (${result.score}%)`);
+      setConfirmOpen(false);
+    } else {
+      toast("Unable to finalize this grade. Please try again.", "error");
     }
     setFinalizing(false);
   };
@@ -231,80 +390,64 @@ export default function FacultyScenarioReviewClient() {
   const awaitingCount = assignments.filter(isAwaiting).length;
 
   return (
-    <div className="relative -m-3 min-h-full bg-canvas lg:-m-5">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 h-48 bg-gradient-to-b from-brand-500/[0.07] to-transparent"
+    <div>
+      <PageHeader
+        badge={{
+          icon: <FontAwesomeIcon icon={faClipboardCheck} className="h-3.5 w-3.5" />,
+          label: "Scenario Management",
+        }}
+        title="Review Submissions"
+        subtitle="Rate each criterion of a student's scenario on a verbal scale, add notes where it helps, then lock in the grade."
       />
 
-      {/* Header */}
-      <header className="sticky -top-3 z-20 border-b border-hairline bg-surface lg:-top-5">
-        <div className="flex items-center gap-3.5 px-4 py-3.5 sm:px-6">
-          <button
-            onClick={() => router.push("/faculty/scenarios")}
-            className="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-foreground/55 transition-colors hover:bg-subtle hover:text-foreground"
-            aria-label="Back to scenarios"
-          >
-            <FontAwesomeIcon icon={faChevronLeft} className="h-5 w-5" />
-          </button>
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-600 text-white shadow-tile">
-            <FontAwesomeIcon icon={faClipboardCheck} className="h-5 w-5" />
-          </div>
-          <div className="min-w-0">
-            <h1 className="font-display text-lg font-bold tracking-tight text-foreground">
-              Review Submissions
-            </h1>
-            <p className="truncate text-sm text-foreground/55">
-              Verify hands-on tasks &amp; finalize scenario scores
-            </p>
-          </div>
-          <div className="ml-auto flex shrink-0 items-center gap-4">
-            {awaitingCount > 0 && (
-              <span className="shrink-0 rounded-full bg-brand-500/12 px-3.5 py-1.5 text-sm font-semibold tabular-nums text-brand-700 dark:text-brand-300">
-                {awaitingCount} awaiting
-              </span>
-            )}
-            <LiveClock variant="compact" className="hidden sm:block" />
-          </div>
-        </div>
-      </header>
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <button
+          onClick={() => router.push("/faculty/scenarios")}
+          className="flex items-center gap-2 rounded-lg border border-gray-200 bg-surface px-3 py-2 text-sm font-medium text-gray-700 transition-all hover:bg-gray-50"
+        >
+          <FontAwesomeIcon icon={faChevronLeft} className="h-3.5 w-3.5" />
+          Back to scenarios
+        </button>
+        {awaitingCount > 0 && (
+          <span className="ml-auto flex items-center gap-2 rounded-full border border-brand-200 bg-brand-50 px-3 py-1.5 text-sm font-semibold tabular-nums text-brand-700">
+            <span className="h-2 w-2 rounded-full bg-brand-500" />
+            {awaitingCount} awaiting review
+          </span>
+        )}
+      </div>
 
-      <main className="grid grid-cols-1 gap-5 px-4 py-5 sm:px-6 lg:grid-cols-[350px_minmax(0,1fr)] lg:py-8">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[340px_minmax(0,1fr)]">
         {/* Queue */}
-        <div className="lg:sticky lg:top-[84px] lg:self-start">
+        <aside className="lg:sticky lg:top-0 lg:self-start">
           {!selectedStudentId ? (
             <>
-              {/* Step 1: find the student before any submission ever renders */}
+              {/* Step 1: find the student before any submission renders */}
               <div className="relative mb-3">
                 <FontAwesomeIcon
                   icon={faMagnifyingGlass}
-                  className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-foreground/35"
+                  className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
                 />
                 <input
                   value={studentQuery}
                   onChange={(e) => setStudentQuery(e.target.value)}
                   placeholder="Search a student…"
-                  className="w-full rounded-2xl border border-hairline bg-surface py-2.5 pl-10 pr-3.5 text-sm text-foreground placeholder:text-foreground/35 shadow-tile outline-none transition-colors focus:border-brand-500/60"
+                  aria-label="Search students"
+                  className="w-full rounded-xl border border-gray-200 bg-surface py-2.5 pl-10 pr-3.5 text-sm text-gray-900 shadow-tile outline-none transition-colors placeholder:text-gray-400 focus:border-brand-600 focus:ring-2 focus:ring-brand-600/30"
                 />
               </div>
 
               <div className="space-y-2">
                 {loading &&
                   [0, 1, 2, 3].map((i) => (
-                    <div
-                      key={i}
-                      className="h-[72px] animate-pulse rounded-2xl border border-hairline bg-subtle"
-                    />
+                    <div key={i} className="h-[68px] animate-pulse rounded-xl border border-hairline bg-subtle" />
                   ))}
 
                 {!loading && filteredStudentGroups.length === 0 && (
-                  <div className="rounded-2xl border border-dashed border-hairline bg-surface px-4 py-10 text-center">
-                    <div className="mx-auto mb-3 grid h-11 w-11 place-items-center rounded-full bg-subtle text-foreground/40">
-                      <FontAwesomeIcon icon={faUserGraduate} className="h-5 w-5" />
-                    </div>
-                    <p className="text-sm font-medium text-foreground/70">No students found</p>
-                    <p className="mt-0.5 text-xs text-foreground/45">Try a different name.</p>
-                  </div>
+                  <EmptyPanel
+                    icon={faUserGraduate}
+                    title={studentQuery ? "No students found" : "No submissions yet"}
+                    body={studentQuery ? "Try a different name." : "Assigned scenarios show up here."}
+                  />
                 )}
 
                 {!loading &&
@@ -313,61 +456,67 @@ export default function FacultyScenarioReviewClient() {
                       key={g.student_id}
                       onClick={() => selectStudent(g.student_id)}
                       style={{ animationDelay: `${Math.min(i, 8) * 35}ms` }}
-                      className="w-full animate-rise rounded-2xl border border-hairline bg-surface p-3.5 text-left transition-all hover:border-brand-500/40 hover:shadow-tile"
+                      className="flex w-full animate-rise items-center gap-3 rounded-xl border border-hairline bg-surface p-3 text-left shadow-tile transition-all hover:border-brand-300 hover:shadow-tile-hover"
                     >
-                      <div className="flex items-center gap-3">
-                        <Avatar name={g.student_name} size="md" tone="solid" />
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate font-semibold text-foreground">{g.student_name}</p>
-                          <p className="truncate text-xs text-foreground/50">
-                            {g.assignments.length} submission{g.assignments.length === 1 ? "" : "s"}
-                          </p>
-                        </div>
-                        {g.awaiting > 0 && (
-                          <span className="flex shrink-0 items-center gap-1 rounded-full bg-brand-500/12 px-2 py-0.5 text-xs font-semibold text-brand-700 dark:text-brand-300">
-                            <span className="h-1.5 w-1.5 rounded-full bg-brand-500" />
-                            {g.awaiting}
-                          </span>
-                        )}
-                      </div>
+                      <Avatar name={g.student_name} size="md" tone="solid" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-semibold text-gray-900">{g.student_name}</span>
+                        <span className="block truncate text-xs text-gray-500">
+                          {g.assignments.length} scenario{g.assignments.length === 1 ? "" : "s"}
+                          {g.completed > 0 && ` · ${g.completed} finalized`}
+                        </span>
+                      </span>
+                      {g.awaiting > 0 && (
+                        <span
+                          title={`${g.awaiting} awaiting review`}
+                          className="flex shrink-0 items-center gap-1.5 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold tabular-nums text-brand-700"
+                        >
+                          <span className="h-1.5 w-1.5 rounded-full bg-brand-500" />
+                          {g.awaiting}
+                        </span>
+                      )}
                     </button>
                   ))}
               </div>
             </>
           ) : (
             <>
-              {/* Step 2: filters + submissions, scoped to the chosen student */}
+              {/* Step 2: the chosen student's submissions */}
               <button
                 onClick={backToStudents}
-                className="mb-3 flex w-full items-center gap-2.5 rounded-2xl border border-hairline bg-surface p-3 text-left transition-colors hover:border-brand-500/40"
+                className="mb-3 flex w-full items-center gap-2.5 rounded-xl border border-hairline bg-surface p-3 text-left shadow-tile transition-colors hover:border-brand-300"
               >
-                <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-foreground/50">
-                  <FontAwesomeIcon icon={faChevronLeft} className="h-3.5 w-3.5" />
-                </span>
+                <FontAwesomeIcon icon={faChevronLeft} className="h-3.5 w-3.5 shrink-0 text-gray-400" />
                 <Avatar name={selectedStudent?.student_name} size="sm" tone="solid" />
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-semibold text-foreground">
+                  <span className="block truncate text-sm font-semibold text-gray-900">
                     {selectedStudent?.student_name}
                   </span>
-                  <span className="block text-xs text-foreground/45">Change student</span>
+                  <span className="block text-xs text-gray-500">Change student</span>
                 </span>
               </button>
 
-              <div className="mb-3 flex gap-1.5">
+              <div
+                role="tablist"
+                aria-label="Filter submissions"
+                className="mb-3 grid grid-cols-4 gap-1 rounded-xl border border-hairline bg-subtle p-1"
+              >
                 {FILTERS.map((f) => {
                   const active = filter === f.key;
+                  const count = studentAssignments.filter((a) => matchesFilter(a, f.key)).length;
                   return (
                     <button
                       key={f.key}
+                      role="tab"
+                      aria-selected={active}
                       onClick={() => setFilter(f.key)}
-                      title={f.label}
-                      className={`min-w-0 flex-1 truncate rounded-full px-2.5 py-1.5 text-xs font-medium transition-all ${
-                        active
-                          ? "bg-brand-600 text-white shadow-tile"
-                          : "border border-hairline bg-surface text-foreground/60 hover:border-brand-500/40 hover:text-foreground"
+                      title={f.title}
+                      className={`flex min-w-0 items-center justify-center gap-1 rounded-lg px-1.5 py-1.5 text-xs font-medium transition-all ${
+                        active ? "bg-surface text-gray-900 shadow-tile" : "text-gray-500 hover:text-gray-800"
                       }`}
                     >
-                      {f.shortLabel ?? f.label}
+                      <span className="truncate">{f.label}</span>
+                      <span className={`tabular-nums ${active ? "text-brand-600" : "text-gray-400"}`}>{count}</span>
                     </button>
                   );
                 })}
@@ -375,234 +524,403 @@ export default function FacultyScenarioReviewClient() {
 
               <div className="space-y-2">
                 {!loading && visible.length === 0 && (
-                  <div className="rounded-2xl border border-dashed border-hairline bg-surface px-4 py-10 text-center">
-                    <div className="mx-auto mb-3 grid h-11 w-11 place-items-center rounded-full bg-subtle text-foreground/40">
-                      <FontAwesomeIcon icon={faCheck} className="h-5 w-5" />
-                    </div>
-                    <p className="text-sm font-medium text-foreground/70">All clear</p>
-                    <p className="mt-0.5 text-xs text-foreground/45">Nothing in this view right now.</p>
-                  </div>
+                  <EmptyPanel icon={faCheck} title="All clear" body="Nothing in this view right now." />
                 )}
 
                 {visible.map((a, i) => {
                   const active = selectedId === a.id;
+                  const done = a.status === "completed";
                   return (
                     <button
                       key={a.id}
                       onClick={() => selectAssignment(a.id)}
+                      aria-current={active}
                       style={{ animationDelay: `${Math.min(i, 8) * 35}ms` }}
-                      className={`w-full animate-rise rounded-2xl border p-4 text-left transition-all ${
+                      className={`w-full animate-rise rounded-xl border p-3.5 text-left transition-all ${
                         active
-                          ? "border-brand-500/60 bg-brand-500/[0.06] shadow-tile"
-                          : "border-hairline bg-surface hover:border-brand-500/40 hover:shadow-tile"
+                          ? "border-brand-600 bg-brand-50 shadow-tile"
+                          : "border-hairline bg-surface shadow-tile hover:border-brand-300 hover:shadow-tile-hover"
                       }`}
                     >
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="min-w-0 truncate font-semibold text-foreground">{a.scenario_title}</p>
-                        {a.status === "completed" ? (
-                          <span className="shrink-0 rounded-full bg-emerald-500/12 px-2 py-0.5 text-xs font-semibold tabular-nums text-emerald-600 dark:text-emerald-300">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="min-w-0 text-sm font-semibold leading-snug text-gray-900">{a.scenario_title}</p>
+                        {done ? (
+                          <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-emerald-700">
                             {a.score ?? 0}%
                           </span>
                         ) : isAwaiting(a) ? (
-                          <span className="flex shrink-0 items-center gap-1 rounded-full bg-brand-500/12 px-2 py-0.5 text-xs font-semibold text-brand-700 dark:text-brand-300">
+                          <span className="flex shrink-0 items-center gap-1 rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-semibold text-brand-700">
                             <span className="h-1.5 w-1.5 rounded-full bg-brand-500" />
                             Awaiting
                           </span>
                         ) : (
-                          <span className="shrink-0 rounded-full bg-foreground/8 px-2 py-0.5 text-xs font-medium capitalize text-foreground/55">
+                          <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium capitalize text-gray-600">
                             {a.status.replace("_", " ")}
                           </span>
                         )}
                       </div>
+                      <p className="mt-1 truncate text-xs text-gray-500">
+                        {done
+                          ? `${scoreDescriptor(a.score ?? 0)}${a.completed_at ? ` · finalized ${formatDay(a.completed_at)}` : ""}`
+                          : a.submitted_at
+                            ? `Submitted ${formatWhen(a.submitted_at)}`
+                            : a.deadline
+                              ? `Due ${formatDay(a.deadline)}`
+                              : "Not submitted"}
+                      </p>
                     </button>
                   );
                 })}
               </div>
             </>
           )}
-        </div>
+        </aside>
 
-        {/* Detail */}
-        <div>
+        {/* Grading panel */}
+        <section ref={gradingRef} className="scroll-mt-4">
           {!selected ? (
-            <div className="flex min-h-[360px] flex-col items-center justify-center rounded-3xl border border-dashed border-hairline bg-surface/60 px-6 py-16 text-center">
-              <div className="mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-brand-500/10 text-brand-600 dark:text-brand-300">
+            <div className="flex min-h-[380px] flex-col items-center justify-center rounded-2xl border border-dashed border-hairline bg-surface/60 px-6 py-16 text-center">
+              <div className="mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-brand-50 text-brand-600">
                 <FontAwesomeIcon icon={selectedStudentId ? faClipboardList : faUserGraduate} className="h-7 w-7" />
               </div>
-              <p className="font-display text-lg font-semibold text-foreground">
+              <p className="font-display text-lg font-semibold text-gray-900">
                 {selectedStudentId ? "Pick a submission" : "Find a student"}
               </p>
-              <p className="mt-1 max-w-xs text-sm text-foreground/50">
+              <p className="mt-1 max-w-xs text-sm text-gray-500">
                 {selectedStudentId
-                  ? "Choose a submission from the queue to verify their hands-on tasks and lock in a score."
-                  : "Search or select a student to see their submissions awaiting review."}
+                  ? "Choose a scenario from the list to rate each criterion and lock in a grade."
+                  : "Search or select a student to see the scenarios they've submitted for review."}
               </p>
             </div>
           ) : (
-            <div className="overflow-hidden rounded-3xl border border-hairline bg-surface shadow-tile">
-              {/* Detail header */}
-              <div className="flex items-center justify-between gap-4 border-b border-hairline bg-subtle/60 px-5 py-5 sm:px-6">
-                <div className="min-w-0">
-                  <h2 className="truncate font-display text-xl font-bold tracking-tight text-foreground">
-                    {selected.student_name}
-                  </h2>
-                  <p className="truncate text-sm text-foreground/55">{selected.scenario_title}</p>
-                  <div className="mt-2.5 flex items-center gap-2 text-xs font-medium">
-                    <span className="rounded-full bg-foreground/8 px-2.5 py-1 tabular-nums text-foreground/60">
-                      {doneCount}/{tasks.length} done
-                    </span>
-                    <span className="rounded-full bg-foreground/8 px-2.5 py-1 tabular-nums text-foreground/60">
-                      {earnedPoints}/{totalPoints} pts
-                    </span>
-                    {finalized && (
-                      <span className="flex items-center gap-1 rounded-full bg-emerald-500/12 px-2.5 py-1 text-emerald-600 dark:text-emerald-300">
-                        <CheckIcon className="h-3 w-3" /> Finalized
+            <div className="rounded-2xl border border-hairline bg-surface shadow-tile">
+              {/* Who, what, and the grade so far */}
+              <div className="flex flex-col gap-5 border-b border-hairline p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+                <div className="flex min-w-0 items-start gap-3.5">
+                  <Avatar name={selected.student_name} size="lg" tone="solid" />
+                  <div className="min-w-0">
+                    <h2 className="truncate font-display text-xl font-bold tracking-tight text-gray-900">
+                      {selected.student_name}
+                    </h2>
+                    <p className="text-sm text-gray-500">{selected.scenario_title}</p>
+                    <div className="mt-2.5 flex flex-wrap items-center gap-1.5 text-xs font-medium text-gray-600">
+                      <span className="flex items-center gap-1.5 rounded-full bg-gray-100 px-2.5 py-1">
+                        <FontAwesomeIcon icon={faCalendarCheck} className="h-3 w-3 text-gray-400" />
+                        {selected.submitted_at ? `Submitted ${formatWhen(selected.submitted_at)}` : "Not submitted yet"}
                       </span>
-                    )}
+                      {Boolean(selected.time_taken) && (
+                        <span className="flex items-center gap-1.5 rounded-full bg-gray-100 px-2.5 py-1 tabular-nums">
+                          <FontAwesomeIcon icon={faStopwatch} className="h-3 w-3 text-gray-400" />
+                          {formatDuration(selected.time_taken!)}
+                        </span>
+                      )}
+                      {finalized && (
+                        <span className="flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700">
+                          <FontAwesomeIcon icon={faLock} className="h-3 w-3" />
+                          Finalized
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
-                <div className="flex flex-col items-center gap-1">
-                  <ScoreRing
-                    value={finalized ? (selected.score ?? 0) : projectedScore}
-                    tone={finalized ? "emerald" : "brand"}
-                  />
-                  <span className="text-[11px] font-medium uppercase tracking-wide text-foreground/45">
-                    {finalized ? "Final" : "Projected"}
-                  </span>
+
+                <div className="flex shrink-0 items-center gap-4 sm:flex-row-reverse sm:text-right">
+                  <ScoreRing value={gradePending ? null : shownScore} final={finalized} />
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                      {finalized ? "Final grade" : "Projected grade"}
+                    </p>
+                    <p className="font-display text-2xl font-bold tracking-tight text-gray-900">
+                      {tasksLoading && !finalized ? "—" : ungraded ? "Not graded yet" : scoreDescriptor(shownScore)}
+                    </p>
+                  </div>
                 </div>
               </div>
 
-              {/* Tasks */}
-              <div className="space-y-2.5 px-4 py-5 sm:px-6">
+              {/* How the grade is composed: one segment per criterion, as wide as its weight */}
+              {!tasksLoading && tasks.length > 0 && (
+                <div className="border-b border-hairline px-5 py-4 sm:px-6">
+                  <div className="mb-2 flex items-center justify-between gap-3 text-xs">
+                    <span className="font-semibold text-gray-700">
+                      {finalized ? "Grade breakdown" : `${ratedCount} of ${tasks.length} criteria rated`}
+                    </span>
+                    <span className="text-gray-400">Bar width = criterion weight</span>
+                  </div>
+                  <div className="flex h-2.5 gap-0.5 overflow-hidden rounded-full">
+                    {tasks.map((t) => {
+                      const level = effectiveRating(t);
+                      return (
+                        <span
+                          key={t.id}
+                          title={`${t.title}: ${level ? ratingLabel(level) : "Not rated"}`}
+                          style={{ flexGrow: Math.max(t.points, 1) }}
+                          className={`basis-0 transition-colors duration-300 ${
+                            level ? RATING_STYLE[level].dot : "bg-gray-200"
+                          } ${level && faded(t) ? "opacity-45" : ""}`}
+                        />
+                      );
+                    })}
+                  </div>
+                  <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-[11px] text-gray-500">
+                    {TASK_RATINGS.map((level) => (
+                      <li key={level.key} className="flex items-center gap-1.5">
+                        <span className={`h-2 w-2 rounded-full ${RATING_STYLE[level.key].dot}`} />
+                        {level.label}
+                        <span className="tabular-nums text-gray-400">{Math.round(level.credit * 100)}%</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {!ratingsEnabled && !finalized && (
+                <div className="mx-5 mt-5 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 sm:mx-6">
+                  <FontAwesomeIcon icon={faTriangleExclamation} className="mt-0.5 h-4 w-4 shrink-0" />
+                  <p>
+                    Ratings can&apos;t be saved yet — database migration 043 (scenario task ratings) hasn&apos;t been
+                    applied. Existing check-offs still count at full credit.
+                  </p>
+                </div>
+              )}
+
+              {/* Criteria */}
+              <ol className="space-y-3 p-5 sm:p-6">
                 {tasksLoading &&
                   [0, 1, 2, 3].map((i) => (
-                    <div
-                      key={i}
-                      className="h-[76px] animate-pulse rounded-xl border border-hairline bg-subtle"
-                    />
+                    <li key={i} className="h-[132px] animate-pulse rounded-xl border border-hairline bg-subtle" />
                   ))}
 
                 {!tasksLoading && tasks.length === 0 && (
-                  <p className="py-6 text-center text-sm text-foreground/50">
-                    This scenario has no tasks.
-                  </p>
+                  <li className="py-6 text-center text-sm text-gray-500">This scenario has no criteria.</li>
                 )}
 
                 {!tasksLoading &&
                   tasks.map((task, i) => {
-                    const isFaculty = task.verification === "faculty";
-                    const interactive = isFaculty && !finalized;
-                    const done = task.is_completed;
-                    return (
-                      <div
-                        key={task.id}
-                        onClick={() => interactive && handleToggle(task)}
-                        style={{ animationDelay: `${Math.min(i, 10) * 30}ms` }}
-                        className={`group animate-rise overflow-hidden rounded-xl border px-4 py-3.5 transition-all ${
-                          done
-                            ? "border-emerald-500/40 bg-emerald-500/[0.06]"
-                            : "border-hairline bg-surface"
-                        } ${interactive ? "cursor-pointer hover:border-brand-500/50 hover:shadow-tile" : ""}`}
-                      >
-                        <div className="flex items-start gap-3.5">
-                          {/* Checkbox */}
-                          <div
-                            className={`mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-md border-2 transition-all ${
-                              busyTaskId === task.id ? "opacity-50" : ""
-                            } ${
-                              done
-                                ? isFaculty
-                                  ? "border-emerald-500 bg-emerald-500 text-white"
-                                  : "border-brand-600 bg-brand-600 text-white"
-                                : isFaculty
-                                  ? interactive
-                                    ? "border-foreground/25 text-transparent group-hover:border-emerald-500"
-                                    : "border-foreground/20 text-transparent"
-                                  : "border-dashed border-brand-500/40 text-transparent"
-                            }`}
-                          >
-                            {done ? (
-                              <CheckIcon />
-                            ) : !isFaculty ? (
-                              <span className="h-1.5 w-1.5 rounded-full bg-brand-500/60" />
-                            ) : null}
-                          </div>
+                    const isAuto = task.verification === "system";
+                    const level = effectiveRating(task);
+                    const saving = savingTaskIds.has(task.id);
+                    const noteOpen = openNotes.has(task.id) || Boolean(task.remarks);
+                    const noteValue = noteDrafts[task.id] ?? task.remarks ?? "";
+                    const trigger = task.system_trigger === "vitals" ? "recording vitals" : "charting";
 
+                    const evidence = isAuto
+                      ? task.completed_via === "system"
+                        ? `Auto-completed from the student's ${trigger}${task.completed_at ? ` · ${formatWhen(task.completed_at)}` : ""}`
+                        : `Not detected — completes from the student's ${trigger}`
+                      : "Hands-on — rate from your observation";
+
+                    const status =
+                      task.rating !== null
+                        ? null
+                        : hasCompletion(task)
+                          ? "Counts as Excellent until you rate it"
+                          : "Not rated — counts as Not Performed";
+
+                    return (
+                      <li
+                        key={task.id}
+                        style={{ animationDelay: `${Math.min(i, 10) * 30}ms` }}
+                        className={`relative animate-rise overflow-hidden rounded-xl border border-hairline bg-surface py-4 pl-5 pr-4 before:absolute before:inset-y-0 before:left-0 before:w-1 before:transition-colors ${
+                          level ? RATING_STYLE[level].rail : "before:bg-gray-200"
+                        } ${level && faded(task) ? "before:opacity-45" : ""}`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <span className="mt-0.5 font-mono text-xs font-medium tabular-nums text-gray-400">
+                            {String(i + 1).padStart(2, "0")}
+                          </span>
                           <div className="min-w-0 flex-1">
-                            <div className="mb-1 flex flex-wrap items-center gap-2">
-                              <p
-                                className={`font-semibold ${done ? "text-foreground" : "text-foreground/90"}`}
-                              >
-                                {task.title}
-                              </p>
-                              <span
-                                className={`rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize ${categoryChip(task.category)}`}
-                              >
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                              <h3 className="font-semibold text-gray-900">{task.title}</h3>
+                              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium capitalize text-gray-600">
                                 {task.category}
                               </span>
-                              <span
-                                className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                                  isFaculty
-                                    ? "bg-violet-500/12 text-violet-600 dark:text-violet-300"
-                                    : "bg-brand-500/12 text-brand-700 dark:text-brand-300"
-                                }`}
-                              >
-                                {isFaculty ? "Faculty-verified" : "Auto"}
+                              <span className="flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">
+                                <FontAwesomeIcon
+                                  icon={isAuto ? faLaptopMedical : faHandHoldingMedical}
+                                  className="h-2.5 w-2.5"
+                                />
+                                {isAuto ? "Auto-tracked" : "Hands-on"}
                               </span>
                             </div>
-                            <p className="text-sm text-foreground/55">{task.description}</p>
-                            <p className="mt-1 text-xs text-foreground/40">
-                              {task.is_completed
-                                ? task.completed_via === "system"
-                                  ? "Auto-completed from the student's charting"
-                                  : "Verified by faculty"
-                                : isFaculty
-                                  ? interactive
-                                    ? "Tap to mark verified"
-                                    : "Awaiting verification"
-                                  : "Completes from the student's charting"}
-                            </p>
+                            {task.description && <p className="mt-1 text-sm text-gray-500">{task.description}</p>}
+                            <p className="mt-1.5 text-xs text-gray-400">{evidence}</p>
                           </div>
-
-                          <span className="shrink-0 font-display text-sm font-bold tabular-nums text-foreground/70">
-                            {task.points}
-                            <span className="text-foreground/35"> pt</span>
+                          <span
+                            title={`${task.points} of ${totalPoints} points`}
+                            className="shrink-0 text-right text-xs leading-tight text-gray-400"
+                          >
+                            <span className="block font-display text-base font-bold tabular-nums text-gray-700">
+                              {weightOf(task)}%
+                            </span>
+                            of grade
                           </span>
                         </div>
-                      </div>
+
+                        <div className="mt-3.5 pl-7">
+                          {finalized ? (
+                            <span
+                              className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-semibold ${
+                                RATING_STYLE[level ?? "not_performed"].active
+                              }`}
+                            >
+                              <FontAwesomeIcon icon={faCheck} className="h-3 w-3" />
+                              {ratingLabel(level ?? "not_performed")}
+                            </span>
+                          ) : (
+                            <>
+                              <div
+                                role="radiogroup"
+                                aria-label={`Rating for ${task.title}`}
+                                className={`flex flex-wrap gap-1.5 transition-opacity ${saving ? "opacity-60" : ""}`}
+                              >
+                                {TASK_RATINGS.map((option) => {
+                                  const checked = task.rating === option.key;
+                                  return (
+                                    <button
+                                      key={option.key}
+                                      role="radio"
+                                      aria-checked={checked}
+                                      disabled={saving}
+                                      onClick={() => handleRate(task, checked ? null : option.key)}
+                                      title={
+                                        checked
+                                          ? "Click again to clear"
+                                          : `${option.label} — earns ${Math.round(option.credit * 100)}% of this criterion`
+                                      }
+                                      className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600/40 ${
+                                        checked
+                                          ? RATING_STYLE[option.key].active
+                                          : `border-gray-200 bg-surface text-gray-600 ${RATING_STYLE[option.key].idle}`
+                                      }`}
+                                    >
+                                      {checked ? (
+                                        <FontAwesomeIcon icon={faCheck} className="h-3 w-3" />
+                                      ) : (
+                                        <span className={`h-1.5 w-1.5 rounded-full ${RATING_STYLE[option.key].dot}`} />
+                                      )}
+                                      {option.label}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                              {status && <p className="mt-2 text-xs text-gray-400">{status}</p>}
+                            </>
+                          )}
+
+                          {/* Note */}
+                          {finalized ? (
+                            task.remarks && (
+                              <p className="mt-2.5 flex items-start gap-2 rounded-lg bg-subtle px-3 py-2 text-sm text-gray-600">
+                                <FontAwesomeIcon icon={faCommentMedical} className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gray-400" />
+                                {task.remarks}
+                              </p>
+                            )
+                          ) : noteOpen && hasCompletion(task) ? (
+                            <textarea
+                              value={noteValue}
+                              autoFocus={openNotes.has(task.id) && !task.remarks}
+                              onChange={(e) => setNoteDrafts((d) => ({ ...d, [task.id]: e.target.value }))}
+                              onBlur={() => handleNoteBlur(task)}
+                              maxLength={MAX_REMARKS_LENGTH}
+                              rows={2}
+                              placeholder="What went well, and what to work on…"
+                              aria-label={`Note for ${task.title}`}
+                              className="mt-2.5 w-full resize-y rounded-lg border border-gray-200 bg-surface px-3 py-2 text-sm text-gray-800 outline-none transition-colors placeholder:text-gray-400 focus:border-brand-600 focus:ring-2 focus:ring-brand-600/30"
+                            />
+                          ) : hasCompletion(task) ? (
+                            <button
+                              onClick={() => setOpenNotes((s) => new Set(s).add(task.id))}
+                              className="mt-2 flex items-center gap-1.5 text-xs font-medium text-brand-600 hover:text-brand-700"
+                            >
+                              <FontAwesomeIcon icon={faCommentMedical} className="h-3 w-3" />
+                              Add note
+                            </button>
+                          ) : null}
+                        </div>
+                      </li>
                     );
                   })}
-              </div>
+              </ol>
 
-              {/* Finalize bar */}
-              <div className="flex flex-col gap-3 border-t border-hairline bg-subtle/60 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-                <p className="text-sm text-foreground/55">
-                  {finalized
-                    ? "This assignment is finalized and locked."
-                    : selected.submitted_at
-                      ? "Student submitted — verify the hands-on tasks, then finalize."
-                      : "Not submitted yet — you can still finalize when ready."}
-                </p>
+              {/* Finalize */}
+              <div className="bottom-0 flex flex-col gap-3 rounded-b-2xl sm:sticky border-t border-hairline bg-surface/95 px-5 py-4 backdrop-blur sm:flex-row sm:items-center sm:justify-between sm:px-6">
+                <div className="min-w-0 text-sm">
+                  {finalized ? (
+                    <p className="text-gray-600">
+                      Graded <span className="font-semibold text-gray-900">{scoreDescriptor(shownScore)}</span>{" "}
+                      ({shownScore}%) and locked
+                      {selected.completed_at ? ` on ${formatDay(selected.completed_at)}` : ""}.
+                    </p>
+                  ) : (
+                    <>
+                      <p className="text-gray-600">
+                        Overall{" "}
+                        <span className="font-semibold text-gray-900">
+                          {ungraded ? "not graded yet" : `${scoreDescriptor(projectedScore)} · ${projectedScore}%`}
+                        </span>
+                      </p>
+                      <p className="text-xs text-gray-400">
+                        {unratedMissing > 0
+                          ? `${unratedMissing} unrated ${unratedMissing === 1 ? "criterion counts" : "criteria count"} as Not Performed`
+                          : !selected.submitted_at
+                            ? "Not submitted yet — you can still grade it now"
+                            : "Every criterion has a grade"}
+                      </p>
+                    </>
+                  )}
+                </div>
                 <button
-                  onClick={handleFinalize}
-                  disabled={finalized || finalizing || tasksLoading}
+                  onClick={() => setConfirmOpen(true)}
+                  disabled={finalized || finalizing || tasksLoading || tasks.length === 0}
                   className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white shadow-tile transition-all hover:bg-brand-700 hover:shadow-tile-hover disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-brand-600"
                 >
-                  {finalized ? (
-                    <>
-                      <CheckIcon className="h-4 w-4" /> Finalized
-                    </>
-                  ) : finalizing ? (
-                    "Finalizing…"
-                  ) : (
-                    "Finalize & lock score"
-                  )}
+                  <FontAwesomeIcon icon={finalized ? faCheck : faLock} className="h-3.5 w-3.5" />
+                  {finalized ? "Finalized" : "Finalize grade"}
                 </button>
               </div>
             </div>
           )}
-        </div>
-      </main>
+        </section>
+      </div>
+
+      {confirmOpen && selected && (
+        <ConfirmModal
+          config={{
+            title: "Finalize this grade?",
+            message: (
+              <>
+                {selected.student_name} receives{" "}
+                <span className="font-semibold text-gray-900">
+                  {scoreDescriptor(projectedScore)} ({projectedScore}%)
+                </span>{" "}
+                for {selected.scenario_title}. Ratings and notes lock once finalized.
+              </>
+            ),
+            confirmLabel: "Finalize grade",
+            danger: false,
+            loading: finalizing,
+            onConfirm: handleFinalize,
+            children:
+              unratedMissing + unratedDone > 0 ? (
+                <ul className="mt-3 space-y-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  {unratedMissing > 0 && (
+                    <li>
+                      {unratedMissing} unrated {unratedMissing === 1 ? "criterion" : "criteria"} will count as Not
+                      Performed.
+                    </li>
+                  )}
+                  {unratedDone > 0 && (
+                    <li>
+                      {unratedDone} checked-off {unratedDone === 1 ? "criterion" : "criteria"} without a rating will
+                      count as Excellent.
+                    </li>
+                  )}
+                </ul>
+              ) : undefined,
+          }}
+          onClose={() => setConfirmOpen(false)}
+        />
+      )}
     </div>
   );
 }

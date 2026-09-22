@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { fetchTaskCompletions } from '@/app/lib/scenario-tasks';
+import { isPerformed } from '@/app/lib/task-ratings';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -9,7 +11,8 @@ interface RouteParams {
 // GET /api/student/scenarios/:assignmentId/tasks
 // Returns the scenario's tasks with each one's completion state for this
 // student's assignment (system tasks auto-complete; faculty tasks are checked
-// off on the web).
+// off on the web). Faculty ratings and notes are released with the final score,
+// not while the instructor is still grading.
 export async function GET(_request: Request, { params }: RouteParams) {
   const session = await readSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -32,34 +35,32 @@ export async function GET(_request: Request, { params }: RouteParams) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const [tasksRes, completionsRes] = await Promise.all([
+    const [tasksRes, completions] = await Promise.all([
       supabase
         .from('scenario_tasks')
         .select('id, title, description, category, points, verification, system_trigger, sort_order')
         .eq('scenario_id', assignment.scenario_id)
         .order('sort_order', { ascending: true }),
-      supabase
-        .from('scenario_task_completions')
-        .select('task_id, completed_via, completed_at')
-        .eq('assignment_id', assignmentId),
+      fetchTaskCompletions(supabase, [assignmentId]),
     ]);
 
-    if (tasksRes.error || completionsRes.error) {
-      console.error('Failed to fetch scenario tasks', tasksRes.error, completionsRes.error);
+    if (tasksRes.error || completions.error) {
+      console.error('Failed to fetch scenario tasks', tasksRes.error, completions.error);
       return NextResponse.json({ error: 'Unable to fetch tasks' }, { status: 500 });
     }
 
-    const completionByTask = new Map(
-      (completionsRes.data ?? []).map((c) => [c.task_id, c]),
-    );
+    const completionByTask = new Map(completions.rows.map((c) => [c.task_id, c]));
+    const released = assignment.status === 'completed';
 
     const tasks = (tasksRes.data ?? []).map((t) => {
       const completion = completionByTask.get(t.id);
       return {
         ...t,
-        is_completed: Boolean(completion),
+        is_completed: isPerformed(completion),
         completed_via: completion?.completed_via ?? null,
         completed_at: completion?.completed_at ?? null,
+        rating: released ? (completion?.rating ?? null) : null,
+        remarks: released ? (completion?.remarks ?? null) : null,
       };
     });
 

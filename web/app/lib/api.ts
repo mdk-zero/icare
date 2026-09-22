@@ -2,6 +2,7 @@ import type { MlEvent } from './ml';
 import { NDJSON, readNdjson } from './ndjson';
 import { cachedFetch, clearRequestCache } from './request-cache';
 import type { AttendanceTally, ShiftAttendanceStatus } from './shifts';
+import type { TaskRating } from './task-ratings';
 
 export interface User {
   id: string;
@@ -2608,63 +2609,75 @@ export interface FacultyScenarioTask {
   verification: 'system' | 'faculty';
   system_trigger: 'vitals' | 'charting' | null;
   sort_order: number;
+  /** False for a task faculty rated "not performed", though it has a row. */
   is_completed: boolean;
   completed_via: 'system' | 'faculty' | null;
   completed_at: string | null;
+  /** Faculty's verbal rating; null when unrated. Students get it once finalized. */
+  rating: TaskRating | null;
+  remarks: string | null;
 }
 
 /** A student assignment's scenario tasks with their completion state (faculty view). */
 export async function fetchFacultyAssignmentTasks(
   assignmentId: string,
-): Promise<{ tasks: FacultyScenarioTask[]; status: string } | null> {
+): Promise<{ tasks: FacultyScenarioTask[]; status: string; ratingsEnabled: boolean } | null> {
   try {
     const res = await apiFetch(`/api/faculty/scenarios/assignments/${assignmentId}/tasks`, {
       credentials: 'include',
     });
-    const json = (await res.json()) as { tasks?: FacultyScenarioTask[]; status?: string; error?: string };
+    const json = (await res.json()) as {
+      tasks?: FacultyScenarioTask[];
+      status?: string;
+      ratings_enabled?: boolean;
+      error?: string;
+    };
     if (!res.ok) {
       console.error('fetchFacultyAssignmentTasks() failed', json.error);
       return null;
     }
-    return { tasks: json.tasks ?? [], status: json.status ?? 'pending' };
+    return {
+      tasks: json.tasks ?? [],
+      status: json.status ?? 'pending',
+      ratingsEnabled: json.ratings_enabled ?? true,
+    };
   } catch (err) {
     console.error('fetchFacultyAssignmentTasks() failed', err);
     return null;
   }
 }
 
-/** Check off (or undo) a faculty-verified task for a student's assignment. */
-export async function setFacultyTaskChecked(
+/**
+ * Set (or with `rating: null`, clear) faculty's verbal rating and/or note for
+ * one task; a field left out keeps its saved value. Resolves to the server's
+ * error message on failure, so a missing migration reads as that and not a
+ * generic failure.
+ */
+export async function saveTaskRating(
   assignmentId: string,
   taskId: string,
-  checked: boolean,
-): Promise<boolean> {
+  grade: { rating?: TaskRating | null; remarks?: string | null },
+): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
-    const base = `/api/faculty/scenarios/assignments/${assignmentId}/tasks`;
-    const res = checked
-      ? await apiFetch(base, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({ task_id: taskId }),
-        })
-      : await apiFetch(`${base}?task_id=${encodeURIComponent(taskId)}`, {
-          method: 'DELETE',
-          credentials: 'include',
-        });
+    const res = await apiFetch(`/api/faculty/scenarios/assignments/${assignmentId}/tasks`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ task_id: taskId, ...grade }),
+    });
     if (!res.ok) {
       const j = (await res.json().catch(() => ({}))) as { error?: string };
-      console.error('setFacultyTaskChecked() failed', j.error);
-      return false;
+      console.error('saveTaskRating() failed', j.error);
+      return { ok: false, error: j.error ?? 'Unable to save rating' };
     }
-    return true;
+    return { ok: true };
   } catch (err) {
-    console.error('setFacultyTaskChecked() failed', err);
-    return false;
+    console.error('saveTaskRating() failed', err);
+    return { ok: false, error: 'Unable to save rating' };
   }
 }
 
-/** Lock the assignment and score it from the share of task points completed. */
+/** Lock the assignment and score it from each task's rated share of its points. */
 export async function finalizeScenarioAssignment(
   assignmentId: string,
 ): Promise<{ assignment: ScenarioAssignment; score: number } | null> {

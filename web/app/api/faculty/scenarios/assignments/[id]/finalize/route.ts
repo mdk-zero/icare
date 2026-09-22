@@ -2,14 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { getFacultyStudentIds } from '@/app/lib/roster';
+import { fetchTaskCompletions } from '@/app/lib/scenario-tasks';
+import { gradedScore } from '@/app/lib/task-ratings';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
 }
 
 // POST /api/faculty/scenarios/assignments/:id/finalize
-// Locks the assignment: score = share of task points completed (by the student
-// via the system, or by faculty), status -> completed.
+// Locks the assignment: score = each task's points scaled by its verbal rating
+// (an unrated completion keeps full credit), status -> completed.
 export async function POST(_request: NextRequest, { params }: RouteParams) {
   const session = await readSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -39,21 +41,18 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'This scenario is already finalized' }, { status: 409 });
     }
 
-    const [tasksRes, completionsRes] = await Promise.all([
+    const [tasksRes, completions] = await Promise.all([
       supabase.from('scenario_tasks').select('id, points').eq('scenario_id', assignment.scenario_id),
-      supabase.from('scenario_task_completions').select('task_id').eq('assignment_id', assignmentId),
+      fetchTaskCompletions(supabase, [assignmentId]),
     ]);
-    if (tasksRes.error || completionsRes.error) {
+    if (tasksRes.error || completions.error) {
       return NextResponse.json({ error: 'Unable to finalize scenario' }, { status: 500 });
     }
 
-    const tasks = tasksRes.data ?? [];
-    const completedIds = new Set((completionsRes.data ?? []).map((c) => c.task_id));
-    const totalPoints = tasks.reduce((sum, t) => sum + (t.points ?? 0), 0);
-    const earnedPoints = tasks
-      .filter((t) => completedIds.has(t.id))
-      .reduce((sum, t) => sum + (t.points ?? 0), 0);
-    const score = totalPoints > 0 ? Math.round((earnedPoints / totalPoints) * 100) : 0;
+    const score = gradedScore(
+      tasksRes.data ?? [],
+      new Map(completions.rows.map((c) => [c.task_id, c])),
+    );
 
     const { data: updated, error } = await supabase
       .from('scenario_assignments')

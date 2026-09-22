@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { fetchTaskCompletions } from '@/app/lib/scenario-tasks';
+import { isPerformed } from '@/app/lib/task-ratings';
 
 /**
  * GET /api/student/ward
@@ -88,15 +90,10 @@ export async function GET() {
             .select('id, scenario_id, points')
             .in('scenario_id', scenarioIds)
         : Promise.resolve({ data: [], error: null }),
-      assignments.length > 0
-        ? supabase
-            .from('scenario_task_completions')
-            .select('assignment_id, task_id')
-            .in(
-              'assignment_id',
-              assignments.map((a) => a.id),
-            )
-        : Promise.resolve({ data: [], error: null }),
+      fetchTaskCompletions(
+        supabase,
+        assignments.map((a) => a.id),
+      ).then(({ rows, error }) => ({ data: rows, error })),
       assignedIdList.length > 0
         ? supabase
             .from('vital_sign_readings')
@@ -174,7 +171,8 @@ export async function GET() {
       tasksByScenario.set(task.scenario_id, (tasksByScenario.get(task.scenario_id) ?? 0) + 1);
     }
     const doneByAssignment = new Map<string, number>();
-    for (const completion of completionsRes.data ?? []) {
+    // A task faculty rated "not performed" still has a row; it isn't done.
+    for (const completion of (completionsRes.data ?? []).filter((c) => isPerformed(c))) {
       doneByAssignment.set(
         completion.assignment_id,
         (doneByAssignment.get(completion.assignment_id) ?? 0) + 1,

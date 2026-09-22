@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { createHash } from 'node:crypto';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { fetchTaskCompletions } from '@/app/lib/scenario-tasks';
+import { isPerformed } from '@/app/lib/task-ratings';
 import { callAI, aiErrorResponse } from '@/app/lib/ai/generate';
 
 /**
@@ -268,10 +270,10 @@ export async function GET() {
         .select('scenario_id, title, category, verification, system_trigger')
         .in('scenario_id', openScenarioIds)
         .order('sort_order', { ascending: true }),
-      supabase
-        .from('scenario_task_completions')
-        .select('assignment_id')
-        .in('assignment_id', openAssignmentIds),
+      fetchTaskCompletions(supabase, openAssignmentIds).then(({ rows, error }) => ({
+        data: rows,
+        error,
+      })),
       supabase
         .from('student_ai_tips')
         .select('tips, fingerprint, generated_at')
@@ -299,8 +301,8 @@ export async function GET() {
     }
 
     const completedCountByAssignment = new Map<string, number>();
-    for (const row of completionsRes.data ?? []) {
-      const id = (row as { assignment_id: string }).assignment_id;
+    for (const row of (completionsRes.data ?? []).filter((c) => isPerformed(c))) {
+      const id = row.assignment_id;
       completedCountByAssignment.set(id, (completedCountByAssignment.get(id) ?? 0) + 1);
     }
 

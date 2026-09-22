@@ -15,6 +15,7 @@ import {
   submitScenarioForReview,
 } from "../../lib/api";
 import { withFreshResponses } from "../../lib/request-cache";
+import { ratingLabel, scoreDescriptor, type TaskRating } from "../../lib/task-ratings";
 import { EcgLoader } from "../../components/EcgLoader";
 
 function categoryColor(category: string) {
@@ -25,6 +26,18 @@ function categoryColor(category: string) {
     case "communication": return "bg-green-100 text-green-700";
     case "documentation": return "bg-amber-100 text-amber-700";
     default: return "bg-gray-100 text-gray-700";
+  }
+}
+
+/** Your instructor's verbal rating, shown once the scenario is finalized. */
+function ratingColor(rating: TaskRating) {
+  switch (rating) {
+    case "excellent": return "bg-emerald-100 text-emerald-800";
+    case "very_good": return "bg-teal-100 text-teal-800";
+    case "good": return "bg-blue-100 text-blue-800";
+    case "fair": return "bg-amber-100 text-amber-800";
+    case "needs_improvement": return "bg-rose-100 text-rose-800";
+    default: return "bg-gray-200 text-gray-800";
   }
 }
 
@@ -259,6 +272,17 @@ export default function ScenarioRunnerClient() {
                               </span>
                             </div>
                             <p className="text-sm text-gray-500">{task.description}</p>
+                            {task.rating && (
+                              <span className={`inline-block mt-2 px-2.5 py-0.5 text-xs font-semibold rounded-full ${ratingColor(task.rating)}`}>
+                                {ratingLabel(task.rating)}
+                              </span>
+                            )}
+                            {task.remarks && (
+                              <p className="mt-2 text-sm text-gray-600 bg-gray-50 rounded-lg px-3 py-2">
+                                <span className="font-medium text-gray-700">Instructor&apos;s note: </span>
+                                {task.remarks}
+                              </p>
+                            )}
                             <p className="text-xs text-gray-400 mt-1">
                               {task.points} points
                               {task.is_completed
@@ -348,7 +372,9 @@ export default function ScenarioRunnerClient() {
                   <p className="text-2xl font-bold text-brand-600">
                     {isCompleted ? `${taskInfo?.assignment.score ?? 0}%` : `${earnedPoints}/${totalPoints}`}
                   </p>
-                  <p className="text-xs text-gray-500">{isCompleted ? "Final score" : "Points"}</p>
+                  <p className="text-xs text-gray-500">
+                    {isCompleted ? `Final · ${scoreDescriptor(taskInfo?.assignment.score ?? 0)}` : "Points"}
+                  </p>
                 </div>
               </div>
 

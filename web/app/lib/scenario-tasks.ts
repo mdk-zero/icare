@@ -1,6 +1,71 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { isTaskRating, type TaskRating } from '@/app/lib/task-ratings';
 
 export type ScenarioTaskTrigger = 'vitals' | 'charting';
+
+export interface TaskCompletionRow {
+  assignment_id: string;
+  task_id: string;
+  completed_via: 'system' | 'faculty';
+  completed_at: string;
+  rating: TaskRating | null;
+  remarks: string | null;
+}
+
+/**
+ * Before migration 043 the rating columns don't exist. PostgREST reports an
+ * unknown column on select as 42703 and on write as PGRST204.
+ */
+export function isMissingRatingColumns(error: { code?: string; message?: string } | null): boolean {
+  return error?.code === '42703' || error?.code === 'PGRST204';
+}
+
+export const RATINGS_NEED_MIGRATION =
+  'Verbal ratings need database migration 043 (scenario task ratings) applied first.';
+
+const BASE_COLUMNS = 'assignment_id, task_id, completed_via, completed_at';
+
+/**
+ * Completion rows for the given assignments, with their ratings when the
+ * database has them. `ratingsEnabled` is false before migration 043, when every
+ * row reads back unrated — which scores exactly as check-offs always did.
+ */
+export async function fetchTaskCompletions(
+  supabase: SupabaseClient,
+  assignmentIds: string[],
+): Promise<{
+  rows: TaskCompletionRow[];
+  ratingsEnabled: boolean;
+  error: { message?: string } | null;
+}> {
+  if (assignmentIds.length === 0) return { rows: [], ratingsEnabled: true, error: null };
+
+  const rated = await supabase
+    .from('scenario_task_completions')
+    .select(`${BASE_COLUMNS}, rating, remarks`)
+    .in('assignment_id', assignmentIds);
+  if (!rated.error) {
+    const rows = (rated.data ?? []).map((row) => ({
+      ...(row as Omit<TaskCompletionRow, 'rating'> & { rating: unknown }),
+      rating: isTaskRating(row.rating) ? row.rating : null,
+    }));
+    return { rows, ratingsEnabled: true, error: null };
+  }
+  if (!isMissingRatingColumns(rated.error)) {
+    return { rows: [], ratingsEnabled: true, error: rated.error };
+  }
+
+  const legacy = await supabase
+    .from('scenario_task_completions')
+    .select(BASE_COLUMNS)
+    .in('assignment_id', assignmentIds);
+  const rows = (legacy.data ?? []).map((row) => ({
+    ...(row as Omit<TaskCompletionRow, 'rating' | 'remarks'>),
+    rating: null,
+    remarks: null,
+  }));
+  return { rows, ratingsEnabled: false, error: legacy.error };
+}
 
 /**
  * Auto-check the student's system-verified scenario tasks when they perform the
