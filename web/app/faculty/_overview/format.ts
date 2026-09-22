@@ -66,6 +66,45 @@ export function greeting(now = new Date()): string {
   return "Good evening";
 }
 
+/**
+ * Particles that belong to the surname following them, so "Dela Cruz" and
+ * "Santa Maria" don't get chopped to "Cruz" and "Maria". Mirrors the mobile
+ * duty-roster greeting's list.
+ */
+const SURNAME_PARTICLES = new Set([
+  "de", "del", "dela", "delas", "delos", "della", "di", "da", "das", "dos",
+  "la", "las", "los", "san", "santa", "sta", "sto", "van", "von", "bin",
+]);
+
+/** Generational and credential suffixes; never part of the surname. */
+const NAME_SUFFIXES = new Set(["jr", "sr", "ii", "iii", "iv", "rn"]);
+
+/** Last token(s) of a stored `name` string, particles kept with their surname. */
+function lastName(fullName: string): string {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+  const strip = (part: string) => part.toLowerCase().replace(/[.,]/g, "");
+  while (parts.length > 1 && NAME_SUFFIXES.has(strip(parts[parts.length - 1]))) {
+    parts.pop();
+  }
+  if (parts.length <= 1) return parts[0] ?? "";
+  let start = parts.length - 1;
+  while (start > 1 && SURNAME_PARTICLES.has(strip(parts[start - 1]))) start -= 1;
+  return parts.slice(start).join(" ");
+}
+
+/**
+ * "Sir Dela Cruz" / "Ma'am Santos" once `sex` is recorded on the account;
+ * null keeps the caller falling back to a first name instead of guessing an
+ * honorific.
+ */
+export function addressedName(user: { name?: string | null; sex?: "male" | "female" | null } | null): string | null {
+  const fullName = user?.name?.trim();
+  if (!fullName) return null;
+  if (user?.sex === "male") return `Sir ${lastName(fullName)}`;
+  if (user?.sex === "female") return `Ma'am ${lastName(fullName)}`;
+  return fullName.split(/\s+/)[0];
+}
+
 export function plural(n: number, one: string, many = `${one}s`): string {
   return `${n} ${n === 1 ? one : many}`;
 }

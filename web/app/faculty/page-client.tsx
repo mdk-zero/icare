@@ -28,7 +28,7 @@ import WaitingCard from "./_overview/WaitingCard";
 import SectionMonitor from "./_overview/SectionMonitor";
 import AlertFeed from "./_overview/AlertFeed";
 import ActivityFeed from "./_overview/ActivityFeed";
-import { clockTime, greeting, listSentence, plural, relativeDay, timeAgo } from "./_overview/format";
+import { addressedName, clockTime, greeting, listSentence, plural, relativeDay, timeAgo } from "./_overview/format";
 
 /**
  * The page continues the masthead's entrance cascade (four steps of 45ms)
@@ -90,7 +90,7 @@ export default function FacultyDashboard() {
       activities: dashboard?.recent_activities ?? [],
       overview: dashboard?.overview ?? EMPTY_OVERVIEW,
       alerts: alertsData?.alerts ?? [],
-      firstName: user?.name ? user.name.split(" ")[0] : null,
+      addressee: addressedName(user),
       // Everything on the page is as of this moment, so "live" and "overdue"
       // can't disagree with each other across a re-render.
       loadedAt: Date.now(),
@@ -99,7 +99,7 @@ export default function FacultyDashboard() {
 
   if (loading || !data) return <OverviewSkeleton />;
 
-  const { stats, activities, overview, alerts, firstName, loadedAt } = data;
+  const { stats, activities, overview, alerts, addressee, loadedAt } = data;
   const total = stats?.total_students ?? 0;
   const atRisk = stats?.at_risk_students ?? 0;
   const review = stats?.awaiting_review ?? 0;
@@ -119,7 +119,7 @@ export default function FacultyDashboard() {
     <div>
       <PageHeader
         badge={{ icon: <FontAwesomeIcon icon={faHouse} className="h-3.5 w-3.5" />, label: "Dashboard" }}
-        title={`${greeting()}${firstName ? `, ${firstName}` : ""}`}
+        title={`${greeting()}${addressee ? `, ${addressee}` : ""}`}
         subtitle={briefing(stats, overview, loadedAt)}
       />
 

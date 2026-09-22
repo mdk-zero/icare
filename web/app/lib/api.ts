@@ -10,6 +10,8 @@ export interface User {
   name: string;
   role: 'student' | 'faculty' | 'admin';
   picture_url?: string | null;
+  /** Null when unrecorded; the dashboard greeting drops the honorific then. */
+  sex?: 'male' | 'female' | null;
   has_password?: boolean;
   force_password_change?: boolean;
 }
