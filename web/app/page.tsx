@@ -536,16 +536,33 @@ export default function LandingPage() {
                   </p>
                   <ul className="mt-2.5 space-y-2 text-xs">
                     {[
-                      ["Hand hygiene", "Excellent", "bg-emerald-100 text-emerald-700"],
-                      ["Identifies patient", "Very Good", "bg-brand-600/10 text-brand-700"],
-                      ["Counts a full minute", "Good", "bg-amber-100 text-amber-700"],
-                    ].map(([task, rating, tone]) => (
+                      // One from the top, middle and bottom of the scale, so the
+                      // card reads as grading rather than a row of praise.
+                      {
+                        task: "Hand hygiene",
+                        rating: "Excellent",
+                        tone: "bg-emerald-100 text-emerald-700",
+                        performed: true,
+                      },
+                      {
+                        task: "Identifies patient",
+                        rating: "Fair",
+                        tone: "bg-amber-100 text-amber-700",
+                        performed: true,
+                      },
+                      {
+                        task: "Counts 1 minute",
+                        rating: "Not Performed",
+                        tone: "bg-rose-100 text-rose-700",
+                        performed: false,
+                      },
+                    ].map(({ task, rating, tone, performed }) => (
                       <li key={task} className="flex items-center justify-between gap-2">
                         <span className="flex items-center gap-1.5 text-gray-700">
                           <Icon
-                            d={ICONS.check}
+                            d={performed ? ICONS.check : ICONS.x}
                             strokeWidth={2.5}
-                            className="h-3 w-3 text-brand-600"
+                            className={`h-3 w-3 ${performed ? "text-brand-600" : "text-rose-500"}`}
                           />
                           {task}
                         </span>
