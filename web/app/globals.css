@@ -428,3 +428,150 @@ html {
     scroll-behavior: auto !important;
   }
 }
+
+/*
+ * ---------------------------------------------------------------------------
+ * Landing page (app/page.tsx). Everything is `lp-` prefixed so none of it
+ * reaches the app. Under reduced motion the global block above settles each of
+ * these at a resting state: reveals and draws land at once, the marquee and the
+ * orbit stay put.
+ * ------------------------------------------------------------------------ */
+
+/* Chart paper: a fine grid with a heavier line every fifth square, like ECG
+   paper. Masks and opacity are applied where it's used. */
+.lp-grid {
+  --lp-grid-minor: color-mix(in oklab, var(--color-brand-600) 7%, transparent);
+  --lp-grid-major: color-mix(in oklab, var(--color-brand-600) 13%, transparent);
+  background-image:
+    linear-gradient(to right, var(--lp-grid-major) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--lp-grid-major) 1px, transparent 1px),
+    linear-gradient(to right, var(--lp-grid-minor) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--lp-grid-minor) 1px, transparent 1px);
+  background-size:
+    140px 140px,
+    140px 140px,
+    28px 28px,
+    28px 28px;
+}
+
+/* The same paper on the permanently dark teal panels. */
+.lp-grid-light {
+  --lp-grid-minor: rgb(255 255 255 / 0.04);
+  --lp-grid-major: rgb(255 255 255 / 0.08);
+}
+
+/* Hero entrance. `backwards` rather than a starting opacity-0 class, so if the
+   animation is ever suppressed the content is simply there. */
+.lp-enter {
+  animation: lpEnter 0.8s cubic-bezier(0.22, 0.61, 0.36, 1) backwards;
+  animation-delay: var(--lp-delay, 0ms);
+}
+
+@keyframes lpEnter {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 18px, 0);
+  }
+}
+
+/* The hand-drawn stroke under "judgment", drawn once the headline is up. */
+.lp-underline {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: lpDraw 0.9s cubic-bezier(0.65, 0, 0.35, 1) 0.7s forwards;
+}
+
+@keyframes lpDraw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* The dashed orbit around the hero illustration. */
+.lp-spin {
+  animation: lpSpin 90s linear infinite;
+}
+
+@keyframes lpSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Competency ticker: the list is rendered twice, so sliding one copy's width
+   (-50%) loops without a seam. Hover or focus holds it for reading. */
+.lp-marquee {
+  animation: lpMarquee 80s linear infinite;
+}
+
+.lp-marquee-track:hover .lp-marquee,
+.lp-marquee-track:focus-within .lp-marquee {
+  animation-play-state: paused;
+}
+
+@keyframes lpMarquee {
+  to {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+/* Scroll reveals (components/landing/Reveal.tsx). */
+.lp-reveal {
+  opacity: 0;
+  transform: translate3d(0, 28px, 0);
+  transition:
+    opacity 0.8s cubic-bezier(0.22, 0.61, 0.36, 1),
+    transform 0.8s cubic-bezier(0.22, 0.61, 0.36, 1);
+  transition-delay: var(--lp-delay, 0ms);
+}
+
+.lp-reveal[data-revealed="true"] {
+  opacity: 1;
+  transform: none;
+}
+
+/* How It Works: the monitor trace draws left to right and each step lands as
+   the trace reaches it (the steps carry staggered --lp-delay values). */
+.lp-draw {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  transition: stroke-dashoffset 1.6s cubic-bezier(0.65, 0, 0.35, 1) 0.2s;
+}
+
+.lp-step {
+  opacity: 0;
+  transform: translate3d(0, 16px, 0);
+  transition:
+    opacity 0.6s ease-out,
+    transform 0.6s ease-out;
+  transition-delay: var(--lp-delay, 0ms);
+}
+
+[data-revealed="true"] .lp-draw {
+  stroke-dashoffset: 0;
+}
+
+[data-revealed="true"] .lp-step {
+  opacity: 1;
+  transform: none;
+}
+
+/* FAQ answers slide open where the browser can animate to `auto`; elsewhere
+   they simply toggle. */
+@supports (interpolate-size: allow-keywords) {
+  .lp-faq {
+    interpolate-size: allow-keywords;
+  }
+
+  .lp-faq details::details-content {
+    height: 0;
+    overflow: clip;
+    transition:
+      height 0.35s cubic-bezier(0.22, 0.61, 0.36, 1),
+      content-visibility 0.35s allow-discrete;
+  }
+
+  .lp-faq details[open]::details-content {
+    height: auto;
+  }
+}
