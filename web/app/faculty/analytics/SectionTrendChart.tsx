@@ -115,17 +115,59 @@ function smoothPath(points: { x: number; y: number }[]): string {
   return d;
 }
 
-/** Legend for two or more series; a lone line is named by the card's title. */
-export function TrendLegend({ series }: { series: TrendSeries[] }) {
+/**
+ * Legend for two or more series; a lone line is named by the card's title.
+ * Clicking a section isolates its line — the chart is handed that series
+ * alone — and clicking it again, or "Show all", brings the rest back. The
+ * legend lists every section either way, so the way back stays in view and
+ * the dimmed entries still say which colour belongs to whom.
+ */
+export function TrendLegend({
+  series,
+  focused,
+  onFocus,
+}: {
+  series: TrendSeries[];
+  focused: string | null;
+  onFocus: (id: string | null) => void;
+}) {
   if (series.length < 2) return null;
   return (
-    <ul className="mb-3 flex flex-wrap gap-x-4 gap-y-1.5" aria-label="Sections">
-      {series.map((s) => (
-        <li key={s.id} className="flex items-center gap-1.5 text-xs text-gray-600">
-          <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: s.color }} />
-          {s.name}
+    <ul className="mb-3 flex flex-wrap items-center gap-x-1 gap-y-0.5" aria-label="Sections">
+      {series.map((s) => {
+        const isFocused = focused === s.id;
+        const dimmed = focused !== null && !isFocused;
+        return (
+          <li key={s.id} className="flex">
+            <button
+              type="button"
+              onClick={() => onFocus(isFocused ? null : s.id)}
+              aria-pressed={isFocused}
+              title={isFocused ? "Show all sections" : `Show only ${s.name}`}
+              className={`flex items-center gap-1.5 rounded-md px-1.5 py-0.5 text-xs transition-colors hover:bg-subtle ${
+                dimmed ? "text-gray-400" : "text-gray-600"
+              } ${isFocused ? "bg-subtle font-medium" : ""}`}
+            >
+              <span
+                className="h-2.5 w-2.5 shrink-0 rounded-full"
+                style={{ backgroundColor: s.color, opacity: dimmed ? 0.4 : 1 }}
+              />
+              {s.name}
+            </button>
+          </li>
+        );
+      })}
+      {focused !== null && (
+        <li className="flex">
+          <button
+            type="button"
+            onClick={() => onFocus(null)}
+            className="rounded-md px-1.5 py-0.5 text-xs font-medium text-brand-600 transition-colors hover:bg-subtle"
+          >
+            Show all
+          </button>
         </li>
-      ))}
+      )}
     </ul>
   );
 }
@@ -150,9 +192,13 @@ const MAX_MARKED_BUCKETS = 16;
 
 export function TrendLineChart({
   series,
+  focused = null,
   bucket,
 }: {
   series: TrendSeries[];
+  /** Isolate one section's line. The x-axis still spans every series, so an
+   *  isolated line sits exactly where it sat among the others. */
+  focused?: string | null;
   bucket: AnalyticsBucket;
 }) {
   const boxRef = useRef<HTMLDivElement>(null);
@@ -175,7 +221,9 @@ export function TrendLineChart({
   const W = size?.w ?? 0;
   const H = Math.max(size?.h ?? MIN_H, MIN_H);
 
+  // Every series sets the axis; `shown` is what actually gets drawn.
   const buckets = bucketsOf(series);
+  const shown = focused === null ? series : series.filter((s) => s.id === focused);
   const n = buckets.length;
   const indexOf = new Map(buckets.map((b, i) => [b, i]));
   const last = n - 1;
@@ -187,13 +235,17 @@ export function TrendLineChart({
   const ends = series.map((s) => s.points[s.points.length - 1]);
   const endSlots = ends.map((p) => yRaw(p.average_score)).sort((a, b) => a - b);
   const plotH = H - PAD_T - PAD_B;
-  const labelEnds =
+  // The room is judged on every series, so isolating a line doesn't re-stretch
+  // the plot under it; the labels themselves want two or more lines to tell
+  // apart — an isolated line is named by the card's title instead.
+  const labelRoom =
     series.length >= 2 &&
     series.length <= 4 &&
     ends.every((p) => indexOf.get(p.week_start) === last) &&
     endSlots.every((v, i) => i === 0 || (v - endSlots[i - 1]) * plotH >= LABEL_MIN_GAP);
+  const labelEnds = labelRoom && shown.length >= 2;
 
-  const padR = labelEnds ? LABEL_ROOM : 16;
+  const padR = labelRoom ? LABEL_ROOM : 16;
   const plotW = W - PAD_L - padR;
   const x = (i: number) => PAD_L + (n === 1 ? plotW / 2 : (i / (n - 1)) * plotW);
   const y = (v: number) => PAD_T + yRaw(v) * plotH;
@@ -203,7 +255,7 @@ export function TrendLineChart({
   const isTick = (i: number) => i === last || (i % tickStep === 0 && last - i >= tickStep);
   const marked = n <= MAX_MARKED_BUCKETS;
 
-  const drawn = series.map((s) => ({
+  const drawn = shown.map((s) => ({
     ...s,
     pts: s.points.map((p) => ({ x: x(indexOf.get(p.week_start)!), y: y(p.average_score), p })),
   }));
@@ -242,7 +294,7 @@ export function TrendLineChart({
           viewBox={`0 0 ${W} ${H}`}
           className="absolute inset-0 block overflow-visible"
           role="img"
-          aria-label={`Average quiz score over time for ${series.map((s) => s.name).join(", ")}. Use the table view for exact values.`}
+          aria-label={`Average quiz score over time for ${shown.map((s) => s.name).join(", ")}. Use the table view for exact values.`}
           tabIndex={0}
           onPointerMove={onPointerMove}
           onPointerLeave={() => setHover(null)}
@@ -373,7 +425,7 @@ export function TrendLineChart({
             {formatBucket(hoverBucket, bucket)}
           </p>
           <ul className="space-y-1">
-            {series.map((s) => {
+            {shown.map((s) => {
               const p = s.points.find((q) => q.week_start === hoverBucket);
               return (
                 <li key={s.id} className="flex items-center gap-2 text-xs">

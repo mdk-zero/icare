@@ -765,6 +765,9 @@ export default function FacultyAnalyticsClient() {
   // The table carries the same numbers as the performance chart, for readers
   // who can't hover or can't tell the lighter section colours apart.
   const [trendView, setTrendView] = useState<"chart" | "table">("chart");
+  // Clicking a section in the chart's legend isolates its line. The table is
+  // the full read-out, so it always lists every section.
+  const [trendFocus, setTrendFocus] = useState<string | null>(null);
 
   /* --- AI narrative -------------------------------------------------- */
 
@@ -845,6 +848,22 @@ export default function FacultyAnalyticsClient() {
   // The split failed to load (the summary itself did) — say so rather than
   // drawing one merged line in its place.
   const trendUnavailable = summary != null && summary.section_trend == null;
+  // Read the isolated section off the series in hand, so a filter or range
+  // change that drops it — or a switch to the full table — simply shows every
+  // line again, and switching back to the chart restores the isolation.
+  const trendFocused =
+    trendView === "chart" && trendFocus !== null && trendSeries.some((s) => s.id === trendFocus)
+      ? trendFocus
+      : null;
+  // The one line on show, if there is only one — whether isolated by a legend
+  // click or because this faculty member manages a single section. The card's
+  // title names it, which is why the chart draws no end-label for it.
+  const trendSolo =
+    trendFocused !== null
+      ? (trendSeries.find((s) => s.id === trendFocused) ?? null)
+      : trendSeries.length === 1
+        ? trendSeries[0]
+        : null;
   const competencies = Object.entries(summary?.competency_breakdown ?? {}).sort(
     (a, b) => b[1] - a[1],
   );
@@ -1083,8 +1102,8 @@ export default function FacultyAnalyticsClient() {
                   <div>
                     <h3 className="font-semibold text-gray-900">Classroom Performance Overview</h3>
                     <p className="text-xs text-gray-400">
-                      {trendSeries.length === 1
-                        ? `Average quiz score over time — ${trendSeries[0].name}`
+                      {trendSolo
+                        ? `Average quiz score over time — ${trendSolo.name}`
                         : "Average quiz score over time, one line per section"}
                     </p>
                   </div>
@@ -1131,8 +1150,16 @@ export default function FacultyAnalyticsClient() {
                   <TrendTable series={trendSeries} bucket={bucket} />
                 ) : (
                   <>
-                    <TrendLegend series={trendSeries} />
-                    <TrendLineChart series={trendSeries} bucket={bucket} />
+                    <TrendLegend
+                      series={trendSeries}
+                      focused={trendFocused}
+                      onFocus={setTrendFocus}
+                    />
+                    <TrendLineChart
+                      series={trendSeries}
+                      focused={trendFocused}
+                      bucket={bucket}
+                    />
                   </>
                 )}
               </div>
