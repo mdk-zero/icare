@@ -18,7 +18,11 @@ import {
   type FacultyStats,
 } from "../lib/api";
 import { usePageData } from "../lib/use-page-data";
-import { SkeletonActivityItem, SkeletonStatTile, SkeletonStudentRow } from "../components/skeletons";
+import {
+  SkeletonActivityItem,
+  SkeletonStatTile,
+  SkeletonStudentRow,
+} from "../components/skeletons";
 import PageHeader from "../components/PageHeader";
 import StatTile from "../components/StatTile";
 import { CardLabel } from "../components/Card";
@@ -28,7 +32,15 @@ import WaitingCard from "./_overview/WaitingCard";
 import SectionMonitor from "./_overview/SectionMonitor";
 import AlertFeed from "./_overview/AlertFeed";
 import ActivityFeed from "./_overview/ActivityFeed";
-import { addressedName, clockTime, greeting, listSentence, plural, relativeDay, timeAgo } from "./_overview/format";
+import {
+  addressedName,
+  clockTime,
+  greeting,
+  listSentence,
+  plural,
+  relativeDay,
+  timeAgo,
+} from "./_overview/format";
 
 /**
  * The page continues the masthead's entrance cascade (four steps of 45ms)
@@ -55,13 +67,19 @@ const EMPTY_OVERVIEW: FacultyOverview = {
 function briefing(stats: FacultyStats | null, overview: FacultyOverview, now: number): string {
   const parts: string[] = [];
   const flagged = overview.attention_total;
-  if (flagged > 0) parts.push(`${plural(flagged, "student")} ${flagged === 1 ? "needs" : "need"} a look`);
+  if (flagged > 0)
+    parts.push(`${plural(flagged, "student")} ${flagged === 1 ? "needs" : "need"} a look`);
   const review = stats?.awaiting_review ?? 0;
-  if (review > 0) parts.push(`${plural(review, "submission")} ${review === 1 ? "is" : "are"} waiting for review`);
+  if (review > 0)
+    parts.push(`${plural(review, "submission")} ${review === 1 ? "is" : "are"} waiting for review`);
   const overdue = stats?.overdue_assignments ?? 0;
-  if (overdue > 0) parts.push(`${plural(overdue, "assignment")} ${overdue === 1 ? "is" : "are"} overdue`);
+  if (overdue > 0)
+    parts.push(`${plural(overdue, "assignment")} ${overdue === 1 ? "is" : "are"} overdue`);
 
-  let text = parts.length > 0 ? `${listSentence(parts)}.` : "Everyone is on track and nothing is waiting on you.";
+  let text =
+    parts.length > 0
+      ? `${listSentence(parts)}.`
+      : "Everyone is on track and nothing is waiting on you.";
   text = text.charAt(0).toUpperCase() + text.slice(1);
 
   const next = overview.upcoming_shifts[0];
@@ -106,10 +124,9 @@ export default function FacultyDashboard() {
   const overdue = stats?.overdue_assignments ?? 0;
 
   // One scale for every monitor, so equal heights mean equal scores.
-  const observed = overview.sections.flatMap((s) => [
-    ...s.weekly.map((w) => w.average),
-    s.avg_recent,
-  ]).filter((v): v is number => v != null);
+  const observed = overview.sections
+    .flatMap((s) => [...s.weekly.map((w) => w.average), s.avg_recent])
+    .filter((v): v is number => v != null);
   const domain = {
     min: observed.length > 0 ? Math.max(0, Math.floor((Math.min(...observed) - 5) / 10) * 10) : 0,
     max: 100,
@@ -118,19 +135,29 @@ export default function FacultyDashboard() {
   return (
     <div>
       <PageHeader
-        badge={{ icon: <FontAwesomeIcon icon={faHouse} className="h-3.5 w-3.5" />, label: "Dashboard" }}
-        title={`${greeting()}${addressee ? `, ${addressee}` : ""}`}
+        badge={{
+          icon: <FontAwesomeIcon icon={faHouse} className="h-3.5 w-3.5" />,
+          label: "Dashboard",
+        }}
+        title={`${greeting()}${addressee ? `, ${addressee}.` : ""}`}
         subtitle={briefing(stats, overview, loadedAt)}
       />
 
       <div className="space-y-4">
-        <div className="animate-rise grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4" style={rise(0)}>
+        <div
+          className="animate-rise grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4"
+          style={rise(0)}
+        >
           <StatTile
             href="/faculty/students"
             icon={faUsers}
             value={total}
             label="Students"
-            caption={overview.sections.length > 0 ? `Across ${plural(overview.sections.length, "section")}` : "No sections yet"}
+            caption={
+              overview.sections.length > 0
+                ? `Across ${plural(overview.sections.length, "section")}`
+                : "No sections yet"
+            }
           />
           <StatTile
             href="/faculty/students"
@@ -161,13 +188,21 @@ export default function FacultyDashboard() {
             iconColor="text-amber-600"
             value={overdue}
             label="Overdue"
-            caption={overdue > 0 ? `${plural(stats?.students_behind ?? 0, "student")} behind` : "Nothing overdue"}
+            caption={
+              overdue > 0
+                ? `${plural(stats?.students_behind ?? 0, "student")} behind`
+                : "Nothing overdue"
+            }
           />
         </div>
 
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
           <div className="animate-rise lg:col-span-2" style={rise(1)}>
-            <AttentionList students={overview.attention} total={overview.attention_total} roster={total} />
+            <AttentionList
+              students={overview.attention}
+              total={overview.attention_total}
+              roster={total}
+            />
           </div>
           <div className="animate-rise flex flex-col gap-4" style={rise(2)}>
             <DutyCard shifts={overview.upcoming_shifts} now={loadedAt} />
@@ -184,13 +219,21 @@ export default function FacultyDashboard() {
                   How each section is doing
                 </h2>
               </div>
-              <Link href="/faculty/analytics" className="shrink-0 text-sm font-medium text-brand-600 hover:text-brand-700">
+              <Link
+                href="/faculty/analytics"
+                className="shrink-0 text-sm font-medium text-brand-600 hover:text-brand-700"
+              >
                 Open analytics →
               </Link>
             </div>
             <div className="grid grid-cols-[repeat(auto-fill,minmax(250px,1fr))] gap-4">
               {overview.sections.map((section, i) => (
-                <SectionMonitor key={section.id} section={section} domain={domain} style={rise(4 + i)} />
+                <SectionMonitor
+                  key={section.id}
+                  section={section}
+                  domain={domain}
+                  style={rise(4 + i)}
+                />
               ))}
             </div>
           </section>
