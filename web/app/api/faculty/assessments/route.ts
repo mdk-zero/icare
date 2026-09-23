@@ -110,12 +110,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const { title, description, difficulty, category, time_limit_seconds, target_sections } = body as {
+  const { title, description, difficulty, category, time_limit_seconds, max_attempts, target_sections } = body as {
     title?: unknown;
     description?: unknown;
     difficulty?: unknown;
     category?: unknown;
     time_limit_seconds?: unknown;
+    max_attempts?: unknown;
     target_sections?: unknown;
   };
 
@@ -134,6 +135,11 @@ export async function POST(request: NextRequest) {
       : Number(time_limit_seconds);
   if (timeLimit !== null && (!Number.isInteger(timeLimit) || timeLimit <= 0)) {
     return NextResponse.json({ error: 'Invalid time limit' }, { status: 400 });
+  }
+  const maxAttempts =
+    max_attempts === null || max_attempts === undefined ? null : Number(max_attempts);
+  if (maxAttempts !== null && (!Number.isInteger(maxAttempts) || maxAttempts <= 0)) {
+    return NextResponse.json({ error: 'Attempts allowed must be a positive whole number' }, { status: 400 });
   }
   // Section names, not ids. Empty means every section sees it.
   if (target_sections !== undefined && target_sections !== null) {
@@ -173,6 +179,7 @@ export async function POST(request: NextRequest) {
         difficulty: difficulty as (typeof validDifficulties)[number],
         category: category as (typeof validCategories)[number],
         time_limit_seconds: timeLimit,
+        max_attempts: maxAttempts,
         target_sections: targetSectionNames.length > 0 ? targetSectionNames : null,
       })
       .select()

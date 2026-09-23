@@ -25,7 +25,12 @@ import LiveClock from "../../../components/LiveClock";
 
 const inputClassName =
   "w-full px-4 py-3 bg-surface border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 focus:bg-surface transition-all text-sm shadow-sm";
-const labelClassName = "block text-sm font-bold text-gray-800 mb-2";
+/** A plainer, Google-Forms-like field style for the assessment's own detail
+ * form — lighter than `inputClassName`, and scoped to just that form so the
+ * question builder below keeps its usual weight. */
+const formLabelClassName = "block text-xs font-medium text-gray-500 mb-1";
+const formInputClassName =
+  "w-full px-3 py-2 bg-surface border border-gray-300 rounded-md text-gray-900 placeholder:text-gray-400 text-sm focus:outline-none focus:ring-1 focus:ring-brand-600 focus:border-brand-600 transition-colors";
 
 interface AssessmentDetail {
   id: string;
@@ -157,7 +162,7 @@ export default function AssessmentQuestionsClient({
 
   // inline detail editing
   const [editingDetails, setEditingDetails] = useState(false);
-  const [detailForm, setDetailForm] = useState({ title: "", description: "", difficulty: "beginner", category: "General", time_limit_minutes: "", total_questions: "", max_attempts: "", target_sections: [] as string[] });
+  const [detailForm, setDetailForm] = useState({ title: "", description: "", difficulty: "beginner", category: "General", time_limit_minutes: "", max_attempts: "", target_sections: [] as string[] });
   const [savingDetails, setSavingDetails] = useState(false);
   const [sections, setSections] = useState<Section[]>([]);
 
@@ -180,9 +185,10 @@ export default function AssessmentQuestionsClient({
       toast("Title is required");
       return;
     }
-    // Blank means "no limit" for both of these, which is a real setting rather
-    // than a missing one: no cap on retakes, and serve the whole bank.
-    const totalQuestions = detailForm.total_questions ? Number(detailForm.total_questions) : null;
+    // Every attempt always serves the whole bank now — no per-attempt cap to
+    // set, so this is sent as null on every save (clearing out any value a
+    // quiz was left with from before this control was removed).
+    const totalQuestions = null;
     const maxAttempts = detailForm.max_attempts ? Number(detailForm.max_attempts) : null;
 
     setSavingDetails(true);
@@ -265,7 +271,6 @@ export default function AssessmentQuestionsClient({
           difficulty: a.difficulty,
           category: a.category,
           time_limit_minutes: a.time_limit_seconds ? String(Math.round(a.time_limit_seconds / 60)) : "",
-          total_questions: a.total_questions ? String(a.total_questions) : "",
           max_attempts: a.max_attempts ? String(a.max_attempts) : "",
           target_sections: a.target_sections ?? [],
         });
@@ -839,74 +844,78 @@ export default function AssessmentQuestionsClient({
           </button>
           <div className="flex-1 min-w-0">
             {editingDetails ? (
-              <div className="space-y-3">
-                <input
-                  value={detailForm.title}
-                  onChange={(e) => setDetailForm((f) => ({ ...f, title: e.target.value }))}
-                  placeholder="Title"
-                  className={inputClassName}
-                />
-                <textarea
-                  value={detailForm.description}
-                  onChange={(e) => setDetailForm((f) => ({ ...f, description: e.target.value }))}
-                  rows={2}
-                  placeholder="Description"
-                  className={inputClassName}
-                />
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <select
-                    value={detailForm.difficulty}
-                    onChange={(e) => setDetailForm((f) => ({ ...f, difficulty: e.target.value }))}
-                    className={inputClassName}
-                  >
-                    <option value="beginner">Beginner</option>
-                    <option value="intermediate">Intermediate</option>
-                    <option value="advanced">Advanced</option>
-                  </select>
-                  <select
-                    value={detailForm.category}
-                    onChange={(e) => setDetailForm((f) => ({ ...f, category: e.target.value }))}
-                    className={inputClassName}
-                  >
-                    {CATEGORIES.map((c) => (
-                      <option key={c} value={c}>{c}</option>
-                    ))}
-                  </select>
+              <div className="space-y-4">
+                <div>
+                  <label className={formLabelClassName}>Title</label>
                   <input
-                    type="number"
-                    min={1}
-                    value={detailForm.time_limit_minutes}
-                    onChange={(e) => setDetailForm((f) => ({ ...f, time_limit_minutes: e.target.value }))}
-                    placeholder="Time limit (min)"
-                    className={inputClassName}
-                  />
-                  <input
-                    type="number"
-                    min={1}
-                    value={detailForm.total_questions}
-                    onChange={(e) => setDetailForm((f) => ({ ...f, total_questions: e.target.value }))}
-                    placeholder="Questions per attempt"
-                    title="How many questions each attempt serves. Leave blank to serve every question."
-                    className={inputClassName}
-                  />
-                  <input
-                    type="number"
-                    min={1}
-                    value={detailForm.max_attempts}
-                    onChange={(e) => setDetailForm((f) => ({ ...f, max_attempts: e.target.value }))}
-                    placeholder="Attempts allowed"
-                    title="How many times a student may sit this quiz. Leave blank for unlimited."
-                    className={inputClassName}
+                    value={detailForm.title}
+                    onChange={(e) => setDetailForm((f) => ({ ...f, title: e.target.value }))}
+                    className={formInputClassName}
                   />
                 </div>
+                <div>
+                  <label className={formLabelClassName}>Description</label>
+                  <textarea
+                    value={detailForm.description}
+                    onChange={(e) => setDetailForm((f) => ({ ...f, description: e.target.value }))}
+                    rows={2}
+                    className={formInputClassName}
+                  />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div>
+                    <label className={formLabelClassName}>Difficulty</label>
+                    <select
+                      value={detailForm.difficulty}
+                      onChange={(e) => setDetailForm((f) => ({ ...f, difficulty: e.target.value }))}
+                      className={formInputClassName}
+                    >
+                      <option value="beginner">Beginner</option>
+                      <option value="intermediate">Intermediate</option>
+                      <option value="advanced">Advanced</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className={formLabelClassName}>Category</label>
+                    <select
+                      value={detailForm.category}
+                      onChange={(e) => setDetailForm((f) => ({ ...f, category: e.target.value }))}
+                      className={formInputClassName}
+                    >
+                      {CATEGORIES.map((c) => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className={formLabelClassName}>Time limit (minutes)</label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={detailForm.time_limit_minutes}
+                      onChange={(e) => setDetailForm((f) => ({ ...f, time_limit_minutes: e.target.value }))}
+                      placeholder="No limit"
+                      className={formInputClassName}
+                    />
+                  </div>
+                  <div>
+                    <label className={formLabelClassName}>Attempts allowed</label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={detailForm.max_attempts}
+                      onChange={(e) => setDetailForm((f) => ({ ...f, max_attempts: e.target.value }))}
+                      placeholder="Unlimited"
+                      className={formInputClassName}
+                    />
+                  </div>
+                </div>
                 <p className="text-xs text-gray-500">
-                  Leave <span className="font-medium">Questions per attempt</span> blank to serve every
-                  question, and <span className="font-medium">Attempts allowed</span> blank for unlimited
-                  retakes. Holding questions back is what lets a retake show a student ones they
-                  haven&apos;t seen.
+                  Every attempt serves the whole quiz. Leave{" "}
+                  <span className="font-medium">Attempts allowed</span> blank for unlimited retakes.
                 </p>
                 <div>
-                  <label className={labelClassName}>Published to sections</label>
+                  <label className={formLabelClassName}>Published to sections</label>
                   {sections.length === 0 ? (
                     <p className="text-sm text-gray-500">
                       No sections exist yet — this assessment reaches every student.
