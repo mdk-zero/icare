@@ -53,6 +53,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({
         assessment,
         results: [],
+        audience: 'assigned' as const,
         summary: { total: 0, submitted: 0, in_progress: 0, not_started: 0, average_score: null },
       });
     }
@@ -81,6 +82,12 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       console.error('Failed to load attempts', attemptsRes.error);
       return NextResponse.json({ error: 'Unable to load results' }, { status: 500 });
     }
+    // Assignments decide the audience below, so a failed read must not quietly
+    // widen it to the whole cohort.
+    if (assignmentsRes.error) {
+      console.error('Failed to load assignments', assignmentsRes.error);
+      return NextResponse.json({ error: 'Unable to load results' }, { status: 500 });
+    }
 
     const attemptsByStudent = new Map<string, typeof attemptsRes.data>();
     for (const attempt of attemptsRes.data ?? []) {
@@ -94,12 +101,25 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
     const students = (studentsRes.data ?? []) as unknown as StudentRow[];
 
-    // Who this assessment is actually for. A section-targeted assessment must
-    // not report the rest of the cohort as "not started", but an explicit
-    // assignment and an existing attempt both override the section filter --
-    // anyone who has a result must appear, whatever the targeting says.
+    // Who this assessment is actually for.
+    //
+    // An explicit assignment is the strongest statement of audience there is:
+    // once anyone has been assigned, the audience is the assigned students, and
+    // the rest of the cohort is not "not started" -- they were never given it.
+    //
+    // target_sections is visibility, not assignment. Assigning to one section
+    // leaves an untargeted assessment visible to every section (see the assign
+    // route), so treating "no target sections" as "everyone is expected to take
+    // it" reported whole rosters as not started for a quiz assigned to someone
+    // else's section entirely. Visibility decides the audience only when nobody
+    // has been assigned, where the assessment really is open to whoever sees it.
+    //
+    // An attempt always counts, whatever the targeting says -- anyone who has a
+    // result must appear.
+    const hasAssignments = assignedIds.size > 0;
     const inScope = (student: StudentRow) => {
       if (assignedIds.has(student.id) || attemptsByStudent.has(student.id)) return true;
+      if (hasAssignments) return false;
       if (targetSections.length === 0) return true;
       return student.sections?.name ? targetSections.includes(student.sections.name) : false;
     };
@@ -143,6 +163,9 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({
       assessment,
       results,
+      // Lets the page say whether an empty table means "assigned to nobody you
+      // handle" or "nobody can see this yet".
+      audience: hasAssignments ? 'assigned' : 'visibility',
       summary: {
         total: results.length,
         submitted: results.filter((r) => r.status === 'submitted').length,

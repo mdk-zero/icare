@@ -49,6 +49,12 @@ interface Summary {
   average_score: number | null;
 }
 
+/**
+ * Which students the table covers: the ones explicitly assigned this
+ * assessment, or -- when nobody has been assigned -- everyone who can see it.
+ */
+type Audience = "assigned" | "visibility";
+
 interface AssessmentRef {
   id: string;
   title: string;
@@ -114,6 +120,7 @@ export default function AssessmentResultsClient({ assessmentId }: { assessmentId
       assessment?: AssessmentRef;
       results?: StudentResult[];
       summary?: Summary;
+      audience?: Audience;
       error?: string;
     };
     if (!res.ok) throw new Error(json.error ?? "Unable to load results.");
@@ -121,12 +128,14 @@ export default function AssessmentResultsClient({ assessmentId }: { assessmentId
       assessment: json.assessment ?? null,
       results: json.results ?? NO_RESULTS,
       summary: json.summary ?? null,
+      audience: json.audience ?? "visibility",
     };
   });
 
   const assessment = data?.assessment ?? null;
   const results = data?.results ?? NO_RESULTS;
   const summary = data?.summary ?? null;
+  const audience = data?.audience ?? "visibility";
   const error = loadError instanceof Error ? loadError.message : loadError ? String(loadError) : null;
 
   /** Only the sections actually present, so the dropdown never offers a dead end. */
@@ -252,7 +261,9 @@ export default function AssessmentResultsClient({ assessmentId }: { assessmentId
               icon={faCircleCheck}
               value={summary?.submitted ?? 0}
               label="Completed"
-              caption={`of ${summary?.total ?? 0} student${summary?.total === 1 ? "" : "s"}`}
+              caption={`of ${summary?.total ?? 0} ${
+                audience === "assigned" ? "assigned" : "eligible"
+              } student${summary?.total === 1 ? "" : "s"}`}
               iconBg="bg-emerald-50"
               iconColor="text-emerald-600"
             />
@@ -436,7 +447,9 @@ export default function AssessmentResultsClient({ assessmentId }: { assessmentId
                       <tr>
                         <td colSpan={7} className="py-12 text-center text-gray-400">
                           {results.length === 0
-                            ? "No students are targeted by this assessment yet"
+                            ? audience === "assigned"
+                              ? "This assessment is assigned, but not to any of your students"
+                              : "No students are targeted by this assessment yet"
                             : "No students match these filters"}
                         </td>
                       </tr>

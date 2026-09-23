@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { logAudit } from '@/app/lib/audit';
+import { getFacultyStudentIds } from '@/app/lib/roster';
 
 const validDifficulties = ['beginner', 'intermediate', 'advanced'] as const;
 const validCategories = [
@@ -29,7 +30,7 @@ export async function GET() {
     const { data, error } = await supabase
       .from('assessments')
       .select(
-        'id, created_by, title, description, difficulty, category, time_limit_seconds, is_published, is_ai_generated, target_sections, total_questions, max_attempts, created_at, updated_at, questions(count), assessment_assignments(count)',
+        'id, created_by, title, description, difficulty, category, time_limit_seconds, is_published, is_ai_generated, target_sections, total_questions, max_attempts, created_at, updated_at, questions(count)',
       )
       .order('created_at', { ascending: false })
       .limit(500);
@@ -37,6 +38,32 @@ export async function GET() {
     if (error) {
       console.error('Failed to fetch assessments', error);
       return NextResponse.json({ error: 'Unable to fetch assessments' }, { status: 500 });
+    }
+
+    // "N assigned" has to count the same students the results page lists, so a
+    // faculty member's number covers only their own sections -- otherwise a card
+    // reads "8 assigned" for a quiz given entirely to another section's
+    // students, and opening it shows none of them. Admin is unscoped.
+    //
+    // Counted here rather than with an embedded assessment_assignments(count),
+    // which cannot be filtered by student. The roster is the smaller `in` list,
+    // so it is the one that goes in the query.
+    const scopedIds =
+      session.role === 'faculty' ? await getFacultyStudentIds(supabase, session.uid) : null;
+
+    const assignedCounts = new Map<string, number>();
+    if (scopedIds === null || scopedIds.length > 0) {
+      let assignmentQuery = supabase.from('assessment_assignments').select('assessment_id').limit(20000);
+      if (scopedIds) assignmentQuery = assignmentQuery.in('student_id', scopedIds);
+      const { data: assignments, error: assignmentsError } = await assignmentQuery;
+      if (assignmentsError) {
+        console.error('Failed to count assessment assignments', assignmentsError);
+        return NextResponse.json({ error: 'Unable to fetch assessments' }, { status: 500 });
+      }
+      for (const row of assignments ?? []) {
+        const key = row.assessment_id as string;
+        assignedCounts.set(key, (assignedCounts.get(key) ?? 0) + 1);
+      }
     }
 
     const assessments = (data ?? []).map((a) => ({
@@ -59,10 +86,7 @@ export async function GET() {
       question_count: Number(
         (a as unknown as { questions: [{ count: number }] }).questions?.[0]?.count ?? 0,
       ),
-      student_count: Number(
-        (a as unknown as { assessment_assignments: [{ count: number }] })
-          .assessment_assignments?.[0]?.count ?? 0,
-      ),
+      student_count: assignedCounts.get(a.id) ?? 0,
     }));
 
     return NextResponse.json({ assessments });
