@@ -22,10 +22,11 @@ export default function AdminAnalyticsClient() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const { data: summary, loading, refresh: load } = usePageData(
-    "admin:analytics",
-    async () => (await fetchAnalyticsSummary()).summary,
-  );
+  const {
+    data: summary,
+    loading,
+    refresh: load,
+  } = usePageData("admin:analytics", async () => (await fetchAnalyticsSummary()).summary);
 
   const handleRefresh = async () => {
     setError(null);
@@ -49,7 +50,7 @@ export default function AdminAnalyticsClient() {
       <PageHeader
         badge={{
           icon: <FontAwesomeIcon icon={faChartBar} className="w-3.5 h-3.5" />,
-          label: "Warehouse Analytics",
+          label: "System Analytics",
         }}
         title="Analytics Dashboard"
         subtitle={
@@ -58,7 +59,11 @@ export default function AdminAnalyticsClient() {
             : "Cohort analytics from the iCARE++ star-schema warehouse"
         }
         action={{
-          icon: refreshing ? <EcgLoader /> : <FontAwesomeIcon icon={faRotate} className="w-4 h-4" />,
+          icon: refreshing ? (
+            <EcgLoader />
+          ) : (
+            <FontAwesomeIcon icon={faRotate} className="w-4 h-4" />
+          ),
           onClick: handleRefresh,
           label: "Refresh Warehouse",
           text: refreshing ? "Refreshing…" : "Refresh Warehouse",
@@ -80,13 +85,18 @@ export default function AdminAnalyticsClient() {
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
             {[
-              { icon: faUsers, label: "Total Students", value: `${summary?.cohort.total_students ?? 0}` },
+              {
+                icon: faUsers,
+                label: "Total Students",
+                value: `${summary?.cohort.total_students ?? 0}`,
+              },
               { icon: faExclamationTriangle, label: "At-Risk Students", value: `${atRisk}` },
               { icon: faDoorOpen, label: "Active Rooms", value: `${activeRooms}` },
               {
                 icon: faChartBar,
                 label: "Avg. Quiz Score",
-                value: summary?.cohort.average_score != null ? `${summary.cohort.average_score}%` : "—",
+                value:
+                  summary?.cohort.average_score != null ? `${summary.cohort.average_score}%` : "—",
               },
             ].map((stat) => (
               <div
@@ -126,7 +136,8 @@ export default function AdminAnalyticsClient() {
                       const plotW = W - marginLeft - marginRight;
                       const plotH = H - marginTop - marginBottom;
                       const n = trend.length;
-                      const xScale = (i: number) => marginLeft + (n === 1 ? plotW / 2 : (i / (n - 1)) * plotW);
+                      const xScale = (i: number) =>
+                        marginLeft + (n === 1 ? plotW / 2 : (i / (n - 1)) * plotW);
                       const yScale = (v: number) => marginTop + (1 - v / 100) * plotH;
                       const ticks = [0, 25, 50, 75, 100];
                       const points = trend.map((week, i) => ({
@@ -162,19 +173,44 @@ export default function AdminAnalyticsClient() {
                             const ty = yScale(t);
                             return (
                               <g key={t}>
-                                <line x1={marginLeft} y1={ty} x2={marginLeft + plotW} y2={ty} stroke="#e5e7eb" strokeWidth="1" />
-                                <text x={marginLeft - 8} y={ty + 3} textAnchor="end" fontSize="10" fill="#9ca3af">
+                                <line
+                                  x1={marginLeft}
+                                  y1={ty}
+                                  x2={marginLeft + plotW}
+                                  y2={ty}
+                                  stroke="#e5e7eb"
+                                  strokeWidth="1"
+                                />
+                                <text
+                                  x={marginLeft - 8}
+                                  y={ty + 3}
+                                  textAnchor="end"
+                                  fontSize="10"
+                                  fill="#9ca3af"
+                                >
                                   {t}
                                 </text>
                               </g>
                             );
                           })}
 
-                          {areaPath && <path d={areaPath} fill="url(#weeklyTrendFill)" stroke="none" />}
-                          <path d={linePath} fill="none" stroke="#1b6b7b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                          {areaPath && (
+                            <path d={areaPath} fill="url(#weeklyTrendFill)" stroke="none" />
+                          )}
+                          <path
+                            d={linePath}
+                            fill="none"
+                            stroke="#1b6b7b"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
 
                           {points.map((p, i) => {
-                            const tooltipX = Math.min(Math.max(p.x - 55, marginLeft), W - marginRight - 110);
+                            const tooltipX = Math.min(
+                              Math.max(p.x - 55, marginLeft),
+                              W - marginRight - 110,
+                            );
                             const tooltipY = Math.max(p.y - 42, 2);
                             return (
                               <g key={p.week.week_start} className="group">
@@ -195,12 +231,28 @@ export default function AdminAnalyticsClient() {
                                   className="transition-opacity group-hover:opacity-80"
                                 />
                                 {i === points.length - 1 && (
-                                  <text x={p.x} y={Math.max(p.y - 10, 12)} textAnchor="middle" fontSize="11" fontWeight="700" fill="#1b6b7b">
+                                  <text
+                                    x={p.x}
+                                    y={Math.max(p.y - 10, 12)}
+                                    textAnchor="middle"
+                                    fontSize="11"
+                                    fontWeight="700"
+                                    fill="#1b6b7b"
+                                  >
                                     {p.week.average_score}%
                                   </text>
                                 )}
-                                <text x={p.x} y={H - 6} textAnchor="middle" fontSize="10" fill="#6b7280">
-                                  {new Date(p.week.week_start).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                                <text
+                                  x={p.x}
+                                  y={H - 6}
+                                  textAnchor="middle"
+                                  fontSize="10"
+                                  fill="#6b7280"
+                                >
+                                  {new Date(p.week.week_start).toLocaleDateString(undefined, {
+                                    month: "short",
+                                    day: "numeric",
+                                  })}
                                 </text>
                                 <foreignObject
                                   x={tooltipX}
@@ -210,7 +262,8 @@ export default function AdminAnalyticsClient() {
                                   className="pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity"
                                 >
                                   <div className="bg-brand-600 text-white text-[11px] leading-tight px-2 py-1 rounded shadow-lg text-center whitespace-nowrap">
-                                    {p.week.average_score}% · {p.week.attempts} attempt{p.week.attempts === 1 ? "" : "s"}
+                                    {p.week.average_score}% · {p.week.attempts} attempt
+                                    {p.week.attempts === 1 ? "" : "s"}
                                   </div>
                                 </foreignObject>
                               </g>
@@ -251,31 +304,70 @@ export default function AdminAnalyticsClient() {
                     </div>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                       {(() => {
-                        const sorted = [...trend].sort((a, b) => new Date(b.week_start).getTime() - new Date(a.week_start).getTime());
-                        const best = sorted.reduce((max, w) => w.average_score > max.average_score ? w : max, sorted[0]);
-                        const worst = sorted.reduce((min, w) => w.average_score < min.average_score ? w : min, sorted[0]);
+                        const sorted = [...trend].sort(
+                          (a, b) =>
+                            new Date(b.week_start).getTime() - new Date(a.week_start).getTime(),
+                        );
+                        const best = sorted.reduce(
+                          (max, w) => (w.average_score > max.average_score ? w : max),
+                          sorted[0],
+                        );
+                        const worst = sorted.reduce(
+                          (min, w) => (w.average_score < min.average_score ? w : min),
+                          sorted[0],
+                        );
                         const totalAttempts = sorted.reduce((s, w) => s + w.attempts, 0);
                         const avgAttempts = Math.round(totalAttempts / sorted.length);
-                        const trendDir = sorted.length > 1
-                          ? sorted[0].average_score > sorted[sorted.length - 1].average_score
-                            ? "Improving"
-                            : sorted[0].average_score < sorted[sorted.length - 1].average_score
-                              ? "Declining"
-                              : "Stable"
-                          : "—";
+                        const trendDir =
+                          sorted.length > 1
+                            ? sorted[0].average_score > sorted[sorted.length - 1].average_score
+                              ? "Improving"
+                              : sorted[0].average_score < sorted[sorted.length - 1].average_score
+                                ? "Declining"
+                                : "Stable"
+                            : "—";
                         return [
-                          { label: "Best Week", value: `${best.average_score}%`, sub: new Date(best.week_start).toLocaleDateString(undefined, { month: "short", day: "numeric" }) },
-                          { label: "Lowest Week", value: `${worst.average_score}%`, sub: new Date(worst.week_start).toLocaleDateString(undefined, { month: "short", day: "numeric" }) },
-                          { label: "Avg Attempts/Week", value: `${avgAttempts}`, sub: `${sorted.length} weeks` },
-                          { label: "Trend", value: trendDir, sub: trendDir === "Improving" ? "↑" : trendDir === "Declining" ? "↓" : "→" },
+                          {
+                            label: "Best Week",
+                            value: `${best.average_score}%`,
+                            sub: new Date(best.week_start).toLocaleDateString(undefined, {
+                              month: "short",
+                              day: "numeric",
+                            }),
+                          },
+                          {
+                            label: "Lowest Week",
+                            value: `${worst.average_score}%`,
+                            sub: new Date(worst.week_start).toLocaleDateString(undefined, {
+                              month: "short",
+                              day: "numeric",
+                            }),
+                          },
+                          {
+                            label: "Avg Attempts/Week",
+                            value: `${avgAttempts}`,
+                            sub: `${sorted.length} weeks`,
+                          },
+                          {
+                            label: "Trend",
+                            value: trendDir,
+                            sub:
+                              trendDir === "Improving" ? "↑" : trendDir === "Declining" ? "↓" : "→",
+                          },
                         ].map((item) => (
                           <div key={item.label} className="p-3 bg-gray-50 rounded-lg">
                             <p className="text-xs text-gray-500 mb-0.5">{item.label}</p>
-                            <p className={`text-lg font-bold ${
-                              item.label === "Trend" && item.value === "Improving" ? "text-emerald-600" :
-                              item.label === "Trend" && item.value === "Declining" ? "text-rose-600" :
-                              "text-gray-800"
-                            }`}>{item.value}</p>
+                            <p
+                              className={`text-lg font-bold ${
+                                item.label === "Trend" && item.value === "Improving"
+                                  ? "text-emerald-600"
+                                  : item.label === "Trend" && item.value === "Declining"
+                                    ? "text-rose-600"
+                                    : "text-gray-800"
+                              }`}
+                            >
+                              {item.value}
+                            </p>
                             <p className="text-xs text-gray-400">{item.sub}</p>
                           </div>
                         ));
@@ -286,26 +378,40 @@ export default function AdminAnalyticsClient() {
                   {/* Risk Summary (moved out of the removed Room Utilization card) */}
                   {(summary?.risk_distribution?.at_risk ?? 0) > 0 && (
                     <div className="mt-4 pt-4 border-t border-hairline">
-                      <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Risk Summary</h4>
+                      <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
+                        Risk Summary
+                      </h4>
                       <div className="flex items-center gap-3">
                         <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden">
                           <div className="flex h-full">
                             <div
                               className="bg-emerald-500 h-full transition-all"
                               style={{
-                                width: `${summary?.risk_distribution ? Math.round(
-                                  ((summary.risk_distribution.safe ?? 0) /
-                                    ((summary.risk_distribution.safe ?? 0) + (summary.risk_distribution.at_risk ?? 0))) * 100
-                                ) : 0}%`,
+                                width: `${
+                                  summary?.risk_distribution
+                                    ? Math.round(
+                                        ((summary.risk_distribution.safe ?? 0) /
+                                          ((summary.risk_distribution.safe ?? 0) +
+                                            (summary.risk_distribution.at_risk ?? 0))) *
+                                          100,
+                                      )
+                                    : 0
+                                }%`,
                               }}
                             />
                             <div
                               className="bg-rose-400 h-full transition-all"
                               style={{
-                                width: `${summary?.risk_distribution ? Math.round(
-                                  ((summary.risk_distribution.at_risk ?? 0) /
-                                    ((summary.risk_distribution.safe ?? 0) + (summary.risk_distribution.at_risk ?? 0))) * 100
-                                ) : 0}%`,
+                                width: `${
+                                  summary?.risk_distribution
+                                    ? Math.round(
+                                        ((summary.risk_distribution.at_risk ?? 0) /
+                                          ((summary.risk_distribution.safe ?? 0) +
+                                            (summary.risk_distribution.at_risk ?? 0))) *
+                                          100,
+                                      )
+                                    : 0
+                                }%`,
                               }}
                             />
                           </div>
@@ -331,28 +437,46 @@ export default function AdminAnalyticsClient() {
           {/* Third row: Clinical Activity + Section Performance split */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
             <div className="lg:col-span-2 bg-surface p-6 rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)]">
-              <h3 className="text-lg font-semibold text-gray-900 mb-5">Clinical Training Activity</h3>
+              <h3 className="text-lg font-semibold text-gray-900 mb-5">
+                Clinical Training Activity
+              </h3>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                  {[
-                    { icon: faHeartbeat, label: "Vital Readings", value: activity?.vital_readings ?? 0 },
-                    { icon: faExclamationTriangle, label: "Anomalies", value: activity?.anomalies ?? 0 },
-                    { icon: faNotesMedical, label: "TPR Entries", value: activity?.tpr_entries ?? 0 },
-                    { icon: faNotesMedical, label: "IVF Records", value: activity?.ivf_records ?? 0 },
-                    { icon: faNotesMedical, label: "Progress Notes", value: activity?.progress_notes ?? 0 },
-                    { icon: faClipboardCheck, label: "Notes Reviewed", value: activity?.notes_reviewed ?? 0 },
-                  ].map((item) => (
-                    <div key={item.label} className="bg-brand-600/5 rounded-xl p-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-brand-600/10 border border-white/50">
-                          <FontAwesomeIcon icon={item.icon} className="w-4 h-4 text-brand-600" />
-                        </div>
-                        <div>
-                          <p className="text-xl font-bold text-gray-800">{item.value}</p>
-                          <p className="text-xs text-gray-500">{item.label}</p>
-                        </div>
+                {[
+                  {
+                    icon: faHeartbeat,
+                    label: "Vital Readings",
+                    value: activity?.vital_readings ?? 0,
+                  },
+                  {
+                    icon: faExclamationTriangle,
+                    label: "Anomalies",
+                    value: activity?.anomalies ?? 0,
+                  },
+                  { icon: faNotesMedical, label: "TPR Entries", value: activity?.tpr_entries ?? 0 },
+                  { icon: faNotesMedical, label: "IVF Records", value: activity?.ivf_records ?? 0 },
+                  {
+                    icon: faNotesMedical,
+                    label: "Progress Notes",
+                    value: activity?.progress_notes ?? 0,
+                  },
+                  {
+                    icon: faClipboardCheck,
+                    label: "Notes Reviewed",
+                    value: activity?.notes_reviewed ?? 0,
+                  },
+                ].map((item) => (
+                  <div key={item.label} className="bg-brand-600/5 rounded-xl p-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-brand-600/10 border border-white/50">
+                        <FontAwesomeIcon icon={item.icon} className="w-4 h-4 text-brand-600" />
+                      </div>
+                      <div>
+                        <p className="text-xl font-bold text-gray-800">{item.value}</p>
+                        <p className="text-xs text-gray-500">{item.label}</p>
                       </div>
                     </div>
-                  ))}
+                  </div>
+                ))}
               </div>
             </div>
 
@@ -367,7 +491,10 @@ export default function AdminAnalyticsClient() {
               ) : (
                 <div className="space-y-3">
                   {summary!.sections.map((sec) => (
-                    <div key={sec.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div
+                      key={sec.id}
+                      className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                    >
                       <span className="text-sm font-medium text-gray-800 truncate">{sec.name}</span>
                       <span className="flex items-center gap-1.5 text-sm text-gray-600 shrink-0 ml-3">
                         <FontAwesomeIcon icon={faUsers} className="w-3 h-3 text-gray-400" />
@@ -381,7 +508,9 @@ export default function AdminAnalyticsClient() {
                 <div className="mt-4 pt-4 border-t border-hairline">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm font-medium text-gray-700">Overall Average</span>
-                    <span className="text-sm font-bold text-brand-600">{summary.cohort.average_score}%</span>
+                    <span className="text-sm font-bold text-brand-600">
+                      {summary.cohort.average_score}%
+                    </span>
                   </div>
                   <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
                     <div
@@ -404,25 +533,36 @@ export default function AdminAnalyticsClient() {
                     .sort((a, b) => b.average_score - a.average_score)
                     .map((comp, i) => (
                       <div key={comp.name} className="flex items-center gap-3">
-                        <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
-                          i === 0 ? "bg-amber-100 text-amber-700" :
-                          i === 1 ? "bg-gray-100 text-gray-600" :
-                          i === 2 ? "bg-orange-100 text-orange-700" :
-                          "bg-gray-50 text-gray-500"
-                        }`}>
+                        <span
+                          className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
+                            i === 0
+                              ? "bg-amber-100 text-amber-700"
+                              : i === 1
+                                ? "bg-gray-100 text-gray-600"
+                                : i === 2
+                                  ? "bg-orange-100 text-orange-700"
+                                  : "bg-gray-50 text-gray-500"
+                          }`}
+                        >
                           {i + 1}
                         </span>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between mb-1">
-                            <span className="text-sm font-medium text-gray-800 truncate">{comp.name}</span>
-                            <span className="text-sm font-bold text-gray-700 ml-2 shrink-0">{comp.average_score}%</span>
+                            <span className="text-sm font-medium text-gray-800 truncate">
+                              {comp.name}
+                            </span>
+                            <span className="text-sm font-bold text-gray-700 ml-2 shrink-0">
+                              {comp.average_score}%
+                            </span>
                           </div>
                           <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
                             <div
                               className={`h-full rounded-full transition-all duration-500 ${
-                                comp.average_score >= 80 ? "bg-emerald-500" :
-                                comp.average_score >= 60 ? "bg-brand-600" :
-                                "bg-rose-400"
+                                comp.average_score >= 80
+                                  ? "bg-emerald-500"
+                                  : comp.average_score >= 60
+                                    ? "bg-brand-600"
+                                    : "bg-rose-400"
                               }`}
                               style={{ width: `${Math.min(comp.average_score, 100)}%` }}
                             />
@@ -445,20 +585,37 @@ export default function AdminAnalyticsClient() {
                     <div className="text-center">
                       <div className="relative w-40 h-40 mx-auto mb-4">
                         <svg className="w-40 h-40 -rotate-90" viewBox="0 0 120 120">
-                          <circle cx="60" cy="60" r="54" fill="none" stroke="#e5e7eb" strokeWidth="8" />
                           <circle
-                            cx="60" cy="60" r="54" fill="none"
+                            cx="60"
+                            cy="60"
+                            r="54"
+                            fill="none"
+                            stroke="#e5e7eb"
+                            strokeWidth="8"
+                          />
+                          <circle
+                            cx="60"
+                            cy="60"
+                            r="54"
+                            fill="none"
                             stroke="url(#completionGradient)"
                             strokeWidth="8"
                             strokeLinecap="round"
                             strokeDasharray={`${Math.min(
                               ((summary?.cohort.submitted_attempts ?? 0) /
-                                Math.max(summary?.cohort.total_students ?? 1, 1)) * 339.292,
-                              339.292
+                                Math.max(summary?.cohort.total_students ?? 1, 1)) *
+                                339.292,
+                              339.292,
                             )} 339.292`}
                           />
                           <defs>
-                            <linearGradient id="completionGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                            <linearGradient
+                              id="completionGradient"
+                              x1="0%"
+                              y1="0%"
+                              x2="100%"
+                              y2="0%"
+                            >
                               <stop offset="0%" stopColor="#155663" />
                               <stop offset="100%" stopColor="#2a8a98" />
                             </linearGradient>
@@ -473,11 +630,15 @@ export default function AdminAnalyticsClient() {
                       </div>
                       <div className="grid grid-cols-2 gap-4 text-sm">
                         <div className="p-3 bg-emerald-50 rounded-lg">
-                          <p className="text-lg font-bold text-emerald-700">{summary?.cohort.submitted_attempts ?? 0}</p>
+                          <p className="text-lg font-bold text-emerald-700">
+                            {summary?.cohort.submitted_attempts ?? 0}
+                          </p>
                           <p className="text-xs text-emerald-600">Attempts</p>
                         </div>
                         <div className="p-3 bg-brand-50 rounded-lg">
-                          <p className="text-lg font-bold text-brand-700">{summary?.cohort.active_students_30d ?? 0}</p>
+                          <p className="text-lg font-bold text-brand-700">
+                            {summary?.cohort.active_students_30d ?? 0}
+                          </p>
                           <p className="text-xs text-brand-600">Active</p>
                         </div>
                       </div>
@@ -504,16 +665,25 @@ export default function AdminAnalyticsClient() {
                 <table className="w-full">
                   <thead>
                     <tr className="bg-gray-50">
-                      <th className="text-left py-3 px-4 font-semibold text-gray-700">Competency</th>
-                      <th className="text-left py-3 px-4 font-semibold text-gray-700">Students Assessed</th>
+                      <th className="text-left py-3 px-4 font-semibold text-gray-700">
+                        Competency
+                      </th>
+                      <th className="text-left py-3 px-4 font-semibold text-gray-700">
+                        Students Assessed
+                      </th>
                       <th className="text-left py-3 px-4 font-semibold text-gray-700">Ratings</th>
-                      <th className="text-left py-3 px-4 font-semibold text-gray-700">Average Score</th>
+                      <th className="text-left py-3 px-4 font-semibold text-gray-700">
+                        Average Score
+                      </th>
                       <th className="text-left py-3 px-4 font-semibold text-gray-700">Pass Rate</th>
                     </tr>
                   </thead>
                   <tbody>
                     {summary!.competency_detail.map((row) => (
-                      <tr key={row.name} className="border-t border-hairline hover:bg-gray-50 transition-colors">
+                      <tr
+                        key={row.name}
+                        className="border-t border-hairline hover:bg-gray-50 transition-colors"
+                      >
                         <td className="py-3 px-4 text-gray-800 font-medium">{row.name}</td>
                         <td className="py-3 px-4 text-gray-600">{row.students}</td>
                         <td className="py-3 px-4 text-gray-600">{row.ratings}</td>
@@ -525,7 +695,9 @@ export default function AdminAnalyticsClient() {
                                 style={{ width: `${Math.min(row.average_score, 100)}%` }}
                               />
                             </div>
-                            <span className="text-sm font-medium text-gray-800">{row.average_score}%</span>
+                            <span className="text-sm font-medium text-gray-800">
+                              {row.average_score}%
+                            </span>
                           </div>
                         </td>
                         <td className="py-3 px-4">
