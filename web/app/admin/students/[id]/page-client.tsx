@@ -364,7 +364,11 @@ export default function StudentDetailClient() {
                         {formatDateTime(record.completed_at)} • {Math.floor(record.time_taken / 60)}m {record.time_taken % 60}s
                       </p>
                       <p className="text-xs text-gray-400 mt-1">
-                        {record.completed_tasks?.length || 0} / {record.total_tasks || 0} tasks completed
+                        {record.total_tasks !== null && record.completed_tasks !== null
+                          ? record.total_tasks > 0
+                            ? `${record.completed_tasks} / ${record.total_tasks} tasks performed`
+                            : "No checklist tasks"
+                          : "Task progress unavailable"}
                       </p>
                     </div>
                     <div className={`text-xl font-bold ${getScoreColor(record.score)}`}>{record.score}%</div>

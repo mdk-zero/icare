@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   gradedScore,
+  isPerformed,
   isTaskRating,
   ratingForCredit,
   taskCredit,
@@ -72,6 +73,84 @@ export async function fetchTaskCompletions(
     remarks: null,
   }));
   return { rows, ratingsEnabled: false, error: legacy.error };
+}
+
+/**
+ * PostgREST puts `in` lists in the query string, so a roster-wide read has to
+ * go a chunk of assignments at a time or the URL grows past what the server
+ * accepts.
+ */
+const COMPLETION_LOOKUP_CHUNK = 200;
+
+/**
+ * How many of each assignment's tasks the student actually performed, keyed by
+ * assignment id. Only the rating is read, not the whole completion row, since
+ * lists ask this for every assignment on a roster at once.
+ *
+ * A "not performed" rating is stored as a row (see migration 043), so it is
+ * excluded here — counting rows alone would report a criterion the instructor
+ * explicitly marked not performed as done.
+ */
+export async function fetchPerformedTaskCounts(
+  supabase: SupabaseClient,
+  assignmentIds: string[],
+): Promise<{ counts: Map<string, number>; error: { message?: string } | null }> {
+  const counts = new Map<string, number>();
+  if (assignmentIds.length === 0) return { counts, error: null };
+
+  for (let i = 0; i < assignmentIds.length; i += COMPLETION_LOOKUP_CHUNK) {
+    const chunk = assignmentIds.slice(i, i + COMPLETION_LOOKUP_CHUNK);
+
+    let rows: { assignment_id: string; rating: unknown }[];
+    const rated = await supabase
+      .from('scenario_task_completions')
+      .select('assignment_id, rating')
+      .in('assignment_id', chunk);
+    if (rated.error) {
+      // Before migration 043 there is no rating column; every row is a check-off.
+      if (!isMissingRatingColumns(rated.error)) return { counts, error: rated.error };
+      const legacy = await supabase
+        .from('scenario_task_completions')
+        .select('assignment_id')
+        .in('assignment_id', chunk);
+      if (legacy.error) return { counts, error: legacy.error };
+      rows = (legacy.data ?? []).map((row) => ({
+        assignment_id: row.assignment_id as string,
+        rating: null,
+      }));
+    } else {
+      rows = (rated.data ?? []) as { assignment_id: string; rating: unknown }[];
+    }
+
+    for (const row of rows) {
+      const rating = isTaskRating(row.rating) ? row.rating : null;
+      if (!isPerformed({ rating })) continue;
+      counts.set(row.assignment_id, (counts.get(row.assignment_id) ?? 0) + 1);
+    }
+  }
+
+  return { counts, error: null };
+}
+
+/** How many tasks each of the given scenarios has, keyed by scenario id. */
+export async function fetchTaskCountsByScenario(
+  supabase: SupabaseClient,
+  scenarioIds: string[],
+): Promise<{ counts: Map<string, number>; error: { message?: string } | null }> {
+  const counts = new Map<string, number>();
+  if (scenarioIds.length === 0) return { counts, error: null };
+
+  const { data, error } = await supabase
+    .from('scenario_tasks')
+    .select('scenario_id')
+    .in('scenario_id', scenarioIds);
+  if (error) return { counts, error };
+
+  for (const row of data ?? []) {
+    const id = row.scenario_id as string;
+    counts.set(id, (counts.get(id) ?? 0) + 1);
+  }
+  return { counts, error: null };
 }
 
 export interface TaskStepRow {

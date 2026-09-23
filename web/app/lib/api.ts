@@ -1164,6 +1164,10 @@ export interface ScenarioAssignment {
   time_taken?: number;
   submitted_at?: string | null;
   finalized_by?: string | null;
+  /** Tasks on the scenario's checklist; null when the counts couldn't be read. */
+  total_tasks?: number | null;
+  /** How many of them the student performed; null when unknown. */
+  completed_tasks?: number | null;
 }
 
 export interface ScenarioPerformance {
@@ -1175,9 +1179,23 @@ export interface ScenarioPerformance {
   score: number;
   max_score: number;
   time_taken: number;
-  completed_tasks: string[];
-  total_tasks: number;
+  /** Tasks performed, and how many the scenario has. Null when unknown. */
+  completed_tasks: number | null;
+  total_tasks: number | null;
   completed_at: string;
+}
+
+/** One submitted quiz attempt, as the faculty Performance tab lists it. */
+export interface StudentQuizAttempt {
+  id: string;
+  quiz_title: string;
+  /** Percentage, or null for an attempt that was never scored. */
+  score: number | null;
+  submitted_at: string | null;
+  started_at: string | null;
+  time_taken_seconds: number | null;
+  correct_answers: number | null;
+  total_questions: number | null;
 }
 
 export interface ScenarioTask {
@@ -1675,10 +1693,18 @@ export async function fetchFacultyStudents(riskLevel?: string, search?: string):
   }
 }
 
-export async function fetchFacultyStudentDetail(studentId: string): Promise<{ student: FacultyStudent; performance_history: any[]; competencies: Record<string, number> } | null> {
+export async function fetchFacultyStudentDetail(studentId: string): Promise<{
+  student: FacultyStudent;
+  performance_history: StudentQuizAttempt[];
+  competencies: Record<string, number>;
+} | null> {
   try {
     const res = await apiFetch(`/api/faculty/students/${studentId}`, { credentials: 'include' });
-    const json = (await res.json()) as { student?: FacultyStudent; error?: string };
+    const json = (await res.json()) as {
+      student?: FacultyStudent;
+      performance_history?: StudentQuizAttempt[];
+      error?: string;
+    };
     if (!res.ok || !json.student) {
       console.error('fetchFacultyStudentDetail() failed', json.error);
       return null;
@@ -1686,7 +1712,9 @@ export async function fetchFacultyStudentDetail(studentId: string): Promise<{ st
 
     return {
       student: json.student,
-      performance_history: await fetchStudentScenarioHistory(studentId),
+      // The student's submitted quiz attempts. Scenario runs are a separate
+      // tab and come from fetchStudentScenarioHistory().
+      performance_history: json.performance_history ?? [],
       // Real competency data comes from fetchCompetencyScores(); kept for shape compat.
       competencies: {},
     };
@@ -3024,8 +3052,8 @@ export async function fetchStudentScenarioHistory(studentId: string): Promise<Sc
       score: a.score ?? 0,
       max_score: 100,
       time_taken: a.time_taken ?? 0,
-      completed_tasks: [],
-      total_tasks: 8,
+      completed_tasks: a.completed_tasks ?? null,
+      total_tasks: a.total_tasks ?? null,
       completed_at: a.completed_at ?? a.assigned_at,
     }));
   } catch (err) {

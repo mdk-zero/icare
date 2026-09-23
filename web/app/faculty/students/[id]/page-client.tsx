@@ -36,7 +36,10 @@ import {
   fetchCompetencyScores,
   generateStudentSummary,
   CompetencyScore,
+  type ScenarioPerformance,
+  type StudentQuizAttempt,
 } from "../../../lib/api";
+import { scoreDescriptor } from "../../../lib/task-ratings";
 import { SkeletonProfileHeader, SkeletonRiskPredictionCard, SkeletonTabContent } from "../../../components/skeletons";
 import Card from "../../../components/Card";
 import Avatar from "../../../components/Avatar";
@@ -103,29 +106,36 @@ function writeStoredSummary(studentId: string, entry: StoredSummary) {
   }
 }
 
-interface PerformanceHistory {
-  quiz_title: string;
-  score: number;
-  date: string;
-  time_taken: number;
-}
-
-interface ScenarioPerformanceRecord {
-  id: string;
-  scenario_title: string;
-  score: number;
-  max_score: number;
-  completed_at: string;
-  time_taken: number;
-  total_tasks: number;
-  completed_tasks: string[];
-}
-
 // Stable empty fallbacks, so nothing downstream sees a new array each render.
-const NO_PERFORMANCE_HISTORY: PerformanceHistory[] = [];
-const NO_SCENARIO_HISTORY: ScenarioPerformanceRecord[] = [];
+const NO_PERFORMANCE_HISTORY: StudentQuizAttempt[] = [];
+const NO_SCENARIO_HISTORY: ScenarioPerformance[] = [];
 const NO_COMPETENCIES: ResolvedCompetency[] = [];
 const NO_SCORE_HISTORY: CompetencyScore[] = [];
+
+function formatDateTime(value: string | null): string {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+/** A duration in seconds, read as a person would say it. */
+function formatDuration(seconds: number | null): string | null {
+  if (seconds === null || !Number.isFinite(seconds) || seconds < 0) return null;
+  if (seconds < 60) return `${Math.round(seconds)}s`;
+  const minutes = Math.floor(seconds / 60);
+  const rest = Math.round(seconds % 60);
+  if (minutes < 60) return rest > 0 ? `${minutes}m ${rest}s` : `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  const restMinutes = minutes % 60;
+  return restMinutes > 0 ? `${hours}h ${restMinutes}m` : `${hours}h`;
+}
 
 /**
  * Plain-language reading of this student's record, in a popup opened from
@@ -361,7 +371,7 @@ export default function StudentDetailClient() {
   // another AI call to describe activity that hasn't moved.
   const summaryDataSignature = data
     ? JSON.stringify({
-        quizzes: performanceHistory.map((h) => [h.quiz_title, h.score, h.date]),
+        quizzes: performanceHistory.map((h) => [h.quiz_title, h.score, h.submitted_at]),
         scenarios: scenarioHistory.map((s) => [s.id, s.score, s.completed_at]),
         competencies: scoreHistory.map((c) => [c.competency_id, c.score, c.source, c.created_at]),
         risk: riskPrediction
@@ -723,20 +733,50 @@ export default function StudentDetailClient() {
               {performanceHistory.length === 0 ? (
                 <p className="text-gray-500 text-center py-8">No quiz attempts yet</p>
               ) : (
-                performanceHistory.map((record, idx) => (
-                  <div key={idx} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-600/10 text-brand-600">
-                      <FontAwesomeIcon icon={faFileLines} className="h-4 w-4" />
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-gray-900 truncate">{record.quiz_title}</p>
-                      <p className="text-sm text-gray-500">{record.date} • {record.time_taken} min</p>
+                performanceHistory.map((record) => {
+                  const duration = formatDuration(record.time_taken_seconds);
+                  const answered =
+                    record.total_questions !== null && record.total_questions > 0
+                      ? record.total_questions
+                      : null;
+                  return (
+                    <div key={record.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-600/10 text-brand-600">
+                        <FontAwesomeIcon icon={faFileLines} className="h-4 w-4" />
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-gray-900 truncate">{record.quiz_title}</p>
+                        <p className="text-sm text-gray-500">{formatDateTime(record.submitted_at)}</p>
+                        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-400">
+                          {answered !== null && (
+                            <span className="flex items-center gap-1">
+                              <FontAwesomeIcon icon={faCircleCheck} className="h-3 w-3" />
+                              {record.correct_answers} / {answered} correct
+                            </span>
+                          )}
+                          {duration && (
+                            <span className="flex items-center gap-1">
+                              <FontAwesomeIcon icon={faClock} className="h-3 w-3" />
+                              {duration}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <p
+                          className={`text-xl font-bold leading-none ${
+                            record.score !== null ? getScoreColor(record.score) : 'text-gray-400'
+                          }`}
+                        >
+                          {record.score !== null ? `${record.score}%` : '—'}
+                        </p>
+                        <p className="mt-1 text-[11px] text-gray-400">
+                          {record.score !== null ? scoreDescriptor(record.score) : 'Not scored'}
+                        </p>
+                      </div>
                     </div>
-                    <div className={`text-xl font-bold shrink-0 ${getScoreColor(record.score)}`}>
-                      {record.score}%
-                    </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           )}
@@ -746,21 +786,56 @@ export default function StudentDetailClient() {
               {scenarioHistory.length === 0 ? (
                 <p className="text-gray-500 text-center py-8">No scenario performance records yet</p>
               ) : (
-                scenarioHistory.map((record) => (
-                  <div key={record.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-purple-100 text-purple-600">
-                      <FontAwesomeIcon icon={faStethoscope} className="h-4 w-4" />
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-gray-900 truncate">{record.scenario_title}</p>
-                      <p className="text-sm text-gray-500">{record.completed_at} • {Math.floor(record.time_taken / 60)}m {record.time_taken % 60}s</p>
-                      <p className="text-xs text-gray-400 mt-1">{record.completed_tasks?.length || 0} / {record.total_tasks || 0} tasks completed</p>
+                scenarioHistory.map((record) => {
+                  const duration = formatDuration(record.time_taken);
+                  // A scenario with no authored checklist, and a run whose
+                  // progress couldn't be read, are different things — neither
+                  // should read as "0 / 8".
+                  const total = record.total_tasks;
+                  const done = record.completed_tasks;
+                  const hasProgress = total !== null && done !== null && total > 0;
+                  return (
+                    <div key={record.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-purple-100 text-purple-600">
+                        <FontAwesomeIcon icon={faStethoscope} className="h-4 w-4" />
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-gray-900 truncate">{record.scenario_title}</p>
+                        <p className="text-sm text-gray-500">{formatDateTime(record.completed_at)}</p>
+                        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-400">
+                          <span className="flex items-center gap-1">
+                            <FontAwesomeIcon icon={faListCheck} className="h-3 w-3" />
+                            {hasProgress
+                              ? `${done} / ${total} tasks performed`
+                              : total === 0
+                                ? 'No checklist tasks'
+                                : 'Task progress unavailable'}
+                          </span>
+                          {duration && (
+                            <span className="flex items-center gap-1">
+                              <FontAwesomeIcon icon={faClock} className="h-3 w-3" />
+                              {duration}
+                            </span>
+                          )}
+                        </div>
+                        {hasProgress && (
+                          <div className="mt-1.5 h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-gray-200">
+                            <div
+                              className="h-full rounded-full bg-purple-500 transition-all"
+                              style={{ width: `${Math.min(100, Math.round((done / total) * 100))}%` }}
+                            />
+                          </div>
+                        )}
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <p className={`text-xl font-bold leading-none ${getScoreColor(record.score)}`}>
+                          {record.score}%
+                        </p>
+                        <p className="mt-1 text-[11px] text-gray-400">{scoreDescriptor(record.score)}</p>
+                      </div>
                     </div>
-                    <div className={`text-xl font-bold shrink-0 ${getScoreColor(record.score)}`}>
-                      {record.score}%
-                    </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           )}

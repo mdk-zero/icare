@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { getFacultyStudentIds } from '@/app/lib/roster';
+import {
+  fetchPerformedTaskCounts,
+  fetchTaskCountsByScenario,
+} from '@/app/lib/scenario-tasks';
 
 export async function GET(request: NextRequest) {
   const session = await readSession();
@@ -68,18 +72,32 @@ export async function GET(request: NextRequest) {
     }
 
     const scenarioIds = [...new Set(assignments.map((a) => a.scenario_id))];
-    const [scenariosRes, studentsRes] = await Promise.all([
+    // Task progress is read here rather than left to the caller, so a list row
+    // can say how much of the checklist was actually performed instead of
+    // guessing at a fixed checklist length.
+    const [scenariosRes, studentsRes, taskCounts, performedCounts] = await Promise.all([
       supabase.from('scenarios').select('id, title').in('id', scenarioIds),
       supabase.from('users').select('id, name, picture_url, sex').in('id', studentIds),
+      fetchTaskCountsByScenario(supabase, scenarioIds),
+      fetchPerformedTaskCounts(
+        supabase,
+        assignments.map((a) => a.id as string),
+      ),
     ]);
 
     if (scenariosRes.error || studentsRes.error) {
       console.error('Failed to fetch related data', scenariosRes.error, studentsRes.error);
       return NextResponse.json({ error: 'Unable to fetch assignments' }, { status: 500 });
     }
+    // Task progress is supporting detail; if it can't be read the assignments
+    // themselves are still worth returning, with the counts left unknown.
+    if (taskCounts.error || performedCounts.error) {
+      console.error('Failed to fetch task progress', taskCounts.error, performedCounts.error);
+    }
 
     const scenariosById = new Map(scenariosRes.data?.map((s) => [s.id, s.title]));
     const studentsById = new Map(studentsRes.data?.map((s) => [s.id, s]));
+    const countsKnown = !taskCounts.error && !performedCounts.error;
 
     const formatted = assignments.map((a) => ({
       id: a.id,
@@ -98,6 +116,8 @@ export async function GET(request: NextRequest) {
       time_taken: a.time_taken,
       submitted_at: a.submitted_at,
       finalized_by: a.finalized_by,
+      total_tasks: countsKnown ? taskCounts.counts.get(a.scenario_id) ?? 0 : null,
+      completed_tasks: countsKnown ? performedCounts.counts.get(a.id) ?? 0 : null,
     }));
 
     return NextResponse.json({ assignments: formatted });
