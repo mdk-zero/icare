@@ -98,6 +98,7 @@ export default function AssessmentNewClient() {
     difficulty: "beginner" as Difficulty,
     category: "General" as (typeof CATEGORIES)[number],
     time_limit_minutes: "",
+    max_attempts: "",
   });
 
   const handleCreate = async () => {
@@ -137,6 +138,7 @@ export default function AssessmentNewClient() {
             time_limit_seconds: form.time_limit_minutes
               ? Number(form.time_limit_minutes) * 60
               : null,
+            max_attempts: form.max_attempts ? Number(form.max_attempts) : null,
           }),
         });
 
@@ -308,19 +310,35 @@ export default function AssessmentNewClient() {
               </SelectField>
             </div>
           </div>
-          <div>
-            <label className={labelClassName}>
-              Time limit <span className="font-normal text-gray-500">(minutes, optional)</span>
-            </label>
-            <input
-              type="number"
-              min={1}
-              value={form.time_limit_minutes}
-              onChange={(e) => setForm((f) => ({ ...f, time_limit_minutes: e.target.value }))}
-              placeholder="No limit"
-              disabled={busy}
-              className={inputClassName}
-            />
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label className={labelClassName}>
+                Time limit <span className="font-normal text-gray-500">(minutes, optional)</span>
+              </label>
+              <input
+                type="number"
+                min={1}
+                value={form.time_limit_minutes}
+                onChange={(e) => setForm((f) => ({ ...f, time_limit_minutes: e.target.value }))}
+                placeholder="No limit"
+                disabled={busy}
+                className={inputClassName}
+              />
+            </div>
+            <div>
+              <label className={labelClassName}>
+                Attempts allowed <span className="font-normal text-gray-500">(optional)</span>
+              </label>
+              <input
+                type="number"
+                min={1}
+                value={form.max_attempts}
+                onChange={(e) => setForm((f) => ({ ...f, max_attempts: e.target.value }))}
+                placeholder="Unlimited"
+                disabled={busy}
+                className={inputClassName}
+              />
+            </div>
           </div>
         </div>
 
