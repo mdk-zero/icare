@@ -21,7 +21,6 @@ export interface PublishBlocker {
     | 'no_criteria'
     | 'weights'
     | 'unassigned_questions'
-    | 'no_total'
     | 'total_exceeds_bank'
     | 'criterion_below_min'
     | 'minimums_exceed_total';
@@ -117,12 +116,10 @@ export async function assessmentPublishBlockers(
     overrides && 'total_questions' in overrides
       ? overrides.total_questions
       : assessmentRes.data.total_questions;
-  if (totalQuestions === null || totalQuestions === undefined) {
-    blockers.push({
-      code: 'no_total',
-      message: 'Set how many questions each attempt serves before publishing.',
-    });
-  } else {
+  // Null is a real, publishable setting — every servable question goes out
+  // each attempt — not a missing value, so there is nothing to check against
+  // a cap that was never set.
+  if (totalQuestions !== null && totalQuestions !== undefined) {
     // Only questions a criterion owns can be served.
     const servable = questions.length - unassigned.length;
     if (totalQuestions > servable) {

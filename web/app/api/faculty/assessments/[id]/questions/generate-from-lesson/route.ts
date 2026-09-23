@@ -348,14 +348,6 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       if (tagError) console.error('Failed to tag generated question competencies', tagError);
     }
 
-    // Serve every generated question per attempt unless faculty already chose a number.
-    const { error: totalError } = await supabase
-      .from('assessments')
-      .update({ total_questions: (existingCount ?? 0) + inserted.length })
-      .eq('id', assessmentId)
-      .is('total_questions', null);
-    if (totalError) console.error('Failed to set questions per attempt', totalError);
-
     return NextResponse.json({ questions, saved: inserted.length });
   } catch (err) {
     console.error('Generate questions from lesson failed', err);
