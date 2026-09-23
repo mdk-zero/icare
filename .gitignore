@@ -3,6 +3,9 @@ node_modules/
 
 # Build output
 dist/
+# Next.js writes trace output here if a build is run from the repo root
+# instead of web/ (web/.gitignore's /.next/ only anchors inside web/).
+.next/
 
 # Env
 .env
