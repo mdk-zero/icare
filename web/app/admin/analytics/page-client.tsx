@@ -67,9 +67,11 @@ function Panel({ children, className = "" }: { children: ReactNode; className?: 
  * ones that follow the filters above. The difference is easy to miss otherwise. */
 function ScopeTag({ live, label, dark }: { live?: boolean; label?: string; dark?: boolean }) {
   return (
-    <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${
+    <span
+      className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${
         dark ? "bg-white/10 text-white/80" : "bg-subtle text-gray-600"
-      }`}>
+      }`}
+    >
       {live && (
         <span className="relative flex h-1.5 w-1.5">
           <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60 motion-reduce:animate-none" />
@@ -117,7 +119,9 @@ function CardHeading({
           />
           <span className="truncate">{title}</span>
         </h3>
-        {subtitle && <p className={`mt-0.5 text-sm ${dark ? "text-white/60" : "text-gray-500"}`}>{subtitle}</p>}
+        {subtitle && (
+          <p className={`mt-0.5 text-sm ${dark ? "text-white/60" : "text-gray-500"}`}>{subtitle}</p>
+        )}
       </div>
       <div className="flex shrink-0 items-center gap-4">
         {aside}
@@ -201,8 +205,20 @@ function RoleDonut({ counts }: { counts: Record<"student" | "faculty" | "admin",
     <div className="flex flex-1 flex-col justify-between gap-6">
       <div className="flex flex-1 items-center justify-center">
         <div className="relative aspect-square w-full max-w-[15rem]">
-          <svg viewBox="0 0 120 120" className="h-full w-full -rotate-90" role="img" aria-label="Users by role">
-            <circle cx="60" cy="60" r={r} fill="none" className="stroke-gray-200" strokeWidth="18" />
+          <svg
+            viewBox="0 0 120 120"
+            className="h-full w-full -rotate-90"
+            role="img"
+            aria-label="Users by role"
+          >
+            <circle
+              cx="60"
+              cy="60"
+              r={r}
+              fill="none"
+              className="stroke-gray-200"
+              strokeWidth="18"
+            />
             {total > 0 &&
               ROLE_SLICES.map((slice) => {
                 const len = (counts[slice.key] / total) * c;
@@ -239,7 +255,10 @@ function RoleDonut({ counts }: { counts: Record<"student" | "faculty" | "admin",
               <span className="text-base font-semibold text-gray-400">%</span>
             </p>
             <p className="mt-1 flex items-center justify-center gap-1.5 text-xs text-gray-500">
-              <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: slice.color }} />
+              <span
+                className="h-2 w-2 shrink-0 rounded-full"
+                style={{ backgroundColor: slice.color }}
+              />
               {slice.label} · {counts[slice.key]}
             </p>
           </div>
@@ -308,7 +327,12 @@ function RoomGauge({
   return (
     <div className="flex flex-col items-center rounded-2xl border border-hairline bg-gradient-to-b from-gray-50 to-transparent px-3 pb-4 pt-5 text-center">
       <div className="relative w-full max-w-[11rem]">
-        <svg viewBox="0 0 120 70" className="block w-full" role="img" aria-label={`${name}: ${percent}% occupied`}>
+        <svg
+          viewBox="0 0 120 70"
+          className="block w-full"
+          role="img"
+          aria-label={`${name}: ${percent}% occupied`}
+        >
           <defs>
             <linearGradient id={gradId} x1="0%" y1="100%" x2="100%" y2="0%">
               <stop offset="0%" stopColor={color.from} />
@@ -345,9 +369,17 @@ function RoomGauge({
 }
 
 const ROOM_STATUS_TONE: Record<string, { badge: string; fill: string; label: string }> = {
-  active: { badge: "bg-emerald-100 text-emerald-600", fill: "bg-emerald-500/[0.08]", label: "Active" },
+  active: {
+    badge: "bg-emerald-100 text-emerald-600",
+    fill: "bg-emerald-500/[0.08]",
+    label: "Active",
+  },
   inactive: { badge: "bg-gray-100 text-gray-500", fill: "bg-gray-400/[0.08]", label: "Inactive" },
-  maintenance: { badge: "bg-amber-100 text-amber-600", fill: "bg-amber-500/[0.08]", label: "Maintenance" },
+  maintenance: {
+    badge: "bg-amber-100 text-amber-600",
+    fill: "bg-amber-500/[0.08]",
+    label: "Maintenance",
+  },
 };
 
 /** Smallest round step (1/2/5/10 × 10ⁿ) at or above `rough`, so gridlines land
@@ -402,7 +434,12 @@ function SectionColumns({
         </span>
       </div>
       <div className="relative">
-        <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" role="img" aria-label="Active students per section">
+        <svg
+          viewBox={`0 0 ${W} ${H}`}
+          className="h-auto w-full"
+          role="img"
+          aria-label="Active students per section"
+        >
           {ticks.map((t) => (
             <g key={t}>
               <line
@@ -414,7 +451,13 @@ function SectionColumns({
                 strokeWidth="1"
                 strokeDasharray={t === 0 ? undefined : "3 4"}
               />
-              <text x={pad.left - 6} y={y(t) + 3.5} textAnchor="end" className="fill-gray-400" fontSize="10">
+              <text
+                x={pad.left - 6}
+                y={y(t) + 3.5}
+                textAnchor="end"
+                className="fill-gray-400"
+                fontSize="10"
+              >
                 {t}
               </text>
             </g>
@@ -429,7 +472,10 @@ function SectionColumns({
                   <path d={roundedTop(x, y(d.students), barW, base)} className="fill-brand-200" />
                 )}
                 {d.active_students > 0 && (
-                  <path d={roundedTop(x, y(d.active_students), barW, base)} className="fill-brand-600" />
+                  <path
+                    d={roundedTop(x, y(d.active_students), barW, base)}
+                    className="fill-brand-600"
+                  />
                 )}
                 <text
                   x={x + barW / 2}
@@ -441,7 +487,13 @@ function SectionColumns({
                 >
                   {d.active_students}
                 </text>
-                <text x={x + barW / 2} y={H - 10} textAnchor="middle" className="fill-gray-500" fontSize="10">
+                <text
+                  x={x + barW / 2}
+                  y={H - 10}
+                  textAnchor="middle"
+                  className="fill-gray-500"
+                  fontSize="10"
+                >
                   {shortLabel(d.name)}
                 </text>
                 <rect
@@ -542,12 +594,13 @@ export default function AdminAnalyticsClient() {
       ? ((await facultyRes.json()) as { faculty?: AdminFacultyRow[] })
       : {};
     const users = usersRes.ok
-      ? ((await usersRes.json()) as { users?: { role: string }[] }).users ?? []
+      ? (((await usersRes.json()) as { users?: { role: string }[] }).users ?? [])
       : [];
     const totalUsers = users.length;
     const roleCounts = { student: 0, faculty: 0, admin: 0 };
     for (const u of users) {
-      if (u.role === "student" || u.role === "faculty" || u.role === "admin") roleCounts[u.role] += 1;
+      if (u.role === "student" || u.role === "faculty" || u.role === "admin")
+        roleCounts[u.role] += 1;
     }
 
     // Which faculty teach each section, so the performance ranking below can
@@ -669,17 +722,6 @@ export default function AdminAnalyticsClient() {
         }}
         title="Analytics Dashboard"
         subtitle="Cohort analytics from the iCARE++ star-schema warehouse"
-        action={{
-          icon: refreshing ? (
-            <EcgLoader />
-          ) : (
-            <FontAwesomeIcon icon={faRotate} className="w-4 h-4" />
-          ),
-          onClick: handleRefresh,
-          label: "Refresh Warehouse",
-          text: refreshing ? "Refreshing…" : "Refresh Warehouse",
-          disabled: refreshing,
-        }}
       />
 
       {error && (
@@ -726,7 +768,11 @@ export default function AdminAnalyticsClient() {
               icon={faExclamationTriangle}
               value={atRisk}
               label="At-Risk Students"
-              caption={totalStudents ? `${atRiskRate}% of ${totalStudents} students` : "No students in range"}
+              caption={
+                totalStudents
+                  ? `${atRiskRate}% of ${totalStudents} students`
+                  : "No students in range"
+              }
               iconBg="bg-rose-50"
               iconColor="text-rose-600"
             />
@@ -738,104 +784,8 @@ export default function AdminAnalyticsClient() {
             />
           </div>
 
-          {/* Section engagement + users by role */}
-          <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
-            <Panel className="lg:col-span-2">
-              <svg
-                viewBox="0 0 220 44"
-                className="pointer-events-none absolute right-40 top-5 hidden h-10 w-56 opacity-50 md:block"
-                aria-hidden
-              >
-                <path
-                  d="M0 24 H52 L60 24 L66 6 L74 40 L82 24 H120 L128 24 L134 14 L140 24 H220"
-                  fill="none"
-                  stroke="#2a8a98"
-                  strokeWidth="1.5"
-                  strokeLinejoin="round"
-                />
-              </svg>
-              <CardHeading
-                icon={faLayerGroup}
-                title="Section Engagement"
-                subtitle="Active students against enrollment, per section"
-                tag={rangeTag}
-              />
-              {sectionEngagement.length === 0 ? (
-                <p className="py-8 text-center text-sm text-gray-400">No sections with students in this scope.</p>
-              ) : (
-                <SectionColumns data={sectionEngagement} />
-              )}
-              <div className="mt-5 grid grid-cols-2 gap-4 border-t border-hairline pt-5 sm:grid-cols-4">
-                <MiniStat icon={faUserGraduate} label="Students" value={totalStudents} chip="bg-blue-50 text-blue-600" />
-                <MiniStat
-                  icon={faUserCheck}
-                  label="Active (30d)"
-                  value={activeStudents}
-                  chip="bg-emerald-50 text-emerald-600"
-                />
-                <MiniStat
-                  icon={faClipboardCheck}
-                  label="Attempts"
-                  value={summary?.cohort.submitted_attempts ?? 0}
-                  chip="bg-amber-50 text-amber-600"
-                />
-                <MiniStat
-                  icon={faLayerGroup}
-                  label="Sections"
-                  value={sectionEngagement.length}
-                  chip="bg-purple-50 text-purple-600"
-                />
-              </div>
-            </Panel>
-
-            <Panel className="flex flex-col">
-              <CardHeading icon={faUsers} title="Users by Role" subtitle="Everyone with an account" tag={liveTag} />
-              <RoleDonut counts={roleCounts} />
-          </Panel>
-          </div>
-
-          {/* Room Utilization: one gauge per busiest room */}
-          <Panel className="mb-6">
-            <CardHeading
-              icon={faBuilding}
-              title="Room Utilization"
-              subtitle={`Top ${TOP_ROOMS} busiest rooms`}
-              tag={liveTag}
-              aside={
-                roomList.length > 0 ? (
-                  <div className="hidden text-right sm:block">
-                    <p className="font-display text-xl font-bold tabular-nums text-gray-900">{overallOccupancy}%</p>
-                    <p className="text-xs text-gray-500">
-                      {occupiedBeds}/{totalBeds} beds overall
-                    </p>
-                  </div>
-                ) : undefined
-              }
-            />
-            {roomList.length === 0 ? (
-              <p className="py-8 text-center text-sm text-gray-400">No rooms configured.</p>
-            ) : (
-              <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-5">
-                {rooms.map((room, i) => {
-                  const tone = ROOM_STATUS_TONE[room.status] ?? ROOM_STATUS_TONE.inactive;
-                  return (
-                    <RoomGauge
-                      key={room.id}
-                      id={room.id}
-                      name={room.name}
-                      sublabel={`Room ${room.room_number} · ${tone.label}`}
-                      percent={room.utilization_pct}
-                      beds={`${room.patients_assigned}/${room.capacity} beds`}
-                      colorIndex={i}
-                    />
-                  );
-                })}
-              </div>
-            )}
-          </Panel>
-
           {/* Faculty Performance + Top Students, side by side */}
-          <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-2 mb-4">
             <Panel>
               <CardHeading
                 icon={faUserTie}
@@ -904,8 +854,12 @@ export default function AdminAnalyticsClient() {
                             size={first ? "xl" : "lg"}
                             tone="brand"
                           />
-                          <p className="mt-2 w-full truncate text-sm font-semibold text-gray-900">{s.name}</p>
-                          <p className="w-full truncate text-xs text-gray-400">{s.section ?? "No section"}</p>
+                          <p className="mt-2 w-full truncate text-sm font-semibold text-gray-900">
+                            {s.name}
+                          </p>
+                          <p className="w-full truncate text-xs text-gray-400">
+                            {s.section ?? "No section"}
+                          </p>
                           <p
                             className={`mt-2 font-display font-bold tabular-nums ${
                               first ? "text-3xl text-amber-600" : "text-2xl text-brand-600"
@@ -938,6 +892,116 @@ export default function AdminAnalyticsClient() {
                   )}
                 </>
               )}
+            </Panel>
+          </div>
+
+          {/* Room Utilization: one gauge per busiest room */}
+          <Panel className="mb-6">
+            <CardHeading
+              icon={faBuilding}
+              title="Room Utilization"
+              subtitle={`Top ${TOP_ROOMS} busiest rooms`}
+              tag={liveTag}
+              aside={
+                roomList.length > 0 ? (
+                  <div className="hidden text-right sm:block">
+                    <p className="font-display text-xl font-bold tabular-nums text-gray-900">
+                      {overallOccupancy}%
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {occupiedBeds}/{totalBeds} beds overall
+                    </p>
+                  </div>
+                ) : undefined
+              }
+            />
+            {roomList.length === 0 ? (
+              <p className="py-8 text-center text-sm text-gray-400">No rooms configured.</p>
+            ) : (
+              <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-5">
+                {rooms.map((room, i) => {
+                  const tone = ROOM_STATUS_TONE[room.status] ?? ROOM_STATUS_TONE.inactive;
+                  return (
+                    <RoomGauge
+                      key={room.id}
+                      id={room.id}
+                      name={room.name}
+                      sublabel={`Room ${room.room_number} · ${tone.label}`}
+                      percent={room.utilization_pct}
+                      beds={`${room.patients_assigned}/${room.capacity} beds`}
+                      colorIndex={i}
+                    />
+                  );
+                })}
+              </div>
+            )}
+          </Panel>
+
+          {/* Section engagement + users by role */}
+          <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
+            <Panel className="lg:col-span-2">
+              <svg
+                viewBox="0 0 220 44"
+                className="pointer-events-none absolute right-40 top-5 hidden h-10 w-56 opacity-50 md:block"
+                aria-hidden
+              >
+                <path
+                  d="M0 24 H52 L60 24 L66 6 L74 40 L82 24 H120 L128 24 L134 14 L140 24 H220"
+                  fill="none"
+                  stroke="#2a8a98"
+                  strokeWidth="1.5"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              <CardHeading
+                icon={faLayerGroup}
+                title="Section Engagement"
+                subtitle="Active students against enrollment, per section"
+                tag={rangeTag}
+              />
+              {sectionEngagement.length === 0 ? (
+                <p className="py-8 text-center text-sm text-gray-400">
+                  No sections with students in this scope.
+                </p>
+              ) : (
+                <SectionColumns data={sectionEngagement} />
+              )}
+              <div className="mt-5 grid grid-cols-2 gap-4 border-t border-hairline pt-5 sm:grid-cols-4">
+                <MiniStat
+                  icon={faUserGraduate}
+                  label="Students"
+                  value={totalStudents}
+                  chip="bg-blue-50 text-blue-600"
+                />
+                <MiniStat
+                  icon={faUserCheck}
+                  label="Active (30d)"
+                  value={activeStudents}
+                  chip="bg-emerald-50 text-emerald-600"
+                />
+                <MiniStat
+                  icon={faClipboardCheck}
+                  label="Attempts"
+                  value={summary?.cohort.submitted_attempts ?? 0}
+                  chip="bg-amber-50 text-amber-600"
+                />
+                <MiniStat
+                  icon={faLayerGroup}
+                  label="Sections"
+                  value={sectionEngagement.length}
+                  chip="bg-purple-50 text-purple-600"
+                />
+              </div>
+            </Panel>
+
+            <Panel className="flex flex-col">
+              <CardHeading
+                icon={faUsers}
+                title="Users by Role"
+                subtitle="Everyone with an account"
+                tag={liveTag}
+              />
+              <RoleDonut counts={roleCounts} />
             </Panel>
           </div>
         </>
