@@ -6,7 +6,6 @@ import {
   faHouse,
   faHeartPulse,
   faLayerGroup,
-  faUserTie,
   faDoorOpen,
   faCircleCheck,
   faTriangleExclamation,
@@ -288,8 +287,6 @@ async function loadDashboard(viewerId: string) {
     sectionRows,
     assignedStudents: students.length - unassignedStudents,
     unassignedStudents,
-    uncoveredSectionCount: uncoveredSections.length,
-    coverageKnown,
     activeRoomCount: activeRooms.length,
     occupiedRooms,
     admittedPatients,
@@ -317,8 +314,6 @@ export default async function AdminDashboard() {
     sectionRows,
     assignedStudents,
     unassignedStudents,
-    uncoveredSectionCount,
-    coverageKnown,
     activeRoomCount,
     occupiedRooms,
     admittedPatients,
@@ -342,14 +337,6 @@ export default async function AdminDashboard() {
       : totalStudents > 0
         ? "No risk check yet"
         : "No students enrolled";
-  const coveredSectionCount = sectionRows.length - uncoveredSectionCount;
-  const coverageCaption = !coverageKnown
-    ? "Couldn't load faculty assignments"
-    : sectionRows.length === 0
-      ? "No sections with students yet"
-      : uncoveredSectionCount > 0
-        ? `${uncoveredSectionCount} without a faculty member`
-        : "Every section has a faculty member";
 
   return (
     <div className="space-y-4">
@@ -362,7 +349,7 @@ export default async function AdminDashboard() {
         subtitle={`${today} • Here's what's happening across the program today.`}
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <StatTile
           href="/admin/analytics"
           icon={faHeartPulse}
@@ -382,13 +369,6 @@ export default async function AdminDashboard() {
               ? `${plural(assignedStudents, "student")} · ${unassignedStudents} unassigned`
               : `${plural(assignedStudents, "student")} · all assigned`
           }
-        />
-        <StatTile
-          href="/admin/faculty/assignment"
-          icon={faUserTie}
-          value={coverageKnown && sectionRows.length > 0 ? `${coveredSectionCount}/${sectionRows.length}` : "—"}
-          label="Sections with Faculty"
-          caption={coverageCaption}
         />
         <StatTile
           href="/admin/rooms"
