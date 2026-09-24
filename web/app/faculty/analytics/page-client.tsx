@@ -921,16 +921,6 @@ export default function FacultyAnalyticsClient() {
       iconBg: "bg-amber-50",
       iconColor: "text-amber-600",
     },
-    {
-      icon: faBullseye,
-      value: `${Math.round(modelEval.accuracy * 100)}%`,
-      label: "Prediction Accuracy",
-      change: null,
-      comparisonLabel: `${modelEval.model} · offline eval`,
-      goodDirection: "up" as const,
-      iconBg: "bg-rose-50",
-      iconColor: "text-rose-600",
-    },
   ];
 
   return (
@@ -1076,7 +1066,7 @@ export default function FacultyAnalyticsClient() {
         </div>
       ) : (
         <div className={`transition-opacity duration-200 ${refreshing ? "opacity-60" : ""}`}>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4 items-stretch">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4 items-stretch">
             {statCards.map((card) => (
               <StatTile
                 key={card.label}
@@ -1093,6 +1083,27 @@ export default function FacultyAnalyticsClient() {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4 items-stretch">
+            <Card padding="md" className="flex flex-col">
+              <div className="flex items-center gap-2.5 mb-5">
+                <div className="rounded-xl bg-amber-500/10 p-2.5">
+                  <FontAwesomeIcon icon={faTrophy} className="h-5 w-5 text-amber-600" />
+                </div>
+                <h3 className="font-semibold text-gray-900">Top Performing Students</h3>
+              </div>
+              <div className="flex-1 flex flex-col justify-center">
+                <Leaderboard students={topStudents.slice(0, 7)} />
+              </div>
+              {topStudents.length > 0 && (
+                <div className="mt-4 flex justify-end border-t border-hairline pt-3">
+                  <Link
+                    href={leaderboardHref}
+                    className="text-sm font-medium text-brand-600 transition-colors hover:text-brand-700"
+                  >
+                    View full leaderboard →
+                  </Link>
+                </div>
+              )}
+            </Card>
             <Card padding="md" className="flex flex-col lg:col-span-2">
               <div className="flex items-center justify-between mb-5">
                 <div className="flex items-center gap-2.5">
@@ -1155,36 +1166,10 @@ export default function FacultyAnalyticsClient() {
                       focused={trendFocused}
                       onFocus={setTrendFocus}
                     />
-                    <TrendLineChart
-                      series={trendSeries}
-                      focused={trendFocused}
-                      bucket={bucket}
-                    />
+                    <TrendLineChart series={trendSeries} focused={trendFocused} bucket={bucket} />
                   </>
                 )}
               </div>
-            </Card>
-
-            <Card padding="md" className="flex flex-col">
-              <div className="flex items-center gap-2.5 mb-5">
-                <div className="rounded-xl bg-amber-500/10 p-2.5">
-                  <FontAwesomeIcon icon={faTrophy} className="h-5 w-5 text-amber-600" />
-                </div>
-                <h3 className="font-semibold text-gray-900">Top Performing Students</h3>
-              </div>
-              <div className="flex-1 flex flex-col justify-center">
-                <Leaderboard students={topStudents.slice(0, 7)} />
-              </div>
-              {topStudents.length > 0 && (
-                <div className="mt-4 flex justify-end border-t border-hairline pt-3">
-                  <Link
-                    href={leaderboardHref}
-                    className="text-sm font-medium text-brand-600 transition-colors hover:text-brand-700"
-                  >
-                    View full leaderboard →
-                  </Link>
-                </div>
-              )}
             </Card>
           </div>
 
@@ -1196,7 +1181,7 @@ export default function FacultyAnalyticsClient() {
                 </div>
                 <div>
                   <h3 className="font-semibold text-gray-900">Performance per Competency</h3>
-                  <p className="text-xs text-gray-400">Bar chart — average score by competency</p>
+                  <p className="text-xs text-gray-400">Average score by competency</p>
                 </div>
               </div>
               <div className="flex-1 flex flex-col justify-center">

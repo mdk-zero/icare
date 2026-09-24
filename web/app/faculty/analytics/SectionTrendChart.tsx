@@ -12,7 +12,7 @@ import { formatBucket } from "./dates";
  * lines that remain.
  */
 
-type Point = { week_start: string; average_score: number; attempts: number };
+type Point = { week_start: string; average_score: number };
 
 export interface TrendSeries {
   id: string;
@@ -54,7 +54,7 @@ export function buildTrendSeries(
     const slot = slotOf.get(r.section_id) ?? order.length;
     if (slot < ownSlots) {
       const points = own.get(r.section_id) ?? [];
-      points.push({ week_start: r.week_start, average_score: r.average_score, attempts: r.attempts });
+      points.push({ week_start: r.week_start, average_score: r.average_score });
       own.set(r.section_id, points);
     } else {
       const acc = other.get(r.week_start) ?? { weighted: 0, attempts: 0 };
@@ -82,7 +82,6 @@ export function buildTrendSeries(
         .map(([week_start, { weighted, attempts }]) => ({
           week_start,
           average_score: Math.round((weighted / attempts) * 10) / 10,
-          attempts,
         })),
     });
   }
@@ -434,11 +433,6 @@ export function TrendLineChart({
                     {p ? `${p.average_score}%` : "—"}
                   </span>
                   <span className="truncate text-gray-500">{s.name}</span>
-                  {p && (
-                    <span className="ml-auto pl-2 tabular-nums text-gray-400">
-                      {p.attempts}×
-                    </span>
-                  )}
                 </li>
               );
             })}
@@ -491,14 +485,7 @@ export function TrendTable({
                   const p = m.get(b);
                   return (
                     <td key={series[i].id} className="px-3 py-1.5 text-right tabular-nums text-gray-900">
-                      {p ? (
-                        <>
-                          {p.average_score}%
-                          <span className="ml-1.5 text-xs text-gray-400">{p.attempts}×</span>
-                        </>
-                      ) : (
-                        <span className="text-gray-400">—</span>
-                      )}
+                      {p ? `${p.average_score}%` : <span className="text-gray-400">—</span>}
                     </td>
                   );
                 })}
