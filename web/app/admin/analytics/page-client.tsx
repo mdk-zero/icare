@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import {
@@ -27,7 +27,6 @@ import {
 } from "../../lib/api";
 import type { Section } from "../../lib/api";
 import { usePageData } from "../../lib/use-page-data";
-import { EcgLoader } from "../../components/EcgLoader";
 import PageHeader from "../../components/PageHeader";
 import Avatar from "../../components/Avatar";
 import StatTile from "../../components/StatTile";
@@ -536,6 +535,199 @@ function SectionColumns({
   );
 }
 
+/** A grey placeholder block. The pulse comes from the wrapper around the page. */
+function Bone({ className = "", style }: { className?: string; style?: CSSProperties }) {
+  return <div className={`rounded bg-gray-100 ${className}`} style={style} />;
+}
+
+/** Mirrors CardHeading: icon and title, the subtitle, and the scope tag, over a hairline. */
+function SkeletonHeading({ subtitle = "w-56" }: { subtitle?: string }) {
+  return (
+    <div className="mb-5 flex items-start justify-between gap-4 border-b border-hairline pb-4">
+      <div className="min-w-0">
+        <div className="flex h-7 items-center gap-2">
+          <Bone className="h-4 w-4" />
+          <Bone className="h-5 w-40" />
+        </div>
+        <div className="mt-0.5 flex h-5 items-center">
+          <Bone className={`h-3.5 ${subtitle}`} />
+        </div>
+      </div>
+      <Bone className="h-6 w-24 shrink-0 rounded-full" />
+    </div>
+  );
+}
+
+/** Mirrors StatTile: label beside a round icon, a display-size value, a caption. */
+function SkeletonTile() {
+  return (
+    <div className="flex flex-col rounded-2xl border border-hairline bg-surface p-5 shadow-tile">
+      <div className="flex items-start justify-between gap-2">
+        <Bone className="mt-0.5 h-3 w-24" />
+        <Bone className="h-11 w-11 shrink-0 rounded-full" />
+      </div>
+      <Bone className="mt-3.5 h-11 w-20" />
+      <div className="mt-3 flex h-4 items-center">
+        <Bone className="h-3 w-40" />
+      </div>
+    </div>
+  );
+}
+
+/** Mirrors BarRow: a rank badge, two lines of text, a trailing figure. */
+function SkeletonBarRow() {
+  return (
+    <div className="flex items-center gap-3 rounded-xl border border-hairline bg-surface p-3">
+      <Bone className="h-8 w-8 shrink-0 rounded-full" />
+      <div className="flex h-9 min-w-0 flex-1 flex-col justify-center gap-1.5">
+        <Bone className="h-3.5 w-1/2" />
+        <Bone className="h-3 w-2/3" />
+      </div>
+      <Bone className="h-4 w-10 shrink-0" />
+    </div>
+  );
+}
+
+/** One podium place. The middle one is the winner's, so it stands taller. */
+function SkeletonPodiumCard({ first = false }: { first?: boolean }) {
+  return (
+    <div
+      className={`flex flex-col items-center rounded-2xl border border-hairline px-3 pb-4 ${
+        first ? "pt-6 sm:pb-6" : "pt-4"
+      }`}
+    >
+      <Bone className={`rounded-full ${first ? "h-16 w-16" : "h-12 w-12"}`} />
+      <Bone className="mt-3 h-3.5 w-4/5" />
+      <Bone className="mt-1.5 h-3 w-1/2" />
+      <Bone className={`mt-3 ${first ? "h-8 w-16" : "h-7 w-14"}`} />
+      <Bone className="mt-1.5 h-2.5 w-14" />
+    </div>
+  );
+}
+
+/** Mirrors RoomGauge: a semicircle over a percentage, the room's name and its beds. */
+function SkeletonGauge() {
+  return (
+    <div className="flex flex-col items-center rounded-2xl border border-hairline px-3 pb-4 pt-5">
+      <Bone className="aspect-[120/70] w-full max-w-[11rem] rounded-t-full" />
+      <Bone className="mt-4 h-7 w-16" />
+      <Bone className="mt-2 h-4 w-3/4" />
+      <Bone className="mt-1.5 h-3 w-1/2" />
+      <Bone className="mt-1.5 h-3 w-1/3" />
+    </div>
+  );
+}
+
+/** Mirrors MiniStat: a tinted disc beside a label and a figure. */
+function SkeletonMiniStat() {
+  return (
+    <div className="flex items-center gap-3">
+      <Bone className="h-10 w-10 shrink-0 rounded-full" />
+      <div className="space-y-2">
+        <Bone className="h-3 w-16" />
+        <Bone className="h-4 w-10" />
+      </div>
+    </div>
+  );
+}
+
+// Fixed, so the placeholder columns don't reshuffle between renders.
+const SKELETON_COLUMNS = [55, 80, 40, 65, 90, 50];
+
+/**
+ * The dashboard's shape with nothing in it, shown until the first load lands.
+ * Each block below stands where a panel in `AdminAnalyticsClient` sits, at the
+ * same grid and spacing, so the page doesn't jump when the figures arrive — if
+ * that layout changes, change this with it.
+ */
+function AnalyticsSkeleton() {
+  return (
+    <div className="animate-pulse" role="status" aria-busy="true">
+      <span className="sr-only">Loading analytics…</span>
+
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <SkeletonTile key={i} />
+        ))}
+      </div>
+
+      <div className="mb-4 grid grid-cols-1 gap-6 xl:grid-cols-2">
+        <Panel>
+          <SkeletonHeading subtitle="w-64" />
+          <div className="space-y-2">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <SkeletonBarRow key={i} />
+            ))}
+          </div>
+        </Panel>
+
+        <Panel>
+          <SkeletonHeading subtitle="w-48" />
+          <div className="grid grid-cols-3 items-end gap-3 sm:gap-6">
+            <SkeletonPodiumCard />
+            <SkeletonPodiumCard first />
+            <SkeletonPodiumCard />
+          </div>
+          <div className="mt-4 grid grid-cols-1 gap-2">
+            <SkeletonBarRow />
+            <SkeletonBarRow />
+          </div>
+        </Panel>
+      </div>
+
+      <Panel className="mb-6">
+        <SkeletonHeading subtitle="w-40" />
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-5">
+          {Array.from({ length: TOP_ROOMS }).map((_, i) => (
+            <SkeletonGauge key={i} />
+          ))}
+        </div>
+      </Panel>
+
+      <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <Panel className="lg:col-span-2">
+          <SkeletonHeading subtitle="w-72" />
+          <div className="mb-3 flex items-center gap-4">
+            <Bone className="h-3 w-16" />
+            <Bone className="h-3 w-14" />
+          </div>
+          <div className="flex aspect-[640/170] w-full items-end gap-4 rounded-lg bg-gray-50 px-6 pt-4">
+            {SKELETON_COLUMNS.map((height, i) => (
+              <Bone
+                key={i}
+                className="flex-1 rounded-b-none rounded-t-md"
+                style={{ height: `${height}%` }}
+              />
+            ))}
+          </div>
+          <div className="mt-5 grid grid-cols-2 gap-4 border-t border-hairline pt-5 sm:grid-cols-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <SkeletonMiniStat key={i} />
+            ))}
+          </div>
+        </Panel>
+
+        <Panel className="flex flex-col">
+          <SkeletonHeading subtitle="w-36" />
+          <div className="flex flex-1 flex-col justify-between gap-6">
+            <div className="flex flex-1 items-center justify-center">
+              <div className="aspect-square w-full max-w-[15rem] rounded-full border-[2rem] border-gray-100" />
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="flex flex-col items-center gap-2">
+                  <Bone className="h-8 w-12" />
+                  <Bone className="h-3 w-20" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </Panel>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminAnalyticsClient() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -584,7 +776,11 @@ export default function AdminAnalyticsClient() {
 
   // Live figures that don't depend on the filters, so they aren't re-read on
   // every filter change.
-  const { data: live, refresh: reloadLive } = usePageData("admin:analytics:live", async () => {
+  const {
+    data: live,
+    loading: liveLoading,
+    refresh: reloadLive,
+  } = usePageData("admin:analytics:live", async () => {
     const [facultyRes, usersRes, rooms] = await Promise.all([
       apiFetch("/api/admin/faculty", { credentials: "include" }),
       apiFetch("/api/admin/users", { credentials: "include" }),
@@ -709,7 +905,9 @@ export default function AdminAnalyticsClient() {
   // exist; a shorter list just reads in rank order.
   const podiumOrder = podium.length === 3 ? [1, 0, 2] : podium.map((_, i) => i);
 
-  const firstLoad = loading && !summary;
+  // The live figures gate it too: without them the tiles would read zero and
+  // the rooms panel "No rooms configured" until they landed.
+  const firstLoad = (loading && !summary) || liveLoading;
   const rangeTag = <ScopeTag label={formatRangeLabel(from, to)} />;
   const liveTag = <ScopeTag live />;
 
@@ -744,9 +942,7 @@ export default function AdminAnalyticsClient() {
       />
 
       {firstLoad ? (
-        <div className="flex items-center justify-center p-16">
-          <EcgLoader size="lg" className="text-brand-600" />
-        </div>
+        <AnalyticsSkeleton />
       ) : (
         <>
           <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
