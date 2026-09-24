@@ -34,9 +34,6 @@ interface SectionRow {
   id: string;
   name: string;
   students: number;
-  attempts: number;
-  /** Null until a student in the section has submitted something. */
-  average: number | null;
 }
 
 interface AttentionItem {
@@ -46,8 +43,6 @@ interface AttentionItem {
   href: string;
   action: string;
 }
-
-const PASSING_SCORE = 75;
 
 /**
  * The ML service scores the cohort every night at 03:00, so a newest prediction
@@ -146,7 +141,6 @@ async function loadDashboard(viewerId: string) {
     usersRes,
     sectionsRes,
     facultySectionsRes,
-    attemptsRes,
     predictionsRes,
     roomsRes,
     patientsRes,
@@ -155,7 +149,6 @@ async function loadDashboard(viewerId: string) {
     supabase.from("users").select("id, name, role, section_id"),
     supabase.from("sections").select("id, name"),
     supabase.from("faculty_sections").select("faculty_id, section_id"),
-    supabase.from("assessment_attempts").select("student_id, score").eq("status", "submitted"),
     supabase
       .from("performance_predictions")
       .select("student_id, risk, predicted_at")
@@ -174,58 +167,29 @@ async function loadDashboard(viewerId: string) {
   const users = usersRes.data ?? [];
   const sections = sectionsRes.data ?? [];
   const facultySections = facultySectionsRes.data ?? [];
-  const attempts = attemptsRes.data ?? [];
   const predictions = predictionsRes.data ?? [];
 
   const students = users.filter((u) => u.role === "student");
   const faculty = users.filter((u) => u.role === "faculty");
   const studentIds = new Set(students.map((s) => s.id));
 
-  // Who is rostered where, and how each section has scored. Attempts count per
-  // attempt, the way the Analytics faculty ranking weights a section.
-  const sectionOfStudent = new Map(students.map((s) => [s.id, s.section_id as string | null]));
-  const tally = new Map<string, { students: number; attempts: number; sum: number }>();
-  const entryFor = (sectionId: string) => {
-    let entry = tally.get(sectionId);
-    if (!entry) {
-      entry = { students: 0, attempts: 0, sum: 0 };
-      tally.set(sectionId, entry);
+  // Head count per section. Sections with nobody in them are left out: they
+  // have no students to leave uncovered.
+  const studentsBySection = new Map<string, number>();
+  for (const st of students) {
+    if (st.section_id) {
+      studentsBySection.set(st.section_id, (studentsBySection.get(st.section_id) ?? 0) + 1);
     }
-    return entry;
-  };
-  for (const s of students) {
-    if (s.section_id) entryFor(s.section_id).students += 1;
   }
-  for (const a of attempts) {
-    const sectionId = sectionOfStudent.get(a.student_id);
-    if (!sectionId) continue;
-    const entry = entryFor(sectionId);
-    entry.attempts += 1;
-    entry.sum += a.score ?? 0;
-  }
-  const unassignedStudents = students.filter((s) => !s.section_id).length;
-
-  // Sections with nobody in them have nothing to compare, so they're left out.
-  // Weakest average first puts the section needing intervention on top; ones
-  // with no submissions yet sink to the bottom.
+  const unassignedStudents = students.filter((st) => !st.section_id).length;
   const sectionRows: SectionRow[] = sections
-    .map((sec): SectionRow => {
-      const t = tally.get(sec.id);
-      return {
-        id: sec.id,
-        name: sec.name,
-        students: t?.students ?? 0,
-        attempts: t?.attempts ?? 0,
-        average: t && t.attempts > 0 ? Math.round(t.sum / t.attempts) : null,
-      };
-    })
-    .filter((s) => s.students > 0)
-    .sort((a, b) => {
-      if (a.average === null && b.average === null) return a.name.localeCompare(b.name);
-      if (a.average === null) return 1;
-      if (b.average === null) return -1;
-      return a.average - b.average || a.name.localeCompare(b.name);
-    });
+    .map((sec): SectionRow => ({
+      id: sec.id,
+      name: sec.name,
+      students: studentsBySection.get(sec.id) ?? 0,
+    }))
+    .filter((sec) => sec.students > 0)
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   // Faculty coverage. If either query failed, "no faculty anywhere" would be
   // an alarm about a fault rather than a fact, so coverage is reported unknown.
@@ -438,64 +402,42 @@ export default async function AdminDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Panel className="lg:col-span-2">
           <PanelHeader
-            title="Section Comparison"
-            subtitle={`Weakest average first · the tick marks the ${PASSING_SCORE}% pass line`}
+            title="Needs Your Attention"
+            subtitle="Gaps in rosters and predictions that only an admin can close"
           >
-            <Link
-              href="/admin/analytics"
-              className="text-sm text-brand-600 font-medium hover:text-brand-700 transition-colors"
-            >
-              Analytics →
-            </Link>
+            {attention.length > 0 && (
+              <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700">
+                {attention.length} open
+              </span>
+            )}
           </PanelHeader>
-          {sectionRows.length === 0 ? (
-            <EmptyState
-              title="No sections with students yet"
-              hint="Create sections and enroll students to compare them here."
-            />
+          {attention.length === 0 ? (
+            <div className="p-10 text-center">
+              <span className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
+                <FontAwesomeIcon icon={faCircleCheck} className="h-5 w-5" />
+              </span>
+              <p className="text-gray-500 font-medium">Nothing needs your attention</p>
+              <p className="text-sm text-gray-400 mt-1">
+                Every student is placed, every section has faculty, and risk predictions are current.
+              </p>
+            </div>
           ) : (
-            <div className="p-4 space-y-4">
-              {sectionRows.map((section) => (
-                <div key={section.id}>
-                  <div className="flex items-baseline justify-between gap-3 mb-2">
-                    <span className="min-w-0 truncate text-sm font-medium text-gray-700">
-                      {section.name}
-                      <span className="font-normal text-gray-400">
-                        {" "}
-                        · {plural(section.students, "student")} ·{" "}
-                        {plural(section.attempts, "attempt")}
-                      </span>
-                    </span>
-                    <span
-                      className={`tabular shrink-0 text-sm font-semibold ${
-                        section.average === null
-                          ? "text-gray-400"
-                          : section.average >= PASSING_SCORE
-                            ? "text-gray-900"
-                            : "text-red-600"
-                      }`}
-                    >
-                      {section.average === null ? "—" : `${section.average}%`}
-                    </span>
+            <div className="divide-y divide-hairline">
+              {attention.map((item) => (
+                <Link
+                  key={item.key}
+                  href={item.href}
+                  className="flex items-center gap-3 p-4 hover:bg-subtle transition-colors"
+                >
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-50 text-amber-600">
+                    <FontAwesomeIcon icon={faTriangleExclamation} className="h-4 w-4" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium text-gray-900">{item.message}</p>
+                    <p className="text-sm text-gray-500">{item.detail}</p>
                   </div>
-                  <div className="relative h-2.5 bg-gray-100 rounded-full overflow-hidden">
-                    {section.average !== null && (
-                      <div
-                        className={`h-full rounded-full transition-all duration-500 ${
-                          section.average >= PASSING_SCORE
-                            ? "bg-gradient-to-r from-brand-600 to-brand-500"
-                            : "bg-red-500"
-                        }`}
-                        style={{ width: `${Math.min(section.average, 100)}%` }}
-                      />
-                    )}
-                    <span
-                      aria-hidden
-                      className="absolute top-0 h-full w-px bg-gray-400/70"
-                      style={{ left: `${PASSING_SCORE}%` }}
-                    />
-                  </div>
-                </div>
+                  <span className="shrink-0 text-sm text-brand-600 font-medium">{item.action} →</span>
+                </Link>
               ))}
             </div>
           )}
@@ -546,49 +488,6 @@ export default async function AdminDashboard() {
           )}
         </Panel>
       </div>
-
-      <Panel>
-        <PanelHeader
-          title="Needs Your Attention"
-          subtitle="Gaps in rosters and predictions that only an admin can close"
-        >
-          {attention.length > 0 && (
-            <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700">
-              {attention.length} open
-            </span>
-          )}
-        </PanelHeader>
-        {attention.length === 0 ? (
-          <div className="p-10 text-center">
-            <span className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
-              <FontAwesomeIcon icon={faCircleCheck} className="h-5 w-5" />
-            </span>
-            <p className="text-gray-500 font-medium">Nothing needs your attention</p>
-            <p className="text-sm text-gray-400 mt-1">
-              Every student is placed, every section has faculty, and risk predictions are current.
-            </p>
-          </div>
-        ) : (
-          <div className="divide-y divide-hairline">
-            {attention.map((item) => (
-              <Link
-                key={item.key}
-                href={item.href}
-                className="flex items-center gap-3 p-4 hover:bg-subtle transition-colors"
-              >
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-50 text-amber-600">
-                  <FontAwesomeIcon icon={faTriangleExclamation} className="h-4 w-4" />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="font-medium text-gray-900">{item.message}</p>
-                  <p className="text-sm text-gray-500">{item.detail}</p>
-                </div>
-                <span className="shrink-0 text-sm text-brand-600 font-medium">{item.action} →</span>
-              </Link>
-            ))}
-          </div>
-        )}
-      </Panel>
     </div>
   );
 }
