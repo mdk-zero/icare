@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
@@ -10,47 +10,118 @@ import {
   faDoorOpen,
   faExclamationTriangle,
   faRotate,
-  faHeartbeat,
-  faNotesMedical,
-  faClipboardCheck,
-  faGraduationCap,
   faUserTie,
-  faStethoscope,
   faBuilding,
+  faTrophy,
+  faLayerGroup,
+  faUserCheck,
+  faClipboardCheck,
+  faUserGraduate,
 } from "@fortawesome/free-solid-svg-icons";
-import { apiFetch, fetchAnalyticsSummary, runWarehouseEtl } from "../../lib/api";
+import {
+  apiFetch,
+  fetchAnalyticsSummary,
+  fetchFacultySections,
+  fetchRooms,
+  runWarehouseEtl,
+} from "../../lib/api";
+import type { Section } from "../../lib/api";
 import { usePageData } from "../../lib/use-page-data";
 import { EcgLoader } from "../../components/EcgLoader";
 import PageHeader from "../../components/PageHeader";
+import Avatar from "../../components/Avatar";
 import StatTile from "../../components/StatTile";
+import AnalyticsFilterBar, {
+  formatRangeLabel,
+  rangeForPreset,
+  type PresetId,
+} from "../../components/AnalyticsFilterBar";
 
 interface AdminFacultyRow {
   name: string;
   sections: { id: string; name: string }[];
 }
 
+/** How many of the busiest rooms to show — a ranking reads better short. */
+const TOP_ROOMS = 5;
+/** Podium (three) plus the two runners-up beneath it. */
+const TOP_STUDENTS = 5;
+
 // Stable empty fallbacks, so nothing downstream sees a new value each render.
 const NO_SECTION_FACULTY = new Map<string, string[]>();
+const NO_SECTIONS: Section[] = [];
 
-/** Section header: an icon in a rounded box beside a title and, sometimes, a
- * one-line note — the same identity mark every card below uses. */
+/** The frame every chart card on the page shares. */
+function Panel({ children, className = "" }: { children: ReactNode; className?: string }) {
+  return (
+    <div
+      className={`relative overflow-hidden rounded-2xl border border-hairline bg-surface p-6 shadow-tile ${className}`}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** Says which of the page's controls a panel answers to: a green "Live" for
+ * figures read straight from the database, or the applied date range for the
+ * ones that follow the filters above. The difference is easy to miss otherwise. */
+function ScopeTag({ live, label, dark }: { live?: boolean; label?: string; dark?: boolean }) {
+  return (
+    <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${
+        dark ? "bg-white/10 text-white/80" : "bg-subtle text-gray-600"
+      }`}>
+      {live && (
+        <span className="relative flex h-1.5 w-1.5">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60 motion-reduce:animate-none" />
+          <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
+        </span>
+      )}
+      {live ? "Live" : label}
+    </span>
+  );
+}
+
+/** Panel title with a small brand-coloured icon, the subtitle beneath, and the
+ * panel's scope tag (and anything else) at the right, over a hairline. */
 function CardHeading({
   icon,
   title,
   subtitle,
+  tag,
+  aside,
+  dark = false,
 }: {
   icon: IconDefinition;
   title: string;
   subtitle?: string;
+  tag?: ReactNode;
+  aside?: ReactNode;
+  /** For a panel on the dark "monitor" surface. */
+  dark?: boolean;
 }) {
   return (
-    <div className="mb-5 flex items-center gap-3">
-      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-600/10 text-brand-600">
-        <FontAwesomeIcon icon={icon} className="h-4 w-4" />
-      </span>
+    <div
+      className={`relative mb-5 flex items-start justify-between gap-4 border-b pb-4 ${
+        dark ? "border-white/10" : "border-hairline"
+      }`}
+    >
       <div className="min-w-0">
-        <h3 className="font-display text-lg font-semibold text-gray-900">{title}</h3>
-        {subtitle && <p className="text-sm text-gray-500">{subtitle}</p>}
+        <h3
+          className={`flex items-center gap-2 font-display text-lg font-semibold ${
+            dark ? "text-white" : "text-gray-900"
+          }`}
+        >
+          <FontAwesomeIcon
+            icon={icon}
+            className={`h-4 w-4 shrink-0 ${dark ? "text-[#3fd0c9]" : "text-brand-600"}`}
+          />
+          <span className="truncate">{title}</span>
+        </h3>
+        {subtitle && <p className={`mt-0.5 text-sm ${dark ? "text-white/60" : "text-gray-500"}`}>{subtitle}</p>}
+      </div>
+      <div className="flex shrink-0 items-center gap-4">
+        {aside}
+        {tag}
       </div>
     </div>
   );
@@ -111,132 +182,164 @@ function BarRow({
   );
 }
 
-/**
- * Drawn at the card's real pixel width via a measured viewBox, rather than a
- * fixed one — a fixed viewBox on a wide card either stretches the line/text
- * (distorted) or, with `meet` scaling, letterboxes with dead space on both
- * sides once the card is much wider than the chart's own aspect ratio.
- */
-function WeeklyTrendChart({
-  trend,
-}: {
-  trend: { week_start: string; average_score: number; attempts: number }[];
-}) {
-  const boxRef = useRef<HTMLDivElement>(null);
-  const [width, setWidth] = useState(0);
+const ROLE_SLICES = [
+  { key: "student", label: "Students", color: "#2a8a98" },
+  { key: "faculty", label: "Faculty", color: "#f59e0b" },
+  { key: "admin", label: "Admins", color: "#7c3aed" },
+] as const;
 
-  useEffect(() => {
-    const box = boxRef.current;
-    if (!box) return;
-    const observer = new ResizeObserver(([entry]) => setWidth(Math.floor(entry.contentRect.width)));
-    observer.observe(box);
-    return () => observer.disconnect();
-  }, []);
-
-  // Score is always a 0–100 percentage, so the y-axis is a fixed domain
-  // rather than scaled to the data's own min/max — that keeps a 60% week
-  // from ever looking visually like an 80% week.
-  const W = width || 760;
-  const H = 190;
-  const marginLeft = 34;
-  const marginRight = 12;
-  const marginTop = 22;
-  const marginBottom = 28;
-  const plotW = W - marginLeft - marginRight;
-  const plotH = H - marginTop - marginBottom;
-  const n = trend.length;
-  const xScale = (i: number) => marginLeft + (n === 1 ? plotW / 2 : (i / (n - 1)) * plotW);
-  const yScale = (v: number) => marginTop + (1 - v / 100) * plotH;
-  const ticks = [0, 25, 50, 75, 100];
-  const points = trend.map((week, i) => ({
-    x: xScale(i),
-    y: yScale(week.average_score),
-    week,
-  }));
-  const linePath = points
-    .map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(1)},${p.y.toFixed(1)}`)
-    .join(" ");
-  const baseline = marginTop + plotH;
-  const areaPath =
-    points.length > 1
-      ? `${linePath} L${points[points.length - 1].x.toFixed(1)},${baseline} L${points[0].x.toFixed(1)},${baseline} Z`
-      : "";
-  const bandWidth = n > 1 ? plotW / (n - 1) : plotW;
-
+/** Large donut of who the users are, with each role's share, name and count in
+ * a row underneath. The card is stretched to match its neighbour, so the ring
+ * takes the free height instead of leaving a gap. */
+function RoleDonut({ counts }: { counts: Record<"student" | "faculty" | "admin", number> }) {
+  const total = counts.student + counts.faculty + counts.admin;
+  const r = 45;
+  const c = 2 * Math.PI * r;
+  const gap = 2.5;
+  let offset = 0;
   return (
-    <div ref={boxRef} className="h-[190px] w-full">
-      <svg
-        viewBox={`0 0 ${W} ${H}`}
-        className="w-full h-full"
-        role="img"
-        aria-label="Weekly average quiz score over the last 8 weeks"
-      >
-        <defs>
-          <linearGradient id="weeklyTrendFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#1b6b7b" stopOpacity="0.18" />
-            <stop offset="100%" stopColor="#1b6b7b" stopOpacity="0" />
-          </linearGradient>
-        </defs>
+    <div className="flex flex-1 flex-col justify-between gap-6">
+      <div className="flex flex-1 items-center justify-center">
+        <div className="relative aspect-square w-full max-w-[15rem]">
+          <svg viewBox="0 0 120 120" className="h-full w-full -rotate-90" role="img" aria-label="Users by role">
+            <circle cx="60" cy="60" r={r} fill="none" className="stroke-gray-200" strokeWidth="18" />
+            {total > 0 &&
+              ROLE_SLICES.map((slice) => {
+                const len = (counts[slice.key] / total) * c;
+                const el =
+                  len > 0 ? (
+                    <circle
+                      key={slice.key}
+                      cx="60"
+                      cy="60"
+                      r={r}
+                      fill="none"
+                      stroke={slice.color}
+                      strokeWidth="18"
+                      strokeDasharray={`${Math.max(len - gap, 0.1)} ${c}`}
+                      strokeDashoffset={-offset}
+                    />
+                  ) : null;
+                offset += len;
+                return el;
+              })}
+          </svg>
+          <div className="absolute inset-0 flex flex-col items-center justify-center">
+            <p className="font-display text-5xl font-bold text-gray-900">{total}</p>
+            <p className="text-sm text-gray-500">Users</p>
+          </div>
+        </div>
+      </div>
 
-        {ticks.map((t) => {
-          const ty = yScale(t);
-          return (
-            <g key={t}>
-              <line x1={marginLeft} y1={ty} x2={marginLeft + plotW} y2={ty} stroke="#e5e7eb" strokeWidth="1" />
-              <text x={marginLeft - 8} y={ty + 3} textAnchor="end" fontSize="10" fill="#9ca3af">
-                {t}
-              </text>
-            </g>
-          );
-        })}
+      <div className="grid grid-cols-3 gap-2 text-center">
+        {ROLE_SLICES.map((slice) => (
+          <div key={slice.key}>
+            <p className="font-display text-3xl font-bold tabular-nums text-gray-900">
+              {total > 0 ? Math.round((100 * counts[slice.key]) / total) : 0}
+              <span className="text-base font-semibold text-gray-400">%</span>
+            </p>
+            <p className="mt-1 flex items-center justify-center gap-1.5 text-xs text-gray-500">
+              <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: slice.color }} />
+              {slice.label} · {counts[slice.key]}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
-        {areaPath && <path d={areaPath} fill="url(#weeklyTrendFill)" stroke="none" />}
-        <path d={linePath} fill="none" stroke="#1b6b7b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+/** One figure with a tinted icon disc — the strip along the bottom of a card. */
+function MiniStat({
+  icon,
+  label,
+  value,
+  chip,
+}: {
+  icon: IconDefinition;
+  label: string;
+  value: ReactNode;
+  chip: string;
+}) {
+  return (
+    <div className="flex items-center gap-3">
+      <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${chip}`}>
+        <FontAwesomeIcon icon={icon} className="h-4 w-4" />
+      </span>
+      <div className="min-w-0">
+        <p className="truncate text-xs text-gray-500">{label}</p>
+        <p className="font-display text-lg font-bold tabular-nums text-gray-900">{value}</p>
+      </div>
+    </div>
+  );
+}
 
-        {points.map((p, i) => {
-          const tooltipX = Math.min(Math.max(p.x - 55, marginLeft), W - marginRight - 110);
-          const tooltipY = Math.max(p.y - 42, 2);
-          return (
-            <g key={p.week.week_start} className="group">
-              <rect
-                x={p.x - bandWidth / 2}
-                y={marginTop}
-                width={bandWidth}
-                height={plotH}
-                fill="transparent"
-              />
-              <circle
-                cx={p.x}
-                cy={p.y}
-                r="4"
-                fill="#1b6b7b"
-                stroke="#ffffff"
-                strokeWidth="2"
-                className="transition-opacity group-hover:opacity-80"
-              />
-              {i === points.length - 1 && (
-                <text x={p.x} y={Math.max(p.y - 10, 12)} textAnchor="middle" fontSize="11" fontWeight="700" fill="#1b6b7b">
-                  {p.week.average_score}%
-                </text>
-              )}
-              <text x={p.x} y={H - 6} textAnchor="middle" fontSize="10" fill="#6b7280">
-                {new Date(p.week.week_start).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-              </text>
-              <foreignObject
-                x={tooltipX}
-                y={tooltipY}
-                width="110"
-                height="28"
-                className="pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity"
-              >
-                <div className="bg-brand-600 text-white text-[11px] leading-tight px-2 py-1 rounded shadow-lg text-center whitespace-nowrap">
-                  {p.week.average_score}% · {p.week.attempts} attempt{p.week.attempts === 1 ? "" : "s"}
-                </div>
-              </foreignObject>
-            </g>
-          );
-        })}
-      </svg>
+/** Each room keeps its own colour, by rank, so a gauge can be told apart from
+ * its neighbours; the number and name under it carry the meaning. */
+const ROOM_GAUGE_COLORS = [
+  { from: "#155663", to: "#2a8a98", chip: "text-[#1b6b7b]" },
+  { from: "#f97316", to: "#fbbf24", chip: "text-orange-500" },
+  { from: "#7c3aed", to: "#a78bfa", chip: "text-purple-600" },
+  { from: "#2563eb", to: "#38bdf8", chip: "text-blue-600" },
+  { from: "#e11d48", to: "#fb7185", chip: "text-rose-600" },
+] as const;
+
+/** Thick semicircle gauge for one room: gradient arc over a pale track, a door
+ * disc in the middle, then the percentage, name and beds beneath. */
+function RoomGauge({
+  id,
+  name,
+  sublabel,
+  percent,
+  beds,
+  colorIndex,
+}: {
+  id: string;
+  name: string;
+  sublabel: string;
+  percent: number;
+  beds: string;
+  colorIndex: number;
+}) {
+  const color = ROOM_GAUGE_COLORS[colorIndex % ROOM_GAUGE_COLORS.length];
+  const fill = Math.min(Math.max(percent, 0), 100);
+  const arc = "M16,60 A44,44 0 0 1 104,60";
+  const gradId = `roomGauge-${id}`;
+  return (
+    <div className="flex flex-col items-center rounded-2xl border border-hairline bg-gradient-to-b from-gray-50 to-transparent px-3 pb-4 pt-5 text-center">
+      <div className="relative w-full max-w-[11rem]">
+        <svg viewBox="0 0 120 70" className="block w-full" role="img" aria-label={`${name}: ${percent}% occupied`}>
+          <defs>
+            <linearGradient id={gradId} x1="0%" y1="100%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor={color.from} />
+              <stop offset="100%" stopColor={color.to} />
+            </linearGradient>
+          </defs>
+          <path d={arc} pathLength={100} fill="none" strokeWidth="16" className="stroke-gray-200" />
+          {fill > 0 && (
+            <path
+              d={arc}
+              pathLength={100}
+              fill="none"
+              stroke={`url(#${gradId})`}
+              strokeWidth="16"
+              strokeDasharray={`${fill} 100`}
+              style={{ transition: "stroke-dasharray 700ms ease-out" }}
+            />
+          )}
+        </svg>
+        <span
+          className={`absolute left-1/2 top-[58%] flex h-[26%] w-[26%] min-h-7 min-w-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-surface shadow-tile ${color.chip}`}
+        >
+          <FontAwesomeIcon icon={faDoorOpen} className="h-3.5 w-3.5" />
+        </span>
+        <span className="absolute -bottom-3 left-[6%] text-[10px] text-gray-400">0%</span>
+        <span className="absolute -bottom-3 right-[4%] text-[10px] text-gray-400">100%</span>
+      </div>
+      <p className="mt-2 font-display text-2xl font-bold tabular-nums text-gray-900">{percent}%</p>
+      <p className="mt-0.5 w-full truncate text-sm font-semibold text-gray-900">{name}</p>
+      <p className="w-full truncate text-xs text-gray-400">{sublabel}</p>
+      <p className="text-xs font-medium tabular-nums text-gray-500">{beds}</p>
     </div>
   );
 }
@@ -247,18 +350,205 @@ const ROOM_STATUS_TONE: Record<string, { badge: string; fill: string; label: str
   maintenance: { badge: "bg-amber-100 text-amber-600", fill: "bg-amber-500/[0.08]", label: "Maintenance" },
 };
 
+/** Smallest round step (1/2/5/10 × 10ⁿ) at or above `rough`, so gridlines land
+ * on whole numbers. */
+function niceStep(rough: number): number {
+  if (rough <= 1) return 1;
+  const magnitude = Math.pow(10, Math.floor(Math.log10(rough)));
+  for (const m of [1, 2, 5, 10]) if (m * magnitude >= rough) return m * magnitude;
+  return 10 * magnitude;
+}
+
+function shortLabel(name: string, max = 11): string {
+  return name.length > max ? `${name.slice(0, max - 1)}…` : name;
+}
+
+/** One column per section: the light bar is everyone enrolled, the dark bar in
+ * front of it is who has been active. Hover (or tab to) a column for the exact
+ * figures — the plot itself carries no per-bar numbers. */
+function SectionColumns({
+  data,
+}: {
+  data: { id: string; name: string; students: number; active_students: number }[];
+}) {
+  const [hovered, setHovered] = useState<number | null>(null);
+  const W = 640;
+  const H = 170;
+  const pad = { left: 34, right: 8, top: 22, bottom: 32 };
+  const plotW = W - pad.left - pad.right;
+  const plotH = H - pad.top - pad.bottom;
+  const rawMax = Math.max(...data.map((d) => d.students), 1);
+  const step = niceStep(rawMax / 4);
+  const max = Math.ceil(rawMax / step) * step;
+  const ticks: number[] = [];
+  for (let t = 0; t <= max; t += step) ticks.push(t);
+  const band = plotW / data.length;
+  const barW = Math.min(band * 0.5, 48);
+  const y = (v: number) => pad.top + plotH - (v / max) * plotH;
+  const roundedTop = (x: number, top: number, w: number, base: number) => {
+    const h = base - top;
+    const r = Math.min(5, h / 2, w / 2);
+    return `M${x},${base} V${top + r} Q${x},${top} ${x + r},${top} H${x + w - r} Q${x + w},${top} ${x + w},${top + r} V${base} Z`;
+  };
+
+  return (
+    <div>
+      <div className="mb-3 flex items-center gap-4 text-xs text-gray-500">
+        <span className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-sm bg-brand-200" /> Enrolled
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-sm bg-brand-600" /> Active
+        </span>
+      </div>
+      <div className="relative">
+        <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" role="img" aria-label="Active students per section">
+          {ticks.map((t) => (
+            <g key={t}>
+              <line
+                x1={pad.left}
+                x2={W - pad.right}
+                y1={y(t)}
+                y2={y(t)}
+                className="stroke-gray-200"
+                strokeWidth="1"
+                strokeDasharray={t === 0 ? undefined : "3 4"}
+              />
+              <text x={pad.left - 6} y={y(t) + 3.5} textAnchor="end" className="fill-gray-400" fontSize="10">
+                {t}
+              </text>
+            </g>
+          ))}
+          {data.map((d, i) => {
+            const x = pad.left + band * i + (band - barW) / 2;
+            const base = pad.top + plotH;
+            const dim = hovered !== null && hovered !== i;
+            return (
+              <g key={d.id} opacity={dim ? 0.45 : 1} className="transition-opacity">
+                {d.students > 0 && (
+                  <path d={roundedTop(x, y(d.students), barW, base)} className="fill-brand-200" />
+                )}
+                {d.active_students > 0 && (
+                  <path d={roundedTop(x, y(d.active_students), barW, base)} className="fill-brand-600" />
+                )}
+                <text
+                  x={x + barW / 2}
+                  y={y(Math.max(d.active_students, d.students)) - 6}
+                  textAnchor="middle"
+                  className="fill-gray-800"
+                  fontSize="11"
+                  fontWeight="600"
+                >
+                  {d.active_students}
+                </text>
+                <text x={x + barW / 2} y={H - 10} textAnchor="middle" className="fill-gray-500" fontSize="10">
+                  {shortLabel(d.name)}
+                </text>
+                <rect
+                  x={pad.left + band * i}
+                  y={pad.top}
+                  width={band}
+                  height={plotH + pad.bottom}
+                  fill="transparent"
+                  tabIndex={0}
+                  aria-label={`${d.name}: ${d.active_students} of ${d.students} students active`}
+                  onMouseEnter={() => setHovered(i)}
+                  onMouseLeave={() => setHovered(null)}
+                  onFocus={() => setHovered(i)}
+                  onBlur={() => setHovered(null)}
+                />
+              </g>
+            );
+          })}
+        </svg>
+        {hovered !== null && (
+          <div
+            className="pointer-events-none absolute -translate-x-1/2 rounded-lg border border-hairline bg-surface px-3 py-2 text-xs shadow-overlay"
+            style={{
+              left: `${((pad.left + band * (hovered + 0.5)) / W) * 100}%`,
+              top: `${(Math.max(y(data[hovered].students) - 56, 0) / H) * 100}%`,
+            }}
+          >
+            <p className="font-semibold text-gray-900">{data[hovered].name}</p>
+            <p className="text-gray-600">
+              {data[hovered].active_students}/{data[hovered].students} active ·{" "}
+              {data[hovered].students > 0
+                ? Math.round((100 * data[hovered].active_students) / data[hovered].students)
+                : 0}
+              %
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function AdminAnalyticsClient() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const { data, loading, refresh: load } = usePageData("admin:analytics", async () => {
-    const [{ summary }, facultyRes] = await Promise.all([
-      fetchAnalyticsSummary({ sectionTrend: true }),
+  // Filters — the same section + range controls the faculty dashboard has.
+  const [sectionIds, setSectionIds] = useState<string[]>([]);
+  const [preset, setPreset] = useState<PresetId>("3m");
+  // Lazily initialised so `new Date()` never runs during a server render.
+  const [range, setRange] = useState(() => rangeForPreset("3m"));
+  // What the custom date inputs show, kept apart from the applied `range` so a
+  // half-typed or inverted range doesn't fire a request.
+  const [draft, setDraft] = useState(() => rangeForPreset("3m"));
+
+  const { from, to } = range;
+  const sectionKey = [...sectionIds].sort().join(",");
+
+  const { data: sectionsData } = usePageData("faculty:sections", fetchFacultySections);
+  const allSections = sectionsData ?? NO_SECTIONS;
+
+  const applyPreset = useCallback((id: PresetId) => {
+    setPreset(id);
+    if (id === "custom") return;
+    const next = rangeForPreset(id);
+    setRange(next);
+    setDraft(next);
+  }, []);
+
+  const setCustom = (edge: "from" | "to", value: string) => {
+    const next = { ...draft, [edge]: value };
+    setDraft(next);
+    // Only a complete, ordered range becomes a query.
+    if (next.from && next.to && next.from <= next.to) setRange(next);
+  };
+
+  // Follows the filters: one cache entry per combination.
+  const {
+    data: analytics,
+    loading,
+    revalidating,
+    refresh: reloadSummary,
+  } = usePageData(
+    `admin:analytics:${sectionKey}:${from}:${to}`,
+    () => fetchAnalyticsSummary({ sectionIds, from, to, sectionTrend: true }),
+    { keepPreviousData: true },
+  );
+
+  // Live figures that don't depend on the filters, so they aren't re-read on
+  // every filter change.
+  const { data: live, refresh: reloadLive } = usePageData("admin:analytics:live", async () => {
+    const [facultyRes, usersRes, rooms] = await Promise.all([
       apiFetch("/api/admin/faculty", { credentials: "include" }),
+      apiFetch("/api/admin/users", { credentials: "include" }),
+      fetchRooms(),
     ]);
     const facultyJson = facultyRes.ok
       ? ((await facultyRes.json()) as { faculty?: AdminFacultyRow[] })
       : {};
+    const users = usersRes.ok
+      ? ((await usersRes.json()) as { users?: { role: string }[] }).users ?? []
+      : [];
+    const totalUsers = users.length;
+    const roleCounts = { student: 0, faculty: 0, admin: 0 };
+    for (const u of users) {
+      if (u.role === "student" || u.role === "faculty" || u.role === "admin") roleCounts[u.role] += 1;
+    }
 
     // Which faculty teach each section, so the performance ranking below can
     // read by name instead of by section code.
@@ -268,12 +558,14 @@ export default function AdminAnalyticsClient() {
         sectionFaculty.set(s.id, [...(sectionFaculty.get(s.id) ?? []), f.name]);
       }
     }
-
-    return { summary, sectionFaculty };
+    return { sectionFaculty, totalUsers, roleCounts, rooms };
   });
 
-  const summary = data?.summary ?? null;
-  const sectionFaculty = data?.sectionFaculty ?? NO_SECTION_FACULTY;
+  const summary = analytics?.summary ?? null;
+  const sectionFaculty = live?.sectionFaculty ?? NO_SECTION_FACULTY;
+  const totalUsers = live?.totalUsers ?? 0;
+  const roleCounts = live?.roleCounts ?? { student: 0, faculty: 0, admin: 0 };
+  const allRooms = live?.rooms;
 
   const handleRefresh = async () => {
     setError(null);
@@ -282,35 +574,44 @@ export default function AdminAnalyticsClient() {
     if (result.error) {
       setError(result.error);
     } else {
-      await load();
+      await Promise.all([reloadSummary(), reloadLive()]);
     }
     setRefreshing(false);
   };
 
+  const sectionCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const s of summary?.sections ?? []) counts[s.id] = s.students;
+    return counts;
+  }, [summary]);
+
   const atRisk = summary?.risk_distribution?.at_risk ?? 0;
-  const activeRooms = (summary?.room_utilization ?? []).filter((r) => r.status === "active").length;
-  const trend = summary?.weekly_trend ?? [];
-  const activity = summary?.clinical_activity;
-  const activeRate = summary?.cohort.total_students
-    ? Math.min(100, Math.round((summary.cohort.active_students_30d / summary.cohort.total_students) * 100))
+  const totalStudents = summary?.cohort.total_students ?? 0;
+  const activeStudents = summary?.cohort.active_students_30d ?? 0;
+  const activeRate = totalStudents
+    ? Math.min(100, Math.round((activeStudents / totalStudents) * 100))
     : 0;
 
-  // Rooms, busiest first.
-  const rooms = [...(summary?.room_utilization ?? [])].sort(
-    (a, b) => b.utilization_pct - a.utilization_pct,
-  );
+  const atRiskRate = totalStudents ? Math.min(100, Math.round((100 * atRisk) / totalStudents)) : 0;
 
-  // The six clinical-activity counters, scaled against whichever is largest
-  // so every bar reads relative to the busiest metric, not an absolute scale.
-  const activityItems = [
-    { key: "vital_readings", label: "Vital Readings", icon: faHeartbeat, value: activity?.vital_readings ?? 0 },
-    { key: "anomalies", label: "Anomalies Flagged", icon: faExclamationTriangle, value: activity?.anomalies ?? 0 },
-    { key: "tpr_entries", label: "TPR Entries", icon: faNotesMedical, value: activity?.tpr_entries ?? 0 },
-    { key: "ivf_records", label: "IVF Records", icon: faNotesMedical, value: activity?.ivf_records ?? 0 },
-    { key: "progress_notes", label: "Progress Notes", icon: faNotesMedical, value: activity?.progress_notes ?? 0 },
-    { key: "notes_reviewed", label: "Notes Reviewed", icon: faClipboardCheck, value: activity?.notes_reviewed ?? 0 },
-  ];
-  const activityMax = Math.max(...activityItems.map((i) => i.value), 1);
+  const roomList = useMemo(() => allRooms ?? [], [allRooms]);
+  const activeRooms = roomList.filter((r) => r.status === "active").length;
+
+  // Occupancy reads from the rooms themselves — patients actually admitted to
+  // a bed — rather than the warehouse's room_assignments count, which tracks
+  // students rostered for clinical duty and is usually empty even when every
+  // room is full of patients. Busiest five only; the rest is what the Rooms
+  // page is for.
+  const totalBeds = roomList.reduce((n, r) => n + r.capacity, 0);
+  const occupiedBeds = roomList.reduce((n, r) => n + r.patients_assigned, 0);
+  const overallOccupancy = totalBeds > 0 ? Math.round((100 * occupiedBeds) / totalBeds) : 0;
+  const rooms = roomList
+    .map((r) => ({
+      ...r,
+      utilization_pct: r.capacity > 0 ? Math.round((100 * r.patients_assigned) / r.capacity) : 0,
+    }))
+    .sort((a, b) => b.utilization_pct - a.utilization_pct)
+    .slice(0, TOP_ROOMS);
 
   // Section performance rolled up from the weekly trend, then relabeled by
   // whoever teaches that section — a faculty ranking built on their
@@ -344,6 +645,21 @@ export default function AdminAnalyticsClient() {
     .sort((a, b) => b.avgScore - a.avgScore);
   const facultyPerfMax = Math.max(...facultyPerf.map((f) => f.avgScore), 1);
 
+  const sectionEngagement = (summary?.sections ?? [])
+    .filter((s) => s.students > 0)
+    .map((s) => ({ ...s, active_students: s.active_students ?? 0 }));
+  const topStudents = (summary?.top_students ?? []).slice(0, TOP_STUDENTS);
+  const podium = topStudents.slice(0, 3);
+  const runnersUp = topStudents.slice(3);
+
+  // Silver, gold, bronze left to right, gold raised — but only when all three
+  // exist; a shorter list just reads in rank order.
+  const podiumOrder = podium.length === 3 ? [1, 0, 2] : podium.map((_, i) => i);
+
+  const firstLoad = loading && !summary;
+  const rangeTag = <ScopeTag label={formatRangeLabel(from, to)} />;
+  const liveTag = <ScopeTag live />;
+
   return (
     <div>
       <PageHeader
@@ -352,11 +668,7 @@ export default function AdminAnalyticsClient() {
           label: "System Analytics",
         }}
         title="Analytics Dashboard"
-        subtitle={
-          summary?.etl?.last_run_at
-            ? `Cohort analytics from the iCARE++ star-schema warehouse · last refreshed ${new Date(summary.etl.last_run_at).toLocaleString()}`
-            : "Cohort analytics from the iCARE++ star-schema warehouse"
-        }
+        subtitle="Cohort analytics from the iCARE++ star-schema warehouse"
         action={{
           icon: refreshing ? (
             <EcgLoader />
@@ -376,24 +688,45 @@ export default function AdminAnalyticsClient() {
         </div>
       )}
 
-      {loading ? (
+      <AnalyticsFilterBar
+        sections={allSections}
+        sectionIds={sectionIds}
+        onSectionsChange={setSectionIds}
+        sectionCounts={sectionCounts}
+        preset={preset}
+        onPresetChange={applyPreset}
+        draft={draft}
+        onDraftChange={setCustom}
+        range={range}
+        refreshing={revalidating}
+      />
+
+      {firstLoad ? (
         <div className="flex items-center justify-center p-16">
           <EcgLoader size="lg" className="text-brand-600" />
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <StatTile
               icon={faUsers}
-              value={summary?.cohort.total_students ?? 0}
-              label="Total Students"
-              iconBg="bg-blue-50"
-              iconColor="text-blue-600"
+              value={totalUsers}
+              label="Total Users"
+              caption="Students, faculty and admins"
+            />
+            <StatTile
+              icon={faUserCheck}
+              value={activeStudents}
+              label="Active Students"
+              caption={`${activeRate}% of ${totalStudents} students · last 30 days`}
+              iconBg="bg-emerald-50"
+              iconColor="text-emerald-600"
             />
             <StatTile
               icon={faExclamationTriangle}
               value={atRisk}
               label="At-Risk Students"
+              caption={totalStudents ? `${atRiskRate}% of ${totalStudents} students` : "No students in range"}
               iconBg="bg-rose-50"
               iconColor="text-rose-600"
             />
@@ -401,146 +734,117 @@ export default function AdminAnalyticsClient() {
               icon={faDoorOpen}
               value={activeRooms}
               label="Active Rooms"
-              iconBg="bg-purple-50"
-              iconColor="text-purple-600"
-            />
-            <StatTile
-              icon={faChartBar}
-              value={summary?.cohort.average_score != null ? `${summary.cohort.average_score}%` : "—"}
-              label="Avg. Quiz Score"
-              iconBg="bg-amber-50"
-              iconColor="text-amber-600"
+              caption={`${occupiedBeds}/${totalBeds} beds occupied`}
             />
           </div>
 
-          {/* Weekly Quiz Performance */}
-          <div className="mb-6">
-            <div className="bg-surface p-6 rounded-2xl border border-hairline shadow-tile">
-              <CardHeading icon={faChartBar} title="Weekly Quiz Performance" />
-              {trend.length === 0 ? (
-                <p className="text-gray-400 text-sm py-12 text-center">
-                  No submitted attempts in the last 8 weeks.
-                </p>
+          {/* Section engagement + users by role */}
+          <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
+            <Panel className="lg:col-span-2">
+              <svg
+                viewBox="0 0 220 44"
+                className="pointer-events-none absolute right-40 top-5 hidden h-10 w-56 opacity-50 md:block"
+                aria-hidden
+              >
+                <path
+                  d="M0 24 H52 L60 24 L66 6 L74 40 L82 24 H120 L128 24 L134 14 L140 24 H220"
+                  fill="none"
+                  stroke="#2a8a98"
+                  strokeWidth="1.5"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              <CardHeading
+                icon={faLayerGroup}
+                title="Section Engagement"
+                subtitle="Active students against enrollment, per section"
+                tag={rangeTag}
+              />
+              {sectionEngagement.length === 0 ? (
+                <p className="py-8 text-center text-sm text-gray-400">No sections with students in this scope.</p>
               ) : (
-                <>
-                  <WeeklyTrendChart trend={trend} />
-                  <div className="grid grid-cols-3 gap-4 mt-3 pt-3 border-t border-hairline">
-                    <div>
-                      <p className="text-2xl font-bold text-gray-800">
-                        {summary?.cohort.submitted_attempts ?? 0}
-                      </p>
-                      <p className="text-sm text-gray-500">Total Attempts</p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-2xl font-bold text-brand-600">
-                        {summary?.cohort.active_students_30d ?? 0}
-                      </p>
-                      <p className="text-sm text-gray-500">Active (30d)</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-2xl font-bold text-gray-800">
-                        {trend.length > 0
-                          ? `${Math.round(trend.reduce((s, w) => s + w.average_score, 0) / trend.length)}%`
-                          : "—"}
-                      </p>
-                      <p className="text-sm text-gray-500">8-Week Avg</p>
-                    </div>
+                <SectionColumns data={sectionEngagement} />
+              )}
+              <div className="mt-5 grid grid-cols-2 gap-4 border-t border-hairline pt-5 sm:grid-cols-4">
+                <MiniStat icon={faUserGraduate} label="Students" value={totalStudents} chip="bg-blue-50 text-blue-600" />
+                <MiniStat
+                  icon={faUserCheck}
+                  label="Active (30d)"
+                  value={activeStudents}
+                  chip="bg-emerald-50 text-emerald-600"
+                />
+                <MiniStat
+                  icon={faClipboardCheck}
+                  label="Attempts"
+                  value={summary?.cohort.submitted_attempts ?? 0}
+                  chip="bg-amber-50 text-amber-600"
+                />
+                <MiniStat
+                  icon={faLayerGroup}
+                  label="Sections"
+                  value={sectionEngagement.length}
+                  chip="bg-purple-50 text-purple-600"
+                />
+              </div>
+            </Panel>
+
+            <Panel className="flex flex-col">
+              <CardHeading icon={faUsers} title="Users by Role" subtitle="Everyone with an account" tag={liveTag} />
+              <RoleDonut counts={roleCounts} />
+          </Panel>
+          </div>
+
+          {/* Room Utilization: one gauge per busiest room */}
+          <Panel className="mb-6">
+            <CardHeading
+              icon={faBuilding}
+              title="Room Utilization"
+              subtitle={`Top ${TOP_ROOMS} busiest rooms`}
+              tag={liveTag}
+              aside={
+                roomList.length > 0 ? (
+                  <div className="hidden text-right sm:block">
+                    <p className="font-display text-xl font-bold tabular-nums text-gray-900">{overallOccupancy}%</p>
+                    <p className="text-xs text-gray-500">
+                      {occupiedBeds}/{totalBeds} beds overall
+                    </p>
                   </div>
+                ) : undefined
+              }
+            />
+            {roomList.length === 0 ? (
+              <p className="py-8 text-center text-sm text-gray-400">No rooms configured.</p>
+            ) : (
+              <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-5">
+                {rooms.map((room, i) => {
+                  const tone = ROOM_STATUS_TONE[room.status] ?? ROOM_STATUS_TONE.inactive;
+                  return (
+                    <RoomGauge
+                      key={room.id}
+                      id={room.id}
+                      name={room.name}
+                      sublabel={`Room ${room.room_number} · ${tone.label}`}
+                      percent={room.utilization_pct}
+                      beds={`${room.patients_assigned}/${room.capacity} beds`}
+                      colorIndex={i}
+                    />
+                  );
+                })}
+              </div>
+            )}
+          </Panel>
 
-                  {(summary?.risk_distribution?.at_risk ?? 0) > 0 && (
-                    <div className="mt-4 pt-4 border-t border-hairline">
-                      <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
-                        Risk Summary
-                      </h4>
-                      <div className="flex items-center gap-3">
-                        <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden">
-                          <div className="flex h-full">
-                            <div
-                              className="bg-emerald-500 h-full transition-all"
-                              style={{
-                                width: `${
-                                  summary?.risk_distribution
-                                    ? Math.round(
-                                        ((summary.risk_distribution.safe ?? 0) /
-                                          ((summary.risk_distribution.safe ?? 0) +
-                                            (summary.risk_distribution.at_risk ?? 0))) *
-                                          100,
-                                      )
-                                    : 0
-                                }%`,
-                              }}
-                            />
-                            <div
-                              className="bg-rose-400 h-full transition-all"
-                              style={{
-                                width: `${
-                                  summary?.risk_distribution
-                                    ? Math.round(
-                                        ((summary.risk_distribution.at_risk ?? 0) /
-                                          ((summary.risk_distribution.safe ?? 0) +
-                                            (summary.risk_distribution.at_risk ?? 0))) *
-                                          100,
-                                      )
-                                    : 0
-                                }%`,
-                              }}
-                            />
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2 text-xs shrink-0">
-                          <span className="flex items-center gap-1">
-                            <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                            {summary?.risk_distribution?.safe ?? 0}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <span className="w-2 h-2 rounded-full bg-rose-400" />
-                            {summary?.risk_distribution?.at_risk ?? 0}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-          </div>
-
-          {/* Room Utilization + Faculty Performance */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-            <div className="bg-surface p-6 rounded-2xl border border-hairline shadow-tile">
-              <CardHeading icon={faBuilding} title="Room Utilization" subtitle="Busiest rooms first" />
-              {rooms.length === 0 ? (
-                <p className="text-gray-400 text-sm py-8 text-center">No rooms configured.</p>
-              ) : (
-                <div className="space-y-2">
-                  {rooms.map((room) => {
-                    const tone = ROOM_STATUS_TONE[room.status] ?? ROOM_STATUS_TONE.inactive;
-                    return (
-                      <BarRow
-                        key={`${room.name}-${room.room_number}`}
-                        badge={<FontAwesomeIcon icon={faDoorOpen} className="h-3.5 w-3.5" />}
-                        badgeClass={tone.badge}
-                        label={room.name}
-                        sublabel={`Room ${room.room_number} · ${tone.label}`}
-                        fillPct={room.utilization_pct}
-                        fillClass={tone.fill}
-                        trailing={`${room.utilization_pct}%`}
-                        trailingSub={`${room.assigned}/${room.capacity}`}
-                      />
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            <div className="lg:col-span-2 bg-surface p-6 rounded-2xl border border-hairline shadow-tile">
+          {/* Faculty Performance + Top Students, side by side */}
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+            <Panel>
               <CardHeading
                 icon={faUserTie}
                 title="Faculty Performance"
                 subtitle="Ranked by their students' average submitted score"
+                tag={rangeTag}
               />
               {facultyPerf.length === 0 ? (
-                <p className="text-gray-400 text-sm py-8 text-center">
+                <p className="py-8 text-center text-sm text-gray-400">
                   No submitted attempts in range yet — rankings appear once students start.
                 </p>
               ) : (
@@ -559,194 +863,82 @@ export default function AdminAnalyticsClient() {
                   ))}
                 </div>
               )}
-            </div>
-          </div>
+            </Panel>
 
-          {/* Clinical/Patient Activity + Completion Overview */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-            <div className="lg:col-span-2 bg-surface p-6 rounded-2xl border border-hairline shadow-tile">
+            {/* Top students: podium for the first three, rows for the rest */}
+            <Panel>
               <CardHeading
-                icon={faStethoscope}
-                title="Patient Care Activity"
-                subtitle="Charting volume across the cohort"
+                icon={faTrophy}
+                title="Top Students"
+                subtitle="Highest average submitted score"
+                tag={rangeTag}
               />
-              <div className="space-y-2">
-                {activityItems.map((item) => (
-                  <BarRow
-                    key={item.key}
-                    badge={<FontAwesomeIcon icon={item.icon} className="h-3.5 w-3.5" />}
-                    badgeClass="bg-brand-600/10 text-brand-600"
-                    label={item.label}
-                    fillPct={(item.value / activityMax) * 100}
-                    fillClass="bg-brand-600/[0.06]"
-                    trailing={item.value}
-                  />
-                ))}
-              </div>
-            </div>
-
-            {/* Engagement Overview */}
-            <div className="flex h-full flex-col bg-surface p-6 rounded-2xl border border-hairline shadow-tile">
-              <CardHeading
-                icon={faGraduationCap}
-                title="Engagement Overview"
-                subtitle="Share of the cohort active in the last 30 days"
-              />
-              <div className="flex flex-1 flex-col items-center justify-center gap-6">
-                <div className="relative w-40 h-40 shrink-0">
-                  <svg className="w-40 h-40 -rotate-90" viewBox="0 0 120 120">
-                    <circle cx="60" cy="60" r="54" fill="none" stroke="#e5e7eb" strokeWidth="10" />
-                    <circle
-                      cx="60" cy="60" r="54" fill="none"
-                      stroke="url(#completionGradient)"
-                      strokeWidth="10"
-                      strokeLinecap="round"
-                      strokeDasharray={`${(activeRate / 100) * 339.292} 339.292`}
-                    />
-                    <defs>
-                      <linearGradient id="completionGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                        <stop offset="0%" stopColor="#155663" />
-                        <stop offset="100%" stopColor="#2a8a98" />
-                      </linearGradient>
-                    </defs>
-                  </svg>
-                  <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <p className="text-3xl font-bold text-gray-900">{activeRate}%</p>
-                    <p className="text-xs text-gray-500">Active</p>
-                  </div>
-                </div>
-
-                <div className="grid w-full grid-cols-3 gap-2 text-center">
-                  <div className="rounded-lg bg-gray-50 p-3">
-                    <p className="text-lg font-bold text-gray-800">{summary?.cohort.total_students ?? 0}</p>
-                    <p className="text-[11px] text-gray-500">Students</p>
-                  </div>
-                  <div className="rounded-lg bg-emerald-50 p-3">
-                    <p className="text-lg font-bold text-emerald-700">{summary?.cohort.submitted_attempts ?? 0}</p>
-                    <p className="text-[11px] text-emerald-600">Attempts</p>
-                  </div>
-                  <div className="rounded-lg bg-brand-50 p-3">
-                    <p className="text-lg font-bold text-brand-700">{summary?.cohort.active_students_30d ?? 0}</p>
-                    <p className="text-[11px] text-brand-600">Active (30d)</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Competency Performance Ranking */}
-          {(summary?.competency_detail ?? []).length > 0 && (
-            <div className="bg-surface p-6 rounded-2xl border border-hairline shadow-tile mb-6">
-              <CardHeading icon={faChartBar} title="Competency Performance" />
-              <div className="space-y-3">
-                {[...summary!.competency_detail]
-                  .sort((a, b) => b.average_score - a.average_score)
-                  .map((comp, i) => (
-                    <div key={comp.name} className="flex items-center gap-3">
-                      <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
-                        i === 0 ? "bg-amber-100 text-amber-700" :
-                        i === 1 ? "bg-gray-100 text-gray-600" :
-                        i === 2 ? "bg-orange-100 text-orange-700" :
-                        "bg-gray-50 text-gray-500"
-                      }`}>
-                        {i + 1}
-                      </span>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-sm font-medium text-gray-800 truncate">{comp.name}</span>
-                          <span className="text-sm font-bold text-gray-700 ml-2 shrink-0">{comp.average_score}%</span>
-                        </div>
-                        <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                          <div
-                            className={`h-full rounded-full transition-all duration-500 ${
-                              comp.average_score >= 80 ? "bg-emerald-500" :
-                              comp.average_score >= 60 ? "bg-brand-600" :
-                              "bg-rose-400"
-                            }`}
-                            style={{ width: `${Math.min(comp.average_score, 100)}%` }}
-                          />
-                        </div>
-                      </div>
-                      <div className="text-right shrink-0 ml-2">
-                        <p className="text-xs text-gray-500">{comp.students} students</p>
-                        <p className="text-xs text-gray-400">{comp.ratings} ratings</p>
-                      </div>
-                    </div>
-                  ))}
-              </div>
-            </div>
-          )}
-
-          <div className="bg-surface rounded-2xl border border-hairline shadow-tile overflow-hidden">
-            <div className="p-6 border-b border-hairline">
-              <h3 className="font-display text-lg font-semibold text-gray-900">Competency Assessment Summary</h3>
-              <p className="text-sm text-gray-500">
-                Faculty-validated competency scores across the cohort (pass mark: 75%)
-              </p>
-            </div>
-            {(summary?.competency_detail ?? []).length === 0 ? (
-              <p className="text-gray-400 text-sm p-8 text-center">
-                No validated competency scores yet.
-              </p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="bg-gray-50">
-                      <th className="text-left py-3 px-4 font-semibold text-gray-700">
-                        Competency
-                      </th>
-                      <th className="text-left py-3 px-4 font-semibold text-gray-700">
-                        Students Assessed
-                      </th>
-                      <th className="text-left py-3 px-4 font-semibold text-gray-700">Ratings</th>
-                      <th className="text-left py-3 px-4 font-semibold text-gray-700">
-                        Average Score
-                      </th>
-                      <th className="text-left py-3 px-4 font-semibold text-gray-700">Pass Rate</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {summary!.competency_detail.map((row) => (
-                      <tr
-                        key={row.name}
-                        className="border-t border-hairline hover:bg-gray-50 transition-colors"
-                      >
-                        <td className="py-3 px-4 text-gray-800 font-medium">{row.name}</td>
-                        <td className="py-3 px-4 text-gray-600">{row.students}</td>
-                        <td className="py-3 px-4 text-gray-600">{row.ratings}</td>
-                        <td className="py-3 px-4">
-                          <div className="flex items-center gap-2">
-                            <div className="w-16 h-2 bg-gray-200 rounded-full overflow-hidden">
-                              <div
-                                className="h-full bg-brand-600 rounded-full"
-                                style={{ width: `${Math.min(row.average_score, 100)}%` }}
-                              />
-                            </div>
-                            <span className="text-sm font-medium text-gray-800">
-                              {row.average_score}%
-                            </span>
-                          </div>
-                        </td>
-                        <td className="py-3 px-4">
+              {topStudents.length === 0 ? (
+                <p className="py-8 text-center text-sm text-gray-400">No submitted attempts yet.</p>
+              ) : (
+                <>
+                  <div className="grid grid-cols-3 items-end gap-3 sm:gap-6">
+                    {podiumOrder.map((idx) => {
+                      const s = podium[idx];
+                      const rank = idx + 1;
+                      const first = rank === 1;
+                      return (
+                        <div
+                          key={s.student_key}
+                          className={`relative flex flex-col items-center rounded-2xl border px-3 pb-4 text-center ${
+                            first
+                              ? "border-amber-200 bg-gradient-to-b from-amber-50 to-transparent pt-6 sm:pb-6"
+                              : "border-hairline bg-gradient-to-b from-gray-50 to-transparent pt-4"
+                          }`}
+                        >
                           <span
-                            className={`px-3 py-1 rounded-full text-xs font-medium ${
-                              row.pass_rate_pct >= 90
-                                ? "bg-emerald-50 text-emerald-700"
-                                : row.pass_rate_pct >= 80
-                                  ? "bg-brand-600/10 text-brand-600"
-                                  : "bg-rose-50 text-rose-700"
+                            className={`absolute -top-3 flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${rankBadgeClass(rank)}`}
+                          >
+                            {rank}
+                          </span>
+                          <Avatar
+                            name={s.name}
+                            src={s.picture_url}
+                            userId={s.student_key}
+                            sex={s.sex}
+                            size={first ? "xl" : "lg"}
+                            tone="brand"
+                          />
+                          <p className="mt-2 w-full truncate text-sm font-semibold text-gray-900">{s.name}</p>
+                          <p className="w-full truncate text-xs text-gray-400">{s.section ?? "No section"}</p>
+                          <p
+                            className={`mt-2 font-display font-bold tabular-nums ${
+                              first ? "text-3xl text-amber-600" : "text-2xl text-brand-600"
                             }`}
                           >
-                            {row.pass_rate_pct}%
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+                            {Math.round(s.average_score)}%
+                          </p>
+                          <p className="text-[11px] text-gray-400">
+                            {s.attempts} attempt{s.attempts === 1 ? "" : "s"}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {runnersUp.length > 0 && (
+                    <div className="mt-4 grid grid-cols-1 gap-2">
+                      {runnersUp.map((s, i) => (
+                        <BarRow
+                          key={s.student_key}
+                          badge={i + 4}
+                          badgeClass={rankBadgeClass(i + 4)}
+                          label={s.name}
+                          sublabel={`${s.section ?? "No section"} · ${s.attempts} attempt${s.attempts === 1 ? "" : "s"}`}
+                          fillPct={s.average_score}
+                          fillClass="bg-brand-600/[0.06]"
+                          trailing={`${Math.round(s.average_score)}%`}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </Panel>
           </div>
         </>
       )}
