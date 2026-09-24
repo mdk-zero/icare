@@ -260,8 +260,8 @@ async function loadDashboard(viewerId: string) {
   if (students.length > 0 && !lastPredictedAt) {
     attention.push({
       key: "predictions-never",
-      message: "Risk predictions have never run",
-      detail: "Cohort health can't be reported until the ML jobs have scored the students.",
+      message: "The risk check has never run",
+      detail: "Students can't be marked on track or at risk until the ML jobs have run.",
       href: "/admin/student-management",
       action: "Run ML jobs",
     });
@@ -270,8 +270,8 @@ async function loadDashboard(viewerId: string) {
     if (daysStale > STALE_PREDICTION_DAYS) {
       attention.push({
         key: "predictions-stale",
-        message: `Risk predictions last ran ${daysStale} days ago`,
-        detail: "The nightly run should keep these current; at-risk flags may be out of date.",
+        message: `The risk check last ran ${daysStale} days ago`,
+        detail: "It should refresh every night, so who is at risk may be out of date.",
         href: "/admin/student-management",
         action: "Run ML jobs",
       });
@@ -282,7 +282,6 @@ async function loadDashboard(viewerId: string) {
     // The masthead greets whoever is signed in, the way the faculty one does.
     viewerName: users.find((u) => u.id === viewerId)?.name ?? null,
     totalStudents: students.length,
-    facultyCount: faculty.length,
     assessedCount,
     atRiskCount,
     lastPredictedAt,
@@ -312,7 +311,6 @@ export default async function AdminDashboard() {
   const {
     viewerName,
     totalStudents,
-    facultyCount,
     assessedCount,
     atRiskCount,
     lastPredictedAt,
@@ -340,12 +338,18 @@ export default async function AdminDashboard() {
   const onTrackCount = assessedCount - atRiskCount;
   const healthCaption =
     assessedCount > 0 && lastPredictedAt
-      ? `${Math.round((onTrackCount / assessedCount) * 100)}% on track · as of ${shortDate(lastPredictedAt)}`
+      ? `${Math.round((onTrackCount / assessedCount) * 100)}% · last risk check ${shortDate(lastPredictedAt)}`
       : totalStudents > 0
-        ? "No prediction run yet"
+        ? "No risk check yet"
         : "No students enrolled";
-  const studentsPerFaculty =
-    facultyCount > 0 && totalStudents > 0 ? `${Math.round(totalStudents / facultyCount)}:1` : "—";
+  const coveredSectionCount = sectionRows.length - uncoveredSectionCount;
+  const coverageCaption = !coverageKnown
+    ? "Couldn't load faculty assignments"
+    : sectionRows.length === 0
+      ? "No sections with students yet"
+      : uncoveredSectionCount > 0
+        ? `${uncoveredSectionCount} without a faculty member`
+        : "Every section has a faculty member";
 
   return (
     <div className="space-y-4">
@@ -365,7 +369,7 @@ export default async function AdminDashboard() {
           iconBg="bg-emerald-50"
           iconColor="text-emerald-600"
           value={assessedCount > 0 ? `${onTrackCount}/${assessedCount}` : "—"}
-          label="Cohort Health"
+          label="Students on Track"
           caption={healthCaption}
         />
         <StatTile
@@ -380,15 +384,11 @@ export default async function AdminDashboard() {
           }
         />
         <StatTile
-          href="/admin/faculty"
+          href="/admin/faculty/assignment"
           icon={faUserTie}
-          value={studentsPerFaculty}
-          label="Faculty Load"
-          caption={
-            coverageKnown
-              ? `${plural(facultyCount, "faculty member")} · ${uncoveredSectionCount} uncovered`
-              : plural(facultyCount, "faculty member")
-          }
+          value={coverageKnown && sectionRows.length > 0 ? `${coveredSectionCount}/${sectionRows.length}` : "—"}
+          label="Sections with Faculty"
+          caption={coverageCaption}
         />
         <StatTile
           href="/admin/rooms"
@@ -403,7 +403,7 @@ export default async function AdminDashboard() {
         <Panel className="lg:col-span-2">
           <PanelHeader
             title="Needs Your Attention"
-            subtitle="Gaps in rosters and predictions that only an admin can close"
+            subtitle="Things only an admin can fix"
           >
             {attention.length > 0 && (
               <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700">
@@ -418,7 +418,7 @@ export default async function AdminDashboard() {
               </span>
               <p className="text-gray-500 font-medium">Nothing needs your attention</p>
               <p className="text-sm text-gray-400 mt-1">
-                Every student is placed, every section has faculty, and risk predictions are current.
+                Every student is placed, every section has a faculty member, and the risk check is current.
               </p>
             </div>
           ) : (
