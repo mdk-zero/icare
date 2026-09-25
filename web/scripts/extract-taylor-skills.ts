@@ -1,5 +1,5 @@
 /**
- * Extracts every skill checklist from Lynn & LeBon, "Skill Checklists for
+ * Extracts the skill checklists of the included chapters from Lynn & LeBon, "Skill Checklists for
  * Taylor's Clinical Nursing Skills" (3rd ed.), shipped in docs/, into
  * scripts/data/taylor-skills.json: each skill's number, title, goal, and its
  * numbered steps word for word.
@@ -23,6 +23,13 @@ import { TAYLORS_CHAPTERS } from './taylors-chapters';
 
 const PDF = join(__dirname, '..', '..', 'docs', 'Skill Checklists for Taylor_s Clinical Nursing Skills - Pamela Lynn , 3E.pdf');
 const OUT = join(__dirname, 'data', 'taylor-skills.json');
+
+/**
+ * The chapters the app teaches from: Vital Signs, Oxygenation, and Fluid,
+ * Electrolyte, and Acid–Base Balance. The rest of the book is left out of the
+ * catalog.
+ */
+export const INCLUDED_CHAPTERS: readonly number[] = [1, 14, 15];
 
 export interface ExtractedStep {
   /** The number the book prints; repeats across a skill's variants. */
@@ -176,7 +183,9 @@ export function extract(text: string): ExtractedSkill[] {
     bySkill.get(current)!.push(line);
   }
 
-  const skills = [...bySkill.entries()].map(([id, ls]) => parseSkill(id, trimBlank(ls)));
+  const skills = [...bySkill.entries()]
+    .filter(([id]) => INCLUDED_CHAPTERS.includes(Number(id.split('-')[0])))
+    .map(([id, ls]) => parseSkill(id, trimBlank(ls)));
   skills.sort((a, b) => a.chapter - b.chapter || a.number - b.number);
   return skills;
 }
@@ -191,11 +200,12 @@ function trimBlank(lines: string[]): string[] {
 
 export function validate(skills: ExtractedSkill[]): string[] {
   const problems: string[] = [];
-  for (const ch of TAYLORS_CHAPTERS) {
+  for (const ch of TAYLORS_CHAPTERS.filter((c) => INCLUDED_CHAPTERS.includes(c.chapter))) {
     const got = skills.filter((s) => s.chapter === ch.chapter).length;
     if (got !== ch.skills) problems.push(`Chapter ${ch.chapter}: expected ${ch.skills} skills, extracted ${got}`);
   }
   for (const s of skills) {
+    if (!INCLUDED_CHAPTERS.includes(s.chapter)) problems.push(`Skill ${s.id}: chapter ${s.chapter} is not included`);
     if (!s.title) problems.push(`Skill ${s.id}: no title`);
     if (!s.goal) problems.push(`Skill ${s.id}: no goal`);
     if (s.steps.length === 0) problems.push(`Skill ${s.id}: no steps`);

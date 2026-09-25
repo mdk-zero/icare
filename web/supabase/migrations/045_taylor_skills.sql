@@ -3,9 +3,11 @@
 --
 -- 041 made the 18 chapters of Lynn & LeBon, "Skill Checklists for
 -- Taylor's Clinical Nursing Skills" (3rd ed.) the skill areas, but the
--- 188 skills inside them only existed as citations in text ("Skill
--- 5-23"). This stores the whole book: one row per skill (its number,
--- title and goal) and one row per checklist step, word for word, so
+-- skills inside them only existed as citations in text ("Skill 1-7").
+-- This stores the chapters the app teaches from — 1 Vital Signs,
+-- 14 Oxygenation, 15 Fluid, Electrolyte, and Acid–Base Balance (32
+-- skills): one row per skill (its number, title and goal) and one row
+-- per checklist step, word for word, so
 -- scenarios can be built from a skill's steps and skill assessments
 -- can be written against them.
 --

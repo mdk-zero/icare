@@ -1,6 +1,6 @@
 /**
  * Loads the Taylor's skills catalog (migration 045) from
- * scripts/data/taylor-skills.json — all 188 skills of Lynn & LeBon, "Skill
+ * scripts/data/taylor-skills.json — the skills of Chapters 1, 14 and 15 of Lynn & LeBon, "Skill
  * Checklists for Taylor's Clinical Nursing Skills" (3rd ed.), with every
  * checklist step word for word. extract-taylor-skills.ts produced the JSON
  * from the PDF in docs/.

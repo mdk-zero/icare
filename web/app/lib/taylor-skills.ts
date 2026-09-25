@@ -4,7 +4,7 @@ import { TAYLORS_CHAPTERS } from '@/scripts/taylors-chapters';
 import bundled from '@/scripts/data/taylor-skills.json';
 
 /**
- * The Taylor's skills catalog: all 188 skills of Lynn & LeBon, "Skill
+ * The Taylor's skills catalog: the skills of Chapters 1, 14 and 15 of Lynn & LeBon, "Skill
  * Checklists for Taylor's Clinical Nursing Skills" (3rd ed.), grouped into the
  * 18 chapters that are the app's skill areas, each with its checklist steps
  * word for word.
