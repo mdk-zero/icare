@@ -65,29 +65,32 @@ const NO_GRADING: Grading = {
   rubric: DEFAULT_RUBRIC,
 };
 
-type Filter = "awaiting" | "in_progress" | "completed" | "all";
+/**
+ * A scenario is either Assigned (the student is working on it, or has
+ * submitted it and it waits for your grade) or Completed (graded and locked).
+ */
+type Filter = "assigned" | "completed" | "all";
 
 const FILTERS: { key: Filter; label: string; title: string }[] = [
-  { key: "awaiting", label: "Awaiting", title: "Submitted, awaiting your review" },
-  { key: "in_progress", label: "Ongoing", title: "Not submitted yet" },
-  { key: "completed", label: "Finalized", title: "Graded and locked" },
-  { key: "all", label: "All", title: "Every submission" },
+  { key: "assigned", label: "Assigned", title: "Not graded yet, submitted or not" },
+  { key: "completed", label: "Completed", title: "Graded and locked" },
+  { key: "all", label: "All", title: "Every scenario" },
 ];
 
-function isAwaiting(a: ScenarioAssignment) {
+/** Submitted and waiting for a grade — still Assigned, but the ones to grade first. */
+function isSubmitted(a: ScenarioAssignment) {
   return Boolean(a.submitted_at) && a.status !== "completed";
 }
 
-function isOngoing(a: ScenarioAssignment) {
-  return a.status !== "completed" && !a.submitted_at;
-}
-
 function matchesFilter(a: ScenarioAssignment, filter: Filter) {
-  if (filter === "awaiting") return isAwaiting(a);
-  if (filter === "in_progress") return isOngoing(a);
+  if (filter === "assigned") return a.status !== "completed";
   if (filter === "completed") return a.status === "completed";
   return true;
 }
+
+/** The group filter: every group, one group by name, or students in none. */
+const ALL_GROUPS = "__all";
+const NO_GROUP = "__none";
 
 const formatWhen = (iso: string) =>
   new Date(iso).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
@@ -144,9 +147,10 @@ function EmptyPanel({ icon, title, body }: { icon: typeof faCheck; title: string
 
 export default function FacultyScenarioReviewClient() {
   const router = useRouter();
-  const [filter, setFilter] = useState<Filter>("awaiting");
+  const [filter, setFilter] = useState<Filter>("assigned");
 
   const [studentQuery, setStudentQuery] = useState("");
+  const [groupFilter, setGroupFilter] = useState<string>(ALL_GROUPS);
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -218,7 +222,7 @@ export default function FacultyScenarioReviewClient() {
     return Array.from(byStudent.values())
       .map((g) => ({
         ...g,
-        awaiting: g.assignments.filter(isAwaiting).length,
+        awaiting: g.assignments.filter(isSubmitted).length,
         completed: g.assignments.filter((a) => a.status === "completed").length,
       }))
       // Grouped by team (students without one last), then who needs review first.
@@ -230,14 +234,21 @@ export default function FacultyScenarioReviewClient() {
       );
   }, [assignments]);
   const hasTeams = studentGroups.some((g) => g.team_name);
+  const groupNames = useMemo(
+    () => [...new Set(studentGroups.flatMap((g) => (g.team_name ? [g.team_name] : [])))],
+    [studentGroups],
+  );
+  const hasUngrouped = studentGroups.some((g) => !g.team_name);
 
   const filteredStudentGroups = useMemo(() => {
     const q = studentQuery.trim().toLowerCase();
-    if (!q) return studentGroups;
     return studentGroups.filter(
-      (g) => g.student_name.toLowerCase().includes(q) || (g.team_name ?? "").toLowerCase().includes(q),
+      (g) =>
+        (groupFilter === ALL_GROUPS ||
+          (groupFilter === NO_GROUP ? !g.team_name : g.team_name === groupFilter)) &&
+        (!q || g.student_name.toLowerCase().includes(q) || (g.team_name ?? "").toLowerCase().includes(q)),
     );
-  }, [studentGroups, studentQuery]);
+  }, [studentGroups, studentQuery, groupFilter]);
 
   const selectedStudent = studentGroups.find((g) => g.student_id === selectedStudentId) ?? null;
 
@@ -248,7 +259,7 @@ export default function FacultyScenarioReviewClient() {
 
   const selectStudent = (studentId: string) => {
     setSelectedStudentId(studentId);
-    setFilter("awaiting");
+    setFilter("assigned");
     setSelectedId(null);
     resetNotes();
   };
@@ -387,15 +398,15 @@ export default function FacultyScenarioReviewClient() {
         ),
       );
       await reloadTasks();
-      toast(`Finalized — ${scoreDescriptor(result.score)} (${result.score}%)`);
+      toast(`Completed — ${scoreDescriptor(result.score)} (${result.score}%)`);
       setConfirmOpen(false);
     } else {
-      toast("Unable to finalize this grade. Please try again.", "error");
+      toast("Unable to complete grading. Please try again.", "error");
     }
     setFinalizing(false);
   };
 
-  const awaitingCount = assignments.filter(isAwaiting).length;
+  const submittedCount = assignments.filter(isSubmitted).length;
 
   return (
     <div>
@@ -416,10 +427,10 @@ export default function FacultyScenarioReviewClient() {
           <FontAwesomeIcon icon={faChevronLeft} className="h-3.5 w-3.5" />
           Back to scenarios
         </button>
-        {awaitingCount > 0 && (
+        {submittedCount > 0 && (
           <span className="ml-auto flex items-center gap-2 rounded-full border border-brand-200 bg-brand-50 px-3 py-1.5 text-sm font-semibold tabular-nums text-brand-700">
             <span className="h-2 w-2 rounded-full bg-brand-500" />
-            {awaitingCount} awaiting review
+            {submittedCount} submitted, not yet graded
           </span>
         )}
       </div>
@@ -445,6 +456,40 @@ export default function FacultyScenarioReviewClient() {
                 />
               </div>
 
+              {/* Filter by group */}
+              {hasTeams && (
+                <div role="group" aria-label="Filter by group" className="mb-3 flex flex-wrap gap-1.5">
+                  {[
+                    { key: ALL_GROUPS, label: "All groups" },
+                    ...groupNames.map((name) => ({ key: name, label: name })),
+                    ...(hasUngrouped ? [{ key: NO_GROUP, label: "No group" }] : []),
+                  ].map((option) => {
+                    const active = groupFilter === option.key;
+                    const count =
+                      option.key === ALL_GROUPS
+                        ? studentGroups.length
+                        : studentGroups.filter((g) =>
+                            option.key === NO_GROUP ? !g.team_name : g.team_name === option.key,
+                          ).length;
+                    return (
+                      <button
+                        key={option.key}
+                        onClick={() => setGroupFilter(option.key)}
+                        aria-pressed={active}
+                        className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
+                          active
+                            ? "border-brand-600 bg-brand-600 text-white"
+                            : "border-gray-200 bg-surface text-gray-600 hover:border-brand-300 hover:text-gray-900"
+                        }`}
+                      >
+                        {option.label}
+                        <span className={`tabular-nums ${active ? "text-white/80" : "text-gray-400"}`}>{count}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
               <div className="space-y-2">
                 {loading &&
                   [0, 1, 2, 3].map((i) => (
@@ -454,8 +499,12 @@ export default function FacultyScenarioReviewClient() {
                 {!loading && filteredStudentGroups.length === 0 && (
                   <EmptyPanel
                     icon={faUserGraduate}
-                    title={studentQuery ? "No students found" : "No submissions yet"}
-                    body={studentQuery ? "Try a different name." : "Assigned scenarios show up here."}
+                    title={studentQuery || groupFilter !== ALL_GROUPS ? "No students found" : "No scenarios yet"}
+                    body={
+                      studentQuery || groupFilter !== ALL_GROUPS
+                        ? "Try a different name or group."
+                        : "Assigned scenarios show up here."
+                    }
                   />
                 )}
 
@@ -464,7 +513,7 @@ export default function FacultyScenarioReviewClient() {
                     <Fragment key={g.student_id}>
                     {hasTeams && (i === 0 || filteredStudentGroups[i - 1].team_name !== g.team_name) && (
                       <p className="px-1 pt-2 text-[11px] font-semibold uppercase tracking-wider text-gray-500 first:pt-0">
-                        {g.team_name ?? "No team"}
+                        {g.team_name ?? "No group"}
                       </p>
                     )}
                     <button
@@ -484,12 +533,12 @@ export default function FacultyScenarioReviewClient() {
                         <span className="block truncate font-semibold text-gray-900">{g.student_name}</span>
                         <span className="block truncate text-xs text-gray-500">
                           {g.assignments.length} scenario{g.assignments.length === 1 ? "" : "s"}
-                          {g.completed > 0 && ` · ${g.completed} finalized`}
+                          {g.completed > 0 && ` · ${g.completed} completed`}
                         </span>
                       </span>
                       {g.awaiting > 0 && (
                         <span
-                          title={`${g.awaiting} awaiting review`}
+                          title={`${g.awaiting} submitted, not yet graded`}
                           className="flex shrink-0 items-center gap-1.5 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold tabular-nums text-brand-700"
                         >
                           <span className="h-1.5 w-1.5 rounded-full bg-brand-500" />
@@ -528,7 +577,7 @@ export default function FacultyScenarioReviewClient() {
               <div
                 role="tablist"
                 aria-label="Filter submissions"
-                className="mb-3 grid grid-cols-4 gap-1 rounded-xl border border-hairline bg-subtle p-1"
+                className="mb-3 grid grid-cols-3 gap-1 rounded-xl border border-hairline bg-subtle p-1"
               >
                 {FILTERS.map((f) => {
                   const active = filter === f.key;
@@ -577,20 +626,20 @@ export default function FacultyScenarioReviewClient() {
                           <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-emerald-700">
                             {a.score ?? 0}%
                           </span>
-                        ) : isAwaiting(a) ? (
-                          <span className="flex shrink-0 items-center gap-1 rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-semibold text-brand-700">
-                            <span className="h-1.5 w-1.5 rounded-full bg-brand-500" />
-                            Awaiting
-                          </span>
                         ) : (
-                          <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium capitalize text-gray-600">
-                            {a.status.replace("_", " ")}
+                          <span
+                            className={`flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                              isSubmitted(a) ? "bg-brand-50 text-brand-700" : "bg-gray-100 text-gray-600"
+                            }`}
+                          >
+                            {isSubmitted(a) && <span className="h-1.5 w-1.5 rounded-full bg-brand-500" />}
+                            Assigned
                           </span>
                         )}
                       </div>
                       <p className="mt-1 truncate text-xs text-gray-500">
                         {done
-                          ? `${scoreDescriptor(a.score ?? 0)}${a.completed_at ? ` · finalized ${formatDay(a.completed_at)}` : ""}`
+                          ? `${scoreDescriptor(a.score ?? 0)}${a.completed_at ? ` · completed ${formatDay(a.completed_at)}` : ""}`
                           : a.submitted_at
                             ? `Submitted ${formatWhen(a.submitted_at)}`
                             : a.deadline
@@ -656,7 +705,7 @@ export default function FacultyScenarioReviewClient() {
                       {finalized && (
                         <span className="flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700">
                           <FontAwesomeIcon icon={faLock} className="h-3 w-3" />
-                          Finalized
+                          Completed
                         </span>
                       )}
                     </div>
@@ -788,7 +837,7 @@ export default function FacultyScenarioReviewClient() {
                   className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white shadow-tile transition-all hover:bg-brand-700 hover:shadow-tile-hover disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-brand-600"
                 >
                   <FontAwesomeIcon icon={finalized ? faCheck : faLock} className="h-3.5 w-3.5" />
-                  {finalized ? "Finalized" : "Finalize grade"}
+                  {finalized ? "Completed" : "Complete grading"}
                 </button>
               </div>
             </div>
@@ -799,17 +848,17 @@ export default function FacultyScenarioReviewClient() {
       {confirmOpen && selected && (
         <ConfirmModal
           config={{
-            title: "Finalize this grade?",
+            title: "Complete grading?",
             message: (
               <>
                 {selected.student_name} receives{" "}
                 <span className="font-semibold text-gray-900">
                   {scoreDescriptor(projectedScore)} ({projectedScore}%)
                 </span>{" "}
-                for {selected.scenario_title}. Ratings and notes lock once finalized.
+                for {selected.scenario_title}. Ratings and notes lock once it is completed.
               </>
             ),
-            confirmLabel: "Finalize grade",
+            confirmLabel: "Complete grading",
             danger: false,
             loading: finalizing,
             onConfirm: handleFinalize,
