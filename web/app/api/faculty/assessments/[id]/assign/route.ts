@@ -115,7 +115,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         console.error('Failed to resolve section students', studentsError);
         return NextResponse.json({ error: 'Unable to assign assessment' }, { status: 500 });
       }
-      for (const student of sectionStudents ?? []) recipients.add(student.id);
+      // A faculty member giving it to a section gives it to their own group
+      // members there, not to the whole section.
+      const roster = session.role === 'faculty' ? new Set(await getFacultyStudentIds(supabase, session.uid)) : null;
+      for (const student of sectionStudents ?? []) {
+        if (!roster || roster.has(student.id)) recipients.add(student.id);
+      }
     }
 
     if (session.role === 'faculty' && studentIds.length > 0) {
@@ -123,7 +128,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       const invalid = studentIds.filter((id) => !roster.has(id));
       if (invalid.length > 0) {
         return NextResponse.json(
-          { error: 'Some students are not in your sections', invalid },
+          { error: 'Some students are not in your groups', invalid },
           { status: 403 },
         );
       }

@@ -1,6 +1,6 @@
 import { Text } from '@react-pdf/renderer';
 import type { getSupabaseAdmin } from '@/app/lib/supabase/server';
-import { getFacultySectionIds } from '@/app/lib/roster';
+import { getFacultyStudentIds } from '@/app/lib/roster';
 import { ReportShell, StatGrid, Table, styles, type ReportMeta, type ReportDocument } from './kit';
 import { toCsv, toCsvBlocks, type CsvCell } from './csv';
 import { tallyAttendance, type ShiftAttendanceStatus } from '../shifts';
@@ -187,22 +187,30 @@ export async function buildStudentReport(
 // Section — one class at a glance
 // ---------------------------------------------------------------------------
 
+/**
+ * The students a report may name: a faculty member's group members, an admin's
+ * students, or null for no limit.
+ */
+export type StudentScope = readonly string[] | null;
+
 export async function buildSectionReport(
   supabase: Supabase,
   meta: ReportMeta,
   sectionId: string,
+  scope: StudentScope = null,
 ): Promise<BuildResult> {
   const { data: section } = await supabase.from('sections').select('id, name').eq('id', sectionId).maybeSingle();
   if (!section) return { error: 'Section not found', status: 404 };
 
-  const { data: students } = await supabase
+  const { data: sectionStudents } = await supabase
     .from('users')
     .select('id, name, email')
     .eq('role', 'student')
     .eq('section_id', sectionId)
     .order('name');
+  const students = (sectionStudents ?? []).filter((s) => !scope || scope.includes(s.id));
 
-  const ids = (students ?? []).map((s) => s.id);
+  const ids = students.map((s) => s.id);
   const [{ data: scores }, { data: attempts }] = await Promise.all([
     ids.length
       ? supabase.from('competency_scores').select('student_id, score, competency_areas(name)').in('student_id', ids)
@@ -302,6 +310,7 @@ export async function buildScenarioReport(
   supabase: Supabase,
   meta: ReportMeta,
   scenarioId: string,
+  scope: StudentScope = null,
 ): Promise<BuildResult> {
   const { data: scenario } = await supabase
     .from('scenarios')
@@ -310,13 +319,14 @@ export async function buildScenarioReport(
     .maybeSingle();
   if (!scenario) return { error: 'Scenario not found', status: 404 };
 
-  const { data: assignments } = await supabase
+  const { data: allAssignments } = await supabase
     .from('scenario_assignments')
-    .select('status, score, time_taken, assigned_at, completed_at, deadline, users!scenario_assignments_student_id_fkey(name)')
+    .select('student_id, status, score, time_taken, assigned_at, completed_at, deadline, users!scenario_assignments_student_id_fkey(name)')
     .eq('scenario_id', scenarioId)
     .order('assigned_at', { ascending: false });
+  const assignments = (allAssignments ?? []).filter((a) => !scope || scope.includes(a.student_id as string));
 
-  const rows = (assignments ?? []).map((a) => {
+  const rows = assignments.map((a) => {
     const studentName =
       (a as unknown as { users: { name: string } | null }).users?.name ?? 'Unknown student';
     return {
@@ -384,6 +394,7 @@ export async function buildAssessmentReport(
   supabase: Supabase,
   meta: ReportMeta,
   assessmentId: string,
+  scope: StudentScope = null,
 ): Promise<BuildResult> {
   const { data: assessment } = await supabase
     .from('assessments')
@@ -392,13 +403,14 @@ export async function buildAssessmentReport(
     .maybeSingle();
   if (!assessment) return { error: 'Assessment not found', status: 404 };
 
-  const { data: attempts } = await supabase
+  const { data: allAttempts } = await supabase
     .from('assessment_attempts')
-    .select('status, score, submitted_at, time_taken_seconds, users(name)')
+    .select('student_id, status, score, submitted_at, time_taken_seconds, users(name)')
     .eq('assessment_id', assessmentId)
     .order('submitted_at', { ascending: false });
+  const attempts = (allAttempts ?? []).filter((a) => !scope || scope.includes(a.student_id as string));
 
-  const rows = (attempts ?? []).map((a) => ({
+  const rows = attempts.map((a) => ({
     name: (a as unknown as { users: { name: string } | null }).users?.name ?? 'Unknown student',
     status: a.status as string,
     score: a.score === null ? null : Math.round(Number(a.score)),
@@ -487,11 +499,12 @@ export async function buildRosterReport(
     .order('name');
 
   if (session.role === 'faculty') {
-    const sectionIds = await getFacultySectionIds(supabase, session.uid);
-    if (sectionIds.length === 0) {
-      return { error: 'You have no assigned sections yet', status: 400 };
+    // The members of the groups they supervise.
+    const studentIds = await getFacultyStudentIds(supabase, session.uid);
+    if (studentIds.length === 0) {
+      return { error: 'You have no students in your groups yet', status: 400 };
     }
-    query = query.in('section_id', sectionIds);
+    query = query.in('id', studentIds);
   }
 
   const { data: students } = await query;
@@ -524,7 +537,7 @@ export async function buildRosterReport(
   const noActivity = rows.filter((r) => r.attempts === 0).length;
 
   const metaRows = [
-    { label: 'Scope', value: session.role === 'admin' ? 'All students' : 'Your sections' },
+    { label: 'Scope', value: session.role === 'admin' ? 'All students' : 'Your groups' },
     { label: 'Students', value: String(rows.length) },
   ];
 
@@ -765,6 +778,7 @@ export async function buildAttendanceReport(
   supabase: Supabase,
   meta: ReportMeta,
   sectionId: string,
+  scope: StudentScope = null,
 ): Promise<BuildResult> {
   const { data: section } = await supabase
     .from('sections')
@@ -795,7 +809,9 @@ export async function buildAttendanceReport(
     .eq('section_id', sectionId)
     .order('name');
 
-  const studentList = (students ?? []) as { id: string; name: string }[];
+  const studentList = ((students ?? []) as { id: string; name: string }[]).filter(
+    (s) => !scope || scope.includes(s.id),
+  );
 
   const assignments = shiftList.length
     ? ((

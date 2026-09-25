@@ -3,14 +3,14 @@ import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { logAudit } from '@/app/lib/audit';
 import { isPatientAssigned } from '@/app/lib/assigned-patients';
-import { getFacultySectionIds } from '@/app/lib/roster';
+import { getStudentSupervisorIds, isStudentInFacultySections } from '@/app/lib/roster';
 
 /**
  * Student help flag raised during simulation (ERD `assistance_requests`,
  * Phase 1.10). The table has existed since migration 013 but nothing could
  * write to it, so the faculty dashboard's assistance alerts were unreachable.
  *
- * Raising one notifies every faculty member who handles the student's section,
+ * Raising one notifies the faculty member supervising the student's group,
  * which is the same roster rule the vitals-anomaly notification uses.
  */
 
@@ -131,7 +131,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-/** Notifies the faculty who handle the student's section. */
+/** Notifies the faculty member supervising the student's group. */
 async function notifySectionFaculty(
   supabase: ReturnType<typeof getSupabaseAdmin>,
   studentId: string,
@@ -146,12 +146,8 @@ async function notifySectionFaculty(
       .maybeSingle();
     if (!student?.section_id) return;
 
-    const { data: links } = await supabase
-      .from('faculty_sections')
-      .select('faculty_id')
-      .eq('section_id', student.section_id);
-
-    const facultyIds = [...new Set((links ?? []).map((l) => l.faculty_id as string))];
+    // The supervisor of the student's group; a student in no group has none.
+    const facultyIds = await getStudentSupervisorIds(supabase, studentId);
     if (facultyIds.length === 0) return;
 
     await supabase.from('notifications').insert(
@@ -207,13 +203,7 @@ export async function PATCH(request: NextRequest) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
     } else if (session.role === 'faculty') {
-      const { data: student } = await supabase
-        .from('users')
-        .select('section_id')
-        .eq('id', existing.student_id)
-        .maybeSingle();
-      const sections = await getFacultySectionIds(supabase, session.uid);
-      if (!student?.section_id || !sections.includes(student.section_id)) {
+      if (!(await isStudentInFacultySections(supabase, session.uid, existing.student_id as string))) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
     } else if (session.role !== 'admin') {

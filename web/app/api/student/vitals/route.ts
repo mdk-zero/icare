@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { logAudit } from '@/app/lib/audit';
+import { getStudentSupervisorIds } from '@/app/lib/roster';
 import {
   evaluateVitals,
   VITAL_RULES,
@@ -190,11 +191,9 @@ async function notifyRosterFaculty(
       .single();
     if (!student?.section_id) return;
 
-    const { data: roster } = await supabase
-      .from('faculty_sections')
-      .select('faculty_id')
-      .eq('section_id', student.section_id);
-    if (!roster || roster.length === 0) return;
+    // The supervisor of the student's group; a student in no group has none.
+    const roster = (await getStudentSupervisorIds(supabase, studentId)).map((faculty_id) => ({ faculty_id }));
+    if (roster.length === 0) return;
 
     const studentName = student?.name ?? 'A student';
 

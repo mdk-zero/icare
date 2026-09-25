@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { callAI, aiErrorResponse } from '@/app/lib/ai/generate';
-import { resolveSummaryArgs, type SummaryArgs } from '@/app/lib/analytics';
+import { callAnalytics, resolveSummaryArgs, type SummaryArgs } from '@/app/lib/analytics';
 
 /**
  * Plain-language reading of the analytics dashboard.
@@ -146,7 +146,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: args.error }, { status: 500 });
     }
 
-    const { data, error } = await supabase.rpc('dw_analytics_summary', args);
+    const { data, error } = await callAnalytics(supabase, 'dw_analytics_summary', { ...args });
     if (error) {
       console.error('Failed to fetch analytics for narrative', error);
       return NextResponse.json({ error: 'Unable to read analytics' }, { status: 500 });

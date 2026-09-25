@@ -1,7 +1,7 @@
 import type { getSupabaseAdmin } from './supabase/server';
 import { summarizeAnomalyReasons } from './vitals/rules';
 import type { SessionPayload } from './auth/session';
-import { getFacultySectionIds } from './roster';
+import { getFacultySectionIds, getFacultyStudentIds } from './roster';
 
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
 
@@ -35,9 +35,10 @@ export async function getScopedStudents(
     .order('name');
 
   if (session.role === 'faculty') {
-    const sectionIds = await getFacultySectionIds(supabase, session.uid);
-    if (sectionIds.length === 0) return [];
-    query = query.in('section_id', sectionIds);
+    // Only the members of the groups they supervise.
+    const studentIds = await getFacultyStudentIds(supabase, session.uid);
+    if (studentIds.length === 0) return [];
+    query = query.in('id', studentIds);
   }
 
   const { data, error } = await query.limit(5000);

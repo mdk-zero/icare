@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { getFacultySectionIds } from '@/app/lib/roster';
 
 /** The requesting faculty member's assigned sections (admin: all sections). */
 export async function GET() {
@@ -25,20 +26,18 @@ export async function GET() {
       return NextResponse.json({ sections: sections ?? [] });
     }
 
-    const { data: links, error } = await supabase
-      .from('faculty_sections')
-      .select('sections(id, name)')
-      .eq('faculty_id', session.uid);
+    // The sections of the groups they supervise.
+    const sectionIds = await getFacultySectionIds(supabase, session.uid);
+    const { data: rows, error } = sectionIds.length
+      ? await supabase.from('sections').select('id, name').in('id', sectionIds)
+      : { data: [] as { id: string; name: string }[], error: null };
 
     if (error) {
       console.error('Failed to list faculty sections', error);
       return NextResponse.json({ error: 'Unable to list sections' }, { status: 500 });
     }
 
-    const sections = (links ?? [])
-      .map((l) => l.sections as unknown as { id: string; name: string } | null)
-      .filter((s): s is { id: string; name: string } => Boolean(s))
-      .sort((a, b) => a.name.localeCompare(b.name));
+    const sections = (rows ?? []).sort((a, b) => a.name.localeCompare(b.name));
 
     return NextResponse.json({ sections });
   } catch (err) {

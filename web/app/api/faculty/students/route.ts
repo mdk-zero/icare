@@ -3,7 +3,7 @@ import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { readSession } from '@/app/lib/auth/session';
 import { sendStudentInvitationEmail } from '@/app/lib/auth/email';
 import { generateRandomPassword, hashPassword } from '@/app/lib/auth/password';
-import { getFacultySectionIds } from '@/app/lib/roster';
+import { getFacultySectionIds, getFacultyStudentIds, isStudentInFacultySections } from '@/app/lib/roster';
 import { parseSex } from '@/app/lib/auth/user';
 import { getLatestRiskByStudent, getLastActivityByStudent } from '@/app/lib/faculty-dashboard';
 import { logAudit } from '@/app/lib/audit';
@@ -62,7 +62,7 @@ export async function GET() {
   try {
     const supabase = getSupabaseAdmin();
 
-    // Admin sees all students; faculty only students in their sections.
+    // Admin sees all students; faculty only the members of the groups they supervise.
     let query = supabase
       .from('users')
       .select('id, email, name, role, picture_url, sex, section_id, sections(id, name)')
@@ -70,11 +70,11 @@ export async function GET() {
       .order('name', { ascending: true });
 
     if (session.role === 'faculty') {
-      const sectionIds = await getFacultySectionIds(supabase, session.uid);
-      if (sectionIds.length === 0) {
+      const studentIds = await getFacultyStudentIds(supabase, session.uid);
+      if (studentIds.length === 0) {
         return NextResponse.json({ students: [] });
       }
-      query = query.in('section_id', sectionIds);
+      query = query.in('id', studentIds);
     }
 
     const { data: students, error } = await query;
@@ -366,11 +366,8 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Student not found' }, { status: 404 });
     }
 
-    if (session.role === 'faculty') {
-      const facultySections = await getFacultySectionIds(supabase, session.uid);
-      if (!target.section_id || !facultySections.includes(target.section_id)) {
-        return NextResponse.json({ error: 'Student not found' }, { status: 404 });
-      }
+    if (session.role === 'faculty' && !(await isStudentInFacultySections(supabase, session.uid, id))) {
+      return NextResponse.json({ error: 'Student not found' }, { status: 404 });
     }
 
     const { error: deleteError } = await supabase

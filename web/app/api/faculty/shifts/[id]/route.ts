@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
-import { getFacultySectionIds } from '@/app/lib/roster';
+import { getFacultySectionIds, getFacultyStudentIds } from '@/app/lib/roster';
 import { logAudit } from '@/app/lib/audit';
 import { SHIFT_ATTENDANCE_LABEL, type ShiftAttendanceStatus } from '@/app/lib/shifts';
 
@@ -67,8 +67,11 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unable to load the roster' }, { status: 500 });
     }
 
+    // Faculty see only the members of the groups they supervise.
+    const mine = session.role === 'faculty' ? new Set(await getFacultyStudentIds(supabase, session.uid)) : null;
+
     // Alphabetical: a ward roster is read by name, and the DB order is arbitrary.
-    const sorted = (roster ?? []).sort((a, b) => {
+    const sorted = (roster ?? []).filter((r) => !mine || mine.has(r.student_id as string)).sort((a, b) => {
       const an = (a as unknown as { users?: { name?: string } }).users?.name ?? '';
       const bn = (b as unknown as { users?: { name?: string } }).users?.name ?? '';
       return an.localeCompare(bn);
@@ -123,6 +126,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     }
 
     const marks = Array.isArray(body.marks) ? body.marks : [];
+    const mine = session.role === 'faculty' && marks.length > 0
+      ? await getFacultyStudentIds(supabase, session.uid)
+      : null;
     let updated = 0;
     for (const raw of marks) {
       if (!raw || typeof raw !== 'object') continue;
@@ -144,12 +150,14 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       // `select` so the count reflects rows actually changed. An update that
       // matches nothing is not an error in PostgREST, so without this an
       // unknown or foreign assignment id would be reported back as marked.
-      const { data: changed, error } = await supabase
+      let update = supabase
         .from('shift_assignments')
         .update(patch)
         .eq('id', assignmentId)
-        .eq('shift_id', id) // scoping guard: an id from another shift matches nothing
-        .select('id');
+        .eq('shift_id', id); // scoping guard: an id from another shift matches nothing
+      // Faculty mark only their own group members.
+      if (mine) update = update.in('student_id', mine.length > 0 ? mine : ['00000000-0000-0000-0000-000000000000']);
+      const { data: changed, error } = await update.select('id');
       if (error) {
         console.error('Failed to mark attendance', assignmentId, error);
         continue;

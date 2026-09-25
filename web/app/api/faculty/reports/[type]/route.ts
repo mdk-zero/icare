@@ -4,7 +4,7 @@ import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { logAudit } from '@/app/lib/audit';
 import { renderReport, type ReportMeta } from '@/app/lib/reports/kit';
 import { slugify } from '@/app/lib/reports/csv';
-import { getFacultySectionIds, isStudentInFacultySections } from '@/app/lib/roster';
+import { getFacultySectionIds, getFacultyStudentIds, isStudentInFacultySections } from '@/app/lib/roster';
 import {
   REPORT_NEEDS_TARGET,
   buildAssessmentReport,
@@ -66,19 +66,22 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       generatedAt: new Date().toLocaleString('en-PH', { dateStyle: 'long', timeStyle: 'short' }),
     };
 
+    // Faculty reports name only the members of the groups they supervise.
+    const scope = session.role === 'faculty' ? await getFacultyStudentIds(supabase, session.uid) : null;
+
     let result: BuildResult;
     switch (type) {
       case 'student':
         result = await buildStudentReport(supabase, meta, id);
         break;
       case 'section':
-        result = await buildSectionReport(supabase, meta, id);
+        result = await buildSectionReport(supabase, meta, id, scope);
         break;
       case 'scenario':
-        result = await buildScenarioReport(supabase, meta, id);
+        result = await buildScenarioReport(supabase, meta, id, scope);
         break;
       case 'assessment':
-        result = await buildAssessmentReport(supabase, meta, id);
+        result = await buildAssessmentReport(supabase, meta, id, scope);
         break;
       case 'roster':
         result = await buildRosterReport(supabase, meta, session);
@@ -87,7 +90,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         result = await buildDischargeReport(supabase, meta, id);
         break;
       case 'attendance':
-        result = await buildAttendanceReport(supabase, meta, id);
+        result = await buildAttendanceReport(supabase, meta, id, scope);
         break;
     }
 

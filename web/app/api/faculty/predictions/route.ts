@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { getFacultyStudentIds } from '@/app/lib/roster';
 
 /**
  * At-risk predictions written by the ML service (Phase 3.5/3.8).
@@ -18,12 +19,18 @@ export async function GET(request: NextRequest) {
 
   try {
     const supabase = getSupabaseAdmin();
+    // Faculty read only the members of the groups they supervise.
+    const mine = session.role === 'faculty' ? await getFacultyStudentIds(supabase, session.uid) : null;
+    if (mine && studentId && !mine.includes(studentId)) {
+      return NextResponse.json({ error: 'Student not found' }, { status: 404 });
+    }
+    if (mine && !studentId && mine.length === 0) return NextResponse.json({ predictions: [] });
     let query = supabase
       .from('performance_predictions')
       .select('id, student_id, risk, probability, features, explanations, predicted_at, ml_models(kind, version, is_baseline)')
       .order('predicted_at', { ascending: false });
     if (studentId) query = query.eq('student_id', studentId).limit(1);
-    else query = query.limit(2000);
+    else query = (mine ? query.in('student_id', mine) : query).limit(2000);
 
     const { data, error } = await query;
     if (error) {

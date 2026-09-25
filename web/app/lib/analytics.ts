@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { SessionPayload } from './auth/session';
+import { getFacultySectionIds, getFacultyStudentIds } from './roster';
 
 /**
  * Shared filter handling for the warehouse-backed analytics endpoints
@@ -15,6 +16,30 @@ export interface SummaryArgs {
   p_from: string | null;
   p_to: string | null;
   p_bucket: AnalyticsBucket;
+  /**
+   * Only these students count (migration 052); left out when there is no
+   * limit, so an unscoped call still works before 052 is applied.
+   */
+  p_student_ids?: string[];
+}
+
+/**
+ * Calls a warehouse function, dropping p_student_ids and retrying when the
+ * live database predates migration 052 (PostgREST can't find a function with
+ * that parameter). The retry is still section-scoped, but counts every
+ * student in those sections, so it is logged.
+ */
+export async function callAnalytics(
+  supabase: SupabaseClient,
+  fn: 'dw_analytics_summary' | 'dw_student_leaderboard' | 'dw_section_trend',
+  args: Record<string, unknown>,
+): Promise<{ data: unknown; error: { message: string; code?: string } | null }> {
+  const first = await supabase.rpc(fn, args);
+  if (!first.error || args.p_student_ids === undefined || first.error.code !== 'PGRST202') return first;
+  console.warn(`${fn}: migration 052 not applied, falling back to a section-only scope`);
+  const { p_student_ids: _dropped, ...rest } = args;
+  void _dropped;
+  return supabase.rpc(fn, rest);
 }
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -58,17 +83,21 @@ export async function resolveSummaryArgs(
   const to = parseDate(params.get('to'));
 
   let sectionIds: string[] | null = requested.length > 0 ? requested : null;
+  let studentIds: string[] | null = null;
   if (session.role === 'faculty') {
-    const { data: links, error } = await supabase
-      .from('faculty_sections')
-      .select('section_id')
-      .eq('faculty_id', session.uid);
-    if (error) {
-      console.error('Failed to read faculty sections', error);
-      return { error: 'Unable to read your sections' };
+    // The sections of the groups they supervise, and only those groups'
+    // members within them.
+    try {
+      const [managed, members] = await Promise.all([
+        getFacultySectionIds(supabase as never, session.uid),
+        getFacultyStudentIds(supabase as never, session.uid),
+      ]);
+      sectionIds = requested.length > 0 ? managed.filter((id) => requested.includes(id)) : managed;
+      studentIds = members;
+    } catch (err) {
+      console.error('Failed to read faculty groups', err);
+      return { error: 'Unable to read your groups' };
     }
-    const managed = (links ?? []).map((l) => l.section_id as string);
-    sectionIds = requested.length > 0 ? managed.filter((id) => requested.includes(id)) : managed;
   }
 
   return {
@@ -76,6 +105,7 @@ export async function resolveSummaryArgs(
     p_from: from,
     p_to: to,
     p_bucket: deriveBucket(from, to),
+    ...(studentIds ? { p_student_ids: studentIds } : {}),
   };
 }
 

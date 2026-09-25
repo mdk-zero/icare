@@ -24,12 +24,14 @@ export async function GET() {
       console.error('Failed to load groups', error);
       return NextResponse.json({ error: 'Unable to load groups' }, { status: 500 });
     }
-    const summary = await groupSummaries(supabase, teams);
+    // Faculty get only the groups they supervise.
+    const own = session.role === 'faculty' ? teams.filter((t) => t.faculty_id === session.uid) : teams;
+    const summary = await groupSummaries(supabase, own);
     if (summary.error) {
       console.error('Failed to summarise groups', summary.error);
       return NextResponse.json({ error: 'Unable to load groups' }, { status: 500 });
     }
-    const supervisor = new Map(teams.map((t) => [t.id, t.faculty_id]));
+    const supervisor = new Map(own.map((t) => [t.id, t.faculty_id]));
     return NextResponse.json({
       enabled: true,
       viewer_id: session.uid,

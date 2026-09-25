@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
-import { getFacultySectionIds } from '@/app/lib/roster';
+import { getFacultySectionIds, getFacultyStudentIds } from '@/app/lib/roster';
 import { logAudit } from '@/app/lib/audit';
 import { SHIFT_TYPES, type ShiftAttendanceStatus, type ShiftType } from '@/app/lib/shifts';
 
@@ -56,10 +56,16 @@ export async function GET() {
     const ids = (shifts ?? []).map((s) => s.id);
     const byShift = new Map<string, ShiftAttendanceStatus[]>();
     if (ids.length > 0) {
-      const { data: assignments } = await supabase
+      let tallyQuery = supabase
         .from('shift_assignments')
         .select('shift_id, attendance_status')
         .in('shift_id', ids);
+      // Faculty tally only the members of the groups they supervise.
+      if (session.role !== 'admin') {
+        const mine = await getFacultyStudentIds(supabase, session.uid);
+        tallyQuery = tallyQuery.in('student_id', mine.length > 0 ? mine : ['00000000-0000-0000-0000-000000000000']);
+      }
+      const { data: assignments } = await tallyQuery;
       for (const row of assignments ?? []) {
         const list = byShift.get(row.shift_id) ?? [];
         list.push(row.attendance_status as ShiftAttendanceStatus);

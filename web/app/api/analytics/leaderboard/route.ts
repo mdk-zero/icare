@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
-import { resolveSummaryArgs, withStudentAvatars } from '@/app/lib/analytics';
+import { callAnalytics, resolveSummaryArgs, withStudentAvatars } from '@/app/lib/analytics';
 
 /**
  * Every student in scope, ranked the way the analytics summary's
@@ -25,10 +25,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unable to fetch leaderboard' }, { status: 500 });
     }
 
-    const { data, error } = await supabase.rpc('dw_student_leaderboard', {
+    const { data, error } = await callAnalytics(supabase, 'dw_student_leaderboard', {
       p_section_ids: args.p_section_ids,
       p_from: args.p_from,
       p_to: args.p_to,
+      ...(args.p_student_ids ? { p_student_ids: args.p_student_ids } : {}),
     });
 
     if (error) {

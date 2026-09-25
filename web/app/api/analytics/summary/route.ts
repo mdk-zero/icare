@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
-import { resolveSummaryArgs, withStudentAvatars, type SummaryArgs } from '@/app/lib/analytics';
+import { callAnalytics, resolveSummaryArgs, withStudentAvatars, type SummaryArgs } from '@/app/lib/analytics';
 
 /**
  * Dashboard analytics read from the star-schema warehouse
@@ -36,14 +36,14 @@ async function readSectionTrend(
   args: SummaryArgs,
   sections: { id: string; name: string }[],
 ): Promise<unknown[] | null> {
-  const { data, error } = await supabase.rpc('dw_section_trend', args);
+  const { data, error } = await callAnalytics(supabase, 'dw_section_trend', { ...args });
   if (!error) return (data as unknown[] | null) ?? [];
   console.warn('dw_section_trend unavailable, reading per section instead:', error.message);
 
   try {
     const perSection = await Promise.all(
       sections.map(async (section) => {
-        const one = await supabase.rpc('dw_analytics_summary', {
+        const one = await callAnalytics(supabase, 'dw_analytics_summary', {
           ...args,
           p_section_ids: [section.id],
         });
@@ -84,7 +84,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unable to fetch analytics' }, { status: 500 });
     }
 
-    const { data, error } = await supabase.rpc('dw_analytics_summary', args);
+    const { data, error } = await callAnalytics(supabase, 'dw_analytics_summary', { ...args });
 
     if (error) {
       console.error('Failed to fetch analytics summary', error);
@@ -99,7 +99,7 @@ export async function GET(request: NextRequest) {
       if (etlError) {
         console.error('Warehouse auto-ETL failed', etlError);
       } else {
-        const refreshed = await supabase.rpc('dw_analytics_summary', args);
+        const refreshed = await callAnalytics(supabase, 'dw_analytics_summary', { ...args });
         if (!refreshed.error && refreshed.data) summary = refreshed.data as Summary;
       }
     }
