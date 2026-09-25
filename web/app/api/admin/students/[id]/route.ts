@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { getAdminScope } from '@/app/lib/admin-scope';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -18,6 +19,10 @@ export async function GET(_request: Request, { params }: RouteParams) {
 
   try {
     const supabase = getSupabaseAdmin();
+    const scope = await getAdminScope(supabase, session.uid);
+    if (scope && !scope.studentIds.includes(id)) {
+      return NextResponse.json({ error: 'Student not found' }, { status: 404 });
+    }
 
     const { data: student, error } = await supabase
       .from('users')

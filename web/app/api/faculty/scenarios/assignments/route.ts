@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { canSeeStudent, getAdminScope } from '@/app/lib/admin-scope';
 import { getFacultyStudentIds } from '@/app/lib/roster';
 import {
   fetchPerformedTaskCounts,
@@ -25,13 +26,16 @@ export async function GET(request: NextRequest) {
 
     if (session.role === 'admin') {
       if (requestedStudentId) {
+        if (!(await canSeeStudent(supabase, session, requestedStudentId))) {
+          return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        }
         studentIds = [requestedStudentId];
       } else {
-        const { data: allStudents, error: studentsError } = await supabase
-          .from('users')
-          .select('id')
-          .eq('role', 'student')
-          .limit(2000);
+        // Only this admin's students (migration 053).
+        const scope = await getAdminScope(supabase, session.uid);
+        let allQuery = supabase.from('users').select('id').eq('role', 'student').limit(2000);
+        if (scope) allQuery = allQuery.in('id', scope.studentIds.length ? scope.studentIds : ['00000000-0000-0000-0000-000000000000']);
+        const { data: allStudents, error: studentsError } = await allQuery;
 
         if (studentsError) {
           console.error('Failed to fetch students', studentsError);

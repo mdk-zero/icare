@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { getAdminScope } from '@/app/lib/admin-scope';
 
-/** Faculty overview: every faculty account with its assigned sections and derived student count. */
+/** Faculty overview: the admin's own faculty, each with its assigned sections and derived student count. */
 export async function GET() {
   const session = await readSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -12,13 +13,19 @@ export async function GET() {
 
   try {
     const supabase = getSupabaseAdmin();
+    const scope = await getAdminScope(supabase, session.uid);
+    if (scope && scope.facultyIds.length === 0) return NextResponse.json({ faculty: [] });
+
+    let facultyQuery = supabase
+      .from('users')
+      .select('id, email, name, picture_url, sex, created_at, last_login_at')
+      .eq('role', 'faculty')
+      .order('name');
+    // Each admin has their own faculty (migration 053).
+    if (scope) facultyQuery = facultyQuery.in('id', scope.facultyIds);
 
     const [facultyRes, linksRes, studentsRes] = await Promise.all([
-      supabase
-        .from('users')
-        .select('id, email, name, picture_url, sex, created_at, last_login_at')
-        .eq('role', 'faculty')
-        .order('name'),
+      facultyQuery,
       supabase.from('faculty_sections').select('faculty_id, sections(id, name)'),
       supabase
         .from('users')

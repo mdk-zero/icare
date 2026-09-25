@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { getAdminScope } from '@/app/lib/admin-scope';
 import {
   compareTeamNames,
   isMissingTeamTables,
@@ -45,7 +46,11 @@ export async function GET() {
   // Admins pick a supervising faculty member per group, so they get the roster.
   const [{ data: faculty }, facultyProbe] = await Promise.all([
     session.role === 'admin'
-      ? supabase.from('users').select('id, name').eq('role', 'faculty').order('name')
+      ? getAdminScope(supabase, session.uid).then((scope) => {
+          // An admin assigns only their own faculty (migration 053).
+          const q = supabase.from('users').select('id, name').eq('role', 'faculty').order('name');
+          return scope ? q.in('id', scope.facultyIds.length ? scope.facultyIds : ['00000000-0000-0000-0000-000000000000']) : q;
+        })
       : Promise.resolve({ data: [] }),
     supabase.from('teams').select('faculty_id', { head: true, count: 'exact' }).limit(1),
   ]);

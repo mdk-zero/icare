@@ -13,6 +13,7 @@ import {
 import { redirect } from "next/navigation";
 import { getSupabaseAdmin } from "@/app/lib/supabase/server";
 import { readSession } from "@/app/lib/auth/session";
+import { adminVisibleUserIds, getAdminScope } from "@/app/lib/admin-scope";
 import PageHeader from "@/app/components/PageHeader";
 import StatTile from "@/app/components/StatTile";
 
@@ -135,6 +136,10 @@ function EmptyState({ title, hint }: { title: string; hint: string }) {
 
 async function loadDashboard(viewerId: string) {
   const supabase = getSupabaseAdmin();
+  // This admin's own faculty, sections and students (migration 053); null
+  // before it, when every admin still sees everything.
+  const scope = await getAdminScope(supabase, viewerId);
+  const visible = scope ? new Set(adminVisibleUserIds(scope, viewerId)) : null;
 
   const [
     usersRes,
@@ -156,16 +161,20 @@ async function loadDashboard(viewerId: string) {
     // Only admitted patients hold a bed; check-out clears room_id anyway, the
     // status filter keeps a hand-edited discharged row from counting.
     supabase.from("patients").select("room_id").eq("status", "admitted").not("room_id", "is", null),
-    supabase
-      .from("audit_logs")
-      .select("action, created_at, actor:users(name)")
+    (visible
+      ? supabase.from("audit_logs").select("action, created_at, actor:users(name)").in("actor_id", [...visible])
+      : supabase.from("audit_logs").select("action, created_at, actor:users(name)")
+    )
       .order("created_at", { ascending: false })
       .limit(5),
   ]);
+  const { data: memberRows, error: membersError } = await supabase.from("team_members").select("student_id");
 
-  const users = usersRes.data ?? [];
-  const sections = sectionsRes.data ?? [];
-  const facultySections = facultySectionsRes.data ?? [];
+  const users = (usersRes.data ?? []).filter((u) => !visible || visible.has(u.id));
+  const sections = (sectionsRes.data ?? []).filter((sec) => !scope || scope.sectionIds.includes(sec.id));
+  const facultySections = (facultySectionsRes.data ?? []).filter(
+    (fs) => !scope || scope.sectionIds.includes(fs.section_id),
+  );
   const predictions = predictionsRes.data ?? [];
 
   const students = users.filter((u) => u.role === "student");
@@ -181,6 +190,10 @@ async function loadDashboard(viewerId: string) {
     }
   }
   const unassignedStudents = students.filter((st) => !st.section_id).length;
+  // Faculty see only the students in the groups they supervise, so a sectioned
+  // student in no group is seen by nobody.
+  const grouped = new Set((memberRows ?? []).map((m) => m.student_id as string));
+  const ungroupedStudents = membersError ? 0 : students.filter((st) => st.section_id && !grouped.has(st.id)).length;
   const sectionRows: SectionRow[] = sections
     .map((sec): SectionRow => ({
       id: sec.id,
@@ -234,6 +247,15 @@ async function loadDashboard(viewerId: string) {
       detail: "No faculty can see them until they're placed in a section.",
       href: "/admin/student-management",
       action: "Assign",
+    });
+  }
+  if (ungroupedStudents > 0) {
+    attention.push({
+      key: "ungrouped",
+      message: `${plural(ungroupedStudents, "student")} not in a group`,
+      detail: "Faculty only see the students in the groups they supervise.",
+      href: "/admin/student-management",
+      action: "Group them",
     });
   }
   if (uncoveredSections.length > 0) {

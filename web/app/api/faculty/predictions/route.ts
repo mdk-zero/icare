@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
-import { getFacultyStudentIds } from '@/app/lib/roster';
+import { getScopedStudentIds } from '@/app/lib/admin-scope';
 
 /**
  * At-risk predictions written by the ML service (Phase 3.5/3.8).
@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
   try {
     const supabase = getSupabaseAdmin();
     // Faculty read only the members of the groups they supervise.
-    const mine = session.role === 'faculty' ? await getFacultyStudentIds(supabase, session.uid) : null;
+    const mine = await getScopedStudentIds(supabase, session);
     if (mine && studentId && !mine.includes(studentId)) {
       return NextResponse.json({ error: 'Student not found' }, { status: 404 });
     }

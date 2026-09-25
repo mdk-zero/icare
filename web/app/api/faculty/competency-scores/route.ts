@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { canSeeStudent } from '@/app/lib/admin-scope';
 import { logAudit } from '@/app/lib/audit';
-import { isStudentInFacultySections } from '@/app/lib/roster';
+
 import { isActiveSkillArea } from '@/scripts/taylors-chapters';
 
 export async function GET(request: NextRequest) {
@@ -19,7 +20,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const supabase = getSupabaseAdmin();
-    if (session.role === 'faculty' && !(await isStudentInFacultySections(supabase, session.uid, studentId))) {
+    if (!(await canSeeStudent(supabase, session, studentId))) {
       return NextResponse.json({ error: 'Student not found' }, { status: 404 });
     }
     const { data: scores, error } = await supabase
@@ -71,7 +72,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const supabase = getSupabaseAdmin();
-    if (session.role === 'faculty' && !(await isStudentInFacultySections(supabase, session.uid, student_id))) {
+    if (!(await canSeeStudent(supabase, session, student_id))) {
       return NextResponse.json({ error: 'Student not found' }, { status: 404 });
     }
 

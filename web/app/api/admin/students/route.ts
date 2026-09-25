@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { getAdminScope } from '@/app/lib/admin-scope';
 import { logAudit } from '@/app/lib/audit';
 
 /**
@@ -17,13 +18,18 @@ export async function GET() {
 
   try {
     const supabase = getSupabaseAdmin();
+    // Only this admin's students (migration 053).
+    const scope = await getAdminScope(supabase, session.uid);
+    if (scope && scope.studentIds.length === 0) return NextResponse.json({ students: [] });
+    let studentQuery = supabase
+      .from('users')
+      .select('id, email, name, picture_url, sex, created_at, last_login_at, section_id, sections(name)')
+      .eq('role', 'student')
+      .order('name');
+    if (scope) studentQuery = studentQuery.in('id', scope.studentIds);
 
     const [studentsRes, attemptsRes, predictionsRes] = await Promise.all([
-      supabase
-        .from('users')
-        .select('id, email, name, picture_url, sex, created_at, last_login_at, section_id, sections(name)')
-        .eq('role', 'student')
-        .order('name'),
+      studentQuery,
       supabase
         .from('assessment_attempts')
         .select('student_id, score')
@@ -124,10 +130,11 @@ export async function DELETE(request: NextRequest) {
 
     // Resolved before the delete: the names are needed for the audit trail, and
     // the count tells the caller how many of its ids were actually students.
+    const scope = await getAdminScope(supabase, session.uid);
     const { data: targets, error: lookupError } = await supabase
       .from('users')
       .select('id, email, name')
-      .in('id', unique)
+      .in('id', scope ? unique.filter((id) => scope.studentIds.includes(id)) : unique)
       .eq('role', 'student');
 
     if (lookupError) {

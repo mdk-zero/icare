@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { getScopedStudentIds } from '@/app/lib/admin-scope';
 import { logAudit } from '@/app/lib/audit';
-import { getFacultyStudentIds } from '@/app/lib/roster';
 
 const validDifficulties = ['beginner', 'intermediate', 'advanced'] as const;
 const validCategories = [
@@ -49,7 +49,7 @@ export async function GET() {
     // which cannot be filtered by student. The roster is the smaller `in` list,
     // so it is the one that goes in the query.
     const scopedIds =
-      session.role === 'faculty' ? await getFacultyStudentIds(supabase, session.uid) : null;
+      await getScopedStudentIds(supabase, session);
 
     const assignedCounts = new Map<string, number>();
     if (scopedIds === null || scopedIds.length > 0) {

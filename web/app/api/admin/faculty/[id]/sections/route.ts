@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { logAudit } from '@/app/lib/audit';
+import { getAdminScope, ownsFaculty } from '@/app/lib/admin-scope';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -39,8 +40,18 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       .eq('id', facultyId)
       .eq('role', 'faculty')
       .maybeSingle();
-    if (!faculty) {
+    // An admin manages only their own faculty, within their own sections.
+    const scope = await getAdminScope(supabase, session.uid);
+    if (!faculty || !ownsFaculty(scope, facultyId)) {
       return NextResponse.json({ error: 'Faculty not found' }, { status: 404 });
+    }
+    if (scope) {
+      const { data: current } = await supabase.from('faculty_sections').select('section_id').eq('faculty_id', facultyId);
+      const allowed = new Set([...scope.sectionIds, ...(current ?? []).map((c) => c.section_id as string)]);
+      const outside = sectionIds.filter((id) => !allowed.has(id));
+      if (outside.length > 0) {
+        return NextResponse.json({ error: 'Some sections belong to another admin', invalid: outside }, { status: 403 });
+      }
     }
 
     if (sectionIds.length > 0) {

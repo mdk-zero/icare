@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { SessionPayload } from './auth/session';
 import { getFacultySectionIds, getFacultyStudentIds } from './roster';
+import { getAdminScope } from './admin-scope';
 
 /**
  * Shared filter handling for the warehouse-backed analytics endpoints
@@ -97,6 +98,18 @@ export async function resolveSummaryArgs(
     } catch (err) {
       console.error('Failed to read faculty groups', err);
       return { error: 'Unable to read your groups' };
+    }
+  } else if (session.role === 'admin') {
+    // An admin's own sections and students (migration 053); no limit before it.
+    try {
+      const scope = await getAdminScope(supabase as never, session.uid);
+      if (scope) {
+        sectionIds = requested.length > 0 ? scope.sectionIds.filter((id) => requested.includes(id)) : scope.sectionIds;
+        studentIds = scope.studentIds;
+      }
+    } catch (err) {
+      console.error('Failed to read the admin scope', err);
+      return { error: 'Unable to read your sections' };
     }
   }
 

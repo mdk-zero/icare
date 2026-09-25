@@ -179,6 +179,7 @@ export default function UsersPanel() {
           key={selected.id}
           user={selected}
           sections={sections}
+          admins={users.filter((entry) => entry.role === "admin")}
           onClose={() => setSelected(null)}
           onChanged={onChanged}
           onImpersonated={(home) => {
@@ -197,12 +198,15 @@ export default function UsersPanel() {
 function UserDrawer({
   user,
   sections,
+  admins,
   onClose,
   onChanged,
   onImpersonated,
 }: {
   user: DevUser;
   sections: Section[];
+  /** Admin accounts a faculty member can belong to. */
+  admins: DevUser[];
   onClose: () => void;
   onChanged: (user: DevUser | null, id: string) => void;
   onImpersonated: (home: string) => void;
@@ -213,6 +217,9 @@ function UserDrawer({
 
   const [role, setRole] = useState(user.role);
   const [sectionId, setSectionId] = useState(user.section_id ?? "");
+  const [adminId, setAdminId] = useState(user.admin_id ?? "");
+  // Undefined before migration 053: there is no owner to set yet.
+  const ownerEnabled = user.admin_id !== undefined;
 
   const [newPassword, setNewPassword] = useState("");
   const [forceChange, setForceChange] = useState(true);
@@ -221,8 +228,11 @@ function UserDrawer({
   const [references, setReferences] = useState<UserReference[] | null>(null);
 
   const dirty = useMemo(
-    () => role !== user.role || sectionId !== (user.section_id ?? ""),
-    [role, sectionId, user],
+    () =>
+      role !== user.role ||
+      sectionId !== (user.section_id ?? "") ||
+      (ownerEnabled && adminId !== (user.admin_id ?? "")),
+    [role, sectionId, adminId, ownerEnabled, user],
   );
 
   const run = async (label: string, action: () => Promise<void>) => {
@@ -243,7 +253,14 @@ function UserDrawer({
         `/api/dev/users/${user.id}`,
         {
           method: "PATCH",
-          body: JSON.stringify({ role, section_id: sectionId || null }),
+          body: JSON.stringify({
+            role,
+            section_id: sectionId || null,
+            // Sent only when changed; a role change away from faculty clears it in the database.
+            ...(ownerEnabled && role === "faculty" && adminId !== (user.admin_id ?? "")
+              ? { admin_id: adminId || null }
+              : {}),
+          }),
         },
       );
       const section = sections.find((entry) => entry.id === sectionId);
@@ -253,6 +270,7 @@ function UserDrawer({
           role: result.user.role,
           section_id: sectionId || null,
           section_name: section?.name ?? null,
+          ...(ownerEnabled ? { admin_id: role === "faculty" ? adminId || null : null } : {}),
         },
         user.id,
       );
@@ -358,7 +376,7 @@ function UserDrawer({
           ))}
         </dl>
 
-        <Block title="Role & section">
+        <Block title={ownerEnabled ? "Role, section & admin" : "Role & section"}>
           <div className="flex gap-2">
             <select
               className="dc-field"
@@ -384,6 +402,26 @@ function UserDrawer({
               ))}
             </select>
           </div>
+          {ownerEnabled && role === "faculty" && (
+            <label className="mt-2 block text-[11.5px]" style={{ color: "var(--dc-dim)" }}>
+              Belongs to admin
+              <select
+                className="dc-field mt-1"
+                value={adminId}
+                onChange={(event) => setAdminId(event.target.value)}
+              >
+                <option value="">no admin</option>
+                {user.admin_id && !admins.some((admin) => admin.id === user.admin_id) && (
+                  <option value={user.admin_id}>current admin (not in this list)</option>
+                )}
+                {admins.map((admin) => (
+                  <option key={admin.id} value={admin.id}>
+                    {admin.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <button
             className="dc-btn dc-btn-accent mt-2"
             onClick={saveRole}

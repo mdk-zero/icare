@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
-import { isStudentInFacultySections } from '@/app/lib/roster';
+import { canSeeStudent } from '@/app/lib/admin-scope';
+
 import { isMissingReflectionTables } from '@/app/lib/reflections';
 
 interface RouteParams {
@@ -20,7 +21,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
 
   const { id: studentId } = await params;
   const supabase = getSupabaseAdmin();
-  if (session.role === 'faculty' && !(await isStudentInFacultySections(supabase, session.uid, studentId))) {
+  if (!(await canSeeStudent(supabase, session, studentId))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 

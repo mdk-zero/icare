@@ -5,6 +5,7 @@ import { sendStudentInvitationEmail } from '@/app/lib/auth/email';
 import { generateRandomPassword, hashPassword } from '@/app/lib/auth/password';
 import { logAudit } from '@/app/lib/audit';
 import { parseSex } from '@/app/lib/auth/user';
+import { adminVisibleUserIds, getAdminScope } from '@/app/lib/admin-scope';
 
 const VALID_ROLES = ['student', 'faculty', 'admin'] as const;
 
@@ -30,6 +31,9 @@ export async function GET(request: NextRequest) {
     if (role && (VALID_ROLES as readonly string[]).includes(role)) {
       query = query.eq('role', role);
     }
+    // An admin sees themselves, their own faculty and those faculty's students.
+    const scope = await getAdminScope(supabase, session.uid);
+    if (scope) query = query.in('id', adminVisibleUserIds(scope, session.uid));
     const { data: users, error } = await query;
     if (error) {
       console.error('Failed to list users', error);
@@ -110,6 +114,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const scope = await getAdminScope(supabase, session.uid);
     if (sectionId) {
       const { data: section } = await supabase
         .from('sections')
@@ -118,6 +123,9 @@ export async function POST(request: NextRequest) {
         .maybeSingle();
       if (!section) {
         return NextResponse.json({ error: 'Section not found' }, { status: 400 });
+      }
+      if (scope && !scope.sectionIds.includes(sectionId)) {
+        return NextResponse.json({ error: 'That section belongs to another admin' }, { status: 403 });
       }
     }
 
@@ -135,6 +143,8 @@ export async function POST(request: NextRequest) {
         force_password_change: true,
         picture_url: null,
         section_id: sectionId,
+        // A faculty account an admin creates is theirs (migration 053).
+        ...(scope && role === 'faculty' ? { admin_id: session.uid } : {}),
       })
       .select('id, email, name, role, picture_url, sex, created_at, last_login_at, section_id, sections(name)')
       .single();

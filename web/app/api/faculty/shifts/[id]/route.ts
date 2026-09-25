@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
-import { getFacultySectionIds, getFacultyStudentIds } from '@/app/lib/roster';
+import { getScopedSectionIds, getScopedStudentIds } from '@/app/lib/admin-scope';
 import { logAudit } from '@/app/lib/audit';
 import { SHIFT_ATTENDANCE_LABEL, type ShiftAttendanceStatus } from '@/app/lib/shifts';
 
@@ -28,11 +28,9 @@ async function loadScopedShift(
     .maybeSingle();
 
   if (!shift) return { error: 'Shift not found', status: 404 as const };
-  if (session.role !== 'admin') {
-    const mine = await getFacultySectionIds(supabase, session.uid);
-    if (!shift.section_id || !mine.includes(shift.section_id)) {
-      return { error: 'That shift is not one of yours', status: 403 as const };
-    }
+  const mine = await getScopedSectionIds(supabase, session);
+  if (mine && (!shift.section_id || !mine.includes(shift.section_id))) {
+    return { error: 'That shift is not one of yours', status: 403 as const };
   }
   return { shift };
 }
@@ -68,7 +66,8 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
     }
 
     // Faculty see only the members of the groups they supervise.
-    const mine = session.role === 'faculty' ? new Set(await getFacultyStudentIds(supabase, session.uid)) : null;
+    const visibleIds = await getScopedStudentIds(supabase, session);
+    const mine = visibleIds ? new Set(visibleIds) : null;
 
     // Alphabetical: a ward roster is read by name, and the DB order is arbitrary.
     const sorted = (roster ?? []).filter((r) => !mine || mine.has(r.student_id as string)).sort((a, b) => {
@@ -126,9 +125,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     }
 
     const marks = Array.isArray(body.marks) ? body.marks : [];
-    const mine = session.role === 'faculty' && marks.length > 0
-      ? await getFacultyStudentIds(supabase, session.uid)
-      : null;
+    const mine = marks.length > 0 ? await getScopedStudentIds(supabase, session) : null;
     let updated = 0;
     for (const raw of marks) {
       if (!raw || typeof raw !== 'object') continue;

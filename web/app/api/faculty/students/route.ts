@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { canSeeStudent, getScopedStudentIds } from '@/app/lib/admin-scope';
 import { readSession } from '@/app/lib/auth/session';
 import { sendStudentInvitationEmail } from '@/app/lib/auth/email';
 import { generateRandomPassword, hashPassword } from '@/app/lib/auth/password';
-import { getFacultySectionIds, getFacultyStudentIds, isStudentInFacultySections } from '@/app/lib/roster';
+import { getFacultySectionIds, getFacultyStudentIds } from '@/app/lib/roster';
 import { parseSex } from '@/app/lib/auth/user';
 import { getLatestRiskByStudent, getLastActivityByStudent } from '@/app/lib/faculty-dashboard';
 import { logAudit } from '@/app/lib/audit';
@@ -62,15 +63,15 @@ export async function GET() {
   try {
     const supabase = getSupabaseAdmin();
 
-    // Admin sees all students; faculty only the members of the groups they supervise.
+    // Faculty see the members of the groups they supervise; an admin their own students.
     let query = supabase
       .from('users')
       .select('id, email, name, role, picture_url, sex, section_id, sections(id, name)')
       .eq('role', 'student')
       .order('name', { ascending: true });
 
-    if (session.role === 'faculty') {
-      const studentIds = await getFacultyStudentIds(supabase, session.uid);
+    const studentIds = await getScopedStudentIds(supabase, session);
+    if (studentIds) {
       if (studentIds.length === 0) {
         return NextResponse.json({ students: [] });
       }
@@ -366,7 +367,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Student not found' }, { status: 404 });
     }
 
-    if (session.role === 'faculty' && !(await isStudentInFacultySections(supabase, session.uid, id))) {
+    if (!(await canSeeStudent(supabase, session, id))) {
       return NextResponse.json({ error: 'Student not found' }, { status: 404 });
     }
 

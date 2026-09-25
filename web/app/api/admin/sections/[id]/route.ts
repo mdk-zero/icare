@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { getAdminScope } from '@/app/lib/admin-scope';
 import { logAudit } from '@/app/lib/audit';
 
 interface RouteParams {
@@ -24,6 +25,11 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
 
   try {
     const supabase = getSupabaseAdmin();
+    // Only this admin's sections (migration 053).
+    const scope = await getAdminScope(supabase, session.uid);
+    if (scope && !scope.sectionIds.includes(id)) {
+      return NextResponse.json({ error: 'Section not found' }, { status: 404 });
+    }
 
     const { data: section } = await supabase
       .from('sections')
@@ -95,6 +101,11 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
   try {
     const supabase = getSupabaseAdmin();
+    // Only this admin's sections (migration 053).
+    const scope = await getAdminScope(supabase, session.uid);
+    if (scope && !scope.sectionIds.includes(id)) {
+      return NextResponse.json({ error: 'Section not found' }, { status: 404 });
+    }
 
     const { data: current } = await supabase
       .from('sections')
@@ -194,6 +205,11 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
   try {
     const supabase = getSupabaseAdmin();
+    // Only this admin's sections (migration 053).
+    const scope = await getAdminScope(supabase, session.uid);
+    if (scope && !scope.sectionIds.includes(id)) {
+      return NextResponse.json({ error: 'Section not found' }, { status: 404 });
+    }
 
     const { data: section } = await supabase
       .from('sections')

@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { canSeeStudent, getScopedStudentIds } from '@/app/lib/admin-scope';
 import { logAudit } from '@/app/lib/audit';
 import { renderReport, type ReportMeta } from '@/app/lib/reports/kit';
 import { slugify } from '@/app/lib/reports/csv';
-import { getFacultySectionIds, getFacultyStudentIds, isStudentInFacultySections } from '@/app/lib/roster';
+import { getFacultySectionIds, isStudentInFacultySections } from '@/app/lib/roster';
 import {
   REPORT_NEEDS_TARGET,
   buildAssessmentReport,
@@ -56,6 +57,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     if (session.role === 'faculty' && (await outOfScope(supabase, session.uid, type, id))) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
+    // An admin reports only on their own students (migration 053).
+    if (session.role === 'admin' && type === 'student' && !(await canSeeStudent(supabase, session, id))) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
 
     const { data: faculty } = await supabase.from('users').select('name').eq('id', session.uid).maybeSingle();
     const { data: campus } = await supabase.from('campuses').select('name').limit(1).maybeSingle();
@@ -67,7 +72,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     };
 
     // Faculty reports name only the members of the groups they supervise.
-    const scope = session.role === 'faculty' ? await getFacultyStudentIds(supabase, session.uid) : null;
+    const scope = await getScopedStudentIds(supabase, session);
 
     let result: BuildResult;
     switch (type) {

@@ -61,6 +61,8 @@ export interface DevUser {
   picture_url: string | null;
   section_id: string | null;
   section_name: string | null;
+  /** The admin a faculty account belongs to (migration 053); undefined before it. */
+  admin_id?: string | null;
   google_sub: string | null;
   has_password: boolean;
   force_password_change: boolean;

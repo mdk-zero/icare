@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { getAdminScope, ownsFaculty } from '@/app/lib/admin-scope';
 import { manageableTeam, MAX_TEAM_NAME, TEAM_FACULTY_NEEDS_MIGRATION } from '@/app/lib/teams';
 
 interface RouteParams {
@@ -57,6 +58,10 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       .maybeSingle();
     if (!faculty || faculty.role !== 'faculty') {
       return NextResponse.json({ error: 'That user is not a faculty member' }, { status: 400 });
+    }
+    // An admin puts only their own faculty in charge (migration 053).
+    if (session.role === 'admin' && !ownsFaculty(await getAdminScope(supabase, session.uid), update.faculty_id)) {
+      return NextResponse.json({ error: 'That faculty member belongs to another admin' }, { status: 403 });
     }
   }
 

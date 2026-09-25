@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { getScopedStudentIds } from '@/app/lib/admin-scope';
 import { logAudit } from '@/app/lib/audit';
 import { getFacultySectionIds, getFacultyStudentIds } from '@/app/lib/roster';
 
@@ -117,7 +118,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       }
       // A faculty member giving it to a section gives it to their own group
       // members there, not to the whole section.
-      const roster = session.role === 'faculty' ? new Set(await getFacultyStudentIds(supabase, session.uid)) : null;
+      const roster = await getScopedStudentIds(supabase, session).then((ids) => (ids ? new Set(ids) : null));
       for (const student of sectionStudents ?? []) {
         if (!roster || roster.has(student.id)) recipients.add(student.id);
       }

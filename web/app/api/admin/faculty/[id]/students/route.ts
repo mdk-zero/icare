@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { logAudit } from '@/app/lib/audit';
+import { getAdminScope, ownsFaculty } from '@/app/lib/admin-scope';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -39,8 +40,12 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       .eq('id', facultyId)
       .eq('role', 'faculty')
       .maybeSingle();
-    if (!faculty) {
+    const scope = await getAdminScope(supabase, session.uid);
+    if (!faculty || !ownsFaculty(scope, facultyId)) {
       return NextResponse.json({ error: 'Faculty not found' }, { status: 404 });
+    }
+    if (scope && studentIds.some((id) => !scope.studentIds.includes(id))) {
+      return NextResponse.json({ error: 'Some students belong to another admin' }, { status: 403 });
     }
 
     if (studentIds.length > 0) {

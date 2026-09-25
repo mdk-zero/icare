@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { canSeeStudent } from '@/app/lib/admin-scope';
 import { isStudentInFacultySections } from '@/app/lib/roster';
 import { getLatestRiskByStudent, getLastActivityByStudent } from '@/app/lib/faculty-dashboard';
 
@@ -38,12 +39,9 @@ export async function GET(_request: Request, { params }: RouteParams) {
       return NextResponse.json({ error: 'Student not found' }, { status: 404 });
     }
 
-    // Faculty can only view students in their sections.
-    if (session.role === 'faculty') {
-      const allowed = await isStudentInFacultySections(supabase, session.uid, id);
-      if (!allowed) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-      }
+    // Faculty only their group members; an admin only their own students.
+    if (!(await canSeeStudent(supabase, session, id))) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     // The profile header shows a score, a quiz count and a last-seen time, and

@@ -1,5 +1,6 @@
 import type { getSupabaseAdmin } from './supabase/server';
 import { getFacultySectionIds } from './roster';
+import { getAdminScope } from './admin-scope';
 
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
 
@@ -19,9 +20,14 @@ export function isMissingTeamTables(error: { code?: string } | null): boolean {
 export const MAX_TEAM_NAME = 60;
 export const MAX_TEAMS_PER_SECTION = 20;
 
-/** The sections a caller may manage teams in: their own, or every section for an admin. */
+/**
+ * The sections a caller may manage teams in: a faculty member's own, an
+ * admin's own (migration 053), or every section for an admin before 053.
+ */
 export async function manageableSectionIds(supabase: Supabase, role: string, uid: string): Promise<string[]> {
   if (role === 'admin') {
+    const scope = await getAdminScope(supabase, uid);
+    if (scope) return scope.sectionIds;
     const { data } = await supabase.from('sections').select('id');
     return (data ?? []).map((s) => s.id as string);
   }

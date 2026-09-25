@@ -14,18 +14,23 @@ export async function GET(request: NextRequest) {
   try {
     const search = request.nextUrl.searchParams.get('q')?.trim() ?? '';
     const supabase = getSupabaseAdmin();
-    let query = supabase
-      .from('users')
-      .select(
-        'id, email, name, role, sex, picture_url, section_id, google_sub, ' +
-          'password_hash, force_password_change, created_at, last_login_at, sections(name)',
-      )
-      .order('created_at', { ascending: false })
-      .limit(100);
-    if (search) {
-      query = query.or(`name.ilike.%${search}%,email.ilike.%${search}%`);
-    }
-    const { data, error } = await query;
+    const columns =
+      'id, email, name, role, sex, picture_url, section_id, google_sub, ' +
+      'password_hash, force_password_change, created_at, last_login_at, sections(name)';
+    const list = (withAdmin: boolean) => {
+      let query = supabase
+        .from('users')
+        .select(withAdmin ? `${columns}, admin_id` : columns)
+        .order('created_at', { ascending: false })
+        .limit(100);
+      if (search) {
+        query = query.or(`name.ilike.%${search}%,email.ilike.%${search}%`);
+      }
+      return query;
+    };
+    // admin_id arrives with migration 053; read without it before then.
+    let { data, error } = await list(true);
+    if (error?.code === '42703') ({ data, error } = await list(false));
     if (error) throw new Error(error.message);
 
     const users = (data ?? []).map((row) => {

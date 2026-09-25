@@ -1,3 +1,4 @@
+import { adminVisibleUserIds, ownsFaculty, type AdminScope } from '@/app/lib/admin-scope';
 import { Text } from '@react-pdf/renderer';
 import type { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { ReportShell, StatGrid, Table, styles, type ReportMeta, type ReportDocument } from './kit';
@@ -36,17 +37,24 @@ function fmtDate(value: string | null): string {
 // Faculty — one faculty member's sections and student counts
 // ---------------------------------------------------------------------------
 
+/** Pads an empty id list so an `in` filter matches nothing rather than erroring. */
+const idsOrNone = (ids: readonly string[]) => (ids.length ? [...ids] : ['00000000-0000-0000-0000-000000000000']);
+
 export async function buildAdminFacultyReport(
   supabase: Supabase,
   meta: ReportMeta,
   facultyId: string,
+  scope: AdminScope | null = null,
 ): Promise<BuildResult> {
+  if (facultyId && !ownsFaculty(scope, facultyId)) return { error: 'Faculty not found', status: 404 };
   if (!facultyId) {
-    const { data: allFaculty } = await supabase
+    let facultyQuery = supabase
       .from('users')
       .select('id, name, email, created_at, last_login_at')
       .eq('role', 'faculty')
       .order('name');
+    if (scope) facultyQuery = facultyQuery.in('id', idsOrNone(scope.facultyIds));
+    const { data: allFaculty } = await facultyQuery;
 
     const ids = (allFaculty ?? []).map((f) => f.id);
     const { data: links } = ids.length
@@ -343,12 +351,18 @@ export async function buildAdminUserReport(
   supabase: Supabase,
   meta: ReportMeta,
   userId: string,
+  scope: AdminScope | null = null,
+  adminId = '',
 ): Promise<BuildResult> {
+  const visible = scope ? adminVisibleUserIds(scope, adminId) : null;
+  if (userId && visible && !visible.includes(userId)) return { error: 'User not found', status: 404 };
   if (!userId) {
-    const { data: users } = await supabase
+    let usersQuery = supabase
       .from('users')
       .select('id, name, email, role, created_at, last_login_at')
       .order('name');
+    if (visible) usersQuery = usersQuery.in('id', visible);
+    const { data: users } = await usersQuery;
 
     const rows = (users ?? []).map((u) => [
       `${u.name}\n${u.email}`,
@@ -469,18 +483,24 @@ export async function buildAdminUserReport(
 export async function buildAdminSummaryReport(
   supabase: Supabase,
   meta: ReportMeta,
+  scope: AdminScope | null = null,
+  adminId = '',
 ): Promise<BuildResult> {
+  let facultyQuery = supabase
+    .from('users')
+    .select('id, name, email, created_at, last_login_at')
+    .eq('role', 'faculty')
+    .order('name');
+  let countQuery = supabase.from('users').select('role').in('role', ['student', 'faculty', 'admin']);
+  // Only this admin's faculty and students (migration 053); rooms stay shared.
+  if (scope) {
+    facultyQuery = facultyQuery.in('id', idsOrNone(scope.facultyIds));
+    countQuery = countQuery.in('id', adminVisibleUserIds(scope, adminId));
+  }
   const [{ data: faculty }, { data: rooms }, { data: userCounts }] = await Promise.all([
-    supabase
-      .from('users')
-      .select('id, name, email, created_at, last_login_at')
-      .eq('role', 'faculty')
-      .order('name'),
+    facultyQuery,
     supabase.from('rooms').select('*').order('room_number'),
-    supabase
-      .from('users')
-      .select('role')
-      .in('role', ['student', 'faculty', 'admin']),
+    countQuery,
   ]);
 
   const byRole = new Map<string, number>();

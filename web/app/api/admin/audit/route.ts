@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { adminVisibleUserIds, getAdminScope } from '@/app/lib/admin-scope';
 
 const MAX_LIMIT = 200;
 
@@ -40,6 +41,9 @@ export async function GET(request: NextRequest) {
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
 
+    // Only what this admin, their faculty and their students did (migration 053).
+    const scope = await getAdminScope(supabase, session.uid);
+    if (scope) query = query.in('actor_id', adminVisibleUserIds(scope, session.uid));
     if (q) query = query.ilike('action', `%${q}%`);
     if (['student', 'faculty', 'admin'].includes(role)) query = query.eq('actor_role', role);
     if (entity) query = query.eq('entity_type', entity);

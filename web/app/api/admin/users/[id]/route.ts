@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { adminVisibleUserIds, getAdminScope } from '@/app/lib/admin-scope';
 import { logAudit } from '@/app/lib/audit';
 import { parseSex } from '@/app/lib/auth/user';
 
@@ -58,6 +59,13 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
   try {
     const supabase = getSupabaseAdmin();
+    // Only the admin's own accounts (migration 053).
+    const scope = await getAdminScope(supabase, session.uid);
+    if (scope && !adminVisibleUserIds(scope, session.uid).includes(id)) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+    // Someone made faculty by this admin becomes this admin's faculty.
+    if (scope && updates.role === 'faculty') updates.admin_id = session.uid;
     const { data: user, error } = await supabase
       .from('users')
       .update(updates)
@@ -100,12 +108,13 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
   try {
     const supabase = getSupabaseAdmin();
+    const scope = await getAdminScope(supabase, session.uid);
     const { data: user } = await supabase
       .from('users')
       .select('id, email, role')
       .eq('id', id)
       .maybeSingle();
-    if (!user) {
+    if (!user || (scope && !adminVisibleUserIds(scope, session.uid).includes(id))) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 

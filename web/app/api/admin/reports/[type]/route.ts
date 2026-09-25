@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
+import { getAdminScope } from '@/app/lib/admin-scope';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { logAudit } from '@/app/lib/audit';
 import { renderReport, type ReportMeta } from '@/app/lib/reports/kit';
@@ -51,18 +52,20 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     };
 
     let result: BuildResult;
+    // Only this admin's faculty and students (migration 053).
+    const scope = await getAdminScope(supabase, session.uid);
     switch (type) {
       case 'faculty':
-        result = await buildAdminFacultyReport(supabase, meta, id);
+        result = await buildAdminFacultyReport(supabase, meta, id, scope);
         break;
       case 'rooms':
         result = await buildAdminRoomReport(supabase, meta, id);
         break;
       case 'users':
-        result = await buildAdminUserReport(supabase, meta, id);
+        result = await buildAdminUserReport(supabase, meta, id, scope, session.uid);
         break;
       case 'summary':
-        result = await buildAdminSummaryReport(supabase, meta);
+        result = await buildAdminSummaryReport(supabase, meta, scope, session.uid);
         break;
     }
 

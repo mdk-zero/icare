@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
-import { getFacultyStudentIds } from '@/app/lib/roster';
+import { getScopedStudentIds } from '@/app/lib/admin-scope';
+
 import { isMissingTeamTables } from '@/app/lib/teams';
 
 type Status = 'submitted' | 'in_progress' | 'not_started';
@@ -48,7 +49,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     // Faculty are scoped to their own sections; admin is unscoped, which is
     // expressed as "no id filter" rather than a list of every student.
     const scopedIds =
-      session.role === 'faculty' ? await getFacultyStudentIds(supabase, session.uid) : null;
+      await getScopedStudentIds(supabase, session);
 
     if (scopedIds !== null && scopedIds.length === 0) {
       return NextResponse.json({

@@ -24,6 +24,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       email?: unknown;
       sex?: unknown;
       force_password_change?: unknown;
+      admin_id?: unknown;
     };
 
     const patch: Record<string, unknown> = {};
@@ -71,6 +72,15 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       const parsed = parseSex(body.sex);
       if (parsed.error) throw new DevError(parsed.error);
       patch.sex = parsed.sex ?? null;
+    }
+
+    // The admin a faculty account belongs to (migration 053). The database
+    // checks it names an admin and clears it for anyone who isn't faculty.
+    if (body.admin_id !== undefined) {
+      if (body.admin_id !== null && (typeof body.admin_id !== 'string' || !body.admin_id)) {
+        throw new DevError('Invalid admin_id');
+      }
+      patch.admin_id = body.admin_id;
     }
 
     if (body.force_password_change !== undefined) {

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { getFacultySectionIds } from '@/app/lib/roster';
+import { getAdminScope } from '@/app/lib/admin-scope';
 
 /** The requesting faculty member's assigned sections (admin: all sections). */
 export async function GET() {
@@ -15,10 +16,11 @@ export async function GET() {
     const supabase = getSupabaseAdmin();
 
     if (session.role === 'admin') {
-      const { data: sections, error } = await supabase
-        .from('sections')
-        .select('id, name')
-        .order('name');
+      // An admin's own sections (migration 053), or every section before it.
+      const scope = await getAdminScope(supabase, session.uid);
+      let query = supabase.from('sections').select('id, name').order('name');
+      if (scope) query = query.in('id', scope.sectionIds.length ? scope.sectionIds : ['00000000-0000-0000-0000-000000000000']);
+      const { data: sections, error } = await query;
       if (error) {
         console.error('Failed to list sections', error);
         return NextResponse.json({ error: 'Unable to list sections' }, { status: 500 });

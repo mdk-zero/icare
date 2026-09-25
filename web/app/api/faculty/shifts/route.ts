@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
-import { getFacultySectionIds, getFacultyStudentIds } from '@/app/lib/roster';
+import { getScopedSectionIds, getScopedStudentIds } from '@/app/lib/admin-scope';
 import { logAudit } from '@/app/lib/audit';
 import { SHIFT_TYPES, type ShiftAttendanceStatus, type ShiftType } from '@/app/lib/shifts';
 
@@ -21,8 +21,8 @@ async function scopeSectionIds(
   supabase: ReturnType<typeof getSupabaseAdmin>,
   session: { uid: string; role: string },
 ): Promise<string[] | null> {
-  if (session.role === 'admin') return null;
-  return await getFacultySectionIds(supabase, session.uid);
+  // An admin's own sections (migration 053), or every section before it.
+  return await getScopedSectionIds(supabase, session);
 }
 
 /** GET /api/faculty/shifts — scheduled shifts with their attendance tallies. */
@@ -61,8 +61,8 @@ export async function GET() {
         .select('shift_id, attendance_status')
         .in('shift_id', ids);
       // Faculty tally only the members of the groups they supervise.
-      if (session.role !== 'admin') {
-        const mine = await getFacultyStudentIds(supabase, session.uid);
+      const mine = await getScopedStudentIds(supabase, session);
+      if (mine) {
         tallyQuery = tallyQuery.in('student_id', mine.length > 0 ? mine : ['00000000-0000-0000-0000-000000000000']);
       }
       const { data: assignments } = await tallyQuery;
