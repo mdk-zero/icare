@@ -9,9 +9,10 @@ interface RouteParams {
 }
 
 // POST /api/faculty/scenarios/assignments/:id/finalize
-// Locks the assignment: score = each task's points scaled by its verbal rating,
-// or by its sub-tasks' ratings once any are rated (an unrated completion keeps
-// full credit), status -> completed.
+// Saves the grade: score = each task's points scaled by its verbal rating, or
+// by its sub-tasks' ratings once any are rated (an unrated completion keeps
+// full credit), status -> completed. Saving again after an edit re-scores it
+// and keeps the date it was first completed.
 export async function POST(_request: NextRequest, { params }: RouteParams) {
   const session = await readSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -26,7 +27,7 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
 
     const { data: assignment } = await supabase
       .from('scenario_assignments')
-      .select('id, student_id, scenario_id, status')
+      .select('id, student_id, scenario_id, status, completed_at')
       .eq('id', assignmentId)
       .maybeSingle();
     if (!assignment) return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
@@ -36,9 +37,6 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
       if (!studentIds.includes(assignment.student_id)) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
-    }
-    if (assignment.status === 'completed') {
-      return NextResponse.json({ error: 'This scenario is already finalized' }, { status: 409 });
     }
 
     const graded = await scoreAssignment(supabase, assignmentId, assignment.scenario_id);
@@ -55,7 +53,9 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
       .update({
         status: 'completed',
         score,
-        completed_at: new Date().toISOString(),
+        completed_at: assignment.status === 'completed' && assignment.completed_at
+          ? assignment.completed_at
+          : new Date().toISOString(),
         finalized_by: session.uid,
       })
       .eq('id', assignmentId)

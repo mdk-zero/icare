@@ -10,6 +10,8 @@ import {
   faClipboardCheck,
   faClipboardList,
   faLock,
+  faPenToSquare,
+  faFloppyDisk,
   faMagnifyingGlass,
   faStopwatch,
   faTriangleExclamation,
@@ -44,8 +46,8 @@ import {
 } from "./grading";
 import { toast } from "../../../components/Toast";
 import Avatar from "../../../components/Avatar";
+import { EcgLoader } from "../../../components/EcgLoader";
 import PageHeader from "../../../components/PageHeader";
-import ConfirmModal from "../../../components/ConfirmModal";
 import { usePageData } from "../../../lib/use-page-data";
 
 type Grading = NonNullable<Awaited<ReturnType<typeof fetchFacultyAssignmentTasks>>>;
@@ -156,8 +158,9 @@ export default function FacultyScenarioReviewClient() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   // Checklist rows (sub-task ids, or task ids for tasks without sub-tasks) mid-save.
   const [savingKeys, setSavingKeys] = useState<ReadonlySet<string>>(() => new Set());
-  const [confirmOpen, setConfirmOpen] = useState(false);
   const [finalizing, setFinalizing] = useState(false);
+  // A saved grade opens locked; Edit unlocks it until the next Save.
+  const [editing, setEditing] = useState(false);
 
   const gradingRef = useRef<HTMLElement>(null);
 
@@ -195,6 +198,7 @@ export default function FacultyScenarioReviewClient() {
 
   const selected = assignments.find((a) => a.id === selectedId) ?? null;
   const finalized = selected?.status === "completed";
+  const locked = finalized && !editing;
 
   /** One row per student, so the queue can be searched/picked before any
    * submissions are shown — grouping happens client-side since the API
@@ -272,6 +276,7 @@ export default function FacultyScenarioReviewClient() {
 
   const selectAssignment = (id: string) => {
     setSelectedId(id);
+    setEditing(false);
     resetNotes();
     // Stacked below the queue on narrow screens, the rubric would open out of sight.
     if (!window.matchMedia("(min-width: 1024px)").matches) {
@@ -385,23 +390,24 @@ export default function FacultyScenarioReviewClient() {
     }
   };
 
-  const handleFinalize = async () => {
-    if (!selectedId || finalized) return;
+  /** Save the grade: the scenario becomes Completed and the student sees it. Saving an edit re-scores it. */
+  const handleSave = async () => {
+    if (!selectedId) return;
     setFinalizing(true);
     const result = await finalizeScenarioAssignment(selectedId);
     if (result) {
       setAssignments((prev) =>
         prev.map((a) =>
           a.id === selectedId
-            ? { ...a, status: "completed", score: result.score, completed_at: new Date().toISOString() }
+            ? { ...a, status: "completed", score: result.score, completed_at: a.completed_at ?? new Date().toISOString() }
             : a,
         ),
       );
       await reloadTasks();
-      toast(`Completed — ${scoreDescriptor(result.score)} (${result.score}%)`);
-      setConfirmOpen(false);
+      toast(`Saved — ${scoreDescriptor(result.score)} (${result.score}%)`);
+      setEditing(false);
     } else {
-      toast("Unable to complete grading. Please try again.", "error");
+      toast("Unable to save the grade. Please try again.", "error");
     }
     setFinalizing(false);
   };
@@ -416,7 +422,7 @@ export default function FacultyScenarioReviewClient() {
           label: "Scenario Management",
         }}
         title="Review Submissions"
-        subtitle="Rate each criterion of a student's scenario on a verbal scale, add notes where it helps, then lock in the grade."
+        subtitle="Rate each criterion of a student's scenario on a verbal scale, add notes where it helps, then save the grade — you can edit it later."
       />
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
@@ -777,6 +783,7 @@ export default function FacultyScenarioReviewClient() {
                 loading={tasksLoading}
                 totalPoints={totalPoints}
                 rubric={gradingData?.rubric ?? DEFAULT_RUBRIC}
+                readOnly={locked}
                 savingKeys={savingKeys}
                 onRateTask={handleRateTask}
                 onRateSteps={handleRateSteps}
@@ -805,11 +812,11 @@ export default function FacultyScenarioReviewClient() {
                   the panel's `overflow-clip` rounds them off at its end. */}
               <div className="isolate z-10 -bottom-3 flex flex-col gap-3 border-t border-hairline bg-surface px-5 py-4 sm:sticky sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:-bottom-5">
                 <div className="min-w-0 text-sm">
-                  {finalized ? (
+                  {locked ? (
                     <p className="text-gray-600">
-                      Graded <span className="font-semibold text-gray-900">{scoreDescriptor(shownScore)}</span>{" "}
-                      ({shownScore}%){selected.completed_at ? ` on ${formatDay(selected.completed_at)}` : ""}. You
-                      can still adjust ratings above — the grade updates right away.
+                      Saved as <span className="font-semibold text-gray-900">{scoreDescriptor(shownScore)}</span>{" "}
+                      ({shownScore}%){selected.completed_at ? ` on ${formatDay(selected.completed_at)}` : ""}. Edit to
+                      change a rating or note.
                     </p>
                   ) : (
                     <>
@@ -825,63 +832,38 @@ export default function FacultyScenarioReviewClient() {
                           : !selected.submitted_at
                             ? "Not submitted yet — you can still grade it now"
                             : unratedImplied > 0
-                              ? `${unratedImplied} auto-completed ${rowNoun(unratedImplied)} still to confirm`
+                              ? `${unratedImplied} auto-completed ${rowNoun(unratedImplied)} count as their task's level until rated`
                               : "Every row has a grade"}
                       </p>
                     </>
                   )}
                 </div>
-                <button
-                  onClick={() => setConfirmOpen(true)}
-                  disabled={finalized || finalizing || tasksLoading || tasks.length === 0}
-                  className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white shadow-tile transition-all hover:bg-brand-700 hover:shadow-tile-hover disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-brand-600"
-                >
-                  <FontAwesomeIcon icon={finalized ? faCheck : faLock} className="h-3.5 w-3.5" />
-                  {finalized ? "Completed" : "Complete grading"}
-                </button>
+                <div className="flex shrink-0 items-center gap-2">
+                  {locked ? (
+                    <button
+                      onClick={() => setEditing(true)}
+                      className="inline-flex items-center justify-center gap-2 rounded-xl border border-brand-600 bg-surface px-5 py-2.5 text-sm font-semibold text-brand-700 shadow-tile transition-all hover:bg-brand-50"
+                    >
+                      <FontAwesomeIcon icon={faPenToSquare} className="h-3.5 w-3.5" />
+                      Edit
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleSave}
+                      disabled={finalizing || tasksLoading || tasks.length === 0 || ungraded}
+                      title={ungraded ? "Rate at least one row first" : undefined}
+                      className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white shadow-tile transition-all hover:bg-brand-700 hover:shadow-tile-hover disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-brand-600"
+                    >
+                      {finalizing ? <EcgLoader /> : <FontAwesomeIcon icon={faFloppyDisk} className="h-3.5 w-3.5" />}
+                      {finalizing ? "Saving…" : "Save"}
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           )}
         </section>
       </div>
-
-      {confirmOpen && selected && (
-        <ConfirmModal
-          config={{
-            title: "Complete grading?",
-            message: (
-              <>
-                {selected.student_name} receives{" "}
-                <span className="font-semibold text-gray-900">
-                  {scoreDescriptor(projectedScore)} ({projectedScore}%)
-                </span>{" "}
-                for {selected.scenario_title}. Ratings and notes lock once it is completed.
-              </>
-            ),
-            confirmLabel: "Complete grading",
-            danger: false,
-            loading: finalizing,
-            onConfirm: handleFinalize,
-            children:
-              unratedMissing + unratedImplied > 0 ? (
-                <ul className="mt-3 space-y-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                  {unratedMissing > 0 && (
-                    <li>
-                      {unratedMissing} unrated checklist {rowNoun(unratedMissing)} will earn no points.
-                    </li>
-                  )}
-                  {impliedByLevel.map(({ level, count }) => (
-                    <li key={level}>
-                      {count} {rowNoun(count)} you haven&apos;t rated will count as {ratingLabel(level)}, the level
-                      {count === 1 ? " its task has" : " their tasks have"} as a whole.
-                    </li>
-                  ))}
-                </ul>
-              ) : undefined,
-          }}
-          onClose={() => setConfirmOpen(false)}
-        />
-      )}
     </div>
   );
 }

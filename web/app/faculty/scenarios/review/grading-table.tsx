@@ -58,6 +58,8 @@ interface GradingTableProps {
   totalPoints: number;
   /** What each level means for this scenario, shown on the column headers. */
   rubric: Rubric;
+  /** A saved grade not being edited: shown, but nothing can be changed. */
+  readOnly?: boolean;
   /** Rows (sub-task or task ids) with a save in flight. */
   savingKeys: ReadonlySet<string>;
   onRateTask: (task: GradingTask, rating: TaskRating | null) => void;
@@ -79,6 +81,7 @@ export default function GradingTable({
   loading,
   totalPoints,
   rubric,
+  readOnly = false,
   savingKeys,
   onRateTask,
   onRateSteps,
@@ -150,6 +153,7 @@ export default function GradingTable({
               task={task}
               index={i}
               totalPoints={totalPoints}
+              readOnly={readOnly}
               savingKeys={savingKeys}
               onRateTask={onRateTask}
               onRateSteps={onRateSteps}
@@ -192,7 +196,7 @@ export default function GradingTable({
           </span>
           Counts until you rate it
         </span>
-        <span>Click a checked box again to clear it.</span>
+        {!readOnly && <span>Click a checked box again to clear it.</span>}
       </div>
     </div>
   );
@@ -202,6 +206,7 @@ interface TaskGroupProps {
   task: GradingTask;
   index: number;
   totalPoints: number;
+  readOnly: boolean;
   savingKeys: ReadonlySet<string>;
   onRateTask: (task: GradingTask, rating: TaskRating | null) => void;
   onRateSteps: (task: GradingTask, changes: Map<string, TaskRating | null>) => void;
@@ -217,6 +222,7 @@ function TaskGroup({
   task,
   index,
   totalPoints,
+  readOnly,
   savingKeys,
   onRateTask,
   onRateSteps,
@@ -301,7 +307,7 @@ function TaskGroup({
                 </p>
               )}
               {status && <p className="mt-1 text-xs text-gray-400">{status}</p>}
-              {hasCompletion(task) && !noteOpen && (
+              {hasCompletion(task) && !noteOpen && !readOnly && (
                 <button
                   onClick={() => onOpenNote(task.id)}
                   className="mt-1.5 flex items-center gap-1.5 text-xs font-medium text-brand-600 hover:text-brand-700"
@@ -317,7 +323,7 @@ function TaskGroup({
         {TASK_RATINGS.map((option) =>
           hasSteps ? (
             <td key={option.key} className="px-0.5 py-3.5 text-center align-top">
-              {openRows.length > 0 && (
+              {openRows.length > 0 && !readOnly && (
                 <button
                   onClick={() => fillOpenRows(option.key)}
                   disabled={openRows.some((r) => savingKeys.has(r.key))}
@@ -335,6 +341,7 @@ function TaskGroup({
               row={rows[0]}
               option={option.key}
               label={task.title}
+              readOnly={readOnly}
               saving={savingKeys.has(rows[0].key)}
               onRate={rateRow}
             />
@@ -375,6 +382,7 @@ function TaskGroup({
                   row={row}
                   option={option.key}
                   label={step.title}
+                  readOnly={readOnly}
                   saving={savingKeys.has(row.key)}
                   onRate={rateRow}
                 />
@@ -401,6 +409,7 @@ function TaskGroup({
               autoFocus={noteAutoFocus}
               onChange={(e) => onNoteChange(task.id, e.target.value)}
               onBlur={() => onNoteBlur(task)}
+              readOnly={readOnly}
               maxLength={MAX_REMARKS_LENGTH}
               rows={2}
               placeholder="What went well, and what to work on…"
@@ -419,11 +428,12 @@ interface RatingCellProps {
   option: TaskRating;
   /** The row's title, for the checkmark's accessible name. */
   label: string;
+  readOnly: boolean;
   saving: boolean;
   onRate: (row: ChecklistRow, option: TaskRating) => void;
 }
 
-function RatingCell({ row, option, label, saving, onRate }: RatingCellProps) {
+function RatingCell({ row, option, label, readOnly, saving, onRate }: RatingCellProps) {
   const style = RATING_STYLE[option];
   const shown = row.level === option;
   const checked = shown && !row.implied;
@@ -441,19 +451,21 @@ function RatingCell({ row, option, label, saving, onRate }: RatingCellProps) {
           shown && row.implied ? " (counts until rated)" : ""
         }`}
         tabIndex={tabbable ? 0 : -1}
-        disabled={saving}
+        disabled={saving || readOnly}
         onClick={() => onRate(row, option)}
         onKeyDown={moveWithinRow}
         title={
-          checked
+          readOnly
+            ? `${ratingLabel(option)} — ${formatPoints(points)} points`
+            : checked
             ? "Click again to clear"
             : shown
               ? `Counts as ${ratingLabel(option)} until rated — click to confirm`
               : `${ratingLabel(option)} — ${formatPoints(points)} points`
         }
-        className={`group mx-auto grid h-7 w-7 place-items-center rounded-full border transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600/40 disabled:cursor-wait ${
+        className={`group mx-auto grid h-7 w-7 place-items-center rounded-full border transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600/40 disabled:cursor-wait ${readOnly ? "disabled:cursor-default" : ""} ${
           saving ? "opacity-60" : ""
-        } ${checked ? style.checked : shown ? style.implied : `border-gray-300 bg-surface text-transparent ${style.hover}`}`}
+        } ${checked ? style.checked : shown ? style.implied : `border-gray-300 bg-surface text-transparent ${readOnly ? "" : style.hover}`}`}
       >
         <FontAwesomeIcon icon={faCheck} className={`h-3 w-3 ${shown ? "" : "opacity-70"}`} />
       </button>
