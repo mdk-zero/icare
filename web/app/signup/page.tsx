@@ -1,38 +1,39 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faCircleExclamation,
+  faCircleCheck,
   faUser,
   faEnvelope,
-  faChevronDown,
-  faVenusMars,
-  faLock,
-  faEye,
-  faEyeSlash,
+  faTag,
   faBolt,
   faChartColumn,
   faHeart,
 } from "@fortawesome/free-solid-svg-icons";
-import { register, StudentSex, User } from "../lib/api";
 import logo_white from "../../public/logo-white-no-bg.png";
 import { EcgLoader } from "../components/EcgLoader";
 
-export default function SignUpPage() {
-  const router = useRouter();
+const inputClass =
+  "auth-input w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-[#7DD3D8]/30 focus:border-[#7DD3D8]/50 transition-all";
+const iconInputClass = `${inputClass} pl-11`;
+
+/**
+ * Accounts aren't self-service: this page is a contact form that mails an
+ * access request to the dev team, who validate the person and create the
+ * account for them.
+ */
+export default function ContactUsPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [role, setRole] = useState<User["role"]>("faculty");
-  const [sex, setSex] = useState<StudentSex>("");
-  const [showPassword, setShowPassword] = useState(false);
+  const [subject, setSubject] = useState("Requesting account activation");
+  const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [sent, setSent] = useState(false);
 
   useEffect(() => {
     document.body.style.overflow = "hidden";
@@ -44,32 +45,23 @@ export default function SignUpPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-
-    if (password.length < 8) {
-      setError("Password must be at least 8 characters.");
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      setError("Passwords do not match.");
-      return;
-    }
-
     setIsLoading(true);
 
     try {
-      const result = await register(name, email, password, role, sex);
-      if (!result) {
-        setError("Unable to create account. This email may already be in use.");
-        setIsLoading(false);
+      const res = await fetch("/api/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, subject, message }),
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        setError(data.error ?? "Your message could not be sent. Please try again.");
         return;
       }
-
-      localStorage.setItem("icare_user", JSON.stringify(result.user));
-      localStorage.setItem("icare_token", "logged_in");
-      router.push(result.user.role === "faculty" ? "/faculty" : "/admin");
+      setSent(true);
     } catch {
       setError("Connection error. Please try again.");
+    } finally {
       setIsLoading(false);
     }
   };
@@ -163,7 +155,7 @@ export default function SignUpPage() {
 
       {/* ───────── Right panel — glass form card ───────── */}
       <div className="w-full lg:w-1/2 flex items-center justify-center px-5 sm:px-8 py-12 relative">
-        <div className="relative z-10 w-full max-w-[460px] -mt-8 animate-fade-in-up">
+        <div className="relative z-10 w-full max-w-[560px] -mt-8 animate-fade-in-up">
           {/* Mobile header */}
           <div className="lg:hidden flex flex-col items-center mb-6">
             <div className="p-3.5 bg-white/10 border border-white/10 backdrop-blur-md rounded-2xl mb-3">
@@ -174,178 +166,133 @@ export default function SignUpPage() {
           {/* Sign up card */}
           <div className="bg-white/[0.06] backdrop-blur-2xl rounded-3xl border border-white/30 shadow-2xl shadow-black/40 p-5 sm:p-8">
             <div className="mb-6">
-              <h1 className="text-3xl font-semibold text-white mb-1 tracking-tight">
-                Create your account
-              </h1>
-              <p className="text-sm text-white/50">Join iCARE++ for nursing education</p>
+              <h1 className="text-3xl font-semibold text-white mb-1 tracking-tight">Contact us</h1>
+              <p className="text-sm text-white/50">
+                Accounts are created by the iCARE++ team. Send a request and we&apos;ll set you up.
+              </p>
             </div>
 
-            {error && (
-              <div className="flex items-start gap-3 p-3.5 mb-5 bg-red-500/10 border border-red-500/20 rounded-xl text-red-300 text-sm animate-shake">
-                <FontAwesomeIcon
-                  icon={faCircleExclamation}
-                  className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5"
-                />
-                <span>{error}</span>
-              </div>
-            )}
-
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label htmlFor="name" className="block text-sm font-medium text-white/70 mb-1.5">
-                  Full Name <span className="text-red-400">*</span>
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <FontAwesomeIcon icon={faUser} className="h-5 w-5 text-white/35" />
-                  </div>
-                  <input
-                    type="text"
-                    id="name"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    required
-                    className="w-full pl-11 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-[#7DD3D8]/30 focus:border-[#7DD3D8]/50 transition-all"
-                    placeholder="Maria Cruz"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label htmlFor="email" className="block text-sm font-medium text-white/70 mb-1.5">
-                  Email Address <span className="text-red-400">*</span>
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <FontAwesomeIcon icon={faEnvelope} className="h-5 w-5 text-white/35" />
-                  </div>
-                  <input
-                    type="email"
-                    id="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                    className="w-full pl-11 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-[#7DD3D8]/30 focus:border-[#7DD3D8]/50 transition-all"
-                    placeholder="name@icare.edu"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label htmlFor="role" className="block text-sm font-medium text-white/70 mb-1.5">
-                  I am a <span className="text-red-400">*</span>
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <FontAwesomeIcon icon={faUser} className="h-5 w-5 text-white/35" />
-                  </div>
-                  <select
-                    id="role"
-                    value={role}
-                    onChange={(e) => setRole(e.target.value as User["role"])}
-                    required
-                    className="w-full pl-11 pr-10 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#7DD3D8]/30 focus:border-[#7DD3D8]/50 transition-all appearance-none [&>option]:bg-[#0A4A4D] [&>option]:text-white"
-                  >
-                    <option value="faculty">Faculty</option>
-                    <option value="admin">Administrator</option>
-                  </select>
-                  <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
-                    <FontAwesomeIcon icon={faChevronDown} className="h-4 w-4 text-white/35" />
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <label htmlFor="sex" className="block text-sm font-medium text-white/70 mb-1.5">
-                  Sex <span className="text-white/35">(optional)</span>
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <FontAwesomeIcon icon={faVenusMars} className="h-5 w-5 text-white/35" />
-                  </div>
-                  <select
-                    id="sex"
-                    value={sex}
-                    onChange={(e) => setSex(e.target.value as StudentSex)}
-                    className="w-full pl-11 pr-10 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#7DD3D8]/30 focus:border-[#7DD3D8]/50 transition-all appearance-none [&>option]:bg-[#0A4A4D] [&>option]:text-white"
-                  >
-                    <option value="">Not specified</option>
-                    <option value="female">Female (Ms.)</option>
-                    <option value="male">Male (Mr.)</option>
-                  </select>
-                  <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
-                    <FontAwesomeIcon icon={faChevronDown} className="h-4 w-4 text-white/35" />
-                  </div>
-                </div>
-                <p className="mt-1.5 text-xs text-white/40">
-                  Sets the Mr./Ms. the app greets you by. Leave it unspecified and it
-                  greets you by name alone.
+            {sent ? (
+              <div className="py-6 text-center" role="status">
+                <span className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[#7DD3D8]/15 text-[#7DD3D8]">
+                  <FontAwesomeIcon icon={faCircleCheck} className="h-6 w-6" />
+                </span>
+                <h2 className="text-xl font-semibold text-white mb-2">Request sent</h2>
+                <p className="text-sm text-white/60 leading-relaxed">
+                  Please wait for the team to validate your account. We&apos;ll reply to{" "}
+                  <span className="text-white/80">{email}</span> once it&apos;s ready.
                 </p>
               </div>
-
-              <div>
-                <label htmlFor="password" className="block text-sm font-medium text-white/70 mb-1.5">
-                  Password <span className="text-red-400">*</span>
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <FontAwesomeIcon icon={faLock} className="h-5 w-5 text-white/35" />
+            ) : (
+              <>
+                {error && (
+                  <div className="flex items-start gap-3 p-3.5 mb-5 bg-red-500/10 border border-red-500/20 rounded-xl text-red-300 text-sm animate-shake">
+                    <FontAwesomeIcon
+                      icon={faCircleExclamation}
+                      className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5"
+                    />
+                    <span>{error}</span>
                   </div>
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    id="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    minLength={8}
-                    className="w-full pl-11 pr-11 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-[#7DD3D8]/30 focus:border-[#7DD3D8]/50 transition-all"
-                    placeholder="At least 8 characters"
-                  />
+                )}
+
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-5">
+                    <div className="sm:col-span-2">
+                      <label htmlFor="name" className="block text-sm font-medium text-white/70 mb-1.5">
+                        Name <span className="text-red-400">*</span>
+                      </label>
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                          <FontAwesomeIcon icon={faUser} className="h-4 w-4 text-white/35" />
+                        </div>
+                        <input
+                          type="text"
+                          id="name"
+                          value={name}
+                          onChange={(e) => setName(e.target.value)}
+                          required
+                          maxLength={120}
+                          className={iconInputClass}
+                          placeholder="Your name"
+                        />
+                      </div>
+                    </div>
+                    <div className="sm:col-span-3">
+                      <label htmlFor="email" className="block text-sm font-medium text-white/70 mb-1.5">
+                        Email <span className="text-red-400">*</span>
+                      </label>
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                          <FontAwesomeIcon icon={faEnvelope} className="h-4 w-4 text-white/35" />
+                        </div>
+                        <input
+                          type="email"
+                          id="email"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          required
+                          maxLength={254}
+                          className={iconInputClass}
+                          placeholder="you@email.com"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label htmlFor="subject" className="block text-sm font-medium text-white/70 mb-1.5">
+                      Subject <span className="text-red-400">*</span>
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                        <FontAwesomeIcon icon={faTag} className="h-4 w-4 text-white/35" />
+                      </div>
+                      <input
+                        type="text"
+                        id="subject"
+                        value={subject}
+                        onChange={(e) => setSubject(e.target.value)}
+                        required
+                        maxLength={150}
+                        className={iconInputClass}
+                        placeholder="What's this about?"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label htmlFor="message" className="block text-sm font-medium text-white/70 mb-1.5">
+                      Message <span className="text-red-400">*</span>
+                    </label>
+                    <textarea
+                      id="message"
+                      value={message}
+                      onChange={(e) => setMessage(e.target.value)}
+                      required
+                      maxLength={4000}
+                      rows={5}
+                      className={`${inputClass} resize-none`}
+                      placeholder="Tell us who you are, your school, and the access you need."
+                    />
+                  </div>
+
                   <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-white/35 hover:text-white/60 transition-colors"
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full bg-[#2B9095] hover:bg-[#19797D] text-white border border-white/20 py-3 px-6 rounded-xl font-semibold transition-all duration-200 shadow-lg shadow-black/20 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
                   >
-                    {showPassword ? (
-                      <FontAwesomeIcon icon={faEyeSlash} className="h-5 w-5" />
+                    {isLoading ? (
+                      <>
+                        <EcgLoader />
+                        Sending...
+                      </>
                     ) : (
-                      <FontAwesomeIcon icon={faEye} className="h-5 w-5" />
+                      "Send request"
                     )}
                   </button>
-                </div>
-              </div>
-
-              <div>
-                <label htmlFor="confirmPassword" className="block text-sm font-medium text-white/70 mb-1.5">
-                  Confirm Password <span className="text-red-400">*</span>
-                </label>
-                <input
-                  type={showPassword ? "text" : "password"}
-                  id="confirmPassword"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  required
-                  minLength={8}
-                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-[#7DD3D8]/30 focus:border-[#7DD3D8]/50 transition-all"
-                  placeholder="Re-enter your password"
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="w-full bg-[#2B9095] hover:bg-[#19797D] text-white border border-white/20 py-3 px-6 rounded-xl font-semibold transition-all duration-200 shadow-lg shadow-black/20 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
-              >
-                {isLoading ? (
-                  <>
-                    <EcgLoader />
-                    Creating account...
-                  </>
-                ) : (
-                  "Create account"
-                )}
-              </button>
-            </form>
+                </form>
+              </>
+            )}
 
             <div className="mt-6 text-center">
               <p className="text-sm text-white/50">

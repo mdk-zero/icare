@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Sign Up | iCARE++",
-  description: "Create your iCARE++ account",
+  title: "Contact Us | iCARE++",
+  description: "Request account activation for iCARE++",
 };
 
 export default function SignUpLayout({

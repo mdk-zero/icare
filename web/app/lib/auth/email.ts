@@ -107,9 +107,10 @@ function getProvider(): MailProvider | null {
 
 async function sendViaResend(message: {
   from: string;
-  to: string;
+  to: string | string[];
   subject: string;
   html: string;
+  replyTo?: string;
 }): Promise<void> {
   const response = await fetch(RESEND_ENDPOINT, {
     method: 'POST',
@@ -119,9 +120,10 @@ async function sendViaResend(message: {
     },
     body: JSON.stringify({
       from: message.from,
-      to: [message.to],
+      to: Array.isArray(message.to) ? message.to : [message.to],
       subject: message.subject,
       html: message.html,
+      ...(message.replyTo ? { reply_to: message.replyTo } : {}),
     }),
     signal: AbortSignal.timeout(10000),
   });
@@ -182,13 +184,16 @@ function shouldSkipSending(): boolean {
 }
 
 async function sendEmail(options: {
-  to: string;
+  to: string | string[];
   subject: string;
   html: string;
+  /** Where a reply goes — the person who filled in a form, not the sender. */
+  replyTo?: string;
 }): Promise<void> {
-  const { to, subject, html } = options;
+  const { to, subject, html, replyTo } = options;
 
-  if (!to || !isValidEmail(to)) {
+  const recipients = Array.isArray(to) ? to : [to];
+  if (recipients.length === 0 || !recipients.every(isValidEmail)) {
     throw new Error("A valid recipient email address is required");
   }
 
@@ -211,11 +216,11 @@ async function sendEmail(options: {
   const from = getFromHeader();
 
   if (provider === 'resend') {
-    await sendViaResend({ from, to, subject, html });
+    await sendViaResend({ from, to, subject, html, replyTo });
     return;
   }
 
-  await getTransporter().sendMail({ from, to, subject, html });
+  await getTransporter().sendMail({ from, to, subject, html, replyTo });
 }
 
 function buildOtpHtml(otp: string, name: string, heading: string, bodyText: string): string {
@@ -413,4 +418,40 @@ export async function sendStudentInvitationEmail(
       error: err instanceof Error ? err.message : "Unknown error",
     };
   }
+}
+
+/**
+ * Someone asking the dev team for an account from the public contact form.
+ * Accounts are no longer self-service, so this mail is the whole request: the
+ * team reads it, validates the person, and creates the account themselves.
+ * Replying goes straight to the requester.
+ */
+export async function sendAccessRequestEmail(
+  to: string[],
+  request: { name: string; email: string; subject: string; message: string },
+): Promise<void> {
+  const name = htmlEscape(request.name);
+  const email = htmlEscape(request.email);
+  const subject = htmlEscape(request.subject);
+  const message = htmlEscape(request.message).replace(/\n/g, "<br/>");
+
+  if (shouldSkipSending()) {
+    console.log(`[DEV] Access request from ${request.email} (${request.name}): ${request.subject}`);
+    return;
+  }
+
+  await sendEmail({
+    to,
+    replyTo: request.email,
+    subject: `iCARE++ account activation request: ${request.subject}`,
+    html: `
+    <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 32px; color: #0f172a;">
+      <h2 style="color: #0d7377; margin: 0 0 16px;">New account activation request</h2>
+      <p style="margin: 0 0 4px;"><strong>Name:</strong> ${name}</p>
+      <p style="margin: 0 0 4px;"><strong>Email:</strong> <a href="mailto:${email}">${email}</a></p>
+      <p style="margin: 0 0 16px;"><strong>Subject:</strong> ${subject}</p>
+      <div style="background: #f0f9fa; border: 1px solid #d0ebea; border-radius: 12px; padding: 16px; line-height: 1.6;">${message}</div>
+      <p style="font-size: 13px; color: #64748b; margin-top: 24px;">Reply to this email to answer them directly. Create the account from Admin &rarr; Users once they are validated.</p>
+    </div>`,
+  });
 }

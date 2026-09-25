@@ -55,8 +55,8 @@ const steps = [
   },
 ];
 
-/* Students can't self-register — /signup offers Faculty and Administrator only —
-   so the student card sends them to sign in with the account they were given. */
+/* Nobody self-registers: /signup is a contact form that asks the team for an
+   account. Students already have one, so their card sends them to sign in. */
 const roles = [
   {
     title: "Students",
@@ -76,7 +76,7 @@ const roles = [
     title: "Faculty",
     description:
       "Create scenarios and assessments with AI assistance, monitor student performance in real time, identify at-risk learners early, and generate comprehensive reports.",
-    action: "Create a faculty account",
+    action: "Request faculty account activation",
     href: "/signup",
     highlights: [
       "AI-assisted scenario and assessment creation",
@@ -90,7 +90,7 @@ const roles = [
     title: "Administrators",
     description:
       "Manage students, faculty, and rooms from a single dashboard. Access institution-wide analytics, audit logs, and configuration settings to keep your program running smoothly.",
-    action: "Set up your program",
+    action: "Request admin account activation",
     href: "/signup",
     highlights: [
       "Centralised user and room management",
@@ -216,7 +216,7 @@ const footerLinks = [
     heading: "Account",
     links: [
       { label: "Sign In", href: "/login" },
-      { label: "Create Account", href: "/signup" },
+      { label: "Contact Us", href: "/signup" },
     ],
   },
 ];
@@ -402,7 +402,7 @@ export default function LandingPage() {
               </p>
 
               <div className="lp-enter mt-10 flex flex-wrap items-center gap-3" style={delay(240)}>
-                <PrimaryButton href="/signup">Get Started Free</PrimaryButton>
+                <PrimaryButton href="/signup">Request Account Activation</PrimaryButton>
                 <a
                   href="#how-it-works"
                   className="group inline-flex items-center gap-2 rounded-full border border-hairline bg-surface/70 px-6 py-3.5 text-sm font-semibold text-gray-700 backdrop-blur transition-colors hover:border-brand-300 hover:text-brand-700"
@@ -847,7 +847,7 @@ export default function LandingPage() {
                       href="/signup"
                       className="group inline-flex items-center justify-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-semibold text-brand-700 transition-colors hover:bg-white/90"
                     >
-                      Get Started Free
+                      Request Account Activation
                       <Icon
                         d={ICONS.arrowRight}
                         strokeWidth={2}
@@ -1184,7 +1184,7 @@ export default function LandingPage() {
                     href="/signup"
                     className="group inline-flex items-center gap-2 rounded-full bg-white py-3.5 pl-7 pr-6 text-sm font-semibold text-brand-700 shadow-xl shadow-black/10 transition-all duration-200 hover:-translate-y-0.5 hover:bg-white/90"
                   >
-                    Get Started Free
+                    Request Account Activation
                     <Icon
                       d={ICONS.arrowRight}
                       strokeWidth={2}
