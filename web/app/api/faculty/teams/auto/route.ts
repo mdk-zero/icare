@@ -11,15 +11,17 @@ import {
 
 /**
  * POST { section_id, count }: split the section's students into `count`
- * teams at random, as evenly as possible. Existing teams are reused in name
- * order and "Team N" is created for any missing; teams past `count` are left
- * empty rather than deleted, so their names and past assignments stay.
+ * groups at random, as evenly as possible. Existing groups are reused in name
+ * order (keeping their names and supervising faculty) and "Group N" is created
+ * for any missing. Groups past `count` are deleted, since regrouping leaves
+ * them empty; scenarios assigned through them stay, just without the label.
  * Everyone in the section is reshuffled.
  */
 export async function POST(request: NextRequest) {
   const session = await readSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (!['faculty', 'admin'].includes(session.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  // Groups are built by admins; faculty only see the ones assigned to them.
+  if (session.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   let body: { section_id?: unknown; count?: unknown };
   try {
@@ -54,10 +56,10 @@ export async function POST(request: NextRequest) {
   const names = new Set(teams.map((t) => t.name));
   let n = 1;
   while (teams.length < count) {
-    while (names.has(`Team ${n}`)) n++;
+    while (names.has(`Group ${n}`)) n++;
     const { data, error } = await supabase
       .from('teams')
-      .insert({ section_id: sectionId, name: `Team ${n}`, created_by: session.uid })
+      .insert({ section_id: sectionId, name: `Group ${n}`, created_by: session.uid })
       .select('id, name')
       .single();
     if (error || !data) {
@@ -65,7 +67,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unable to split teams' }, { status: 500 });
     }
     teams.push(data as { id: string; name: string });
-    names.add(`Team ${n}`);
+    names.add(`Group ${n}`);
   }
   const targets = teams.slice(0, count);
 
@@ -86,6 +88,11 @@ export async function POST(request: NextRequest) {
   if (insertError) {
     console.error('Failed to add team members', insertError);
     return NextResponse.json({ error: 'Unable to split teams' }, { status: 500 });
+  }
+  const extra = teams.slice(count).map((t) => t.id);
+  if (extra.length > 0) {
+    const { error: pruneError } = await supabase.from('teams').delete().in('id', extra);
+    if (pruneError) console.error('Failed to remove extra groups', pruneError);
   }
   return NextResponse.json({ teams: targets.length, students: rows.length });
 }

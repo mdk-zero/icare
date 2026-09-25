@@ -41,7 +41,7 @@ const navItems: NavItem[] = [
   },
   {
     id: "teams",
-    label: "Teams",
+    label: "My Groups",
     href: "/faculty/teams",
     icon: faPeopleGroup,
     section: "Teaching",

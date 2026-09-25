@@ -16,12 +16,20 @@ import {
   faPenToSquare,
   faFolderPlus,
   faBrain,
+  faUserPlus,
 } from "@fortawesome/free-solid-svg-icons";
 import PageHeader from "../../components/PageHeader";
 import FilterSelect from "../../components/FilterSelect";
 import StatTile from "../../components/StatTile";
 import ConfirmModal from "../../components/ConfirmModal";
-import { fetchSections, runMlJob, Section, apiFetch } from "../../lib/api";
+import {
+  fetchSections,
+  fetchFacultyTeams,
+  moveStudentToTeam,
+  runMlJob,
+  Section,
+  apiFetch,
+} from "../../lib/api";
 import { usePageData } from "../../lib/use-page-data";
 import Avatar from "../../components/Avatar";
 import { EcgLoader } from "../../components/EcgLoader";
@@ -31,6 +39,8 @@ import MlRunProgress, {
   mlRunLabel,
 } from "../../components/MlRunProgress";
 import { toast } from "../../components/Toast";
+import SectionGroups from "./SectionGroups";
+import RegisterStudentModal from "./RegisterStudentModal";
 
 /** The run summary is a couple of sentences; the default toast is gone before it can be read. */
 const ML_TOAST_MS = 8000;
@@ -45,6 +55,8 @@ interface StudentPerformance {
   average_score: number | null;
   at_risk: boolean;
   last_login_at: string | null;
+  /** When the account was made, i.e. when they were enrolled. */
+  created_at: string;
   section_id: string | null;
   section: string | null;
 }
@@ -416,6 +428,7 @@ export default function StudentManagementClient() {
   const [sectionForm, setSectionForm] = useState<{ section: Section | null } | null>(null);
   const [sectionToDelete, setSectionToDelete] = useState<Section | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [registering, setRegistering] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [confirmingBatchDelete, setConfirmingBatchDelete] = useState(false);
   const [batchDeleting, setBatchDeleting] = useState(false);
@@ -437,6 +450,12 @@ export default function StudentManagementClient() {
       : NO_STUDENTS;
     return { students, sections };
   });
+
+  // Groups within each section, with their faculty; reloaded after every change.
+  const { data: teamsOverview, refresh: refreshTeams } = usePageData(
+    "admin:student-management:groups",
+    fetchFacultyTeams,
+  );
 
   const students = data?.students ?? NO_STUDENTS;
   const sections = data?.sections ?? NO_SECTIONS;
@@ -534,6 +553,32 @@ export default function StudentManagementClient() {
   }, [sections, students, filteredStudents]);
 
   const openGroup = groups.find((g) => g.key === selectedSection) ?? null;
+  const isRealSection = !!openGroup && openGroup.key !== UNASSIGNED_KEY;
+
+  // Once a section has groups, its table lists only the students left out of
+  // every group; the grouped ones are shown in their group cards above.
+  const sectionGroups = useMemo(
+    () =>
+      isRealSection
+        ? (teamsOverview?.teams ?? [])
+            .filter((t) => t.section_id === openGroup.key)
+            .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
+        : [],
+    [teamsOverview, isRealSection, openGroup],
+  );
+  const hasGroups = sectionGroups.length > 0;
+  const tableStudents = useMemo(() => {
+    if (!openGroup) return NO_STUDENTS;
+    if (!hasGroups) return openGroup.students;
+    const grouped = new Set(sectionGroups.flatMap((g) => g.members.map((m) => m.id)));
+    return openGroup.students.filter((s) => !grouped.has(s.id));
+  }, [openGroup, hasGroups, sectionGroups]);
+
+  const addToGroup = async (studentId: string, teamId: string) => {
+    const result = await moveStudentToTeam(studentId, teamId);
+    if ("error" in result) toast(result.error, "error");
+    await refreshTeams();
+  };
 
   /** Leaving a roster drops its selection, so nothing carries into the next one. */
   const openSection = (key: string | null) => {
@@ -544,10 +589,10 @@ export default function StudentManagementClient() {
   // Only rows currently on screen count as selected: narrowing the search after
   // ticking boxes must not delete students the admin can no longer see.
   const selectedStudents = useMemo(
-    () => openGroup?.students.filter((s) => selectedIds.has(s.id)) ?? [],
-    [openGroup, selectedIds],
+    () => tableStudents.filter((s) => selectedIds.has(s.id)),
+    [tableStudents, selectedIds],
   );
-  const visibleCount = openGroup?.students.length ?? 0;
+  const visibleCount = tableStudents.length;
   const allVisibleSelected = visibleCount > 0 && selectedStudents.length === visibleCount;
 
   const toggleStudent = (id: string) =>
@@ -560,7 +605,7 @@ export default function StudentManagementClient() {
   const toggleAllVisible = () =>
     setSelectedIds((prev) => {
       const next = new Set(prev);
-      for (const student of openGroup?.students ?? []) {
+      for (const student of tableStudents) {
         if (allVisibleSelected) next.delete(student.id);
         else next.add(student.id);
       }
@@ -829,6 +874,31 @@ export default function StudentManagementClient() {
             )}
           </div>
 
+          {isRealSection && (
+            <SectionGroups
+              sectionId={openGroup.key}
+              studentCount={openGroup.students.length}
+              overview={teamsOverview ?? null}
+              onChanged={refreshTeams}
+            />
+          )}
+
+          {isRealSection && (
+            <div className="mb-2 mt-2 flex flex-wrap items-center justify-between gap-3">
+              <h3 className="font-display text-base font-semibold text-gray-900">
+                {hasGroups ? "Not in a group" : "Students"}{" "}
+                <span className="text-sm font-normal text-gray-400">({tableStudents.length})</span>
+              </h3>
+              <button
+                onClick={() => setRegistering(true)}
+                className="flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition-all hover:bg-brand-700"
+              >
+                <FontAwesomeIcon icon={faUserPlus} className="h-3.5 w-3.5" />
+                Register student
+              </button>
+            </div>
+          )}
+
           {selectedStudents.length > 0 && (
             <div className="mb-3 flex flex-wrap items-center gap-3 rounded-xl border border-brand-600/20 bg-brand-600/5 px-4 py-3">
               <p className="text-sm font-medium text-gray-700">
@@ -875,7 +945,12 @@ export default function StudentManagementClient() {
                         className="h-4 w-4 cursor-pointer accent-brand-600 disabled:cursor-not-allowed disabled:opacity-40"
                       />
                     </th>
-                    {["Student", "Skill Assessments", "Avg. Score", "Status", "Last Active"].map((h) => (
+                    {/* With groups, this table is only who is left over, so it
+                        keeps to who they are and when they joined. */}
+                    {(hasGroups
+                      ? ["Name", "Enrolled"]
+                      : ["Student", "Skill Assessments", "Avg. Score", "Status", "Last Active"]
+                    ).map((h) => (
                       <th
                         key={h}
                         className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-500 sm:px-6"
@@ -883,10 +958,11 @@ export default function StudentManagementClient() {
                         {h}
                       </th>
                     ))}
+                    {hasGroups && <th className="px-4 py-3 sm:px-6" aria-label="Add to group" />}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-hairline">
-                  {openGroup.students.map((student) => (
+                  {tableStudents.map((student) => (
                     <tr
                       key={student.id}
                       onClick={() => router.push(`/admin/students/${student.id}`)}
@@ -923,42 +999,73 @@ export default function StudentManagementClient() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-4 text-sm font-medium text-gray-600 sm:px-6">
-                        {student.quizzes_completed}
-                      </td>
-                      <td className="px-4 py-4 sm:px-6">
-                        {student.average_score === null ? (
-                          <span className="text-sm text-gray-400">No attempts</span>
-                        ) : (
-                          <span
-                            className={`text-sm font-semibold ${
-                              student.average_score >= 70 ? "text-brand-600" : "text-rose-600"
-                            }`}
-                          >
-                            {student.average_score}%
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-4 sm:px-6">
-                        <span
-                          className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${
-                            student.at_risk
-                              ? "bg-rose-50 text-rose-600"
-                              : "bg-emerald-50 text-emerald-600"
-                          }`}
-                        >
-                          {student.at_risk ? "At Risk" : "Safe"}
-                        </span>
-                      </td>
-                      <td className="px-4 py-4 text-sm text-gray-500 sm:px-6">
-                        {formatLastActive(student.last_login_at)}
-                      </td>
+                      {hasGroups ? (
+                        <>
+                          <td className="px-4 py-4 text-sm text-gray-500 sm:px-6">
+                            {new Date(student.created_at).toLocaleString("en-US", {
+                              month: "short",
+                              day: "numeric",
+                              year: "numeric",
+                              hour: "numeric",
+                              minute: "2-digit",
+                            })}
+                          </td>
+                          <td className="px-4 py-4 sm:px-6" onClick={(e) => e.stopPropagation()}>
+                            <select
+                              value=""
+                              aria-label={`Add ${student.name} to a group`}
+                              onChange={(e) => e.target.value && void addToGroup(student.id, e.target.value)}
+                              className="rounded-lg border border-gray-200 bg-surface px-2.5 py-1.5 text-sm text-gray-600 focus:border-brand-600 focus:outline-none"
+                            >
+                              <option value="">Add to group…</option>
+                              {sectionGroups.map((g) => (
+                                <option key={g.id} value={g.id}>
+                                  {g.name}
+                                </option>
+                              ))}
+                            </select>
+                          </td>
+                        </>
+                      ) : (
+                        <>
+                          <td className="px-4 py-4 text-sm font-medium text-gray-600 sm:px-6">
+                            {student.quizzes_completed}
+                          </td>
+                          <td className="px-4 py-4 sm:px-6">
+                            {student.average_score === null ? (
+                              <span className="text-sm text-gray-400">No attempts</span>
+                            ) : (
+                              <span
+                                className={`text-sm font-semibold ${
+                                  student.average_score >= 70 ? "text-brand-600" : "text-rose-600"
+                                }`}
+                              >
+                                {student.average_score}%
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-4 sm:px-6">
+                            <span
+                              className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${
+                                student.at_risk
+                                  ? "bg-rose-50 text-rose-600"
+                                  : "bg-emerald-50 text-emerald-600"
+                              }`}
+                            >
+                              {student.at_risk ? "At Risk" : "Safe"}
+                            </span>
+                          </td>
+                          <td className="px-4 py-4 text-sm text-gray-500 sm:px-6">
+                            {formatLastActive(student.last_login_at)}
+                          </td>
+                        </>
+                      )}
                     </tr>
                   ))}
-                  {openGroup.students.length === 0 && (
+                  {tableStudents.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="py-12 text-center text-gray-400">
-                        No students in this section yet
+                      <td colSpan={hasGroups ? 4 : 6} className="py-12 text-center text-gray-400">
+                        {hasGroups ? "Every student is in a group" : "No students in this section yet"}
                       </td>
                     </tr>
                   )}
@@ -967,6 +1074,19 @@ export default function StudentManagementClient() {
             </div>
           </div>
         </>
+      )}
+
+      {registering && isRealSection && (
+        <RegisterStudentModal
+          sectionId={openGroup.key}
+          sectionName={openGroup.name}
+          groups={sectionGroups}
+          onClose={() => setRegistering(false)}
+          onRegistered={() => {
+            void loadStudents();
+            void refreshTeams();
+          }}
+        />
       )}
 
       {sectionForm && (
