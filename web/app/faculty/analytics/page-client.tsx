@@ -37,6 +37,7 @@ import { MODEL_EVAL_SNAPSHOT, DEFAULT_MODEL_KIND } from "../../lib/model-eval-sn
 import { EcgLoader } from "../../components/EcgLoader";
 import AiThinking from "../../components/AiThinking";
 import { Leaderboard } from "./Leaderboard";
+import GroupPerformance from "./GroupPerformance";
 import { parseDay, formatRange } from "./dates";
 import { buildTrendSeries, TrendLegend, TrendLineChart, TrendTable } from "./SectionTrendChart";
 import { isActiveSkillArea } from "../../../scripts/taylors-chapters";
@@ -1083,6 +1084,8 @@ export default function FacultyAnalyticsClient() {
               />
             ))}
           </div>
+
+          <GroupPerformance sectionIds={sectionIds} />
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4 items-stretch">
             <Card padding="md" className="flex flex-col">

@@ -1086,8 +1086,13 @@ export interface ScenarioAssignment {
   student_name: string;
   student_picture_url?: string | null;
   student_sex?: 'male' | 'female' | null;
-  /** The student's team, if they are in one. */
+  /** The student's current group, if they are in one. */
+  team_id?: string | null;
   team_name?: string | null;
+  /** "BSN 1102 · Group 1": group names repeat across sections. */
+  team_label?: string | null;
+  /** The group the assignment was given through, if any. */
+  assigned_team_id?: string | null;
   assigned_at: string;
   deadline: string;
   status: 'pending' | 'in_progress' | 'completed' | 'overdue';
@@ -3251,6 +3256,34 @@ export const moveStudentToTeam = (studentId: string, teamId: string | null) =>
 
 export const autoSplitTeams = (sectionId: string, count: number) =>
   teamRequest('/api/faculty/teams/auto', 'POST', { section_id: sectionId, count });
+
+/** One group's averages over its members' individual grades. */
+export interface GroupSummary {
+  team_id: string;
+  name: string;
+  section_id: string;
+  section_name: string | null;
+  faculty_id: string | null;
+  faculty_name: string | null;
+  members: number;
+  scenarios: { assigned: number; graded: number; cases: number; average: number | null };
+  assessments: { taken: number; average: number | null };
+}
+
+export async function fetchGroupSummaries(): Promise<{ viewer_id: string | null; groups: GroupSummary[] } | null> {
+  try {
+    const res = await apiFetch('/api/faculty/teams/summary', { credentials: 'include' });
+    const json = (await res.json()) as { viewer_id?: string; groups?: GroupSummary[]; error?: string };
+    if (!res.ok) {
+      console.error('fetchGroupSummaries() failed', json.error);
+      return null;
+    }
+    return { viewer_id: json.viewer_id ?? null, groups: json.groups ?? [] };
+  } catch (err) {
+    console.error('fetchGroupSummaries() failed', err);
+    return null;
+  }
+}
 
 /** One member's case in a group split. */
 export interface GroupCasePlan {

@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
 
     const { data: assignments, error: assignmentsError } = await supabase
       .from('scenario_assignments')
-      .select('id, scenario_id, student_id, assigned_at, deadline, status, required, score, completed_at, time_taken, submitted_at, finalized_by')
+      .select('id, scenario_id, student_id, assigned_at, deadline, status, required, score, completed_at, time_taken, submitted_at, finalized_by, team_id')
       .in('student_id', studentIds)
       .order('assigned_at', { ascending: false })
       .limit(2000);
@@ -84,7 +84,7 @@ export async function GET(request: NextRequest) {
         assignments.map((a) => a.id as string),
       ),
       // Each student's team, for grouping; nothing before migration 048.
-      supabase.from('team_members').select('student_id, teams(name)').in('student_id', studentIds),
+      supabase.from('team_members').select('student_id, team_id, teams(name, sections(name))').in('student_id', studentIds),
     ]);
 
     if (scenariosRes.error || studentsRes.error) {
@@ -100,11 +100,20 @@ export async function GET(request: NextRequest) {
     const scenariosById = new Map(scenariosRes.data?.map((s) => [s.id, s.title]));
     const studentsById = new Map(studentsRes.data?.map((s) => [s.id, s]));
     const countsKnown = !taskCounts.error && !performedCounts.error;
+    // Group names repeat across sections ("Group 1"), so the label carries the
+    // section and the id is what callers group and filter by.
     const teamByStudent = new Map(
-      (teamsRes.error ? [] : teamsRes.data ?? []).map((m) => [
-        m.student_id as string,
-        (m.teams as unknown as { name: string } | null)?.name ?? null,
-      ]),
+      (teamsRes.error ? [] : teamsRes.data ?? []).map((m) => {
+        const team = m.teams as unknown as { name: string; sections: { name: string } | null } | null;
+        return [
+          m.student_id as string,
+          {
+            id: m.team_id as string,
+            name: team?.name ?? null,
+            label: team ? (team.sections?.name ? `${team.sections.name} · ${team.name}` : team.name) : null,
+          },
+        ];
+      }),
     );
 
     const formatted = assignments.map((a) => ({
@@ -115,7 +124,11 @@ export async function GET(request: NextRequest) {
       student_name: studentsById.get(a.student_id)?.name ?? 'Unknown Student',
       student_picture_url: studentsById.get(a.student_id)?.picture_url ?? null,
       student_sex: studentsById.get(a.student_id)?.sex ?? null,
-      team_name: teamByStudent.get(a.student_id) ?? null,
+      team_id: teamByStudent.get(a.student_id)?.id ?? null,
+      team_name: teamByStudent.get(a.student_id)?.name ?? null,
+      team_label: teamByStudent.get(a.student_id)?.label ?? null,
+      /** The group this assignment was given through, which may differ after regrouping. */
+      assigned_team_id: a.team_id ?? null,
       assigned_at: a.assigned_at,
       deadline: a.deadline,
       status: a.status,

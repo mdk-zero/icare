@@ -29,6 +29,9 @@ interface StudentResult {
   picture_url: string | null;
   sex: "male" | "female" | null;
   section: string | null;
+  /** The student's group; grades stay individual. */
+  team_id: string | null;
+  team_label: string | null;
   status: Status;
   attempt_count: number;
   submitted_count: number;
@@ -48,6 +51,16 @@ interface Summary {
   not_started: number;
   average_score: number | null;
 }
+
+/** One group's averages over its members' individual best scores. */
+interface GroupResult {
+  team_id: string;
+  label: string;
+  members: number;
+  submitted: number;
+  average_score: number | null;
+}
+const NO_GROUPS: GroupResult[] = [];
 
 /**
  * Which students the table covers: the ones explicitly assigned this
@@ -110,6 +123,7 @@ export default function AssessmentResultsClient({ assessmentId }: { assessmentId
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<Status | "all">("all");
   const [sectionFilter, setSectionFilter] = useState("all");
+  const [groupFilter, setGroupFilter] = useState("all");
   const [scoreFilter, setScoreFilter] = useState<ScoreBand>("all");
 
   const { data, loading, error: loadError } = usePageData(`faculty:assessment-results:${assessmentId}`, async () => {
@@ -121,6 +135,7 @@ export default function AssessmentResultsClient({ assessmentId }: { assessmentId
       results?: StudentResult[];
       summary?: Summary;
       audience?: Audience;
+      groups?: GroupResult[];
       error?: string;
     };
     if (!res.ok) throw new Error(json.error ?? "Unable to load results.");
@@ -129,12 +144,14 @@ export default function AssessmentResultsClient({ assessmentId }: { assessmentId
       results: json.results ?? NO_RESULTS,
       summary: json.summary ?? null,
       audience: json.audience ?? "visibility",
+      groups: json.groups ?? NO_GROUPS,
     };
   });
 
   const assessment = data?.assessment ?? null;
   const results = data?.results ?? NO_RESULTS;
   const summary = data?.summary ?? null;
+  const groups = data?.groups ?? NO_GROUPS;
   const audience = data?.audience ?? "visibility";
   const error = loadError instanceof Error ? loadError.message : loadError ? String(loadError) : null;
 
@@ -157,6 +174,9 @@ export default function AssessmentResultsClient({ assessmentId }: { assessmentId
       }
       if (statusFilter !== "all" && r.status !== statusFilter) return false;
 
+      if (groupFilter !== "all" && (groupFilter === "__none__" ? r.team_id !== null : r.team_id !== groupFilter)) {
+        return false;
+      }
       if (sectionFilter !== "all") {
         const section = r.section ?? "__unassigned__";
         if (section !== sectionFilter) return false;
@@ -175,29 +195,32 @@ export default function AssessmentResultsClient({ assessmentId }: { assessmentId
 
       return true;
     });
-  }, [results, search, statusFilter, sectionFilter, scoreFilter]);
+  }, [results, search, statusFilter, sectionFilter, groupFilter, scoreFilter]);
 
   const filtersActive =
     search.trim() !== "" ||
     statusFilter !== "all" ||
     sectionFilter !== "all" ||
+    groupFilter !== "all" ||
     scoreFilter !== "all";
 
   const clearFilters = () => {
     setSearch("");
     setStatusFilter("all");
     setSectionFilter("all");
+    setGroupFilter("all");
     setScoreFilter("all");
   };
 
   /** Exports what is on screen, so a filtered view exports the filtered rows. */
   const exportCsv = () => {
-    const header = "student,email,section,status,best_score,attempts,last_submitted,time_taken";
+    const header = "student,email,section,group,status,best_score,attempts,last_submitted,time_taken";
     const rows = filtered.map((r) =>
       [
         r.name,
         r.email,
         r.section ?? "",
+        r.team_label ?? "",
         STATUS_LABEL[r.status],
         r.best_score ?? "",
         r.attempt_count,
@@ -293,6 +316,35 @@ export default function AssessmentResultsClient({ assessmentId }: { assessmentId
             />
           </div>
 
+          {groups.length > 0 && (
+            <div className="mb-4 overflow-hidden rounded-xl border border-hairline bg-surface shadow-tile">
+              <p className="border-b border-hairline bg-subtle px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+                By group
+              </p>
+              <ul className="divide-y divide-hairline">
+                {groups.map((g) => (
+                  <li key={g.team_id}>
+                    <button
+                      onClick={() => setGroupFilter(groupFilter === g.team_id ? "all" : g.team_id)}
+                      aria-pressed={groupFilter === g.team_id}
+                      className={`flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left text-sm transition-colors hover:bg-subtle ${
+                        groupFilter === g.team_id ? "bg-brand-50/60" : ""
+                      }`}
+                    >
+                      <span className="font-medium text-gray-800">{g.label}</span>
+                      <span className="flex items-center gap-4 tabular-nums text-gray-600">
+                        <span>
+                          {g.submitted}/{g.members} completed
+                        </span>
+                        <span className="w-14 text-right font-semibold text-gray-900">{formatScore(g.average_score)}</span>
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           <div className="mb-4 flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center">
             <div className="relative min-w-[220px] flex-1">
               <FontAwesomeIcon
@@ -337,6 +389,22 @@ export default function AssessmentResultsClient({ assessmentId }: { assessmentId
                 {sectionOptions.hasUnassigned && (
                   <option value="__unassigned__">Unassigned</option>
                 )}
+              </select>
+            )}
+            {groups.length > 0 && (
+              <select
+                value={groupFilter}
+                onChange={(e) => setGroupFilter(e.target.value)}
+                aria-label="Filter by group"
+                className={SELECT_CLASS}
+              >
+                <option value="all">All groups</option>
+                {groups.map((g) => (
+                  <option key={g.team_id} value={g.team_id}>
+                    {g.label}
+                  </option>
+                ))}
+                <option value="__none__">No group</option>
               </select>
             )}
             <select
@@ -411,6 +479,9 @@ export default function AssessmentResultsClient({ assessmentId }: { assessmentId
                         </td>
                         <td className="px-4 py-4 text-sm text-gray-600 sm:px-6">
                           {r.section ?? "Unassigned"}
+                          {r.team_label && (
+                            <span className="block text-xs text-gray-400">{r.team_label.split(" · ").pop()}</span>
+                          )}
                         </td>
                         <td className="px-4 py-4 sm:px-6">
                           <span

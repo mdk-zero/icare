@@ -128,3 +128,121 @@ export async function manageableTeam(
   const allowed = await manageableSectionIds(supabase, role, uid);
   return allowed.includes(data.section_id as string) ? (data as { id: string; section_id: string; name: string }) : null;
 }
+
+/** How one group is doing, averaged over its members' individual grades. */
+export interface GroupSummary {
+  team_id: string;
+  name: string;
+  section_id: string;
+  section_name: string | null;
+  faculty_name: string | null;
+  members: number;
+  scenarios: {
+    assigned: number;
+    graded: number;
+    /** Distinct cases across the group's work. */
+    cases: number;
+    /** Mean of the graded scenario scores; null until one is graded. */
+    average: number | null;
+  };
+  assessments: {
+    /** (member, assessment) pairs with a submitted attempt. */
+    taken: number;
+    /** Mean of each member's best score per assessment; null until one is taken. */
+    average: number | null;
+  };
+}
+
+const mean = (xs: number[]) => (xs.length ? Math.round(xs.reduce((a, b) => a + b, 0) / xs.length) : null);
+
+/**
+ * Per-group averages for the given groups. A scenario counts towards the group
+ * it was given through (scenario_assignments.team_id), else the member's
+ * current group; a Skill Assessment counts towards the member's current group.
+ * Grades stay individual: these are only means over them.
+ */
+export async function groupSummaries(
+  supabase: Supabase,
+  teams: TeamRow[],
+): Promise<{ groups: GroupSummary[]; error: { message?: string } | null }> {
+  if (teams.length === 0) return { groups: [], error: null };
+  const teamIds = new Set(teams.map((t) => t.id));
+  const teamOf = new Map<string, string>();
+  for (const t of teams) for (const m of t.members) teamOf.set(m.id, t.id);
+  const memberIds = [...teamOf.keys()];
+
+  const [sectionsRes, scenariosRes, attemptsRes] = await Promise.all([
+    supabase.from('sections').select('id, name').in('id', [...new Set(teams.map((t) => t.section_id))]),
+    memberIds.length
+      ? supabase
+          .from('scenario_assignments')
+          .select('student_id, scenario_id, team_id, status, score')
+          .in('student_id', memberIds)
+      : Promise.resolve({ data: [], error: null }),
+    memberIds.length
+      ? supabase
+          .from('assessment_attempts')
+          .select('student_id, assessment_id, score')
+          .eq('status', 'submitted')
+          .in('student_id', memberIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+  const error = sectionsRes.error ?? scenariosRes.error ?? attemptsRes.error;
+  if (error) return { groups: [], error };
+
+  const sectionName = new Map((sectionsRes.data ?? []).map((s) => [s.id as string, s.name as string]));
+
+  const scenarioWork = new Map<string, { student_id: string; scenario_id: string; status: string; score: number | null }[]>();
+  for (const a of (scenariosRes.data ?? []) as {
+    student_id: string;
+    scenario_id: string;
+    team_id: string | null;
+    status: string;
+    score: number | null;
+  }[]) {
+    const team = a.team_id && teamIds.has(a.team_id) ? a.team_id : teamOf.get(a.student_id);
+    if (!team) continue;
+    scenarioWork.set(team, [...(scenarioWork.get(team) ?? []), a]);
+  }
+
+  // Best score per (member, assessment), then grouped by the member's group.
+  const best = new Map<string, { student_id: string; score: number }>();
+  for (const a of (attemptsRes.data ?? []) as { student_id: string; assessment_id: string; score: number | null }[]) {
+    if (a.score === null) continue;
+    const key = `${a.student_id}:${a.assessment_id}`;
+    const prev = best.get(key);
+    if (!prev || a.score > prev.score) best.set(key, { student_id: a.student_id, score: a.score });
+  }
+  const assessmentScores = new Map<string, number[]>();
+  for (const { student_id, score } of best.values()) {
+    const team = teamOf.get(student_id);
+    if (team) assessmentScores.set(team, [...(assessmentScores.get(team) ?? []), score]);
+  }
+
+  const groups = teams.map((t) => {
+    const work = scenarioWork.get(t.id) ?? [];
+    const graded = work.filter((a) => a.status === 'completed' && a.score !== null).map((a) => a.score as number);
+    const quiz = assessmentScores.get(t.id) ?? [];
+    return {
+      team_id: t.id,
+      name: t.name,
+      section_id: t.section_id,
+      section_name: sectionName.get(t.section_id) ?? null,
+      faculty_name: t.faculty_name,
+      members: t.members.length,
+      scenarios: {
+        assigned: work.length,
+        graded: graded.length,
+        cases: new Set(work.map((a) => a.scenario_id)).size,
+        average: mean(graded),
+      },
+      assessments: { taken: quiz.length, average: mean(quiz) },
+    };
+  });
+  groups.sort(
+    (a, b) =>
+      (a.section_name ?? '').localeCompare(b.section_name ?? '', undefined, { numeric: true }) ||
+      compareTeamNames(a.name, b.name),
+  );
+  return { groups, error: null };
+}

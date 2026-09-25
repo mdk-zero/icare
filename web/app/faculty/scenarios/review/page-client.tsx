@@ -206,7 +206,7 @@ export default function FacultyScenarioReviewClient() {
   const studentGroups = useMemo(() => {
     const byStudent = new Map<
       string,
-      Pick<ScenarioAssignment, "student_id" | "student_name" | "student_picture_url" | "student_sex" | "team_name"> & {
+      Pick<ScenarioAssignment, "student_id" | "student_name" | "student_picture_url" | "student_sex" | "team_id" | "team_name"> & {
         assignments: ScenarioAssignment[];
       }
     >();
@@ -219,7 +219,9 @@ export default function FacultyScenarioReviewClient() {
           student_name: a.student_name,
           student_picture_url: a.student_picture_url,
           student_sex: a.student_sex,
-          team_name: a.team_name ?? null,
+          team_id: a.team_id ?? null,
+          // The section-qualified label, since group names repeat across sections.
+          team_name: a.team_label ?? a.team_name ?? null,
           assignments: [a],
         });
     }
@@ -238,10 +240,12 @@ export default function FacultyScenarioReviewClient() {
       );
   }, [assignments]);
   const hasTeams = studentGroups.some((g) => g.team_name);
-  const groupNames = useMemo(
-    () => [...new Set(studentGroups.flatMap((g) => (g.team_name ? [g.team_name] : [])))],
-    [studentGroups],
-  );
+  // One chip per group id (names repeat across sections), in label order.
+  const groupOptions = useMemo(() => {
+    const byId = new Map<string, string>();
+    for (const g of studentGroups) if (g.team_id) byId.set(g.team_id, g.team_name ?? "Group");
+    return [...byId].map(([key, label]) => ({ key, label })).sort((a, b) => compareTeams(a.label, b.label));
+  }, [studentGroups]);
   const hasUngrouped = studentGroups.some((g) => !g.team_name);
 
   const filteredStudentGroups = useMemo(() => {
@@ -249,12 +253,27 @@ export default function FacultyScenarioReviewClient() {
     return studentGroups.filter(
       (g) =>
         (groupFilter === ALL_GROUPS ||
-          (groupFilter === NO_GROUP ? !g.team_name : g.team_name === groupFilter)) &&
+          (groupFilter === NO_GROUP ? !g.team_id : g.team_id === groupFilter)) &&
         (!q || g.student_name.toLowerCase().includes(q) || (g.team_name ?? "").toLowerCase().includes(q)),
     );
   }, [studentGroups, studentQuery, groupFilter]);
 
   const selectedStudent = studentGroups.find((g) => g.student_id === selectedStudentId) ?? null;
+
+  /** Averages over one group's individual grades, when a group chip is picked. */
+  const selectedGroupStats = useMemo(() => {
+    if (groupFilter === ALL_GROUPS || groupFilter === NO_GROUP) return null;
+    const work = studentGroups.filter((g) => g.team_id === groupFilter).flatMap((g) => g.assignments);
+    const graded = work.filter((a) => a.status === "completed" && typeof a.score === "number");
+    return {
+      assigned: work.length,
+      graded: graded.length,
+      average: graded.length
+        ? Math.round(graded.reduce((sum, a) => sum + (a.score ?? 0), 0) / graded.length)
+        : null,
+      cases: new Set(work.map((a) => a.scenario_id)).size,
+    };
+  }, [studentGroups, groupFilter]);
 
   const resetNotes = () => {
     setNoteDrafts({});
@@ -467,7 +486,7 @@ export default function FacultyScenarioReviewClient() {
                 <div role="group" aria-label="Filter by group" className="mb-3 flex flex-wrap gap-1.5">
                   {[
                     { key: ALL_GROUPS, label: "All groups" },
-                    ...groupNames.map((name) => ({ key: name, label: name })),
+                    ...groupOptions,
                     ...(hasUngrouped ? [{ key: NO_GROUP, label: "No group" }] : []),
                   ].map((option) => {
                     const active = groupFilter === option.key;
@@ -475,7 +494,7 @@ export default function FacultyScenarioReviewClient() {
                       option.key === ALL_GROUPS
                         ? studentGroups.length
                         : studentGroups.filter((g) =>
-                            option.key === NO_GROUP ? !g.team_name : g.team_name === option.key,
+                            option.key === NO_GROUP ? !g.team_id : g.team_id === option.key,
                           ).length;
                     return (
                       <button
@@ -493,6 +512,27 @@ export default function FacultyScenarioReviewClient() {
                       </button>
                     );
                   })}
+                </div>
+              )}
+
+              {selectedGroupStats && (
+                <div className="mb-3 grid grid-cols-3 gap-2 rounded-xl border border-hairline bg-subtle p-3 text-center">
+                  <div>
+                    <p className="text-lg font-semibold tabular-nums text-gray-900">
+                      {selectedGroupStats.average === null ? "—" : `${selectedGroupStats.average}%`}
+                    </p>
+                    <p className="text-[11px] text-gray-500">Group average</p>
+                  </div>
+                  <div>
+                    <p className="text-lg font-semibold tabular-nums text-gray-900">
+                      {selectedGroupStats.graded}/{selectedGroupStats.assigned}
+                    </p>
+                    <p className="text-[11px] text-gray-500">Graded</p>
+                  </div>
+                  <div>
+                    <p className="text-lg font-semibold tabular-nums text-gray-900">{selectedGroupStats.cases}</p>
+                    <p className="text-[11px] text-gray-500">Different cases</p>
+                  </div>
                 </div>
               )}
 
@@ -517,7 +557,7 @@ export default function FacultyScenarioReviewClient() {
                 {!loading &&
                   filteredStudentGroups.map((g, i) => (
                     <Fragment key={g.student_id}>
-                    {hasTeams && (i === 0 || filteredStudentGroups[i - 1].team_name !== g.team_name) && (
+                    {hasTeams && (i === 0 || filteredStudentGroups[i - 1].team_id !== g.team_id) && (
                       <p className="px-1 pt-2 text-[11px] font-semibold uppercase tracking-wider text-gray-500 first:pt-0">
                         {g.team_name ?? "No group"}
                       </p>

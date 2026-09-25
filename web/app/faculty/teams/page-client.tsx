@@ -14,7 +14,9 @@ import {
 import {
   fetchFacultyStudents,
   fetchFacultyTeams,
+  fetchGroupSummaries,
   type FacultyTeam,
+  type GroupSummary,
   type TeamsOverview,
 } from "../../lib/api";
 import PageHeader from "../../components/PageHeader";
@@ -32,6 +34,9 @@ const matches = (text: string, query: string) => text.toLowerCase().includes(que
 
 /** Latest ML risk label per student: "at_risk", "safe", or null when never scored. */
 type RiskMap = Map<string, string | null>;
+
+/** Each group's averages over its members' individual grades, by group id. */
+type SummaryMap = Map<string, GroupSummary>;
 
 const RISK_BADGE = {
   at_risk: { label: "Low performing", className: "bg-rose-50 text-rose-700 ring-rose-200" },
@@ -119,6 +124,8 @@ export default function TeamsClient() {
   const { data, loading } = usePageData("faculty:teams", fetchFacultyTeams);
   // Risk labels come from the roster, which carries each student's latest prediction.
   const { data: roster } = usePageData("faculty:students", () => fetchFacultyStudents());
+  const { data: summaryData } = usePageData("faculty:group-summaries", fetchGroupSummaries);
+  const summaries: SummaryMap = new Map((summaryData?.groups ?? []).map((g) => [g.team_id, g]));
   const [openId, setOpenId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const q = query.trim().toLowerCase();
@@ -182,7 +189,7 @@ export default function TeamsClient() {
           </div>
 
           {open ? (
-            <SectionDetail section={open} risks={risks} query={q} onBack={() => setOpenId(null)} />
+            <SectionDetail section={open} risks={risks} summaries={summaries} query={q} onBack={() => setOpenId(null)} />
           ) : (
             <SectionGrid sections={sections} risks={risks} query={q} onOpen={setOpenId} />
           )}
@@ -269,11 +276,13 @@ function SectionGrid({
 function SectionDetail({
   section,
   risks,
+  summaries,
   query,
   onBack,
 }: {
   section: SectionView;
   risks: RiskMap;
+  summaries: SummaryMap;
   query: string;
   onBack: () => void;
 }) {
@@ -296,14 +305,24 @@ function SectionDetail({
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {section.groups.map((group) => (
-          <GroupCard key={group.id} group={group} risks={risks} query={query} />
+          <GroupCard key={group.id} group={group} risks={risks} summary={summaries.get(group.id)} query={query} />
         ))}
       </div>
     </div>
   );
 }
 
-function GroupCard({ group, risks, query }: { group: FacultyTeam; risks: RiskMap; query: string }) {
+function GroupCard({
+  group,
+  risks,
+  summary,
+  query,
+}: {
+  group: FacultyTeam;
+  risks: RiskMap;
+  summary: GroupSummary | undefined;
+  query: string;
+}) {
   const [assigning, setAssigning] = useState(false);
   const members = group.members
     .filter((m) => !query || matches(m.name, query))
@@ -334,6 +353,26 @@ function GroupCard({ group, risks, query }: { group: FacultyTeam; risks: RiskMap
           )}
         </div>
       </header>
+      {summary && (
+        <dl className="grid grid-cols-2 divide-x divide-hairline border-b border-hairline text-center">
+          <div className="px-3 py-2.5">
+            <dt className="text-[11px] text-gray-500">Scenario average</dt>
+            <dd className="text-sm font-semibold tabular-nums text-gray-900">
+              {summary.scenarios.average === null ? "—" : `${summary.scenarios.average}%`}
+              <span className="ml-1.5 text-xs font-normal text-gray-500">
+                {summary.scenarios.graded}/{summary.scenarios.assigned} graded
+              </span>
+            </dd>
+          </div>
+          <div className="px-3 py-2.5">
+            <dt className="text-[11px] text-gray-500">Skill Assessment average</dt>
+            <dd className="text-sm font-semibold tabular-nums text-gray-900">
+              {summary.assessments.average === null ? "—" : `${summary.assessments.average}%`}
+              <span className="ml-1.5 text-xs font-normal text-gray-500">best per assessment</span>
+            </dd>
+          </div>
+        </dl>
+      )}
       {assigning && <AssignCasesModal group={group} onClose={() => setAssigning(false)} />}
       {members.length === 0 ? (
         <p className="px-5 py-6 text-center text-sm text-gray-400">

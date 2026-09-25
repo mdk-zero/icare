@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { getFacultyStudentIds } from '@/app/lib/roster';
+import { isMissingTeamTables } from '@/app/lib/teams';
 
 type Status = 'submitted' | 'in_progress' | 'not_started';
 
@@ -55,6 +56,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
         results: [],
         audience: 'assigned' as const,
         summary: { total: 0, submitted: 0, in_progress: 0, not_started: 0, average_score: null },
+        groups: [],
       });
     }
 
@@ -124,7 +126,29 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       return student.sections?.name ? targetSections.includes(student.sections.name) : false;
     };
 
-    const results = students.filter(inScope).map((student) => {
+    // Each student's group. Grades stay individual; the group is a label for
+    // filtering and for the per-group averages below.
+    const inScopeStudents = students.filter(inScope);
+    const teamOf = new Map<string, { id: string; label: string }>();
+    if (inScopeStudents.length > 0) {
+      const { data: memberships, error: membershipError } = await supabase
+        .from('team_members')
+        .select('student_id, team_id, teams(name, sections(name))')
+        .in('student_id', inScopeStudents.map((s) => s.id));
+      if (membershipError && !isMissingTeamTables(membershipError)) {
+        console.error('Failed to load groups for results', membershipError);
+      }
+      for (const m of memberships ?? []) {
+        const team = m.teams as unknown as { name: string; sections: { name: string } | null } | null;
+        if (!team) continue;
+        teamOf.set(m.student_id as string, {
+          id: m.team_id as string,
+          label: team.sections?.name ? `${team.sections.name} · ${team.name}` : team.name,
+        });
+      }
+    }
+
+    const results = inScopeStudents.map((student) => {
       const attempts = attemptsByStudent.get(student.id) ?? [];
       const submitted = attempts.filter((a) => a.status === 'submitted');
 
@@ -148,6 +172,8 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
         picture_url: student.picture_url,
         sex: student.sex ?? null,
         section: student.sections?.name ?? null,
+        team_id: teamOf.get(student.id)?.id ?? null,
+        team_label: teamOf.get(student.id)?.label ?? null,
         status,
         attempt_count: attempts.length,
         submitted_count: submitted.length,
@@ -159,6 +185,25 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     });
 
     const graded = results.map((r) => r.best_score).filter((s): s is number => s !== null);
+
+    const average = (scores: number[]) =>
+      scores.length > 0 ? Math.round(scores.reduce((sum, s) => sum + s, 0) / scores.length) : null;
+    const byGroup = new Map<string, { team_id: string; label: string; rows: typeof results }>();
+    for (const r of results) {
+      if (!r.team_id) continue;
+      const entry = byGroup.get(r.team_id) ?? { team_id: r.team_id, label: r.team_label ?? 'Group', rows: [] };
+      entry.rows.push(r);
+      byGroup.set(r.team_id, entry);
+    }
+    const groups = [...byGroup.values()]
+      .map((g) => ({
+        team_id: g.team_id,
+        label: g.label,
+        members: g.rows.length,
+        submitted: g.rows.filter((r) => r.status === 'submitted').length,
+        average_score: average(g.rows.map((r) => r.best_score).filter((s): s is number => s !== null)),
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
 
     return NextResponse.json({
       assessment,
@@ -177,6 +222,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
             ? Math.round(graded.reduce((sum, s) => sum + s, 0) / graded.length)
             : null,
       },
+      groups,
     });
   } catch (err) {
     console.error('Fetch assessment results failed', err);
