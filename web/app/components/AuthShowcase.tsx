@@ -68,18 +68,18 @@ const DRIFTERS: {
   sway: number;
   delay: number;
 }[] = [
-  { icon: faStethoscope, left: "4%", size: 30, rise: 26, sway: 7, delay: -3 },
-  { icon: faPills, left: "13%", size: 14, rise: 21, sway: 5, delay: -14 },
-  { icon: faHeartPulse, left: "22%", size: 22, rise: 29, sway: 8, delay: -20 },
-  { icon: faSyringe, left: "31%", size: 12, rise: 19, sway: 4.5, delay: -7 },
-  { icon: faLungs, left: "39%", size: 26, rise: 32, sway: 9, delay: -12 },
-  { icon: faDroplet, left: "47%", size: 11, rise: 18, sway: 4, delay: -1 },
-  { icon: faTemperatureHalf, left: "55%", size: 18, rise: 24, sway: 6, delay: -17 },
-  { icon: faVial, left: "63%", size: 13, rise: 22, sway: 5.5, delay: -9 },
-  { icon: faNotesMedical, left: "71%", size: 24, rise: 30, sway: 8.5, delay: -24 },
-  { icon: faCapsules, left: "79%", size: 15, rise: 23, sway: 5, delay: -5 },
-  { icon: faUserNurse, left: "87%", size: 20, rise: 27, sway: 7.5, delay: -15 },
-  { icon: faBandage, left: "94%", size: 12, rise: 20, sway: 4.5, delay: -11 },
+  { icon: faStethoscope, left: "4%", size: 45, rise: 26, sway: 7, delay: -3 },
+  { icon: faPills, left: "13%", size: 21, rise: 21, sway: 5, delay: -14 },
+  { icon: faHeartPulse, left: "22%", size: 33, rise: 29, sway: 8, delay: -20 },
+  { icon: faSyringe, left: "31%", size: 18, rise: 19, sway: 4.5, delay: -7 },
+  { icon: faLungs, left: "39%", size: 39, rise: 32, sway: 9, delay: -12 },
+  { icon: faDroplet, left: "47%", size: 16, rise: 18, sway: 4, delay: -1 },
+  { icon: faTemperatureHalf, left: "55%", size: 27, rise: 24, sway: 6, delay: -17 },
+  { icon: faVial, left: "63%", size: 20, rise: 22, sway: 5.5, delay: -9 },
+  { icon: faNotesMedical, left: "71%", size: 36, rise: 30, sway: 8.5, delay: -24 },
+  { icon: faCapsules, left: "79%", size: 22, rise: 23, sway: 5, delay: -5 },
+  { icon: faUserNurse, left: "87%", size: 30, rise: 27, sway: 7.5, delay: -15 },
+  { icon: faBandage, left: "94%", size: 18, rise: 20, sway: 4.5, delay: -11 },
 ];
 
 /*
@@ -106,8 +106,8 @@ export function DriftingKit() {
     <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
       <style>{driftStyles}</style>
       {DRIFTERS.map((d) => {
-        // 11px → far (dim, soft), 32px → near (brighter, crisp).
-        const depth = (d.size - 11) / 21;
+        // 16px → far (dim, soft), 45px → near (brighter, crisp).
+        const depth = (d.size - 16) / 29;
         return (
           <div
             key={d.left}
