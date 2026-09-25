@@ -33,9 +33,22 @@
  * relative to the moment it runs, so re-running moves the term to the new
  * today.
  *
- * Scope and re-runs: this owns exactly the (student, scenario) and
- * (student, assessment) pairs listed below. Those are cleared and rebuilt on
- * each run; anything else in the database is left alone. Deleting an attempt
+ * It follows the groups. A student in a group is assigned and graded by the
+ * group's supervising faculty member, their scenario rows carry the group,
+ * and within a block every member of a group works a different case (and so a
+ * different patient) and sits that case's paired quiz — the same rule the
+ * app's Assign cases enforces.
+ *
+ * It grades the way faculty do. Every performed task has each of its
+ * sub-tasks rated Excellent, Satisfactory or Needs Practice against the
+ * student's profile, and the stored score comes from the app's own
+ * scoreAssignment(), so re-opening a grade and saving it keeps the score.
+ *
+ * Scope and re-runs: this owns the (student, scenario) and (student,
+ * assessment) pairs of every case and quiz in the catalog below, for every
+ * student in PROFILES. Those are cleared and rebuilt on each run, so a
+ * student whose group rotation changed loses the old pair rather than keeping
+ * it; anything else in the database is left alone. Deleting an attempt
  * also drops its derived competency_scores, by the trigger migration 027
  * installs, so the roll-up never double-counts.
  *
@@ -46,6 +59,8 @@ import { config } from 'dotenv';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { selectQuestionsForAttempt } from '../app/lib/assessment-selection';
 import { deriveCompetencyScoresForAttempt } from '../app/lib/competency';
+import { scoreAssignment } from '../app/lib/scenario-tasks';
+import { ratingForCredit, TASK_RATINGS, type TaskRating } from '../app/lib/task-ratings';
 import { generateRandomPassword, hashPassword } from '../app/lib/auth/password';
 
 config({ path: '.env.local' });
@@ -466,6 +481,26 @@ const SECTION_WORK: Record<string, WorkItem[]> = {
   'BSN 1105': [ANAEMIA, FEVER, DEHYDRATION, POST_OP, HYPERTENSION],
 };
 
+/** Every case this seed knows, for group rotation and for clearing old pairs. */
+const CATALOG: WorkItem[] = [FEVER, DEHYDRATION, POST_OP, HYPERTENSION, ANAEMIA, UTI, ASTHMA, CELLULITIS];
+
+/**
+ * A member's cases, block by block. Outside a group it is the section's list.
+ * In a group, member i of n (by name) starts the section's list i places on,
+ * over the section's cases topped up from the catalog until there are at
+ * least n, so no two members of a group share a case in the same block and
+ * nobody repeats one.
+ */
+function memberWork(section: WorkItem[], groupIndex: number | null, groupSize: number): WorkItem[] {
+  if (groupIndex === null) return section;
+  const pool = [...section];
+  for (const item of CATALOG) {
+    if (pool.length >= Math.max(groupSize, section.length)) break;
+    if (!pool.includes(item)) pool.push(item);
+  }
+  return section.map((_, k) => pool[(k + groupIndex) % pool.length]);
+}
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 const HOUR_MS = 60 * 60 * 1000;
 
@@ -580,6 +615,24 @@ function chanceCorrect(profile: Profile, competencyNames: string[]): number {
   return Math.min(0.97, Math.max(0.08, p));
 }
 
+/**
+ * The level a student earns on one sub-task, drawn against their profile for
+ * the task's skill area: a likely-correct student is mostly Excellent, a weak
+ * one mostly Needs Practice.
+ */
+function drawLevel(p: number, rng: () => number): TaskRating {
+  const x = rng();
+  if (x < p * 0.7) return 'excellent';
+  if (x < p * 0.7 + (1 - p * 0.7) * 0.55) return 'satisfactory';
+  return 'needs_practice';
+}
+
+const REMARKS: Record<TaskRating, string[]> = {
+  excellent: ['Confident and accurate throughout.', 'Performed every step without prompting.'],
+  satisfactory: ['Correct technique, some hesitation.', 'Needed one prompt on the sequence.'],
+  needs_practice: ['Missed steps; review the checklist.', 'Needs supervised practice before the next case.'],
+};
+
 async function main() {
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -675,6 +728,31 @@ async function main() {
     (facultyLinks ?? []).map((l) => [l.section_id, l.faculty_id]),
   );
 
+  // Groups: each member's group, its supervisor, and the member's place in it.
+  const { data: groupRows, error: groupError } = await supabase
+    .from('teams')
+    .select('id, faculty_id, team_members(student_id, users(name))');
+  if (groupError) console.warn('  groups not read, seeding without them:', groupError.message);
+  const groupOf = new Map<string, { teamId: string; supervisor: string | null; index: number; size: number }>();
+  for (const g of groupRows ?? []) {
+    const members = ((g.team_members ?? []) as unknown as { student_id: string; users: { name: string } | null }[])
+      .slice()
+      .sort((a, b) => (a.users?.name ?? '').localeCompare(b.users?.name ?? '', undefined, { numeric: true }));
+    members.forEach((m, index) =>
+      groupOf.set(m.student_id, {
+        teamId: g.id as string,
+        supervisor: (g.faculty_id as string | null) ?? null,
+        index,
+        size: members.length,
+      }),
+    );
+  }
+
+  // Each task's skill area, so a sub-task is rated against the student's
+  // strengths and weaknesses there.
+  const { data: skillRows } = await supabase.from('taylor_skills').select('id, chapter_id');
+  const chapterOfSkill = new Map((skillRows ?? []).map((r) => [r.id as string, r.chapter_id as string]));
+
   // Every question's competency tags, so an answer can be drawn against the
   // student's actual weaknesses rather than a coin flip.
   const { data: tags } = await supabase
@@ -695,6 +773,8 @@ async function main() {
   let scenarioCount = 0;
   let attemptCount = 0;
   let taskCount = 0;
+  let stepRatingCount = 0;
+  const keptScenarios = new Set<string>();
   let skippedScenarios = 0;
   let skippedQuizzes = 0;
   const coverage: string[] = [];
@@ -715,6 +795,9 @@ async function main() {
     profile: Profile;
     studentId: string;
     facultyId: string | null;
+    teamId: string | null;
+    /** This member's cases, block by block (see memberWork). */
+    work: WorkItem[];
     /** Work beyond this index was assigned and never touched. */
     didCount: number;
   }
@@ -733,10 +816,14 @@ async function main() {
       continue;
     }
     const members = bySection.get(sectionName) ?? [];
+    const group = groupOf.get(student.id) ?? null;
     members.push({
       profile,
       studentId: student.id,
-      facultyId: facultyBySection.get(student.section_id) ?? null,
+      // A group's supervisor assigns and grades its members' work.
+      facultyId: group?.supervisor ?? facultyBySection.get(student.section_id) ?? null,
+      teamId: group?.teamId ?? null,
+      work: memberWork(work, group?.index ?? null, group?.size ?? 0),
       didCount: Math.max(1, Math.round(profile.engagement * work.length)),
     });
     bySection.set(sectionName, members);
@@ -748,9 +835,47 @@ async function main() {
     const work = SECTION_WORK[sectionName];
     const blocks = termBlocks(work.length, termStart);
 
+    // ---- Clear every catalog pair these students hold -------------------
+    // A group rotation can move a student off a case, so clearing only the
+    // cases they get now would leave the old ones behind.
+    //
+    // Two kinds of row are real work, not ours, and are kept: a scenario a
+    // faculty member graded sub-task by sub-task in the app (the seed never
+    // left sub-task ratings before), and an attempt still in progress (the
+    // seed only writes submitted ones).
+    const catalogScenarios = CATALOG.map((i) => scenarioByTitle.get(i.scenario)).filter((x): x is string => !!x);
+    const catalogQuizzes = CATALOG.map((i) => assessmentByTitle.get(i.quiz)).filter((x): x is string => !!x);
+    for (const member of members) {
+      const { data: held } = await supabase
+        .from('scenario_assignments')
+        .select('id, scenario_id, scenario_task_step_ratings(id)')
+        .eq('student_id', member.studentId)
+        .in('scenario_id', catalogScenarios);
+      for (const row of held ?? []) {
+        if (((row.scenario_task_step_ratings ?? []) as unknown[]).length > 0) {
+          keptScenarios.add(`${member.studentId}|${row.scenario_id}`);
+        } else {
+          await supabase.from('scenario_assignments').delete().eq('id', row.id);
+        }
+      }
+      // Attempts cascade to answers, served questions and criteria scores;
+      // the 027 trigger takes the derived competency scores.
+      await supabase
+        .from('assessment_attempts')
+        .delete()
+        .eq('student_id', member.studentId)
+        .neq('status', 'in_progress')
+        .in('assessment_id', catalogQuizzes);
+      await supabase
+        .from('assessment_assignments')
+        .delete()
+        .eq('student_id', member.studentId)
+        .in('assessment_id', catalogQuizzes);
+    }
+
     // ---- Scenarios ------------------------------------------------------
     for (const member of members) {
-      for (const [k, item] of work.entries()) {
+      for (const [k, item] of member.work.entries()) {
         const completed = k < member.didCount;
         const scenarioId = scenarioByTitle.get(item.scenario);
         if (!scenarioId) {
@@ -759,14 +884,10 @@ async function main() {
         }
         const rng = seeded(hash(`${member.profile.email}|${item.scenario}`));
 
-        // This pair is ours: clear it so a re-run rebuilds rather than stacks.
-        const { data: old } = await supabase
-          .from('scenario_assignments')
-          .select('id')
-          .eq('scenario_id', scenarioId)
-          .eq('student_id', member.studentId);
-        for (const row of old ?? []) {
-          await supabase.from('scenario_assignments').delete().eq('id', row.id);
+        // Graded in the app: that grade stands (cleared pairs were removed above).
+        if (keptScenarios.has(`${member.studentId}|${scenarioId}`)) {
+          console.log(`  kept ${member.profile.email} / ${item.scenario}: graded in the app`);
+          continue;
         }
 
         // The scenario opens its block; the student works it within a day,
@@ -785,6 +906,7 @@ async function main() {
           .insert({
             scenario_id: scenarioId,
             student_id: member.studentId,
+            team_id: member.teamId,
             assigned_by: member.facultyId,
             assigned_at: assignedAt.toISOString(),
             deadline: deadline.toISOString(),
@@ -810,31 +932,76 @@ async function main() {
 
         const { data: tasks } = await supabase
           .from('scenario_tasks')
-          .select('id, points, verification')
+          .select('id, points, verification, skill_id, scenario_task_steps(id)')
           .eq('scenario_id', scenarioId)
           .order('sort_order', { ascending: true });
 
+        // Grade the way faculty do: each performed task has every sub-task
+        // rated, and its completion row carries the level those add up to.
+        const gradedAt = completedAt.toISOString();
         const done = (tasks ?? []).filter(() => rng() < member.profile.taskCompletion);
-        if (done.length > 0) {
-          await supabase.from('scenario_task_completions').insert(
-            done.map((t) => ({
-              assignment_id: assignment.id,
-              task_id: t.id,
-              // A system task is closed by the student's own charting; a
-              // faculty task by the faculty member signing it off.
-              completed_by: t.verification === 'system' ? member.studentId : member.facultyId,
-              completed_via: t.verification,
-              completed_at: submittedAt.toISOString(),
-            })),
-          );
-          taskCount += done.length;
+        const stepRatings: { assignment_id: string; step_id: string; rating: TaskRating; rated_by: string | null; rated_at: string }[] = [];
+        const completions = done.map((t) => {
+          const area = competencyName.get(chapterOfSkill.get(t.skill_id as string) ?? '') ?? '';
+          const p = chanceCorrect(member.profile, area ? [area] : []);
+          const steps = (t.scenario_task_steps ?? []) as { id: string }[];
+          let rating: TaskRating;
+          if (steps.length > 0) {
+            let credit = 0;
+            for (const step of steps) {
+              const level = drawLevel(p, rng);
+              credit += TASK_RATINGS.find((l) => l.key === level)!.credit;
+              stepRatings.push({
+                assignment_id: assignment.id,
+                step_id: step.id,
+                rating: level,
+                rated_by: member.facultyId,
+                rated_at: gradedAt,
+              });
+            }
+            rating = ratingForCredit(credit / steps.length);
+          } else {
+            rating = drawLevel(p, rng);
+          }
+          const remarks = rng() < 0.4 ? REMARKS[rating][Math.floor(rng() * REMARKS[rating].length)] : null;
+          return {
+            assignment_id: assignment.id,
+            task_id: t.id,
+            // A system task is closed by the student's own charting; a
+            // faculty task by the faculty member signing it off.
+            completed_by: t.verification === 'system' ? member.studentId : member.facultyId,
+            completed_via: t.verification,
+            completed_at: submittedAt.toISOString(),
+            rating,
+            remarks,
+            rated_by: member.facultyId,
+          };
+        });
+        if (completions.length > 0) {
+          const { error: cErr } = await supabase.from('scenario_task_completions').insert(completions);
+          if (cErr) {
+            console.error(`  ✗ completions ${member.profile.email} / ${item.scenario}:`, cErr.message);
+            process.exit(1);
+          }
+          taskCount += completions.length;
+        }
+        if (stepRatings.length > 0) {
+          const { error: rErr } = await supabase.from('scenario_task_step_ratings').insert(stepRatings);
+          if (rErr) {
+            console.error(`  ✗ step ratings ${member.profile.email} / ${item.scenario}:`, rErr.message);
+            process.exit(1);
+          }
+          stepRatingCount += stepRatings.length;
         }
 
-        // Same formula the finalize route uses: share of task points earned.
-        const totalPoints = (tasks ?? []).reduce((sum, t) => sum + (t.points ?? 0), 0);
-        const earned = done.reduce((sum, t) => sum + (t.points ?? 0), 0);
-        const score = totalPoints > 0 ? Math.round((earned / totalPoints) * 100) : 0;
-        await supabase.from('scenario_assignments').update({ score }).eq('id', assignment.id);
+        // The finalize route's own scoring, so the stored score is the one a
+        // faculty member re-opening and saving this grade would get.
+        const scored = await scoreAssignment(supabase, assignment.id, scenarioId);
+        if (scored.error) {
+          console.error(`  ✗ scoring ${member.profile.email} / ${item.scenario}:`, scored.error.message);
+          process.exit(1);
+        }
+        await supabase.from('scenario_assignments').update({ score: scored.score }).eq('id', assignment.id);
         scenarioCount += 1;
       }
     }
@@ -844,30 +1011,11 @@ async function main() {
     // sitting below falls inside the window the student could sit it.
     const assignmentIds = new Map<string, string | null>();
     for (const member of members) {
-      for (const [k, item] of work.entries()) {
+      for (const [k, item] of member.work.entries()) {
         const assessmentId = assessmentByTitle.get(item.quiz);
         if (!assessmentId) {
           console.warn(`  missing quiz "${item.quiz}" — run db:seed:scenario-quizzes first`);
           continue;
-        }
-
-        // Ours to rebuild. Attempts cascade to answers, served questions and
-        // criteria scores; the 027 trigger takes the derived competency scores.
-        const { data: oldAttempts } = await supabase
-          .from('assessment_attempts')
-          .select('id')
-          .eq('assessment_id', assessmentId)
-          .eq('student_id', member.studentId);
-        for (const row of oldAttempts ?? []) {
-          await supabase.from('assessment_attempts').delete().eq('id', row.id);
-        }
-        const { data: oldAssign } = await supabase
-          .from('assessment_assignments')
-          .select('id')
-          .eq('assessment_id', assessmentId)
-          .eq('student_id', member.studentId);
-        for (const row of oldAssign ?? []) {
-          await supabase.from('assessment_assignments').delete().eq('id', row.id);
         }
 
         const sat = k < member.didCount;
@@ -904,7 +1052,7 @@ async function main() {
     // a quiz and prefers questions they have not met.
     for (const planned of sittings) {
       const member = members[planned.member];
-      const item = work[planned.block];
+      const item = member.work[planned.block];
       const assessmentId = assessmentByTitle.get(item.quiz);
       if (!assessmentId) continue;
       const key = `${member.studentId}|${assessmentId}`;
@@ -1023,6 +1171,12 @@ async function main() {
       // The app's own roll-up, so competency standing matches what a real
       // submission would have produced.
       await deriveCompetencyScoresForAttempt(supabase, attempt.id);
+      // Dated by the sitting, not by this run, so the skill-area trend and
+      // "newest wins" both follow the term's calendar.
+      await supabase
+        .from('competency_scores')
+        .update({ created_at: new Date(submittedAt).toISOString() })
+        .eq('attempt_id', attempt.id);
 
       attemptCount += 1;
       // The warehouse dates an attempt by its submission, so that is the
@@ -1040,7 +1194,7 @@ async function main() {
   }));
 
   console.log(
-    `\nScenarios: ${scenarioCount} completed (${taskCount} task check-offs), ` +
+    `\nScenarios: ${scenarioCount} completed (${taskCount} rated tasks, ${stepRatingCount} rated sub-tasks), ` +
       `${skippedScenarios} left outstanding.\n` +
       `Quizzes: ${attemptCount} attempts submitted, ${skippedQuizzes} assignments never sat.\n`,
   );
