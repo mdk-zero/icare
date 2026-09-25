@@ -15,6 +15,7 @@ import {
   ScenarioTask,
 } from '@/lib/api';
 import { isNetworkError } from '@/lib/client';
+import { ReflectionCard } from '@/components/ReflectionCard';
 import { scoreDescriptor, TASK_RATING_BADGE, TASK_RATING_LABEL } from '@/lib/task-ratings';
 
 const DIFFICULTY_VARIANT: Record<Scenario['difficulty'], 'success' | 'warning' | 'danger'> = {
@@ -220,6 +221,10 @@ export default function ScenarioBriefScreen() {
             </View>
           </View>
         </Card>
+      ) : null}
+
+      {isCompleted ? (
+        <ReflectionCard source="scenario" sourceId={assignment.id} />
       ) : isSubmitted ? (
         <Card style={styles.reviewCard}>
           <Ionicons name="hourglass-outline" size={20} color={Accent.blue.fg} />

@@ -16,6 +16,7 @@ import {
   faTriangleExclamation,
   faStethoscope,
   faListCheck,
+  faBullseye,
   faFileLines,
   faXmark,
   faArrowsRotate,
@@ -47,6 +48,9 @@ import StatTile from "../../../components/StatTile";
 import { usePageData } from "../../../lib/use-page-data";
 import LiveClock from "../../../components/LiveClock";
 import AiThinking from "../../../components/AiThinking";
+import ReflectionsTab from "./reflections-tab";
+import { fetchStudentReflections, type FacultyReflection } from "../../../lib/api";
+import SkillAreaTrend from "./skill-area-trend";
 
 /** Shown in turn while the summary is written, following what it draws on. */
 const STUDENT_SUMMARY_PHRASES = [
@@ -312,6 +316,19 @@ export default function StudentDetailClient() {
   const studentId = params?.id as string;
   
   const [activeTab, setActiveTab] = useState("performance");
+  const [reflections, setReflections] = useState<FacultyReflection[] | null>(null);
+  const [reflectionsEnabled, setReflectionsEnabled] = useState(true);
+  useEffect(() => {
+    let live = true;
+    void fetchStudentReflections(studentId).then((r) => {
+      if (!live) return;
+      setReflections(r.reflections);
+      setReflectionsEnabled(r.enabled);
+    });
+    return () => {
+      live = false;
+    };
+  }, [studentId]);
   const loggedRef = useRef(false);
 
   useEffect(() => {
@@ -688,11 +705,12 @@ export default function StudentDetailClient() {
         </Card>
       </div>
 
-        <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {([
-            { key: 'performance', label: 'Performance', hint: 'Skill Assessment results', count: performanceHistory.length, unit: 'quizzes', icon: faChartLine },
+            { key: 'performance', label: 'Performance', hint: 'Skill Assessment results', count: performanceHistory.length, unit: 'attempts', icon: faChartLine },
             { key: 'scenarios', label: 'Scenarios', hint: 'Simulation runs', count: scenarioHistory.length, unit: 'runs', icon: faStethoscope },
             { key: 'competencies', label: 'Skill Areas', hint: 'Skill mastery', count: competencies.length, unit: 'areas', icon: faListCheck },
+            { key: 'reflections', label: 'Reflections', hint: 'Reflections & goals', count: reflections?.length ?? 0, unit: 'entries', icon: faBullseye },
           ] as const).map((tab) => {
             const active = activeTab === tab.key;
             return (
@@ -840,6 +858,8 @@ export default function StudentDetailClient() {
             </div>
           )}
 
+          {activeTab === 'reflections' && <ReflectionsTab reflections={reflections} enabled={reflectionsEnabled} />}
+
           {activeTab === 'competencies' && (
             <div className="space-y-6">
               {competencies.length === 0 ? (
@@ -901,6 +921,14 @@ export default function StudentDetailClient() {
                   </div>
                 </>
               )}
+
+              <SkillAreaTrend
+                records={scoreHistory.map((r) => ({
+                  name: r.competency_areas?.name ?? "Unknown skill area",
+                  score: r.score,
+                  created_at: r.created_at,
+                }))}
+              />
 
               {scoreHistory.length > 0 && (
                 <div>

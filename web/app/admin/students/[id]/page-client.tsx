@@ -289,7 +289,7 @@ export default function StudentDetailClient() {
 
       <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
         {([
-          { key: "performance", label: "Performance", hint: "Skill Assessment results", count: attempts.length, unit: "quizzes", icon: faChartLine },
+          { key: "performance", label: "Performance", hint: "Skill Assessment results", count: attempts.length, unit: "attempts", icon: faChartLine },
           { key: "scenarios", label: "Scenarios", hint: "Simulation runs", count: scenarioHistory.length, unit: "runs", icon: faStethoscope },
           { key: "competencies", label: "Skill Areas", hint: "Skill mastery", count: Object.keys(competencies).length, unit: "areas", icon: faListCheck },
         ] as const).map((tab) => {

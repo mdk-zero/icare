@@ -17,6 +17,7 @@ import { Image } from 'expo-image';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { SectionHeader } from '@/components/ui';
+import { GoalsList } from '@/components/GoalsList';
 import { useAuth } from '@/hooks/useAuth';
 import { useAvatarImage, useAvatarPicker } from '@/hooks/useAvatar';
 import { useApiData, allCached } from '@/hooks/useApiData';
@@ -225,10 +226,12 @@ export default function ProfileScreen() {
               <Ionicons name="ribbon" size={18} color={Accent.blue.fg} />
             </View>
             <Text style={styles.perfValue}>{competencies.length}</Text>
-            <Text style={styles.perfLabel}>Skills</Text>
+            <Text style={styles.perfLabel}>Skill Areas</Text>
           </View>
         </View>
       </View>
+
+      <GoalsList />
 
       <View style={styles.section}>
         <SectionHeader title="Skill Areas" />

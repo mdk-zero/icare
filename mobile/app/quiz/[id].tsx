@@ -6,6 +6,7 @@ import { Card, PrimaryButton, SkeletonScreen, EmptyState } from '@/components/ui
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { startAttempt, submitAttempt, StartedAttempt, AttemptResult } from '@/lib/api';
+import { ReflectionCard } from '@/components/ReflectionCard';
 import { ApiError, isNetworkError } from '@/lib/client';
 
 function formatClock(seconds: number) {
@@ -173,6 +174,8 @@ export default function QuizInterfaceScreen() {
             {started.assessment.title} · {formatClock(result.time_taken_seconds)}
           </Text>
         </Card>
+
+        <ReflectionCard source="assessment" sourceId={started.attempt.id} />
 
         <Text style={styles.reviewHeading}>Review</Text>
         {started.questions.map((q, idx) => {

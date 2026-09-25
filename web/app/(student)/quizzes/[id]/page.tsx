@@ -10,6 +10,7 @@ import {
   AttemptResult,
 } from "../../../lib/api";
 import { EcgLoader } from "../../../components/EcgLoader";
+import ReflectionPanel from "../../../components/ReflectionPanel";
 
 export default function TakeQuizPage() {
   const router = useRouter();
@@ -151,6 +152,12 @@ export default function TakeQuizPage() {
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {attempt && (
+          <div className="mb-6">
+            <ReflectionPanel source="assessment" sourceId={attempt.attempt.id} />
           </div>
         )}
 

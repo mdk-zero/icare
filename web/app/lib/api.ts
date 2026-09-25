@@ -3312,3 +3312,147 @@ export const moveStudentToTeam = (studentId: string, teamId: string | null) =>
 
 export const autoSplitTeams = (sectionId: string, count: number) =>
   teamRequest('/api/faculty/teams/auto', 'POST', { section_id: sectionId, count });
+
+// ---------------------------------------------------------------------------
+// Reflections and goals
+// ---------------------------------------------------------------------------
+
+export type ReflectionSource = 'scenario' | 'assessment';
+
+export interface GradedItem {
+  title: string;
+  skill_id: string | null;
+  score: number;
+  level: string;
+  remarks: string | null;
+}
+
+export interface ReflectionFeedback {
+  summary: string;
+  strengths: { skill_id: string | null; note: string }[];
+  improvements: { skill_id: string | null; note: string }[];
+  suggested_goals: string[];
+  source: 'ai' | 'rules';
+}
+
+export interface StudentGoal {
+  id: string;
+  text: string;
+  skill_id: string | null;
+  status: 'open' | 'met';
+  created_at: string;
+  met_at: string | null;
+  source_type?: ReflectionSource | null;
+  source_id?: string | null;
+}
+
+export interface ReflectionState {
+  enabled: boolean;
+  work: { title: string; score: number | null; graded_at: string | null; items: GradedItem[] };
+  reflection: { text: string; updated_at: string } | null;
+  goals: StudentGoal[];
+  feedback: ReflectionFeedback | null;
+  feedback_stale: boolean;
+}
+
+export async function fetchReflection(source: ReflectionSource, sourceId: string): Promise<ReflectionState | null> {
+  try {
+    const res = await apiFetch(`/api/student/reflections?source_type=${source}&source_id=${encodeURIComponent(sourceId)}`, {
+      credentials: 'include',
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as ReflectionState;
+  } catch (err) {
+    console.error('fetchReflection() failed', err);
+    return null;
+  }
+}
+
+export async function requestReflectionFeedback(
+  source: ReflectionSource,
+  sourceId: string,
+): Promise<ReflectionFeedback | { error: string }> {
+  try {
+    const res = await apiFetch('/api/student/reflections/feedback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ source_type: source, source_id: sourceId }),
+    });
+    const json = (await res.json()) as { feedback?: ReflectionFeedback; error?: string };
+    return res.ok && json.feedback ? json.feedback : { error: json.error ?? 'Unable to get feedback' };
+  } catch (err) {
+    console.error('requestReflectionFeedback() failed', err);
+    return { error: 'Unable to get feedback' };
+  }
+}
+
+export async function saveReflection(
+  source: ReflectionSource,
+  sourceId: string,
+  reflection: string,
+  goals: { text: string; skill_id: string | null }[],
+): Promise<{ ok: true } | { error: string }> {
+  try {
+    const res = await apiFetch('/api/student/reflections', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ source_type: source, source_id: sourceId, reflection, goals }),
+    });
+    if (res.ok) return { ok: true };
+    const json = (await res.json().catch(() => ({}))) as { error?: string };
+    return { error: json.error ?? 'Unable to save' };
+  } catch (err) {
+    console.error('saveReflection() failed', err);
+    return { error: 'Unable to save' };
+  }
+}
+
+export async function fetchStudentGoals(): Promise<StudentGoal[]> {
+  try {
+    const res = await apiFetch('/api/student/goals', { credentials: 'include' });
+    const json = (await res.json()) as { goals?: StudentGoal[] };
+    return res.ok ? (json.goals ?? []) : [];
+  } catch (err) {
+    console.error('fetchStudentGoals() failed', err);
+    return [];
+  }
+}
+
+export async function setGoalStatus(goalId: string, status: 'open' | 'met'): Promise<boolean> {
+  try {
+    const res = await apiFetch(`/api/student/goals/${goalId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ status }),
+    });
+    return res.ok;
+  } catch (err) {
+    console.error('setGoalStatus() failed', err);
+    return false;
+  }
+}
+
+export interface FacultyReflection {
+  id: string;
+  source_type: ReflectionSource;
+  title: string;
+  score: number | null;
+  reflection: string;
+  feedback_summary: string | null;
+  updated_at: string;
+  goals: { id: string; text: string; skill_id: string | null; status: 'open' | 'met'; met_at: string | null }[];
+}
+
+export async function fetchStudentReflections(studentId: string): Promise<{ enabled: boolean; reflections: FacultyReflection[] }> {
+  try {
+    const res = await apiFetch(`/api/faculty/students/${studentId}/reflections`, { credentials: 'include' });
+    const json = (await res.json()) as { enabled?: boolean; reflections?: FacultyReflection[] };
+    return res.ok ? { enabled: json.enabled ?? true, reflections: json.reflections ?? [] } : { enabled: true, reflections: [] };
+  } catch (err) {
+    console.error('fetchStudentReflections() failed', err);
+    return { enabled: true, reflections: [] };
+  }
+}

@@ -800,3 +800,77 @@ export async function resolveAvatarUrl(pictureUrl: string | null | undefined): P
     return null;
   }
 }
+
+// ---------------------------------------------------------------
+// Reflections and goals (after a scenario is finalized or a skill
+// assessment is scored). Mirrors web/app/lib/reflections.ts.
+// ---------------------------------------------------------------
+
+export type ReflectionSource = 'scenario' | 'assessment';
+
+export interface GradedItem {
+  title: string;
+  skill_id: string | null;
+  score: number;
+  level: string;
+  remarks: string | null;
+}
+
+export interface ReflectionFeedback {
+  summary: string;
+  strengths: { skill_id: string | null; note: string }[];
+  improvements: { skill_id: string | null; note: string }[];
+  suggested_goals: string[];
+  source: 'ai' | 'rules';
+}
+
+export interface StudentGoal {
+  id: string;
+  text: string;
+  skill_id: string | null;
+  status: 'open' | 'met';
+  created_at: string;
+  met_at: string | null;
+}
+
+export interface ReflectionState {
+  enabled: boolean;
+  work: { title: string; score: number | null; graded_at: string | null; items: GradedItem[] };
+  reflection: { text: string; updated_at: string } | null;
+  goals: StudentGoal[];
+  feedback: ReflectionFeedback | null;
+  feedback_stale: boolean;
+}
+
+export async function fetchReflection(source: ReflectionSource, sourceId: string): Promise<ReflectionState> {
+  return api<ReflectionState>(`/api/student/reflections?source_type=${source}&source_id=${encodeURIComponent(sourceId)}`);
+}
+
+export async function requestReflectionFeedback(source: ReflectionSource, sourceId: string): Promise<ReflectionFeedback> {
+  const res = await api<{ feedback: ReflectionFeedback }>('/api/student/reflections/feedback', {
+    method: 'POST',
+    body: { source_type: source, source_id: sourceId },
+  });
+  return res.feedback;
+}
+
+export async function saveReflection(
+  source: ReflectionSource,
+  sourceId: string,
+  reflection: string,
+  goals: { text: string; skill_id: string | null }[],
+): Promise<void> {
+  await api('/api/student/reflections', {
+    method: 'POST',
+    body: { source_type: source, source_id: sourceId, reflection, goals },
+  });
+}
+
+export async function fetchGoals(): Promise<StudentGoal[]> {
+  const res = await api<{ goals: StudentGoal[] }>('/api/student/goals');
+  return res.goals ?? [];
+}
+
+export async function setGoalStatus(goalId: string, status: 'open' | 'met'): Promise<void> {
+  await api(`/api/student/goals/${goalId}`, { method: 'PATCH', body: { status } });
+}

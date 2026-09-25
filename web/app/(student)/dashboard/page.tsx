@@ -24,6 +24,7 @@ import {
   ScenarioAssignment,
 } from "../../lib/api";
 import { usePageData } from "../../lib/use-page-data";
+import GoalsCard from "../../components/GoalsCard";
 
 // Stable empty fallbacks, so nothing downstream sees a new array each render.
 const NO_PATIENTS: Patient[] = [];
@@ -193,6 +194,8 @@ export default function StudentDashboard() {
               </div>
               )}
             </div>
+
+            <GoalsCard />
 
             <div className="bg-surface p-6 rounded-2xl shadow-sm border border-gray-100">
               <h3 className="font-semibold text-gray-800 mb-4">

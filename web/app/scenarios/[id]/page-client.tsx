@@ -17,6 +17,7 @@ import {
 import { withFreshResponses } from "../../lib/request-cache";
 import { ratingLabel, scoreDescriptor, type TaskRating } from "../../lib/task-ratings";
 import { EcgLoader } from "../../components/EcgLoader";
+import ReflectionPanel from "../../components/ReflectionPanel";
 
 function categoryColor(category: string) {
   switch (category) {
@@ -428,6 +429,12 @@ export default function ScenarioRunnerClient() {
             </div>
           </div>
         </div>
+
+        {isCompleted && assignment && (
+          <div className="mt-6">
+            <ReflectionPanel source="scenario" sourceId={assignment.id} />
+          </div>
+        )}
       </main>
     </div>
   );
