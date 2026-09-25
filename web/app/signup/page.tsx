@@ -16,7 +16,7 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import logo_white from "../../public/logo-white-no-bg.png";
 import { EcgLoader } from "../components/EcgLoader";
-import { RotatingWords } from "../components/AuthShowcase";
+import { DriftingKit, RotatingWords } from "../components/AuthShowcase";
 
 const inputClass =
   "auth-input w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-[#7DD3D8]/30 focus:border-[#7DD3D8]/50 transition-all";
@@ -92,6 +92,8 @@ export default function ContactUsPage() {
         style={{ animationDelay: "-3s" }}
       />
       <div className="absolute bottom-[10%] right-0 w-[350px] h-[350px] bg-black/20 rounded-full blur-3xl translate-x-1/4 pointer-events-none" />
+
+      <DriftingKit />
 
       {/* ───────── Left panel — brand story ───────── */}
       <div className="hidden lg:flex lg:w-1/2 relative">

@@ -19,7 +19,7 @@ import {
 import { login, isAuthenticated, refreshCurrentUser, User, logAuditAction } from "../lib/api";
 import logo_white from "../../public/logo-white-no-bg.png";
 import { EcgLoader } from "../components/EcgLoader";
-import { RotatingWords } from "../components/AuthShowcase";
+import { DriftingKit, RotatingWords } from "../components/AuthShowcase";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -184,6 +184,8 @@ export default function LoginPage() {
         style={{ animationDelay: "-3s" }}
       />
       <div className="absolute bottom-[10%] right-0 w-[350px] h-[350px] bg-black/20 rounded-full blur-3xl translate-x-1/4 pointer-events-none" />
+
+      <DriftingKit />
 
       {/* ───────── Left panel — brand story ───────── */}
       <div className="hidden lg:flex lg:w-1/2 relative">

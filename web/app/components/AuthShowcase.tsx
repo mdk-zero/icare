@@ -1,6 +1,22 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faBandage,
+  faCapsules,
+  faDroplet,
+  faHeartPulse,
+  faLungs,
+  faNotesMedical,
+  faPills,
+  faStethoscope,
+  faSyringe,
+  faTemperatureHalf,
+  faUserNurse,
+  faVial,
+} from "@fortawesome/free-solid-svg-icons";
 
 /*
  * The moving parts of the login and contact screens' brand panel. The form
@@ -35,5 +51,66 @@ export function RotatingWords({ words, interval = 2600 }: { words: string[]; int
         {words[index]}
       </span>
     </span>
+  );
+}
+
+/*
+ * A nurse's kit drifting up the backdrop. Each icon rises on the outer element
+ * and sways on the inner one, at unrelated periods so no two move in step;
+ * smaller ones are dimmer and softened so they read as further away. Values are
+ * fixed, not random, so the server and client render the same markup.
+ */
+const DRIFTERS: {
+  icon: IconDefinition;
+  left: string;
+  size: number;
+  rise: number;
+  sway: number;
+  delay: number;
+}[] = [
+  { icon: faStethoscope, left: "4%", size: 30, rise: 26, sway: 7, delay: -3 },
+  { icon: faPills, left: "13%", size: 14, rise: 21, sway: 5, delay: -14 },
+  { icon: faHeartPulse, left: "22%", size: 22, rise: 29, sway: 8, delay: -20 },
+  { icon: faSyringe, left: "31%", size: 12, rise: 19, sway: 4.5, delay: -7 },
+  { icon: faLungs, left: "39%", size: 26, rise: 32, sway: 9, delay: -12 },
+  { icon: faDroplet, left: "47%", size: 11, rise: 18, sway: 4, delay: -1 },
+  { icon: faTemperatureHalf, left: "55%", size: 18, rise: 24, sway: 6, delay: -17 },
+  { icon: faVial, left: "63%", size: 13, rise: 22, sway: 5.5, delay: -9 },
+  { icon: faNotesMedical, left: "71%", size: 24, rise: 30, sway: 8.5, delay: -24 },
+  { icon: faCapsules, left: "79%", size: 15, rise: 23, sway: 5, delay: -5 },
+  { icon: faUserNurse, left: "87%", size: 20, rise: 27, sway: 7.5, delay: -15 },
+  { icon: faBandage, left: "94%", size: 12, rise: 20, sway: 4.5, delay: -11 },
+];
+
+export function DriftingKit() {
+  return (
+    <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+      {DRIFTERS.map((d) => {
+        // 11px → far (dim, soft), 32px → near (brighter, crisp).
+        const depth = (d.size - 11) / 21;
+        return (
+          <div
+            key={d.left}
+            className="auth-drift absolute bottom-0"
+            style={{ left: d.left, animationDuration: `${d.rise}s`, animationDelay: `${d.delay}s` }}
+          >
+            <div
+              className="auth-sway"
+              style={{
+                animationDuration: `${d.sway}s`,
+                animationDelay: `${d.delay / 3}s`,
+                opacity: 0.1 + depth * 0.14,
+                filter: `blur(${((1 - depth) * 1.4).toFixed(2)}px)`,
+              }}
+            >
+              <FontAwesomeIcon
+                icon={d.icon}
+                style={{ width: d.size, height: d.size, color: "#7DD3D8" }}
+              />
+            </div>
+          </div>
+        );
+      })}
+    </div>
   );
 }
