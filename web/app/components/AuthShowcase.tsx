@@ -82,9 +82,29 @@ const DRIFTERS: {
   { icon: faBandage, left: "94%", size: 12, rise: 20, sway: 4.5, delay: -11 },
 ];
 
+/*
+ * Kept beside the component rather than in globals.css, as Shell does with its
+ * styles: the rules only matter where this renders. The global reduced-motion
+ * block still stills them.
+ */
+const driftStyles = `
+.auth-drift { animation: authDrift linear infinite; }
+@keyframes authDrift {
+  from { transform: translate3d(0, 12vh, 0); opacity: 0; }
+  12%, 85% { opacity: 1; }
+  to { transform: translate3d(0, -110vh, 0); opacity: 0; }
+}
+.auth-sway { animation: authSway ease-in-out infinite alternate; }
+@keyframes authSway {
+  from { transform: translateX(-14px) rotate(-14deg); }
+  to { transform: translateX(14px) rotate(14deg); }
+}
+`;
+
 export function DriftingKit() {
   return (
     <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+      <style>{driftStyles}</style>
       {DRIFTERS.map((d) => {
         // 11px → far (dim, soft), 32px → near (brighter, crisp).
         const depth = (d.size - 11) / 21;

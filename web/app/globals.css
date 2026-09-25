@@ -622,37 +622,6 @@ html {
   }
 }
 
-/* DriftingKit: the outer element rises, the inner one sways. */
-.auth-drift {
-  animation: authDrift linear infinite;
-}
-@keyframes authDrift {
-  from {
-    transform: translate3d(0, 12vh, 0);
-    opacity: 0;
-  }
-  12%,
-  85% {
-    opacity: 1;
-  }
-  to {
-    transform: translate3d(0, -110vh, 0);
-    opacity: 0;
-  }
-}
-
-.auth-sway {
-  animation: authSway ease-in-out infinite alternate;
-}
-@keyframes authSway {
-  from {
-    transform: translateX(-14px) rotate(-14deg);
-  }
-  to {
-    transform: translateX(14px) rotate(14deg);
-  }
-}
-
 /* Drag handles: the system grab hand is white and faint on light rows, so
    these draw it with an outline that contrasts with the theme, black around
    white on light, white around black on dark. */
