@@ -16,6 +16,7 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import logo_white from "../../public/logo-white-no-bg.png";
 import { EcgLoader } from "../components/EcgLoader";
+import { RotatingWords, VitalsMonitor } from "../components/AuthShowcase";
 
 const inputClass =
   "auth-input w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-[#7DD3D8]/30 focus:border-[#7DD3D8]/50 transition-all";
@@ -106,7 +107,9 @@ export default function ContactUsPage() {
             <h2 className="opacity-0 animate-fade-in-up [animation-delay:200ms] text-4xl xl:text-[2.75rem] font-semibold tracking-tight leading-[1.12] mb-5">
               Join the future of
               <br />
-              nursing education.
+              <RotatingWords
+                words={["nursing education.", "clinical practice.", "patient care."]}
+              />
             </h2>
             <p className="opacity-0 animate-fade-in-up [animation-delay:300ms] text-base text-white/70 leading-relaxed mb-10">
               A scalable machine learning–driven clinical competency assessment and adaptive
@@ -149,6 +152,7 @@ export default function ContactUsPage() {
                 </li>
               ))}
             </ul>
+            <VitalsMonitor />
           </div>
         </div>
       </div>

@@ -19,6 +19,7 @@ import {
 import { login, isAuthenticated, refreshCurrentUser, User, logAuditAction } from "../lib/api";
 import logo_white from "../../public/logo-white-no-bg.png";
 import { EcgLoader } from "../components/EcgLoader";
+import { RotatingWords, VitalsMonitor } from "../components/AuthShowcase";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -203,7 +204,8 @@ export default function LoginPage() {
             <h2 className="opacity-0 animate-fade-in-up [animation-delay:200ms] text-4xl xl:text-[2.75rem] font-semibold tracking-tight leading-[1.12] mb-5">
               Sharpen clinical judgment,
               <br />
-              one scenario at a time.
+              one{" "}
+              <RotatingWords words={["scenario", "patient", "skill", "shift"]} /> at a time.
             </h2>
             <p className="opacity-0 animate-fade-in-up [animation-delay:300ms] text-base text-white/70 leading-relaxed mb-10">
               A scalable machine learning–driven clinical competency assessment and adaptive
@@ -246,6 +248,7 @@ export default function LoginPage() {
                 </li>
               ))}
             </ul>
+            <VitalsMonitor />
           </div>
         </div>
       </div>
