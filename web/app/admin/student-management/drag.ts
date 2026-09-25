@@ -76,10 +76,17 @@ function setChipDragImage(e: DragEvent, label: string, count: number) {
   text.textContent = label;
   chip.appendChild(text);
 
-  document.body.appendChild(chip);
-  e.dataTransfer.setDragImage(chip, 20, 20);
-  // The browser snapshots the chip at drag start, so it can go straight away.
-  setTimeout(() => chip.remove(), 0);
+  // The chip hangs below and to the right of the pointer, inside a clear
+  // frame, so the cursor stays in plain sight instead of sitting on top of the
+  // chip where it's hard to see.
+  const frame = document.createElement("div");
+  frame.style.cssText = "position:fixed;top:-1000px;left:-1000px;padding:22px 14px 14px 22px;background:transparent";
+  chip.style.position = "static";
+  frame.appendChild(chip);
+  document.body.appendChild(frame);
+  e.dataTransfer.setDragImage(frame, 0, 0);
+  // The browser snapshots the frame at drag start, so it can go straight away.
+  setTimeout(() => frame.remove(), 0);
 }
 
 export function isStudentDrag(e: DragEvent): boolean {

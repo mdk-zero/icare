@@ -19,7 +19,6 @@ import {
   autoSplitTeams,
   createTeam,
   deleteTeam,
-  moveStudentToTeam,
   renameTeam,
   type TeamsOverview,
 } from "../../lib/api";
@@ -48,11 +47,17 @@ export default function SectionGroups({
   studentCount,
   overview,
   onChanged,
+  pendingIds,
+  onMove,
 }: {
   sectionId: string;
   studentCount: number;
   overview: TeamsOverview | null;
   onChanged: () => Promise<unknown> | void;
+  /** Students moved on screen whose save hasn't landed yet; drawn greyed out. */
+  pendingIds: ReadonlyMap<string, string | null>;
+  /** Moves students right away on screen, then saves. */
+  onMove: (ids: string[], to: string | null, labels: { pending: string; done: string }) => Promise<void>;
 }) {
   // Kept as the typed text, so clearing the box doesn't snap back to a number.
   const [perGroup, setPerGroup] = useState("2");
@@ -194,17 +199,10 @@ export default function SectionGroups({
                 setDropTarget(null);
                 const drag = readStudentDrag(e);
                 if (!drag || drag.fromGroupId === group.id) return;
-                void run(
-                  async () => {
-                    // One at a time: the move endpoint takes a single student.
-                    for (const id of drag.studentIds) {
-                      const result = await moveStudentToTeam(id, group.id);
-                      if ("error" in result) return result;
-                    }
-                    return { ok: true as const };
-                  },
-                  { pending: `Adding ${drag.label} to ${group.name}…`, done: `Added ${drag.label} to ${group.name}` },
-                );
+                void onMove(drag.studentIds, group.id, {
+                  pending: `Adding ${drag.label} to ${group.name}…`,
+                  done: `Added ${drag.label} to ${group.name}`,
+                });
               }}
               className={`relative flex flex-col rounded-xl border p-4 transition-all duration-150 ${
                 dropTarget === group.id
@@ -316,10 +314,14 @@ export default function SectionGroups({
                   {group.members.map((member) => (
                     <li
                       key={member.id}
-                      draggable={!busy}
+                      draggable={!busy && !pendingIds.has(member.id)}
                       onDragStart={(e) => startStudentDrag(e, [member], group.id)}
-                      title="Drag to another group"
-                      className="flex cursor-grab items-center gap-2 rounded-lg bg-surface px-2 py-1.5 active:cursor-grabbing"
+                      title={pendingIds.has(member.id) ? "Saving…" : "Drag to another group"}
+                      className={`flex items-center gap-2 rounded-lg bg-surface px-2 py-1.5 transition-opacity ${
+                        pendingIds.has(member.id)
+                          ? "pointer-events-none animate-pulse opacity-50 grayscale"
+                          : "cursor-grab-outlined"
+                      }`}
                     >
                       <FontAwesomeIcon icon={faGripVertical} className="h-3 w-3 shrink-0 text-gray-300" aria-hidden />
                       <Avatar name={member.name} src={member.picture_url} userId={member.id} sex={member.sex} size="xs" />
@@ -330,8 +332,9 @@ export default function SectionGroups({
                         aria-label={`Move ${member.name}`}
                         onChange={(e) => {
                           const to = e.target.value || null;
-                          void run(
-                            () => moveStudentToTeam(member.id, to),
+                          void onMove(
+                            [member.id],
+                            to,
                             to
                               ? { pending: `Moving ${member.name} to ${groupName(to)}…`, done: `Moved ${member.name} to ${groupName(to)}` }
                               : { pending: `Taking ${member.name} out of ${group.name}…`, done: `${member.name} is no longer in a group` },

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCheckCircle, faTimes, faInfoCircle } from "@fortawesome/free-solid-svg-icons";
 import { EcgLoader } from "./EcgLoader";
@@ -15,7 +15,12 @@ interface ToastItem {
   progress?: number;
   /** Began as a loading toast, so its bar stays to finish filling. */
   wasLoading?: boolean;
+  /** Playing its exit animation; removed once that ends. */
+  leaving?: boolean;
 }
+
+/** How long the slide-out transition runs before the toast is removed. */
+const EXIT_MS = 300;
 
 let nextId = 0;
 let addToastFn:
@@ -46,6 +51,13 @@ export function loadingToast(text: string, progress?: number) {
 export default function ToastContainer() {
   const [items, setItems] = useState<ToastItem[]>([]);
 
+  // Toasts don't vanish in one frame: they're marked leaving, slide out, and
+  // only then leave the list.
+  const dismiss = useCallback((id: number, only?: (t: ToastItem) => boolean) => {
+    setItems((prev) => prev.map((t) => (t.id === id && (!only || only(t)) ? { ...t, leaving: true } : t)));
+    setTimeout(() => setItems((prev) => prev.filter((t) => !(t.id === id && t.leaving))), EXIT_MS);
+  }, []);
+
   useEffect(() => {
     // Re-adding an id replaces that toast in place, which is how a loading
     // toast updates. A duration of 0 keeps it until the next replace.
@@ -56,13 +68,13 @@ export default function ToastContainer() {
           : [...prev, { id, text, type, progress }],
       );
       if (durationMs > 0) {
-        setTimeout(() => {
-          setItems((prev) => prev.filter((t) => !(t.id === id && t.text === text && t.type === type)));
-        }, durationMs);
+        // Only if it still says this: a loading toast that moved on since
+        // keeps going.
+        setTimeout(() => dismiss(id, (t) => t.text === text && t.type === type), durationMs);
       }
     };
     return () => { addToastFn = null; };
-  }, []);
+  }, [dismiss]);
 
   if (items.length === 0) return null;
 
@@ -71,7 +83,7 @@ export default function ToastContainer() {
       {items.map((item) => (
         <div
           key={item.id}
-          className={`flex items-start gap-3 px-4 py-3 rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] border text-sm font-medium animate-[slideIn_0.3s_ease] ${
+          className={`flex items-start gap-3 px-4 py-3 rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] border text-sm font-medium transition-[translate,opacity] duration-300 ease-in ${item.leaving ? "translate-x-[110%] opacity-0" : "animate-[slideIn_0.3s_ease]"} ${
             item.type === "success"
               ? "bg-green-50 border-green-200 text-green-800"
               : item.type === "error"
@@ -100,7 +112,7 @@ export default function ToastContainer() {
           </span>
           {item.type !== "loading" && (
             <button
-              onClick={() => setItems((prev) => prev.filter((t) => t.id !== item.id))}
+              onClick={() => dismiss(item.id)}
               className="shrink-0 opacity-60 hover:opacity-100 transition-opacity"
               aria-label="Dismiss"
             >

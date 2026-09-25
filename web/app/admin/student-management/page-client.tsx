@@ -27,6 +27,7 @@ import {
   fetchSections,
   fetchFacultyTeams,
   moveStudentToTeam,
+  type TeamsOverview,
   runMlJob,
   Section,
   apiFetch,
@@ -469,6 +470,59 @@ export default function StudentManagementClient() {
     fetchFacultyTeams,
   );
 
+  // Moves shown on screen before the server confirms them: student id → the
+  // group they're headed to (null = out of every group). The student sits in
+  // their new place, greyed out, until the save lands; a failed save drops
+  // the entry and they fall back to where they were.
+  const [pendingMoves, setPendingMoves] = useState<Map<string, string | null>>(new Map());
+  const shownOverview = useMemo(() => {
+    if (!teamsOverview || pendingMoves.size === 0) return teamsOverview ?? null;
+    const people = new Map<string, TeamsOverview["teams"][number]["members"][number]>();
+    for (const s of teamsOverview.students) {
+      people.set(s.id, { id: s.id, name: s.name, picture_url: s.picture_url, sex: s.sex });
+    }
+    for (const t of teamsOverview.teams) for (const m of t.members) people.set(m.id, m);
+    const incoming = (teamId: string) =>
+      [...pendingMoves]
+        .filter(([, to]) => to === teamId)
+        .map(([id]) => people.get(id))
+        .filter((m): m is NonNullable<typeof m> => !!m);
+    return {
+      ...teamsOverview,
+      teams: teamsOverview.teams.map((t) => ({
+        ...t,
+        members: [...t.members.filter((m) => !pendingMoves.has(m.id)), ...incoming(t.id)],
+      })),
+      students: teamsOverview.students.map((s) =>
+        pendingMoves.has(s.id) ? { ...s, team_id: pendingMoves.get(s.id) ?? null } : s,
+      ),
+    };
+  }, [teamsOverview, pendingMoves]);
+
+  /** Moves students at once on screen, then saves; the toast tracks the save. */
+  const moveStudents = async (ids: string[], to: string | null, labels: { pending: string; done: string }) => {
+    setPendingMoves((prev) => {
+      const next = new Map(prev);
+      for (const id of ids) next.set(id, to);
+      return next;
+    });
+    setSelectedIds((prev) => new Set([...prev].filter((id) => !ids.includes(id))));
+    const progress = loadingToast(labels.pending);
+    let failure: string | null = null;
+    for (const id of ids) {
+      const result = await moveStudentToTeam(id, to);
+      if ("error" in result) failure = result.error;
+    }
+    await refreshTeams();
+    setPendingMoves((prev) => {
+      const next = new Map(prev);
+      for (const id of ids) if (next.get(id) === to) next.delete(id);
+      return next;
+    });
+    if (failure) progress.error(failure);
+    else progress.success(labels.done);
+  };
+
   const students = data?.students ?? NO_STUDENTS;
   const sections = data?.sections ?? NO_SECTIONS;
   const loadStudents = refresh;
@@ -572,11 +626,11 @@ export default function StudentManagementClient() {
   const sectionGroups = useMemo(
     () =>
       isRealSection
-        ? (teamsOverview?.teams ?? [])
+        ? (shownOverview?.teams ?? [])
             .filter((t) => t.section_id === openGroup.key)
             .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
         : [],
-    [teamsOverview, isRealSection, openGroup],
+    [shownOverview, isRealSection, openGroup],
   );
   const hasGroups = sectionGroups.length > 0;
   const tableStudents = useMemo(() => {
@@ -924,8 +978,10 @@ export default function StudentManagementClient() {
             <SectionGroups
               sectionId={openGroup.key}
               studentCount={openGroup.students.length}
-              overview={teamsOverview ?? null}
+              overview={shownOverview}
               onChanged={refreshTeams}
+              pendingIds={pendingMoves}
+              onMove={moveStudents}
             />
           )}
 
@@ -997,17 +1053,10 @@ export default function StudentManagementClient() {
               const drag = readStudentDrag(e);
               // Only a student dragged out of a group has anywhere to leave.
               if (!drag?.fromGroupId) return;
-              void (async () => {
-                const progress = loadingToast(`Taking ${drag.label} out of their group…`);
-                let failure: string | null = null;
-                for (const id of drag.studentIds) {
-                  const result = await moveStudentToTeam(id, null);
-                  if ("error" in result) failure = result.error;
-                }
-                await refreshTeams();
-                if (failure) progress.error(failure);
-                else progress.success(`${drag.label} ${drag.studentIds.length === 1 ? "is" : "are"} no longer in a group`);
-              })();
+              void moveStudents(drag.studentIds, null, {
+                pending: `Taking ${drag.label} out of their group…`,
+                done: `${drag.label} ${drag.studentIds.length === 1 ? "is" : "are"} no longer in a group`,
+              });
             }}
             className={`relative overflow-hidden rounded-xl border bg-surface shadow-tile transition-all duration-150 ${
               tableDropActive ? "border-brand-500 ring-2 ring-brand-500/40" : "border-hairline"
@@ -1079,8 +1128,10 @@ export default function StudentManagementClient() {
                       }
                       // Clicking a row only picks it; the folder icon opens the profile.
                       onClick={(e) => selectRow(student.id, e)}
-                      className={`select-none transition-colors ${hasGroups ? "cursor-grab active:cursor-grabbing" : "cursor-default"} ${
-                        selectedIds.has(student.id)
+                      className={`select-none transition-colors ${hasGroups ? "cursor-grab-outlined" : "cursor-default"} ${
+                        pendingMoves.has(student.id)
+                          ? "pointer-events-none animate-pulse opacity-50 grayscale"
+                          : selectedIds.has(student.id)
                           ? "bg-brand-600/10 shadow-[inset_3px_0_0_0_var(--color-brand-600)]"
                           : "hover:bg-subtle"
                       }`}
