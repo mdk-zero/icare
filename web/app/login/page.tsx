@@ -19,7 +19,7 @@ import {
 import { login, isAuthenticated, refreshCurrentUser, User, logAuditAction } from "../lib/api";
 import logo_white from "../../public/logo-white-no-bg.png";
 import { EcgLoader } from "../components/EcgLoader";
-import { RotatingWords, VitalsMonitor } from "../components/AuthShowcase";
+import { RotatingWords, EcgSweep } from "../components/AuthShowcase";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -248,7 +248,7 @@ export default function LoginPage() {
                 </li>
               ))}
             </ul>
-            <VitalsMonitor />
+            <EcgSweep />
           </div>
         </div>
       </div>

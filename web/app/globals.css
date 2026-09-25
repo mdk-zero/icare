@@ -637,53 +637,6 @@ html {
   }
 }
 
-.auth-heartbeat {
-  animation: authHeartbeat ease-out infinite;
-}
-@keyframes authHeartbeat {
-  0%,
-  100% {
-    transform: scale(1);
-  }
-  15% {
-    transform: scale(1.35);
-  }
-  30% {
-    transform: scale(0.95);
-  }
-  45% {
-    transform: scale(1.15);
-  }
-}
-
-.auth-digit {
-  animation: authDigit 0.4s ease-out;
-}
-@keyframes authDigit {
-  from {
-    opacity: 0.3;
-    transform: translate3d(0, -3px, 0);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-.auth-scan {
-  animation: authScan 6s ease-in-out infinite;
-}
-@keyframes authScan {
-  0%,
-  20% {
-    transform: translateX(0);
-  }
-  80%,
-  100% {
-    transform: translateX(400%);
-  }
-}
-
 /* Drag handles: the system grab hand is white and faint on light rows, so
    these draw it with an outline that contrasts with the theme, black around
    white on light, white around black on dark. */
