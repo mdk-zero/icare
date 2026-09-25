@@ -8,11 +8,12 @@ import {
   MAX_TEAMS_PER_SECTION,
   TEAMS_NEED_MIGRATION,
 } from '@/app/lib/teams';
+import { nextGroupName } from '@/app/lib/group-label';
 
 /**
  * POST { section_id, count }: split the section's students into `count`
  * groups at random, as evenly as possible. Existing groups are reused in name
- * order (keeping their names and supervising faculty) and "Group N" is created
+ * order (keeping their names and supervising faculty) and "Group A", "Group B"… are created
  * for any missing. Groups past `count` are deleted, since regrouping leaves
  * them empty; scenarios assigned through them stay, just without the label.
  * Everyone in the section is reshuffled.
@@ -54,12 +55,11 @@ export async function POST(request: NextRequest) {
 
   const teams = [...(existing ?? [])].sort((a, b) => compareTeamNames(a.name, b.name)) as { id: string; name: string }[];
   const names = new Set(teams.map((t) => t.name));
-  let n = 1;
   while (teams.length < count) {
-    while (names.has(`Group ${n}`)) n++;
+    const name = nextGroupName(names);
     const { data, error } = await supabase
       .from('teams')
-      .insert({ section_id: sectionId, name: `Group ${n}`, created_by: session.uid })
+      .insert({ section_id: sectionId, name, created_by: session.uid })
       .select('id, name')
       .single();
     if (error || !data) {
@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unable to split teams' }, { status: 500 });
     }
     teams.push(data as { id: string; name: string });
-    names.add(`Group ${n}`);
+    names.add(name);
   }
   const targets = teams.slice(0, count);
 

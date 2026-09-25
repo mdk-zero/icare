@@ -4,6 +4,7 @@ import { useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faUserPlus, faCircleCheck, faTriangleExclamation } from "@fortawesome/free-solid-svg-icons";
 import { apiFetch, moveStudentToTeam } from "../../lib/api";
+import { loadingToast } from "../../components/Toast";
 
 const inputClass =
   "mt-1.5 block w-full rounded-lg border border-gray-200 bg-surface px-3 py-2 text-gray-800 focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30";
@@ -38,6 +39,7 @@ export default function RegisterStudentModal({
     e.preventDefault();
     setError(null);
     setSaving(true);
+    const progress = loadingToast(`Registering ${name.trim()}…`);
     const res = await apiFetch("/api/admin/users", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -58,6 +60,7 @@ export default function RegisterStudentModal({
     };
     if (!res.ok || !json.user) {
       setSaving(false);
+      progress.error(json.error ?? "Unable to register the student.");
       setError(json.error ?? "Unable to register the student.");
       return;
     }
@@ -70,6 +73,7 @@ export default function RegisterStudentModal({
       }
     }
     setSaving(false);
+    progress.success(`Registered ${name.trim()}`);
     setDone({ email: json.user.email, password: json.password ?? "", warning });
     onRegistered();
   };

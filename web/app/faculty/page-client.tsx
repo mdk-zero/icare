@@ -149,7 +149,7 @@ export default function FacultyDashboard() {
           style={rise(0)}
         >
           <StatTile
-            href="/faculty/students"
+            href="/faculty/teams"
             icon={faUsers}
             value={total}
             label="Students"
@@ -160,7 +160,7 @@ export default function FacultyDashboard() {
             }
           />
           <StatTile
-            href="/faculty/students"
+            href="/faculty/teams"
             icon={faTriangleExclamation}
             iconBg="bg-red-50"
             iconColor="text-red-600"
@@ -182,7 +182,7 @@ export default function FacultyDashboard() {
             caption={review > 0 ? "Scenario submissions" : "Queue is clear"}
           />
           <StatTile
-            href="/faculty/students"
+            href="/faculty/teams"
             icon={faClock}
             iconBg="bg-amber-50"
             iconColor="text-amber-600"

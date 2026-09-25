@@ -12,19 +12,21 @@ import {
   faTriangleExclamation,
   faCheck,
   faXmark,
+  faGripVertical,
 } from "@fortawesome/free-solid-svg-icons";
 import {
   assignTeamFaculty,
   autoSplitTeams,
   createTeam,
   deleteTeam,
-  moveStudentToTeam,
   renameTeam,
   type TeamsOverview,
 } from "../../lib/api";
 import Avatar from "../../components/Avatar";
+import { nextGroupName } from "../../lib/group-label";
+import { isStudentDrag, leftTarget, readStudentDrag, startStudentDrag } from "./drag";
 import ConfirmModal, { type ConfirmConfig } from "../../components/ConfirmModal";
-import { toast } from "../../components/Toast";
+import { loadingToast } from "../../components/Toast";
 
 /** Mirrors MAX_TEAMS_PER_SECTION on the server. */
 const MAX_GROUPS = 20;
@@ -45,11 +47,17 @@ export default function SectionGroups({
   studentCount,
   overview,
   onChanged,
+  pendingIds,
+  onMove,
 }: {
   sectionId: string;
   studentCount: number;
   overview: TeamsOverview | null;
   onChanged: () => Promise<unknown> | void;
+  /** Students moved on screen whose save hasn't landed yet; drawn greyed out. */
+  pendingIds: ReadonlyMap<string, string | null>;
+  /** Moves students right away on screen, then saves. */
+  onMove: (ids: string[], to: string | null, labels: { pending: string; done: string }) => Promise<void>;
 }) {
   // Kept as the typed text, so clearing the box doesn't snap back to a number.
   const [perGroup, setPerGroup] = useState("2");
@@ -57,6 +65,8 @@ export default function SectionGroups({
   const [busy, setBusy] = useState(false);
   const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
   const [confirm, setConfirm] = useState<ConfirmConfig | null>(null);
+  // The group card a student is being dragged over, lit up as the drop target.
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
 
   const groups = (overview?.teams ?? []).filter((t) => t.section_id === sectionId).sort(byName);
   const faculty = overview?.faculty ?? [];
@@ -65,29 +75,37 @@ export default function SectionGroups({
   const size = Math.max(1, Math.floor(Number(perGroup)) || 1);
   const groupCount = Math.min(MAX_GROUPS, Math.max(1, Math.ceil(studentCount / size)));
 
-  const run = async (action: () => Promise<{ ok: true } | { error: string }>, success?: string) => {
+  /**
+   * Runs one change with a loading toast up the whole time, including the
+   * reload after it, so the toast turns to done only once the cards show it.
+   */
+  const run = async (
+    action: () => Promise<{ ok: true } | { error: string }>,
+    labels: { pending: string; done: string },
+  ) => {
     setBusy(true);
+    const progress = loadingToast(labels.pending);
     const result = await action();
-    if ("error" in result) toast(result.error, "error");
-    else if (success) toast(success, "success");
     await onChanged();
     setBusy(false);
+    if ("error" in result) progress.error(result.error);
+    else progress.success(labels.done);
     return !("error" in result);
   };
 
+  const groupName = (id: string | null) => groups.find((g) => g.id === id)?.name ?? "a group";
+
   const generate = async () => {
-    const ok = await run(
-      () => autoSplitTeams(sectionId, groupCount),
-      `Split ${studentCount} students into ${groupCount} group${groupCount === 1 ? "" : "s"}`,
-    );
+    const ok = await run(() => autoSplitTeams(sectionId, groupCount), {
+      pending: `Splitting ${studentCount} students into ${groupCount} group${groupCount === 1 ? "" : "s"}…`,
+      done: `Split ${studentCount} students into ${groupCount} group${groupCount === 1 ? "" : "s"}`,
+    });
     if (ok) setSplitting(false);
   };
 
   const addGroup = () => {
-    const names = new Set(groups.map((g) => g.name));
-    let n = groups.length + 1;
-    while (names.has(`Group ${n}`)) n++;
-    void run(() => createTeam(sectionId, `Group ${n}`));
+    const name = nextGroupName(groups.map((g) => g.name));
+    void run(() => createTeam(sectionId, name), { pending: `Adding ${name}…`, done: `Added ${name}` });
   };
 
   const askDelete = (id: string, name: string, members: number) =>
@@ -101,7 +119,7 @@ export default function SectionGroups({
       danger: true,
       onConfirm: () => {
         setConfirm(null);
-        void run(() => deleteTeam(id), `${name} deleted`);
+        void run(() => deleteTeam(id), { pending: `Deleting ${name}…`, done: `${name} deleted` });
       },
     });
 
@@ -109,7 +127,8 @@ export default function SectionGroups({
     if (!renaming) return;
     const name = renaming.name.trim();
     if (!name) return;
-    if (await run(() => renameTeam(renaming.id, name))) setRenaming(null);
+    if (await run(() => renameTeam(renaming.id, name), { pending: `Renaming to ${name}…`, done: `Renamed to ${name}` }))
+      setRenaming(null);
   };
 
   if (overview && !overview.enabled) {
@@ -164,7 +183,40 @@ export default function SectionGroups({
       {groups.length > 0 && (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
           {groups.map((group) => (
-            <div key={group.id} className="flex flex-col rounded-xl border border-hairline bg-subtle/60 p-4">
+            <div
+              key={group.id}
+              onDragOver={(e) => {
+                if (!isStudentDrag(e)) return;
+                e.preventDefault();
+                e.dataTransfer.dropEffect = "move";
+                if (dropTarget !== group.id) setDropTarget(group.id);
+              }}
+              onDragLeave={(e) => {
+                if (leftTarget(e)) setDropTarget((current) => (current === group.id ? null : current));
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDropTarget(null);
+                const drag = readStudentDrag(e);
+                if (!drag || drag.fromGroupId === group.id) return;
+                void onMove(drag.studentIds, group.id, {
+                  pending: `Adding ${drag.label} to ${group.name}…`,
+                  done: `Added ${drag.label} to ${group.name}`,
+                });
+              }}
+              className={`relative flex flex-col rounded-xl border p-4 transition-all duration-150 ${
+                dropTarget === group.id
+                  ? "border-brand-500 bg-brand-50 ring-2 ring-brand-500/40"
+                  : "border-hairline bg-subtle/60"
+              }`}
+            >
+              {dropTarget === group.id && (
+                <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-brand-50/85">
+                  <span className="rounded-full bg-brand-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm">
+                    Drop to add to {group.name}
+                  </span>
+                </div>
+              )}
               <div className="mb-3 flex items-center justify-between gap-2">
                 {renaming?.id === group.id ? (
                   <div className="flex min-w-0 flex-1 items-center gap-1">
@@ -232,12 +284,16 @@ export default function SectionGroups({
                 <select
                   value={group.faculty_id ?? ""}
                   disabled={busy || !overview?.faculty_enabled}
-                  onChange={(e) =>
+                  onChange={(e) => {
+                    const facultyId = e.target.value || null;
+                    const who = faculty.find((f) => f.id === facultyId)?.name;
                     void run(
-                      () => assignTeamFaculty(group.id, e.target.value || null),
-                      e.target.value ? "Faculty assigned" : "Faculty removed",
-                    )
-                  }
+                      () => assignTeamFaculty(group.id, facultyId),
+                      who
+                        ? { pending: `Assigning ${who} to ${group.name}…`, done: `${who} now supervises ${group.name}` }
+                        : { pending: `Removing the faculty from ${group.name}…`, done: `${group.name} has no faculty now` },
+                    );
+                  }}
                   className={selectClass}
                 >
                   <option value="">No faculty yet</option>
@@ -251,21 +307,39 @@ export default function SectionGroups({
 
               {group.members.length === 0 ? (
                 <p className="rounded-lg border border-dashed border-gray-200 py-4 text-center text-xs text-gray-400">
-                  No students yet
+                  No students yet. Drag students here.
                 </p>
               ) : (
                 <ul className="space-y-1.5">
                   {group.members.map((member) => (
-                    <li key={member.id} className="flex items-center gap-2 rounded-lg bg-surface px-2 py-1.5">
+                    <li
+                      key={member.id}
+                      draggable={!busy && !pendingIds.has(member.id)}
+                      onDragStart={(e) => startStudentDrag(e, [member], group.id)}
+                      title={pendingIds.has(member.id) ? "Saving…" : "Drag to another group"}
+                      className={`flex items-center gap-2 rounded-lg bg-surface px-2 py-1.5 transition-opacity ${
+                        pendingIds.has(member.id)
+                          ? "pointer-events-none animate-pulse opacity-50 grayscale"
+                          : "cursor-grab-outlined"
+                      }`}
+                    >
+                      <FontAwesomeIcon icon={faGripVertical} className="h-3 w-3 shrink-0 text-gray-300" aria-hidden />
                       <Avatar name={member.name} src={member.picture_url} userId={member.id} sex={member.sex} size="xs" />
                       <span className="min-w-0 flex-1 truncate text-sm text-gray-800">{member.name}</span>
                       <select
                         value={group.id}
                         disabled={busy}
                         aria-label={`Move ${member.name}`}
-                        onChange={(e) =>
-                          void run(() => moveStudentToTeam(member.id, e.target.value || null))
-                        }
+                        onChange={(e) => {
+                          const to = e.target.value || null;
+                          void onMove(
+                            [member.id],
+                            to,
+                            to
+                              ? { pending: `Moving ${member.name} to ${groupName(to)}…`, done: `Moved ${member.name} to ${groupName(to)}` }
+                              : { pending: `Taking ${member.name} out of ${group.name}…`, done: `${member.name} is no longer in a group` },
+                          );
+                        }}
                         className="w-28 shrink-0 rounded-md border border-gray-200 bg-surface px-1.5 py-1 text-xs text-gray-600 focus:border-brand-600 focus:outline-none"
                       >
                         {groups.map((g) => (
