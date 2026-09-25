@@ -56,3 +56,23 @@ export function chapterOfSkill(skill: string): TaylorsChapter {
   }
   return found;
 }
+
+/**
+ * The chapters the app teaches from: Vital Signs, Oxygenation, and Fluid,
+ * Electrolyte, and Acid–Base Balance. The catalog holds only their skills, and
+ * the other chapters' skill areas are hidden wherever areas are listed (their
+ * rows stay in competency_areas, so older scores keep their references).
+ */
+export const ACTIVE_CHAPTERS: readonly number[] = [1, 14, 15];
+
+const ACTIVE = TAYLORS_CHAPTERS.filter((c) => ACTIVE_CHAPTERS.includes(c.chapter));
+
+/** Skill area (competency_areas) ids of the active chapters. */
+export const ACTIVE_SKILL_AREA_IDS: readonly string[] = ACTIVE.map((c) => c.id);
+
+const ACTIVE_NAMES = new Set(ACTIVE.map((c) => c.name));
+
+/** Whether a skill area, by id or by name, is one of the active chapters. */
+export function isActiveSkillArea(idOrName: string | null | undefined): boolean {
+  return Boolean(idOrName) && (ACTIVE_SKILL_AREA_IDS.includes(idOrName!) || ACTIVE_NAMES.has(idOrName!));
+}

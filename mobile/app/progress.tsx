@@ -67,16 +67,16 @@ export default function ProgressScreen() {
           />
         </View>
         <View style={styles.statItem}>
-          <StatCard title="Quizzes Taken" value={attempts.length} icon="pulse" color={Palette.primary} />
+          <StatCard title="Skill Assessments Taken" value={attempts.length} icon="pulse" color={Palette.primary} />
         </View>
       </View>
 
       <View style={styles.section}>
-        <SectionHeader title="By Competency" />
+        <SectionHeader title="By Skill Area" />
         <Card>
           {categoryStats.length === 0 && (
             <Text style={styles.emptyText}>
-              {error ?? 'No competency scores yet — they appear as your faculty validates your work.'}
+              {error ?? 'No skill area scores yet — they appear as your faculty validates your work.'}
             </Text>
           )}
           {categoryStats.map((stat, index) => (
@@ -102,7 +102,7 @@ export default function ProgressScreen() {
         <SectionHeader title="Recent Activity" />
         <Card>
           {recentAttempts.length === 0 && (
-            <Text style={styles.emptyText}>No quiz attempts yet — take one from the Quizzes tab.</Text>
+            <Text style={styles.emptyText}>No skill assessment attempts yet — take one from the Assessments tab.</Text>
           )}
           {recentAttempts.map((attempt, index) => (
             <View key={attempt.id} style={[styles.activityItem, index > 0 && styles.rowBorder]}>

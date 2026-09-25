@@ -231,11 +231,11 @@ export default function ProfileScreen() {
       </View>
 
       <View style={styles.section}>
-        <SectionHeader title="Competencies" />
+        <SectionHeader title="Skill Areas" />
         <View style={styles.listCard}>
           {competencies.length === 0 && (
             <Text style={styles.emptyListText}>
-              Competency scores appear here once your faculty validates your work.
+              Skill area scores appear here once your faculty validates your work.
             </Text>
           )}
           {competencies.map((comp, index) => {
@@ -273,7 +273,7 @@ export default function ProfileScreen() {
         <View style={styles.listCard}>
           {recommendations.length === 0 && (
             <Text style={styles.emptyListText}>
-              Personalized suggestions appear here after your quiz results are analyzed.
+              Personalized suggestions appear here after your skill assessment results are analyzed.
             </Text>
           )}
           {recommendations.slice(0, 2).map((rec, index) => {

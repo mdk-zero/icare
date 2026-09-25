@@ -125,7 +125,7 @@ export default function StudentDashboard() {
                 </div>
                 <div>
                   <p className="text-2xl font-bold text-gray-800">3</p>
-                  <p className="text-sm text-gray-500">Quizzes Completed</p>
+                  <p className="text-sm text-gray-500">Skill Assessments Completed</p>
                 </div>
               </div>
             </div>
@@ -200,7 +200,7 @@ export default function StudentDashboard() {
               </h3>
               {recommendations.length === 0 ? (
                 <p className="text-sm text-gray-500 py-6 text-center">
-                  No recommendations yet — take a quiz so the recommender can
+                  No recommendations yet — take a skill assessment so the recommender can
                   learn your strengths. New picks arrive nightly.
                 </p>
               ) : (
@@ -212,7 +212,7 @@ export default function StudentDashboard() {
                     >
                       <div className="min-w-0">
                         <p className="font-medium text-gray-800 truncate">
-                          {rec.assessments?.title ?? "Quiz"}
+                          {rec.assessments?.title ?? "Skill Assessment"}
                         </p>
                         <p className="text-xs text-gray-500">{rec.reason}</p>
                       </div>
@@ -378,7 +378,7 @@ export default function StudentDashboard() {
         <div className="space-y-4">
           {quizzes.length === 0 && (
             <div className="bg-surface p-10 rounded-2xl shadow-sm border border-gray-100 text-center text-gray-500">
-              No quizzes are available yet. Assigned quizzes will appear here.
+              No skill assessments are available yet. Assigned skill assessments will appear here.
             </div>
           )}
           {quizzes.map((quiz) => (
@@ -466,7 +466,7 @@ export default function StudentDashboard() {
                     onClick={() => router.push(`/quizzes/${quiz.id}`)}
                     className="px-6 py-2 bg-brand-600 text-white rounded-lg hover:bg-[#155663] transition-colors shrink-0"
                   >
-                    {quiz.attempt_count > 0 ? "Retake Quiz" : "Start Quiz"}
+                    {quiz.attempt_count > 0 ? "Retake Skill Assessment" : "Start Skill Assessment"}
                   </button>
                 )}
               </div>
@@ -585,11 +585,11 @@ export default function StudentDashboard() {
             </div>
             <div className="bg-surface p-6 rounded-2xl shadow-sm border border-gray-100 text-center">
               <p className="text-4xl font-bold text-brand-600">3</p>
-              <p className="text-gray-500 mt-2">Quizzes Completed</p>
+              <p className="text-gray-500 mt-2">Skill Assessments Completed</p>
             </div>
             <div className="bg-surface p-6 rounded-2xl shadow-sm border border-gray-100 text-center">
               <p className="text-4xl font-bold text-brand-600">12m</p>
-              <p className="text-gray-500 mt-2">Avg. Time per Quiz</p>
+              <p className="text-gray-500 mt-2">Avg. Time per Skill Assessment</p>
             </div>
           </div>
 

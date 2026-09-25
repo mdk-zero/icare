@@ -34,7 +34,7 @@ function AuthStack() {
       <Stack.Screen name="clinic/patient/[id]/tpr" options={{ title: 'TPR Sheet' }} />
       <Stack.Screen name="clinic/patient/[id]/ivf" options={{ title: 'IVF Sheet' }} />
       <Stack.Screen name="clinic/assignment/[id]" options={{ title: 'Scenario' }} />
-      <Stack.Screen name="quiz/[id]" options={{ title: 'Quiz' }} />
+      <Stack.Screen name="quiz/[id]" options={{ title: 'Skill Assessment' }} />
       <Stack.Screen name="notifications" options={{ title: 'Notifications' }} />
       <Stack.Screen name="recommendations" options={{ title: 'AI Recommendations' }} />
       <Stack.Screen name="progress" options={{ title: 'Performance' }} />

@@ -336,10 +336,10 @@ export default function FacultyAssessmentsClient() {
       <PageHeader
         badge={{
           icon: <FontAwesomeIcon icon={faListCheck} className="h-4 w-4" />,
-          label: "Assessments",
+          label: "Skill Assessments",
         }}
-        title="Question Bank"
-        subtitle="Create quizzes, manage questions, and assign them to your students"
+        title="Skill Assessments"
+        subtitle="Create skill assessments, manage questions, and assign them to your students"
       />
 
       {/* Stats */}
@@ -477,7 +477,7 @@ export default function FacultyAssessmentsClient() {
         <div className="bg-surface p-12 rounded-xl border border-hairline shadow-tile text-center text-gray-500">
           {filtersActive
             ? "No assessments match these filters."
-            : "No assessments yet. Create your first quiz to start building the question bank."}
+            : "No assessments yet. Create your first skill assessment to start building the question bank."}
         </div>
       ) : (
         <div className="space-y-6">
@@ -628,11 +628,11 @@ export default function FacultyAssessmentsClient() {
                   min={1}
                   value={assignMaxAttempts}
                   onChange={(e) => setAssignMaxAttempts(e.target.value)}
-                  placeholder="Use the quiz default"
+                  placeholder="Use the skill assessment default"
                   className={inputClassName}
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  Overrides the quiz&apos;s own limit for the students in the sections below. Leave
+                  Overrides the skill assessment&apos;s own limit for the students in the sections below. Leave
                   blank to use it. Re-assigning without a value clears any override.
                 </p>
               </div>
@@ -688,13 +688,13 @@ export default function FacultyAssessmentsClient() {
               <p className="text-xs text-gray-500 mt-1.5 flex items-start gap-1.5">
                 <FontAwesomeIcon icon={faUsers} className="w-3 h-3 mt-0.5 shrink-0" />
                 <span>
-                  Every student in the sections you pick gets this quiz, including ones who
+                  Every student in the sections you pick gets this skill assessment, including ones who
                   transfer in later than this roster.
                 </span>
               </p>
               {sectionsToPublish.length > 0 && (
                 <p className="text-xs text-amber-700 mt-1.5">
-                  Assigning also publishes this quiz to{" "}
+                  Assigning also publishes this skill assessment to{" "}
                   {sectionsToPublish.map((s) => `Section ${s.name}`).join(", ")} — otherwise those
                   students would never see it.
                 </p>

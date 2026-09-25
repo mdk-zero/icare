@@ -66,7 +66,7 @@ function buildPrompt(summary: WarehouseSummary, args: SummaryArgs): string {
               `- ${c.name}: avg ${c.average_score}%, ${c.pass_rate_pct}% at or above the 75% pass mark, ${c.ratings} ratings across ${c.students} students`,
           )
           .join('\n')
-      : '(no faculty-validated competency scores in this period)';
+      : '(no faculty-validated skill area scores in this period)';
 
   const activityBlock =
     Object.keys(activity).length > 0
@@ -90,13 +90,13 @@ Period: ${period}
 Cohort totals for the period:
 - Students in scope: ${cohort.total_students ?? 0}
 - Students active (submitted at least one attempt in the period): ${cohort.active_students_30d ?? 0}
-- Submitted quiz attempts: ${cohort.submitted_attempts ?? 0}
-- Average quiz score: ${cohort.average_score ?? 'no submitted attempts'}
+- Submitted skill assessment attempts: ${cohort.submitted_attempts ?? 0}
+- Average skill assessment score: ${cohort.average_score ?? 'no submitted attempts'}
 
 Score trend, one point per ${bucket}:
 ${trendBlock}
 
-Faculty-validated competency scores:
+Faculty-validated skill area scores:
 ${competencyBlock}
 
 Clinical training activity:

@@ -515,7 +515,7 @@ export async function buildFacultyOverview(
   for (const row of quizRows) {
     const done = row.status === 'completed';
     tally(row.student_id, row.deadline, done);
-    noteDueSoon('quiz', row.assessment_id, row.assessments?.title ?? 'Quiz', row.deadline, done);
+    noteDueSoon('quiz', row.assessment_id, row.assessments?.title ?? 'Skill Assessment', row.deadline, done);
   }
 
   // ---- Quiz performance ---------------------------------------------

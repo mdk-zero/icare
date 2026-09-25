@@ -181,7 +181,7 @@ export default function QuizScreen() {
     >
       <ScreenHeader
         eyebrow="Knowledge Check"
-        title="Quiz"
+        title="Skill Assessments"
         subtitle={`${assigned.length + available.length} available`}
         icon="school-outline"
         accent="violet"
@@ -205,7 +205,7 @@ export default function QuizScreen() {
 
       {available.length > 0 ? (
         <View style={styles.section}>
-          <SectionHeader title="Available Quizzes" count={available.length} />
+          <SectionHeader title="Available Skill Assessments" count={available.length} />
           {available.map((quiz) => (
             <QuizCard key={quiz.id} quiz={quiz} onPress={() => router.push(`/quiz/${quiz.id}`)} Palette={Palette} Accent={Accent} styles={styles} />
           ))}
@@ -215,11 +215,11 @@ export default function QuizScreen() {
           <View style={styles.emptyIconContainer}>
             <Ionicons name="checkmark-circle" size={44} color={Accent.green.fg} />
           </View>
-          <Text style={styles.emptyTitle}>All Quizzes Completed!</Text>
+          <Text style={styles.emptyTitle}>All Skill Assessments Completed!</Text>
           <Text style={styles.emptyText}>Check back later for new quizzes.</Text>
         </View>
       ) : assigned.length === 0 && completed.length === 0 && !error ? (
-        <EmptyState icon="document-text-outline" message="No quizzes published yet — check back once your faculty publishes one." />
+        <EmptyState icon="document-text-outline" message="No skill assessments published yet — check back once your faculty publishes one." />
       ) : null}
 
       {completed.length > 0 && (

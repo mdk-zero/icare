@@ -285,7 +285,7 @@ export default function TabLayout() {
       >
         <Tabs.Screen name="clinic" options={{ title: "Clinic" }} />
         <Tabs.Screen name="index" options={{ title: "Home" }} />
-        <Tabs.Screen name="quiz" options={{ title: "Quiz" }} />
+        <Tabs.Screen name="quiz" options={{ title: "Assessments" }} />
       </Tabs>
     </View>
   );

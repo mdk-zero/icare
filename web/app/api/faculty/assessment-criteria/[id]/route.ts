@@ -47,7 +47,7 @@ export async function PATCH(
 
   if (competency_id !== undefined) {
     if (typeof competency_id !== 'string' || competency_id.trim().length === 0) {
-      return NextResponse.json({ error: 'Competency is required' }, { status: 400 });
+      return NextResponse.json({ error: 'Skill area is required' }, { status: 400 });
     }
     update.competency_id = competency_id;
   }

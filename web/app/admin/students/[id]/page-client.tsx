@@ -212,7 +212,7 @@ export default function StudentDetailClient() {
                 value={student.average_score !== null ? `${student.average_score}%` : "—"}
                 label="Avg Score"
               />
-              <StatTile icon={faClipboardList} value={student.quizzes_completed} label="Quizzes" />
+              <StatTile icon={faClipboardList} value={student.quizzes_completed} label="Skill Assessments" />
               <StatTile icon={faClock} value={formatLastActive(student.last_login_at)} label="Last Active" />
               <StatTile
                 icon={riskLevel === "high" ? faTriangleExclamation : faShieldHalved}
@@ -289,9 +289,9 @@ export default function StudentDetailClient() {
 
       <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
         {([
-          { key: "performance", label: "Performance", hint: "Quiz results", count: attempts.length, unit: "quizzes", icon: faChartLine },
+          { key: "performance", label: "Performance", hint: "Skill Assessment results", count: attempts.length, unit: "quizzes", icon: faChartLine },
           { key: "scenarios", label: "Scenarios", hint: "Simulation runs", count: scenarioHistory.length, unit: "runs", icon: faStethoscope },
-          { key: "competencies", label: "Competencies", hint: "Skill mastery", count: Object.keys(competencies).length, unit: "areas", icon: faListCheck },
+          { key: "competencies", label: "Skill Areas", hint: "Skill mastery", count: Object.keys(competencies).length, unit: "areas", icon: faListCheck },
         ] as const).map((tab) => {
           const active = activeTab === tab.key;
           return (
@@ -330,7 +330,7 @@ export default function StudentDetailClient() {
           {activeTab === "performance" && (
             <div className="space-y-4">
               {attempts.length === 0 ? (
-                <p className="text-gray-500 text-center py-8">No submitted quiz attempts yet</p>
+                <p className="text-gray-500 text-center py-8">No submitted skill assessment attempts yet</p>
               ) : (
                 attempts.map((record) => (
                   <div key={record.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
@@ -382,7 +382,7 @@ export default function StudentDetailClient() {
             <div>
               {Object.keys(competencies).length === 0 ? (
                 <p className="text-gray-500 text-center py-8">
-                  No validated competency scores yet — faculty record them from the student&apos;s Competencies tab.
+                  No validated skill area scores yet — faculty record them from the student&apos;s Skill Areas tab.
                 </p>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

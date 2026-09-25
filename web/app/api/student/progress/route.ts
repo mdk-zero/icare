@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { isActiveSkillArea } from '@/scripts/taylors-chapters';
 
 /**
  * Student's own performance history (mobile Progress screen): submitted
@@ -39,7 +40,7 @@ export async function GET() {
 
     return NextResponse.json({
       attempts: attempts ?? [],
-      competency_scores: scores ?? [],
+      competency_scores: (scores ?? []).filter((s) => isActiveSkillArea(s.competency_id as string)),
     });
   } catch (err) {
     console.error('Fetch progress failed', err);

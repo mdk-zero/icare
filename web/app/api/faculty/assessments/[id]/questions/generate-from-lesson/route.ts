@@ -3,6 +3,7 @@ import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { callAI, aiErrorResponse } from '@/app/lib/ai/generate';
 import { readLessonUpload } from '@/app/lib/ai/lesson';
+import { ACTIVE_SKILL_AREA_IDS } from '@/scripts/taylors-chapters';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -267,7 +268,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         .select('title, description, category, difficulty')
         .eq('id', assessmentId)
         .maybeSingle(),
-      supabase.from('competency_areas').select('id, name').order('name'),
+      supabase.from('competency_areas').select('id, name').in('id', [...ACTIVE_SKILL_AREA_IDS]).order('name'),
     ]);
 
     if (!assessment) {

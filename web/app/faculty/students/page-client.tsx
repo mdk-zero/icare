@@ -842,7 +842,7 @@ export default function FacultyStudentsClient() {
                   ? mlRunLabel(mlRun)
                   : sections.length === 0
                     ? "You need at least one section before the jobs have anyone to run against"
-                    : "Score your students for risk and refresh their quiz recommendations"
+                    : "Score your students for risk and refresh their skill assessment recommendations"
               }
               className="px-4 py-2.5 bg-surface border border-brand-600/30 text-brand-600 font-medium rounded-lg hover:bg-brand-600/5 transition-all flex items-center gap-2 disabled:opacity-45 disabled:hover:bg-surface disabled:cursor-not-allowed"
             >

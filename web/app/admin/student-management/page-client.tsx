@@ -973,7 +973,7 @@ export default function StudentManagementClient() {
           disabled: runningMl,
           label: mlRun
             ? mlRunLabel(mlRun)
-            : "Run ML Jobs — score every student for risk and refresh their quiz recommendations",
+            : "Run ML Jobs — score every student for risk and refresh their skill assessment recommendations",
           below: mlRun && <MlRunProgress run={mlRun} />,
         }}
       />
@@ -1278,7 +1278,7 @@ export default function StudentManagementClient() {
                         className="h-4 w-4 cursor-pointer accent-brand-600 disabled:cursor-not-allowed disabled:opacity-40"
                       />
                     </th>
-                    {["Student", "Quizzes", "Avg. Score", "Status", "Last Active"].map((h) => (
+                    {["Student", "Skill Assessments", "Avg. Score", "Status", "Last Active"].map((h) => (
                       <th
                         key={h}
                         className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-500 sm:px-6"
@@ -1402,7 +1402,7 @@ export default function StudentManagementClient() {
               selectedStudents.length === 1 ? "" : "s"
             }?`,
             message:
-              "Their accounts, quiz attempts, scores and risk history are removed permanently. This cannot be undone.",
+              "Their accounts, skill assessment attempts, scores and risk history are removed permanently. This cannot be undone.",
             confirmLabel: `Delete ${selectedStudents.length}`,
             loading: batchDeleting,
             error: batchDeleteError,

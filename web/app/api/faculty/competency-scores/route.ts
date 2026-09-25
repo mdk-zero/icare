@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { logAudit } from '@/app/lib/audit';
+import { isActiveSkillArea } from '@/scripts/taylors-chapters';
 
 export async function GET(request: NextRequest) {
   const session = await readSession();
@@ -29,7 +30,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unable to fetch scores' }, { status: 500 });
     }
 
-    return NextResponse.json({ scores: scores ?? [] });
+    // Only the chapters the app teaches from; see ACTIVE_CHAPTERS.
+    return NextResponse.json({ scores: (scores ?? []).filter((s) => isActiveSkillArea(s.competency_id as string)) });
   } catch (err) {
     console.error('Fetch competency scores failed', err);
     return NextResponse.json({ error: 'Unable to fetch scores' }, { status: 500 });
@@ -71,7 +73,7 @@ export async function POST(request: NextRequest) {
       supabase.from('competency_areas').select('id, name').eq('id', competency_id).single(),
     ]);
     if (!student) return NextResponse.json({ error: 'Student not found' }, { status: 404 });
-    if (!competency) return NextResponse.json({ error: 'Competency not found' }, { status: 404 });
+    if (!competency) return NextResponse.json({ error: 'Skill area not found' }, { status: 404 });
 
     const { data: record, error } = await supabase
       .from('competency_scores')
@@ -106,8 +108,8 @@ export async function POST(request: NextRequest) {
     const { error: notifyError } = await supabase.from('notifications').insert({
       user_id: student_id,
       type: 'performance_validated',
-      title: 'Competency score recorded',
-      body: `Your instructor rated your "${competency.name}" competency at ${scoreValue}%.`,
+      title: 'Skill area score recorded',
+      body: `Your instructor rated your "${competency.name}" skill area at ${scoreValue}%.`,
       data: { competency_id, score: scoreValue },
     });
     if (notifyError) console.error('Failed to create validation notification', notifyError);

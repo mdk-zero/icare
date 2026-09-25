@@ -70,7 +70,7 @@ export async function POST(
   }
 
   if (typeof competency_id !== 'string' || competency_id.trim().length === 0) {
-    return NextResponse.json({ error: 'Competency is required' }, { status: 400 });
+    return NextResponse.json({ error: 'Skill area is required' }, { status: 400 });
   }
 
   const minQuestions = min_questions === undefined ? 1 : Number(min_questions);

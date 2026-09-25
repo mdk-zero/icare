@@ -37,7 +37,7 @@ export default function TakeQuizPage() {
     startAssessmentAttempt(assessmentId).then((started) => {
       if (cancelled) return;
       if (!started) {
-        setError("This quiz is not available right now.");
+        setError("This skill assessment is not available right now.");
       } else {
         setAttempt(started);
         if (started.assessment.time_limit_seconds) {
@@ -103,7 +103,7 @@ export default function TakeQuizPage() {
   if (error || !attempt) {
     return (
       <div className="bg-surface p-10 rounded-2xl shadow-sm border border-gray-100 text-center">
-        <p className="text-gray-600 mb-4">{error ?? "Quiz not found."}</p>
+        <p className="text-gray-600 mb-4">{error ?? "Skill Assessment not found."}</p>
         <button
           onClick={() => router.push("/dashboard?tab=quizzes")}
           className="px-6 py-2 bg-brand-600 text-white rounded-lg hover:bg-[#155663]"
@@ -130,7 +130,7 @@ export default function TakeQuizPage() {
 
         {result.criteria_breakdown && result.criteria_breakdown.length > 0 && (
           <div className="bg-surface p-6 rounded-2xl shadow-sm border border-gray-100">
-            <h3 className="font-semibold text-gray-800 mb-4">Competency Breakdown</h3>
+            <h3 className="font-semibold text-gray-800 mb-4">Skill Area Breakdown</h3>
             <div className="space-y-3">
               {result.criteria_breakdown.map((cb) => (
                 <div key={cb.criteria_id}>
@@ -279,7 +279,7 @@ export default function TakeQuizPage() {
             disabled={submitting}
             className="px-8 py-2 bg-brand-600 text-white rounded-lg hover:bg-[#155663] disabled:opacity-60"
           >
-            {submitting ? "Submitting…" : "Submit Quiz"}
+            {submitting ? "Submitting…" : "Submit Skill Assessment"}
           </button>
         ) : (
           <button

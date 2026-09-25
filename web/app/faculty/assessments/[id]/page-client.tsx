@@ -19,7 +19,7 @@ import {
 import { SkeletonQuestionCard } from "../../../components/skeletons";
 import { toast } from "../../../components/Toast";
 import ConfirmModal from "../../../components/ConfirmModal";
-import { fetchSections, type Section, apiFetch } from "../../../lib/api";
+import { fetchSections, fetchSkillCatalog, type Section, type SkillSummary, apiFetch } from "../../../lib/api";
 import { EcgLoader } from "../../../components/EcgLoader";
 import LiveClock from "../../../components/LiveClock";
 
@@ -148,6 +148,9 @@ export default function AssessmentQuestionsClient({
   const [showAIPanel, setShowAIPanel] = useState(false);
   const [aiTopic, setAiTopic] = useState("");
   const [aiCount, setAiCount] = useState(5);
+  // The Taylor's skill checklist the AI writes from; "" for a general question set.
+  const [aiSkill, setAiSkill] = useState<string | null>(null);
+  const [skillCatalog, setSkillCatalog] = useState<SkillSummary[]>([]);
   const [aiGenerating, setAiGenerating] = useState(false);
 
   // criteria editor
@@ -568,6 +571,23 @@ export default function AssessmentQuestionsClient({
     [criteria],
   );
 
+  // Skills this assessment's criteria cover ("Skill 1-7 · …"); the first is
+  // the default source for AI questions.
+  const criteriaSkillIds = useMemo(
+    () => [...new Set(criteria.flatMap((c) => [...c.name.matchAll(/\b(\d{1,2}-\d{1,2})\b/g)].map((m) => m[1])))],
+    [criteria],
+  );
+  const chosenSkill = aiSkill ?? (criteriaSkillIds.find((id) => skillCatalog.some((s) => s.id === id)) ?? "");
+
+  useEffect(() => {
+    if (!showAIPanel || skillCatalog.length > 0) return;
+    let live = true;
+    void fetchSkillCatalog().then((skills) => live && setSkillCatalog(skills));
+    return () => {
+      live = false;
+    };
+  }, [showAIPanel, skillCatalog.length]);
+
   /** Appends draft questions to the builder as unsaved `new_` entries. */
   const appendDraftQuestions = (forms: QuestionFormData[]) => {
     if (forms.length === 0) return;
@@ -607,7 +627,7 @@ export default function AssessmentQuestionsClient({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
-          body: JSON.stringify({ topic: aiTopic.trim(), count: aiCount }),
+          body: JSON.stringify({ topic: aiTopic.trim(), count: aiCount, skill_id: chosenSkill || undefined }),
         },
       );
       const json = (await res.json()) as {
@@ -825,7 +845,7 @@ export default function AssessmentQuestionsClient({
           onClick={() => router.push("/faculty/assessments")}
           className="px-6 py-2 bg-brand-600 text-white rounded-lg"
         >
-          Back to Question Bank
+          Back to Skill Assessments
         </button>
       </div>
     );
@@ -946,7 +966,7 @@ export default function AssessmentQuestionsClient({
                     </div>
                   )}
                   {/* Deleting a section leaves its name behind here, and a name
-                      with no section left to match hides the quiz from a
+                      with no section left to match hides the skill assessment from a
                       cohort that no longer exists. Surfaced so it can be
                       dropped — it has no checkbox to untick. */}
                   {staleTargetSections.length > 0 && (
@@ -1101,7 +1121,7 @@ export default function AssessmentQuestionsClient({
                 <div className="flex items-center gap-3 px-3 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
                   <span className="w-6" />
                   <span className="flex-1">Criteria</span>
-                  <span className="w-44">Competency</span>
+                  <span className="w-44">Skill Area</span>
                   <span className="w-16 text-right" title="Questions assigned to this criteria">Pool</span>
                   <span className="w-16 text-right" title="Questions from this criteria every attempt must include">Min</span>
                   <span className="w-16 text-right">Weight</span>
@@ -1184,7 +1204,7 @@ export default function AssessmentQuestionsClient({
                 onChange={(e) => setNewCriterionCompetency(e.target.value)}
                 className={inputClassName}
               >
-                <option value="">Select competency</option>
+                <option value="">Select skill area</option>
                 {competencyAreas.map((ca) => (
                   <option key={ca.id} value={ca.id}>
                     {ca.name}
@@ -1520,6 +1540,28 @@ export default function AssessmentQuestionsClient({
                 <FontAwesomeIcon icon={faTimes} className="w-4 h-4" />
               </button>
             </div>
+            <label className="block">
+              <span className="mb-1 block text-xs font-semibold text-gray-600">Write from</span>
+              <select
+                value={chosenSkill}
+                onChange={(e) => setAiSkill(e.target.value)}
+                className={inputClassName}
+                disabled={aiGenerating}
+              >
+                <option value="">General questions for this assessment</option>
+                {skillCatalog.map((sk) => (
+                  <option key={sk.id} value={sk.id}>
+                    Skill {sk.id} · {sk.title}
+                    {criteriaSkillIds.includes(sk.id) ? " (in this assessment)" : ""}
+                  </option>
+                ))}
+              </select>
+              {chosenSkill && (
+                <span className="mt-1 block text-xs text-gray-500">
+                  Every question tests one step of the checklist and cites it, e.g. “Skill {chosenSkill}, step 9”.
+                </span>
+              )}
+            </label>
             <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] gap-3">
               <input
                 value={aiTopic}

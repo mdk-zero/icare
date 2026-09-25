@@ -77,10 +77,10 @@ interface Profile {
   /** Baseline chance of answering a question correctly. */
   ability: number;
   /**
-   * Competency areas — Taylor's chapters — this student reliably misses, and
-   * reliably gets. Only chapters their section's quizzes test have any
-   * effect: BSN 1102's cases cover Laboratory Specimen Collection,
-   * Medications, Asepsis and Infection Control, and Oxygenation.
+   * Skill areas — Taylor's chapters — this student reliably misses, and
+   * reliably gets. Only chapters their section's skill assessments test have
+   * any effect; every assessment is built on Chapters 1 (Vital Signs), 14
+   * (Oxygenation) and 15 (Fluid, Electrolyte, and Acid–Base Balance).
    */
   weakAt: string[];
   strongAt: string[];
@@ -111,7 +111,7 @@ const PROFILES: Profile[] = [
     sex: 'male',
     ability: 0.88,
     weakAt: [],
-    strongAt: ['Vital Signs', 'Laboratory Specimen Collection'],
+    strongAt: ['Vital Signs', 'Oxygenation'],
     taskCompletion: 1,
     engagement: 1,
   },
@@ -121,7 +121,7 @@ const PROFILES: Profile[] = [
     section: 'BSN 1102',
     sex: 'male',
     ability: 0.72,
-    weakAt: ['Medications'],
+    weakAt: ['Fluid, Electrolyte, and Acid–Base Balance'],
     strongAt: ['Oxygenation'],
     taskCompletion: 0.85,
     engagement: 1,
@@ -132,7 +132,7 @@ const PROFILES: Profile[] = [
     section: 'BSN 1102',
     sex: 'male',
     ability: 0.45,
-    weakAt: ['Medications', 'Laboratory Specimen Collection'],
+    weakAt: ['Fluid, Electrolyte, and Acid–Base Balance', 'Oxygenation'],
     strongAt: [],
     taskCompletion: 0.5,
     engagement: 1,
@@ -143,7 +143,7 @@ const PROFILES: Profile[] = [
     section: 'BSN 1102',
     sex: 'male',
     ability: 0.63,
-    weakAt: ['Asepsis and Infection Control'],
+    weakAt: ['Vital Signs'],
     strongAt: ['Oxygenation'],
     taskCompletion: 0.7,
     engagement: 1,
@@ -157,7 +157,7 @@ const PROFILES: Profile[] = [
     sex: 'female',
     ability: 0.81,
     weakAt: [],
-    strongAt: ['Perioperative Nursing', 'Health Assessment'],
+    strongAt: ['Oxygenation', 'Fluid, Electrolyte, and Acid–Base Balance'],
     taskCompletion: 0.95,
     engagement: 1,
   },
@@ -167,7 +167,7 @@ const PROFILES: Profile[] = [
     section: 'BSN 1101',
     sex: 'male',
     ability: 0.66,
-    weakAt: ['Laboratory Specimen Collection'],
+    weakAt: ['Oxygenation'],
     strongAt: [],
     taskCompletion: 0.75,
     engagement: 1,
@@ -178,7 +178,7 @@ const PROFILES: Profile[] = [
     section: 'BSN 1101',
     sex: 'female',
     ability: 0.52,
-    weakAt: ['Medications'],
+    weakAt: ['Fluid, Electrolyte, and Acid–Base Balance'],
     strongAt: [],
     taskCompletion: 0.6,
     // Stopped after the first two. The gap is the point.
@@ -190,7 +190,7 @@ const PROFILES: Profile[] = [
     section: 'BSN 1101',
     sex: 'male',
     ability: 0.38,
-    weakAt: ['Vital Signs', 'Asepsis and Infection Control'],
+    weakAt: ['Vital Signs'],
     strongAt: [],
     taskCompletion: 0.4,
     engagement: 0.34,
@@ -201,7 +201,7 @@ const PROFILES: Profile[] = [
     section: 'BSN 1101',
     sex: 'female',
     ability: 0.74,
-    weakAt: ['Health Assessment'],
+    weakAt: ['Fluid, Electrolyte, and Acid–Base Balance'],
     strongAt: ['Vital Signs'],
     taskCompletion: 0.9,
     engagement: 1,
@@ -215,7 +215,7 @@ const PROFILES: Profile[] = [
     sex: 'male',
     ability: 0.85,
     weakAt: [],
-    strongAt: ['Medications', 'Laboratory Specimen Collection'],
+    strongAt: ['Fluid, Electrolyte, and Acid–Base Balance', 'Oxygenation'],
     taskCompletion: 1,
     engagement: 1,
   },
@@ -236,7 +236,7 @@ const PROFILES: Profile[] = [
     section: 'BSN 1102',
     sex: 'male',
     ability: 0.41,
-    weakAt: ['Medications', 'Asepsis and Infection Control'],
+    weakAt: ['Fluid, Electrolyte, and Acid–Base Balance', 'Vital Signs'],
     strongAt: [],
     taskCompletion: 0.45,
     engagement: 0.67,
@@ -248,7 +248,7 @@ const PROFILES: Profile[] = [
     sex: 'female',
     ability: 0.69,
     weakAt: [],
-    strongAt: ['Laboratory Specimen Collection'],
+    strongAt: ['Oxygenation'],
     taskCompletion: 0.8,
     engagement: 1,
   },
@@ -258,7 +258,7 @@ const PROFILES: Profile[] = [
     section: 'BSN 1102',
     sex: 'male',
     ability: 0.33,
-    weakAt: ['Laboratory Specimen Collection', 'Medications', 'Oxygenation'],
+    weakAt: ['Oxygenation', 'Fluid, Electrolyte, and Acid–Base Balance'],
     strongAt: [],
     taskCompletion: 0.3,
     // Barely engaged: one piece of work, done badly. The clearest at-risk case.
@@ -273,7 +273,7 @@ const PROFILES: Profile[] = [
     sex: 'female',
     ability: 0.84,
     weakAt: [],
-    strongAt: ['Perioperative Nursing'],
+    strongAt: ['Oxygenation'],
     taskCompletion: 0.95,
     engagement: 1,
   },
@@ -283,7 +283,7 @@ const PROFILES: Profile[] = [
     section: 'BSN 1103',
     sex: 'male',
     ability: 0.61,
-    weakAt: ['Asepsis and Infection Control'],
+    weakAt: ['Vital Signs'],
     strongAt: [],
     taskCompletion: 0.7,
     engagement: 1,
@@ -294,7 +294,7 @@ const PROFILES: Profile[] = [
     section: 'BSN 1103',
     sex: 'female',
     ability: 0.47,
-    weakAt: ['Medications', 'Perioperative Nursing'],
+    weakAt: ['Fluid, Electrolyte, and Acid–Base Balance', 'Oxygenation'],
     strongAt: [],
     taskCompletion: 0.55,
     engagement: 0.67,
@@ -305,7 +305,7 @@ const PROFILES: Profile[] = [
     section: 'BSN 1103',
     sex: 'male',
     ability: 0.36,
-    weakAt: ['Vital Signs', 'Asepsis and Infection Control'],
+    weakAt: ['Vital Signs'],
     strongAt: [],
     taskCompletion: 0.4,
     engagement: 0.34,
@@ -317,7 +317,7 @@ const PROFILES: Profile[] = [
     sex: 'female',
     ability: 0.77,
     weakAt: [],
-    strongAt: ['Laboratory Specimen Collection'],
+    strongAt: ['Oxygenation'],
     taskCompletion: 0.9,
     engagement: 1,
   },
@@ -328,7 +328,7 @@ const PROFILES: Profile[] = [
     sex: 'male',
     ability: 0.9,
     weakAt: [],
-    strongAt: ['Vital Signs', 'Medications'],
+    strongAt: ['Vital Signs', 'Fluid, Electrolyte, and Acid–Base Balance'],
     taskCompletion: 1,
     engagement: 1,
   },
@@ -338,7 +338,7 @@ const PROFILES: Profile[] = [
     section: 'BSN 1104',
     sex: 'female',
     ability: 0.68,
-    weakAt: ['Health Assessment'],
+    weakAt: ['Fluid, Electrolyte, and Acid–Base Balance'],
     strongAt: [],
     taskCompletion: 0.8,
     engagement: 1,
@@ -349,7 +349,7 @@ const PROFILES: Profile[] = [
     section: 'BSN 1104',
     sex: 'male',
     ability: 0.54,
-    weakAt: ['Medications'],
+    weakAt: ['Fluid, Electrolyte, and Acid–Base Balance'],
     strongAt: [],
     taskCompletion: 0.6,
     engagement: 1,
@@ -360,7 +360,7 @@ const PROFILES: Profile[] = [
     section: 'BSN 1104',
     sex: 'female',
     ability: 0.4,
-    weakAt: ['Asepsis and Infection Control', 'Laboratory Specimen Collection'],
+    weakAt: ['Vital Signs', 'Oxygenation'],
     strongAt: [],
     taskCompletion: 0.45,
     engagement: 0.67,
@@ -372,7 +372,7 @@ const PROFILES: Profile[] = [
     sex: 'male',
     ability: 0.73,
     weakAt: [],
-    strongAt: ['Health Assessment'],
+    strongAt: ['Fluid, Electrolyte, and Acid–Base Balance'],
     taskCompletion: 0.85,
     engagement: 1,
   },
@@ -382,7 +382,7 @@ const PROFILES: Profile[] = [
     section: 'BSN 1104',
     sex: 'female',
     ability: 0.31,
-    weakAt: ['Vital Signs', 'Medications', 'Perioperative Nursing'],
+    weakAt: ['Vital Signs', 'Fluid, Electrolyte, and Acid–Base Balance', 'Oxygenation'],
     strongAt: [],
     taskCompletion: 0.3,
     engagement: 0.34,
@@ -394,7 +394,7 @@ const PROFILES: Profile[] = [
     sex: 'male',
     ability: 0.8,
     weakAt: [],
-    strongAt: ['Asepsis and Infection Control'],
+    strongAt: ['Vital Signs'],
     taskCompletion: 0.9,
     engagement: 1,
   },
@@ -404,7 +404,7 @@ const PROFILES: Profile[] = [
     section: 'BSN 1105',
     sex: 'female',
     ability: 0.57,
-    weakAt: ['Laboratory Specimen Collection'],
+    weakAt: ['Oxygenation'],
     strongAt: [],
     taskCompletion: 0.65,
     engagement: 1,
@@ -415,7 +415,7 @@ const PROFILES: Profile[] = [
     section: 'BSN 1105',
     sex: 'male',
     ability: 0.44,
-    weakAt: ['Perioperative Nursing'],
+    weakAt: ['Oxygenation'],
     strongAt: [],
     taskCompletion: 0.5,
     engagement: 0.67,
@@ -438,14 +438,14 @@ interface WorkItem {
   quiz: string;
 }
 
-const FEVER: WorkItem = { scenario: 'Fever Workup: Vital Signs and a Nasopharyngeal Swab', quiz: 'Temperature, Pulse, Respiration, and Nasopharyngeal Swab' };
-const DEHYDRATION: WorkItem = { scenario: 'Dehydration: Peripheral IV and Stool Culture', quiz: 'Peripheral IV Therapy, Stool Culture, and PPE' };
-const POST_OP: WorkItem = { scenario: 'Post-Op Day One: Dressing, Breathing Exercises and Comfort', quiz: 'Wound Dressing, Post-Op Breathing Exercises, and Pain Relief' };
-const HYPERTENSION: WorkItem = { scenario: 'New Hypertension: Accurate BP and Cardiovascular Assessment', quiz: 'Blood Pressure, Cardiovascular Assessment, and 12-Lead ECG' };
-const ANAEMIA: WorkItem = { scenario: 'Anaemia and Dizziness: Fall Prevention and Safe Ambulation', quiz: 'Fall Prevention, Assisted Ambulation, and Venipuncture' };
-const UTI: WorkItem = { scenario: 'UTI: Clean-Catch Urine and Oral Antibiotics', quiz: 'Clean-Catch Urine, Oral Medications, and Handwashing' };
-const ASTHMA: WorkItem = { scenario: 'Asthma: Pulse Oximetry, Inhaler and Nebulizer', quiz: 'Pulse Oximetry, Inhalers, Nebulizers, and Nasal Cannula' };
-const CELLULITIS: WorkItem = { scenario: 'Cellulitis with Diabetes: Glucose, Insulin and IV Antibiotic', quiz: 'Capillary Glucose, Insulin Injection, and IV Piggyback' };
+const FEVER: WorkItem = { scenario: 'Fever Workup: Temperature, Pulse and Respirations', quiz: 'Temperature, Pulse, Respiration, and Pulse Oximetry' };
+const DEHYDRATION: WorkItem = { scenario: 'Dehydration: Starting and Monitoring a Peripheral IV', quiz: 'Peripheral IV Therapy, Pulse, and Blood Pressure' };
+const POST_OP: WorkItem = { scenario: 'Post-Op Day One: Incentive Spirometry and the IV Site', quiz: 'Incentive Spirometry, IV Site Care, and Temperature' };
+const HYPERTENSION: WorkItem = { scenario: 'New Hypertension: Accurate Blood Pressure and Apical Pulse', quiz: 'Blood Pressure, Apical Pulse, and Radial Pulse' };
+const ANAEMIA: WorkItem = { scenario: 'Anaemia and Dizziness: Orthostatic Vital Signs and Oxygen Saturation', quiz: 'Blood Pressure, Pulse, and Pulse Oximetry' };
+const UTI: WorkItem = { scenario: 'UTI with Low-Grade Fever: A Full Set of Vital Signs', quiz: 'A Full Set of Vital Signs' };
+const ASTHMA: WorkItem = { scenario: 'Asthma: Pulse Oximetry, Respirations and Nasal Cannula Oxygen', quiz: 'Pulse Oximetry, Respiration, and Nasal Cannula Oxygen' };
+const CELLULITIS: WorkItem = { scenario: 'Cellulitis: IV Antibiotic Through a Saline Lock', quiz: 'Saline Lock, IV Site Monitoring, and Temperature' };
 
 /**
  * The cases each section works through over the term, in order, and so the

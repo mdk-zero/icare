@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { citedSkillId, isMissingSkillColumn } from '@/app/lib/taylor-skills';
 import { logAudit } from '@/app/lib/audit';
 
 interface RouteParams {
@@ -99,21 +100,28 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       .select('id', { count: 'exact', head: true })
       .eq('assessment_id', assessmentId);
 
-    const { data: question, error } = await supabase
+    const row: Record<string, unknown> = {
+      assessment_id: assessmentId,
+      position: count ?? 0,
+      content: content.trim(),
+      options: sanitizedOptions,
+      correct_index: correctIndex,
+      question_type: typeof question_type === 'string' ? question_type : 'multiple_choice',
+      points: typeof points === 'number' ? points : 1,
+      explanation: typeof explanation === 'string' ? explanation.trim() : '',
+      criteria_id: criteriaId,
+    };
+    // A question citing a Taylor's skill is linked to it (migration 049).
+    const skillId = citedSkillId(row.explanation);
+    let inserted = await supabase
       .from('questions')
-      .insert({
-        assessment_id: assessmentId,
-        position: count ?? 0,
-        content: content.trim(),
-        options: sanitizedOptions,
-        correct_index: correctIndex,
-        question_type: typeof question_type === 'string' ? question_type : 'multiple_choice',
-        points: typeof points === 'number' ? points : 1,
-        explanation: typeof explanation === 'string' ? explanation.trim() : '',
-        criteria_id: criteriaId,
-      })
+      .insert(skillId ? { ...row, skill_id: skillId } : row)
       .select()
       .single();
+    if (skillId && isMissingSkillColumn(inserted.error)) {
+      inserted = await supabase.from('questions').insert(row).select().single();
+    }
+    const { data: question, error } = inserted;
 
     if (error || !question) {
       console.error('Failed to create question', error);

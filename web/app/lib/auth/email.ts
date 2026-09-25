@@ -286,7 +286,7 @@ function buildWelcomeHtml(name: string, loginUrl: string, password: string): str
                 ML-driven clinical competency assessment and adaptive learning system for nursing students.
               </p>
               <p style="margin:0 0 24px;font-size:15px;color:#475569;line-height:1.6;">
-                You can now sign in to access your quizzes, scenarios, and track your performance.
+                You can now sign in to access your skill assessments, scenarios, and track your performance.
               </p>
               <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f0f9fa;border:1px solid #d0ebea;border-radius:10px;padding:16px 20px;margin-bottom:24px;">
                 <tr>

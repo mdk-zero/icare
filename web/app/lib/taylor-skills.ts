@@ -185,3 +185,19 @@ export function stepsForSections<T extends Pick<SkillStep, 'section'>>(steps: re
 export function catalogPromptLines(): string {
   return BUNDLED.map((s) => `${s.id}: ${s.title}`).join('\n');
 }
+
+/**
+ * The catalog skill a question's explanation cites by opening with it
+ * ("Skill 1-5, step 10: …"), or null. That citation is how a question is tied
+ * to its skill.
+ */
+export function citedSkillId(explanation: unknown): string | null {
+  if (typeof explanation !== 'string') return null;
+  const id = /^\s*Skills? (\d{1,2}-\d{1,2})\b/.exec(explanation)?.[1];
+  return id && isSkillId(id) ? id : null;
+}
+
+/** Before migration 049 the skill_id columns don't exist. */
+export function isMissingSkillColumn(error: { code?: string } | null): boolean {
+  return error?.code === '42703' || error?.code === 'PGRST204' || error?.code === '23503';
+}

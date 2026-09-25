@@ -129,7 +129,7 @@ export default function SectionMonitor({
             </span>
           )}
         </div>
-        <p className="mt-1.5 text-[12px] text-slate-500">Quiz average, last 2 weeks</p>
+        <p className="mt-1.5 text-[12px] text-slate-500">Skill Assessment average, last 2 weeks</p>
       </div>
 
       {/* The trace. Stretched to the tile with non-scaling strokes, so it is
@@ -174,7 +174,7 @@ export default function SectionMonitor({
             </svg>
           ) : (
             <p className="absolute inset-0 flex items-center justify-center text-[11px] text-slate-400">
-              No quiz attempts in 8 weeks
+              No skill assessment attempts in 8 weeks
             </p>
           )}
 

@@ -78,7 +78,7 @@ export default function SettingsClient() {
                   {[
                     { role: "Super Administrator", desc: "Full system access, user management, analytics, and configuration" },
                     { role: "Faculty", desc: "Student management, grading, performance monitoring, and room oversight" },
-                    { role: "Student", desc: "Clinical tasks, quizzes, patient monitoring, and learning recommendations" },
+                    { role: "Student", desc: "Clinical tasks, skill assessments, patient monitoring, and learning recommendations" },
                   ].map((item, idx) => (
                     <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                       <div>

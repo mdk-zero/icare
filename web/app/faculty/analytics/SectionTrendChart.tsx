@@ -293,7 +293,7 @@ export function TrendLineChart({
           viewBox={`0 0 ${W} ${H}`}
           className="absolute inset-0 block overflow-visible"
           role="img"
-          aria-label={`Average quiz score over time for ${shown.map((s) => s.name).join(", ")}. Use the table view for exact values.`}
+          aria-label={`Average skill assessment score over time for ${shown.map((s) => s.name).join(", ")}. Use the table view for exact values.`}
           tabIndex={0}
           onPointerMove={onPointerMove}
           onPointerLeave={() => setHover(null)}

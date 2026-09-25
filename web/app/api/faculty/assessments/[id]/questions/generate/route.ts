@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { callAI, aiErrorResponse } from '@/app/lib/ai/generate';
+import { getSkills, isSkillId, type SkillDetail } from '@/app/lib/taylor-skills';
+import { ACTIVE_SKILL_AREA_IDS } from '@/scripts/taylors-chapters';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -17,6 +19,43 @@ interface GeneratedDraft {
   points: number;
   explanation: string;
   competency_ids: string[];
+  /** Set when generated from a skill checklist: the criterion assessing that skill. */
+  criteria_id?: string | null;
+}
+
+/**
+ * Prompt for questions written from one Taylor's skill checklist. Each
+ * question tests one numbered step, and its explanation opens by citing it,
+ * the same convention the seeded skill assessments follow.
+ */
+function buildSkillPrompt(skill: SkillDetail, topic: string, count: number): string {
+  const steps = skill.steps
+    .map((st) => `${st.section ? `[${st.section}] ` : ''}Step ${st.stepNo}: ${st.text}`)
+    .join('\n');
+  return `You are a clinical nursing educator writing a skill assessment for nursing students. Every question must be answerable from this Taylor's skill checklist alone:
+
+Skill ${skill.id}: ${skill.title}
+Goal: ${skill.goal}
+${steps}
+${topic ? `\nFaculty focus request: "${topic.replace(/"/g, '\\"')}"\n` : ''}
+Write exactly ${count} multiple-choice questions, each testing one step (or two adjacent steps) of the checklist above. Prefer steps that carry a specific technique, sequence, number, or safety check over generic steps like hand hygiene. Return ONLY a valid JSON object, no markdown:
+
+{
+  "questions": [
+    {
+      "content": "the question text",
+      "options": ["option A", "option B", "option C", "option D"],
+      "correct_index": 0,
+      "explanation": "Skill ${skill.id}, step N: what the checklist says, in one or two sentences"
+    }
+  ]
+}
+
+Rules:
+- The correct option must be what the checklist says; distractors must be plausible but contradict it.
+- Exactly 4 options; vary which index is correct.
+- Every explanation MUST start with "Skill ${skill.id}, step " and the step number it comes from${skill.steps.some((st) => st.section) ? ' (name the variant for a variant step, e.g. "Skill 1-1, oral step 12")' : ''}.
+- Never mention "the checklist" or "the book" in the question itself; write it as a clinical question.`;
 }
 
 function buildPrompt(
@@ -104,9 +143,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
   const { id: assessmentId } = await params;
 
-  let body: { topic?: unknown; count?: unknown };
+  let body: { topic?: unknown; count?: unknown; skill_id?: unknown };
   try {
-    body = (await request.json()) as { topic?: unknown; count?: unknown };
+    body = (await request.json()) as { topic?: unknown; count?: unknown; skill_id?: unknown };
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
@@ -126,7 +165,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         .select('title, description, category, difficulty')
         .eq('id', assessmentId)
         .maybeSingle(),
-      supabase.from('competency_areas').select('id, name').order('name'),
+      supabase.from('competency_areas').select('id, name').in('id', [...ACTIVE_SKILL_AREA_IDS]).order('name'),
     ]);
 
     if (!assessment) {
@@ -134,6 +173,35 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
 
     const competencyList = (competencies ?? []) as { id: string; name: string }[];
+
+    // Written from one skill's checklist: every question cites its step, is
+    // tagged with the skill's area, and goes to the criterion for that skill.
+    if (isSkillId(body.skill_id)) {
+      const [skill] = await getSkills(supabase, [body.skill_id]);
+      const { data: criteria } = await supabase
+        .from('assessment_criteria')
+        .select('id, name')
+        .eq('assessment_id', assessmentId);
+      const criterion = (criteria ?? []).find((c) =>
+        new RegExp(`^Skills? [^·]*\\b${skill.id.replace('-', '\\-')}\\b`).test(c.name as string),
+      );
+      const raw = await callAI(buildSkillPrompt(skill, topic, count));
+      const citation = `Skill ${skill.id}`;
+      const questions = sanitizeDrafts(raw, []).map((q) => ({
+        ...q,
+        explanation: q.explanation.startsWith(citation) ? q.explanation : `${citation}: ${q.explanation}`,
+        competency_ids: [skill.chapterId],
+        criteria_id: (criterion?.id as string | undefined) ?? null,
+      }));
+      if (questions.length === 0) {
+        return NextResponse.json(
+          { error: 'The AI response did not contain usable questions. Please try again.' },
+          { status: 502 },
+        );
+      }
+      return NextResponse.json({ questions });
+    }
+
     const generated = await callAI(
       buildPrompt(
         assessment as { title: string; description: string; category: string; difficulty: string },

@@ -19,17 +19,13 @@
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { TAYLORS_CHAPTERS } from './taylors-chapters';
+import { ACTIVE_CHAPTERS, TAYLORS_CHAPTERS } from './taylors-chapters';
 
 const PDF = join(__dirname, '..', '..', 'docs', 'Skill Checklists for Taylor_s Clinical Nursing Skills - Pamela Lynn , 3E.pdf');
 const OUT = join(__dirname, 'data', 'taylor-skills.json');
 
-/**
- * The chapters the app teaches from: Vital Signs, Oxygenation, and Fluid,
- * Electrolyte, and Acid–Base Balance. The rest of the book is left out of the
- * catalog.
- */
-export const INCLUDED_CHAPTERS: readonly number[] = [1, 14, 15];
+/** The chapters the catalog holds; the rest of the book is left out. */
+export const INCLUDED_CHAPTERS = ACTIVE_CHAPTERS;
 
 export interface ExtractedStep {
   /** The number the book prints; repeats across a skill's variants. */

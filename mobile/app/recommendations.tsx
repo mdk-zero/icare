@@ -65,7 +65,7 @@ export default function RecommendationsScreen() {
       {recommendations.length === 0 && (
         <EmptyState
           icon={error ? 'cloud-offline-outline' : 'bulb-outline'}
-          message={error ?? 'No recommendations yet — they appear after your quiz results are analyzed.'}
+          message={error ?? 'No recommendations yet — they appear after your skill assessment results are analyzed.'}
         />
       )}
 
@@ -104,7 +104,7 @@ export default function RecommendationsScreen() {
               </View>
             ) : null}
             <View style={styles.recActionRow}>
-              <Text style={styles.recAction}>Start Quiz</Text>
+              <Text style={styles.recAction}>Start Skill Assessment</Text>
               <Ionicons name="arrow-forward" size={14} color={Palette.primary} />
             </View>
           </Pressable>

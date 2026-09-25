@@ -23,7 +23,7 @@ const pillars = [
   },
   {
     title: "Assess",
-    text: "Checklist-graded tasks and adaptive quizzes, scored the same way every time.",
+    text: "Checklist-graded tasks and adaptive skill assessments, scored the same way every time.",
   },
   {
     title: "Understand",
@@ -65,7 +65,7 @@ const roles = [
     action: "Sign in to practice",
     href: "/login",
     highlights: [
-      "Adaptive scenarios and quizzes",
+      "Adaptive scenarios and skill assessments",
       "EHR charting and vitals monitoring",
       "Personalized progress dashboard",
       "Competency tracking and feedback",
@@ -161,7 +161,7 @@ const faqs = [
   {
     question: "How does the ML-driven assessment work?",
     answer:
-      "The machine learning model analyzes every student response across scenarios, quizzes, and EHR entries to build a detailed competency profile. It identifies knowledge gaps, adjusts difficulty in real time, and provides objective scoring that eliminates grading bias. Faculty get a clear picture of each student’s strengths and areas needing improvement.",
+      "The machine learning model analyzes every student response across scenarios, skill assessments, and EHR entries to build a detailed competency profile. It identifies knowledge gaps, adjusts difficulty in real time, and provides objective scoring that eliminates grading bias. Faculty get a clear picture of each student’s strengths and areas needing improvement.",
   },
   {
     question: "Can faculty create their own scenarios?",

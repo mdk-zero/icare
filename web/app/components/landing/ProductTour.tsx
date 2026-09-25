@@ -25,7 +25,7 @@ const TOUR = [
     capabilities: [
       "Dynamic difficulty adjustment based on performance",
       "Instant competency scoring with detailed breakdowns",
-      "Multiple formats: quizzes, OSCEs, case studies",
+      "Multiple formats: skill assessments, OSCEs, case studies",
       "Identifies strengths and knowledge gaps automatically",
     ],
     icon: ICONS.presentation,
@@ -76,7 +76,7 @@ const TOUR = [
       "An intelligent recommendation engine suggests personalised learning paths based on each student’s performance history. Faculty receive actionable insights to target remediation where it matters most.",
     capabilities: [
       "Personalized learning paths based on performance data",
-      "Suggested scenarios and quizzes to address weak areas",
+      "Suggested scenarios and skill assessments to address weak areas",
       "Spaced repetition scheduling for knowledge retention",
       "Faculty insights for targeted remediation",
     ],

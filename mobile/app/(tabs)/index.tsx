@@ -226,7 +226,7 @@ export default function DashboardScreen() {
       href: "/progress",
     },
     {
-      label: "Quizzes Available",
+      label: "Skill Assessments Available",
       value: String(quizzesAvailable),
       icon: "file-lines",
       accent: Accent.violet,

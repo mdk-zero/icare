@@ -39,6 +39,7 @@ import AiThinking from "../../components/AiThinking";
 import { Leaderboard } from "./Leaderboard";
 import { parseDay, formatRange } from "./dates";
 import { buildTrendSeries, TrendLegend, TrendLineChart, TrendTable } from "./SectionTrendChart";
+import { isActiveSkillArea } from "../../../scripts/taylors-chapters";
 
 /** Stable empty fallback, so nothing downstream sees a new array each render. */
 const NO_SECTIONS: Section[] = [];
@@ -864,7 +865,8 @@ export default function FacultyAnalyticsClient() {
       : trendSeries.length === 1
         ? trendSeries[0]
         : null;
-  const competencies = Object.entries(summary?.competency_breakdown ?? {}).sort(
+  // Only the chapters the app teaches from; see ACTIVE_CHAPTERS.
+  const competencies = Object.entries(summary?.competency_breakdown ?? {}).filter(([name]) => isActiveSkillArea(name)).sort(
     (a, b) => b[1] - a[1],
   );
   const topStudents = summary?.top_students ?? [];
@@ -1114,8 +1116,8 @@ export default function FacultyAnalyticsClient() {
                     <h3 className="font-semibold text-gray-900">Classroom Performance Overview</h3>
                     <p className="text-xs text-gray-400">
                       {trendSolo
-                        ? `Average quiz score over time — ${trendSolo.name}`
-                        : "Average quiz score over time, one line per section"}
+                        ? `Average skill assessment score over time — ${trendSolo.name}`
+                        : "Average skill assessment score over time, one line per section"}
                     </p>
                   </div>
                 </div>
@@ -1180,14 +1182,14 @@ export default function FacultyAnalyticsClient() {
                   <FontAwesomeIcon icon={faLayerGroup} className="h-5 w-5 text-brand-600" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-gray-900">Performance per Competency</h3>
-                  <p className="text-xs text-gray-400">Average score by competency</p>
+                  <h3 className="font-semibold text-gray-900">Performance per Skill Area</h3>
+                  <p className="text-xs text-gray-400">Average score by skill area</p>
                 </div>
               </div>
               <div className="flex-1 flex flex-col justify-center">
                 {competencies.length === 0 ? (
                   <p className="text-gray-400 text-sm py-12 text-center">
-                    No validated competency scores yet — record them from each student&apos;s
+                    No validated skill area scores yet — record them from each student&apos;s
                     profile.
                   </p>
                 ) : (

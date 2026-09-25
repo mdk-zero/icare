@@ -3,6 +3,7 @@ import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { callAI, aiErrorResponse } from '@/app/lib/ai/generate';
 import { isStudentInFacultySections } from '@/app/lib/roster';
+import { isActiveSkillArea } from '@/scripts/taylors-chapters';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -48,7 +49,7 @@ function buildPrompt(input: {
     ? quizAttempts
         .map((a) => `- ${a.quiz_title}: ${a.score ?? 'ungraded'}%${a.submitted_at ? ` (${a.submitted_at.slice(0, 10)})` : ''}`)
         .join('\n')
-    : '(no quiz attempts yet)';
+    : '(no skill assessment attempts yet)';
 
   const scenarioBlock = scenarios.length > 0
     ? scenarios
@@ -60,7 +61,7 @@ function buildPrompt(input: {
     ? competencies
         .map((c) => `- ${c.area}: ${c.score}%${c.source ? ` (source: ${c.source})` : ''} (${c.created_at.slice(0, 10)})`)
         .join('\n')
-    : '(no validated competency scores yet)';
+    : '(no validated skill area scores yet)';
 
   const predictionBlock = prediction
     ? `Classification: ${prediction.risk === 'at_risk' ? 'AT RISK' : 'SAFE'}${prediction.probability != null ? ` (risk probability ${Math.round(prediction.probability * 100)}%)` : ''}, predicted ${prediction.predicted_at.slice(0, 10)}.\nTop factors: ${JSON.stringify(prediction.explanations)}`
@@ -205,8 +206,10 @@ export async function POST(_request: Request, { params }: RouteParams) {
       completed_at: a.completed_at,
     }));
 
-    const competencies: CompetencyRecord[] = (scoresRes.data ?? []).map((c) => ({
-      area: (c.competency_areas as unknown as { name?: string } | null)?.name ?? 'Competency',
+    const competencies: CompetencyRecord[] = (scoresRes.data ?? [])
+      .filter((c) => isActiveSkillArea((c.competency_areas as unknown as { name?: string } | null)?.name))
+      .map((c) => ({
+      area: (c.competency_areas as unknown as { name?: string } | null)?.name ?? 'Skill Area',
       score: Math.round(Number(c.score)),
       source: c.source,
       created_at: c.created_at,

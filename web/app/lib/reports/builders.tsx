@@ -4,6 +4,7 @@ import { getFacultySectionIds } from '@/app/lib/roster';
 import { ReportShell, StatGrid, Table, styles, type ReportMeta, type ReportDocument } from './kit';
 import { toCsv, toCsvBlocks, type CsvCell } from './csv';
 import { tallyAttendance, type ShiftAttendanceStatus } from '../shifts';
+import { isActiveSkillArea } from '@/scripts/taylors-chapters';
 
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
 
@@ -99,6 +100,7 @@ export async function buildStudentReport(
   for (const record of scores ?? []) {
     const name =
       (record as unknown as { competency_areas: { name: string } | null }).competency_areas?.name ?? 'Unknown';
+    if (!isActiveSkillArea(name)) continue;
     const entry = byCompetency.get(name);
     if (entry) entry.count += 1;
     else byCompetency.set(name, { latest: Number(record.score), count: 1 });
@@ -123,26 +125,26 @@ export async function buildStudentReport(
 
   const pdf = (
     <ReportShell
-      title={`Competency Report - ${student.name}`}
-      heading="iCARE++ Student Competency Report"
+      title={`Skill Area Report - ${student.name}`}
+      heading="iCARE++ Student Skill Area Report"
       meta={meta}
       metaRows={metaRows}
     >
       <Text style={styles.sectionTitle}>Summary</Text>
       <StatGrid
         items={[
-          { label: 'Competency areas', value: competencies.length },
-          { label: 'Quiz attempts', value: attempts?.length ?? 0 },
+          { label: 'Skill areas', value: competencies.length },
+          { label: 'Skill Assessment attempts', value: attempts?.length ?? 0 },
           { label: 'Average score', value: fmt(avg(scored), '%') },
           { label: 'Best score', value: fmt(scored.length ? Math.max(...scored) : null, '%') },
         ]}
       />
 
-      <Text style={styles.sectionTitle}>Competency areas</Text>
+      <Text style={styles.sectionTitle}>Skill areas</Text>
       <Table
         head={['Area', 'Ratings', 'Latest']}
         rows={competencies.map((c) => [c.name, c.count, `${Math.round(c.latest)}%`])}
-        emptyText="No competency ratings recorded yet."
+        emptyText="No skill area ratings recorded yet."
       />
 
       <Text style={styles.sectionTitle}>Recent assessment attempts</Text>
@@ -165,9 +167,9 @@ export async function buildStudentReport(
   );
 
   const csv = toCsvBlocks([
-    { title: `Competency report — ${student.name} (${student.email})`, head: ['Generated at'], rows: [[meta.generatedAt]] },
+    { title: `Skill area report — ${student.name} (${student.email})`, head: ['Generated at'], rows: [[meta.generatedAt]] },
     {
-      title: 'Competency areas',
+      title: 'Skill areas',
       head: ['Area', 'Ratings', 'Latest score'],
       rows: competencies.map((c) => [c.name, c.count, Math.round(c.latest)]),
     },
@@ -221,6 +223,7 @@ export async function buildSectionReport(
   const byArea = new Map<string, number[]>();
   for (const s of (scores ?? []) as { score: number; competency_areas: { name: string } | null }[]) {
     const name = s.competency_areas?.name ?? 'Unknown';
+    if (!isActiveSkillArea(name)) continue;
     const list = byArea.get(name) ?? [];
     list.push(Number(s.score));
     byArea.set(name, list);
@@ -254,7 +257,7 @@ export async function buildSectionReport(
           { label: 'Students', value: roster.length },
           { label: 'Class average', value: fmt(classMean, '%') },
           { label: 'Below 75%', value: belowThreshold },
-          { label: 'Competency areas', value: areaRows.length },
+          { label: 'Skill areas', value: areaRows.length },
         ]}
       />
 
@@ -265,11 +268,11 @@ export async function buildSectionReport(
         emptyText="No students in this section yet."
       />
 
-      <Text style={styles.sectionTitle}>Competency areas (section mean)</Text>
+      <Text style={styles.sectionTitle}>Skill areas (section mean)</Text>
       <Table
         head={['Area', 'Ratings', 'Mean']}
         rows={areaRows.map((a) => [a.name, a.count, fmt(a.mean, '%')])}
-        emptyText="No competency ratings recorded for this section yet."
+        emptyText="No skill area ratings recorded for this section yet."
       />
     </ReportShell>
   );
@@ -282,7 +285,7 @@ export async function buildSectionReport(
       rows: roster.map((r) => [r.name, r.email, r.attempts, r.mean]),
     },
     {
-      title: 'Competency areas',
+      title: 'Skill areas',
       head: ['Area', 'Ratings', 'Mean score'],
       rows: areaRows.map((a) => [a.name, a.count, a.mean]),
     },

@@ -55,7 +55,7 @@ const navItems: NavItem[] = [
   },
   {
     id: "assessments",
-    label: "Question Bank",
+    label: "Skill Assessments",
     href: "/faculty/assessments",
     icon: faListCheck,
     section: "Teaching",

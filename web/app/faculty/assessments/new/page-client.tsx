@@ -206,9 +206,9 @@ export default function AssessmentNewClient() {
   const rateLimited = error?.toLowerCase().includes("rate-limited") ?? false;
 
   const steps = [
-    { key: "creating", label: "Creating your quiz" },
+    { key: "creating", label: "Creating your skill assessment" },
     { key: "generating", label: "Reading the lesson and writing questions" },
-    { key: "done", label: "Connecting criteria and opening the quiz" },
+    { key: "done", label: "Connecting criteria and opening the skill assessment" },
   ] as const;
   const stepIndex = stage === "generating" ? 1 : stage === "creating" ? 0 : -1;
 
@@ -217,10 +217,10 @@ export default function AssessmentNewClient() {
       <PageHeader
         badge={{
           icon: <FontAwesomeIcon icon={faListCheck} className="h-4 w-4" />,
-          label: "Assessments",
+          label: "Skill Assessments",
         }}
-        title="New Assessment"
-        subtitle="Create a new quiz — or drop in a lesson and let it write the questions"
+        title="New Skill Assessment"
+        subtitle="Create a new skill assessment — or drop in a lesson and let it write the questions"
       />
 
       {error && (
@@ -249,7 +249,7 @@ export default function AssessmentNewClient() {
               <FontAwesomeIcon icon={faListCheck} className="h-4 w-4" />
             </span>
             <div>
-              <h2 className="text-base font-bold text-gray-900">Quiz details</h2>
+              <h2 className="text-base font-bold text-gray-900">Skill Assessment details</h2>
               <p className="text-xs text-gray-500">What students will see</p>
             </div>
           </div>
@@ -270,7 +270,7 @@ export default function AssessmentNewClient() {
               value={form.description}
               onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
               rows={3}
-              placeholder="A short summary of what this quiz covers"
+              placeholder="A short summary of what this skill assessment covers"
               disabled={busy}
               className={inputClassName}
             />
@@ -570,7 +570,7 @@ export default function AssessmentNewClient() {
       <div className="flex flex-col-reverse items-stretch justify-between gap-3 rounded-2xl border border-hairline bg-surface p-4 shadow-tile sm:flex-row sm:items-center">
         <p className="text-xs text-gray-500">
           {lessonFile
-            ? "Your quiz opens with questions and criteria already in place."
+            ? "Your skill assessment opens with questions and criteria already in place."
             : "Without a lesson, you'll add questions and scoring criteria after creating."}
         </p>
         <div className="flex justify-end gap-2">

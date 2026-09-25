@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { citedSkillId, isMissingSkillColumn } from '@/app/lib/taylor-skills';
 import { logAudit } from '@/app/lib/audit';
 
 interface RouteParams {
@@ -145,7 +146,12 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         );
       }
 
-      const { error } = await supabase.from('questions').update(updates).eq('id', id);
+      // Re-link the question to the Taylor's skill its explanation now cites (049).
+      const skillUpdates = explanation !== undefined ? { ...updates, skill_id: citedSkillId(updates.explanation) } : updates;
+      let { error } = await supabase.from('questions').update(skillUpdates).eq('id', id);
+      if (error && skillUpdates !== updates && isMissingSkillColumn(error)) {
+        ({ error } = await supabase.from('questions').update(updates).eq('id', id));
+      }
       if (error) {
         console.error('Failed to update question', error);
         return NextResponse.json({ error: 'Unable to update question' }, { status: 500 });

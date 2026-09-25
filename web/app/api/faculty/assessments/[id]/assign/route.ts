@@ -194,7 +194,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         newlyAssigned.map((user_id) => ({
           user_id,
           type: 'assignment_created',
-          title: 'New quiz assigned',
+          title: 'New skill assessment assigned',
           body: `You have been assigned "${assessment.title}".`,
           data: { assessment_id: assessmentId },
         })),

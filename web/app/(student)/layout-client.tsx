@@ -33,7 +33,7 @@ const navItems: NavItem[] = [
   },
   {
     id: "quizzes",
-    label: "Quizzes",
+    label: "Skill Assessments",
     href: "/dashboard?tab=quizzes",
     icon: faClipboardCheck,
   },

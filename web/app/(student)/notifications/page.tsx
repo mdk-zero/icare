@@ -60,7 +60,7 @@ export default function StudentNotificationsPage() {
           <FontAwesomeIcon icon={faBell} className="w-12 h-12 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-gray-700">No notifications yet</h3>
           <p className="text-gray-500 text-sm mt-1">
-            You&apos;ll see quiz assignments, deadline reminders, and alerts here.
+            You&apos;ll see skill assessment assignments, deadline reminders, and alerts here.
           </p>
         </div>
       ) : (

@@ -104,7 +104,7 @@ function suggestFor(
       icon: faTriangleExclamation,
       tone: "rose",
       title: `${atRisk[0].label} is at risk`,
-      detail: "Competency profile, quiz history and clinical activity in one report.",
+      detail: "Skill area profile, skill assessment history and clinical activity in one report.",
       cta: "Preview their report",
       action: { kind: "preview", type: "student", targetId: atRisk[0].id, subject: atRisk[0].label },
     });
@@ -270,8 +270,8 @@ export default function FacultyReportsClient() {
       type: "student",
       label: "Student",
       icon: faUser,
-      blurb: "One student's competency profile, quiz history and clinical activity.",
-      contents: ["Score summary", "Competency areas", "Recent attempts", "Clinical activity"],
+      blurb: "One student's skill area profile, skill assessment history and clinical activity.",
+      contents: ["Score summary", "Skill areas", "Recent attempts", "Clinical activity"],
       noun: "students",
       list: {
         items: studentTargets,
@@ -293,8 +293,8 @@ export default function FacultyReportsClient() {
       type: "section",
       label: "Section",
       icon: faLayerGroup,
-      blurb: "The whole class: roster, averages and competency means.",
-      contents: ["Class summary", "Roster with averages", "Competency means"],
+      blurb: "The whole class: roster, averages and skill area means.",
+      contents: ["Class summary", "Roster with averages", "Skill area means"],
       noun: "sections",
       list: {
         items: sectionTargets,
@@ -345,7 +345,7 @@ export default function FacultyReportsClient() {
       type: "assessment",
       label: "Assessment",
       icon: faListCheck,
-      blurb: "How a quiz went: attempts, score bands and pass rate.",
+      blurb: "How a skill assessment went: attempts, score bands and pass rate.",
       contents: ["Attempts and pass rate", "Score distribution", "Every attempt"],
       noun: "assessments",
       list: {

@@ -18,7 +18,7 @@ export function mlRunFraction(run: MlRun): number {
 
 /** The step in words, for the run button's tooltip and the bar's name. */
 export function mlRunLabel(run: MlRun): string {
-  if (run.job === "recommend") return "Step 2 of 2 · Refreshing quiz recommendations";
+  if (run.job === "recommend") return "Step 2 of 2 · Refreshing skill assessment recommendations";
   // Nothing reported yet: the service is still starting, which on a sleeping
   // free instance can take most of a minute.
   if (run.fraction === 0) return "Step 1 of 2 · Starting the ML service…";
