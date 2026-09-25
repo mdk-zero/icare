@@ -16,7 +16,7 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import logo_white from "../../public/logo-white-no-bg.png";
 import { EcgLoader } from "../components/EcgLoader";
-import { RotatingWords, EcgSweep } from "../components/AuthShowcase";
+import { RotatingWords } from "../components/AuthShowcase";
 
 const inputClass =
   "auth-input w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-[#7DD3D8]/30 focus:border-[#7DD3D8]/50 transition-all";
@@ -152,7 +152,6 @@ export default function ContactUsPage() {
                 </li>
               ))}
             </ul>
-            <EcgSweep />
           </div>
         </div>
       </div>

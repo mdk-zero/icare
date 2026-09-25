@@ -622,21 +622,6 @@ html {
   }
 }
 
-/* A lit segment travelling a pathLength=1 trace; the gap outruns the path so
-   only one segment is ever on screen. */
-.auth-sweep {
-  stroke-dasharray: 0.18 1.2;
-  animation: authSweep linear infinite;
-}
-@keyframes authSweep {
-  from {
-    stroke-dashoffset: 0.18;
-  }
-  to {
-    stroke-dashoffset: -1.02;
-  }
-}
-
 /* Drag handles: the system grab hand is white and faint on light rows, so
    these draw it with an outline that contrasts with the theme, black around
    white on light, white around black on dark. */
