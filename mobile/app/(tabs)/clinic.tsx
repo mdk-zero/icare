@@ -11,18 +11,16 @@ import {
   EmptyState,
   SkeletonScreen,
   SkeletonBlock,
-  FloorPlanCanvas,
-  hasPlacedRooms,
+  RoomPages,
 } from '@/components/ui';
 import { useApiData } from '@/hooks/useApiData';
 import { fetchWard, fetchAiTips, AiTip, WardRoom, WardPatient, WardAssignment } from '@/lib/api';
-import { roomStatus, ROOM_TONE_LABEL } from '@/lib/rooms';
 
 /**
- * The Clinic tab: the ward as the admin drew it. Students read the floor plan,
- * walk into a room, find the patient attached to their scenario, and chart on
- * them. Everything the tab needs arrives in one cached read (/api/student/ward)
- * so the plan still draws offline.
+ * The Clinic tab: the ward's rooms, four to a page. Students find the room
+ * with their patient, walk into it, find the patient attached to their
+ * scenario, and chart on them. Everything the tab needs arrives in one
+ * cached read (/api/student/ward), so the rooms still show offline.
  */
 
 function AssignmentBanner({
@@ -138,42 +136,6 @@ function TipCard({ tip }: { tip: AiTip }) {
   );
 }
 
-function RoomCard({ room, onPress }: { room: WardRoom; onPress: () => void }) {
-  const { Palette, Accent, Shadow, Type } = useTheme();
-  const styles = React.useMemo(() => createStyles(Palette, Accent, Shadow, Type), [Palette, Accent, Shadow, Type]);
-  const tone = roomStatus(room.occupied, room.capacity);
-  const accent = tone === 'available' ? Accent.green : tone === 'crowded' ? Accent.amber : Accent.red;
-  const offline = room.status !== 'active';
-
-  return (
-    <Pressable style={({ pressed }) => [styles.roomCard, pressed && styles.pressedCard]} onPress={onPress}>
-      <View style={[styles.roomIcon, { backgroundColor: offline ? Palette.borderLight : accent.bg }]}>
-        <Ionicons
-          name={offline ? 'construct-outline' : 'bed-outline'}
-          size={17}
-          color={offline ? Palette.textMuted : accent.fg}
-        />
-      </View>
-      <View style={styles.roomBody}>
-        <View style={styles.roomTitleRow}>
-          <Text style={styles.roomName} numberOfLines={1}>
-            {room.name}
-          </Text>
-          {room.has_assignment ? <View style={[styles.mineDot, { backgroundColor: Palette.primary }]} /> : null}
-        </View>
-        <Text style={styles.roomMeta}>
-          Room {room.room_number} · {room.occupied}/{room.capacity} beds
-        </Text>
-      </View>
-      <View style={[styles.pill, { backgroundColor: offline ? Palette.borderLight : accent.bg }]}>
-        <Text style={[styles.pillText, { color: offline ? Palette.textMuted : accent.fg }]}>
-          {offline ? room.status : ROOM_TONE_LABEL[tone]}
-        </Text>
-      </View>
-    </Pressable>
-  );
-}
-
 export default function ClinicScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -225,7 +187,6 @@ export default function ClinicScreen() {
 
   const tipList = tips.data?.tips ?? [];
   const showTips = tips.loading || tipList.length > 0 || Boolean(tips.error);
-  const planned = hasPlacedRooms(rooms);
 
   return (
     <ScrollView
@@ -294,30 +255,17 @@ export default function ClinicScreen() {
 
       <View style={styles.section}>
         <SectionHeader title="Room Layout" subtitle="Tap a room to see who is in it" />
-        {planned ? (
-          <FloorPlanCanvas
+        {rooms.length > 0 ? (
+          <RoomPages
             rooms={rooms}
             highlightRoomId={myRoomId}
             onPressRoom={(room) => router.push(`/clinic/room/${room.id}`)}
           />
         ) : (
-          <EmptyState
-            icon="grid-outline"
-            message="No room layout yet — your admin has not placed the rooms on the floor plan."
-          />
-        )}
-      </View>
-
-      <View style={styles.section}>
-        <SectionHeader title="All Rooms" count={rooms.length} />
-        {rooms.length > 0 ? (
-          rooms.map((room) => (
-            <RoomCard key={room.id} room={room} onPress={() => router.push(`/clinic/room/${room.id}`)} />
-          ))
-        ) : (
           <EmptyState icon="bed-outline" message="No rooms have been set up yet." />
         )}
       </View>
+
     </ScrollView>
   );
 }
@@ -484,44 +432,6 @@ function createStyles(
     },
     tipSkeletonLine: {
       marginTop: 8,
-    },
-    roomCard: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      backgroundColor: Palette.surface,
-      borderRadius: Radius.lg,
-      padding: Spacing.lg,
-      marginBottom: Spacing.sm + 2,
-      borderWidth: 1,
-      borderColor: Palette.border,
-      ...Shadow.card,
-    },
-    roomIcon: {
-      width: 38,
-      height: 38,
-      borderRadius: Radius.md,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginRight: Spacing.md,
-    },
-    roomBody: {
-      flex: 1,
-    },
-    roomTitleRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 6,
-    },
-    roomName: Type.itemTitle,
-    roomMeta: {
-      fontSize: 12,
-      color: Palette.textSecondary,
-      marginTop: 2,
-    },
-    mineDot: {
-      width: 7,
-      height: 7,
-      borderRadius: 3.5,
     },
   });
 }
