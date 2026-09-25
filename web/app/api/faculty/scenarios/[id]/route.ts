@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { ensureCategories } from '@/app/lib/scenario-categories';
+import { MAX_RUBRIC_LENGTH, TASK_RATINGS } from '@/app/lib/task-ratings';
 
 const validDifficulties = ['beginner', 'intermediate', 'advanced'] as const;
 
@@ -35,6 +36,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     patient_case,
     patient_id,
     learning_objectives,
+    rubric,
   } = body as {
     title?: unknown;
     description?: unknown;
@@ -43,6 +45,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     patient_case?: unknown;
     patient_id?: unknown;
     learning_objectives?: unknown;
+    rubric?: unknown;
   };
 
   const updateData: Record<string, unknown> = {};
@@ -87,6 +90,20 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     updateData.learning_objectives = Array.isArray(learning_objectives)
       ? learning_objectives.filter((o): o is string => typeof o === 'string')
       : [];
+  }
+
+  // The scenario's own wording per level; blank levels (or null for the
+  // whole rubric) fall back to the book's definitions.
+  if (rubric !== undefined) {
+    if (rubric !== null && (typeof rubric !== 'object' || Array.isArray(rubric))) {
+      return NextResponse.json({ error: 'rubric must be an object or null' }, { status: 400 });
+    }
+    const own: Record<string, string> = {};
+    for (const level of TASK_RATINGS) {
+      const text = (rubric as Record<string, unknown> | null)?.[level.key];
+      if (typeof text === 'string' && text.trim()) own[level.key] = text.trim().slice(0, MAX_RUBRIC_LENGTH);
+    }
+    updateData.rubric = Object.keys(own).length > 0 ? own : null;
   }
 
   // Resolved against the category table further down, once the caller is
@@ -144,6 +161,12 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       .select()
       .single();
 
+    if (error?.code === '42703' || error?.code === 'PGRST204') {
+      return NextResponse.json(
+        { error: 'Custom rubrics need database migration 046 applied first.' },
+        { status: 503 },
+      );
+    }
     if (error || !scenario) {
       console.error('Failed to update scenario', error);
       return NextResponse.json({ error: 'Unable to update scenario' }, { status: 500 });

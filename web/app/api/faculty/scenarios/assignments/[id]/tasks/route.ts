@@ -8,7 +8,9 @@ import {
   fetchTaskSteps,
   isMissingRatingColumns,
   isMissingStepTables,
+  isOldRatingScale,
   RATINGS_NEED_MIGRATION,
+  SCALE_NEEDS_MIGRATION,
   scoreAssignment,
   STEPS_NEED_MIGRATION,
 } from '@/app/lib/scenario-tasks';
@@ -17,7 +19,9 @@ import {
   isTaskRating,
   MAX_REMARKS_LENGTH,
   ratingForCredit,
+  resolveRubric,
   resolveStepRatings,
+  storedRating,
   taskCredit,
   wholeTaskLevel,
   type TaskRating,
@@ -70,7 +74,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
     const loaded = await loadAssignment(supabase, session.role, session.uid, assignmentId);
     if ('error' in loaded) return loaded.error;
 
-    const [tasksRes, completions, stepRatings] = await Promise.all([
+    const [tasksRes, completions, stepRatings, rubricRes] = await Promise.all([
       supabase
         .from('scenario_tasks')
         .select('id, title, description, category, points, verification, system_trigger, sort_order')
@@ -78,6 +82,8 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
         .order('sort_order', { ascending: true }),
       fetchTaskCompletions(supabase, [assignmentId]),
       fetchStepRatings(supabase, [assignmentId]),
+      // Before migration 046 there is no rubric column; the defaults apply.
+      supabase.from('scenarios').select('rubric').eq('id', loaded.assignment.scenario_id).maybeSingle(),
     ]);
     const steps = await fetchTaskSteps(supabase, (tasksRes.data ?? []).map((t) => t.id as string));
 
@@ -112,6 +118,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
       status: loaded.assignment.status,
       ratings_enabled: completions.ratingsEnabled,
       steps_enabled: steps.stepsEnabled,
+      rubric: resolveRubric(rubricRes.error ? null : rubricRes.data?.rubric),
     });
   } catch (err) {
     console.error('Fetch faculty assignment tasks failed', err);
@@ -120,6 +127,13 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
 }
 
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
+
+/** A completion row as the whole-task level reads it; a pre-046 "not performed" counts as none. */
+function existingLevel(existing: { rating: unknown } | null): { rating: TaskRating | null } | undefined {
+  if (!existing) return undefined;
+  const rating = storedRating(existing.rating);
+  return rating === 'absent' ? undefined : { rating };
+}
 type StepChange = { step_id: string; rating: TaskRating | null };
 
 /** A body's `steps`, or an error message saying why it isn't one. */
@@ -334,6 +348,9 @@ async function saveTaskGrade(
     if (isMissingRatingColumns(error)) {
       return NextResponse.json({ error: RATINGS_NEED_MIGRATION }, { status: 503 });
     }
+    if (isOldRatingScale(error)) {
+      return NextResponse.json({ error: SCALE_NEEDS_MIGRATION }, { status: 503 });
+    }
     console.error('Failed to save task rating', error);
     return NextResponse.json({ error: 'Unable to save rating' }, { status: 500 });
   }
@@ -400,13 +417,16 @@ async function saveStepRatings(
     return NextResponse.json({ error: 'Unable to save rating' }, { status: 500 });
   }
   const current = new Map(
-    (currentRows ?? []).filter((r) => isTaskRating(r.rating)).map((r) => [r.step_id, r.rating as TaskRating]),
+    (currentRows ?? []).flatMap((r) => {
+      const rating = storedRating(r.rating);
+      return rating === null || rating === 'absent' ? [] : [[r.step_id as string, rating] as const];
+    }),
   );
   const requested = new Map(changes.map((c) => [c.step_id, c.rating]));
   const final = resolveStepRatings(
     stepIds,
     current,
-    wholeTaskLevel(existing ? { rating: isTaskRating(existing.rating) ? existing.rating : null } : undefined),
+    wholeTaskLevel(existingLevel(existing)),
     requested,
   );
 
@@ -444,6 +464,9 @@ async function saveStepRatings(
     if (!write) continue;
     const { error } = await write;
     if (error) {
+      if (isOldRatingScale(error)) {
+        return NextResponse.json({ error: SCALE_NEEDS_MIGRATION }, { status: 503 });
+      }
       console.error('Failed to save sub-task ratings', error);
       return NextResponse.json({ error: 'Unable to save rating' }, { status: 500 });
     }

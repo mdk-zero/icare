@@ -2,8 +2,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   gradedScore,
   isPerformed,
-  isTaskRating,
   ratingForCredit,
+  storedRating,
   taskCredit,
   type StepGrades,
   type TaskRating,
@@ -31,6 +31,17 @@ export function isMissingRatingColumns(error: { code?: string; message?: string 
 export const RATINGS_NEED_MIGRATION =
   'Verbal ratings need database migration 043 (scenario task ratings) applied first.';
 
+/**
+ * Before migration 046 the rating columns only accept the old six-level scale,
+ * so saving Satisfactory or Needs Practice fails their check constraint (23514).
+ */
+export function isOldRatingScale(error: { code?: string } | null): boolean {
+  return error?.code === '23514';
+}
+
+export const SCALE_NEEDS_MIGRATION =
+  'The Excellent / Satisfactory / Needs Practice scale needs database migration 046 applied first.';
+
 const BASE_COLUMNS = 'assignment_id, task_id, completed_via, completed_at';
 
 /**
@@ -53,10 +64,11 @@ export async function fetchTaskCompletions(
     .select(`${BASE_COLUMNS}, rating, remarks`)
     .in('assignment_id', assignmentIds);
   if (!rated.error) {
-    const rows = (rated.data ?? []).map((row) => ({
-      ...(row as Omit<TaskCompletionRow, 'rating'> & { rating: unknown }),
-      rating: isTaskRating(row.rating) ? row.rating : null,
-    }));
+    const rows = (rated.data ?? []).flatMap((row) => {
+      const rating = storedRating(row.rating);
+      if (rating === 'absent') return [];
+      return [{ ...(row as Omit<TaskCompletionRow, 'rating'> & { rating: unknown }), rating }];
+    });
     return { rows, ratingsEnabled: true, error: null };
   }
   if (!isMissingRatingColumns(rated.error)) {
@@ -87,9 +99,9 @@ const COMPLETION_LOOKUP_CHUNK = 200;
  * assignment id. Only the rating is read, not the whole completion row, since
  * lists ask this for every assignment on a roster at once.
  *
- * A "not performed" rating is stored as a row (see migration 043), so it is
- * excluded here — counting rows alone would report a criterion the instructor
- * explicitly marked not performed as done.
+ * Before migration 046 a "not performed" rating was stored as a row, so one
+ * still in the database is excluded here — counting rows alone would report a
+ * criterion the instructor marked not performed as done.
  */
 export async function fetchPerformedTaskCounts(
   supabase: SupabaseClient,
@@ -123,8 +135,8 @@ export async function fetchPerformedTaskCounts(
     }
 
     for (const row of rows) {
-      const rating = isTaskRating(row.rating) ? row.rating : null;
-      if (!isPerformed({ rating })) continue;
+      const rating = storedRating(row.rating);
+      if (rating === 'absent' || !isPerformed({ rating })) continue;
       counts.set(row.assignment_id, (counts.get(row.assignment_id) ?? 0) + 1);
     }
   }
@@ -215,7 +227,10 @@ export async function fetchStepRatings(
     if (isMissingStepTables(error)) return { rows: [], error: null };
     return { rows: [], error };
   }
-  const rows = (data ?? []).filter((row): row is StepRatingRow => isTaskRating(row.rating));
+  const rows = (data ?? []).flatMap((row) => {
+    const rating = storedRating(row.rating);
+    return rating === null || rating === 'absent' ? [] : [{ ...(row as StepRatingRow), rating }];
+  });
   return { rows, error: null };
 }
 

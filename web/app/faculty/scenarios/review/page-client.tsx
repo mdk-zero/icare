@@ -25,6 +25,7 @@ import {
   finalizeScenarioAssignment,
 } from "../../../lib/api";
 import {
+  DEFAULT_RUBRIC,
   TASK_RATINGS,
   gradedScore,
   ratingLabel,
@@ -52,7 +53,13 @@ type Grading = NonNullable<Awaited<ReturnType<typeof fetchFacultyAssignmentTasks
 // Stable empty fallbacks, so the filter memos are not invalidated every render.
 const NO_ASSIGNMENTS: ScenarioAssignment[] = [];
 const NO_TASKS: GradingTask[] = [];
-const NO_GRADING: Grading = { tasks: NO_TASKS, status: "pending", ratingsEnabled: true, stepsEnabled: true };
+const NO_GRADING: Grading = {
+  tasks: NO_TASKS,
+  status: "pending",
+  ratingsEnabled: true,
+  stepsEnabled: true,
+  rubric: DEFAULT_RUBRIC,
+};
 
 type Filter = "awaiting" | "in_progress" | "completed" | "all";
 
@@ -700,6 +707,7 @@ export default function FacultyScenarioReviewClient() {
                 tasks={tasks}
                 loading={tasksLoading}
                 totalPoints={totalPoints}
+                rubric={gradingData?.rubric ?? DEFAULT_RUBRIC}
                 savingKeys={savingKeys}
                 onRateTask={handleRateTask}
                 onRateSteps={handleRateSteps}
@@ -744,7 +752,7 @@ export default function FacultyScenarioReviewClient() {
                       </p>
                       <p className="text-xs text-gray-400">
                         {unratedMissing > 0
-                          ? `${unratedMissing} unrated ${rowNoun(unratedMissing)} ${unratedMissing === 1 ? "counts" : "count"} as Not Performed`
+                          ? `${unratedMissing} unrated ${rowNoun(unratedMissing)} ${unratedMissing === 1 ? "earns" : "earn"} no points`
                           : !selected.submitted_at
                             ? "Not submitted yet — you can still grade it now"
                             : unratedImplied > 0
@@ -790,7 +798,7 @@ export default function FacultyScenarioReviewClient() {
                 <ul className="mt-3 space-y-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
                   {unratedMissing > 0 && (
                     <li>
-                      {unratedMissing} unrated checklist {rowNoun(unratedMissing)} will count as Not Performed.
+                      {unratedMissing} unrated checklist {rowNoun(unratedMissing)} will earn no points.
                     </li>
                   )}
                   {impliedByLevel.map(({ level, count }) => (

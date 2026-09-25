@@ -33,10 +33,8 @@ function categoryColor(category: string) {
 function ratingColor(rating: TaskRating) {
   switch (rating) {
     case "excellent": return "bg-emerald-100 text-emerald-800";
-    case "very_good": return "bg-teal-100 text-teal-800";
-    case "good": return "bg-blue-100 text-blue-800";
-    case "fair": return "bg-amber-100 text-amber-800";
-    case "needs_improvement": return "bg-rose-100 text-rose-800";
+    case "satisfactory": return "bg-blue-100 text-blue-800";
+    case "needs_practice": return "bg-amber-100 text-amber-800";
     default: return "bg-gray-200 text-gray-800";
   }
 }

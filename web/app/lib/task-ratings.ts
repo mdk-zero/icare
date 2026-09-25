@@ -1,7 +1,8 @@
 /**
- * The verbal scale faculty grade each scenario task (criterion) on. Shared by
- * the review page and the finalize route, so the score a faculty member sees
- * projected is the score that gets locked in.
+ * The scale faculty grade each scenario task (criterion) on: the three columns
+ * of the Taylor's skill checklists — Excellent, Satisfactory, Needs Practice.
+ * Shared by the review page and the finalize route, so the score a faculty
+ * member sees projected is the score that gets locked in.
  *
  * A task with a sub-task checklist is rated one sub-task at a time, each level
  * worth `points` out of MAX_RATING_POINTS; a task without one is rated as a
@@ -9,17 +10,13 @@
  * task's points stay its weight in the scenario, and faculty never type a
  * number.
  */
-export type TaskRating =
-  | 'excellent'
-  | 'very_good'
-  | 'good'
-  | 'fair'
-  | 'needs_improvement'
-  | 'not_performed';
+export type TaskRating = 'excellent' | 'satisfactory' | 'needs_practice';
 
 export interface TaskRatingLevel {
   key: TaskRating;
   label: string;
+  /** The book's definition of the column, the default rubric for the level. */
+  rubric: string;
   /** What a checkmark in this column scores, out of MAX_RATING_POINTS. */
   points: number;
   credit: number;
@@ -27,22 +24,46 @@ export interface TaskRatingLevel {
 
 export const MAX_RATING_POINTS = 10;
 
-const level = (key: TaskRating, label: string, points: number): TaskRatingLevel => ({
+const level = (key: TaskRating, label: string, points: number, rubric: string): TaskRatingLevel => ({
   key,
   label,
+  rubric,
   points,
   credit: points / MAX_RATING_POINTS,
 });
 
-/** Best first. */
+/**
+ * Best first. The rubrics are the book's own legend ("Checkmark in the
+ * Excellent column denotes mastering the procedure", ...). A step nobody
+ * rated earns nothing.
+ */
 export const TASK_RATINGS: readonly TaskRatingLevel[] = [
-  level('excellent', 'Excellent', 10),
-  level('very_good', 'Very Good', 9),
-  level('good', 'Good', 8),
-  level('fair', 'Fair', 7),
-  level('needs_improvement', 'Needs Improvement', 5),
-  level('not_performed', 'Not Performed', 0),
+  level('excellent', 'Excellent', 10, 'Mastered the procedure: every step performed correctly, confidently, and without prompting.'),
+  level('satisfactory', 'Satisfactory', 7.5, 'Used the recommended technique for each step, with minor hesitation or prompting.'),
+  level('needs_practice', 'Needs Practice', 5, 'Used some but not all of the recommended technique; the step needs further practice.'),
 ];
+
+/** A rubric: what each level means, for one scenario or the book's defaults. */
+export type Rubric = Record<TaskRating, string>;
+
+export const DEFAULT_RUBRIC: Rubric = Object.fromEntries(TASK_RATINGS.map((l) => [l.key, l.rubric])) as Rubric;
+
+export const MAX_RUBRIC_LENGTH = 500;
+
+/**
+ * A scenario's rubric: its own wording where faculty wrote some, the book's
+ * default for any level left blank. Accepts whatever the column holds.
+ */
+export function resolveRubric(stored: unknown): Rubric {
+  const out = { ...DEFAULT_RUBRIC };
+  if (stored && typeof stored === 'object') {
+    for (const l of TASK_RATINGS) {
+      const v = (stored as Record<string, unknown>)[l.key];
+      if (typeof v === 'string' && v.trim()) out[l.key] = v.trim().slice(0, MAX_RUBRIC_LENGTH);
+    }
+  }
+  return out;
+}
 
 const LEVEL_BY_KEY = new Map(TASK_RATINGS.map((l) => [l.key, l]));
 
@@ -50,6 +71,29 @@ export const MAX_REMARKS_LENGTH = 1000;
 
 export function isTaskRating(value: unknown): value is TaskRating {
   return typeof value === 'string' && LEVEL_BY_KEY.has(value as TaskRating);
+}
+
+/**
+ * The six-level scale before migration 046, read as today's three. Stored
+ * "not performed" meant the step or task wasn't done: it reads as absent.
+ */
+const LEGACY_RATINGS: Record<string, TaskRating | 'absent'> = {
+  very_good: 'satisfactory',
+  good: 'satisfactory',
+  fair: 'needs_practice',
+  needs_improvement: 'needs_practice',
+  not_performed: 'absent',
+};
+
+/**
+ * A rating column's value as a level; null for an unrated row, 'absent' for a
+ * row that means nothing was performed (a pre-046 "not performed", which 046
+ * deletes). Lets the app read the database correctly before 046 is applied.
+ */
+export function storedRating(value: unknown): TaskRating | null | 'absent' {
+  if (isTaskRating(value)) return value;
+  if (typeof value === 'string' && value in LEGACY_RATINGS) return LEGACY_RATINGS[value];
+  return null;
 }
 
 export function ratingLabel(rating: TaskRating): string {
@@ -76,9 +120,13 @@ export function completionCredit(completion: GradedCompletion | undefined): numb
   return LEVEL_BY_KEY.get(completion.rating)?.credit ?? 0;
 }
 
-/** Whether a completion row means the task was done — "not performed" is a row too. */
-export function isPerformed(completion: GradedCompletion | undefined): boolean {
-  return Boolean(completion) && completion!.rating !== 'not_performed';
+/**
+ * Whether a completion row means the task was done. Every level on the scale
+ * is a performance, so any row is — except a "not performed" left from before
+ * migration 046, which was a row too. Takes raw rows as well as parsed ones.
+ */
+export function isPerformed(completion: { rating?: unknown } | undefined): boolean {
+  return Boolean(completion) && storedRating(completion!.rating) !== 'absent';
 }
 
 /** How one assignment rated a task's sub-tasks. */
@@ -119,20 +167,22 @@ export function gradedScore(
   return total > 0 ? Math.round((earned / total) * 100) : 0;
 }
 
+/** Each band starts halfway between two levels' credits (100 / 75 / 50). */
+const EXCELLENT_MIN = 88;
+const SATISFACTORY_MIN = 63;
+
 /**
  * The single level that sums up a task graded sub-task by sub-task — what the
- * student sees on the task and what "performed" is judged by. Same bands as
- * scoreDescriptor, except that nothing earned reads Not Performed.
+ * student sees on the task. Same bands as scoreDescriptor. Only asked of a
+ * task with at least one rated sub-task.
  */
 export function ratingForCredit(credit: number): TaskRating {
-  if (credit <= 0) return 'not_performed';
   const score = Math.round(credit * 100);
-  if (score >= 95) return 'excellent';
-  if (score >= 85) return 'very_good';
-  if (score >= 75) return 'good';
-  if (score >= 60) return 'fair';
-  return 'needs_improvement';
+  if (score >= EXCELLENT_MIN) return 'excellent';
+  if (score >= SATISFACTORY_MIN) return 'satisfactory';
+  return 'needs_practice';
 }
+
 
 /**
  * The sub-task ratings a task ends up with after `changes` (step id → level,
@@ -158,7 +208,7 @@ export function resolveStepRatings(
 /**
  * The level a task without sub-task ratings is graded at as a whole: its
  * rating, or full credit for a completion nobody rated. Null when there is no
- * completion, which scores as Not Performed.
+ * completion, which earns nothing.
  */
 export function wholeTaskLevel(completion: GradedCompletion | undefined): TaskRating | null {
   if (!completion) return null;
@@ -166,13 +216,9 @@ export function wholeTaskLevel(completion: GradedCompletion | undefined): TaskRa
 }
 
 /**
- * The verbal reading of an overall score. Each band starts halfway between
- * two ratings' credits, so a scenario rated "Good" throughout reads "Good".
+ * The verbal reading of an overall score, on the same bands as the levels, so
+ * a scenario rated "Satisfactory" throughout reads "Satisfactory".
  */
 export function scoreDescriptor(score: number): string {
-  if (score >= 95) return 'Excellent';
-  if (score >= 85) return 'Very Good';
-  if (score >= 75) return 'Good';
-  if (score >= 60) return 'Fair';
-  return 'Needs Improvement';
+  return ratingLabel(ratingForCredit(score / 100));
 }

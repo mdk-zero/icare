@@ -330,7 +330,7 @@ export default function ScenarioBriefScreen() {
                 />
               </View>
               <Text style={styles.checkDescription}>{task.description}</Text>
-              {task.rating && (
+              {task.rating && TASK_RATING_LABEL[task.rating] && (
                 <View style={styles.ratingRow}>
                   <Badge label={TASK_RATING_LABEL[task.rating]} variant={TASK_RATING_BADGE[task.rating]} size="sm" />
                 </View>

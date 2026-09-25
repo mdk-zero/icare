@@ -31,6 +31,8 @@ import PageHeader from "../../../../components/PageHeader";
 import { EcgLoader } from "../../../../components/EcgLoader";
 import CategoryPicker from "../../../../components/CategoryPicker";
 import { useScenarioCategories } from "../../../../lib/use-scenario-categories";
+import { DEFAULT_RUBRIC, resolveRubric, type Rubric } from "../../../../lib/task-ratings";
+import RubricEditor, { rubricToStore } from "../../rubric-editor";
 
 const inputClassName =
   "w-full px-4 py-3 bg-surface border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 focus:bg-surface transition-all text-sm shadow-sm";
@@ -61,6 +63,8 @@ export default function EditScenarioClient({ scenarioId }: { scenarioId: string 
   const [patientSearch, setPatientSearch] = useState("");
   const { categories, loading: loadingCategories } = useScenarioCategories();
 
+  const [rubric, setRubric] = useState<Rubric>(DEFAULT_RUBRIC);
+  const [savedRubric, setSavedRubric] = useState<Rubric>(DEFAULT_RUBRIC);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -80,6 +84,9 @@ export default function EditScenarioClient({ scenarioId }: { scenarioId: string 
     }
 
     setScenario(scenarioData);
+    const loadedRubric = resolveRubric(scenarioData.rubric);
+    setRubric(loadedRubric);
+    setSavedRubric(loadedRubric);
     const linked = patientData.find((p) => p.id === (scenarioData.patient_id ?? ""));
     setForm({
       title: scenarioData.title,
@@ -141,7 +148,10 @@ export default function EditScenarioClient({ scenarioId }: { scenarioId: string 
     setSaving(true);
     setError(null);
 
+    // Only sent when edited: before migration 046 there is no column to take it.
+    const rubricChanged = JSON.stringify(rubricToStore(rubric)) !== JSON.stringify(rubricToStore(savedRubric));
     const updated = await updateScenario(scenarioId, {
+      ...(rubricChanged ? { rubric: rubricToStore(rubric) } : {}),
       title: form.title,
       description: form.description,
       difficulty: form.difficulty,
@@ -331,6 +341,8 @@ export default function EditScenarioClient({ scenarioId }: { scenarioId: string 
               <p className="text-xs text-gray-500 mt-1.5">Enter one objective per line.</p>
             </div>
           </div>
+
+          <RubricEditor value={rubric} onChange={setRubric} />
         </div>
 
         {/* Right: patient + room tables */}

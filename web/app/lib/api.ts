@@ -2,7 +2,7 @@ import type { MlEvent } from './ml';
 import { NDJSON, readNdjson } from './ndjson';
 import { cachedFetch, clearRequestCache } from './request-cache';
 import type { AttendanceTally, ShiftAttendanceStatus } from './shifts';
-import type { TaskRating } from './task-ratings';
+import { resolveRubric, type Rubric, type TaskRating } from './task-ratings';
 
 export interface User {
   id: string;
@@ -1145,6 +1145,8 @@ export interface SimulationScenario {
   is_ai_generated: boolean;
   student_count: number;
   created_at: string;
+  /** Faculty's own wording per grading level; missing levels use the book's. Null before migration 046. */
+  rubric?: Partial<Rubric> | null;
 }
 
 export interface ScenarioAssignment {
@@ -2681,6 +2683,8 @@ export async function fetchFacultyAssignmentTasks(assignmentId: string): Promise
   status: string;
   ratingsEnabled: boolean;
   stepsEnabled: boolean;
+  /** What each level means for this scenario (its own rubric, or the book's). */
+  rubric: Rubric;
 } | null> {
   try {
     const res = await apiFetch(`/api/faculty/scenarios/assignments/${assignmentId}/tasks`, {
@@ -2691,6 +2695,7 @@ export async function fetchFacultyAssignmentTasks(assignmentId: string): Promise
       status?: string;
       ratings_enabled?: boolean;
       steps_enabled?: boolean;
+      rubric?: unknown;
       error?: string;
     };
     if (!res.ok) {
@@ -2702,6 +2707,7 @@ export async function fetchFacultyAssignmentTasks(assignmentId: string): Promise
       status: json.status ?? 'pending',
       ratingsEnabled: json.ratings_enabled ?? true,
       stepsEnabled: json.steps_enabled ?? true,
+      rubric: resolveRubric(json.rubric),
     };
   } catch (err) {
     console.error('fetchFacultyAssignmentTasks() failed', err);

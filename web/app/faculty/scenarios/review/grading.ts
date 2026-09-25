@@ -27,40 +27,19 @@ export const RATING_STYLE: Record<
     hover: "hover:border-emerald-600 hover:bg-emerald-50 hover:text-emerald-600",
     count: "bg-emerald-100 text-emerald-800",
   },
-  very_good: {
-    dot: "bg-teal-500",
-    checked: "border-teal-600 bg-teal-600 text-surface",
-    implied: "border-dashed border-teal-600 text-teal-600",
-    hover: "hover:border-teal-600 hover:bg-teal-50 hover:text-teal-600",
-    count: "bg-teal-100 text-teal-800",
-  },
-  good: {
+  satisfactory: {
     dot: "bg-blue-500",
     checked: "border-blue-600 bg-blue-600 text-surface",
     implied: "border-dashed border-blue-600 text-blue-600",
     hover: "hover:border-blue-600 hover:bg-blue-50 hover:text-blue-600",
     count: "bg-blue-100 text-blue-800",
   },
-  fair: {
+  needs_practice: {
     dot: "bg-amber-500",
     checked: "border-amber-600 bg-amber-600 text-surface",
     implied: "border-dashed border-amber-600 text-amber-600",
     hover: "hover:border-amber-600 hover:bg-amber-50 hover:text-amber-600",
     count: "bg-amber-100 text-amber-800",
-  },
-  needs_improvement: {
-    dot: "bg-rose-500",
-    checked: "border-rose-600 bg-rose-600 text-surface",
-    implied: "border-dashed border-rose-600 text-rose-600",
-    hover: "hover:border-rose-600 hover:bg-rose-50 hover:text-rose-600",
-    count: "bg-rose-100 text-rose-800",
-  },
-  not_performed: {
-    dot: "bg-gray-400",
-    checked: "border-gray-600 bg-gray-600 text-surface",
-    implied: "border-dashed border-gray-500 text-gray-500",
-    hover: "hover:border-gray-500 hover:bg-gray-100 hover:text-gray-600",
-    count: "bg-gray-100 text-gray-800",
   },
 };
 
@@ -75,7 +54,7 @@ export interface ChecklistRow {
   key: string;
   /** Null when the row is the task itself. */
   stepId: string | null;
-  /** The level the row scores at right now; null scores as Not Performed. */
+  /** The level the row scores at right now; null earns nothing. */
   level: TaskRating | null;
   /**
    * True when `level` isn't a rating anyone gave this row but the level its
@@ -135,7 +114,7 @@ export function withRating(t: GradingTask, rating: TaskRating | null): GradingTa
   return {
     ...t,
     rating,
-    is_completed: rating !== "not_performed",
+    is_completed: true,
     completed_via: t.completed_via ?? "faculty",
     completed_at: t.completed_at ?? new Date().toISOString(),
   };

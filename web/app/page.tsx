@@ -546,15 +546,15 @@ export default function LandingPage() {
                       },
                       {
                         task: "Identifies patient",
-                        rating: "Fair",
-                        tone: "bg-amber-100 text-amber-700",
+                        rating: "Satisfactory",
+                        tone: "bg-blue-100 text-blue-700",
                         performed: true,
                       },
                       {
                         task: "Counts 1 minute",
-                        rating: "Not Performed",
-                        tone: "bg-rose-100 text-rose-700",
-                        performed: false,
+                        rating: "Needs Practice",
+                        tone: "bg-amber-100 text-amber-700",
+                        performed: true,
                       },
                     ].map(({ task, rating, tone, performed }) => (
                       <li key={task} className="flex items-center justify-between gap-2">
@@ -750,22 +750,19 @@ export default function LandingPage() {
                     inconsistency.
                   </p>
                   <div aria-hidden="true" className="mt-auto pt-7">
-                    {/* The six task ratings, Excellent down to Not Performed. */}
+                    {/* The three Taylor's checklist levels, Excellent down to Needs Practice. */}
                     <div className="flex items-end gap-1">
                       {[
                         "h-10 bg-brand-600",
-                        "h-8 bg-brand-500",
-                        "h-6 bg-brand-400",
-                        "h-5 bg-brand-300",
-                        "h-3.5 bg-amber-300",
-                        "h-2 bg-rose-300",
+                        "h-7 bg-brand-400",
+                        "h-4 bg-amber-300",
                       ].map((bar) => (
                         <span key={bar} className={`flex-1 rounded-md ${bar}`} />
                       ))}
                     </div>
                     <div className="mt-2 flex justify-between font-mono text-[9px] uppercase tracking-wider text-gray-400">
                       <span>Excellent</span>
-                      <span>Not performed</span>
+                      <span>Needs practice</span>
                     </div>
                   </div>
                 </article>
