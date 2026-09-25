@@ -20,7 +20,7 @@ import { EcgLoader } from "../components/EcgLoader";
 
 /** Shared with login/signup so the three auth surfaces read as one screen. */
 const FIELD_CLASS =
-  "w-full py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-[#7DD3D8]/30 focus:border-[#7DD3D8]/50 transition-all";
+  "auth-input w-full py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-[#7DD3D8]/30 focus:border-[#7DD3D8]/50 transition-all";
 const SUBMIT_CLASS =
   "w-full bg-[#2B9095] hover:bg-[#19797D] text-white border border-white/20 py-3 px-6 rounded-xl font-semibold transition-all duration-200 shadow-lg shadow-black/20 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer";
 

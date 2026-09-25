@@ -132,15 +132,7 @@ export default function LoginPage() {
         setIsGoogleLoading(false);
         return;
       }
-      const data = (await res.json()) as {
-        user?: User;
-        needsRoleSelection?: boolean;
-      };
-
-      if (data.needsRoleSelection) {
-        router.push("/signup/role");
-        return;
-      }
+      const data = (await res.json()) as { user?: User };
 
       const user = data.user as User;
       localStorage.setItem("icare_user", JSON.stringify(user));
@@ -305,7 +297,7 @@ export default function LoginPage() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
-                    className="w-full pl-11 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-[#7DD3D8]/30 focus:border-[#7DD3D8]/50 transition-all"
+                    className="auth-input w-full pl-11 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-[#7DD3D8]/30 focus:border-[#7DD3D8]/50 transition-all"
                     placeholder="email@example.com"
                   />
                 </div>
@@ -328,7 +320,7 @@ export default function LoginPage() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
-                    className="w-full pl-11 pr-11 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-[#7DD3D8]/30 focus:border-[#7DD3D8]/50 transition-all"
+                    className="auth-input w-full pl-11 pr-11 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-[#7DD3D8]/30 focus:border-[#7DD3D8]/50 transition-all"
                     placeholder="Enter your password"
                   />
                   <button
@@ -415,7 +407,7 @@ export default function LoginPage() {
                   href="/signup"
                   className="text-[#7DD3D8] hover:text-white font-medium transition-colors"
                 >
-                  Sign up
+                  Contact us
                 </Link>
               </p>
             </div>

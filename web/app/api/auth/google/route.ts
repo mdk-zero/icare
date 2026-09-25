@@ -1,16 +1,32 @@
 import { NextResponse } from 'next/server';
 import { verifyGoogleIdToken } from '@/app/lib/auth/google';
+import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import {
   findUserByGoogleSub,
   toPublicUser,
   touchLastLogin,
+  USER_SELECT,
 } from '@/app/lib/auth/user';
-import {
-  setSessionCookie,
-  signSession,
-  setGoogleOnboardingCookie,
-  signGoogleOnboarding,
-} from '@/app/lib/auth/session';
+import { setSessionCookie, signSession } from '@/app/lib/auth/session';
+
+/**
+ * An account the team created with this email but that has never signed in
+ * with Google. Google has verified the address, so the first Google sign-in
+ * claims it; an account already tied to a different Google identity is left
+ * alone.
+ */
+async function claimAccountByEmail(sub: string, email: string) {
+  const supabase = getSupabaseAdmin();
+  const { data, error } = await supabase
+    .from('users')
+    .update({ google_sub: sub })
+    .eq('email', email.trim().toLowerCase())
+    .is('google_sub', null)
+    .select(USER_SELECT)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
 
 export async function POST(request: Request) {
   let body: unknown;
@@ -44,7 +60,9 @@ export async function POST(request: Request) {
   }
 
   try {
-    const existing = await findUserByGoogleSub(profile.sub);
+    const existing =
+      (await findUserByGoogleSub(profile.sub)) ??
+      (await claimAccountByEmail(profile.sub, profile.email));
 
     if (existing) {
       await touchLastLogin(existing.id);
@@ -58,16 +76,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ user: publicUser, sessionToken: token });
     }
 
-    // New Google user: store verified profile in a short-lived onboarding cookie.
-    const onboardingToken = await signGoogleOnboarding({
-      sub: profile.sub,
-      email: profile.email,
-      name: profile.name,
-      picture: profile.picture,
-    });
-    await setGoogleOnboardingCookie(onboardingToken);
-
-    return NextResponse.json({ needsRoleSelection: true });
+    // Accounts are created by the team, never on first sign-in.
+    return NextResponse.json(
+      { error: 'No iCARE++ account uses this Google email. Use Contact us to request account activation.' },
+      { status: 403 },
+    );
   } catch (err) {
     console.error('Google auth handler failed', err);
     return NextResponse.json({ error: 'Sign-in failed' }, { status: 500 });

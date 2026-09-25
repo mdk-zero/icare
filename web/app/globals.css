@@ -575,3 +575,23 @@ html {
     height: auto;
   }
 }
+
+/* Auth screens (login, contact, forgot password) sit on a fixed dark glass
+   card whatever the theme. Chrome's autofill paints its own light field, dark
+   text and border over that when a value is pasted or remembered. Delaying the
+   background change indefinitely keeps the field's own translucent fill, and
+   the text colour and border are pinned back to the untouched field's. */
+.auth-input:-webkit-autofill,
+.auth-input:-webkit-autofill:hover,
+.auth-input:-webkit-autofill:focus,
+.auth-input:autofill {
+  -webkit-text-fill-color: #ffffff;
+  caret-color: #ffffff;
+  border-color: rgb(255 255 255 / 0.1);
+  transition:
+    background-color 600000s 0s,
+    color 600000s 0s;
+}
+.auth-input:-webkit-autofill:focus {
+  border-color: rgb(125 211 216 / 0.5);
+}
