@@ -17,6 +17,7 @@ import {
   faFolderPlus,
   faBrain,
   faUserPlus,
+  faFolderOpen,
 } from "@fortawesome/free-solid-svg-icons";
 import PageHeader from "../../components/PageHeader";
 import FilterSelect from "../../components/FilterSelect";
@@ -38,9 +39,11 @@ import MlRunProgress, {
   mlRunFraction,
   mlRunLabel,
 } from "../../components/MlRunProgress";
-import { toast } from "../../components/Toast";
+import { loadingToast, toast } from "../../components/Toast";
 import SectionGroups from "./SectionGroups";
 import RegisterStudentModal from "./RegisterStudentModal";
+import BulkEnrollModal from "./BulkEnrollModal";
+import { isStudentDrag, leftTarget, readStudentDrag, startStudentDrag } from "./drag";
 
 /** The run summary is a couple of sentences; the default toast is gone before it can be read. */
 const ML_TOAST_MS = 8000;
@@ -113,6 +116,7 @@ function SectionFormModal({
     }
     setSaving(true);
     setError(null);
+    const progress = loadingToast(section ? `Renaming ${section.name} to ${trimmed}…` : `Creating ${trimmed}…`);
 
     const res = await fetch(section ? `/api/admin/sections/${section.id}` : "/api/admin/sections", {
       method: section ? "PATCH" : "POST",
@@ -128,9 +132,11 @@ function SectionFormModal({
     setSaving(false);
 
     if (!res.ok || !json.section) {
+      progress.error(json.error ?? "Something went wrong. Try again.");
       setError(json.error ?? "Something went wrong. Try again.");
       return;
     }
+    progress.success(section ? `Renamed to ${trimmed}` : `Created ${trimmed}`);
 
     if (section) {
       const moved = json.assessments_retargeted ?? 0;
@@ -281,6 +287,7 @@ function DeleteSectionModal({
   const handleDelete = async () => {
     setDeleting(true);
     setError(null);
+    const progress = loadingToast(`Deleting ${section.name}…`);
     const res = await apiFetch(`/api/admin/sections/${section.id}`, {
       method: "DELETE",
       credentials: "include",
@@ -288,9 +295,11 @@ function DeleteSectionModal({
     const json = (await res.json()) as { unassigned_students?: number; error?: string };
     setDeleting(false);
     if (!res.ok) {
+      progress.error(json.error ?? "Unable to delete section.");
       setError(json.error ?? "Unable to delete section.");
       return;
     }
+    progress.success(`${section.name} deleted`);
     const freed = json.unassigned_students ?? 0;
     onDeleted(
       `Section "${section.name}" deleted` +
@@ -429,6 +438,9 @@ export default function StudentManagementClient() {
   const [sectionToDelete, setSectionToDelete] = useState<Section | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [registering, setRegistering] = useState(false);
+  const [bulkEnrolling, setBulkEnrolling] = useState(false);
+  // Lit while a grouped student is dragged over the table, to take them out of their group.
+  const [tableDropActive, setTableDropActive] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [confirmingBatchDelete, setConfirmingBatchDelete] = useState(false);
   const [batchDeleting, setBatchDeleting] = useState(false);
@@ -574,10 +586,29 @@ export default function StudentManagementClient() {
     return openGroup.students.filter((s) => !grouped.has(s.id));
   }, [openGroup, hasGroups, sectionGroups]);
 
-  const addToGroup = async (studentId: string, teamId: string) => {
-    const result = await moveStudentToTeam(studentId, teamId);
-    if ("error" in result) toast(result.error, "error");
-    await refreshTeams();
+  // Word-style picking in the table: click selects one row (or unselects it
+  // if it's already picked), Ctrl/Cmd+click adds or removes a row, and
+  // Shift+click selects the run from the last pick. Escape clears it all.
+  const [anchorId, setAnchorId] = useState<string | null>(null);
+  const selectRow = (id: string, e: React.MouseEvent) => {
+    if (e.shiftKey && anchorId) {
+      const ids = tableStudents.map((s) => s.id);
+      const [from, to] = [ids.indexOf(anchorId), ids.indexOf(id)].sort((x, y) => x - y);
+      if (from >= 0) {
+        setSelectedIds(new Set(ids.slice(from, to + 1)));
+        return;
+      }
+    }
+    if (e.ctrlKey || e.metaKey || selectedIds.has(id)) {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        if (!next.delete(id)) next.add(id);
+        return next;
+      });
+    } else {
+      setSelectedIds(new Set([id]));
+    }
+    setAnchorId(id);
   };
 
   /** Leaving a roster drops its selection, so nothing carries into the next one. */
@@ -594,6 +625,15 @@ export default function StudentManagementClient() {
   );
   const visibleCount = tableStudents.length;
   const allVisibleSelected = visibleCount > 0 && selectedStudents.length === visibleCount;
+
+  useEffect(() => {
+    if (selectedIds.size === 0) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSelectedIds(new Set());
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [selectedIds]);
 
   const toggleStudent = (id: string) =>
     setSelectedIds((prev) => {
@@ -615,6 +655,8 @@ export default function StudentManagementClient() {
   const handleBatchDelete = async () => {
     setBatchDeleting(true);
     setBatchDeleteError(null);
+    const count = selectedStudents.length;
+    const progress = loadingToast(`Deleting ${count} student${count === 1 ? "" : "s"}…`);
     const res = await apiFetch("/api/admin/students", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
@@ -622,18 +664,22 @@ export default function StudentManagementClient() {
       body: JSON.stringify({ ids: selectedStudents.map((s) => s.id) }),
     });
     const json = (await res.json()) as { deleted?: number; error?: string };
-    setBatchDeleting(false);
     if (!res.ok) {
+      setBatchDeleting(false);
+      progress.error(json.error ?? "Unable to delete the selected students.");
       setBatchDeleteError(json.error ?? "Unable to delete the selected students.");
       return;
     }
     const deleted = json.deleted ?? 0;
+    await loadStudents();
+    await refreshTeams();
+    setBatchDeleting(false);
+    progress.success(`Deleted ${deleted} student${deleted === 1 ? "" : "s"}`);
     setConfirmingBatchDelete(false);
     setSelectedIds(new Set());
     setNotice(
       `${deleted} student${deleted === 1 ? "" : "s"} deleted — their attempts and scores are gone too.`,
     );
-    void loadStudents();
   };
 
   return (
@@ -889,13 +935,22 @@ export default function StudentManagementClient() {
                 {hasGroups ? "Not in a group" : "Students"}{" "}
                 <span className="text-sm font-normal text-gray-400">({tableStudents.length})</span>
               </h3>
-              <button
-                onClick={() => setRegistering(true)}
-                className="flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition-all hover:bg-brand-700"
-              >
-                <FontAwesomeIcon icon={faUserPlus} className="h-3.5 w-3.5" />
-                Register student
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => setBulkEnrolling(true)}
+                  className="flex items-center gap-2 rounded-lg border border-gray-200 bg-surface px-4 py-2 text-sm font-medium text-gray-700 transition-all hover:border-brand-300 hover:text-brand-700"
+                >
+                  <FontAwesomeIcon icon={faUsers} className="h-3.5 w-3.5" />
+                  Bulk enroll
+                </button>
+                <button
+                  onClick={() => setRegistering(true)}
+                  className="flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition-all hover:bg-brand-700"
+                >
+                  <FontAwesomeIcon icon={faUserPlus} className="h-3.5 w-3.5" />
+                  Register student
+                </button>
+              </div>
             </div>
           )}
 
@@ -910,6 +965,9 @@ export default function StudentManagementClient() {
               >
                 Clear
               </button>
+              {hasGroups && (
+                <p className="text-sm text-gray-500">Drag any of them onto a group to add them all.</p>
+              )}
               <button
                 onClick={() => {
                   setBatchDeleteError(null);
@@ -923,7 +981,45 @@ export default function StudentManagementClient() {
             </div>
           )}
 
-          <div className="overflow-hidden rounded-xl border border-hairline bg-surface shadow-tile">
+          <div
+            onDragOver={(e) => {
+              if (!hasGroups || !isStudentDrag(e)) return;
+              e.preventDefault();
+              e.dataTransfer.dropEffect = "move";
+              setTableDropActive(true);
+            }}
+            onDragLeave={(e) => {
+              if (leftTarget(e)) setTableDropActive(false);
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              setTableDropActive(false);
+              const drag = readStudentDrag(e);
+              // Only a student dragged out of a group has anywhere to leave.
+              if (!drag?.fromGroupId) return;
+              void (async () => {
+                const progress = loadingToast(`Taking ${drag.label} out of their group…`);
+                let failure: string | null = null;
+                for (const id of drag.studentIds) {
+                  const result = await moveStudentToTeam(id, null);
+                  if ("error" in result) failure = result.error;
+                }
+                await refreshTeams();
+                if (failure) progress.error(failure);
+                else progress.success(`${drag.label} ${drag.studentIds.length === 1 ? "is" : "are"} no longer in a group`);
+              })();
+            }}
+            className={`relative overflow-hidden rounded-xl border bg-surface shadow-tile transition-all duration-150 ${
+              tableDropActive ? "border-brand-500 ring-2 ring-brand-500/40" : "border-hairline"
+            }`}
+          >
+            {tableDropActive && (
+              <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-brand-50/85">
+                <span className="rounded-full bg-brand-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm">
+                  Drop to take them out of their group
+                </span>
+              </div>
+            )}
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="border-b border-gray-100 bg-subtle">
@@ -958,19 +1054,38 @@ export default function StudentManagementClient() {
                         {h}
                       </th>
                     ))}
-                    {hasGroups && <th className="px-4 py-3 sm:px-6" aria-label="Add to group" />}
+                    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-500 sm:px-6">
+                      View details
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-hairline">
                   {tableStudents.map((student) => (
                     <tr
                       key={student.id}
-                      onClick={() => router.push(`/admin/students/${student.id}`)}
-                      className={`cursor-pointer transition-colors ${
-                        selectedIds.has(student.id) ? "bg-brand-600/5" : "hover:bg-subtle"
+                      draggable={hasGroups}
+                      onDragStart={(e) => {
+                        // Dragging a selected row carries the whole selection;
+                        // dragging any other row carries just that one.
+                        const carried = selectedIds.has(student.id)
+                          ? tableStudents.filter((s) => selectedIds.has(s.id))
+                          : [student];
+                        startStudentDrag(e, carried, null);
+                      }}
+                      title={
+                        hasGroups
+                          ? "Click to select, Ctrl+click to add more, Shift+click for a range, then drag onto a group"
+                          : "Click to select, Ctrl+click to add more, Shift+click for a range"
+                      }
+                      // Clicking a row only picks it; the folder icon opens the profile.
+                      onClick={(e) => selectRow(student.id, e)}
+                      className={`select-none transition-colors ${hasGroups ? "cursor-grab active:cursor-grabbing" : "cursor-default"} ${
+                        selectedIds.has(student.id)
+                          ? "bg-brand-600/10 shadow-[inset_3px_0_0_0_var(--color-brand-600)]"
+                          : "hover:bg-subtle"
                       }`}
                     >
-                      {/* Ticking a box must not also open the student. */}
+                      {/* The checkbox toggles on its own, without the row-click selection rules. */}
                       <td
                         className="px-4 py-4 sm:pl-6 sm:pr-0"
                         onClick={(e) => e.stopPropagation()}
@@ -1010,21 +1125,6 @@ export default function StudentManagementClient() {
                               minute: "2-digit",
                             })}
                           </td>
-                          <td className="px-4 py-4 sm:px-6" onClick={(e) => e.stopPropagation()}>
-                            <select
-                              value=""
-                              aria-label={`Add ${student.name} to a group`}
-                              onChange={(e) => e.target.value && void addToGroup(student.id, e.target.value)}
-                              className="rounded-lg border border-gray-200 bg-surface px-2.5 py-1.5 text-sm text-gray-600 focus:border-brand-600 focus:outline-none"
-                            >
-                              <option value="">Add to group…</option>
-                              {sectionGroups.map((g) => (
-                                <option key={g.id} value={g.id}>
-                                  {g.name}
-                                </option>
-                              ))}
-                            </select>
-                          </td>
                         </>
                       ) : (
                         <>
@@ -1060,11 +1160,21 @@ export default function StudentManagementClient() {
                           </td>
                         </>
                       )}
+                      <td className="px-4 py-4 sm:px-6" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          onClick={() => router.push(`/admin/students/${student.id}`)}
+                          aria-label={`View ${student.name}'s profile`}
+                          title="View profile"
+                          className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-brand-600/10 hover:text-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-600/40"
+                        >
+                          <FontAwesomeIcon icon={faFolderOpen} className="h-4 w-4" />
+                        </button>
+                      </td>
                     </tr>
                   ))}
                   {tableStudents.length === 0 && (
                     <tr>
-                      <td colSpan={hasGroups ? 4 : 6} className="py-12 text-center text-gray-400">
+                      <td colSpan={hasGroups ? 4 : 7} className="py-12 text-center text-gray-400">
                         {hasGroups ? "Every student is in a group" : "No students in this section yet"}
                       </td>
                     </tr>
@@ -1074,6 +1184,19 @@ export default function StudentManagementClient() {
             </div>
           </div>
         </>
+      )}
+
+      {bulkEnrolling && isRealSection && (
+        <BulkEnrollModal
+          sectionId={openGroup.key}
+          sectionName={openGroup.name}
+          groups={sectionGroups}
+          onClose={() => setBulkEnrolling(false)}
+          onFinished={(created) => {
+            if (created > 0) void loadStudents();
+            void refreshTeams();
+          }}
+        />
       )}
 
       {registering && isRealSection && (

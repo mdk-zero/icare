@@ -1,10 +1,6 @@
-import type { Metadata } from "next";
-import FacultyStudentsClient from "./page-client";
+import { redirect } from "next/navigation";
 
-export const metadata: Metadata = {
-  title: "Students | iCARE++ Faculty",
-};
-
+/** The student list became My Groups; old links and bookmarks land there. */
 export default function FacultyStudentsPage() {
-  return <FacultyStudentsClient />;
+  redirect("/faculty/teams");
 }

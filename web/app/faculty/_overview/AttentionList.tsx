@@ -188,10 +188,10 @@ export default function AttentionList({
           {more > 0 ? `${plural(more, "more student")} flagged` : " "}
         </span>
         <Link
-          href="/faculty/students"
+          href="/faculty/teams"
           className="text-sm font-medium text-brand-600 transition-colors hover:text-brand-700"
         >
-          All students →
+          My groups →
         </Link>
       </footer>
     </section>

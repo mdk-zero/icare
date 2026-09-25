@@ -11,7 +11,6 @@ import {
   faHouse,
   faListCheck,
   faNotesMedical,
-  faUsers,
   faPeopleGroup,
 } from "@fortawesome/free-solid-svg-icons";
 import Shell, { NavItem } from "../components/Shell";
@@ -32,13 +31,6 @@ function getCurrentUser(): User | null {
 
 const navItems: NavItem[] = [
   { id: "overview", label: "Overview", href: "/faculty", icon: faHouse, section: "General" },
-  {
-    id: "students",
-    label: "Students",
-    href: "/faculty/students",
-    icon: faUsers,
-    section: "Teaching",
-  },
   {
     id: "teams",
     label: "My Groups",
@@ -97,6 +89,8 @@ const navItems: NavItem[] = [
 
 function isActive(item: NavItem, pathname: string) {
   if (item.href === "/faculty") return pathname === "/faculty";
+  // Student profiles are opened from My Groups, so they count as part of it.
+  if (item.id === "teams" && pathname.startsWith("/faculty/students")) return true;
   return pathname.startsWith(item.href);
 }
 

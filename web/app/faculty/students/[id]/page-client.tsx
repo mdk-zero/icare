@@ -506,10 +506,10 @@ export default function StudentDetailClient() {
       <div className="flex flex-col items-center justify-center h-96">
         <p className="text-gray-500">Student not found</p>
         <button 
-          onClick={() => router.push('/faculty/students')}
+          onClick={() => router.push('/faculty/teams')}
           className="mt-4 px-4 py-2 text-brand-600 font-medium"
         >
-          Back to Students
+          Back to My Groups
         </button>
       </div>
     );
@@ -519,11 +519,11 @@ export default function StudentDetailClient() {
     <div>
       <div className="mb-4 flex items-center justify-between gap-4">
         <button 
-          onClick={() => router.push('/faculty/students')}
+          onClick={() => router.push('/faculty/teams')}
           className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
         >
           <FontAwesomeIcon icon={faChevronLeft} className="w-5 h-5" />
-          Back to Students
+          Back to My Groups
         </button>
         <LiveClock variant="compact" />
       </div>
