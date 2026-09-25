@@ -42,8 +42,18 @@ export async function GET() {
     console.error('Failed to load teams', loaded.error);
     return NextResponse.json({ error: 'Unable to load teams' }, { status: 500 });
   }
+  // Admins pick a supervising faculty member per group, so they get the roster.
+  const [{ data: faculty }, facultyProbe] = await Promise.all([
+    session.role === 'admin'
+      ? supabase.from('users').select('id, name').eq('role', 'faculty').order('name')
+      : Promise.resolve({ data: [] }),
+    supabase.from('teams').select('faculty_id', { head: true, count: 'exact' }).limit(1),
+  ]);
   return NextResponse.json({
     enabled: !loaded.error,
+    faculty_enabled: !facultyProbe.error,
+    viewer_id: session.uid,
+    faculty: faculty ?? [],
     sections: sections ?? [],
     teams: loaded.teams.sort((a, b) => compareTeamNames(a.name, b.name)),
     students: (students ?? []).map((s) => ({ ...s, team_id: loaded.teamOf.get(s.id as string) ?? null })),
@@ -54,7 +64,8 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   const session = await readSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (!['faculty', 'admin'].includes(session.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  // Groups are built by admins; faculty only see the ones assigned to them.
+  if (session.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   let body: { section_id?: unknown; name?: unknown };
   try {

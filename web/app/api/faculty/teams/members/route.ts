@@ -7,7 +7,8 @@ import { isMissingTeamTables, manageableSectionIds, manageableTeam, TEAMS_NEED_M
 export async function PUT(request: NextRequest) {
   const session = await readSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (!['faculty', 'admin'].includes(session.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  // Groups are built by admins; faculty only see the ones assigned to them.
+  if (session.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   let body: { student_id?: unknown; team_id?: unknown };
   try {

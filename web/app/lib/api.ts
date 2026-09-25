@@ -3256,12 +3256,21 @@ export interface FacultyTeam {
   id: string;
   section_id: string;
   name: string;
+  /** Supervising faculty member, or null. */
+  faculty_id: string | null;
+  faculty_name: string | null;
   members: TeamMemberInfo[];
 }
 
 export interface TeamsOverview {
   /** False before migration 048. */
   enabled: boolean;
+  /** False before migration 051 (faculty per group). */
+  faculty_enabled: boolean;
+  /** The signed-in user, so a faculty member can pick out their own groups. */
+  viewer_id: string;
+  /** Every faculty member, for an admin assigning groups; empty for faculty. */
+  faculty: { id: string; name: string }[];
   sections: { id: string; name: string }[];
   teams: FacultyTeam[];
   students: (TeamMemberInfo & { section_id: string; team_id: string | null })[];
@@ -3304,6 +3313,9 @@ export const createTeam = (sectionId: string, name: string) =>
 
 export const renameTeam = (teamId: string, name: string) =>
   teamRequest(`/api/faculty/teams/${teamId}`, 'PATCH', { name });
+
+export const assignTeamFaculty = (teamId: string, facultyId: string | null) =>
+  teamRequest(`/api/faculty/teams/${teamId}`, 'PATCH', { faculty_id: facultyId });
 
 export const deleteTeam = (teamId: string) => teamRequest(`/api/faculty/teams/${teamId}`, 'DELETE');
 

@@ -4,7 +4,7 @@ import { apiFetch } from "@/app/lib/api";
 import { usePageData } from "@/app/lib/use-page-data";
 import { useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faUsers, faPlus, faPencil, faTrash } from "@fortawesome/free-solid-svg-icons";
+import { faUsers, faPencil, faTrash } from "@fortawesome/free-solid-svg-icons";
 import PageHeader from "../../components/PageHeader";
 import FilterSelect from "../../components/FilterSelect";
 import Avatar from "../../components/Avatar";
@@ -50,10 +50,7 @@ export default function UsersClient() {
   const [busy, setBusy] = useState(false);
   const [userRoleFilter, setUserRoleFilter] = useState("all");
   const [message, setMessage] = useState<string | null>(null);
-  const [tempPassword, setTempPassword] = useState<{ email: string; password: string } | null>(null);
 
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [newUser, setNewUser] = useState({ name: "", email: "", role: "student", sex: "" });
   const [editingUser, setEditingUser] = useState<UserAccount | null>(null);
   const [editForm, setEditForm] = useState({ name: "", role: "student", sex: "" });
 
@@ -70,41 +67,9 @@ export default function UsersClient() {
   });
 
   const users = data ?? NO_USERS;
-  // Create, edit and delete each patch the loaded list rather than refetching it.
+  // Edit and delete each patch the loaded list rather than refetching it.
   const setUsers = (update: (previous: UserAccount[]) => UserAccount[]) =>
     setData((previous) => update(previous ?? NO_USERS));
-
-  const handleCreateUser = async () => {
-    if (!newUser.name.trim() || !newUser.email.trim()) {
-      flash("Name and email are required");
-      return;
-    }
-    setBusy(true);
-    const res = await apiFetch("/api/admin/users", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify(newUser),
-    });
-    setBusy(false);
-    const json = (await res.json()) as {
-      user?: UserAccount;
-      password?: string;
-      warning?: string;
-      error?: string;
-    };
-    if (!res.ok || !json.user) {
-      flash(json.error ?? "Failed to create user");
-      return;
-    }
-    setUsers((prev) => [json.user!, ...prev]);
-    setShowAddModal(false);
-    setNewUser({ name: "", email: "", role: "student", sex: "" });
-    if (json.password) {
-      setTempPassword({ email: json.user.email, password: json.password });
-    }
-    flash(json.warning ?? "User created");
-  };
 
   const handleSaveEdit = async () => {
     if (!editingUser) return;
@@ -166,22 +131,6 @@ export default function UsersClient() {
         </div>
       )}
 
-      {tempPassword && (
-        <div className="mb-4 bg-amber-50 border border-amber-300 text-amber-800 px-4 py-3 rounded-xl text-sm flex items-center justify-between gap-4">
-          <span>
-            Temporary password for <strong>{tempPassword.email}</strong>:{" "}
-            <code className="font-mono bg-surface px-2 py-0.5 rounded border border-amber-200">{tempPassword.password}</code>{" "}
-            — they will be asked to change it at first login.
-          </span>
-          <button
-            onClick={() => setTempPassword(null)}
-            className="text-amber-700 hover:text-amber-900 font-medium shrink-0"
-          >
-            Dismiss
-          </button>
-        </div>
-      )}
-
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
         {[
           { label: "Total Users", count: users.length },
@@ -213,13 +162,6 @@ export default function UsersClient() {
           <option value="faculty">Faculty</option>
           <option value="admin">Administrator</option>
         </FilterSelect>
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="flex items-center gap-2 px-4 py-2.5 bg-brand-600 text-white font-medium rounded-xl hover:bg-brand-700 hover:shadow-lg transition-all duration-300 ml-auto"
-        >
-          <FontAwesomeIcon icon={faPlus} className="w-5 h-5" />
-          Add User
-        </button>
       </div>
 
       <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200 overflow-hidden">
@@ -301,83 +243,6 @@ export default function UsersClient() {
           </table>
         </div>
       </div>
-
-      {showAddModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-surface rounded-xl p-4 w-full max-w-lg mx-4 shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-hairline">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Add New User</h3>
-              <div className="space-y-2">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Full Name</label>
-                <input
-                  type="text"
-                  value={newUser.name}
-                  onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-gray-800 focus:outline-none focus:ring-2 focus:ring-brand-600 focus:border-brand-600"
-                  placeholder="Juan dela Cruz"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
-                <input
-                  type="email"
-                  value={newUser.email}
-                  onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-gray-800 focus:outline-none focus:ring-2 focus:ring-brand-600 focus:border-brand-600"
-                  placeholder="user@icare.edu"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Role</label>
-                <select
-                  value={newUser.role}
-                  onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-gray-800 focus:outline-none focus:ring-2 focus:ring-brand-600 focus:border-brand-600"
-                >
-                  <option value="student">Student</option>
-                  <option value="faculty">Faculty</option>
-                  <option value="admin">Administrator</option>
-                </select>
-                <p className="text-xs text-gray-400 mt-2">
-                  A temporary password is generated; students receive it by email, other roles are shown it here once.
-                </p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Sex</label>
-                <select
-                  value={newUser.sex}
-                  onChange={(e) => setNewUser({ ...newUser, sex: e.target.value })}
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-gray-800 focus:outline-none focus:ring-2 focus:ring-brand-600 focus:border-brand-600"
-                >
-                  {SEX_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-                <p className="text-xs text-gray-400 mt-2">
-                  Optional. Students are greeted as Mr./Ms. on mobile once this is set; left unspecified, the greeting uses their name alone.
-                </p>
-              </div>
-            </div>
-            <div className="flex justify-end gap-3 mt-6">
-              <button
-                onClick={() => setShowAddModal(false)}
-                className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleCreateUser}
-                disabled={busy}
-                className="px-4 py-2 bg-brand-600 text-white rounded-xl font-medium hover:bg-brand-700 disabled:opacity-60 transition-all"
-              >
-                {busy ? "Creating…" : "Create User"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {editingUser && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">

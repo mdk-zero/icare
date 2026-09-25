@@ -7,23 +7,29 @@ import {
   faLayerGroup,
   faChevronRight,
   faArrowLeft,
-  faPlus,
   faXmark,
   faTrashCan,
   faCircleCheck,
-  faCircleXmark,
   faUsers,
   faTriangleExclamation,
   faSearch,
   faPenToSquare,
   faFolderPlus,
   faBrain,
+  faUserPlus,
 } from "@fortawesome/free-solid-svg-icons";
 import PageHeader from "../../components/PageHeader";
 import FilterSelect from "../../components/FilterSelect";
 import StatTile from "../../components/StatTile";
 import ConfirmModal from "../../components/ConfirmModal";
-import { fetchSections, runMlJob, Section, apiFetch } from "../../lib/api";
+import {
+  fetchSections,
+  fetchFacultyTeams,
+  moveStudentToTeam,
+  runMlJob,
+  Section,
+  apiFetch,
+} from "../../lib/api";
 import { usePageData } from "../../lib/use-page-data";
 import Avatar from "../../components/Avatar";
 import { EcgLoader } from "../../components/EcgLoader";
@@ -33,6 +39,8 @@ import MlRunProgress, {
   mlRunLabel,
 } from "../../components/MlRunProgress";
 import { toast } from "../../components/Toast";
+import SectionGroups from "./SectionGroups";
+import RegisterStudentModal from "./RegisterStudentModal";
 
 /** The run summary is a couple of sentences; the default toast is gone before it can be read. */
 const ML_TOAST_MS = 8000;
@@ -47,6 +55,8 @@ interface StudentPerformance {
   average_score: number | null;
   at_risk: boolean;
   last_login_at: string | null;
+  /** When the account was made, i.e. when they were enrolled. */
+  created_at: string;
   section_id: string | null;
   section: string | null;
 }
@@ -58,8 +68,6 @@ const NO_SECTIONS: Section[] = [];
 /** Group key for students with no section assigned. */
 const UNASSIGNED_KEY = "__unassigned__";
 
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
 function formatLastActive(value: string | null): string {
   if (!value) return "Never";
   const days = Math.floor((Date.now() - new Date(value).getTime()) / 86_400_000);
@@ -67,335 +75,6 @@ function formatLastActive(value: string | null): string {
   if (days === 1) return "Yesterday";
   if (days < 7) return `${days} days ago`;
   return new Date(value).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
-
-interface DraftRow {
-  key: number;
-  name: string;
-  email: string;
-  /**
-   * "no-email" is the case the roster used to hide: the account exists but the
-   * invitation bounced, so the temporary password has to be handed over by
-   * hand. Reporting it as "created" left the student locked out with nobody
-   * aware of it.
-   */
-  status: "ready" | "creating" | "created" | "no-email" | "failed";
-  message?: string;
-}
-
-/** Provisioned rows must not be re-sent: the account exists, so a retry 409s. */
-const isProvisioned = (status: DraftRow["status"]) => status === "created" || status === "no-email";
-
-/** The account was made; `warning` is set when the invitation did not go out. */
-type EnrollOutcome = { ok: true; warning?: string } | { ok: false; error: string };
-
-let rowKey = 0;
-const emptyRow = (): DraftRow => ({ key: rowKey++, name: "", email: "", status: "ready" });
-
-/**
- * Enrolment is section-first: a cohort arrives as a list, so the section is
- * chosen once and every student in the batch inherits it.
- */
-function EnrollSectionModal({
-  onClose,
-  sections,
-  presetSectionId,
-  onEnroll,
-  onFinished,
-}: {
-  onClose: () => void;
-  sections: Section[];
-  presetSectionId: string | null;
-  onEnroll: (name: string, email: string, sectionId: string) => Promise<EnrollOutcome>;
-  onFinished: (created: number) => void;
-}) {
-  // The parent mounts this only while open and keys it on the section, so state
-  // starts fresh every time rather than needing an effect to reset it.
-  const [sectionId, setSectionId] = useState(presetSectionId ?? "");
-  const [rows, setRows] = useState<DraftRow[]>(() => [emptyRow(), emptyRow(), emptyRow()]);
-  const [submitting, setSubmitting] = useState(false);
-  const [finished, setFinished] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
-
-  const filled = rows.filter((r) => r.name.trim() || r.email.trim());
-  // Enrolment and invitation can diverge, so the summary counts them apart --
-  // claiming "each student receives an email" when one bounced is how a locked
-  // out student goes unnoticed.
-  const provisionedCount = rows.filter((r) => isProvisioned(r.status)).length;
-  const invitedCount = rows.filter((r) => r.status === "created").length;
-
-  const update = (key: number, patch: Partial<DraftRow>) =>
-    setRows((prev) => prev.map((r) => (r.key === key ? { ...r, ...patch } : r)));
-
-  const validate = (): string | null => {
-    if (!sectionId) return "Choose a section first.";
-    if (filled.length === 0) return "Add at least one student.";
-    const seen = new Set<string>();
-    for (const row of filled) {
-      if (!row.name.trim()) return "Every student needs a name.";
-      if (!EMAIL_REGEX.test(row.email.trim()))
-        return `"${row.email.trim() || "(blank)"}" is not a valid email.`;
-      const email = row.email.trim().toLowerCase();
-      if (seen.has(email)) return `${email} appears twice in this batch.`;
-      seen.add(email);
-    }
-    return null;
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const problem = validate();
-    if (problem) {
-      setFormError(problem);
-      return;
-    }
-    setFormError(null);
-    setSubmitting(true);
-
-    let created = 0;
-    for (const row of filled) {
-      if (isProvisioned(row.status)) continue;
-      update(row.key, { status: "creating", message: undefined });
-      const outcome = await onEnroll(row.name.trim(), row.email.trim(), sectionId);
-      if (!outcome.ok) {
-        update(row.key, { status: "failed", message: outcome.error });
-        continue;
-      }
-      // Provisioned either way, so it still counts and must not be retried --
-      // only the invitation differs.
-      created++;
-      if (outcome.warning) {
-        update(row.key, { status: "no-email", message: outcome.warning });
-      } else {
-        update(row.key, { status: "created", message: "Invitation sent" });
-      }
-    }
-
-    setSubmitting(false);
-    setFinished(true);
-    onFinished(created);
-  };
-
-  const sectionName = sections.find((s) => s.id === sectionId)?.name;
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
-      onClick={submitting ? undefined : onClose}
-    >
-      <div
-        className="flex max-h-[88vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-hairline bg-surface shadow-[0_8px_30px_rgba(0,0,0,0.12)]"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between border-b border-hairline bg-subtle px-5 py-3">
-          <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-600/10">
-              <FontAwesomeIcon icon={faLayerGroup} className="h-5 w-5 text-brand-600" />
-            </span>
-            <div>
-              <h2 className="font-display text-lg font-semibold text-gray-900">
-                Enroll students into a section
-              </h2>
-              <p className="text-sm text-gray-500">
-                Pick the section once — every student below joins it.
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            disabled={submitting}
-            className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 disabled:opacity-40"
-            aria-label="Close"
-          >
-            <FontAwesomeIcon icon={faXmark} className="h-5 w-5" />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
-          <div>
-            <label
-              htmlFor="enroll-section"
-              className="mb-1.5 block text-sm font-semibold text-gray-700"
-            >
-              Section <span className="text-rose-500">*</span>
-            </label>
-            <select
-              id="enroll-section"
-              value={sectionId}
-              onChange={(e) => setSectionId(e.target.value)}
-              disabled={submitting}
-              className="w-full rounded-xl border border-gray-300 bg-surface px-4 py-2.5 text-gray-900 transition-all focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30 disabled:opacity-60"
-            >
-              <option value="">Select a section…</option>
-              {sections.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-            {sections.length === 0 && (
-              <p className="mt-1.5 text-xs text-amber-600">
-                No sections exist yet — create one before enrolling students.
-              </p>
-            )}
-          </div>
-
-          <div>
-            <div className="mb-2 flex items-center justify-between">
-              <label className="text-sm font-semibold text-gray-700">
-                Students {sectionName && <span className="text-gray-400">→ {sectionName}</span>}
-              </label>
-              <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-gray-400">
-                {filled.length} to enroll
-              </span>
-            </div>
-
-            <div className="space-y-2">
-              {rows.map((row, i) => (
-                <div key={row.key} className="flex items-start gap-2">
-                  <span className="mt-2.5 w-5 shrink-0 text-right font-mono text-[10px] text-gray-400">
-                    {i + 1}
-                  </span>
-                  <input
-                    type="text"
-                    value={row.name}
-                    onChange={(e) => update(row.key, { name: e.target.value })}
-                    disabled={submitting || isProvisioned(row.status)}
-                    placeholder="Full name"
-                    className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-surface px-3 py-2 text-sm text-gray-800 placeholder:text-gray-400 focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30 disabled:opacity-60"
-                  />
-                  <input
-                    type="text"
-                    value={row.email}
-                    onChange={(e) => update(row.key, { email: e.target.value })}
-                    disabled={submitting || isProvisioned(row.status)}
-                    placeholder="name@batstate-u.edu.ph"
-                    className="min-w-0 flex-[1.3] rounded-lg border border-gray-200 bg-surface px-3 py-2 text-sm text-gray-800 placeholder:text-gray-400 focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30 disabled:opacity-60"
-                  />
-                  <span className="mt-2 flex w-5 shrink-0 justify-center">
-                    {row.status === "creating" && (
-                      <EcgLoader size="xs" className="text-brand-600" />
-                    )}
-                    {row.status === "created" && (
-                      <FontAwesomeIcon
-                        icon={faCircleCheck}
-                        className="h-3.5 w-3.5 text-emerald-600"
-                      />
-                    )}
-                    {row.status === "no-email" && (
-                      <FontAwesomeIcon
-                        icon={faTriangleExclamation}
-                        title={row.message}
-                        className="h-3.5 w-3.5 text-amber-600"
-                      />
-                    )}
-                    {row.status === "failed" && (
-                      <FontAwesomeIcon
-                        icon={faCircleXmark}
-                        title={row.message}
-                        className="h-3.5 w-3.5 text-rose-600"
-                      />
-                    )}
-                    {row.status === "ready" && rows.length > 1 && !submitting && (
-                      <button
-                        type="button"
-                        onClick={() => setRows((prev) => prev.filter((r) => r.key !== row.key))}
-                        aria-label={`Remove row ${i + 1}`}
-                        className="text-gray-300 transition-colors hover:text-rose-500"
-                      >
-                        <FontAwesomeIcon icon={faTrashCan} className="h-3.5 w-3.5" />
-                      </button>
-                    )}
-                  </span>
-                </div>
-              ))}
-            </div>
-
-            {rows.some((r) => r.status === "failed") && (
-              <ul className="mt-2 space-y-1">
-                {rows
-                  .filter((r) => r.status === "failed")
-                  .map((r) => (
-                    <li key={r.key} className="text-xs text-rose-600">
-                      {r.email || "(blank)"} — {r.message}
-                    </li>
-                  ))}
-              </ul>
-            )}
-
-            {/* Enrolled but not invited: the account is usable only once
-                someone passes on the temporary password shown below. */}
-            {rows.some((r) => r.status === "no-email") && (
-              <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
-                <p className="text-xs font-medium text-amber-800">
-                  Enrolled, but the invitation email did not go out. Share the temporary password
-                  below with these students yourself:
-                </p>
-                <ul className="mt-1 space-y-1">
-                  {rows
-                    .filter((r) => r.status === "no-email")
-                    .map((r) => (
-                      <li key={r.key} className="text-xs text-amber-700">
-                        {r.email || "(blank)"}
-                      </li>
-                    ))}
-                </ul>
-              </div>
-            )}
-
-            {!submitting && !finished && (
-              <button
-                type="button"
-                onClick={() => setRows((prev) => [...prev, emptyRow()])}
-                className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-dashed border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:border-brand-300 hover:text-brand-700"
-              >
-                <FontAwesomeIcon icon={faPlus} className="h-3 w-3" />
-                Add another student
-              </button>
-            )}
-          </div>
-
-          {formError && (
-            <p className="rounded-lg border border-rose-200 bg-rose-50 p-2.5 text-sm text-rose-700">
-              {formError}
-            </p>
-          )}
-
-          {finished && (
-            <p className="rounded-lg border border-emerald-200 bg-emerald-50 p-2.5 text-sm text-emerald-700">
-              Enrolled {provisionedCount} of {filled.length} into {sectionName}.{" "}
-              {invitedCount === provisionedCount
-                ? "Each student receives an email with a temporary password."
-                : `${invitedCount} of them received an invitation email — hand the temporary password to the rest yourself.`}
-            </p>
-          )}
-        </form>
-
-        <div className="flex items-center justify-end gap-3 border-t border-hairline bg-subtle px-5 py-3">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={submitting}
-            className="rounded-lg border border-gray-200 bg-surface px-5 py-2.5 text-sm font-medium text-gray-700 transition-all hover:bg-gray-50 disabled:opacity-50"
-          >
-            {finished ? "Close" : "Cancel"}
-          </button>
-          {!finished && (
-            <button
-              onClick={handleSubmit}
-              disabled={submitting || sections.length === 0}
-              className="flex items-center gap-2 rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white shadow-[0_2px_8px_-1px_rgb(27_107_123_/_0.35)] transition-all hover:bg-brand-700 disabled:opacity-60"
-            >
-              {submitting && <EcgLoader />}
-              {submitting
-                ? "Enrolling…"
-                : `Enroll ${filled.length || ""} student${filled.length === 1 ? "" : "s"}`.trim()}
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
-  );
 }
 
 /**
@@ -745,12 +424,11 @@ export default function StudentManagementClient() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [selectedSection, setSelectedSection] = useState<string | null>(null);
-  const [isEnrollModalOpen, setIsEnrollModalOpen] = useState(false);
-  const [passwords, setPasswords] = useState<{ email: string; password: string }[]>([]);
   // `section: null` is the create form; a section is the rename form.
   const [sectionForm, setSectionForm] = useState<{ section: Section | null } | null>(null);
   const [sectionToDelete, setSectionToDelete] = useState<Section | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [registering, setRegistering] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [confirmingBatchDelete, setConfirmingBatchDelete] = useState(false);
   const [batchDeleting, setBatchDeleting] = useState(false);
@@ -772,6 +450,12 @@ export default function StudentManagementClient() {
       : NO_STUDENTS;
     return { students, sections };
   });
+
+  // Groups within each section, with their faculty; reloaded after every change.
+  const { data: teamsOverview, refresh: refreshTeams } = usePageData(
+    "admin:student-management:groups",
+    fetchFacultyTeams,
+  );
 
   const students = data?.students ?? NO_STUDENTS;
   const sections = data?.sections ?? NO_SECTIONS;
@@ -833,33 +517,6 @@ export default function StudentManagementClient() {
   );
 
   /** Provisions one account into a section; returns an error message or null. */
-  const handleEnroll = useCallback(
-    async (name: string, email: string, sectionId: string): Promise<EnrollOutcome> => {
-      const res = await apiFetch("/api/admin/users", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ name, email, role: "student", section_id: sectionId }),
-      });
-      const json = (await res.json()) as {
-        user?: { id: string; name: string; email: string };
-        password?: string;
-        warning?: string;
-        error?: string;
-      };
-      if (!res.ok || !json.user)
-        return { ok: false, error: json.error ?? "Failed to enroll student" };
-      if (json.password) {
-        setPasswords((prev) => [...prev, { email: json.user!.email, password: json.password! }]);
-      }
-      // The route sets `warning` when the account was created but the
-      // invitation could not be mailed. Dropping it here was what made a
-      // silent delivery failure read as "Invitation sent".
-      return { ok: true, warning: json.warning };
-    },
-    [],
-  );
-
   const filteredStudents = useMemo(() => {
     const q = searchQuery.toLowerCase();
     return students.filter((s) => {
@@ -896,6 +553,32 @@ export default function StudentManagementClient() {
   }, [sections, students, filteredStudents]);
 
   const openGroup = groups.find((g) => g.key === selectedSection) ?? null;
+  const isRealSection = !!openGroup && openGroup.key !== UNASSIGNED_KEY;
+
+  // Once a section has groups, its table lists only the students left out of
+  // every group; the grouped ones are shown in their group cards above.
+  const sectionGroups = useMemo(
+    () =>
+      isRealSection
+        ? (teamsOverview?.teams ?? [])
+            .filter((t) => t.section_id === openGroup.key)
+            .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
+        : [],
+    [teamsOverview, isRealSection, openGroup],
+  );
+  const hasGroups = sectionGroups.length > 0;
+  const tableStudents = useMemo(() => {
+    if (!openGroup) return NO_STUDENTS;
+    if (!hasGroups) return openGroup.students;
+    const grouped = new Set(sectionGroups.flatMap((g) => g.members.map((m) => m.id)));
+    return openGroup.students.filter((s) => !grouped.has(s.id));
+  }, [openGroup, hasGroups, sectionGroups]);
+
+  const addToGroup = async (studentId: string, teamId: string) => {
+    const result = await moveStudentToTeam(studentId, teamId);
+    if ("error" in result) toast(result.error, "error");
+    await refreshTeams();
+  };
 
   /** Leaving a roster drops its selection, so nothing carries into the next one. */
   const openSection = (key: string | null) => {
@@ -906,10 +589,10 @@ export default function StudentManagementClient() {
   // Only rows currently on screen count as selected: narrowing the search after
   // ticking boxes must not delete students the admin can no longer see.
   const selectedStudents = useMemo(
-    () => openGroup?.students.filter((s) => selectedIds.has(s.id)) ?? [],
-    [openGroup, selectedIds],
+    () => tableStudents.filter((s) => selectedIds.has(s.id)),
+    [tableStudents, selectedIds],
   );
-  const visibleCount = openGroup?.students.length ?? 0;
+  const visibleCount = tableStudents.length;
   const allVisibleSelected = visibleCount > 0 && selectedStudents.length === visibleCount;
 
   const toggleStudent = (id: string) =>
@@ -922,7 +605,7 @@ export default function StudentManagementClient() {
   const toggleAllVisible = () =>
     setSelectedIds((prev) => {
       const next = new Set(prev);
-      for (const student of openGroup?.students ?? []) {
+      for (const student of tableStudents) {
         if (allVisibleSelected) next.delete(student.id);
         else next.add(student.id);
       }
@@ -990,33 +673,6 @@ export default function StudentManagementClient() {
         </div>
       )}
 
-      {passwords.length > 0 && (
-        <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          <div className="mb-2 flex items-center justify-between gap-4">
-            <p className="font-semibold">
-              Temporary passwords ({passwords.length}) — invitation emails were attempted; keep
-              these as backup.
-            </p>
-            <button
-              onClick={() => setPasswords([])}
-              className="shrink-0 font-medium text-amber-700 hover:text-amber-900"
-            >
-              Dismiss
-            </button>
-          </div>
-          <ul className="space-y-1">
-            {passwords.map((p) => (
-              <li key={p.email} className="flex items-center gap-2">
-                <span className="truncate">{p.email}</span>
-                <code className="rounded border border-amber-200 bg-surface px-2 py-0.5 font-mono text-xs">
-                  {p.password}
-                </code>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
       <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatTile
           icon={faUsers}
@@ -1073,13 +729,6 @@ export default function StudentManagementClient() {
         >
           <FontAwesomeIcon icon={faFolderPlus} className="h-4 w-4" />
           New section
-        </button>
-        <button
-          onClick={() => setIsEnrollModalOpen(true)}
-          className="flex shrink-0 items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white transition-all hover:bg-brand-700"
-        >
-          <FontAwesomeIcon icon={faPlus} className="h-4 w-4" />
-          Enroll students
         </button>
       </div>
 
@@ -1221,16 +870,34 @@ export default function StudentManagementClient() {
                   <FontAwesomeIcon icon={faTrashCan} className="h-3.5 w-3.5" />
                   Delete
                 </button>
-                <button
-                  onClick={() => setIsEnrollModalOpen(true)}
-                  className="flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition-all hover:bg-brand-700"
-                >
-                  <FontAwesomeIcon icon={faPlus} className="h-3.5 w-3.5" />
-                  Enroll into {openGroup.name}
-                </button>
               </div>
             )}
           </div>
+
+          {isRealSection && (
+            <SectionGroups
+              sectionId={openGroup.key}
+              studentCount={openGroup.students.length}
+              overview={teamsOverview ?? null}
+              onChanged={refreshTeams}
+            />
+          )}
+
+          {isRealSection && (
+            <div className="mb-2 mt-2 flex flex-wrap items-center justify-between gap-3">
+              <h3 className="font-display text-base font-semibold text-gray-900">
+                {hasGroups ? "Not in a group" : "Students"}{" "}
+                <span className="text-sm font-normal text-gray-400">({tableStudents.length})</span>
+              </h3>
+              <button
+                onClick={() => setRegistering(true)}
+                className="flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition-all hover:bg-brand-700"
+              >
+                <FontAwesomeIcon icon={faUserPlus} className="h-3.5 w-3.5" />
+                Register student
+              </button>
+            </div>
+          )}
 
           {selectedStudents.length > 0 && (
             <div className="mb-3 flex flex-wrap items-center gap-3 rounded-xl border border-brand-600/20 bg-brand-600/5 px-4 py-3">
@@ -1278,7 +945,12 @@ export default function StudentManagementClient() {
                         className="h-4 w-4 cursor-pointer accent-brand-600 disabled:cursor-not-allowed disabled:opacity-40"
                       />
                     </th>
-                    {["Student", "Skill Assessments", "Avg. Score", "Status", "Last Active"].map((h) => (
+                    {/* With groups, this table is only who is left over, so it
+                        keeps to who they are and when they joined. */}
+                    {(hasGroups
+                      ? ["Name", "Enrolled"]
+                      : ["Student", "Skill Assessments", "Avg. Score", "Status", "Last Active"]
+                    ).map((h) => (
                       <th
                         key={h}
                         className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-500 sm:px-6"
@@ -1286,10 +958,11 @@ export default function StudentManagementClient() {
                         {h}
                       </th>
                     ))}
+                    {hasGroups && <th className="px-4 py-3 sm:px-6" aria-label="Add to group" />}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-hairline">
-                  {openGroup.students.map((student) => (
+                  {tableStudents.map((student) => (
                     <tr
                       key={student.id}
                       onClick={() => router.push(`/admin/students/${student.id}`)}
@@ -1326,42 +999,73 @@ export default function StudentManagementClient() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-4 text-sm font-medium text-gray-600 sm:px-6">
-                        {student.quizzes_completed}
-                      </td>
-                      <td className="px-4 py-4 sm:px-6">
-                        {student.average_score === null ? (
-                          <span className="text-sm text-gray-400">No attempts</span>
-                        ) : (
-                          <span
-                            className={`text-sm font-semibold ${
-                              student.average_score >= 70 ? "text-brand-600" : "text-rose-600"
-                            }`}
-                          >
-                            {student.average_score}%
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-4 sm:px-6">
-                        <span
-                          className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${
-                            student.at_risk
-                              ? "bg-rose-50 text-rose-600"
-                              : "bg-emerald-50 text-emerald-600"
-                          }`}
-                        >
-                          {student.at_risk ? "At Risk" : "Safe"}
-                        </span>
-                      </td>
-                      <td className="px-4 py-4 text-sm text-gray-500 sm:px-6">
-                        {formatLastActive(student.last_login_at)}
-                      </td>
+                      {hasGroups ? (
+                        <>
+                          <td className="px-4 py-4 text-sm text-gray-500 sm:px-6">
+                            {new Date(student.created_at).toLocaleString("en-US", {
+                              month: "short",
+                              day: "numeric",
+                              year: "numeric",
+                              hour: "numeric",
+                              minute: "2-digit",
+                            })}
+                          </td>
+                          <td className="px-4 py-4 sm:px-6" onClick={(e) => e.stopPropagation()}>
+                            <select
+                              value=""
+                              aria-label={`Add ${student.name} to a group`}
+                              onChange={(e) => e.target.value && void addToGroup(student.id, e.target.value)}
+                              className="rounded-lg border border-gray-200 bg-surface px-2.5 py-1.5 text-sm text-gray-600 focus:border-brand-600 focus:outline-none"
+                            >
+                              <option value="">Add to group…</option>
+                              {sectionGroups.map((g) => (
+                                <option key={g.id} value={g.id}>
+                                  {g.name}
+                                </option>
+                              ))}
+                            </select>
+                          </td>
+                        </>
+                      ) : (
+                        <>
+                          <td className="px-4 py-4 text-sm font-medium text-gray-600 sm:px-6">
+                            {student.quizzes_completed}
+                          </td>
+                          <td className="px-4 py-4 sm:px-6">
+                            {student.average_score === null ? (
+                              <span className="text-sm text-gray-400">No attempts</span>
+                            ) : (
+                              <span
+                                className={`text-sm font-semibold ${
+                                  student.average_score >= 70 ? "text-brand-600" : "text-rose-600"
+                                }`}
+                              >
+                                {student.average_score}%
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-4 sm:px-6">
+                            <span
+                              className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${
+                                student.at_risk
+                                  ? "bg-rose-50 text-rose-600"
+                                  : "bg-emerald-50 text-emerald-600"
+                              }`}
+                            >
+                              {student.at_risk ? "At Risk" : "Safe"}
+                            </span>
+                          </td>
+                          <td className="px-4 py-4 text-sm text-gray-500 sm:px-6">
+                            {formatLastActive(student.last_login_at)}
+                          </td>
+                        </>
+                      )}
                     </tr>
                   ))}
-                  {openGroup.students.length === 0 && (
+                  {tableStudents.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="py-12 text-center text-gray-400">
-                        No students in this section yet
+                      <td colSpan={hasGroups ? 4 : 6} className="py-12 text-center text-gray-400">
+                        {hasGroups ? "Every student is in a group" : "No students in this section yet"}
                       </td>
                     </tr>
                   )}
@@ -1372,15 +1076,15 @@ export default function StudentManagementClient() {
         </>
       )}
 
-      {isEnrollModalOpen && (
-        <EnrollSectionModal
-          key={openGroup?.key ?? "all"}
-          onClose={() => setIsEnrollModalOpen(false)}
-          sections={sections}
-          presetSectionId={openGroup && openGroup.key !== UNASSIGNED_KEY ? openGroup.key : null}
-          onEnroll={handleEnroll}
-          onFinished={(created) => {
-            if (created > 0) void loadStudents();
+      {registering && isRealSection && (
+        <RegisterStudentModal
+          sectionId={openGroup.key}
+          sectionName={openGroup.name}
+          groups={sectionGroups}
+          onClose={() => setRegistering(false)}
+          onRegistered={() => {
+            void loadStudents();
+            void refreshTeams();
           }}
         />
       )}
