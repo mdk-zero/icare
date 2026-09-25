@@ -21,6 +21,7 @@ import {
   faNotesMedical,
   faExclamationTriangle,
   faUsers,
+  faCheck,
   faUser,
   faChevronDown,
   faLayerGroup,
@@ -42,6 +43,8 @@ import {
   fetchFacultyStudents,
   FacultyStudent,
   assignScenarioToStudents,
+  fetchFacultyTeams,
+  type FacultyTeam,
   logAuditAction,
   getCurrentFacultyUser,
   fetchFacultyPatients,
@@ -141,6 +144,9 @@ export default function FacultyScenariosClient() {
   const [showAssignModal, setShowAssignModal] = useState(false);
 
   const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
+  // Teams picked in the assign modal; each member is assigned on their own.
+  const [assignTeams, setAssignTeams] = useState<FacultyTeam[]>([]);
+  const [selectedTeams, setSelectedTeams] = useState<string[]>([]);
   const [assignDeadline, setAssignDeadline] = useState("");
   const [assignRequired, setAssignRequired] = useState(false);
   const [studentSearchQuery, setStudentSearchQuery] = useState("");
@@ -487,6 +493,10 @@ export default function FacultyScenariosClient() {
   const handleOpenAssignModal = (scenario: SimulationScenario) => {
     setSelectedScenario(scenario);
     setSelectedStudents([]);
+    setSelectedTeams([]);
+    void fetchFacultyTeams().then((overview) =>
+      setAssignTeams(overview?.enabled ? overview.teams.filter((t) => t.members.length > 0) : []),
+    );
     setAssignDeadline("");
     setAssignRequired(false);
     setStudentSearchQuery("");
@@ -500,14 +510,15 @@ export default function FacultyScenariosClient() {
   };
 
   const handleAssignScenario = async () => {
-    if (!selectedScenario || selectedStudents.length === 0 || !assignDeadline) return;
+    if (!selectedScenario || assignCount === 0 || !assignDeadline) return;
 
     setAssigning(true);
     const assignments = await assignScenarioToStudents(
       selectedScenario.id,
-      selectedStudents,
+      selectedStudents.filter((id) => !teamMemberIds.has(id)),
       assignDeadline,
       assignRequired,
+      selectedTeams,
     );
 
     if (assignments.length > 0) {
@@ -519,23 +530,29 @@ export default function FacultyScenariosClient() {
           faculty_name: faculty.name,
           tab: "scenarios",
           action: "assign_scenario",
-          details: `Assigned scenario "${selectedScenario.title}" to ${selectedStudents.length} student(s)`,
+          details: `Assigned scenario "${selectedScenario.title}" to ${assignments.length} student(s)${
+            selectedTeams.length > 0 ? ` in ${selectedTeams.length} team(s)` : ""
+          }`,
           target_type: "scenario",
           target_id: selectedScenario.id,
           metadata: {
             scenario_title: selectedScenario.title,
-            student_count: selectedStudents.length,
+            student_count: assignments.length,
+            team_count: selectedTeams.length,
             required: assignRequired,
           },
         });
       }
-      toast(`Assigned to ${selectedStudents.length} student${selectedStudents.length === 1 ? "" : "s"}`);
+      toast(`Assigned to ${assignments.length} student${assignments.length === 1 ? "" : "s"}`);
+    } else {
+      toast("Nobody new to assign — everyone chosen already has this scenario");
     }
 
     setAssigning(false);
     setShowAssignModal(false);
     setSelectedScenario(null);
     setSelectedStudents([]);
+    setSelectedTeams([]);
     setStudentSearchQuery("");
   };
 
@@ -635,6 +652,13 @@ export default function FacultyScenariosClient() {
     setShowDeleteModal(false);
     setDeleteTarget(null);
   };
+
+  const teamMemberIds = new Set(
+    assignTeams.filter((t) => selectedTeams.includes(t.id)).flatMap((t) => t.members.map((m) => m.id)),
+  );
+  const assignCount = new Set([...selectedStudents, ...teamMemberIds]).size;
+  const toggleTeamSelection = (teamId: string) =>
+    setSelectedTeams((prev) => (prev.includes(teamId) ? prev.filter((id) => id !== teamId) : [...prev, teamId]));
 
   const filteredStudents = students.filter(
     (student) =>
@@ -1600,6 +1624,43 @@ export default function FacultyScenariosClient() {
                 </div>
               </div>
 
+              {assignTeams.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-bold text-gray-900 mb-1 flex items-center gap-2">
+                    <FontAwesomeIcon icon={faUsers} className="text-brand-600" />
+                    Assign to Teams
+                  </h3>
+                  <p className="text-xs text-gray-500 mb-2">
+                    Every member gets the scenario on their own and is graded individually.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {assignTeams.map((team) => {
+                      const on = selectedTeams.includes(team.id);
+                      return (
+                        <button
+                          key={team.id}
+                          type="button"
+                          onClick={() => toggleTeamSelection(team.id)}
+                          aria-pressed={on}
+                          title={team.members.map((m) => m.name).join(", ")}
+                          className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
+                            on
+                              ? "border-brand-600 bg-brand-600 text-white"
+                              : "border-gray-300 bg-surface text-gray-700 hover:bg-gray-50"
+                          }`}
+                        >
+                          {on && <FontAwesomeIcon icon={faCheck} className="h-3 w-3" />}
+                          {team.name}
+                          <span className={`text-xs tabular-nums ${on ? "text-white/80" : "text-gray-500"}`}>
+                            {team.members.length}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
@@ -1667,7 +1728,8 @@ export default function FacultyScenariosClient() {
                             <td className="py-2.5 px-4" onClick={(e) => e.stopPropagation()}>
                               <input
                                 type="checkbox"
-                                checked={selectedStudents.includes(student.id)}
+                                checked={selectedStudents.includes(student.id) || teamMemberIds.has(student.id)}
+                                disabled={teamMemberIds.has(student.id)}
                                 onChange={() => toggleStudentSelection(student.id)}
                                 className="w-4 h-4 text-brand-600 rounded focus:ring-brand-600"
                               />
@@ -1709,7 +1771,8 @@ export default function FacultyScenariosClient() {
                   )}
                 </div>
                 <p className="text-sm text-gray-500 mt-2">
-                  {selectedStudents.length} student(s) selected
+                  {assignCount} student(s) selected
+                  {selectedTeams.length > 0 && ` · ${selectedTeams.length} team${selectedTeams.length === 1 ? "" : "s"}`}
                 </p>
               </div>
             </div>
@@ -1724,12 +1787,12 @@ export default function FacultyScenariosClient() {
                 </button>
                 <button
                   onClick={handleAssignScenario}
-                  disabled={selectedStudents.length === 0 || !assignDeadline || assigning}
+                  disabled={assignCount === 0 || !assignDeadline || assigning}
                   className="px-5 py-2.5 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
                 >
                   {assigning && <EcgLoader />}
-                  Assign to {selectedStudents.length} Student
-                  {selectedStudents.length !== 1 ? "s" : ""}
+                  Assign to {assignCount} Student
+                  {assignCount !== 1 ? "s" : ""}
                 </button>
               </div>
             </div>

@@ -75,7 +75,7 @@ export async function GET(request: NextRequest) {
     // Task progress is read here rather than left to the caller, so a list row
     // can say how much of the checklist was actually performed instead of
     // guessing at a fixed checklist length.
-    const [scenariosRes, studentsRes, taskCounts, performedCounts] = await Promise.all([
+    const [scenariosRes, studentsRes, taskCounts, performedCounts, teamsRes] = await Promise.all([
       supabase.from('scenarios').select('id, title').in('id', scenarioIds),
       supabase.from('users').select('id, name, picture_url, sex').in('id', studentIds),
       fetchTaskCountsByScenario(supabase, scenarioIds),
@@ -83,6 +83,8 @@ export async function GET(request: NextRequest) {
         supabase,
         assignments.map((a) => a.id as string),
       ),
+      // Each student's team, for grouping; nothing before migration 048.
+      supabase.from('team_members').select('student_id, teams(name)').in('student_id', studentIds),
     ]);
 
     if (scenariosRes.error || studentsRes.error) {
@@ -98,6 +100,12 @@ export async function GET(request: NextRequest) {
     const scenariosById = new Map(scenariosRes.data?.map((s) => [s.id, s.title]));
     const studentsById = new Map(studentsRes.data?.map((s) => [s.id, s]));
     const countsKnown = !taskCounts.error && !performedCounts.error;
+    const teamByStudent = new Map(
+      (teamsRes.error ? [] : teamsRes.data ?? []).map((m) => [
+        m.student_id as string,
+        (m.teams as unknown as { name: string } | null)?.name ?? null,
+      ]),
+    );
 
     const formatted = assignments.map((a) => ({
       id: a.id,
@@ -107,6 +115,7 @@ export async function GET(request: NextRequest) {
       student_name: studentsById.get(a.student_id)?.name ?? 'Unknown Student',
       student_picture_url: studentsById.get(a.student_id)?.picture_url ?? null,
       student_sex: studentsById.get(a.student_id)?.sex ?? null,
+      team_name: teamByStudent.get(a.student_id) ?? null,
       assigned_at: a.assigned_at,
       deadline: a.deadline,
       status: a.status,

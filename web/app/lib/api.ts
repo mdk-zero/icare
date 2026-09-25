@@ -1157,6 +1157,8 @@ export interface ScenarioAssignment {
   student_name: string;
   student_picture_url?: string | null;
   student_sex?: 'male' | 'female' | null;
+  /** The student's team, if they are in one. */
+  team_name?: string | null;
   assigned_at: string;
   deadline: string;
   status: 'pending' | 'in_progress' | 'completed' | 'overdue';
@@ -2805,14 +2807,16 @@ export async function assignScenarioToStudents(
   scenarioId: string,
   studentIds: string[],
   deadline: string,
-  required: boolean
+  required: boolean,
+  /** Teams to assign as well: each member gets their own assignment. */
+  teamIds: string[] = [],
 ): Promise<ScenarioAssignment[]> {
   try {
     const res = await apiFetch(`/api/faculty/scenarios/${scenarioId}/assign`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({ student_ids: studentIds, deadline, required }),
+      body: JSON.stringify({ student_ids: studentIds, team_ids: teamIds, deadline, required }),
     });
     const json = (await res.json()) as { assignments?: ScenarioAssignment[]; error?: string };
     if (!res.ok || !json.assignments) {
@@ -3236,3 +3240,75 @@ export async function removeScenarioTask(scenarioId: string, taskId: string): Pr
     return false;
   }
 }
+
+// ---------------------------------------------------------------------------
+// Teams
+// ---------------------------------------------------------------------------
+
+export interface TeamMemberInfo {
+  id: string;
+  name: string;
+  picture_url: string | null;
+  sex: 'male' | 'female' | null;
+}
+
+export interface FacultyTeam {
+  id: string;
+  section_id: string;
+  name: string;
+  members: TeamMemberInfo[];
+}
+
+export interface TeamsOverview {
+  /** False before migration 048. */
+  enabled: boolean;
+  sections: { id: string; name: string }[];
+  teams: FacultyTeam[];
+  students: (TeamMemberInfo & { section_id: string; team_id: string | null })[];
+}
+
+export async function fetchFacultyTeams(): Promise<TeamsOverview | null> {
+  try {
+    const res = await apiFetch('/api/faculty/teams', { credentials: 'include' });
+    const json = (await res.json()) as TeamsOverview & { error?: string };
+    if (!res.ok) {
+      console.error('fetchFacultyTeams() failed', json.error);
+      return null;
+    }
+    return json;
+  } catch (err) {
+    console.error('fetchFacultyTeams() failed', err);
+    return null;
+  }
+}
+
+async function teamRequest(url: string, method: string, body?: unknown): Promise<{ ok: true } | { error: string }> {
+  try {
+    const res = await apiFetch(url, {
+      method,
+      headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    if (res.ok) return { ok: true };
+    const json = (await res.json().catch(() => ({}))) as { error?: string };
+    return { error: json.error ?? 'Something went wrong' };
+  } catch (err) {
+    console.error(`${method} ${url} failed`, err);
+    return { error: 'Something went wrong' };
+  }
+}
+
+export const createTeam = (sectionId: string, name: string) =>
+  teamRequest('/api/faculty/teams', 'POST', { section_id: sectionId, name });
+
+export const renameTeam = (teamId: string, name: string) =>
+  teamRequest(`/api/faculty/teams/${teamId}`, 'PATCH', { name });
+
+export const deleteTeam = (teamId: string) => teamRequest(`/api/faculty/teams/${teamId}`, 'DELETE');
+
+export const moveStudentToTeam = (studentId: string, teamId: string | null) =>
+  teamRequest('/api/faculty/teams/members', 'PUT', { student_id: studentId, team_id: teamId });
+
+export const autoSplitTeams = (sectionId: string, count: number) =>
+  teamRequest('/api/faculty/teams/auto', 'POST', { section_id: sectionId, count });

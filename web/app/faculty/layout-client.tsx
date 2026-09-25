@@ -12,6 +12,7 @@ import {
   faListCheck,
   faNotesMedical,
   faUsers,
+  faPeopleGroup,
 } from "@fortawesome/free-solid-svg-icons";
 import Shell, { NavItem } from "../components/Shell";
 import { refreshCurrentUser } from "../lib/api";
@@ -36,6 +37,13 @@ const navItems: NavItem[] = [
     label: "Students",
     href: "/faculty/students",
     icon: faUsers,
+    section: "Teaching",
+  },
+  {
+    id: "teams",
+    label: "Teams",
+    href: "/faculty/teams",
+    icon: faPeopleGroup,
     section: "Teaching",
   },
   {

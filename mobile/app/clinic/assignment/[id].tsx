@@ -186,6 +186,7 @@ export default function ScenarioBriefScreen() {
         />
         {scenario && <Badge label={scenario.difficulty} variant={DIFFICULTY_VARIANT[scenario.difficulty]} />}
         {assignment.required && isActive && <Badge label="Required" variant="danger" />}
+        {assignment.team_name ? <Badge label={assignment.team_name} variant="info" /> : null}
       </View>
 
       <Text style={styles.title}>{assignment.scenario_title}</Text>

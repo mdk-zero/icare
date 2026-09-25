@@ -399,6 +399,8 @@ export interface ScenarioAssignment {
   score: number | null;
   completed_at: string | null;
   time_taken: number | null;
+  /** The student's team, when faculty have put them in one. */
+  team_name?: string | null;
 }
 
 export async function fetchScenarioAssignments(): Promise<CachedResult<ScenarioAssignment[]>> {

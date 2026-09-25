@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { Fragment, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -53,6 +53,10 @@ type Grading = NonNullable<Awaited<ReturnType<typeof fetchFacultyAssignmentTasks
 // Stable empty fallbacks, so the filter memos are not invalidated every render.
 const NO_ASSIGNMENTS: ScenarioAssignment[] = [];
 const NO_TASKS: GradingTask[] = [];
+
+/** Team names in natural order ("Team 2" before "Team 10"), students without a team last. */
+const compareTeams = (a: string | null, b: string | null) =>
+  a === b ? 0 : a === null ? 1 : b === null ? -1 : a.localeCompare(b, undefined, { numeric: true });
 const NO_GRADING: Grading = {
   tasks: NO_TASKS,
   status: "pending",
@@ -194,7 +198,7 @@ export default function FacultyScenarioReviewClient() {
   const studentGroups = useMemo(() => {
     const byStudent = new Map<
       string,
-      Pick<ScenarioAssignment, "student_id" | "student_name" | "student_picture_url" | "student_sex"> & {
+      Pick<ScenarioAssignment, "student_id" | "student_name" | "student_picture_url" | "student_sex" | "team_name"> & {
         assignments: ScenarioAssignment[];
       }
     >();
@@ -207,6 +211,7 @@ export default function FacultyScenarioReviewClient() {
           student_name: a.student_name,
           student_picture_url: a.student_picture_url,
           student_sex: a.student_sex,
+          team_name: a.team_name ?? null,
           assignments: [a],
         });
     }
@@ -216,13 +221,22 @@ export default function FacultyScenarioReviewClient() {
         awaiting: g.assignments.filter(isAwaiting).length,
         completed: g.assignments.filter((a) => a.status === "completed").length,
       }))
-      .sort((a, b) => b.awaiting - a.awaiting || a.student_name.localeCompare(b.student_name));
+      // Grouped by team (students without one last), then who needs review first.
+      .sort(
+        (a, b) =>
+          compareTeams(a.team_name ?? null, b.team_name ?? null) ||
+          b.awaiting - a.awaiting ||
+          a.student_name.localeCompare(b.student_name),
+      );
   }, [assignments]);
+  const hasTeams = studentGroups.some((g) => g.team_name);
 
   const filteredStudentGroups = useMemo(() => {
     const q = studentQuery.trim().toLowerCase();
     if (!q) return studentGroups;
-    return studentGroups.filter((g) => g.student_name.toLowerCase().includes(q));
+    return studentGroups.filter(
+      (g) => g.student_name.toLowerCase().includes(q) || (g.team_name ?? "").toLowerCase().includes(q),
+    );
   }, [studentGroups, studentQuery]);
 
   const selectedStudent = studentGroups.find((g) => g.student_id === selectedStudentId) ?? null;
@@ -447,8 +461,13 @@ export default function FacultyScenarioReviewClient() {
 
                 {!loading &&
                   filteredStudentGroups.map((g, i) => (
+                    <Fragment key={g.student_id}>
+                    {hasTeams && (i === 0 || filteredStudentGroups[i - 1].team_name !== g.team_name) && (
+                      <p className="px-1 pt-2 text-[11px] font-semibold uppercase tracking-wider text-gray-500 first:pt-0">
+                        {g.team_name ?? "No team"}
+                      </p>
+                    )}
                     <button
-                      key={g.student_id}
                       onClick={() => selectStudent(g.student_id)}
                       style={{ animationDelay: `${Math.min(i, 8) * 35}ms` }}
                       className="flex w-full animate-rise items-center gap-3 rounded-xl border border-hairline bg-surface p-3 text-left shadow-tile transition-all hover:border-brand-300 hover:shadow-tile-hover"
@@ -478,6 +497,7 @@ export default function FacultyScenarioReviewClient() {
                         </span>
                       )}
                     </button>
+                    </Fragment>
                   ))}
               </div>
             </>

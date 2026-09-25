@@ -41,6 +41,13 @@ export async function GET() {
     }
 
     const scenariosById = new Map(scenarios?.map((s) => [s.id, s]));
+    // The student's team, if any; nothing before migration 048.
+    const { data: membership } = await supabase
+      .from('team_members')
+      .select('teams(name)')
+      .eq('student_id', session.uid)
+      .maybeSingle();
+    const teamName = (membership?.teams as unknown as { name: string } | null)?.name ?? null;
 
     const formatted = assignments.map((a) => {
       const scenario = scenariosById.get(a.scenario_id);
@@ -51,6 +58,7 @@ export async function GET() {
         patient_id: scenario?.patient_id ?? null,
         student_id: a.student_id,
         student_name: session.email,
+        team_name: teamName,
         assigned_at: a.assigned_at,
         deadline: a.deadline,
         status: a.status,
