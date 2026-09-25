@@ -9,6 +9,7 @@ import {
   faChevronRight,
   faSearch,
   faXmark,
+  faUserPlus,
 } from "@fortawesome/free-solid-svg-icons";
 import {
   fetchFacultyStudents,
@@ -17,6 +18,7 @@ import {
   type TeamsOverview,
 } from "../../lib/api";
 import PageHeader from "../../components/PageHeader";
+import AssignCasesModal from "./AssignCasesModal";
 import Avatar from "../../components/Avatar";
 import { EcgLoader } from "../../components/EcgLoader";
 import { usePageData } from "../../lib/use-page-data";
@@ -302,6 +304,7 @@ function SectionDetail({
 }
 
 function GroupCard({ group, risks, query }: { group: FacultyTeam; risks: RiskMap; query: string }) {
+  const [assigning, setAssigning] = useState(false);
   const members = group.members
     .filter((m) => !query || matches(m.name, query))
     .sort((a, b) => RISK_ORDER[riskOf(risks, a.id)] - RISK_ORDER[riskOf(risks, b.id)] || byName(a, b));
@@ -317,9 +320,21 @@ function GroupCard({ group, risks, query }: { group: FacultyTeam; risks: RiskMap
             {low > 0 && <span className="text-rose-600">, {low} low performing</span>}
           </p>
         </div>
-        {/* A glance at who is in it before reading the list. */}
-        <AvatarStack members={group.members} />
+        <div className="flex shrink-0 items-center gap-3">
+          {/* A glance at who is in it before reading the list. */}
+          <AvatarStack members={group.members} />
+          {group.members.length > 0 && (
+            <button
+              onClick={() => setAssigning(true)}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700"
+            >
+              <FontAwesomeIcon icon={faUserPlus} className="h-3 w-3" />
+              Assign cases
+            </button>
+          )}
+        </div>
       </header>
+      {assigning && <AssignCasesModal group={group} onClose={() => setAssigning(false)} />}
       {members.length === 0 ? (
         <p className="px-5 py-6 text-center text-sm text-gray-400">
           {group.members.length === 0 ? "No students in this group yet." : "No students match that search."}

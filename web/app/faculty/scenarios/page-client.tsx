@@ -21,7 +21,6 @@ import {
   faNotesMedical,
   faExclamationTriangle,
   faUsers,
-  faCheck,
   faUser,
   faChevronDown,
   faLayerGroup,
@@ -44,7 +43,6 @@ import {
   FacultyStudent,
   assignScenarioToStudents,
   fetchFacultyTeams,
-  type FacultyTeam,
   logAuditAction,
   getCurrentFacultyUser,
   fetchFacultyPatients,
@@ -145,8 +143,7 @@ export default function FacultyScenariosClient() {
 
   const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
   // Teams picked in the assign modal; each member is assigned on their own.
-  const [assignTeams, setAssignTeams] = useState<FacultyTeam[]>([]);
-  const [selectedTeams, setSelectedTeams] = useState<string[]>([]);
+  const [assignHasTeams, setAssignHasTeams] = useState(false);
   const [assignDeadline, setAssignDeadline] = useState("");
   const [assignRequired, setAssignRequired] = useState(false);
   const [studentSearchQuery, setStudentSearchQuery] = useState("");
@@ -493,9 +490,8 @@ export default function FacultyScenariosClient() {
   const handleOpenAssignModal = (scenario: SimulationScenario) => {
     setSelectedScenario(scenario);
     setSelectedStudents([]);
-    setSelectedTeams([]);
     void fetchFacultyTeams().then((overview) =>
-      setAssignTeams(overview?.enabled ? overview.teams.filter((t) => t.members.length > 0) : []),
+      setAssignHasTeams(Boolean(overview?.enabled && overview.teams.some((t) => t.members.length > 0))),
     );
     setAssignDeadline("");
     setAssignRequired(false);
@@ -515,10 +511,9 @@ export default function FacultyScenariosClient() {
     setAssigning(true);
     const assignments = await assignScenarioToStudents(
       selectedScenario.id,
-      selectedStudents.filter((id) => !teamMemberIds.has(id)),
+      selectedStudents,
       assignDeadline,
       assignRequired,
-      selectedTeams,
     );
 
     if (assignments.length > 0) {
@@ -530,15 +525,12 @@ export default function FacultyScenariosClient() {
           faculty_name: faculty.name,
           tab: "scenarios",
           action: "assign_scenario",
-          details: `Assigned scenario "${selectedScenario.title}" to ${assignments.length} student(s)${
-            selectedTeams.length > 0 ? ` in ${selectedTeams.length} team(s)` : ""
-          }`,
+          details: `Assigned scenario "${selectedScenario.title}" to ${assignments.length} student(s)`,
           target_type: "scenario",
           target_id: selectedScenario.id,
           metadata: {
             scenario_title: selectedScenario.title,
             student_count: assignments.length,
-            team_count: selectedTeams.length,
             required: assignRequired,
           },
         });
@@ -552,7 +544,6 @@ export default function FacultyScenariosClient() {
     setShowAssignModal(false);
     setSelectedScenario(null);
     setSelectedStudents([]);
-    setSelectedTeams([]);
     setStudentSearchQuery("");
   };
 
@@ -653,12 +644,7 @@ export default function FacultyScenariosClient() {
     setDeleteTarget(null);
   };
 
-  const teamMemberIds = new Set(
-    assignTeams.filter((t) => selectedTeams.includes(t.id)).flatMap((t) => t.members.map((m) => m.id)),
-  );
-  const assignCount = new Set([...selectedStudents, ...teamMemberIds]).size;
-  const toggleTeamSelection = (teamId: string) =>
-    setSelectedTeams((prev) => (prev.includes(teamId) ? prev.filter((id) => id !== teamId) : [...prev, teamId]));
+  const assignCount = selectedStudents.length;
 
   const filteredStudents = students.filter(
     (student) =>
@@ -1624,41 +1610,14 @@ export default function FacultyScenariosClient() {
                 </div>
               </div>
 
-              {assignTeams.length > 0 && (
-                <div>
-                  <h3 className="text-sm font-bold text-gray-900 mb-1 flex items-center gap-2">
-                    <FontAwesomeIcon icon={faUsers} className="text-brand-600" />
-                    Assign to Teams
-                  </h3>
-                  <p className="text-xs text-gray-500 mb-2">
-                    Every member gets the scenario on their own and is graded individually.
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {assignTeams.map((team) => {
-                      const on = selectedTeams.includes(team.id);
-                      return (
-                        <button
-                          key={team.id}
-                          type="button"
-                          onClick={() => toggleTeamSelection(team.id)}
-                          aria-pressed={on}
-                          title={team.members.map((m) => m.name).join(", ")}
-                          className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
-                            on
-                              ? "border-brand-600 bg-brand-600 text-white"
-                              : "border-gray-300 bg-surface text-gray-700 hover:bg-gray-50"
-                          }`}
-                        >
-                          {on && <FontAwesomeIcon icon={faCheck} className="h-3 w-3" />}
-                          {team.name}
-                          <span className={`text-xs tabular-nums ${on ? "text-white/80" : "text-gray-500"}`}>
-                            {team.members.length}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
+              {assignHasTeams && (
+                <p className="flex items-start gap-2 rounded-xl border border-hairline bg-subtle px-3 py-2 text-xs text-gray-600">
+                  <FontAwesomeIcon icon={faUsers} className="mt-0.5 h-3.5 w-3.5 text-brand-600" />
+                  <span>
+                    To give a whole group work, use <strong>Assign cases</strong> on the Groups page. Each member
+                    gets a different case there.
+                  </span>
+                </p>
               )}
 
               <div>
@@ -1728,8 +1687,7 @@ export default function FacultyScenariosClient() {
                             <td className="py-2.5 px-4" onClick={(e) => e.stopPropagation()}>
                               <input
                                 type="checkbox"
-                                checked={selectedStudents.includes(student.id) || teamMemberIds.has(student.id)}
-                                disabled={teamMemberIds.has(student.id)}
+                                checked={selectedStudents.includes(student.id)}
                                 onChange={() => toggleStudentSelection(student.id)}
                                 className="w-4 h-4 text-brand-600 rounded focus:ring-brand-600"
                               />
@@ -1772,7 +1730,6 @@ export default function FacultyScenariosClient() {
                 </div>
                 <p className="text-sm text-gray-500 mt-2">
                   {assignCount} student(s) selected
-                  {selectedTeams.length > 0 && ` · ${selectedTeams.length} team${selectedTeams.length === 1 ? "" : "s"}`}
                 </p>
               </div>
             </div>

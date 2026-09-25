@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { getFacultyStudentIds } from '@/app/lib/roster';
-import { isMissingTeamTables, manageableSectionIds, TEAMS_NEED_MIGRATION } from '@/app/lib/teams';
+import { isMissingTeamTables } from '@/app/lib/teams';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -33,11 +33,20 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     required?: unknown;
   };
 
-  const strings = (v: unknown) => (Array.isArray(v) ? v.filter((s): s is string => typeof s === 'string') : []);
-  const directIds = strings(student_ids);
-  const teamIds = strings(team_ids);
-  if (directIds.length === 0 && teamIds.length === 0) {
-    return NextResponse.json({ error: 'Choose at least one student or team' }, { status: 400 });
+  // A group never shares one case: each member gets a different one through
+  // /api/faculty/teams/[id]/assign-cases.
+  if (Array.isArray(team_ids) && team_ids.length > 0) {
+    return NextResponse.json(
+      { error: 'Groups get a different case per member. Assign cases from the Groups page.' },
+      { status: 400 },
+    );
+  }
+
+  const normalizedStudentIds = Array.isArray(student_ids)
+    ? [...new Set(student_ids.filter((s): s is string => typeof s === 'string'))]
+    : [];
+  if (normalizedStudentIds.length === 0) {
+    return NextResponse.json({ error: 'Choose at least one student' }, { status: 400 });
   }
 
   const parsedDeadline = typeof deadline === 'string' && deadline.trim().length > 0
@@ -59,32 +68,6 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     if (!scenario) {
       return NextResponse.json({ error: 'Scenario not found' }, { status: 404 });
-    }
-
-    // A team stands for its members; each gets their own assignment, labelled
-    // with the team it came through.
-    const teamOf = new Map<string, string>();
-    if (teamIds.length > 0) {
-      const { data: teams, error: teamsError } = await supabase
-        .from('teams')
-        .select('id, section_id, team_members(student_id)')
-        .in('id', teamIds);
-      if (teamsError) {
-        if (isMissingTeamTables(teamsError)) return NextResponse.json({ error: TEAMS_NEED_MIGRATION }, { status: 503 });
-        console.error('Failed to read teams', teamsError);
-        return NextResponse.json({ error: 'Unable to assign scenario' }, { status: 500 });
-      }
-      const allowed = new Set(await manageableSectionIds(supabase, session.role, session.uid));
-      if ((teams ?? []).length !== teamIds.length || (teams ?? []).some((t) => !allowed.has(t.section_id as string))) {
-        return NextResponse.json({ error: 'Some teams are not in your sections' }, { status: 403 });
-      }
-      for (const team of teams ?? []) {
-        for (const m of (team.team_members ?? []) as { student_id: string }[]) teamOf.set(m.student_id, team.id as string);
-      }
-    }
-    const normalizedStudentIds = [...new Set([...directIds, ...teamOf.keys()])];
-    if (normalizedStudentIds.length === 0) {
-      return NextResponse.json({ error: 'The chosen teams have no members yet' }, { status: 400 });
     }
 
     // Faculty can only assign to students in their sections.
@@ -110,6 +93,18 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     if (toAssign.length === 0) {
       return NextResponse.json({ assignments: [], skipped: skip.size }, { status: 200 });
     }
+
+    // Label each row with the student's current group, so review and results
+    // can show the group the work was done in.
+    const teamOf = new Map<string, string>();
+    const { data: memberships, error: membershipError } = await supabase
+      .from('team_members')
+      .select('student_id, team_id')
+      .in('student_id', toAssign);
+    if (membershipError && !isMissingTeamTables(membershipError)) {
+      console.error('Failed to read group memberships', membershipError);
+    }
+    for (const m of memberships ?? []) teamOf.set(m.student_id as string, m.team_id as string);
 
     const rows = toAssign.map((studentId) => ({
       scenario_id: scenarioId,

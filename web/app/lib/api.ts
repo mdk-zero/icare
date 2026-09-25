@@ -2737,15 +2737,13 @@ export async function assignScenarioToStudents(
   studentIds: string[],
   deadline: string,
   required: boolean,
-  /** Teams to assign as well: each member gets their own assignment. */
-  teamIds: string[] = [],
 ): Promise<ScenarioAssignment[]> {
   try {
     const res = await apiFetch(`/api/faculty/scenarios/${scenarioId}/assign`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({ student_ids: studentIds, team_ids: teamIds, deadline, required }),
+      body: JSON.stringify({ student_ids: studentIds, deadline, required }),
     });
     const json = (await res.json()) as { assignments?: ScenarioAssignment[]; error?: string };
     if (!res.ok || !json.assignments) {
@@ -3253,6 +3251,39 @@ export const moveStudentToTeam = (studentId: string, teamId: string | null) =>
 
 export const autoSplitTeams = (sectionId: string, count: number) =>
   teamRequest('/api/faculty/teams/auto', 'POST', { section_id: sectionId, count });
+
+/** One member's case in a group split. */
+export interface GroupCasePlan {
+  student_id: string;
+  student_name: string;
+  scenario_id: string;
+  scenario_title: string;
+  patient_name: string | null;
+}
+
+/**
+ * Give a group its cases: each member gets a different scenario from the pool.
+ * With `preview` nothing is written; the same input then assigns the same split.
+ */
+export async function assignGroupCases(
+  teamId: string,
+  input: { scenario_ids: string[]; deadline?: string; required?: boolean; preview?: boolean },
+): Promise<{ plan: GroupCasePlan[] } | { error: string }> {
+  try {
+    const res = await apiFetch(`/api/faculty/teams/${teamId}/assign-cases`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(input),
+    });
+    const json = (await res.json().catch(() => ({}))) as { plan?: GroupCasePlan[]; error?: string };
+    if (!res.ok || !json.plan) return { error: json.error ?? 'Something went wrong' };
+    return { plan: json.plan };
+  } catch (err) {
+    console.error('assignGroupCases() failed', err);
+    return { error: 'Something went wrong' };
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Reflections and goals
