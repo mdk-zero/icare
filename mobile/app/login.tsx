@@ -10,9 +10,12 @@ import {
   Image,
   TextInput,
   ActivityIndicator,
+  Keyboard,
   useWindowDimensions,
+  type LayoutChangeEvent,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { FontAwesome6 } from "@expo/vector-icons";
 import Svg, {
   Defs,
@@ -160,7 +163,17 @@ export default function LoginScreen() {
   const router = useRouter();
   const emailRef = useRef<TextInput>(null);
   const passwordRef = useRef<TextInput>(null);
+  const scrollRef = useRef<ScrollView>(null);
+  // Where the form starts inside the scroll content: the sheet's offset plus
+  // the form's offset within the sheet.
+  const sheetY = useRef(0);
+  const formY = useRef(0);
+  // The Sign In button's bottom edge, measured inside the form.
+  const buttonBottom = useRef(0);
+  const keyboardOpen = useRef(false);
+  const scrollHeight = useRef(0);
   const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const { Palette, Accent } = useTheme();
   const styles = React.useMemo(() => createStyles(Palette, Accent), [Palette, Accent]);
 
@@ -220,6 +233,52 @@ export default function LoginScreen() {
     [loginWithGoogle, rememberMe, router],
   );
 
+  // Android draws edge-to-edge, so the system no longer shrinks the screen when
+  // the keyboard opens and the fields end up hidden behind it. The
+  // KeyboardAvoidingView pads for the keyboard on both platforms instead; these
+  // listeners only track whether it's open, so the layout handler below knows
+  // when a shrink is the keyboard arriving.
+  React.useEffect(() => {
+    const show = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
+      () => {
+        keyboardOpen.current = true;
+      },
+    );
+    const hide = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
+      () => {
+        keyboardOpen.current = false;
+        scrollRef.current?.scrollTo({ y: 0, animated: true });
+      },
+    );
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+
+  /**
+   * Once the view has shrunk for the keyboard, lift the form only as far as
+   * it takes for the Sign In button to clear the keyboard: both fields sit
+   * above it, and nothing climbs further than it has to. The form's top never
+   * goes under the status bar, even on a short screen. Scrolling here, after
+   * the resize, rather than in the keyboard listener, is what makes the room
+   * to scroll into actually exist.
+   */
+  const handleScrollLayout = (e: LayoutChangeEvent) => {
+    const { height } = e.nativeEvent.layout;
+    const shrank = scrollHeight.current > 0 && height < scrollHeight.current;
+    scrollHeight.current = height;
+    if (!shrank || !keyboardOpen.current) return;
+
+    const formTop = sheetY.current + formY.current;
+    const needed = formTop + buttonBottom.current + Spacing.lg - height;
+    const ceiling = formTop - insets.top - Spacing.sm;
+    const y = Math.max(0, Math.min(needed, ceiling));
+    if (y > 0) scrollRef.current?.scrollTo({ y, animated: true });
+  };
+
   // googleResponse is an external auth result delivered as state, so reacting
   // to it here is what this effect is for.
   React.useEffect(() => {
@@ -244,11 +303,10 @@ export default function LoginScreen() {
 
   return (
     <View style={styles.container}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        style={styles.keyboardView}
-      >
+      <KeyboardAvoidingView behavior="padding" style={styles.keyboardView}>
         <ScrollView
+          ref={scrollRef}
+          onLayout={handleScrollLayout}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
@@ -266,7 +324,12 @@ export default function LoginScreen() {
           </View>
 
           {/* White sheet — the pill's bottom half */}
-          <View style={styles.sheet}>
+          <View
+            style={styles.sheet}
+            onLayout={(e) => {
+              sheetY.current = e.nativeEvent.layout.y;
+            }}
+          >
             {/* Logo straddles the seam, like the capsule's break line */}
             <View style={styles.logoCircle}>
               <Image source={logoImg} style={styles.logoImage} />
@@ -275,7 +338,12 @@ export default function LoginScreen() {
             <Text style={styles.welcomeText}>Welcome back</Text>
             <Text style={styles.subtitleText}>Sign in to continue your rounds</Text>
 
-            <View style={styles.formSection}>
+            <View
+              style={styles.formSection}
+              onLayout={(e) => {
+                formY.current = e.nativeEvent.layout.y;
+              }}
+            >
               <Pressable
                 onPress={() => emailRef.current?.focus()}
                 style={[
@@ -421,6 +489,9 @@ export default function LoginScreen() {
                 ]}
                 onPress={handleLogin}
                 disabled={isLoading}
+                onLayout={(e) => {
+                  buttonBottom.current = e.nativeEvent.layout.y + e.nativeEvent.layout.height;
+                }}
               >
                 <ButtonGradient />
                 {isLoading ? (
