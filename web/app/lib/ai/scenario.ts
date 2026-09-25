@@ -1,3 +1,4 @@
+import { catalogPromptLines, isSkillId } from '@/app/lib/taylor-skills';
 import type { getSupabaseAdmin } from '@/app/lib/supabase/server';
 
 export const VALID_DIFFICULTIES = ['beginner', 'intermediate', 'advanced'] as const;
@@ -108,6 +109,8 @@ export interface SanitizedScenario {
   category: string;
   patient_case: PatientCase;
   learning_objectives: string[];
+  /** Taylor's skill ids the case calls for, from the catalog; faculty confirm them. */
+  skills: string[];
 }
 
 /**
@@ -135,6 +138,9 @@ export function sanitizeScenario(
       learningObjectives.length > 0
         ? learningObjectives
         : ['Demonstrate clinical assessment skills', 'Apply evidence-based interventions'],
+    skills: Array.isArray(input.skills)
+      ? [...new Set(input.skills.map((x) => (typeof x === 'string' ? x.replace(/^skill\s*/i, '').trim() : '')).filter(isSkillId))].slice(0, 6)
+      : [],
   };
 }
 
@@ -173,13 +179,16 @@ export const SCENARIO_JSON_SHAPE = `{
     "diagnosis": "string",
     "treatment_plan": "string"
   },
-  "learning_objectives": ["string", "string", "string"]
+  "learning_objectives": ["string", "string", "string"],
+  "skills": ["1-7", "14-1"]
 }`;
 
 export const SCENARIO_GUIDELINES = `- If a patient record is provided, base vitals/diagnosis on it but craft a coherent teaching case.
 - Difficulty should match clinical complexity.
 - Learning objectives must be measurable and nursing-focused.
 - Keep the scenario clinically plausible and safe for educational use.
+- "skills" lists the 2 to 6 Taylor's clinical nursing skills the student performs in this case, most important first, by id from this catalog only:
+${catalogPromptLines()}
 - Treat this as the patient's first recorded encounter: medical_history must describe only pre-existing background (chronic conditions, current medications, allergies, prior surgeries before this admission) — do not reference any previous hospital visits, prior scenarios, or prior nursing encounters in the system.`;
 
 /**

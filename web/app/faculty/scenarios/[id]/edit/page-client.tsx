@@ -24,7 +24,11 @@ import {
   FacultyPatient,
   Room,
   SimulationScenario,
+  addScenarioSkills,
+  type SkillSelection,
 } from "../../../../lib/api";
+import SkillPicker from "../../skill-picker";
+import ScenarioTasksPanel from "./scenario-tasks-panel";
 import { roomStatus, ROOM_STATUS_LABEL, ROOM_STATUS_TONE } from "../../../../lib/rooms";
 import { toast } from "../../../../components/Toast";
 import PageHeader from "../../../../components/PageHeader";
@@ -65,6 +69,8 @@ export default function EditScenarioClient({ scenarioId }: { scenarioId: string 
 
   const [rubric, setRubric] = useState<Rubric>(DEFAULT_RUBRIC);
   const [savedRubric, setSavedRubric] = useState<Rubric>(DEFAULT_RUBRIC);
+  const [newSkills, setNewSkills] = useState<SkillSelection[]>([]);
+  const [existingSkills, setExistingSkills] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -169,6 +175,15 @@ export default function EditScenarioClient({ scenarioId }: { scenarioId: string 
       setError("Unable to save the scenario. You can only edit scenarios you created.");
       setSaving(false);
       return;
+    }
+
+    if (newSkills.length > 0) {
+      const added = await addScenarioSkills(scenarioId, newSkills);
+      if ("error" in added) {
+        setError(`The scenario was saved, but its new skills were not: ${added.error}`);
+        setSaving(false);
+        return;
+      }
     }
 
     const faculty = getCurrentFacultyUser();
@@ -341,6 +356,21 @@ export default function EditScenarioClient({ scenarioId }: { scenarioId: string 
               <p className="text-xs text-gray-500 mt-1.5">Enter one objective per line.</p>
             </div>
           </div>
+
+          <ScenarioTasksPanel scenarioId={scenarioId} onSkillsLoaded={setExistingSkills} reloadKey={0} />
+
+          <SkillPicker
+            value={newSkills}
+            onChange={setNewSkills}
+            existingIds={existingSkills}
+            disabled={saving}
+            detectInput={() => ({
+              title: form.title,
+              description: form.description,
+              learning_objectives: form.learningObjectives.split("\n").map((o) => o.trim()).filter(Boolean),
+              patient_id: form.patientId || null,
+            })}
+          />
 
           <RubricEditor value={rubric} onChange={setRubric} />
         </div>

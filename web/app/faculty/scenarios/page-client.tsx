@@ -412,6 +412,7 @@ export default function FacultyScenariosClient() {
         patient_id: draft.patient_id,
         learning_objectives: draft.learning_objectives,
         is_ai_generated: true,
+        skills: (draft.skills ?? []).map((id) => ({ id })),
       });
       if (created) {
         saved++;

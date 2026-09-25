@@ -3,6 +3,7 @@ import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { seedScenarioTasks } from '@/app/lib/scenario-default-tasks';
 import { ensureCategories } from '@/app/lib/scenario-categories';
+import { addSkillTasks, parseSkillSelections } from '@/app/lib/skill-tasks';
 import {
   getFacultyStudentIdSet,
   scenarioVisibleToFaculty,
@@ -117,6 +118,7 @@ export async function POST(request: NextRequest) {
     patient_id,
     learning_objectives,
     is_ai_generated,
+    skills,
   } = body as {
     title?: unknown;
     description?: unknown;
@@ -126,6 +128,7 @@ export async function POST(request: NextRequest) {
     patient_id?: unknown;
     learning_objectives?: unknown;
     is_ai_generated?: unknown;
+    skills?: unknown;
   };
 
   if (typeof title !== 'string' || title.trim().length === 0) {
@@ -195,9 +198,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unable to create scenario' }, { status: 500 });
     }
 
-    // Give the new scenario the default classified task list so it works
-    // immediately; faculty can tailor it afterwards.
-    await seedScenarioTasks(supabase, scenario.id);
+    // Its tasks are the Taylor's skills faculty confirmed, each with the
+    // skill's checklist steps. A scenario saved without any gets the default
+    // task list, so it still works; skills can be added afterwards.
+    const selections = parseSkillSelections(skills);
+    const built = selections.length > 0 ? await addSkillTasks(supabase, scenario.id, selections) : null;
+    if (built?.error) console.error('Failed to build skill tasks', built.error);
+    if (!built || built.tasks === 0) await seedScenarioTasks(supabase, scenario.id);
 
     return NextResponse.json({ scenario }, { status: 201 });
   } catch (err) {

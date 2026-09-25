@@ -25,7 +25,9 @@ import {
   logAuditAction,
   FacultyPatient,
   Room,
+  type SkillSelection,
 } from "../../../lib/api";
+import SkillPicker from "../skill-picker";
 import { roomStatus, ROOM_STATUS_LABEL, ROOM_STATUS_TONE } from "../../../lib/rooms";
 import PageHeader from "../../../components/PageHeader";
 import { usePageData } from "../../../lib/use-page-data";
@@ -83,6 +85,7 @@ export default function NewScenarioClient() {
   const newTopics = selectedTopics.filter((t) => t.is_new);
   const [savingTopics, setSavingTopics] = useState(false);
 
+  const [skills, setSkills] = useState<SkillSelection[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -182,6 +185,8 @@ export default function NewScenarioClient() {
         learningObjectives: (preview.learning_objectives ?? []).join("\n"),
       }));
       setAiPatientCase((preview.patient_case as Record<string, unknown>) ?? null);
+      // The skills the AI built the case around; faculty confirm them below.
+      if (preview.skills && preview.skills.length > 0) setSkills(preview.skills.map((id) => ({ id })));
       setAiGenerated(true);
     }
     setGenerating(false);
@@ -210,6 +215,7 @@ export default function NewScenarioClient() {
         .map((o) => o.trim())
         .filter(Boolean),
       ...(aiGenerated ? { patient_case: aiPatientCase ?? {}, is_ai_generated: true } : {}),
+      skills,
     });
 
     if (!newScenario) {
@@ -436,6 +442,24 @@ export default function NewScenarioClient() {
               <p className="text-xs text-gray-500 mt-1.5">Enter one objective per line.</p>
             </div>
           </div>
+
+          <SkillPicker
+            value={skills}
+            onChange={setSkills}
+            disabled={saving}
+            detectInput={() => ({
+              title: form.title,
+              description: form.description,
+              learning_objectives: form.learningObjectives.split("\n").map((o) => o.trim()).filter(Boolean),
+              patient_id: form.patientId || null,
+              lesson_text: lesson?.lessonText ?? null,
+            })}
+          />
+          {skills.length === 0 && (
+            <p className="-mt-2 text-xs text-gray-500">
+              Without skills, the scenario gets the general starter task list.
+            </p>
+          )}
         </div>
 
         {/* Right: patient + room tables */}

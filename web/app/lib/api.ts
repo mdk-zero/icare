@@ -1748,7 +1748,9 @@ export async function fetchFacultyScenarios(): Promise<SimulationScenario[]> {
   }
 }
 
-export async function createScenario(scenario: Partial<SimulationScenario>): Promise<SimulationScenario | null> {
+export async function createScenario(
+  scenario: Partial<SimulationScenario> & { skills?: SkillSelection[] },
+): Promise<SimulationScenario | null> {
   try {
     const res = await apiFetch('/api/faculty/scenarios', {
       method: 'POST',
@@ -1852,7 +1854,7 @@ export async function generateAIScenario(
   prompt: string,
   patientId?: string,
   lesson?: { text: string; category?: string | null } | null,
-): Promise<Partial<SimulationScenario> | { error: string }> {
+): Promise<(Partial<SimulationScenario> & { skills?: string[] }) | { error: string }> {
   try {
     const res = await apiFetch('/api/faculty/scenarios/generate', {
       method: 'POST',
@@ -1866,12 +1868,16 @@ export async function generateAIScenario(
       }),
     });
 
-    const json = (await res.json()) as { scenario?: Partial<SimulationScenario>; error?: string };
+    const json = (await res.json()) as {
+      scenario?: Partial<SimulationScenario> & { skills?: string[] };
+      error?: string;
+    };
     if (!res.ok || !json.scenario) {
       return { error: json.error || `Request failed (${res.status})` };
     }
 
     return {
+      skills: json.scenario.skills ?? [],
       title: json.scenario.title || 'AI Generated Scenario',
       description: json.scenario.description || prompt,
       difficulty: json.scenario.difficulty || 'intermediate',
@@ -1908,6 +1914,8 @@ export interface ScenarioDraft {
   patient_case: Record<string, unknown>;
   learning_objectives: string[];
   patient_id: string | null;
+  /** Taylor's skills the AI detected in the case. */
+  skills?: string[];
 }
 
 /** Generates a library of scenarios in one request. Nothing is saved until createScenario(). */
@@ -3097,5 +3105,134 @@ export async function generateStudentSummary(
   } catch (err) {
     console.error('generateStudentSummary() failed', err);
     return { error: 'Unable to generate summary. Please try again.' };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Taylor's skills catalog and skill-built scenarios
+// ---------------------------------------------------------------------------
+
+export interface SkillSummary {
+  /** "1-7" */
+  id: string;
+  chapter: number;
+  chapterId: string;
+  /** The skill area (chapter), e.g. "Vital Signs". */
+  area: string;
+  title: string;
+}
+
+export interface SkillDetail extends SkillSummary {
+  goal: string;
+  steps: { id: string | null; position: number; stepNo: number; section: string | null; text: string }[];
+  variants: { sections: string[]; alternatives: boolean; defaults: string[] };
+}
+
+/** A skill chosen for a scenario, with the variants to include (defaults when omitted). */
+export interface SkillSelection {
+  id: string;
+  sections?: string[];
+}
+
+export interface SkillSuggestion {
+  id: string;
+  reason: string;
+}
+
+export async function fetchSkillCatalog(): Promise<SkillSummary[]> {
+  try {
+    const res = await apiFetch('/api/skills', { credentials: 'include' });
+    const json = (await res.json()) as { skills?: SkillSummary[] };
+    return res.ok ? (json.skills ?? []) : [];
+  } catch (err) {
+    console.error('fetchSkillCatalog() failed', err);
+    return [];
+  }
+}
+
+export async function fetchSkillDetails(ids: string[]): Promise<SkillDetail[]> {
+  if (ids.length === 0) return [];
+  try {
+    const res = await apiFetch(`/api/skills?ids=${encodeURIComponent(ids.join(','))}`, { credentials: 'include' });
+    const json = (await res.json()) as { skills?: SkillDetail[] };
+    return res.ok ? (json.skills ?? []) : [];
+  } catch (err) {
+    console.error('fetchSkillDetails() failed', err);
+    return [];
+  }
+}
+
+/** The Taylor's skills a scenario calls for, detected from its text. */
+export async function suggestScenarioSkills(input: {
+  title: string;
+  description?: string;
+  learning_objectives?: string[];
+  patient_id?: string | null;
+  lesson_text?: string | null;
+}): Promise<{ suggestions: SkillSuggestion[]; source: 'ai' | 'keywords' } | { error: string }> {
+  try {
+    const res = await apiFetch('/api/faculty/scenarios/suggest-skills', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(input),
+    });
+    const json = (await res.json()) as { suggestions?: SkillSuggestion[]; source?: 'ai' | 'keywords'; error?: string };
+    if (!res.ok) return { error: json.error ?? 'Unable to detect skills' };
+    return { suggestions: json.suggestions ?? [], source: json.source ?? 'keywords' };
+  } catch (err) {
+    console.error('suggestScenarioSkills() failed', err);
+    return { error: 'Unable to detect skills' };
+  }
+}
+
+export interface ScenarioSkillTask {
+  id: string;
+  title: string;
+  skill_id: string | null;
+  /** How many students already have a grade on it. */
+  graded: number;
+}
+
+export async function fetchScenarioSkillTasks(scenarioId: string): Promise<ScenarioSkillTask[] | null> {
+  try {
+    const res = await apiFetch(`/api/faculty/scenarios/${scenarioId}/skills`, { credentials: 'include' });
+    const json = (await res.json()) as { tasks?: ScenarioSkillTask[] };
+    return res.ok ? (json.tasks ?? []) : null;
+  } catch (err) {
+    console.error('fetchScenarioSkillTasks() failed', err);
+    return null;
+  }
+}
+
+export async function addScenarioSkills(
+  scenarioId: string,
+  skills: SkillSelection[],
+): Promise<{ added: number } | { error: string }> {
+  try {
+    const res = await apiFetch(`/api/faculty/scenarios/${scenarioId}/skills`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ skills }),
+    });
+    const json = (await res.json()) as { added?: number; error?: string };
+    return res.ok ? { added: json.added ?? 0 } : { error: json.error ?? 'Unable to add the skills' };
+  } catch (err) {
+    console.error('addScenarioSkills() failed', err);
+    return { error: 'Unable to add the skills' };
+  }
+}
+
+export async function removeScenarioTask(scenarioId: string, taskId: string): Promise<boolean> {
+  try {
+    const res = await apiFetch(`/api/faculty/scenarios/${scenarioId}/skills?task_id=${encodeURIComponent(taskId)}`, {
+      method: 'DELETE',
+      credentials: 'include',
+    });
+    return res.ok;
+  } catch (err) {
+    console.error('removeScenarioTask() failed', err);
+    return false;
   }
 }

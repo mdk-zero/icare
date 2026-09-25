@@ -133,3 +133,55 @@ export function stepSource(skillId: string, step: Pick<SkillStep, 'stepNo' | 'se
     ? `Skill ${skillId}, ${step.section}, step ${step.stepNo}`
     : `Skill ${skillId}, step ${step.stepNo}`;
 }
+
+/** The variant headings of a skill ("Assessing Oral Temperature"), and which a scenario gets by default. */
+export interface SkillVariants {
+  sections: string[];
+  /**
+   * True when the sections are alternatives — the book restarts its step
+   * numbers under each (oral, rectal, axillary temperature), so a student
+   * performs one of them, not all.
+   */
+  alternatives: boolean;
+  /** Every section when they run in sequence; the first when they are alternatives. */
+  defaults: string[];
+}
+
+/**
+ * Skills whose sections are alternatives although the book numbers them on:
+ * 15-2 changes the container alone (steps 8–14) or with its set (15–24).
+ */
+const ALTERNATIVES_NUMBERED_ON = new Set(['15-2']);
+
+export function skillVariants(
+  skillId: string,
+  steps: readonly Pick<SkillStep, 'stepNo' | 'section'>[],
+): SkillVariants {
+  const sections: string[] = [];
+  const firstNo = new Map<string, number>();
+  let highest = 0;
+  let restartsAt: number | null = null;
+  for (const step of steps) {
+    if (step.section && !firstNo.has(step.section)) {
+      sections.push(step.section);
+      firstNo.set(step.section, step.stepNo);
+      if (step.stepNo <= highest) restartsAt = step.stepNo;
+    }
+    highest = Math.max(highest, step.stepNo);
+  }
+  if (ALTERNATIVES_NUMBERED_ON.has(skillId) && sections.length > 0) {
+    return { sections, alternatives: true, defaults: sections.slice(0, 1) };
+  }
+  if (restartsAt === null) return { sections, alternatives: false, defaults: sections };
+  return { sections, alternatives: true, defaults: sections.filter((s) => firstNo.get(s) === restartsAt).slice(0, 1) };
+}
+
+/** The steps a scenario gets for a skill: the shared ones plus the chosen sections. */
+export function stepsForSections<T extends Pick<SkillStep, 'section'>>(steps: readonly T[], sections: readonly string[]): T[] {
+  return steps.filter((s) => s.section === null || sections.includes(s.section));
+}
+
+/** "1-7: Assessing Brachial Artery Blood Pressure", one per line — the catalog as a prompt sees it. */
+export function catalogPromptLines(): string {
+  return BUNDLED.map((s) => `${s.id}: ${s.title}`).join('\n');
+}
