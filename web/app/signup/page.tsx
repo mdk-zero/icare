@@ -214,8 +214,9 @@ export default function ContactUsPage() {
                   Request sent
                 </h2>
                 <p className="opacity-0 animate-fade-in-up [animation-delay:750ms] text-sm text-white/60 leading-relaxed">
-                  Please wait for the team to validate your account. We&apos;ll reply to{" "}
-                  <span className="text-white/80">{email}</span> once it&apos;s ready.
+                  We&apos;ve emailed a confirmation to{" "}
+                  <span className="text-white/80">{email}</span>. Please wait for the team to
+                  validate your account; we&apos;ll write again once it&apos;s ready.
                 </p>
               </div>
             ) : (

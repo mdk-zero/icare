@@ -455,3 +455,29 @@ export async function sendAccessRequestEmail(
     </div>`,
   });
 }
+
+/**
+ * Tells the person who filled in the contact form that their request arrived.
+ * The wording is fixed on purpose: the form is public and the address is
+ * whatever was typed, so echoing the name or message back would let anyone
+ * send their own text, under our domain, to any inbox.
+ */
+export async function sendAccessRequestReceipt(to: string, replyTo: string): Promise<void> {
+  if (shouldSkipSending()) {
+    console.log(`[DEV] Access request receipt to ${to}`);
+    return;
+  }
+
+  await sendEmail({
+    to,
+    replyTo,
+    subject: "We received your iCARE++ account request",
+    html: `
+    <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 32px; color: #0f172a;">
+      <h2 style="color: #0d7377; margin: 0 0 16px;">Your request is in</h2>
+      <p style="line-height: 1.6; margin: 0 0 12px;">Thanks for reaching out. The iCARE++ team has received your account request and will validate it shortly.</p>
+      <p style="line-height: 1.6; margin: 0 0 12px;">Once your account is ready, we'll email your sign-in details to this address. There's nothing else you need to do in the meantime.</p>
+      <p style="font-size: 13px; color: #64748b; margin-top: 24px;">If you didn't make this request, you can ignore this email. Questions? Just reply and it will reach the team.</p>
+    </div>`,
+  });
+}

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { sendAccessRequestEmail } from '@/app/lib/auth/email';
+import { sendAccessRequestEmail, sendAccessRequestReceipt } from '@/app/lib/auth/email';
 import { checkRateLimit } from '@/app/lib/auth/rate-limit';
 
 // Where access requests land: the project's own inbox on i-care.dev, which
@@ -53,7 +53,6 @@ export async function POST(request: NextRequest) {
 
   try {
     await sendAccessRequestEmail(DEV_TEAM_EMAILS, { name, email, subject, message });
-    return NextResponse.json({ ok: true });
   } catch (err) {
     console.error('Contact request failed', err);
     return NextResponse.json(
@@ -61,4 +60,13 @@ export async function POST(request: NextRequest) {
       { status: 500 },
     );
   }
+
+  // The team's copy is what matters; a receipt that bounces (a typo'd address,
+  // say) must not turn a delivered request into an error the person retries.
+  try {
+    await sendAccessRequestReceipt(email, DEV_TEAM_EMAILS[0]);
+  } catch (err) {
+    console.error('Contact receipt failed', err);
+  }
+  return NextResponse.json({ ok: true });
 }
