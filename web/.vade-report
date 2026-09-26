@@ -1,0 +1,50 @@
+## Vercel Web Analytics Installation
+
+Successfully installed and configured Vercel Web Analytics for the iCARE++ project following the latest official documentation from Vercel.
+
+### Implementation Summary
+
+This Next.js App Router project now has Vercel Web Analytics properly integrated and ready to track user interactions once deployed to Vercel.
+
+### Files Modified
+
+1. **web/app/layout.tsx**
+   - Added import for `Analytics` component from `@vercel/analytics/next`
+   - Added `<Analytics />` component to the root layout body, positioned alongside the existing `<SpeedInsights />` component
+   - Preserved all existing code structure and functionality
+
+2. **web/package.json**
+   - Added `@vercel/analytics` as a new dependency
+
+3. **web/package-lock.json**
+   - Updated with dependency tree for `@vercel/analytics` package
+
+### Implementation Details
+
+- **Framework**: Next.js 16.2.4 with App Router
+- **Package Manager**: npm
+- **Analytics Package Version**: Latest version installed via npm
+- **Installation Method**: Followed official Vercel Web Analytics quickstart guide for Next.js App Router
+- **Placement**: Analytics component added to root layout (`app/layout.tsx`) as recommended for App Router projects
+
+### Verification Completed
+
+✅ Package installed successfully using npm  
+✅ Build completed successfully (no errors)  
+✅ Linter ran successfully (no new issues introduced)  
+✅ All changes staged with git  
+
+### Next Steps
+
+To complete the setup:
+1. Deploy the application to Vercel
+2. Enable Web Analytics in the Vercel dashboard (Analytics → Enable button)
+3. After deployment, verify tracking is working by checking browser Network tab for requests to `/<unique-path>/view`
+4. View analytics data in the Vercel dashboard under the Analytics section
+
+### Notes
+
+- The Analytics component is now placed alongside the existing SpeedInsights component, providing comprehensive monitoring capabilities
+- The implementation follows Vercel's best practices for Next.js App Router
+- No existing functionality was affected by this change
+- The component will automatically track page views and user interactions once deployed to Vercel
