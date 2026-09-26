@@ -47,6 +47,9 @@
   --color-hairline: #e6edef;
   /* Recessed areas: table headers, modal chrome, inset panels. */
   --color-subtle: #f7fafb;
+  /* Two-series chart palette (super admin performance), validated for CVD. */
+  --chart-1: #0891b2;
+  --chart-2: #d97706;
 
   --shadow-tile: 0 1px 3px 0 rgb(15 23 42 / 0.04), 0 1px 2px -1px rgb(15 23 42 / 0.06);
   --shadow-tile-hover: 0 4px 12px 0 rgb(15 23 42 / 0.06), 0 2px 4px -2px rgb(15 23 42 / 0.06);
@@ -234,6 +237,8 @@
   --color-surface: #111d20;
   --color-hairline: #1f3237;
   --color-subtle: #16252a;
+  --chart-1: #06a5c4;
+  --chart-2: #c47a0a;
 
   /* Same eight hues, stepped for the dark surface (all >= 3:1 on it). */
   --color-series-1: #3987e5;

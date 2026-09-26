@@ -1,6 +1,7 @@
 import type { MlEvent } from './ml';
 import { NDJSON, readNdjson } from './ndjson';
 import { cachedFetch, clearRequestCache } from './request-cache';
+import { recordRequest } from './telemetry';
 import type { AttendanceTally, ShiftAttendanceStatus } from './shifts';
 import { resolveRubric, type Rubric, type TaskRating } from './task-ratings';
 
@@ -62,9 +63,20 @@ function handleSessionExpired() {
  * behind.
  */
 async function sendRequest(input: string, init?: RequestInit): Promise<Response> {
-  const res = await fetch(input, { credentials: 'include', ...init });
-  if (res.status === 401 && !input.startsWith('/api/auth/')) handleSessionExpired();
   const method = (init?.method ?? 'GET').toUpperCase();
+  const started = performance.now();
+  let res: Response;
+  try {
+    res = await fetch(input, { credentials: 'include', ...init });
+  } catch (err) {
+    // Status 0: the request never got a response, which counts against reliability.
+    if (!(err instanceof DOMException && err.name === 'AbortError')) {
+      recordRequest(method, input, 0, performance.now() - started);
+    }
+    throw err;
+  }
+  recordRequest(method, input, res.status, performance.now() - started);
+  if (res.status === 401 && !input.startsWith('/api/auth/')) handleSessionExpired();
   if (method !== 'GET' && res.ok) clearRequestCache();
   return res;
 }
