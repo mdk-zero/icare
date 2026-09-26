@@ -33,11 +33,14 @@
  * relative to the moment it runs, so re-running moves the term to the new
  * today.
  *
- * It follows the groups. A student in a group is assigned and graded by the
- * group's supervising faculty member, their scenario rows carry the group,
- * and within a block every member of a group works a different case (and so a
- * different patient) and sits that case's paired quiz — the same rule the
- * app's Assign cases enforces.
+ * It follows the groups. A group works one scenario, the same case for every
+ * member, and each member is scored on their own: every member has their own
+ * assignment row, carrying the group, graded by the group's supervising
+ * faculty member. Groups in a section take the section's cases in turn, so
+ * two groups rarely share one. Skill Assessments stay individual, and group
+ * members sit the section's quizzes like everyone else. Groups in
+ * GROUPS_LEFT_EMPTY are not seeded at all; they start with nothing until
+ * faculty assign them a case.
  *
  * It grades the way faculty do. Every performed task has each of its
  * sub-tasks rated Excellent, Satisfactory or Needs Practice against the
@@ -46,9 +49,10 @@
  *
  * Scope and re-runs: this owns the (student, scenario) and (student,
  * assessment) pairs of every case and quiz in the catalog below, for every
- * student in PROFILES. Those are cleared and rebuilt on each run, so a
- * student whose group rotation changed loses the old pair rather than keeping
- * it; anything else in the database is left alone. Deleting an attempt
+ * student in PROFILES outside GROUPS_LEFT_EMPTY. Those are cleared and
+ * rebuilt on each run, so a student whose group or group case changed loses
+ * the old pair rather than keeping it; anything else in the database is left
+ * alone. Deleting an attempt
  * also drops its derived competency_scores, by the trigger migration 027
  * installs, so the roll-up never double-counts.
  *
@@ -481,25 +485,15 @@ const SECTION_WORK: Record<string, WorkItem[]> = {
   'BSN 1105': [ANAEMIA, FEVER, DEHYDRATION, POST_OP, HYPERTENSION],
 };
 
-/** Every case this seed knows, for group rotation and for clearing old pairs. */
+/** Every case this seed knows, for clearing old pairs. */
 const CATALOG: WorkItem[] = [FEVER, DEHYDRATION, POST_OP, HYPERTENSION, ANAEMIA, UTI, ASTHMA, CELLULITIS];
 
 /**
- * A member's cases, block by block. Outside a group it is the section's list.
- * In a group, member i of n (by name) starts the section's list i places on,
- * over the section's cases topped up from the catalog until there are at
- * least n, so no two members of a group share a case in the same block and
- * nobody repeats one.
+ * Sections whose groups get no seeded history. Their members start empty and
+ * only have work once faculty assign their group a case, and a re-run leaves
+ * whatever faculty gave them alone.
  */
-function memberWork(section: WorkItem[], groupIndex: number | null, groupSize: number): WorkItem[] {
-  if (groupIndex === null) return section;
-  const pool = [...section];
-  for (const item of CATALOG) {
-    if (pool.length >= Math.max(groupSize, section.length)) break;
-    if (!pool.includes(item)) pool.push(item);
-  }
-  return section.map((_, k) => pool[(k + groupIndex) % pool.length]);
-}
+const GROUPS_LEFT_EMPTY = new Set(['BSN 1101']);
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const HOUR_MS = 60 * 60 * 1000;
@@ -728,24 +722,25 @@ async function main() {
     (facultyLinks ?? []).map((l) => [l.section_id, l.faculty_id]),
   );
 
-  // Groups: each member's group, its supervisor, and the member's place in it.
+  // Groups: each member's group, its supervisor, and the group's place among
+  // its section's groups (by name), which picks the group's case.
   const { data: groupRows, error: groupError } = await supabase
     .from('teams')
-    .select('id, faculty_id, team_members(student_id, users(name))');
+    .select('id, name, section_id, faculty_id, team_members(student_id)');
   if (groupError) console.warn('  groups not read, seeding without them:', groupError.message);
-  const groupOf = new Map<string, { teamId: string; supervisor: string | null; index: number; size: number }>();
-  for (const g of groupRows ?? []) {
-    const members = ((g.team_members ?? []) as unknown as { student_id: string; users: { name: string } | null }[])
-      .slice()
-      .sort((a, b) => (a.users?.name ?? '').localeCompare(b.users?.name ?? '', undefined, { numeric: true }));
-    members.forEach((m, index) =>
+  const groupOf = new Map<string, { teamId: string; supervisor: string | null; ordinal: number }>();
+  const sortedGroups = [...(groupRows ?? [])].sort((a, b) =>
+    (a.name as string).localeCompare(b.name as string, undefined, { numeric: true }),
+  );
+  for (const g of sortedGroups) {
+    const ordinal = sortedGroups.filter((o) => o.section_id === g.section_id).indexOf(g);
+    for (const m of (g.team_members ?? []) as { student_id: string }[]) {
       groupOf.set(m.student_id, {
         teamId: g.id as string,
         supervisor: (g.faculty_id as string | null) ?? null,
-        index,
-        size: members.length,
-      }),
-    );
+        ordinal,
+      });
+    }
   }
 
   // Each task's skill area, so a sub-task is rated against the student's
@@ -796,8 +791,13 @@ async function main() {
     studentId: string;
     facultyId: string | null;
     teamId: string | null;
-    /** This member's cases, block by block (see memberWork). */
+    /** The section's cases, block by block; their quizzes are this member's. */
     work: WorkItem[];
+    /**
+     * The block of the one case this member's group works, or null outside a
+     * group, where the member works every block's case.
+     */
+    groupBlock: number | null;
     /** Work beyond this index was assigned and never touched. */
     didCount: number;
   }
@@ -815,15 +815,20 @@ async function main() {
       console.warn(`  skipped ${profile.email} — section "${sectionName}" has no work defined`);
       continue;
     }
-    const members = bySection.get(sectionName) ?? [];
     const group = groupOf.get(student.id) ?? null;
+    if (group && GROUPS_LEFT_EMPTY.has(sectionName)) {
+      console.log(`  skipped ${profile.email} — ${sectionName} groups start empty`);
+      continue;
+    }
+    const members = bySection.get(sectionName) ?? [];
     members.push({
       profile,
       studentId: student.id,
       // A group's supervisor assigns and grades its members' work.
       facultyId: group?.supervisor ?? facultyBySection.get(student.section_id) ?? null,
       teamId: group?.teamId ?? null,
-      work: memberWork(work, group?.index ?? null, group?.size ?? 0),
+      work,
+      groupBlock: group ? group.ordinal % work.length : null,
       didCount: Math.max(1, Math.round(profile.engagement * work.length)),
     });
     bySection.set(sectionName, members);
@@ -836,8 +841,8 @@ async function main() {
     const blocks = termBlocks(work.length, termStart);
 
     // ---- Clear every catalog pair these students hold -------------------
-    // A group rotation can move a student off a case, so clearing only the
-    // cases they get now would leave the old ones behind.
+    // Joining a group, or a group changing case, moves a student off a case,
+    // so clearing only the cases they get now would leave the old ones behind.
     //
     // Two kinds of row are real work, not ours, and are kept: a scenario a
     // faculty member graded sub-task by sub-task in the app (the seed never
@@ -876,6 +881,8 @@ async function main() {
     // ---- Scenarios ------------------------------------------------------
     for (const member of members) {
       for (const [k, item] of member.work.entries()) {
+        // A group works its one case; the other blocks are quiz-only for it.
+        if (member.groupBlock !== null && k !== member.groupBlock) continue;
         const completed = k < member.didCount;
         const scenarioId = scenarioByTitle.get(item.scenario);
         if (!scenarioId) {
