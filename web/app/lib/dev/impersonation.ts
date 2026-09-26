@@ -43,5 +43,6 @@ export function homeForRole(role: string): string {
   if (role === 'faculty') return '/faculty';
   if (role === 'admin') return '/admin';
   if (role === 'super_admin') return '/super-admin';
-  return '/dashboard';
+  // Students have no web portal (they use the mobile app).
+  return '/login';
 }

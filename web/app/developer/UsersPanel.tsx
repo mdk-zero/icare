@@ -484,7 +484,12 @@ function UserDrawer({
             against their account, tagged with your email. A banner stays on screen
             until you return.
           </p>
-          <button className="dc-btn" onClick={impersonate} disabled={busy !== null}>
+          <button
+            className="dc-btn"
+            onClick={impersonate}
+            disabled={busy !== null || user.role === "student"}
+            title={user.role === "student" ? "Students use the mobile app; there is no student web portal" : undefined}
+          >
             {busy === "impersonate" ? (
               <EcgLoader size="xs" />
             ) : (

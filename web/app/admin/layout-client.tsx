@@ -79,7 +79,7 @@ export default function ClientAdminLayout({
             ? "/faculty"
             : user.role === "super_admin"
               ? "/super-admin"
-              : "/dashboard",
+              : "/login",
         );
       else setReady(true);
     }

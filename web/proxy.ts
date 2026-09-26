@@ -18,12 +18,6 @@ const PROTECTED_PREFIXES = [
   '/super-admin',
   '/admin',
   '/faculty',
-  '/dashboard',
-  '/notifications',
-  '/patients',
-  '/profile',
-  '/quizzes',
-  '/scenarios',
   '/change-password',
 ];
 
@@ -34,8 +28,12 @@ function homeFor(role: string): string {
   if (role === 'faculty') return '/faculty';
   if (role === 'admin') return '/admin';
   if (role === 'super_admin') return '/super-admin';
-  return '/dashboard';
+  // Students use the mobile app; the web has no student portal. The login
+  // page signs them out and says so.
+  return STUDENT_LANDING;
 }
+
+const STUDENT_LANDING = '/login?reason=student';
 
 /**
  * The super admin runs accounts and system health only: none of the
@@ -43,6 +41,7 @@ function homeFor(role: string): string {
  * pages' own gates re-check against the live user row.
  */
 function wrongPortal(role: string, pathname: string): boolean {
+  if (role === 'student') return true;
   const inSuperAdmin = pathname === '/super-admin' || pathname.startsWith('/super-admin/');
   if (role === 'super_admin') return !inSuperAdmin && pathname !== '/change-password';
   return inSuperAdmin;
@@ -89,7 +88,8 @@ export async function proxy(request: NextRequest) {
     return response;
   }
 
-  if (isAuthPage && session) {
+  // A student is sent to /login to be signed out there, not bounced away from it.
+  if (isAuthPage && session && session.role !== 'student') {
     return NextResponse.redirect(new URL(homeFor(session.role), request.url));
   }
 

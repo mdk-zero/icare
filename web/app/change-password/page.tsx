@@ -7,6 +7,13 @@ import { faLock, faCircleExclamation } from "@fortawesome/free-solid-svg-icons";
 import { getCurrentUser, refreshCurrentUser, User, apiFetch } from "../lib/api";
 import { EcgLoader } from "../components/EcgLoader";
 
+/** Students never get here: the login page signs them out first. */
+function portalFor(role: User["role"] | undefined): string {
+  if (role === "admin") return "/admin";
+  if (role === "super_admin") return "/super-admin";
+  return "/faculty";
+}
+
 function useAuthUser(): User | null {
   const [user] = useState<User | null>(() => {
     if (typeof window === "undefined") return null;
@@ -31,7 +38,7 @@ export default function ChangePasswordPage() {
     }
 
     if (!user.force_password_change) {
-      router.push(user.role === "student" ? "/dashboard" : "/faculty");
+      router.push(portalFor(user.role));
     }
   }, [router, user]);
 
@@ -66,7 +73,7 @@ export default function ChangePasswordPage() {
       }
 
       await refreshCurrentUser();
-      router.push(user?.role === "student" ? "/dashboard" : "/faculty");
+      router.push(portalFor(user?.role));
     } catch {
       setError("Connection error. Please try again.");
     } finally {

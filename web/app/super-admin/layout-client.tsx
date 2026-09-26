@@ -28,7 +28,7 @@ function isActive(item: NavItem, pathname: string) {
 function homeFor(role: string): string {
   if (role === "faculty") return "/faculty";
   if (role === "admin") return "/admin";
-  return "/dashboard";
+  return "/login";
 }
 
 /**

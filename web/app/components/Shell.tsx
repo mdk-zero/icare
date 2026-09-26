@@ -42,22 +42,13 @@ export interface NavItem {
 }
 
 interface ShellProps {
-  role: "student" | "faculty" | "admin" | "super_admin";
+  role: "faculty" | "admin" | "super_admin";
   navItems: NavItem[];
   isActive: (item: NavItem, pathname: string, searchParams: URLSearchParams) => boolean;
   children: React.ReactNode;
 }
 
 const config = {
-  student: {
-    // 2000x2000 square mark — works as an icon tile beside a typographic wordmark.
-    logo: "/logo-pill.png",
-    logoIsWordmark: false,
-    portalLabel: "Student Portal",
-    mobileRoleLabel: "Student",
-    profileHref: "/profile",
-    homeHref: "/dashboard",
-  },
   faculty: {
     // 602x200 wordmark — must run at its own aspect ratio, never boxed into a square.
     logo: "/logo-white-no-bg.png",
@@ -226,7 +217,7 @@ export default function Shell({ role, navItems, isActive, children }: ShellProps
   const peekSuppressed = useRef(false);
   const rail = isDesktop && collapsed && !hoverPeek && !focusPeek && !bellOpen;
   // Keeps the live stream open for every role so arrival toasts fire on pages
-  // that have no bell of their own (students, admins). The bell below reads the
+  // that have no bell of their own (admins). The bell below reads the
   // same store for its badge and preview.
   const { unread } = useNotifications();
 
@@ -320,7 +311,7 @@ export default function Shell({ role, navItems, isActive, children }: ShellProps
       // disagree; an empty mirror asks the server rather than assuming nobody
       // is signed in, since the proxy would bounce that redirect back here.
       const cached = getCurrentUser();
-      const fresh: User | null = cached && role !== "student" ? cached : await refreshCurrentUser();
+      const fresh: User | null = cached ?? (await refreshCurrentUser());
 
       if (!mounted) return;
       if (!fresh) {
@@ -347,8 +338,8 @@ export default function Shell({ role, navItems, isActive, children }: ShellProps
   /**
    * The first navigation ends the entrance animations for good — see
    * `.no-entrance` in globals.css. Search params count as a navigation because
-   * the student dashboard's tabs are query-string links onto one page, and
-   * those re-reveal the same content.
+   * query-string tabs are links onto one page, and those re-reveal the same
+   * content.
    *
    * Defaulting to animating and opting out from here, rather than the reverse,
    * keeps the reveal working if this never runs.

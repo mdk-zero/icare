@@ -16,10 +16,12 @@ import {
   faChartColumn,
   faHeart,
 } from "@fortawesome/free-solid-svg-icons";
-import { login, isAuthenticated, refreshCurrentUser, User, logAuditAction } from "../lib/api";
+import { login, logout, isAuthenticated, refreshCurrentUser, User, logAuditAction } from "../lib/api";
 import logo_white from "../../public/logo-white-no-bg.png";
 import { EcgLoader } from "../components/EcgLoader";
 import { DriftingKit, RotatingWords } from "../components/AuthShowcase";
+
+const STUDENT_MESSAGE = "Students sign in on the iCARE++ mobile app. The web portal is for faculty and administrators.";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -41,6 +43,12 @@ export default function LoginPage() {
 
   const redirectAfterAuth = useCallback(
     (user: User) => {
+      // The web has no student portal; students sign in on the mobile app.
+      if (user.role === "student") {
+        void logout();
+        setError(STUDENT_MESSAGE);
+        return;
+      }
       if (user.force_password_change) {
         router.push("/change-password");
         return;
@@ -56,13 +64,7 @@ export default function LoginPage() {
         return;
       }
       router.push(
-        user.role === "student"
-          ? "/dashboard"
-          : user.role === "faculty"
-            ? "/faculty"
-            : user.role === "super_admin"
-              ? "/super-admin"
-              : "/admin",
+        user.role === "faculty" ? "/faculty" : user.role === "super_admin" ? "/super-admin" : "/admin",
       );
     },
     [router],
@@ -80,6 +82,10 @@ export default function LoginPage() {
   }, []);
 
   useEffect(() => {
+    // The proxy parks a signed-in student here; say why before anything else.
+    if (new URLSearchParams(window.location.search).get("reason") === "student") {
+      setError(STUDENT_MESSAGE);
+    }
     if (!isAuthenticated()) return;
     // The stored flag outlives the session cookie, so confirm with the server
     // before bouncing away. Trusting localStorage here would ping-pong against

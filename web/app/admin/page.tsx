@@ -329,7 +329,7 @@ export default async function AdminDashboard() {
         ? "/faculty"
         : session.role === "super_admin"
           ? "/super-admin"
-          : "/dashboard",
+          : "/login",
     );
   }
 

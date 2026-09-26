@@ -62,6 +62,9 @@ export async function POST(request: NextRequest) {
       .maybeSingle();
     if (error) throw new DevError(error.message, 400);
     if (!target) throw new DevError('User not found', 404);
+    if (target.role === 'student') {
+      throw new DevError('Students use the mobile app; there is no student web portal to sign in to');
+    }
 
     await logAudit(
       session,
