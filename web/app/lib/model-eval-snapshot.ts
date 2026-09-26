@@ -13,7 +13,12 @@ export interface ModelEvalEntry {
   recall: number;
   f1: number;
   rocAuc: number;
+  /** Held-out confusion matrix; at-risk is the positive class. */
+  confusion?: { tn: number; fp: number; fn: number; tp: number };
 }
+
+/** The held-out set every entry was scored on. */
+export const MODEL_EVAL_DATASET = { name: "OULAD held-out", samples: 6471, atRiskRate: 0.5251, threshold: 0.5 };
 
 export const MODEL_EVAL_SNAPSHOT: Record<string, ModelEvalEntry> = {
   logistic_regression: {
@@ -23,6 +28,7 @@ export const MODEL_EVAL_SNAPSHOT: Record<string, ModelEvalEntry> = {
     recall: 0.8885,
     f1: 0.923,
     rocAuc: 0.9741,
+    confusion: { tn: 2948, fp: 125, fn: 379, tp: 3019 },
   },
   random_forest: {
     model: "random_forest v0.1.0-oulad",
@@ -31,6 +37,7 @@ export const MODEL_EVAL_SNAPSHOT: Record<string, ModelEvalEntry> = {
     recall: 0.8873,
     f1: 0.9308,
     rocAuc: 0.9794,
+    confusion: { tn: 3008, fp: 65, fn: 383, tp: 3015 },
   },
 };
 

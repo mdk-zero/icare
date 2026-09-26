@@ -99,7 +99,8 @@ function getFromHeader(): string {
   return `"${getFromName()}" <${address}>`;
 }
 
-function getProvider(): MailProvider | null {
+/** Which mail transport is configured, if any. */
+export function getProvider(): MailProvider | null {
   if (process.env.RESEND_API_KEY && getFromAddress()) return 'resend';
   if (isSmtpConfigured()) return 'smtp';
   return null;
