@@ -179,7 +179,16 @@ export default function GoogleSignInButton({
         }
       />
       {!showNative && (
-        <button type="button" onClick={handleClick} disabled={!ready} className={className}>
+        // autocomplete="off": Firefox otherwise restores the enabled state from
+        // before a reload over the server's `disabled`, a hydration mismatch.
+        // React's button typings omit the attribute, hence the spread.
+        <button
+          type="button"
+          onClick={handleClick}
+          disabled={!ready}
+          {...{ autoComplete: "off" }}
+          className={className}
+        >
           {children ?? (
             <>
               <GoogleGlyph />
