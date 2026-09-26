@@ -52,7 +52,7 @@ const sentStyles = `
 export default function ContactUsPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [subject, setSubject] = useState("Requesting account activation");
+  const [subject, setSubject] = useState("Requesting account creation");
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
@@ -122,7 +122,12 @@ export default function ContactUsPage() {
         <div className="relative z-10 flex flex-col w-full px-14 xl:px-20 py-10 xl:py-14 text-white">
           <div className="flex-1 flex flex-col justify-center max-w-xl py-10 -mt-20">
             <div className="mb-12 opacity-0 animate-fade-in-up">
-              <Image src={logo_white} alt="iCare++ Logo" className="h-14 w-auto drop-shadow-md" priority />
+              <Image
+                src={logo_white}
+                alt="iCare++ Logo"
+                className="h-14 w-auto drop-shadow-md"
+                priority
+              />
             </div>
 
             <p className="opacity-0 animate-fade-in-up [animation-delay:100ms] text-[11px] font-semibold uppercase tracking-[0.28em] text-[#7DD3D8] mb-4">
@@ -203,10 +208,32 @@ export default function ContactUsPage() {
               <div className="py-6 text-center" role="status">
                 <style>{sentStyles}</style>
                 <span className="sent-badge relative mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[#7DD3D8]/15 text-[#7DD3D8]">
-                  <span aria-hidden className="sent-ring absolute inset-0 rounded-full border-2 border-[#7DD3D8]" />
-                  <span aria-hidden className="sent-ring sent-ring-late absolute inset-0 rounded-full border border-[#7DD3D8]" />
-                  <svg aria-hidden viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round">
-                    <circle className="sent-circle" cx="12" cy="12" r="10" pathLength={1} transform="rotate(-90 12 12)" />
+                  <span
+                    aria-hidden
+                    className="sent-ring absolute inset-0 rounded-full border-2 border-[#7DD3D8]"
+                  />
+                  <span
+                    aria-hidden
+                    className="sent-ring sent-ring-late absolute inset-0 rounded-full border border-[#7DD3D8]"
+                  />
+                  <svg
+                    aria-hidden
+                    viewBox="0 0 24 24"
+                    className="h-7 w-7"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.25"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <circle
+                      className="sent-circle"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      pathLength={1}
+                      transform="rotate(-90 12 12)"
+                    />
                     <path className="sent-check" d="M7.5 12.5l3 3 6-6.5" pathLength={1} />
                   </svg>
                 </span>
@@ -234,7 +261,10 @@ export default function ContactUsPage() {
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-5">
                     <div className="sm:col-span-2">
-                      <label htmlFor="name" className="block text-sm font-medium text-white/70 mb-1.5">
+                      <label
+                        htmlFor="name"
+                        className="block text-sm font-medium text-white/70 mb-1.5"
+                      >
                         Name <span className="text-red-400">*</span>
                       </label>
                       <div className="relative">
@@ -254,7 +284,10 @@ export default function ContactUsPage() {
                       </div>
                     </div>
                     <div className="sm:col-span-3">
-                      <label htmlFor="email" className="block text-sm font-medium text-white/70 mb-1.5">
+                      <label
+                        htmlFor="email"
+                        className="block text-sm font-medium text-white/70 mb-1.5"
+                      >
                         Email <span className="text-red-400">*</span>
                       </label>
                       <div className="relative">
@@ -276,7 +309,10 @@ export default function ContactUsPage() {
                   </div>
 
                   <div>
-                    <label htmlFor="subject" className="block text-sm font-medium text-white/70 mb-1.5">
+                    <label
+                      htmlFor="subject"
+                      className="block text-sm font-medium text-white/70 mb-1.5"
+                    >
                       Subject <span className="text-red-400">*</span>
                     </label>
                     <div className="relative">
@@ -297,7 +333,10 @@ export default function ContactUsPage() {
                   </div>
 
                   <div>
-                    <label htmlFor="message" className="block text-sm font-medium text-white/70 mb-1.5">
+                    <label
+                      htmlFor="message"
+                      className="block text-sm font-medium text-white/70 mb-1.5"
+                    >
                       Message <span className="text-red-400">*</span>
                     </label>
                     <textarea
@@ -333,7 +372,10 @@ export default function ContactUsPage() {
             <div className="mt-6 text-center">
               <p className="text-sm text-white/50">
                 Already have an account?{" "}
-                <Link href="/login" className="text-[#7DD3D8] hover:text-white font-medium transition-colors">
+                <Link
+                  href="/login"
+                  className="text-[#7DD3D8] hover:text-white font-medium transition-colors"
+                >
                   Sign in
                 </Link>
               </p>
