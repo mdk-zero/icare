@@ -2,12 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faSearch, faShuffle, faTimes } from "@fortawesome/free-solid-svg-icons";
+import { faSearch, faTimes } from "@fortawesome/free-solid-svg-icons";
 import {
-  assignGroupCases,
+  assignGroupCase,
   fetchFacultyScenarios,
   type FacultyTeam,
-  type GroupCasePlan,
   type SimulationScenario,
 } from "../../lib/api";
 import { toast } from "../../components/Toast";
@@ -15,9 +14,8 @@ import { toast } from "../../components/Toast";
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
 /**
- * Hands a group its cases: the faculty member picks a pool of scenarios, sees
- * who would get which (every member a different case and patient, never one
- * they already had), then confirms. Each member is still graded on their own.
+ * Hands a group its case: the faculty member picks one scenario and the whole
+ * group gets it. Every member works it and is graded on their own.
  */
 export default function AssignCasesModal({
   group,
@@ -27,11 +25,10 @@ export default function AssignCasesModal({
   onClose: () => void;
 }) {
   const [scenarios, setScenarios] = useState<SimulationScenario[] | null>(null);
-  const [chosen, setChosen] = useState<string[]>([]);
+  const [chosen, setChosen] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [deadline, setDeadline] = useState("");
   const [required, setRequired] = useState(true);
-  const [plan, setPlan] = useState<GroupCasePlan[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -46,37 +43,22 @@ export default function AssignCasesModal({
     );
   }, [scenarios, query]);
 
-  const needed = group.members.length;
-  const toggle = (id: string) => {
-    setChosen((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
-    // Any change to the pool makes the shown split stale.
-    setPlan(null);
-    setError(null);
-  };
+  const memberCount = group.members.length;
 
-  const preview = async () => {
+  const assign = async () => {
+    if (!chosen || !deadline) return;
     setBusy(true);
-    const result = await assignGroupCases(group.id, { scenario_ids: chosen, preview: true });
-    setBusy(false);
-    if ("error" in result) {
-      setError(result.error);
-      setPlan(null);
-    } else {
-      setError(null);
-      setPlan(result.plan);
-    }
-  };
-
-  const confirm = async () => {
-    if (!plan || !deadline) return;
-    setBusy(true);
-    const result = await assignGroupCases(group.id, { scenario_ids: chosen, deadline, required });
+    const result = await assignGroupCase(group.id, { scenario_id: chosen, deadline, required });
     setBusy(false);
     if ("error" in result) {
       setError(result.error);
       return;
     }
-    toast(`Gave ${group.name} ${plural(result.plan.length, "case")}, one per member`);
+    toast(
+      result.skipped.length > 0
+        ? `Gave ${plural(result.assigned.length, "member")} of ${group.name} "${result.scenario_title}". ${result.skipped.join(", ")} already had it.`
+        : `Gave ${group.name} "${result.scenario_title}"`,
+    );
     onClose();
   };
 
@@ -88,9 +70,9 @@ export default function AssignCasesModal({
       <div className="flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-hairline bg-surface shadow-[0_8px_30px_rgba(0,0,0,0.12)]">
         <header className="flex items-start justify-between gap-3 border-b border-hairline bg-subtle p-4">
           <div>
-            <h2 className="text-lg font-bold text-gray-900">Assign cases to {group.name}</h2>
+            <h2 className="text-lg font-bold text-gray-900">Assign a case to {group.name}</h2>
             <p className="text-sm text-gray-500">
-              Each of the {plural(needed, "member")} gets a different case and patient, graded on their own.
+              All {plural(memberCount, "member")} get the same case. Each is graded on their own.
             </p>
           </div>
           <button onClick={onClose} className="rounded-lg p-2 transition-colors hover:bg-gray-200" aria-label="Close">
@@ -121,12 +103,7 @@ export default function AssignCasesModal({
           </div>
 
           <div>
-            <div className="mb-2 flex items-center justify-between gap-3">
-              <h3 className="text-sm font-bold text-gray-900">Cases to hand out</h3>
-              <span className={`text-xs ${chosen.length >= needed ? "text-gray-500" : "text-amber-700"}`}>
-                {chosen.length} chosen, at least {needed} needed
-              </span>
-            </div>
+            <h3 className="mb-2 text-sm font-bold text-gray-900">Case for the group</h3>
             <div className="relative mb-2">
               <FontAwesomeIcon
                 icon={faSearch}
@@ -149,10 +126,14 @@ export default function AssignCasesModal({
                   <li key={s.id}>
                     <label className="flex cursor-pointer items-center gap-3 px-3 py-2.5 hover:bg-subtle">
                       <input
-                        type="checkbox"
-                        checked={chosen.includes(s.id)}
-                        onChange={() => toggle(s.id)}
-                        className="h-4 w-4 rounded text-brand-600"
+                        type="radio"
+                        name="group-case"
+                        checked={chosen === s.id}
+                        onChange={() => {
+                          setChosen(s.id);
+                          setError(null);
+                        }}
+                        className="h-4 w-4 text-brand-600"
                       />
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-medium text-gray-800">{s.title}</span>
@@ -170,30 +151,6 @@ export default function AssignCasesModal({
           {error && (
             <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>
           )}
-
-          {plan && (
-            <div>
-              <h3 className="mb-2 text-sm font-bold text-gray-900">Who gets what</h3>
-              <table className="w-full overflow-hidden rounded-xl border border-hairline text-sm">
-                <thead className="bg-subtle text-left text-xs uppercase tracking-wide text-gray-500">
-                  <tr>
-                    <th className="px-3 py-2">Student</th>
-                    <th className="px-3 py-2">Case</th>
-                    <th className="px-3 py-2">Patient</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-hairline">
-                  {plan.map((p) => (
-                    <tr key={p.student_id}>
-                      <td className="px-3 py-2 font-medium text-gray-800">{p.student_name}</td>
-                      <td className="px-3 py-2 text-gray-700">{p.scenario_title}</td>
-                      <td className="px-3 py-2 text-gray-500">{p.patient_name ?? "None"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
         </div>
 
         <footer className="flex items-center justify-end gap-2 border-t border-hairline bg-subtle p-4">
@@ -203,25 +160,14 @@ export default function AssignCasesModal({
           >
             Cancel
           </button>
-          {plan ? (
-            <button
-              onClick={confirm}
-              disabled={busy || !deadline}
-              title={deadline ? undefined : "Set a deadline first"}
-              className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
-            >
-              {busy ? "Assigning…" : "Assign these cases"}
-            </button>
-          ) : (
-            <button
-              onClick={preview}
-              disabled={busy || chosen.length < needed}
-              className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
-            >
-              <FontAwesomeIcon icon={faShuffle} className="h-3.5 w-3.5" />
-              {busy ? "Working…" : "Preview the split"}
-            </button>
-          )}
+          <button
+            onClick={assign}
+            disabled={busy || !chosen || !deadline}
+            title={!chosen ? "Choose a case first" : deadline ? undefined : "Set a deadline first"}
+            className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
+          >
+            {busy ? "Assigning…" : `Assign to ${plural(memberCount, "member")}`}
+          </button>
         </footer>
       </div>
     </div>

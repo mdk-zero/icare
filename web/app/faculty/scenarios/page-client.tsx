@@ -1614,8 +1614,8 @@ export default function FacultyScenariosClient() {
                 <p className="flex items-start gap-2 rounded-xl border border-hairline bg-subtle px-3 py-2 text-xs text-gray-600">
                   <FontAwesomeIcon icon={faUsers} className="mt-0.5 h-3.5 w-3.5 text-brand-600" />
                   <span>
-                    To give a whole group work, use <strong>Assign cases</strong> on the Groups page. Each member
-                    gets a different case there.
+                    To give a whole group work, use <strong>Assign case</strong> on the Groups page. The group
+                    shares one case and each member is graded on their own.
                   </span>
                 </p>
               )}

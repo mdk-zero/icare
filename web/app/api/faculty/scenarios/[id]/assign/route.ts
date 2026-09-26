@@ -33,11 +33,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     required?: unknown;
   };
 
-  // A group never shares one case: each member gets a different one through
-  // /api/faculty/teams/[id]/assign-cases.
+  // A group's case is given through /api/faculty/teams/[id]/assign-cases,
+  // which tags every member's assignment with the group.
   if (Array.isArray(team_ids) && team_ids.length > 0) {
     return NextResponse.json(
-      { error: 'Groups get a different case per member. Assign cases from the Groups page.' },
+      { error: 'Give a group its case with Assign case on the Groups page.' },
       { status: 400 },
     );
   }

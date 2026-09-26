@@ -3297,23 +3297,21 @@ export async function fetchGroupSummaries(): Promise<{ viewer_id: string | null;
   }
 }
 
-/** One member's case in a group split. */
-export interface GroupCasePlan {
-  student_id: string;
-  student_name: string;
-  scenario_id: string;
+/** What giving a group its case did: who got it, and who already had it. */
+export interface GroupCaseResult {
   scenario_title: string;
-  patient_name: string | null;
+  assigned: string[];
+  skipped: string[];
 }
 
 /**
- * Give a group its cases: each member gets a different scenario from the pool.
- * With `preview` nothing is written; the same input then assigns the same split.
+ * Give a group one case. Every member gets their own assignment of it and is
+ * graded on their own; members who already have it are skipped.
  */
-export async function assignGroupCases(
+export async function assignGroupCase(
   teamId: string,
-  input: { scenario_ids: string[]; deadline?: string; required?: boolean; preview?: boolean },
-): Promise<{ plan: GroupCasePlan[] } | { error: string }> {
+  input: { scenario_id: string; deadline: string; required?: boolean },
+): Promise<GroupCaseResult | { error: string }> {
   try {
     const res = await apiFetch(`/api/faculty/teams/${teamId}/assign-cases`, {
       method: 'POST',
@@ -3321,11 +3319,11 @@ export async function assignGroupCases(
       credentials: 'include',
       body: JSON.stringify(input),
     });
-    const json = (await res.json().catch(() => ({}))) as { plan?: GroupCasePlan[]; error?: string };
-    if (!res.ok || !json.plan) return { error: json.error ?? 'Something went wrong' };
-    return { plan: json.plan };
+    const json = (await res.json().catch(() => ({}))) as Partial<GroupCaseResult> & { error?: string };
+    if (!res.ok || !json.assigned) return { error: json.error ?? 'Something went wrong' };
+    return { scenario_title: json.scenario_title ?? '', assigned: json.assigned, skipped: json.skipped ?? [] };
   } catch (err) {
-    console.error('assignGroupCases() failed', err);
+    console.error('assignGroupCase() failed', err);
     return { error: 'Something went wrong' };
   }
 }
