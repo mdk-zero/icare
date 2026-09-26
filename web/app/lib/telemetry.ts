@@ -29,6 +29,8 @@ let listening = false;
 
 export function recordRequest(method: string, input: string, status: number, durationMs: number): void {
   if (typeof window === 'undefined') return;
+  // Automated browsers (the Playwright suite) would pass for real traffic.
+  if (navigator.webdriver) return;
   const path = input.split('?')[0];
   if (!path.startsWith('/api/') || path === ENDPOINT) return;
   buffer.push({ method, path, status, duration_ms: Math.round(durationMs), at: Date.now() });

@@ -3,7 +3,7 @@ import { isMissingMigration } from './auth/super-admin';
 
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
 
-export type TestRunKind = 'benchmark' | 'dw_benchmark' | 'health';
+export type TestRunKind = 'benchmark' | 'dw_benchmark' | 'health' | 'e2e' | 'api';
 
 /**
  * Saves one run to system_test_runs (migration 054). Returns false, not an

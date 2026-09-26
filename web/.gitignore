@@ -62,3 +62,8 @@ firebase-service-account.json
 
 # isolated build dir (NEXT_DIST_DIR)
 .next-build/
+
+# test-suite credentials (see tests/README.md)
+.env.test
+/test-results/
+/playwright-report/

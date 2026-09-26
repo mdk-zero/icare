@@ -1,0 +1,53 @@
+name: Tests
+
+# Frontend (Playwright) and API (Postman/Newman) suites against a running
+# deployment. Manual only: the suites need a live app and real test accounts.
+# See web/tests/README.md.
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: "Deployment to test (e.g. https://i-care.dev)"
+        required: true
+      report:
+        description: "Send results to /super-admin/tests"
+        type: boolean
+        default: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    env:
+      TEST_BASE_URL: ${{ inputs.base_url }}
+      TEST_REPORT: ${{ inputs.report && '1' || '0' }}
+      TEST_SUPER_ADMIN_EMAIL: ${{ secrets.TEST_SUPER_ADMIN_EMAIL }}
+      TEST_SUPER_ADMIN_PASSWORD: ${{ secrets.TEST_SUPER_ADMIN_PASSWORD }}
+      TEST_ADMIN_EMAIL: ${{ secrets.TEST_ADMIN_EMAIL }}
+      TEST_ADMIN_PASSWORD: ${{ secrets.TEST_ADMIN_PASSWORD }}
+      TEST_FACULTY_EMAIL: ${{ secrets.TEST_FACULTY_EMAIL }}
+      TEST_FACULTY_PASSWORD: ${{ secrets.TEST_FACULTY_PASSWORD }}
+      TEST_STUDENT_EMAIL: ${{ secrets.TEST_STUDENT_EMAIL }}
+      TEST_STUDENT_PASSWORD: ${{ secrets.TEST_STUDENT_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: API tests (Postman)
+        run: npm run test:api
+      - name: Frontend tests (Playwright)
+        if: always()
+        run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: web/playwright-report
+          retention-days: 14

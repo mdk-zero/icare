@@ -10,6 +10,8 @@ import {
   faFlaskVial,
   faHeartPulse,
   faPlay,
+  faCode,
+  faDisplay,
   faRobot,
   faStop,
   faTruckFast,
@@ -48,7 +50,7 @@ interface DwTiming {
 
 interface TestRun<S = Record<string, number | string | null>, R = unknown[]> {
   id: string | null;
-  kind: "health" | "benchmark" | "dw_benchmark";
+  kind: "health" | "benchmark" | "dw_benchmark" | "e2e" | "api";
   created_at: string;
   summary: S;
   results: R;
@@ -61,6 +63,28 @@ type BenchRun = TestRun<
   BenchmarkResult[]
 >;
 type DwRun = TestRun<{ queries: number; failed: number; total_ms: number; slowest: string | null }, DwTiming[]>;
+
+interface SuiteCase {
+  suite: string;
+  name: string;
+  status: "passed" | "failed" | "skipped";
+  duration_ms: number;
+  error: string | null;
+}
+
+type SuiteRun = TestRun<
+  {
+    total: number;
+    passed: number;
+    failed: number;
+    skipped: number;
+    duration_ms: number;
+    base_url: string | null;
+    runner: string | null;
+    commit: string | null;
+  },
+  SuiteCase[]
+>;
 
 interface RunsPayload {
   runs: TestRun[];
@@ -102,7 +126,7 @@ export default function TestsClient() {
       <PageHeader
         badge={{ icon: <FontAwesomeIcon icon={faFlaskVial} className="w-3.5 h-3.5" />, label: "System" }}
         title="Test Results"
-        subtitle="Health checks, load and warehouse benchmarks, and the prediction models' evaluation"
+        subtitle="Health checks, automated frontend and API tests, load and warehouse benchmarks, and the prediction models' evaluation"
       />
       {pending && (
         <div className="mb-5">
@@ -111,6 +135,22 @@ export default function TestsClient() {
       )}
       <div className="space-y-5">
         <HealthSection runs={ofKind<HealthRun>("health")} onRun={addRun} />
+        <SuiteSection
+          kind="e2e"
+          runs={ofKind<SuiteRun>("e2e")}
+          icon={faDisplay}
+          title="Frontend tests (Playwright)"
+          subtitle="A real browser signs in and clicks through each portal, checking what users see"
+          command="npm run test:e2e:report"
+        />
+        <SuiteSection
+          kind="api"
+          runs={ofKind<SuiteRun>("api")}
+          icon={faCode}
+          title="API tests (Postman)"
+          subtitle="Every endpoint's status codes, response shape and role restrictions, run with Newman"
+          command="npm run test:api:report"
+        />
         <BenchmarkSection runs={ofKind<BenchRun>("benchmark")} onRun={addRun} />
         <DwSection runs={ofKind<DwRun>("dw_benchmark")} onRun={addRun} />
         <MlSection />
@@ -543,6 +583,155 @@ function DwSection({ runs, onRun }: { runs: DwRun[]; onRun: (run: TestRun) => vo
         selected={shown}
         onSelect={setPicked}
         describe={(r) => `${r.summary.total_ms} ms total${r.summary.failed ? `, ${r.summary.failed} failed` : ""}`}
+      />
+    </section>
+  );
+}
+
+/* ---------------------------------------------------------- test suites */
+
+const CASE_STATUS: Record<SuiteCase["status"], { icon: IconDefinition; className: string; label: string }> = {
+  passed: { icon: faCircleCheck, className: "text-emerald-600", label: "Passed" },
+  failed: { icon: faCircleXmark, className: "text-rose-600", label: "Failed" },
+  skipped: { icon: faCircleExclamation, className: "text-gray-400", label: "Skipped" },
+};
+
+/**
+ * Playwright and Postman runs execute outside the app (a developer machine
+ * or CI) and report here, so this section shows results but can't start a
+ * run itself.
+ */
+function SuiteSection({
+  kind,
+  runs,
+  icon,
+  title,
+  subtitle,
+  command,
+}: {
+  kind: "e2e" | "api";
+  runs: SuiteRun[];
+  icon: IconDefinition;
+  title: string;
+  subtitle: string;
+  command: string;
+}) {
+  const [picked, setPicked] = useState<SuiteRun | null>(null);
+  const [showAll, setShowAll] = useState(false);
+  const shown = picked ?? runs[0] ?? null;
+
+  const groups = new Map<string, SuiteCase[]>();
+  for (const c of shown?.results ?? []) {
+    if (!showAll && c.status !== "failed") continue;
+    groups.set(c.suite, [...(groups.get(c.suite) ?? []), c]);
+  }
+  const s = shown?.summary;
+  const verdict = !s ? null : s.failed > 0 ? "fail" : s.passed > 0 ? "pass" : "warn";
+
+  return (
+    <section className={`${CARD} p-4 sm:p-5`} aria-labelledby={`suite-${kind}`}>
+      <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+        <div className="flex items-start gap-3">
+          <span className="w-9 h-9 rounded-xl bg-brand-600/10 text-brand-600 flex items-center justify-center shrink-0">
+            <FontAwesomeIcon icon={icon} className="w-4 h-4" />
+          </span>
+          <div>
+            <h2 id={`suite-${kind}`} className="font-semibold text-gray-800">
+              {title}
+            </h2>
+            <p className="text-xs text-gray-500">{subtitle}</p>
+          </div>
+        </div>
+        {verdict && (
+          <span className={`inline-flex items-center gap-1.5 text-sm font-medium ${STATUS[verdict].className}`}>
+            <FontAwesomeIcon icon={STATUS[verdict].icon} className="w-4 h-4" />
+            {verdict === "fail" ? `${s!.failed} failing` : verdict === "pass" ? "All passing" : "Nothing ran"}
+          </span>
+        )}
+      </div>
+
+      {!shown || !s ? (
+        <p className="text-sm text-gray-500">
+          No run reported yet. From <code className="font-mono text-xs">web/</code>, run{" "}
+          <code className="font-mono text-xs bg-subtle px-1.5 py-0.5 rounded">{command}</code>. The results appear here.
+        </p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+            {(
+              [
+                ["Passed", s.passed, "text-emerald-700"],
+                ["Failed", s.failed, s.failed ? "text-rose-700" : "text-gray-800"],
+                ["Skipped", s.skipped, "text-gray-500"],
+                ["Duration", formatMs(s.duration_ms), "text-gray-800"],
+              ] as [string, string | number, string][]
+            ).map(([label, value, tone]) => (
+              <div key={label} className="rounded-xl border border-hairline px-3 py-2">
+                <p className={`text-lg font-bold tabular-nums ${tone}`}>{value}</p>
+                <p className="text-xs text-gray-500">{label}</p>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-gray-500 mb-3">
+            {when(shown.created_at)}
+            {shown.run_by_name && ` · reported as ${shown.run_by_name}`}
+            {s.base_url && ` · against ${s.base_url}`}
+            {s.commit && (
+              <>
+                {" · commit "}
+                <code className="font-mono">{s.commit}</code>
+              </>
+            )}
+            {s.skipped > 0 && " · skipped tests had no test account configured"}
+          </p>
+
+          <label className="inline-flex items-center gap-2 text-sm text-gray-600 mb-2 cursor-pointer">
+            <input type="checkbox" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} />
+            Show every test, not just failures
+          </label>
+
+          {groups.size === 0 ? (
+            <p className="text-sm text-gray-500">{s.failed === 0 ? "No failures in this run." : ""}</p>
+          ) : (
+            <div className="space-y-3">
+              {[...groups].map(([suite, cases]) => (
+                <div key={suite}>
+                  <p className="text-xs font-medium text-gray-500 mb-1">{suite || "Tests"}</p>
+                  <ul className="divide-y divide-hairline border border-hairline rounded-xl">
+                    {cases.map((c, i) => {
+                      const st = CASE_STATUS[c.status];
+                      return (
+                        <li key={`${c.name}-${i}`} className="px-3 py-2">
+                          <div className="flex items-center gap-2.5 text-sm">
+                            <FontAwesomeIcon icon={st.icon} className={`w-3.5 h-3.5 shrink-0 ${st.className}`} aria-label={st.label} />
+                            <span className="flex-1 text-gray-800">{c.name}</span>
+                            {c.status !== "skipped" && (
+                              <span className="text-xs tabular-nums text-gray-400">{formatMs(c.duration_ms)}</span>
+                            )}
+                          </div>
+                          {c.error && (
+                            <pre className="mt-1.5 ml-6 text-xs text-rose-700 whitespace-pre-wrap break-words font-mono">
+                              {c.error}
+                            </pre>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          )}
+          <p className="text-xs text-gray-400 mt-3">
+            Run again with <code className="font-mono">{command}</code> from <code className="font-mono">web/</code>.
+          </p>
+        </>
+      )}
+      <History
+        runs={runs}
+        selected={shown}
+        onSelect={setPicked}
+        describe={(r) => `${r.summary.passed} passed · ${r.summary.failed} failed · ${r.summary.skipped} skipped`}
       />
     </section>
   );

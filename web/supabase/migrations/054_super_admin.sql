@@ -75,12 +75,33 @@ alter table public.request_metrics enable row level security;
 -- -----------------------------------------------------------------
 create table if not exists public.system_test_runs (
   id uuid primary key default gen_random_uuid(),
-  kind text not null check (kind in ('benchmark', 'dw_benchmark', 'health')),
+  -- e2e = Playwright, api = Postman/Newman; both reported by web/tests/report.mjs.
+  kind text not null check (kind in ('benchmark', 'dw_benchmark', 'health', 'e2e', 'api')),
   run_by uuid references public.users(id) on delete set null,
   created_at timestamptz not null default now(),
   summary jsonb not null default '{}'::jsonb,
   results jsonb not null default '[]'::jsonb
 );
+
+-- A deployment that applied an earlier draft of this file has the narrower
+-- kind check; widen it to the test-suite kinds.
+do $$
+declare
+  con record;
+begin
+  for con in
+    select c.conname from pg_constraint c
+    where c.conrelid = 'public.system_test_runs'::regclass and c.contype = 'c'
+      and pg_get_constraintdef(c.oid) ilike '%kind%'
+      and pg_get_constraintdef(c.oid) not ilike '%e2e%'
+  loop
+    execute format('alter table public.system_test_runs drop constraint %I', con.conname);
+    alter table public.system_test_runs
+      add constraint system_test_runs_kind_check
+      check (kind in ('benchmark', 'dw_benchmark', 'health', 'e2e', 'api'));
+  end loop;
+end;
+$$;
 
 create index if not exists idx_system_test_runs_kind on public.system_test_runs(kind, created_at desc);
 
