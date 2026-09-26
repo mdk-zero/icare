@@ -5,7 +5,11 @@ import { adminVisibleUserIds, getAdminScope } from '@/app/lib/admin-scope';
 import { logAudit } from '@/app/lib/audit';
 import { parseSex } from '@/app/lib/auth/user';
 
-const VALID_ROLES = ['student', 'faculty', 'admin'] as const;
+/** Admin and super admin accounts are the super admin's to make (migration 054). */
+const ASSIGNABLE_ROLES = ['student', 'faculty'] as const;
+
+/** Accounts an admin may change or remove: students and faculty, never another admin. */
+const MANAGEABLE_ROLES = ['student', 'faculty'];
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -37,11 +41,11 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     updates.name = name.trim();
   }
   if (role !== undefined) {
-    if (typeof role !== 'string' || !(VALID_ROLES as readonly string[]).includes(role)) {
-      return NextResponse.json({ error: 'Role must be student, faculty, or admin' }, { status: 400 });
+    if (id === session.uid) {
+      return NextResponse.json({ error: 'You cannot change your own role' }, { status: 400 });
     }
-    if (id === session.uid && role !== 'admin') {
-      return NextResponse.json({ error: 'You cannot demote your own account' }, { status: 400 });
+    if (typeof role !== 'string' || !(ASSIGNABLE_ROLES as readonly string[]).includes(role)) {
+      return NextResponse.json({ error: 'Role must be student or faculty' }, { status: 400 });
     }
     updates.role = role;
   }
@@ -63,6 +67,12 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const scope = await getAdminScope(supabase, session.uid);
     if (scope && !adminVisibleUserIds(scope, session.uid).includes(id)) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+    if (id !== session.uid) {
+      const { data: target } = await supabase.from('users').select('role').eq('id', id).maybeSingle();
+      if (!target || !MANAGEABLE_ROLES.includes(target.role as string)) {
+        return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      }
     }
     // Someone made faculty by this admin becomes this admin's faculty.
     if (scope && updates.role === 'faculty') updates.admin_id = session.uid;
@@ -114,7 +124,11 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       .select('id, email, role')
       .eq('id', id)
       .maybeSingle();
-    if (!user || (scope && !adminVisibleUserIds(scope, session.uid).includes(id))) {
+    if (
+      !user ||
+      !MANAGEABLE_ROLES.includes(user.role as string) ||
+      (scope && !adminVisibleUserIds(scope, session.uid).includes(id))
+    ) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 

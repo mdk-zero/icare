@@ -19,7 +19,7 @@ interface User {
   id: string;
   email: string;
   name: string;
-  role: "student" | "faculty" | "admin";
+  role: "student" | "faculty" | "admin" | "super_admin";
 }
 
 function getCurrentUser(): User | null {
@@ -34,7 +34,6 @@ const navItems: NavItem[] = [
   { id: "faculty", label: "Faculty", href: "/admin/faculty", icon: faUserTie, section: "Management" },
   { id: "patients", label: "Patients", href: "/admin/patients", icon: faHospitalUser, section: "Management" },
   { id: "rooms", label: "Rooms", href: "/admin/rooms", icon: faDoorOpen, section: "Management" },
-  { id: "users", label: "Users", href: "/admin/users", icon: faUsers, section: "Management" },
   { id: "analytics", label: "Analytics", href: "/admin/analytics", icon: faChartBar, section: "Data" },
   { id: "reports", label: "Reports", href: "/admin/reports", icon: faFileLines, section: "Data" },
   { id: "audit", label: "Activity Log", href: "/admin/audit", icon: faClockRotateLeft, section: "Administration" },
@@ -75,7 +74,13 @@ export default function ClientAdminLayout({
       // component at app/admin/page.tsx already does; the two gates only
       // disagreed because this one screened for students alone.
       else if (user.role !== "admin")
-        router.replace(user.role === "faculty" ? "/faculty" : "/dashboard");
+        router.replace(
+          user.role === "faculty"
+            ? "/faculty"
+            : user.role === "super_admin"
+              ? "/super-admin"
+              : "/dashboard",
+        );
       else setReady(true);
     }
     void gate();

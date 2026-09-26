@@ -324,7 +324,13 @@ export default async function AdminDashboard() {
     redirect("/login");
   }
   if (session.role !== "admin") {
-    redirect(session.role === "faculty" ? "/faculty" : "/dashboard");
+    redirect(
+      session.role === "faculty"
+        ? "/faculty"
+        : session.role === "super_admin"
+          ? "/super-admin"
+          : "/dashboard",
+    );
   }
 
   const {

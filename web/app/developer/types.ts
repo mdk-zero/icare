@@ -56,7 +56,7 @@ export interface DevUser {
   id: string;
   email: string;
   name: string;
-  role: "student" | "faculty" | "admin";
+  role: "student" | "faculty" | "admin" | "super_admin";
   sex: "male" | "female" | null;
   picture_url: string | null;
   section_id: string | null;

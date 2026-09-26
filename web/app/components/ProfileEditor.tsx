@@ -35,6 +35,7 @@ interface ProfileEditorProps {
 }
 
 const ROLE_LABEL: Record<User["role"], string> = {
+  super_admin: "Super Administrator",
   admin: "Administrator",
   faculty: "Faculty",
   student: "Student",

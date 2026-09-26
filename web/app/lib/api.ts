@@ -8,7 +8,7 @@ export interface User {
   id: string;
   email: string;
   name: string;
-  role: 'student' | 'faculty' | 'admin';
+  role: 'student' | 'faculty' | 'admin' | 'super_admin';
   picture_url?: string | null;
   /** Null when unrecorded; the dashboard greeting drops the honorific then. */
   sex?: 'male' | 'female' | null;

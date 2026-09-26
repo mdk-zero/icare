@@ -13,7 +13,7 @@ import { formatAuditDetails } from "../../lib/audit-details";
 interface AuditRow {
   id: string;
   actor_id: string | null;
-  actor_role: "student" | "faculty" | "admin" | null;
+  actor_role: "student" | "faculty" | "admin" | "super_admin" | null;
   action: string;
   entity_type: string | null;
   entity_id: string | null;

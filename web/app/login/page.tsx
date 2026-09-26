@@ -56,7 +56,13 @@ export default function LoginPage() {
         return;
       }
       router.push(
-        user.role === "student" ? "/dashboard" : user.role === "faculty" ? "/faculty" : "/admin",
+        user.role === "student"
+          ? "/dashboard"
+          : user.role === "faculty"
+            ? "/faculty"
+            : user.role === "super_admin"
+              ? "/super-admin"
+              : "/admin",
       );
     },
     [router],

@@ -42,5 +42,6 @@ export function decodeFlag(raw: string | undefined): ImpersonationFlag | null {
 export function homeForRole(role: string): string {
   if (role === 'faculty') return '/faculty';
   if (role === 'admin') return '/admin';
+  if (role === 'super_admin') return '/super-admin';
   return '/dashboard';
 }

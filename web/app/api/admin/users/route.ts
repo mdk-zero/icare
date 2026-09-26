@@ -9,6 +9,12 @@ import { adminVisibleUserIds, getAdminScope } from '@/app/lib/admin-scope';
 
 const VALID_ROLES = ['student', 'faculty', 'admin'] as const;
 
+/**
+ * What an admin may create. Admin and super admin accounts are the super
+ * admin's to make (migration 054), from /super-admin/users.
+ */
+const ASSIGNABLE_ROLES = ['student', 'faculty'] as const;
+
 function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
@@ -34,6 +40,8 @@ export async function GET(request: NextRequest) {
     // An admin sees themselves, their own faculty and those faculty's students.
     const scope = await getAdminScope(supabase, session.uid);
     if (scope) query = query.in('id', adminVisibleUserIds(scope, session.uid));
+    // Other admins and the super admins are not an admin's to manage.
+    query = query.or(`role.in.(student,faculty),id.eq.${session.uid}`);
     const { data: users, error } = await query;
     if (error) {
       console.error('Failed to list users', error);
@@ -74,8 +82,8 @@ export async function POST(request: NextRequest) {
   if (typeof email !== 'string' || email.trim().length === 0) {
     return NextResponse.json({ error: 'Email is required' }, { status: 400 });
   }
-  if (typeof role !== 'string' || !(VALID_ROLES as readonly string[]).includes(role)) {
-    return NextResponse.json({ error: 'Role must be student, faculty, or admin' }, { status: 400 });
+  if (typeof role !== 'string' || !(ASSIGNABLE_ROLES as readonly string[]).includes(role)) {
+    return NextResponse.json({ error: 'Role must be student or faculty' }, { status: 400 });
   }
   if (section_id !== undefined && section_id !== null && typeof section_id !== 'string') {
     return NextResponse.json({ error: 'Invalid section_id' }, { status: 400 });

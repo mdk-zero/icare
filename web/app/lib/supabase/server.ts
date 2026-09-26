@@ -20,7 +20,7 @@ export function getSupabaseAdmin(): SupabaseClient {
   return cached;
 }
 
-export type UserRole = 'student' | 'faculty' | 'admin';
+export type UserRole = 'student' | 'faculty' | 'admin' | 'super_admin';
 
 /** Null means unrecorded — see migration 032; it is not a third value. */
 export type UserSex = 'male' | 'female';

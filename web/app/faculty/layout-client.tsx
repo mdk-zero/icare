@@ -20,7 +20,7 @@ interface User {
   id: string;
   email: string;
   name: string;
-  role: "student" | "faculty" | "admin";
+  role: "student" | "faculty" | "admin" | "super_admin";
 }
 
 function getCurrentUser(): User | null {
@@ -116,6 +116,7 @@ export default function ClientFacultyLayout({ children }: { children: React.Reac
       if (!user) router.replace("/login");
       else if (user.role === "student") router.replace("/dashboard");
       else if (user.role === "admin") router.replace("/admin");
+      else if (user.role === "super_admin") router.replace("/super-admin");
       else setReady(true);
     }
     void gate();

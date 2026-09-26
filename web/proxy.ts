@@ -15,6 +15,7 @@ import { IMPERSONATION_RETURN_COOKIE } from '@/app/lib/dev/impersonation';
  * call readSession() themselves, and that is what actually protects data.
  */
 const PROTECTED_PREFIXES = [
+  '/super-admin',
   '/admin',
   '/faculty',
   '/dashboard',
@@ -32,7 +33,19 @@ const AUTH_PAGES = ['/login', '/signup'];
 function homeFor(role: string): string {
   if (role === 'faculty') return '/faculty';
   if (role === 'admin') return '/admin';
+  if (role === 'super_admin') return '/super-admin';
   return '/dashboard';
+}
+
+/**
+ * The super admin runs accounts and system health only: none of the
+ * teaching portals apply to them, and nobody else belongs in theirs. The
+ * pages' own gates re-check against the live user row.
+ */
+function wrongPortal(role: string, pathname: string): boolean {
+  const inSuperAdmin = pathname === '/super-admin' || pathname.startsWith('/super-admin/');
+  if (role === 'super_admin') return !inSuperAdmin && pathname !== '/change-password';
+  return inSuperAdmin;
 }
 
 export async function proxy(request: NextRequest) {
@@ -77,6 +90,10 @@ export async function proxy(request: NextRequest) {
   }
 
   if (isAuthPage && session) {
+    return NextResponse.redirect(new URL(homeFor(session.role), request.url));
+  }
+
+  if (isProtected && session && wrongPortal(session.role, pathname)) {
     return NextResponse.redirect(new URL(homeFor(session.role), request.url));
   }
 
