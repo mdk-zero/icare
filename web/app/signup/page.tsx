@@ -6,7 +6,6 @@ import Image from "next/image";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faCircleExclamation,
-  faCircleCheck,
   faUser,
   faEnvelope,
   faTag,
@@ -21,6 +20,29 @@ import { DriftingKit, RotatingWords } from "../components/AuthShowcase";
 const inputClass =
   "auth-input w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-[#7DD3D8]/30 focus:border-[#7DD3D8]/50 transition-all";
 const iconInputClass = `${inputClass} pl-11`;
+
+/*
+ * The "request sent" confirmation: the badge pops in, the ring and check draw
+ * themselves, then two ripples spread out. Kept beside the markup like
+ * DriftingKit's rules; the global reduced-motion block settles it instantly.
+ */
+const sentStyles = `
+.sent-badge { animation: sentPop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+@keyframes sentPop {
+  from { transform: scale(0.4); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+.sent-circle, .sent-check { stroke-dasharray: 1; stroke-dashoffset: 1; }
+.sent-circle { animation: sentDraw 0.45s ease-out 0.15s forwards; }
+.sent-check { animation: sentDraw 0.3s ease-out 0.5s forwards; }
+@keyframes sentDraw { to { stroke-dashoffset: 0; } }
+.sent-ring { opacity: 0; animation: sentRipple 1.1s ease-out 0.6s; }
+.sent-ring-late { animation-delay: 0.85s; }
+@keyframes sentRipple {
+  from { transform: scale(1); opacity: 0.6; }
+  to { transform: scale(2.1); opacity: 0; }
+}
+`;
 
 /**
  * Accounts aren't self-service: this page is a contact form that mails an
@@ -179,11 +201,19 @@ export default function ContactUsPage() {
 
             {sent ? (
               <div className="py-6 text-center" role="status">
-                <span className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[#7DD3D8]/15 text-[#7DD3D8]">
-                  <FontAwesomeIcon icon={faCircleCheck} className="h-6 w-6" />
+                <style>{sentStyles}</style>
+                <span className="sent-badge relative mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[#7DD3D8]/15 text-[#7DD3D8]">
+                  <span aria-hidden className="sent-ring absolute inset-0 rounded-full border-2 border-[#7DD3D8]" />
+                  <span aria-hidden className="sent-ring sent-ring-late absolute inset-0 rounded-full border border-[#7DD3D8]" />
+                  <svg aria-hidden viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round">
+                    <circle className="sent-circle" cx="12" cy="12" r="10" pathLength={1} transform="rotate(-90 12 12)" />
+                    <path className="sent-check" d="M7.5 12.5l3 3 6-6.5" pathLength={1} />
+                  </svg>
                 </span>
-                <h2 className="text-xl font-semibold text-white mb-2">Request sent</h2>
-                <p className="text-sm text-white/60 leading-relaxed">
+                <h2 className="opacity-0 animate-fade-in-up [animation-delay:650ms] text-xl font-semibold text-white mb-2">
+                  Request sent
+                </h2>
+                <p className="opacity-0 animate-fade-in-up [animation-delay:750ms] text-sm text-white/60 leading-relaxed">
                   Please wait for the team to validate your account. We&apos;ll reply to{" "}
                   <span className="text-white/80">{email}</span> once it&apos;s ready.
                 </p>
