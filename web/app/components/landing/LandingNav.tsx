@@ -129,7 +129,7 @@ export default function LandingNav() {
             href="/signup"
             className="group inline-flex items-center gap-1.5 rounded-full bg-brand-600 py-2 pl-4 pr-3.5 text-sm font-semibold text-white shadow-md shadow-brand-600/20 transition-colors hover:bg-brand-700"
           >
-            Request Account Activation
+            Contact Us
             <Icon
               d={ICONS.arrowRight}
               strokeWidth={2}

@@ -402,7 +402,7 @@ export default function LandingPage() {
               </p>
 
               <div className="lp-enter mt-10 flex flex-wrap items-center gap-3" style={delay(240)}>
-                <PrimaryButton href="/signup">Request Account Activation</PrimaryButton>
+                <PrimaryButton href="/signup">Contact Us</PrimaryButton>
                 <a
                   href="#how-it-works"
                   className="group inline-flex items-center gap-2 rounded-full border border-hairline bg-surface/70 px-6 py-3.5 text-sm font-semibold text-gray-700 backdrop-blur transition-colors hover:border-brand-300 hover:text-brand-700"
@@ -752,11 +752,7 @@ export default function LandingPage() {
                   <div aria-hidden="true" className="mt-auto pt-7">
                     {/* The three Taylor's checklist levels, Excellent down to Needs Practice. */}
                     <div className="flex items-end gap-1">
-                      {[
-                        "h-10 bg-brand-600",
-                        "h-7 bg-brand-400",
-                        "h-4 bg-amber-300",
-                      ].map((bar) => (
+                      {["h-10 bg-brand-600", "h-7 bg-brand-400", "h-4 bg-amber-300"].map((bar) => (
                         <span key={bar} className={`flex-1 rounded-md ${bar}`} />
                       ))}
                     </div>
@@ -847,7 +843,7 @@ export default function LandingPage() {
                       href="/signup"
                       className="group inline-flex items-center justify-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-semibold text-brand-700 transition-colors hover:bg-white/90"
                     >
-                      Request Account Activation
+                      Contact Us
                       <Icon
                         d={ICONS.arrowRight}
                         strokeWidth={2}
@@ -1184,7 +1180,7 @@ export default function LandingPage() {
                     href="/signup"
                     className="group inline-flex items-center gap-2 rounded-full bg-white py-3.5 pl-7 pr-6 text-sm font-semibold text-brand-700 shadow-xl shadow-black/10 transition-all duration-200 hover:-translate-y-0.5 hover:bg-white/90"
                   >
-                    Request Account Activation
+                    Contact Us
                     <Icon
                       d={ICONS.arrowRight}
                       strokeWidth={2}
