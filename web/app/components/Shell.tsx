@@ -42,7 +42,7 @@ export interface NavItem {
 }
 
 interface ShellProps {
-  role: "student" | "faculty" | "admin";
+  role: "student" | "faculty" | "admin" | "super_admin";
   navItems: NavItem[];
   isActive: (item: NavItem, pathname: string, searchParams: URLSearchParams) => boolean;
   children: React.ReactNode;
@@ -74,6 +74,14 @@ const config = {
     mobileRoleLabel: "Admin",
     profileHref: "/admin/settings",
     homeHref: "/admin",
+  },
+  super_admin: {
+    logo: "/logo-white-no-bg.png",
+    logoIsWordmark: true,
+    portalLabel: "System Administration",
+    mobileRoleLabel: "Super Admin",
+    profileHref: "/super-admin/settings",
+    homeHref: "/super-admin",
   },
 };
 
