@@ -419,6 +419,14 @@ html {
   animation: none !important;
 }
 
+/* fade-in-up starts from `opacity-0` and relies on its forwards fill to show
+ * the element at all. With the animation dropped it has to be put at its end
+ * state here, or client-side navigations into the auth pages (logout lands on
+ * /login via router.replace, keeping the class) leave the text invisible. */
+.no-entrance .animate-fade-in-up {
+  opacity: 1 !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
