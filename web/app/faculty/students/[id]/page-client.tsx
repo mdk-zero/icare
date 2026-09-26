@@ -617,7 +617,7 @@ export default function StudentDetailClient() {
                       ? "text-red-600"
                       : "text-emerald-600"
                 }
-                value={riskPrediction ? (riskPrediction.risk === "at_risk" ? "At Risk" : "Safe") : "Not Scored"}
+                value={riskPrediction ? (riskPrediction.risk === "at_risk" ? "At Risk" : "Safe") : "Not scored yet"}
                 valueColor={
                   !riskPrediction
                     ? "text-gray-500"
@@ -641,8 +641,8 @@ export default function StudentDetailClient() {
 
           {!riskPrediction ? (
             <p className="text-sm text-gray-500 py-4">
-              No prediction yet — the ML service scores the cohort nightly
-              (or run it from Admin &gt; Analytics).
+              Not scored yet. A student is scored once they have assigned or completed work; the ML
+              service then scores the cohort nightly (or run it from Admin &gt; Analytics).
             </p>
           ) : (
             <div className="space-y-3">

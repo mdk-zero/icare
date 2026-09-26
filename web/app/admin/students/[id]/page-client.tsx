@@ -216,7 +216,7 @@ export default function StudentDetailClient() {
               <StatTile icon={faClock} value={formatLastActive(student.last_login_at)} label="Last Active" />
               <StatTile
                 icon={riskLevel === "high" ? faTriangleExclamation : faShieldHalved}
-                value={riskLevel ? (riskLevel === "high" ? "At Risk" : "On Track") : "Not Scored"}
+                value={riskLevel ? (riskLevel === "high" ? "At Risk" : "On Track") : "Not scored yet"}
                 valueColor={
                   riskLevel === "high" ? "text-red-600" : riskLevel === "low" ? "text-emerald-600" : "text-gray-500"
                 }
@@ -238,7 +238,8 @@ export default function StudentDetailClient() {
 
           {!prediction ? (
             <p className="text-sm text-gray-400">
-              No prediction on record yet. Run the ML jobs from the Analytics page to score this cohort.
+              Not scored yet. A student is scored once they have assigned or completed work and the ML jobs
+              have run from the Analytics page.
             </p>
           ) : (
             <div className="space-y-3">

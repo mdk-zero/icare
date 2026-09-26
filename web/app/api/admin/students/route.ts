@@ -3,6 +3,7 @@ import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { getAdminScope } from '@/app/lib/admin-scope';
 import { logAudit } from '@/app/lib/audit';
+import { getStudentsWithWork } from '@/app/lib/faculty-dashboard';
 
 /**
  * Cohort roster with per-student performance aggregates for the admin
@@ -59,8 +60,12 @@ export async function GET() {
       if (!latestRisk.has(p.student_id)) latestRisk.set(p.student_id, p.risk);
     }
 
+    // No assigned or done work means not scored yet, whatever the ML predicted.
+    const withWork = await getStudentsWithWork(supabase, (studentsRes.data ?? []).map((s) => s.id));
+
     const students = (studentsRes.data ?? []).map((s) => {
       const t = totals.get(s.id);
+      const scored = withWork.has(s.id) && latestRisk.has(s.id);
       return {
         id: s.id,
         name: s.name,
@@ -71,7 +76,8 @@ export async function GET() {
         last_login_at: s.last_login_at,
         quizzes_completed: t?.count ?? 0,
         average_score: t && t.count > 0 ? Math.round(t.sum / t.count) : null,
-        at_risk: latestRisk.get(s.id) === 'at_risk',
+        scored,
+        at_risk: scored && latestRisk.get(s.id) === 'at_risk',
         section_id: s.section_id ?? null,
         section: (s as unknown as { sections: { name: string } | null }).sections?.name ?? null,
       };

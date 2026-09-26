@@ -280,7 +280,7 @@ export default function FacultyReportsClient() {
         filters: [
           { id: "at-risk", label: "At risk", test: (t) => t.risk === "at_risk" },
           { id: "inactive", label: `Inactive ${INACTIVE_DAYS}d+`, test: isInactive },
-          { id: "unscored", label: "No risk score yet", test: (t) => t.risk === null },
+          { id: "unscored", label: "Not scored yet", test: (t) => t.risk === null },
         ],
         sorts: [
           { id: "attention", label: "Needs attention", compare: byAttention },

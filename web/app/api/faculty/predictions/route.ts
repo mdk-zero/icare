@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { getScopedStudentIds } from '@/app/lib/admin-scope';
+import { getStudentsWithWork } from '@/app/lib/faculty-dashboard';
 
 /**
  * At-risk predictions written by the ML service (Phase 3.5/3.8).
@@ -38,14 +39,19 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unable to fetch predictions' }, { status: 500 });
     }
 
+    // A student with no assigned or done work is not scored yet, whatever
+    // an ML run predicted for them.
+    const withWork = await getStudentsWithWork(supabase, [...new Set((data ?? []).map((r) => r.student_id))]);
+
     if (studentId) {
-      return NextResponse.json({ prediction: data?.[0] ?? null });
+      const row = data?.[0];
+      return NextResponse.json({ prediction: row && withWork.has(row.student_id) ? row : null });
     }
 
     // keep only the newest row per student
     const latest = new Map<string, (typeof data)[number]>();
     for (const row of data ?? []) {
-      if (!latest.has(row.student_id)) latest.set(row.student_id, row);
+      if (withWork.has(row.student_id) && !latest.has(row.student_id)) latest.set(row.student_id, row);
     }
     return NextResponse.json({ predictions: [...latest.values()] });
   } catch (err) {

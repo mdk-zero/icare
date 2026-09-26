@@ -1719,7 +1719,7 @@ export default function FacultyScenariosClient() {
                                   ? "At risk"
                                   : student.risk_level === "safe"
                                     ? "On track"
-                                    : "No prediction"}
+                                    : "Not scored yet"}
                               </span>
                             </td>
                           </tr>

@@ -5,6 +5,7 @@ import { canSeeStudent } from '@/app/lib/admin-scope';
 import { callAI, aiErrorResponse } from '@/app/lib/ai/generate';
 import { isStudentInFacultySections } from '@/app/lib/roster';
 import { isActiveSkillArea } from '@/scripts/taylors-chapters';
+import { getStudentsWithWork } from '@/app/lib/faculty-dashboard';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -213,7 +214,9 @@ export async function POST(_request: Request, { params }: RouteParams) {
       created_at: c.created_at,
     }));
 
-    const predictionRow = predictionRes.data?.[0];
+    // No assigned or done work means not scored yet, whatever the ML predicted.
+    const withWork = await getStudentsWithWork(supabase, [id]);
+    const predictionRow = withWork.has(id) ? predictionRes.data?.[0] : undefined;
     const prediction: PredictionRecord | null = predictionRow
       ? {
           risk: predictionRow.risk,

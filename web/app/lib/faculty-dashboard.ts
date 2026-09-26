@@ -51,12 +51,44 @@ export async function getScopedStudents(
   return data ?? [];
 }
 
-/** Latest prediction per student, newest first, deduped in memory. */
+/**
+ * The students who have anything to be scored on: work assigned to them
+ * (a scenario or a Skill Assessment) or activity of their own (an attempt, a
+ * vitals entry, a progress note). Everyone else is "Not scored yet", whatever
+ * an ML run predicted for them — a prediction for a student with no work is
+ * a guess about an empty record.
+ */
+export async function getStudentsWithWork(supabase: Supabase, studentIds: string[]): Promise<Set<string>> {
+  const found = new Set<string>();
+  if (studentIds.length === 0) return found;
+  const [scenarios, assessments, attempts, vitals, notes] = await Promise.all([
+    supabase.from('scenario_assignments').select('student_id').in('student_id', studentIds).limit(20000),
+    supabase.from('assessment_assignments').select('student_id').in('student_id', studentIds).limit(20000),
+    supabase.from('assessment_attempts').select('student_id').in('student_id', studentIds).limit(20000),
+    supabase.from('vital_sign_readings').select('recorded_by').in('recorded_by', studentIds).limit(20000),
+    supabase.from('progress_notes').select('author_id').in('author_id', studentIds).limit(20000),
+  ]);
+  for (const res of [scenarios, assessments, attempts]) {
+    if (res.error) console.error('Failed to check student work', res.error);
+    for (const row of res.data ?? []) found.add(row.student_id as string);
+  }
+  for (const row of vitals.data ?? []) found.add(row.recorded_by as string);
+  for (const row of notes.data ?? []) found.add(row.author_id as string);
+  return found;
+}
+
+/**
+ * Latest prediction per student, newest first, deduped in memory. Students
+ * with no work (getStudentsWithWork) have none: they are not scored yet.
+ */
 export async function getLatestRiskByStudent(
   supabase: Supabase,
   studentIds: string[],
 ): Promise<Map<string, { risk: string; probability: number | null; predicted_at: string }>> {
   const latest = new Map<string, { risk: string; probability: number | null; predicted_at: string }>();
+  if (studentIds.length === 0) return latest;
+  const withWork = await getStudentsWithWork(supabase, studentIds);
+  studentIds = studentIds.filter((id) => withWork.has(id));
   if (studentIds.length === 0) return latest;
 
   const { data, error } = await supabase

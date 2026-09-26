@@ -14,6 +14,7 @@ import { redirect } from "next/navigation";
 import { getSupabaseAdmin } from "@/app/lib/supabase/server";
 import { readSession } from "@/app/lib/auth/session";
 import { adminVisibleUserIds, getAdminScope } from "@/app/lib/admin-scope";
+import { getStudentsWithWork } from "@/app/lib/faculty-dashboard";
 import PageHeader from "@/app/components/PageHeader";
 import StatTile from "@/app/components/StatTile";
 
@@ -217,10 +218,12 @@ async function loadDashboard(viewerId: string) {
 
   // Latest prediction per student (rows arrive newest-first). Students who've
   // never been scored are unknown, not "on track", so they stay out of both
-  // sides of the ratio.
+  // sides of the ratio — and so do students with no work assigned or done,
+  // whose prediction is a guess about an empty record.
+  const withWork = await getStudentsWithWork(supabase, [...studentIds]);
   const latestRisk = new Map<string, string>();
   for (const p of predictions) {
-    if (studentIds.has(p.student_id) && !latestRisk.has(p.student_id)) {
+    if (studentIds.has(p.student_id) && withWork.has(p.student_id) && !latestRisk.has(p.student_id)) {
       latestRisk.set(p.student_id, p.risk);
     }
   }

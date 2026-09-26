@@ -58,6 +58,8 @@ interface StudentPerformance {
   quizzes_completed: number;
   average_score: number | null;
   at_risk: boolean;
+  /** False until the student has work and an ML prediction: "Not scored yet". */
+  scored: boolean;
   last_login_at: string | null;
   /** When the account was made, i.e. when they were enrolled. */
   created_at: string;
@@ -591,7 +593,7 @@ export default function StudentManagementClient() {
       const matchesFilter =
         filterStatus === "all" ||
         (filterStatus === "at-risk" && s.at_risk) ||
-        (filterStatus === "safe" && !s.at_risk);
+        (filterStatus === "safe" && s.scored && !s.at_risk);
       return matchesSearch && matchesFilter;
     });
   }, [students, searchQuery, filterStatus]);
@@ -782,7 +784,7 @@ export default function StudentManagementClient() {
         />
         <StatTile
           icon={faCircleCheck}
-          value={students.filter((s) => !s.at_risk).length}
+          value={students.filter((s) => s.scored && !s.at_risk).length}
           label="Safe"
           iconBg="bg-emerald-50"
           iconColor="text-emerald-600"
@@ -1198,12 +1200,14 @@ export default function StudentManagementClient() {
                           <td className="px-4 py-4 sm:px-6">
                             <span
                               className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${
-                                student.at_risk
-                                  ? "bg-rose-50 text-rose-600"
-                                  : "bg-emerald-50 text-emerald-600"
+                                !student.scored
+                                  ? "bg-gray-100 text-gray-500"
+                                  : student.at_risk
+                                    ? "bg-rose-50 text-rose-600"
+                                    : "bg-emerald-50 text-emerald-600"
                               }`}
                             >
-                              {student.at_risk ? "At Risk" : "Safe"}
+                              {!student.scored ? "Not scored yet" : student.at_risk ? "At Risk" : "Safe"}
                             </span>
                           </td>
                           <td className="px-4 py-4 text-sm text-gray-500 sm:px-6">
