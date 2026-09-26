@@ -845,19 +845,22 @@ async function main() {
     // so clearing only the cases they get now would leave the old ones behind.
     //
     // Two kinds of row are real work, not ours, and are kept: a scenario a
-    // faculty member graded sub-task by sub-task in the app (the seed never
-    // left sub-task ratings before), and an attempt still in progress (the
-    // seed only writes submitted ones).
+    // faculty member graded sub-task by sub-task in the app, and an attempt
+    // still in progress (the seed only writes submitted ones). The seed rates
+    // every sub-task at exactly the assignment's completed_at, so a rating at
+    // any other moment was made in the app.
     const catalogScenarios = CATALOG.map((i) => scenarioByTitle.get(i.scenario)).filter((x): x is string => !!x);
     const catalogQuizzes = CATALOG.map((i) => assessmentByTitle.get(i.quiz)).filter((x): x is string => !!x);
     for (const member of members) {
       const { data: held } = await supabase
         .from('scenario_assignments')
-        .select('id, scenario_id, scenario_task_step_ratings(id)')
+        .select('id, scenario_id, completed_at, scenario_task_step_ratings(rated_at)')
         .eq('student_id', member.studentId)
         .in('scenario_id', catalogScenarios);
       for (const row of held ?? []) {
-        if (((row.scenario_task_step_ratings ?? []) as unknown[]).length > 0) {
+        const ratings = (row.scenario_task_step_ratings ?? []) as { rated_at: string }[];
+        const completedAt = row.completed_at ? Date.parse(row.completed_at as string) : NaN;
+        if (ratings.some((r) => Date.parse(r.rated_at) !== completedAt)) {
           keptScenarios.add(`${member.studentId}|${row.scenario_id}`);
         } else {
           await supabase.from('scenario_assignments').delete().eq('id', row.id);
