@@ -2,12 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { sendAccessRequestEmail } from '@/app/lib/auth/email';
 import { checkRateLimit } from '@/app/lib/auth/rate-limit';
 
-// Where access requests land: every dev team member gets the same mail.
-// Overridable per deployment with a comma-separated DEV_TEAM_EMAILS.
-const DEV_TEAM_EMAILS = (
-  process.env.DEV_TEAM_EMAILS ||
-  'linuxadona17@gmail.com,dreicachola13@gmail.com,xreetempo@gmail.com'
-)
+// Where access requests land: the project's own inbox on i-care.dev, which
+// the registrar forwards on to the dev team. Overridable per deployment with a
+// comma-separated DEV_TEAM_EMAILS.
+const DEV_TEAM_EMAILS = (process.env.DEV_TEAM_EMAILS || 'contact@i-care.dev')
   .split(',')
   .map((e) => e.trim())
   .filter(Boolean);
