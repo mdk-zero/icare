@@ -1,14 +1,16 @@
-import { Text } from '@react-pdf/renderer';
+import { Text, View } from '@react-pdf/renderer';
 import type { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { getFacultyStudentIds } from '@/app/lib/roster';
 import { ReportShell, StatGrid, Table, styles, type ReportMeta, type ReportDocument } from './kit';
 import { toCsv, toCsvBlocks, type CsvCell } from './csv';
 import { tallyAttendance, type ShiftAttendanceStatus } from '../shifts';
 import { isActiveSkillArea } from '@/scripts/taylors-chapters';
+import { CASE_CRITERIA, isLateSubmission, type CaseObservations } from '../case-rubric';
+import { ratingLabel, scoreDescriptor, type TaskRating } from '../task-ratings';
 
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
 
-export const REPORT_TYPES = ['student', 'section', 'scenario', 'assessment', 'roster', 'discharge', 'attendance'] as const;
+export const REPORT_TYPES = ['student', 'section', 'scenario', 'assessment', 'roster', 'discharge', 'attendance', 'case'] as const;
 export type ReportType = (typeof REPORT_TYPES)[number];
 
 export function isReportType(value: unknown): value is ReportType {
@@ -27,6 +29,8 @@ export const REPORT_NEEDS_TARGET: Record<ReportType, boolean> = {
   discharge: true,
   // Attendance is reported per section.
   attendance: true,
+  // One graded hospital case presentation (a case_submissions id).
+  case: true,
 };
 
 export interface BuiltReport {
@@ -952,4 +956,166 @@ export async function buildAttendanceReport(
   ]);
 
   return { subject: section.name, pdf, csv };
+}
+
+// ---------------------------------------------------------------------------
+// Case presentation — one student's hospital case and how it was graded
+// ---------------------------------------------------------------------------
+
+/**
+ * The patient appears by initials only, exactly as stored: the record never
+ * held more, so the printout can't either.
+ */
+export async function buildCaseReport(
+  supabase: Supabase,
+  meta: ReportMeta,
+  submissionId: string,
+  scope: StudentScope,
+): Promise<BuildResult> {
+  const { data: row } = await supabase
+    .from('case_submissions')
+    .select(
+      'id, student_id, status, patient_initials, age, sex, hospital, ward, admitting_diagnosis, chief_complaint, ' +
+        'history, medications, nursing_diagnoses, interventions, observations, submitted_at, graded_at, score, remarks, ' +
+        'case_presentations(title, deadline), student:users!case_submissions_student_id_fkey(name)',
+    )
+    .eq('id', submissionId)
+    .maybeSingle();
+  if (!row) return { error: 'Case not found', status: 404 };
+
+  const c = row as unknown as {
+    student_id: string;
+    status: string;
+    patient_initials: string | null;
+    age: number | null;
+    sex: string | null;
+    hospital: string;
+    ward: string;
+    admitting_diagnosis: string;
+    chief_complaint: string;
+    history: string;
+    medications: string;
+    nursing_diagnoses: string;
+    interventions: string;
+    observations: CaseObservations;
+    submitted_at: string | null;
+    graded_at: string | null;
+    score: number | null;
+    remarks: string;
+    case_presentations: { title: string; deadline: string | null } | null;
+    student: { name: string | null } | null;
+  };
+  if (scope && !scope.includes(c.student_id)) return { error: 'Case not found', status: 404 };
+  if (c.status !== 'graded') return { error: 'This case has not been graded yet', status: 409 };
+
+  const { data: ratingRows } = await supabase
+    .from('case_submission_ratings')
+    .select('criterion, rating, remarks')
+    .eq('submission_id', submissionId);
+  const ratings = new Map((ratingRows ?? []).map((r) => [r.criterion as string, r as { rating: TaskRating; remarks: string }]));
+
+  const studentName = c.student?.name ?? 'Unknown student';
+  const title = c.case_presentations?.title ?? 'Case presentation';
+  const score = c.score === null ? null : Number(c.score);
+  const late = isLateSubmission(c.submitted_at, c.case_presentations?.deadline ?? null);
+  const obs = c.observations ?? { vitals: [], tpr: [], ivf: [] };
+  const patient = [c.patient_initials ?? '—', c.age != null ? `${c.age} y/o` : null, c.sex].filter(Boolean).join(', ');
+  const n = (v: number | null) => (v === null ? '—' : v);
+
+  const narrative: [string, string][] = [
+    ['Chief complaint', c.chief_complaint],
+    ['History', c.history],
+    ['Medications', c.medications],
+    ['Nursing diagnoses', c.nursing_diagnoses],
+    ['Interventions & rationale', c.interventions],
+  ];
+
+  const rubricRows = CASE_CRITERIA.map((cr) => {
+    const r = ratings.get(cr.key);
+    return [cr.label, r ? ratingLabel(r.rating) : '—', r?.remarks || ''];
+  });
+
+  const pdf = (
+    <ReportShell
+      title={`Case Presentation — ${studentName}`}
+      heading="Case Presentation"
+      meta={meta}
+      metaRows={[
+        { label: 'Student', value: studentName },
+        { label: 'Presentation', value: title },
+        { label: 'Patient', value: patient },
+        { label: 'Hospital / ward', value: [c.hospital, c.ward].filter(Boolean).join(' · ') || '—' },
+        { label: 'Admitting diagnosis', value: c.admitting_diagnosis || '—' },
+        { label: 'Handed in', value: `${date(c.submitted_at)}${late ? ' (late)' : ''}` },
+        { label: 'Graded', value: date(c.graded_at) },
+      ]}
+    >
+      <Text style={styles.sectionTitle}>Result</Text>
+      <StatGrid
+        items={[
+          { label: 'Score', value: score === null ? '—' : `${score}%` },
+          { label: 'Rating', value: score === null ? '—' : scoreDescriptor(score) },
+        ]}
+      />
+      <Table head={['Criterion', 'Rating', 'Remarks']} rows={rubricRows} />
+      {c.remarks ? <Text style={{ marginTop: 6 }}>Instructor remarks: {c.remarks}</Text> : null}
+
+      {narrative.map(([label, text]) => (
+        <View key={label} wrap={false}>
+          <Text style={styles.sectionTitle}>{label}</Text>
+          <Text>{text || '—'}</Text>
+        </View>
+      ))}
+
+      <Text style={styles.sectionTitle}>Vital signs observed</Text>
+      <Table
+        head={['Observed', 'HR', 'BP', 'Temp °C', 'RR', 'SpO2 %', 'Pain']}
+        rows={obs.vitals.map((v) => [
+          v.observed_at ? date(v.observed_at) : '—',
+          n(v.heart_rate),
+          v.bp_systolic != null && v.bp_diastolic != null ? `${v.bp_systolic}/${v.bp_diastolic}` : '—',
+          n(v.temperature_c),
+          n(v.respiratory_rate),
+          n(v.oxygen_saturation),
+          n(v.pain_score),
+        ])}
+        emptyText="No vital signs were recorded for this case."
+      />
+      <Text style={styles.sectionTitle}>TPR</Text>
+      <Table
+        head={['Observed', 'Temp °C', 'Pulse', 'Resp', 'Remarks']}
+        rows={obs.tpr.map((t) => [t.observed_at ? date(t.observed_at) : '—', n(t.temperature_c), n(t.pulse), n(t.respiration), t.remarks || ''])}
+        emptyText="No TPR entries were recorded for this case."
+      />
+      <Text style={styles.sectionTitle}>IV fluids</Text>
+      <Table
+        head={['Solution', 'Volume mL', 'Rate mL/hr', 'Site', 'Remarks']}
+        rows={obs.ivf.map((f) => [f.solution, n(f.volume_ml), n(f.rate_ml_hr), f.site || '—', f.remarks || ''])}
+        emptyText="No IV fluids were recorded for this case."
+      />
+    </ReportShell>
+  );
+
+  const csv = toCsvBlocks([
+    {
+      title: 'Case presentation',
+      head: ['Field', 'Value'],
+      rows: [
+        ['Student', studentName],
+        ['Presentation', title],
+        ['Patient', patient],
+        ['Hospital', c.hospital],
+        ['Ward', c.ward],
+        ['Admitting diagnosis', c.admitting_diagnosis],
+        ...narrative.map(([label, text]) => [label, text]),
+        ['Handed in', date(c.submitted_at)],
+        ['Late', late ? 'yes' : 'no'],
+        ['Score', score ?? ''],
+        ['Instructor remarks', c.remarks],
+      ] as CsvCell[][],
+    },
+    { title: 'Rubric', head: ['Criterion', 'Rating', 'Remarks'], rows: rubricRows as CsvCell[][] },
+  ]);
+
+  return { subject: `${studentName} ${title}`, pdf, csv };
 }

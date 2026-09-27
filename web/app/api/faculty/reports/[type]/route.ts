@@ -10,6 +10,7 @@ import {
   REPORT_NEEDS_TARGET,
   buildAssessmentReport,
   buildAttendanceReport,
+  buildCaseReport,
   buildDischargeReport,
   buildRosterReport,
   buildScenarioReport,
@@ -96,6 +97,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         break;
       case 'attendance':
         result = await buildAttendanceReport(supabase, meta, id, scope);
+        break;
+      case 'case':
+        result = await buildCaseReport(supabase, meta, id, scope);
         break;
     }
 

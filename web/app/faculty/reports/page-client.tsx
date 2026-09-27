@@ -6,6 +6,7 @@ import {
   faCalendarCheck,
   faFileLines,
   faFileMedical,
+  faFilePrescription,
   faLayerGroup,
   faListCheck,
   faNotesMedical,
@@ -388,7 +389,10 @@ export default function FacultyReportsClient() {
         cachePrefix="faculty"
         types={types}
         suggest={(recent) => suggestFor(studentTargets, sectionTargets, recent)}
-        historyTypes={[{ type: "discharge", label: "Discharge summary", icon: faFileMedical }]}
+        historyTypes={[
+          { type: "discharge", label: "Discharge summary", icon: faFileMedical },
+          { type: "case", label: "Case presentation", icon: faFilePrescription },
+        ]}
         notice={
           noSections && (
             <p className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">

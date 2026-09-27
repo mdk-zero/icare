@@ -8,6 +8,7 @@ import {
   faChartBar,
   faClipboardList,
   faFileLines,
+  faFilePrescription,
   faHouse,
   faListCheck,
   faNotesMedical,
@@ -50,6 +51,15 @@ const navItems: NavItem[] = [
     label: "Skill Assessments",
     href: "/faculty/assessments",
     icon: faListCheck,
+    section: "Teaching",
+  },
+  // Students write up a real patient from hospital duty (initials only) and
+  // present it; graded here on a fixed rubric.
+  {
+    id: "cases",
+    label: "Case Presentations",
+    href: "/faculty/cases",
+    icon: faFilePrescription,
     section: "Teaching",
   },
   // Monitoring is the single clinical destination: the room layout and census
