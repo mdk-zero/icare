@@ -16,6 +16,7 @@ import { usePageData } from "@/app/lib/use-page-data";
 import PageHeader from "../../components/PageHeader";
 import FilterSelect from "../../components/FilterSelect";
 import Avatar from "../../components/Avatar";
+import ChangeEmailDialog from "../../components/ChangeEmailDialog";
 
 type Role = "student" | "faculty" | "admin" | "super_admin";
 
@@ -142,6 +143,8 @@ export default function SuperAdminUsersClient() {
         (!term || u.name.toLowerCase().includes(term) || u.email.toLowerCase().includes(term)),
     );
   }, [users, roleFilter, search]);
+
+  const [changingEmail, setChangingEmail] = useState<Account | null>(null);
 
   const openCreate = () => {
     setForm(blankForm());
@@ -473,7 +476,19 @@ export default function SuperAdminUsersClient() {
                 />
               </div>
             ) : (
-              <p className="text-sm text-gray-500">{editing.email}</p>
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm text-gray-500 truncate">{editing.email}</p>
+                {/* Student emails are institutional and fixed. */}
+                {editing.role !== "student" && (
+                  <button
+                    type="button"
+                    onClick={() => setChangingEmail(editing)}
+                    className="shrink-0 text-sm font-medium text-brand-600 hover:text-brand-700"
+                  >
+                    Change email
+                  </button>
+                )}
+              </div>
             )}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
@@ -564,6 +579,22 @@ export default function SuperAdminUsersClient() {
             </button>
           </div>
         </Modal>
+      )}
+
+      {changingEmail && (
+        <ChangeEmailDialog
+          userId={changingEmail.id}
+          currentEmail={changingEmail.email}
+          whose={me?.id === changingEmail.id ? "your" : "their"}
+          onClose={() => setChangingEmail(null)}
+          onChanged={(email) => {
+            const id = changingEmail.id;
+            setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, email } : u)));
+            setEditing((prev) => (prev && prev !== "new" && prev.id === id ? { ...prev, email } : prev));
+            setChangingEmail(null);
+            flash(`Email changed to ${email}. The old address was notified.`);
+          }}
+        />
       )}
 
       {revealed && (

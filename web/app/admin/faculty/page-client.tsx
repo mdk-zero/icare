@@ -10,6 +10,7 @@ import PageHeader from "../../components/PageHeader";
 import FilterSelect from "../../components/FilterSelect";
 import Avatar from "../../components/Avatar";
 import StatTile from "../../components/StatTile";
+import ChangeEmailDialog from "../../components/ChangeEmailDialog";
 
 interface SectionRef {
   id: string;
@@ -53,6 +54,7 @@ export default function FacultyClient() {
   const [selectedFaculty, setSelectedFaculty] = useState<Faculty | null>(null);
   const [selectedSections, setSelectedSections] = useState<string[]>([]);
   const [filterSection, setFilterSection] = useState("");
+  const [changingEmail, setChangingEmail] = useState<Faculty | null>(null);
 
   const { data, loading, refresh: loadData, setData } = usePageData(
     "admin:faculty",
@@ -348,6 +350,16 @@ export default function FacultyClient() {
               <p className="text-sm text-gray-500">
                 This faculty member handles every student in the checked sections
               </p>
+              <p className="mt-2 flex flex-wrap items-center gap-x-3 text-sm text-gray-600">
+                <span className="truncate">{selectedFaculty.email}</span>
+                <button
+                  type="button"
+                  onClick={() => setChangingEmail(selectedFaculty)}
+                  className="font-medium text-brand-600 hover:text-brand-700"
+                >
+                  Change email
+                </button>
+              </p>
             </div>
 
             <div className="flex-1 overflow-y-auto space-y-2 mb-4">
@@ -417,6 +429,21 @@ export default function FacultyClient() {
             </div>
           </div>
         </div>
+      )}
+      {changingEmail && (
+        <ChangeEmailDialog
+          userId={changingEmail.id}
+          currentEmail={changingEmail.email}
+          whose="their"
+          onClose={() => setChangingEmail(null)}
+          onChanged={(email) => {
+            const id = changingEmail.id;
+            void loadData();
+            setSelectedFaculty((prev) => (prev && prev.id === id ? { ...prev, email } : prev));
+            setChangingEmail(null);
+            flash(`Email changed to ${email}. The old address was notified.`);
+          }}
+        />
       )}
     </div>
   );

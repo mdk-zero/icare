@@ -28,6 +28,7 @@ import { EcgLoader } from "./EcgLoader";
 import ThemeSetting from "./ThemeSetting";
 import LocalCacheSetting from "./LocalCacheSetting";
 import { toast } from "./Toast";
+import ChangeEmailDialog from "./ChangeEmailDialog";
 
 interface ProfileEditorProps {
   changePasswordHref: string;
@@ -135,6 +136,7 @@ export default function ProfileEditor({
   // Read after mount: localStorage doesn't exist during the server render, so
   // reading it in the initial state would render differently on each side.
   const [user, setUser] = useState<User | null>(null);
+  const [changingEmail, setChangingEmail] = useState(false);
   const [name, setName] = useState("");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [avatarFailed, setAvatarFailed] = useState(false);
@@ -394,9 +396,39 @@ export default function ProfileEditor({
                     className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400"
                   />
                 </div>
-                <p id="profile-email-hint" className="mt-1.5 text-xs text-gray-400">
-                  Your sign-in email can&apos;t be changed.
-                </p>
+                {user.role === "student" ? (
+                  <p id="profile-email-hint" className="mt-1.5 text-xs text-gray-400">
+                    Your school email can&apos;t be changed.
+                  </p>
+                ) : (
+                  <p id="profile-email-hint" className="mt-1.5 flex items-center justify-between gap-2 text-xs text-gray-400">
+                    <span>Confirmed with a code sent to the new address.</span>
+                    <button
+                      type="button"
+                      onClick={() => setChangingEmail(true)}
+                      className="font-medium text-brand-600 hover:text-brand-700"
+                    >
+                      Change email
+                    </button>
+                  </p>
+                )}
+                {changingEmail && (
+                  <ChangeEmailDialog
+                    userId={user.id}
+                    currentEmail={user.email}
+                    whose="your"
+                    onClose={() => setChangingEmail(false)}
+                    onChanged={async (email) => {
+                      setChangingEmail(false);
+                      const fresh = await refreshCurrentUser();
+                      if (fresh) {
+                        setUser(fresh);
+                        onUserUpdate?.(fresh);
+                      }
+                      toast(`You now sign in with ${email}.`);
+                    }}
+                  />
+                )}
               </div>
             </div>
 

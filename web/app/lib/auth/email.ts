@@ -390,6 +390,60 @@ export async function sendPasswordChangeOtp(
   return { skipped: false };
 }
 
+/** Sent to the NEW address: proves the inbox exists and belongs to someone who can read it. */
+export async function sendEmailChangeOtp(
+  newEmail: string,
+  otp: string,
+  name: string,
+): Promise<EmailSendResult> {
+  if (!otp || otp.length < 4) {
+    throw new Error("A valid OTP is required");
+  }
+
+  if (shouldSkipSending()) {
+    console.log(`[DEV] Email change OTP for ${newEmail}: ${otp}`);
+    return { skipped: true, otp };
+  }
+
+  await sendEmail({
+    to: newEmail,
+    subject: "Confirm your new iCARE++ email address",
+    html: buildOtpHtml(
+      otp,
+      name,
+      "Confirm your new email address",
+      "This address was entered as the new sign-in email for an iCARE++ account. Give the code below to whoever is making the change, or enter it yourself. It will expire in 10 minutes.",
+    ),
+  });
+
+  return { skipped: false };
+}
+
+/**
+ * Sent to the OLD address once a change lands, so a change nobody asked for
+ * doesn't go unnoticed. Best-effort: a failure here never undoes the change.
+ */
+export async function sendEmailChangedNotice(oldEmail: string, name: string, newEmail: string): Promise<void> {
+  if (shouldSkipSending()) {
+    console.log(`[DEV] Email changed notice for ${oldEmail} → ${newEmail}`);
+    return;
+  }
+  const safeName = htmlEscape(name);
+  const safeNew = htmlEscape(newEmail);
+  await sendEmail({
+    to: oldEmail,
+    subject: "Your iCARE++ sign-in email was changed",
+    html: `
+    <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px; color: #0f172a;">
+      <h2 style="color: #0d7377; margin-bottom: 16px;">Your sign-in email was changed</h2>
+      <p style="margin-bottom: 16px;">Hi ${safeName},</p>
+      <p style="margin-bottom: 16px;">The iCARE++ account that used this address now signs in with <strong>${safeNew}</strong>. This address will no longer work for signing in.</p>
+      <p style="font-size: 13px; color: #64748b;">If you did not expect this, contact your iCARE++ administrator right away.</p>
+    </div>
+  `,
+  });
+}
+
 export async function sendStudentInvitationEmail(
   email: string,
   name: string,
