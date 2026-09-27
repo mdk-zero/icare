@@ -21,6 +21,9 @@ const nextConfig: NextConfig = {
   // shipped explicitly to the routes that read lessons.
   serverExternalPackages: ["pdf-parse"],
   outputFileTracingIncludes: {
+    // The PDF letterhead reads the logo from disk (app/lib/reports/kit.tsx).
+    "/api/faculty/reports/*": ["./public/logo-no-bg.png"],
+    "/api/admin/reports/*": ["./public/logo-no-bg.png"],
     "/api/faculty/scenarios/analyze-lesson": [
       "./node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs",
     ],

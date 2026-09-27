@@ -1,5 +1,8 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import {
   Document,
+  Image,
   Page,
   Text,
   View,
@@ -15,12 +18,39 @@ export type ReportDocument = ReactElement<DocumentProps>;
 export const TEAL = '#1B6B7B';
 
 /**
+ * The iCARE++ wordmark for the letterhead, read once per server instance.
+ * next.config.ts ships the file to the report routes (outputFileTracingIncludes),
+ * since public/ isn't otherwise part of a serverless function. If it's
+ * missing anyway, the report still renders, just without the logo.
+ */
+const LOGO: Buffer | null = (() => {
+  try {
+    return readFileSync(path.join(process.cwd(), 'public', 'logo-no-bg.png'));
+  } catch (err) {
+    console.error('Report logo not found; PDFs will render without it', err);
+    return null;
+  }
+})();
+
+/**
  * Shared look for every generated report. Kept in one place so a new report
  * type inherits the letterhead, table and stat styling rather than restating it.
  */
 export const styles = StyleSheet.create({
   page: { padding: 40, fontSize: 10, fontFamily: 'Helvetica', color: '#1f2937' },
-  header: { borderBottomWidth: 2, borderBottomColor: TEAL, paddingBottom: 10, marginBottom: 16 },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+    borderBottomWidth: 2,
+    borderBottomColor: TEAL,
+    paddingBottom: 10,
+    marginBottom: 16,
+  },
+  headerText: { flex: 1 },
+  // The PNG is 602×200; keep that ratio.
+  logo: { width: 108, height: 36 },
   brand: { fontSize: 18, fontFamily: 'Helvetica-Bold', color: TEAL },
   subtitle: { fontSize: 9, color: '#6b7280', marginTop: 2 },
   sectionTitle: {
@@ -100,8 +130,12 @@ export function ReportShell({
     <Document title={title}>
       <Page size="A4" style={styles.page} wrap>
         <View style={styles.header}>
-          <Text style={styles.brand}>{heading}</Text>
-          <Text style={styles.subtitle}>{meta.campus} · College of Health Sciences</Text>
+          <View style={styles.headerText}>
+            <Text style={styles.brand}>{heading}</Text>
+            <Text style={styles.subtitle}>{meta.campus} · College of Health Sciences</Text>
+          </View>
+          {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf's Image has no alt */}
+          {LOGO && <Image src={LOGO} style={styles.logo} />}
         </View>
 
         <View>
