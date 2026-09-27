@@ -130,7 +130,7 @@ export async function buildStudentReport(
   const pdf = (
     <ReportShell
       title={`Skill Area Report - ${student.name}`}
-      heading="iCARE++ Student Skill Area Report"
+      heading="Student Skill Area Report"
       meta={meta}
       metaRows={metaRows}
     >
@@ -259,7 +259,7 @@ export async function buildSectionReport(
   const pdf = (
     <ReportShell
       title={`Section Report - ${section.name}`}
-      heading="iCARE++ Section Performance Report"
+      heading="Section Performance Report"
       meta={meta}
       metaRows={metaRows}
     >
@@ -355,7 +355,7 @@ export async function buildScenarioReport(
   const pdf = (
     <ReportShell
       title={`Scenario Report - ${scenario.title}`}
-      heading="iCARE++ Scenario Report"
+      heading="Scenario Report"
       meta={meta}
       metaRows={metaRows}
     >
@@ -444,7 +444,7 @@ export async function buildAssessmentReport(
   const pdf = (
     <ReportShell
       title={`Assessment Report - ${assessment.title}`}
-      heading="iCARE++ Assessment Report"
+      heading="Assessment Report"
       meta={meta}
       metaRows={metaRows}
     >
@@ -548,7 +548,7 @@ export async function buildRosterReport(
   const pdf = (
     <ReportShell
       title="Roster Summary Report"
-      heading="iCARE++ Roster Summary Report"
+      heading="Roster Summary Report"
       meta={meta}
       metaRows={metaRows}
     >

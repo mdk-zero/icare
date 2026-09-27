@@ -108,7 +108,7 @@ export async function buildAdminFacultyReport(
     const pdf = (
       <ReportShell
         title="All Faculty Report"
-        heading="iCARE++ All Faculty Report"
+        heading="All Faculty Report"
         meta={meta}
         metaRows={metaRows}
       >
@@ -174,7 +174,7 @@ export async function buildAdminFacultyReport(
   const pdf = (
     <ReportShell
       title={`Faculty Report - ${faculty.name}`}
-      heading="iCARE++ Faculty Report"
+      heading="Faculty Report"
       meta={meta}
       metaRows={metaRows}
     >
@@ -250,7 +250,7 @@ export async function buildAdminRoomReport(
     const pdf = (
       <ReportShell
         title="All Rooms Report"
-        heading="iCARE++ All Rooms Report"
+        heading="All Rooms Report"
         meta={meta}
         metaRows={metaRows}
       >
@@ -308,7 +308,7 @@ export async function buildAdminRoomReport(
   const pdf = (
     <ReportShell
       title={`Room Report - ${room.name}`}
-      heading="iCARE++ Room Report"
+      heading="Room Report"
       meta={meta}
       metaRows={metaRows}
     >
@@ -389,7 +389,7 @@ export async function buildAdminUserReport(
     const pdf = (
       <ReportShell
         title="All Users Report"
-        heading="iCARE++ All Users Report"
+        heading="All Users Report"
         meta={meta}
         metaRows={metaRows}
       >
@@ -447,7 +447,7 @@ export async function buildAdminUserReport(
   const pdf = (
     <ReportShell
       title={`User Report - ${user.name}`}
-      heading="iCARE++ User Report"
+      heading="User Report"
       meta={meta}
       metaRows={metaRows}
     >
@@ -548,7 +548,7 @@ export async function buildAdminSummaryReport(
   const pdf = (
     <ReportShell
       title="Admin Summary Report"
-      heading="iCARE++ Admin Summary Report"
+      heading="Admin Summary Report"
       meta={meta}
       metaRows={metaRows}
     >
