@@ -10,8 +10,10 @@ test.describe('Super admin portal', () => {
 
   test('dashboard shows the system overview', async ({ page }) => {
     await expect(page.getByRole('heading', { name: 'System Dashboard' })).toBeVisible();
+    // The sidebar has an "Accounts" section heading too; only look at the page body.
+    const outsideNav = page.locator('xpath=//*[not(ancestor-or-self::nav)]');
     for (const label of ['Accounts', 'Active in 7 days', 'Response time · 24 h', 'Reliability · 24 h', 'Health']) {
-      await expect(page.getByText(label, { exact: true })).toBeVisible();
+      await expect(page.getByText(label, { exact: true }).and(outsideNav)).toBeVisible();
     }
   });
 
