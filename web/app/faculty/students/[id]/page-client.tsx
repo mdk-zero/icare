@@ -641,7 +641,7 @@ export default function StudentDetailClient() {
 
           {!riskPrediction ? (
             <p className="text-sm text-gray-500 py-4">
-              Not scored yet. A student is scored once they have assigned or completed work; the ML
+              Not scored yet. A student is scored once they have started or completed work; the ML
               service then scores the cohort nightly (or run it from Admin &gt; Analytics).
             </p>
           ) : (

@@ -52,18 +52,22 @@ export async function getScopedStudents(
 }
 
 /**
- * The students who have anything to be scored on: work assigned to them
- * (a scenario or a Skill Assessment) or activity of their own (an attempt, a
- * vitals entry, a progress note). Everyone else is "Not scored yet", whatever
- * an ML run predicted for them — a prediction for a student with no work is
- * a guess about an empty record.
+ * The students who have anything to be scored on: work they have started or
+ * finished (a scenario or Skill Assessment in progress or completed, an
+ * attempt, a vitals entry, a progress note). Work that is only assigned
+ * (pending or overdue) does not count. Everyone else is "Not scored yet",
+ * whatever an ML run predicted for them — a prediction for a student who has
+ * done nothing is a guess about an empty record.
  */
+/** Assignment statuses that mean the student has done something. */
+const STARTED = ['in_progress', 'completed'];
+
 export async function getStudentsWithWork(supabase: Supabase, studentIds: string[]): Promise<Set<string>> {
   const found = new Set<string>();
   if (studentIds.length === 0) return found;
   const [scenarios, assessments, attempts, vitals, notes] = await Promise.all([
-    supabase.from('scenario_assignments').select('student_id').in('student_id', studentIds).limit(20000),
-    supabase.from('assessment_assignments').select('student_id').in('student_id', studentIds).limit(20000),
+    supabase.from('scenario_assignments').select('student_id').in('student_id', studentIds).in('status', STARTED).limit(20000),
+    supabase.from('assessment_assignments').select('student_id').in('student_id', studentIds).in('status', STARTED).limit(20000),
     supabase.from('assessment_attempts').select('student_id').in('student_id', studentIds).limit(20000),
     supabase.from('vital_sign_readings').select('recorded_by').in('recorded_by', studentIds).limit(20000),
     supabase.from('progress_notes').select('author_id').in('author_id', studentIds).limit(20000),

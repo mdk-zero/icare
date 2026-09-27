@@ -238,7 +238,7 @@ export default function StudentDetailClient() {
 
           {!prediction ? (
             <p className="text-sm text-gray-400">
-              Not scored yet. A student is scored once they have assigned or completed work and the ML jobs
+              Not scored yet. A student is scored once they have started or completed work and the ML jobs
               have run from the Analytics page.
             </p>
           ) : (

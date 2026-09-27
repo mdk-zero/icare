@@ -47,7 +47,8 @@ type SummaryMap = Map<string, GroupSummary>;
 
 const RISK_BADGE = {
   at_risk: { label: "Low performing", className: "bg-rose-50 text-rose-700 ring-rose-200" },
-  none: { label: "Not scored yet", className: "bg-gray-50 text-gray-500 ring-gray-200" },
+  // Nothing done yet, so nothing to label: a plain dash, not a badge.
+  none: { label: "—", className: "text-gray-400 ring-transparent" },
   safe: { label: "On track", className: "bg-emerald-50 text-emerald-700 ring-emerald-200" },
 } as const;
 type RiskKind = keyof typeof RISK_BADGE;
@@ -413,10 +414,16 @@ function GroupCard({
           <div className="px-3 py-2.5">
             <dt className="text-[11px] text-gray-500">Scenario average</dt>
             <dd className="text-sm font-semibold tabular-nums text-gray-900">
-              {summary.scenarios.average === null ? "—" : `${summary.scenarios.average}%`}
-              <span className="ml-1.5 text-xs font-normal text-gray-500">
-                {summary.scenarios.graded}/{summary.scenarios.assigned} graded
-              </span>
+              {summary.scenarios.graded === 0 || summary.scenarios.average === null ? (
+                "—"
+              ) : (
+                <>
+                  {summary.scenarios.average}%
+                  <span className="ml-1.5 text-xs font-normal text-gray-500">
+                    {summary.scenarios.graded}/{summary.scenarios.assigned} graded
+                  </span>
+                </>
+              )}
             </dd>
           </div>
           <div className="px-3 py-2.5">
