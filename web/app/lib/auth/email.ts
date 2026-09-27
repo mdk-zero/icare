@@ -423,6 +423,31 @@ export async function sendEmailChangeOtp(
  * Sent to the OLD address once a change lands, so a change nobody asked for
  * doesn't go unnoticed. Best-effort: a failure here never undoes the change.
  */
+/**
+ * Sent instead of a reset code when a Google-only account asks for one. The
+ * API answers that request exactly as it answers every other, so whether an
+ * account signs in with Google is told only to its own inbox.
+ */
+export async function sendGoogleAccountResetNotice(email: string, name: string): Promise<void> {
+  if (shouldSkipSending()) {
+    console.log(`[DEV] Google-account reset notice for ${email}`);
+    return;
+  }
+  const safeName = htmlEscape(name);
+  await sendEmail({
+    to: email,
+    subject: "About your iCARE++ password reset request",
+    html: `
+    <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px; color: #0f172a;">
+      <h2 style="color: #0d7377; margin-bottom: 16px;">Your account signs in with Google</h2>
+      <p style="margin-bottom: 16px;">Hi ${safeName},</p>
+      <p style="margin-bottom: 16px;">Someone asked to reset the password for this iCARE++ account. It has no password to reset: sign in with the <strong>Sign in with Google</strong> button instead.</p>
+      <p style="font-size: 13px; color: #64748b;">If you did not ask for this, you can ignore this email.</p>
+    </div>
+  `,
+  });
+}
+
 export async function sendEmailChangedNotice(oldEmail: string, name: string, newEmail: string): Promise<void> {
   if (shouldSkipSending()) {
     console.log(`[DEV] Email changed notice for ${oldEmail} → ${newEmail}`);

@@ -15,7 +15,6 @@ import { FontAwesome6 } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
-import { ApiError } from '@/lib/client';
 import { requestPasswordReset, checkPasswordResetCode, resetPassword } from '@/lib/api';
 
 /** Gradient stops sampled from the pill logo's teal cap (same as the login screen). */
@@ -80,11 +79,7 @@ export default function ForgotPasswordScreen() {
       setMessage(result.message ?? 'If this account exists, a reset code has been sent.');
       setStep('code');
     } catch (err) {
-      if (err instanceof ApiError && err.message === 'google_no_password') {
-        setError('This account uses Google sign-in and has no password set. Please sign in with Google on the web instead.');
-      } else {
-        setError(err instanceof Error ? err.message : 'Unable to send reset code.');
-      }
+      setError(err instanceof Error ? err.message : 'Unable to send reset code.');
     } finally {
       setIsLoading(false);
     }

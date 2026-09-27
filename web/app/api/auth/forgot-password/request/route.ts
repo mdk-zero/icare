@@ -6,7 +6,7 @@ import {
   storePasswordResetOtp,
 } from '@/app/lib/auth/reset';
 import { hashPassword } from '@/app/lib/auth/password';
-import { sendPasswordResetOtp } from '@/app/lib/auth/email';
+import { sendGoogleAccountResetNotice, sendPasswordResetOtp } from '@/app/lib/auth/email';
 import { consumeRateLimit } from '@/app/lib/auth/rate-limit';
 
 const MAX_REQUESTS = 3;
@@ -52,15 +52,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: SUCCESS_MESSAGE }, { status: 200 });
     }
 
-    // Google-only users cannot reset a password they don't have.
+    // Google-only users have no password to reset. Tell their inbox, not the
+    // caller: a distinct response here would reveal how the account signs in.
     if (!user.hasPassword) {
-      return NextResponse.json(
-        {
-          error: 'google_no_password',
-          message: 'This account uses Google sign-in and has no password set.',
-        },
-        { status: 403 },
-      );
+      await sendGoogleAccountResetNotice(user.email, user.name);
+      return NextResponse.json({ message: SUCCESS_MESSAGE }, { status: 200 });
     }
 
     // A code issued moments ago is still valid for 10 minutes and

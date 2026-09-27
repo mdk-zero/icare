@@ -1,4 +1,6 @@
+import { randomInt } from 'crypto';
 import { getSupabaseAdmin } from '../supabase/server';
+import { isMissingMigration } from './super-admin';
 import { hashPassword, verifyPassword } from './password';
 
 export interface ResetableUser {
@@ -9,7 +11,7 @@ export interface ResetableUser {
 }
 
 export function generateOtp(): string {
-  return Math.floor(100000 + Math.random() * 900000).toString();
+  return randomInt(100000, 1000000).toString();
 }
 
 export async function findUserForPasswordReset(email: string): Promise<ResetableUser | null> {
@@ -75,16 +77,26 @@ export async function hasRecentPasswordResetOtp(
   return Boolean(data);
 }
 
+/** Wrong codes allowed before a code is spent, as for email changes (058). */
+export const MAX_OTP_ATTEMPTS = 5;
+
+/**
+ * 'ok' — the code is right. 'invalid' — wrong, missing, or expired.
+ * 'locked' — this wrong guess was the last one allowed, so the code is now
+ * spent and a new one must be requested. A 6-digit code is otherwise
+ * guessable within its 10 minutes.
+ */
+export type OtpCheck = 'ok' | 'invalid' | 'locked';
+
 export async function verifyPasswordResetOtp(
   userId: string,
   plainOtp: string,
   markUsed = true,
-): Promise<boolean> {
+): Promise<OtpCheck> {
   const supabase = getSupabaseAdmin();
-
   const { data, error } = await supabase
     .from('password_resets')
-    .select('id, otp_hash, expires_at, used_at')
+    .select('id, otp_hash')
     .eq('user_id', userId)
     .is('used_at', null)
     .gt('expires_at', new Date().toISOString())
@@ -93,16 +105,30 @@ export async function verifyPasswordResetOtp(
     .maybeSingle();
 
   if (error) throw error;
-  if (!data) return false;
+  if (!data) return 'invalid';
 
   const ok = await verifyPassword(plainOtp, data.otp_hash);
-  if (!ok) return false;
+  if (!ok) return await countWrongOtp(data.id);
 
   // Mark as used immediately to prevent replay unless we're only checking it.
   if (markUsed) {
     await supabase.from('password_resets').update({ used_at: new Date().toISOString() }).eq('id', data.id);
   }
-  return true;
+  return 'ok';
+}
+
+async function countWrongOtp(resetId: string): Promise<OtpCheck> {
+  const { data, error } = await getSupabaseAdmin().rpc('count_password_reset_miss', {
+    p_id: resetId,
+    p_max: MAX_OTP_ATTEMPTS,
+  });
+  // Before 059 there is no counter; the per-IP limit on the routes is then
+  // the only brake.
+  if (error) {
+    if (isMissingMigration(error)) return 'invalid';
+    throw error;
+  }
+  return typeof data === 'number' && data >= MAX_OTP_ATTEMPTS ? 'locked' : 'invalid';
 }
 
 export async function updateUserPassword(userId: string, newPassword: string): Promise<void> {

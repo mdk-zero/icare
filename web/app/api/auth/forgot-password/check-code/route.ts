@@ -1,5 +1,11 @@
 import { NextResponse } from 'next/server';
 import { findUserForPasswordReset, verifyPasswordResetOtp } from '@/app/lib/auth/reset';
+import { clientIp, consumeRateLimit } from '@/app/lib/auth/rate-limit';
+
+// Code guessing from one address. The per-code cap (MAX_OTP_ATTEMPTS) is the
+// main brake; this stops one client cycling through many accounts' codes.
+const WINDOW_MS = 15 * 60 * 1000;
+const MAX_PER_IP = 30;
 
 export async function POST(request: Request) {
   let body: unknown;
@@ -20,6 +26,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Email and code are required' }, { status: 400 });
   }
 
+  if (!(await consumeRateLimit(`reset-code:${clientIp(request)}`, MAX_PER_IP, WINDOW_MS))) {
+    return NextResponse.json({ error: 'Too many attempts. Please try again later.' }, { status: 429 });
+  }
+
   try {
     const user = await findUserForPasswordReset(email.trim().toLowerCase());
     if (!user) {
@@ -27,8 +37,11 @@ export async function POST(request: Request) {
     }
 
     // Verify without marking used — the code stays valid for the password step.
-    const ok = await verifyPasswordResetOtp(user.id, otp.trim(), false);
-    if (!ok) {
+    const check = await verifyPasswordResetOtp(user.id, otp.trim(), false);
+    if (check === 'locked') {
+      return NextResponse.json({ error: 'Too many wrong codes. Request a new one.' }, { status: 429 });
+    }
+    if (check !== 'ok') {
       return NextResponse.json({ error: 'Invalid or expired reset code' }, { status: 400 });
     }
 

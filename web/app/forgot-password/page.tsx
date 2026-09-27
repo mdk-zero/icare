@@ -58,13 +58,7 @@ export default function ForgotPasswordPage() {
       const data = (await res.json()) as { error?: string; message?: string };
 
       if (!res.ok) {
-        if (data.error === "google_no_password") {
-          setError(
-            "This account uses Google sign-in and has no password set. Please sign in with Google.",
-          );
-        } else {
-          setError(data.error ?? "Unable to send reset code.");
-        }
+        setError(data.error ?? "Unable to send reset code.");
         setIsLoading(false);
         return;
       }

@@ -11,6 +11,12 @@ import { sendPasswordChangeOtp } from '@/app/lib/auth/email';
 import { consumeRateLimit } from '@/app/lib/auth/rate-limit';
 
 const MIN_PASSWORD_LENGTH = 8;
+
+function otpRejected(check: 'invalid' | 'locked'): NextResponse {
+  return check === 'locked'
+    ? NextResponse.json({ error: 'Too many wrong codes. Request a new one.' }, { status: 429 })
+    : NextResponse.json({ error: 'Invalid or expired verification code' }, { status: 400 });
+}
 const MAX_OTP_REQUESTS = 3;
 const OTP_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 
@@ -129,25 +135,15 @@ export async function POST(request: Request) {
 
     // Step 2 (optional): verify the OTP without updating the password yet.
     if (verifyOnly === true) {
-      const otpValid = await verifyPasswordResetOtp(user.id, otp.trim(), false);
-      if (!otpValid) {
-        return NextResponse.json(
-          { error: 'Invalid or expired verification code' },
-          { status: 400 },
-        );
-      }
+      const check = await verifyPasswordResetOtp(user.id, otp.trim(), false);
+      if (check !== 'ok') return otpRejected(check);
 
       return NextResponse.json({ otpVerified: true });
     }
 
     // Step 3: verify the OTP and update the password.
-    const otpValid = await verifyPasswordResetOtp(user.id, otp.trim());
-    if (!otpValid) {
-      return NextResponse.json(
-        { error: 'Invalid or expired verification code' },
-        { status: 400 },
-      );
-    }
+    const check = await verifyPasswordResetOtp(user.id, otp.trim());
+    if (check !== 'ok') return otpRejected(check);
 
     const newHash = await hashPassword(newPassword);
     const { error: updateError } = await supabase

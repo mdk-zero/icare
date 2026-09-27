@@ -72,3 +72,24 @@ $$;
 
 revoke all on function public.consume_rate_limit(text, int, int) from public, anon, authenticated;
 grant execute on function public.consume_rate_limit(text, int, int) to service_role;
+
+-- Counts one wrong guess at a reset code and spends the code at p_max.
+-- A single UPDATE, so parallel guesses cannot all read the same count and
+-- slip past the cap. Returns the new count (0 if the code is already gone).
+create or replace function public.count_password_reset_miss(
+  p_id uuid,
+  p_max int
+) returns int
+language sql
+security definer
+set search_path = public
+as $$
+  update public.password_resets
+  set attempts = attempts + 1,
+      used_at = case when attempts + 1 >= p_max then coalesce(used_at, now()) else used_at end
+  where id = p_id and used_at is null
+  returning attempts;
+$$;
+
+revoke all on function public.count_password_reset_miss(uuid, int) from public, anon, authenticated;
+grant execute on function public.count_password_reset_miss(uuid, int) to service_role;

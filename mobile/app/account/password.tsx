@@ -13,7 +13,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { useAuth } from '@/hooks/useAuth';
-import { ApiError } from '@/lib/client';
 import { requestPasswordReset, checkPasswordResetCode, resetPassword } from '@/lib/api';
 
 const MIN_LENGTH = 8;
@@ -56,11 +55,7 @@ export default function ChangePasswordFlowScreen() {
       const result = await requestPasswordReset(email);
       setNotice(result.message ?? `We sent a verification code to ${email}.`);
     } catch (err) {
-      if (err instanceof ApiError && err.message === 'google_no_password') {
-        setError('This account signs in with Google and has no password to change.');
-      } else {
-        setError(err instanceof Error ? err.message : 'Could not send the verification code.');
-      }
+      setError(err instanceof Error ? err.message : 'Could not send the verification code.');
     } finally {
       setSending(false);
     }
