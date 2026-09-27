@@ -57,7 +57,7 @@ export default function GroupPerformance({ sectionIds }: { sectionIds: string[] 
                   {pct(g.scenarios.average)}
                 </td>
                 <td className="px-3 py-2.5 text-right tabular-nums text-gray-600">
-                  {g.scenarios.graded}/{g.scenarios.assigned}
+                  {g.scenarios.graded === 0 ? "—" : `${g.scenarios.graded}/${g.scenarios.assigned}`}
                 </td>
                 <td className="px-3 py-2.5 text-right font-semibold tabular-nums text-gray-900">
                   {pct(g.assessments.average)}
