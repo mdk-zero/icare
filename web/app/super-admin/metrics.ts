@@ -43,3 +43,37 @@ export function formatPct(value: number | null): string {
   if (value === null) return "—";
   return value >= 99.95 || value === 0 ? `${value.toFixed(0)}%` : `${value.toFixed(1)}%`;
 }
+
+/** A bucket after gap filling: latency is null where nothing was measured. */
+export interface FilledBucket {
+  bucket: string;
+  requests: number;
+  p50_ms: number | null;
+  p95_ms: number | null;
+  errors: number;
+}
+
+/**
+ * The summary only returns buckets that saw traffic, so "last 24 hours" with
+ * two busy hours drew two fat bars and a line sloping straight across the
+ * quiet hours in between. This lays out every bucket from `since` to `now`:
+ * an empty one counts zero requests and has no latency, so bars sit at zero
+ * and lines break there instead of inventing a trend.
+ */
+export function fillBuckets(summary: MetricsSummary | null | undefined, now = Date.now()): FilledBucket[] {
+  const series = summary?.series ?? [];
+  const bucket = summary?.bucket;
+  if (!bucket || !summary?.since) return series;
+  const step = BUCKET_MINUTES[bucket] * 60_000;
+  const byKey = new Map(series.map((b) => [Math.floor(Date.parse(b.bucket) / step), b]));
+  const first = Math.floor(Date.parse(summary.since) / step);
+  const last = Math.floor(now / step);
+  // A malformed window would loop for ever; fall back to what was returned.
+  if (!Number.isFinite(first) || last < first || last - first > 2000) return series;
+
+  const out: FilledBucket[] = [];
+  for (let k = first; k <= last; k++) {
+    out.push(byKey.get(k) ?? { bucket: new Date(k * step).toISOString(), requests: 0, p50_ms: null, p95_ms: null, errors: 0 });
+  }
+  return out;
+}

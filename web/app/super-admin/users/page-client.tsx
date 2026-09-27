@@ -67,9 +67,11 @@ const ROLE_LABEL = Object.fromEntries(ROLES.map((r) => [r.value, r.label])) as R
 
 const ROLE_PILL: Record<Role, string> = {
   student: "bg-brand-600/10 text-brand-700",
-  faculty: "bg-sky-500/10 text-sky-700",
+  faculty: "bg-blue-500/10 text-blue-700",
   admin: "bg-amber-500/10 text-amber-700",
-  super_admin: "bg-rose-500/10 text-rose-700",
+  // Not rose: red on a role read as an error beside every super admin. Blue
+  // and purple (not sky or violet) because globals.css rethemes them for dark.
+  super_admin: "bg-purple-500/10 text-purple-700",
 };
 
 const SEX_OPTIONS = [
@@ -235,6 +237,42 @@ export default function SuperAdminUsersClient() {
     flash("Account deleted");
   };
 
+
+  // Shared by the phone cards and the desktop table.
+  const rolePill = (user: Account) => (
+    <>
+      <span className={`px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap ${ROLE_PILL[user.role] ?? ""}`}>
+        {ROLE_LABEL[user.role] ?? user.role}
+      </span>
+      {user.force_password_change && (
+        <span className="ml-2 text-[11px] text-amber-700" title="Must set a new password at next sign-in">
+          temp password
+        </span>
+      )}
+    </>
+  );
+
+  const placement = (user: Account) => {
+    if (user.role === "student") return user.section_name ?? "No section";
+    if (user.role === "faculty" && payload.owner_enabled) {
+      return (user.admin_id ? admins.find((a) => a.id === user.admin_id)?.name : null) ?? "No admin";
+    }
+    return "—";
+  };
+
+  const userActions = (user: Account) => (
+    <div className="flex items-center justify-end gap-1">
+      <IconButton label="Edit" icon={faPencil} onClick={() => openEdit(user)} />
+      <IconButton label="Reset password" icon={faKey} disabled={busy} onClick={() => handleReset(user)} />
+      <IconButton
+        label="Delete"
+        icon={faTrash}
+        danger
+        disabled={busy || me?.id === user.id}
+        onClick={() => handleDelete(user)}
+      />
+    </div>
+  );
   return (
     <div>
       <PageHeader
@@ -310,7 +348,45 @@ export default function SuperAdminUsersClient() {
         </FilterSelect>
       </div>
 
-      <div className={`${CARD} overflow-hidden`}>
+      {/* Phones get cards: the table's actions sat past the right edge, in a
+          sideways scroll nothing hinted at. */}
+      <ul className={`${CARD} md:hidden divide-y divide-hairline overflow-hidden`}>
+        {loading ? (
+          <li className="py-12 text-center text-gray-400">Loading accounts…</li>
+        ) : visible.length === 0 ? (
+          <li className="py-12 text-center text-gray-400">No accounts match</li>
+        ) : (
+          visible.map((user) => {
+            const isMe = me?.id === user.id;
+            return (
+              <li key={user.id} className="p-4 space-y-3">
+                <div className="flex items-start gap-3">
+                  <Avatar name={user.name} src={user.picture_url} userId={user.id} sex={user.sex} size="md" />
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-gray-800 truncate">
+                      {user.name}
+                      {isMe && <span className="ml-1.5 text-xs font-normal text-gray-400">(you)</span>}
+                    </p>
+                    <p className="text-sm text-gray-500 truncate">{user.email}</p>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      {rolePill(user)}
+                      <span className="text-xs text-gray-500">{placement(user)}</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs text-gray-400">
+                    Created {formatDate(user.created_at)} · last sign-in {formatDate(user.last_login_at)}
+                  </p>
+                  {userActions(user)}
+                </div>
+              </li>
+            );
+          })
+        )}
+      </ul>
+
+      <div className={`${CARD} hidden md:block overflow-hidden`}>
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-subtle border-b border-gray-100">
@@ -340,7 +416,6 @@ export default function SuperAdminUsersClient() {
                 </tr>
               ) : (
                 visible.map((user) => {
-                  const owner = user.admin_id ? admins.find((a) => a.id === user.admin_id)?.name : null;
                   const isMe = me?.id === user.id;
                   return (
                     <tr key={user.id} className="hover:bg-subtle transition-colors">
@@ -357,41 +432,13 @@ export default function SuperAdminUsersClient() {
                         </div>
                       </td>
                       <td className="py-3 px-4 whitespace-nowrap">
-                        <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${ROLE_PILL[user.role] ?? ""}`}>
-                          {ROLE_LABEL[user.role] ?? user.role}
-                        </span>
-                        {user.force_password_change && (
-                          <span className="ml-2 text-[11px] text-amber-700" title="Must set a new password at next sign-in">
-                            temp password
-                          </span>
-                        )}
+                        {rolePill(user)}
                       </td>
-                      <td className="py-3 px-4 text-sm text-gray-500">
-                        {user.role === "student"
-                          ? (user.section_name ?? "No section")
-                          : user.role === "faculty" && payload.owner_enabled
-                            ? (owner ?? "No admin")
-                            : "—"}
-                      </td>
+                      <td className="py-3 px-4 text-sm text-gray-500">{placement(user)}</td>
                       <td className="py-3 px-4 text-sm text-gray-500 whitespace-nowrap">{formatDate(user.created_at)}</td>
                       <td className="py-3 px-4 text-sm text-gray-500 whitespace-nowrap">{formatDate(user.last_login_at)}</td>
                       <td className="py-3 px-4">
-                        <div className="flex items-center justify-end gap-1">
-                          <IconButton label="Edit" icon={faPencil} onClick={() => openEdit(user)} />
-                          <IconButton
-                            label="Reset password"
-                            icon={faKey}
-                            disabled={busy}
-                            onClick={() => handleReset(user)}
-                          />
-                          <IconButton
-                            label="Delete"
-                            icon={faTrash}
-                            danger
-                            disabled={busy || isMe}
-                            onClick={() => handleDelete(user)}
-                          />
-                        </div>
+                        {userActions(user)}
                       </td>
                     </tr>
                   );

@@ -494,8 +494,11 @@ function BenchmarkSection({ runs, onRun }: { runs: BenchRun[]; onRun: (run: Test
             {when(shown.created_at)} · {shown.summary.requests.toLocaleString()} requests · {shown.summary.success_pct}%
             successful · peak {shown.summary.peak_rps} req/s
           </p>
+          {/* Width floors on these tables: on a phone they scroll sideways
+              instead of squeezing the bar columns to nothing and cutting off
+              the last columns. */}
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[640px] whitespace-nowrap text-sm">
               <thead className="bg-subtle">
                 <tr>
                   <th className={`${TH} text-left`}>Target</th>
@@ -610,7 +613,7 @@ function DwSection({ runs, onRun }: { runs: DwRun[]; onRun: (run: TestRun) => vo
             {shown.summary.failed > 0 && ` · ${shown.summary.failed} failed`}
           </p>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[560px] text-sm">
               <thead className="bg-subtle">
                 <tr>
                   <th className={`${TH} text-left`}>Query</th>
@@ -871,7 +874,7 @@ function MlSection() {
         ) / 10}% at-risk, threshold ${MODEL_EVAL_DATASET.threshold}`}
       />
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full min-w-[560px] text-sm">
           <thead className="bg-subtle">
             <tr>
               <th className={`${TH} text-left`}>Model</th>

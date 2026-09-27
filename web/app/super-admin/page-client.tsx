@@ -8,7 +8,7 @@ import { usePageData } from "@/app/lib/use-page-data";
 import PageHeader from "../components/PageHeader";
 import TimeSeriesChart from "./TimeSeriesChart";
 import { CARD, MigrationPending } from "./ui";
-import { formatMs, formatPct, reliability, type MetricsSummary } from "./metrics";
+import { fillBuckets, formatMs, formatPct, reliability, type MetricsSummary } from "./metrics";
 
 interface Overview {
   accounts: {
@@ -139,7 +139,7 @@ export default function SuperAdminDashboardClient() {
             ariaLabel="API requests per hour over the last 24 hours"
             kind="bar"
             series={[{ label: "Requests", color: "var(--chart-1)" }]}
-            points={(data?.metrics?.series ?? []).map((b) => ({ t: b.bucket, values: [b.requests] }))}
+            points={fillBuckets(data?.metrics).map((b) => ({ t: b.bucket, values: [b.requests] }))}
             bucket="hour"
             format={(v) => Math.round(v).toLocaleString()}
             height={200}

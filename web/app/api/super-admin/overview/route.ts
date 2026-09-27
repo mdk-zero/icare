@@ -59,7 +59,9 @@ export async function GET() {
 
   return NextResponse.json({
     accounts: { total: (accounts.data ?? []).length, by_role: byRole, active_7d: active7d, new_per_week: weeks },
-    metrics: metrics.error ? null : metrics.data,
+    // The window and bucket travel with the series so the page can lay out
+    // the hours that saw no traffic (fillBuckets).
+    metrics: metrics.error ? null : { ...(metrics.data as object), since: since24h, bucket: 'hour' },
     latest_runs: {
       health: latest('health'),
       benchmark: latest('benchmark'),

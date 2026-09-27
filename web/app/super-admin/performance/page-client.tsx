@@ -9,6 +9,7 @@ import PageHeader from "../../components/PageHeader";
 import TimeSeriesChart from "../TimeSeriesChart";
 import {
   BUCKET_MINUTES,
+  fillBuckets,
   formatMs,
   formatPct,
   reliability,
@@ -40,7 +41,7 @@ export default function PerformanceClient() {
   );
 
   const bucket = data?.bucket ?? "hour";
-  const series = data?.series ?? [];
+  const series = useMemo(() => fillBuckets(data), [data]);
   const totals = data?.totals;
 
   const points = useMemo(
@@ -162,8 +163,10 @@ export default function PerformanceClient() {
               <h2 className="font-semibold text-gray-800">Endpoints</h2>
               <p className="text-xs text-gray-500">Slowest first; click a column to re-sort</p>
             </div>
+            {/* A floor on the width: on a phone the table scrolls sideways
+                rather than breaking paths and "14 s" over several lines. */}
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full min-w-[640px] text-sm whitespace-nowrap">
                 <thead className="bg-subtle border-y border-gray-100">
                   <tr>
                     <th className="text-left py-2.5 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">

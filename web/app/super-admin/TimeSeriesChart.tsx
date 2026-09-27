@@ -41,12 +41,22 @@ function formatFull(iso: string, bucket: Props["bucket"]): string {
   return d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
-/** Rounds a max up to a 1/2/5 step so the gridlines land on readable values. */
+const TICK_COUNT = 4;
+
+/**
+ * The axis top for a data max: four gridline steps, each a 1/2/5 multiple, so
+ * every label is a round number. Rounding only the max (to 50, say) left
+ * quarter-steps of 12.5 that printed as 13 and 38.
+ */
 function niceMax(value: number): number {
   if (value <= 0) return 1;
-  const exp = 10 ** Math.floor(Math.log10(value));
-  const f = value / exp;
-  return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * exp;
+  const raw = value / TICK_COUNT;
+  const exp = 10 ** Math.floor(Math.log10(raw));
+  const f = raw / exp;
+  // 2.5 (25, 250…) keeps a max of 92 at 100 rather than 200; below 10 it would
+  // put fractions like 7.5 on an axis of whole counts.
+  const step = f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 && exp >= 10 ? 2.5 : f <= 5 ? 5 : 10;
+  return step * exp * TICK_COUNT;
 }
 
 /**
@@ -94,7 +104,7 @@ export default function TimeSeriesChart({
     kind === "bar" ? PAD.left + ((i + 0.5) * innerW) / Math.max(n, 1) : PAD.left + (n <= 1 ? innerW / 2 : (i * innerW) / (n - 1));
   const y = (v: number) => PAD.top + innerH - (Math.min(v, top) / top) * innerH;
 
-  const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => f * top);
+  const ticks = Array.from({ length: TICK_COUNT + 1 }, (_, i) => (i / TICK_COUNT) * top);
   const labelEvery = Math.max(1, Math.ceil(n / Math.max(2, Math.floor(innerW / 80))));
 
   const indexAt = (clientX: number) => {
@@ -200,16 +210,28 @@ export default function TimeSeriesChart({
                   d += `${pen ? "L" : "M"}${x(i)},${y(v)} `;
                   pen = true;
                 });
+                // A reading with no neighbour on either side draws no line
+                // segment at all, so it gets a dot or it vanishes.
+                const isolated = points.flatMap((p, i) => {
+                  const v = p.values[si];
+                  const prev = i > 0 ? points[i - 1].values[si] : null;
+                  const next = i < n - 1 ? points[i + 1].values[si] : null;
+                  return v !== null && prev === null && next === null ? [{ i, v }] : [];
+                });
                 return (
-                  <path
-                    key={s.label}
-                    d={d}
-                    fill="none"
-                    stroke={s.color}
-                    strokeWidth={2}
-                    strokeLinejoin="round"
-                    strokeLinecap="round"
-                  />
+                  <g key={s.label}>
+                    <path
+                      d={d}
+                      fill="none"
+                      stroke={s.color}
+                      strokeWidth={2}
+                      strokeLinejoin="round"
+                      strokeLinecap="round"
+                    />
+                    {isolated.map(({ i, v }) => (
+                      <circle key={i} cx={x(i)} cy={y(v)} r={3} fill={s.color} />
+                    ))}
+                  </g>
                 );
               })}
 
