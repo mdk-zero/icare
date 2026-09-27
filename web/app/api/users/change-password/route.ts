@@ -8,7 +8,7 @@ import {
   verifyPasswordResetOtp,
 } from '@/app/lib/auth/reset';
 import { sendPasswordChangeOtp } from '@/app/lib/auth/email';
-import { checkRateLimit } from '@/app/lib/auth/rate-limit';
+import { consumeRateLimit } from '@/app/lib/auth/rate-limit';
 
 const MIN_PASSWORD_LENGTH = 8;
 const MAX_OTP_REQUESTS = 3;
@@ -103,12 +103,7 @@ export async function POST(request: Request) {
         }
       }
 
-      const limit = checkRateLimit(
-        `change-password:${user.id}`,
-        MAX_OTP_REQUESTS,
-        OTP_WINDOW_MS,
-      );
-      if (!limit.allowed) {
+      if (!(await consumeRateLimit(`change-password:${user.id}`, MAX_OTP_REQUESTS, OTP_WINDOW_MS))) {
         return NextResponse.json(
           { error: 'Too many requests. Please try again later.' },
           { status: 429 },

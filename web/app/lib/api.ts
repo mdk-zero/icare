@@ -178,13 +178,26 @@ export interface AttemptResult {
 }
 
 // Authentication Functions
+/** Sign-in was refused for too many attempts; `message` is the server's. */
+export class LoginRateLimitedError extends Error {}
+
 export async function login(email: string, password: string): Promise<{ user: User; sessionToken: string } | null> {
+  let res: Response;
   try {
-    const res = await apiFetch('/api/auth/login', {
+    res = await apiFetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
     });
+  } catch (err) {
+    console.error('login() failed', err);
+    return null;
+  }
+  if (res.status === 429) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new LoginRateLimitedError(data.error || 'Too many sign-in attempts. Please try again later.');
+  }
+  try {
     if (!res.ok) return null;
     const { user, sessionToken } = (await res.json()) as { user: User; sessionToken: string };
     mirrorToStorage(user);

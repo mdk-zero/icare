@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
-import { checkRateLimit } from '@/app/lib/auth/rate-limit';
+import { consumeRateLimit } from '@/app/lib/auth/rate-limit';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { isMissingMigration } from '@/app/lib/auth/super-admin';
 import { normalizeRoute } from '@/app/lib/request-metrics';
@@ -18,8 +18,7 @@ export async function POST(request: NextRequest) {
   const session = await readSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const limit = checkRateLimit(`metrics:${session.uid}`, 30, 60_000);
-  if (!limit.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+  if (!(await consumeRateLimit(`metrics:${session.uid}`, 30, 60_000))) return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
 
   const body = (await request.json().catch(() => null)) as { samples?: unknown; source?: unknown } | null;
   if (!body || !Array.isArray(body.samples)) {

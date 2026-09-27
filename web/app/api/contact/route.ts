@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { sendAccessRequestEmail, sendAccessRequestReceipt } from '@/app/lib/auth/email';
-import { checkRateLimit } from '@/app/lib/auth/rate-limit';
+import { clientIp, consumeRateLimit } from '@/app/lib/auth/rate-limit';
 
 // Where access requests land: the project's own inbox on i-care.dev, which
 // the registrar forwards on to the dev team. Overridable per deployment with a
@@ -42,9 +42,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Enter a valid email address.' }, { status: 400 });
   }
 
-  const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
-  const limit = checkRateLimit(`contact:${ip}`, MAX_REQUESTS, WINDOW_MS);
-  if (!limit.allowed) {
+  if (!(await consumeRateLimit(`contact:${clientIp(request)}`, MAX_REQUESTS, WINDOW_MS))) {
     return NextResponse.json(
       { error: 'Too many requests. Please try again later.' },
       { status: 429 },

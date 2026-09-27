@@ -7,7 +7,7 @@ import {
 } from '@/app/lib/auth/reset';
 import { hashPassword } from '@/app/lib/auth/password';
 import { sendPasswordResetOtp } from '@/app/lib/auth/email';
-import { checkRateLimit } from '@/app/lib/auth/rate-limit';
+import { consumeRateLimit } from '@/app/lib/auth/rate-limit';
 
 const MAX_REQUESTS = 3;
 const WINDOW_MS = 15 * 60 * 1000; // 15 minutes
@@ -36,8 +36,7 @@ export async function POST(request: Request) {
   const normalizedEmail = email.trim().toLowerCase();
 
   // Rate limit by email.
-  const limit = checkRateLimit(`forgot-password:${normalizedEmail}`, MAX_REQUESTS, WINDOW_MS);
-  if (!limit.allowed) {
+  if (!(await consumeRateLimit(`forgot-password:${normalizedEmail}`, MAX_REQUESTS, WINDOW_MS))) {
     return NextResponse.json(
       { error: 'Too many requests. Please try again later.' },
       { status: 429 },

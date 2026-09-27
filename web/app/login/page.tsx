@@ -16,7 +16,7 @@ import {
   faChartColumn,
   faHeart,
 } from "@fortawesome/free-solid-svg-icons";
-import { login, logout, isAuthenticated, refreshCurrentUser, User, logAuditAction } from "../lib/api";
+import { login, LoginRateLimitedError, logout, isAuthenticated, refreshCurrentUser, User, logAuditAction } from "../lib/api";
 import logo_white from "../../public/logo-white-no-bg.png";
 import { EcgLoader } from "../components/EcgLoader";
 import { DriftingKit, RotatingWords } from "../components/AuthShowcase";
@@ -119,8 +119,12 @@ export default function LoginPage() {
       } else {
         setError("Invalid email or password");
       }
-    } catch {
-      setError("Connection error. Please make sure the backend is running.");
+    } catch (err) {
+      setError(
+        err instanceof LoginRateLimitedError
+          ? err.message
+          : "Connection error. Please make sure the backend is running.",
+      );
     } finally {
       setIsLoading(false);
     }

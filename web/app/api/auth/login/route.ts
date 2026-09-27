@@ -2,6 +2,13 @@ import { NextResponse } from 'next/server';
 import { findUserByEmail, toPublicUser, touchLastLogin } from '@/app/lib/auth/user';
 import { verifyPassword } from '@/app/lib/auth/password';
 import { setSessionCookie, signSession } from '@/app/lib/auth/session';
+import { clientIp, consumeRateLimit } from '@/app/lib/auth/rate-limit';
+
+// Password guessing: a cap per address (one attacker) and per account (a
+// botnet aimed at one inbox). Both count every attempt, right or wrong.
+const WINDOW_MS = 15 * 60 * 1000;
+const MAX_PER_IP = 20;
+const MAX_PER_EMAIL = 10;
 
 export async function POST(request: Request) {
   let body: unknown;
@@ -16,8 +23,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Missing email or password' }, { status: 400 });
   }
 
+  const normalizedEmail = email.trim().toLowerCase();
+  const allowed =
+    (await consumeRateLimit(`login:ip:${clientIp(request)}`, MAX_PER_IP, WINDOW_MS)) &&
+    (await consumeRateLimit(`login:email:${normalizedEmail}`, MAX_PER_EMAIL, WINDOW_MS));
+  if (!allowed) {
+    return NextResponse.json(
+      { error: 'Too many sign-in attempts. Please wait a few minutes and try again.' },
+      { status: 429 },
+    );
+  }
+
   try {
-    const row = await findUserByEmail(email.trim().toLowerCase());
+    const row = await findUserByEmail(normalizedEmail);
     if (!row || !row.password_hash) {
       return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 });
     }

@@ -1,4 +1,6 @@
 import { callOpenRouter } from './openrouter';
+import { readSession } from '../auth/session';
+import { consumeRateLimit } from '../auth/rate-limit';
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -71,8 +73,35 @@ async function callGemini(prompt: string, attempt = 1): Promise<Record<string, u
   }
 }
 
+const AI_PER_USER_PER_HOUR = 20;
+const AI_GLOBAL_PER_DAY = 200;
+
+/** Thrown by callAI when the app's own AI budget is spent; see enforceAiBudget. */
+export class AiRateLimitedError extends Error {}
+
+/**
+ * The providers' free tiers are one small daily quota (~20 requests per model)
+ * shared by every user, so one person tapping "generate" in a loop would spend
+ * it for everyone. Every AI call counts against the signed-in user's hourly
+ * budget and a global daily one. Outside a request (seed scripts) there is no
+ * session, and only the global budget applies.
+ */
+async function enforceAiBudget(): Promise<void> {
+  let userId: string | null = null;
+  try {
+    userId = (await readSession())?.uid ?? null;
+  } catch {
+    // No request scope — a script, not a route.
+  }
+  const allowed =
+    (!userId || (await consumeRateLimit(`ai:user:${userId}`, AI_PER_USER_PER_HOUR, 60 * 60 * 1000))) &&
+    (await consumeRateLimit('ai:global', AI_GLOBAL_PER_DAY, 24 * 60 * 60 * 1000));
+  if (!allowed) throw new AiRateLimitedError('AI is busy right now. Please try again later.');
+}
+
 /** Gemini first (JSON mode), falling back to the OpenRouter free-model chain. */
 export async function callAI(prompt: string): Promise<Record<string, unknown>> {
+  await enforceAiBudget();
   try {
     return await callGemini(prompt);
   } catch (geminiErr) {
@@ -91,6 +120,7 @@ export async function callAI(prompt: string): Promise<Record<string, unknown>> {
 
 /** Maps a raw AI-failure message to the HTTP response the faculty UI expects. */
 export function aiErrorResponse(err: unknown, entity: string): { error: string; status: number } {
+  if (err instanceof AiRateLimitedError) return { error: err.message, status: 429 };
   const rawMessage = err instanceof Error ? err.message : `Unable to generate ${entity}`;
   const lower = rawMessage.toLowerCase();
   const isRateLimit =
