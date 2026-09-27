@@ -1182,7 +1182,30 @@ export interface FacultyNotification {
   student_id?: string;
   /** Set on a super admin's copy of a sign-up page account request. */
   access_request?: AccessRequestInfo;
+  /** Set on an admin's copy of a faculty request to change a saved grade. */
+  grade_edit_request?: GradeEditRequestInfo;
 }
+
+export interface GradeEditRequestInfo {
+  id: string;
+  faculty_name: string;
+  student_name: string;
+  scenario_title: string;
+  reason: string;
+  status: AccessRequestStatus;
+  resolved_by_name?: string;
+}
+
+/** Where a faculty member stands on changing one saved grade. */
+export type GradeEditState =
+  | { status: 'not_required' | 'none' }
+  | {
+      status: 'pending' | 'accepted' | 'declined';
+      reason: string;
+      requested_at: string;
+      resolved_by_name: string | null;
+      resolved_at: string | null;
+    };
 
 export type AccessRequestStatus = 'pending' | 'accepted' | 'declined';
 
@@ -2467,7 +2490,77 @@ export function toFacultyNotification(n: ServerNotification): FacultyNotificatio
     created_at: n.created_at,
     student_id: typeof n.data?.student_id === 'string' ? n.data.student_id : undefined,
     access_request: toAccessRequest(n.data),
+    grade_edit_request: toGradeEditRequest(n.data),
   };
+}
+
+function toGradeEditRequest(data: Record<string, unknown> | undefined): GradeEditRequestInfo | undefined {
+  if (data?.kind !== 'grade_edit_request' || typeof data.request_id !== 'string') return undefined;
+  const text = (value: unknown) => (typeof value === 'string' ? value : '');
+  return {
+    id: data.request_id,
+    faculty_name: text(data.faculty_name),
+    student_name: text(data.student_name),
+    scenario_title: text(data.scenario_title),
+    reason: text(data.reason),
+    status: data.status === 'accepted' || data.status === 'declined' ? data.status : 'pending',
+    resolved_by_name: typeof data.resolved_by_name === 'string' ? data.resolved_by_name : undefined,
+  };
+}
+
+/** An admin's answer to a faculty request to change a saved grade. */
+export async function resolveGradeEditRequest(
+  requestId: string,
+  status: 'accepted' | 'declined',
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const res = await apiFetch(`/api/admin/grade-edit-requests/${encodeURIComponent(requestId)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ status }),
+    });
+    if (res.ok) return { ok: true };
+    const json = (await res.json().catch(() => ({}))) as { error?: string };
+    return { ok: false, error: json.error ?? 'Could not update the request' };
+  } catch (err) {
+    console.error('resolveGradeEditRequest() failed', err);
+    return { ok: false, error: 'Connection error' };
+  }
+}
+
+export async function fetchGradeEditState(assignmentId: string): Promise<GradeEditState | null> {
+  try {
+    const res = await apiFetch(`/api/faculty/scenarios/assignments/${assignmentId}/edit-request`, {
+      credentials: 'include',
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as GradeEditState;
+  } catch (err) {
+    console.error('fetchGradeEditState() failed', err);
+    return null;
+  }
+}
+
+/** Asks the faculty member's admin for permission to change a saved grade. */
+export async function requestGradeEdit(
+  assignmentId: string,
+  reason: string,
+): Promise<{ ok: true; state: GradeEditState } | { ok: false; error: string }> {
+  try {
+    const res = await apiFetch(`/api/faculty/scenarios/assignments/${assignmentId}/edit-request`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ reason }),
+    });
+    const json = (await res.json().catch(() => ({}))) as GradeEditState & { error?: string };
+    if (!res.ok) return { ok: false, error: json.error ?? 'Could not send the request' };
+    return { ok: true, state: json };
+  } catch (err) {
+    console.error('requestGradeEdit() failed', err);
+    return { ok: false, error: 'Connection error' };
+  }
 }
 
 function toAccessRequest(data: Record<string, unknown> | undefined): AccessRequestInfo | undefined {

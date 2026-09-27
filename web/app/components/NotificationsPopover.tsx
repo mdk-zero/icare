@@ -16,6 +16,7 @@ import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import { useNotifications } from "../lib/notifications-live";
 import { FacultyNotification } from "../lib/api";
 import AccessRequestActions from "./AccessRequestActions";
+import GradeEditRequestActions from "./GradeEditRequestActions";
 
 type Variant = "sidebar" | "topbar";
 
@@ -259,7 +260,7 @@ export default function NotificationsPopover({
                         onClick={() => markRead(notification.id)}
                         style={{ animationDelay: `${Math.min(i, 5) * 30}ms` }}
                         className={`flex w-full animate-rise items-start gap-2.5 rounded-xl px-2.5 py-2.5 text-left transition-colors hover:bg-brand-500/[0.09] ${
-                          notification.access_request ? "" : "bg-brand-500/[0.05]"
+                          notification.access_request || notification.grade_edit_request ? "" : "bg-brand-500/[0.05]"
                         }`}
                       >
                         <span
@@ -286,17 +287,21 @@ export default function NotificationsPopover({
                         />
                       </button>
                     );
-                    if (!notification.access_request) return button;
+                    if (!notification.access_request && !notification.grade_edit_request) return button;
                     // Buttons can't nest, so the actions sit under the item's button.
                     return (
                       <div key={notification.id} className="rounded-xl bg-brand-500/[0.05]">
                         {button}
                         <div className="px-2.5 pb-2.5 pl-[3.25rem]">
-                          <AccessRequestActions
-                            notificationId={notification.id}
-                            request={notification.access_request}
-                            onNavigate={() => setOpen(false)}
-                          />
+                          {notification.access_request ? (
+                            <AccessRequestActions
+                              notificationId={notification.id}
+                              request={notification.access_request}
+                              onNavigate={() => setOpen(false)}
+                            />
+                          ) : (
+                            <GradeEditRequestActions request={notification.grade_edit_request!} compact />
+                          )}
                         </div>
                       </div>
                     );

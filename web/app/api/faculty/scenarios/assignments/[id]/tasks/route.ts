@@ -27,6 +27,7 @@ import {
   type TaskRating,
 } from '@/app/lib/task-ratings';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { activeGradeEditApproval, EDIT_NEEDS_APPROVAL, needsEditApproval } from '@/app/lib/grade-edit-requests';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -220,6 +221,15 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     const supabase = getSupabaseAdmin();
     const loaded = await loadAssignment(supabase, session.role, session.uid, assignmentId);
     if ('error' in loaded) return loaded.error;
+
+    // A saved grade changes only with an admin's approval (see grade-edit-requests).
+    if (
+      loaded.assignment.status === 'completed' &&
+      needsEditApproval(session.role) &&
+      !(await activeGradeEditApproval(supabase, assignmentId, session.uid))
+    ) {
+      return NextResponse.json({ error: EDIT_NEEDS_APPROVAL }, { status: 403 });
+    }
 
     const { data: task } = await supabase
       .from('scenario_tasks')

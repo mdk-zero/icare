@@ -16,6 +16,7 @@ import {
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import PageHeader from "../../components/PageHeader";
 import AccessRequestActions from "../../components/AccessRequestActions";
+import GradeEditRequestActions from "../../components/GradeEditRequestActions";
 
 type Filter = "all" | "unread" | "alert" | "warning";
 
@@ -220,6 +221,11 @@ export default function FacultyNotificationsClient({
                                   notificationId={notification.id}
                                   request={notification.access_request}
                                 />
+                              </div>
+                            )}
+                            {notification.grade_edit_request && (
+                              <div className="mt-2.5">
+                                <GradeEditRequestActions request={notification.grade_edit_request} />
                               </div>
                             )}
                             <div className="mt-2 flex items-center gap-2">

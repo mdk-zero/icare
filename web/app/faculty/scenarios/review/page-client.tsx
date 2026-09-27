@@ -9,6 +9,7 @@ import {
   faChevronLeft,
   faClipboardCheck,
   faClipboardList,
+  faHourglassHalf,
   faLock,
   faPenToSquare,
   faFloppyDisk,
@@ -26,6 +27,8 @@ import {
   saveTaskRating,
   saveStepRatings,
   finalizeScenarioAssignment,
+  fetchGradeEditState,
+  requestGradeEdit,
 } from "../../../lib/api";
 import {
   DEFAULT_RUBRIC,
@@ -46,6 +49,8 @@ import {
   withStepChanges,
 } from "./grading";
 import { toast } from "../../../components/Toast";
+import ConfirmModal from "../../../components/ConfirmModal";
+import { onNotificationArrival } from "../../../lib/notifications-live";
 import Avatar from "../../../components/Avatar";
 import { EcgLoader } from "../../../components/EcgLoader";
 import PageHeader from "../../../components/PageHeader";
@@ -100,6 +105,9 @@ const gradeChanged = (t: GradingTask, saved: GradingTask) =>
   t.rating !== saved.rating ||
   t.completed_via !== saved.completed_via ||
   t.steps.some((s, i) => s.rating !== saved.steps[i]?.rating);
+
+/** Matches the edit-request route's limit (grade-edit-requests.ts). */
+const MAX_REASON_LENGTH = 500;
 
 const formatWhen = (iso: string) =>
   new Date(iso).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
@@ -205,6 +213,18 @@ export default function FacultyScenarioReviewClient() {
   const selected = assignments.find((a) => a.id === selectedId) ?? null;
   const finalized = selected?.status === "completed";
   const locked = finalized && !editing;
+
+  // A saved grade changes only with an admin's approval; this is where the
+  // faculty member stands on this one.
+  const { data: editState, refresh: refreshEditState } = usePageData(
+    finalized && selectedId ? `faculty:grade-edit:${selectedId}` : null,
+    () => fetchGradeEditState(selectedId!),
+  );
+  // The admin's answer arrives as a notification: re-check when one lands.
+  useEffect(() => onNotificationArrival(() => void refreshEditState()), [refreshEditState]);
+  const [requestReason, setRequestReason] = useState<string | null>(null);
+  const [requestError, setRequestError] = useState<string | null>(null);
+  const [requesting, setRequesting] = useState(false);
 
   /** One row per student, so the queue can be searched/picked before any
    * submissions are shown — grouping happens client-side since the API
@@ -448,6 +468,8 @@ export default function FacultyScenarioReviewClient() {
       );
       await reloadTasks();
       resetDraft();
+      // Saving an approved edit used the approval up.
+      if (finalized) void refreshEditState();
       toast(`Saved — ${scoreDescriptor(result.score)} (${result.score}%)`);
       setEditing(false);
     } else {
@@ -455,6 +477,42 @@ export default function FacultyScenarioReviewClient() {
       toast("Unable to save the grade. Please try again.", "error");
     }
     setFinalizing(false);
+  };
+
+  /** Edit a saved grade: straight in once approved, otherwise ask the admin. */
+  const handleEdit = async () => {
+    if (!selectedId) return;
+    const state = await fetchGradeEditState(selectedId);
+    void refreshEditState();
+    if (!state) {
+      toast("Couldn't check whether you may change this grade. Please try again.", "error");
+    } else if (state.status === "accepted" || state.status === "not_required") {
+      setEditing(true);
+    } else if (state.status === "pending") {
+      toast("Your request is still waiting for your admin's answer.");
+    } else {
+      setRequestError(null);
+      setRequestReason("");
+    }
+  };
+
+  const sendEditRequest = async () => {
+    if (!selectedId || requestReason === null) return;
+    const reason = requestReason.trim();
+    if (!reason) {
+      setRequestError("Say why the grade needs to change.");
+      return;
+    }
+    setRequesting(true);
+    const result = await requestGradeEdit(selectedId, reason);
+    setRequesting(false);
+    if (!result.ok) {
+      setRequestError(result.error);
+      return;
+    }
+    setRequestReason(null);
+    void refreshEditState();
+    toast("Request sent. You'll be notified when your admin answers.");
   };
 
   const submittedCount = assignments.filter(isSubmitted).length;
@@ -877,11 +935,23 @@ export default function FacultyScenarioReviewClient() {
               <div className="isolate z-10 -bottom-3 flex flex-col gap-3 border-t border-hairline bg-surface px-5 py-4 sm:sticky sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:-bottom-5">
                 <div className="min-w-0 text-sm">
                   {locked ? (
-                    <p className="text-gray-600">
-                      Saved as <span className="font-semibold text-gray-900">{scoreDescriptor(shownScore)}</span>{" "}
-                      ({shownScore}%){selected.completed_at ? ` on ${formatDay(selected.completed_at)}` : ""}. Edit to
-                      change a rating or note.
-                    </p>
+                    <>
+                      <p className="text-gray-600">
+                        Saved as <span className="font-semibold text-gray-900">{scoreDescriptor(shownScore)}</span>{" "}
+                        ({shownScore}%){selected.completed_at ? ` on ${formatDay(selected.completed_at)}` : ""}.
+                      </p>
+                      <p className="text-xs text-gray-400">
+                        {editState?.status === "not_required"
+                          ? "Edit to change a rating or note."
+                          : editState?.status === "accepted"
+                            ? `${editState.resolved_by_name ?? "Your admin"} approved a change. Saving it uses the approval up.`
+                            : editState?.status === "pending"
+                              ? `Change requested ${formatWhen(editState.requested_at)} and waiting for your admin.`
+                              : editState?.status === "declined"
+                                ? `${editState.resolved_by_name ?? "Your admin"} declined your last request. You can ask again.`
+                                : "Changing a saved grade needs your admin's permission."}
+                      </p>
+                    </>
                   ) : (
                     <>
                       <p className="text-gray-600">
@@ -910,11 +980,19 @@ export default function FacultyScenarioReviewClient() {
                 <div className="flex shrink-0 items-center gap-2">
                   {locked ? (
                     <button
-                      onClick={() => setEditing(true)}
-                      className="inline-flex items-center justify-center gap-2 rounded-xl border border-brand-600 bg-surface px-5 py-2.5 text-sm font-semibold text-brand-700 shadow-tile transition-all hover:bg-brand-50"
+                      onClick={handleEdit}
+                      disabled={editState?.status === "pending"}
+                      className="inline-flex items-center justify-center gap-2 rounded-xl border border-brand-600 bg-surface px-5 py-2.5 text-sm font-semibold text-brand-700 shadow-tile transition-all hover:bg-brand-50 disabled:cursor-not-allowed disabled:border-gray-200 disabled:text-gray-500 disabled:hover:bg-surface"
                     >
-                      <FontAwesomeIcon icon={faPenToSquare} className="h-3.5 w-3.5" />
-                      Edit
+                      <FontAwesomeIcon
+                        icon={editState?.status === "pending" ? faHourglassHalf : faPenToSquare}
+                        className="h-3.5 w-3.5"
+                      />
+                      {editState?.status === "pending"
+                        ? "Awaiting approval"
+                        : editState?.status === "accepted" || editState?.status === "not_required"
+                          ? "Edit"
+                          : "Request edit"}
                     </button>
                   ) : (
                     <>
@@ -945,6 +1023,33 @@ export default function FacultyScenarioReviewClient() {
           )}
         </section>
       </div>
+
+      {requestReason !== null && selected && (
+        <ConfirmModal
+          onClose={() => setRequestReason(null)}
+          config={{
+            title: "Ask to change this grade",
+            message: `${selected.student_name}'s grade on "${selected.scenario_title}" is saved. Your admin will be notified, and you can edit it once they accept.`,
+            confirmLabel: "Send request",
+            danger: false,
+            loading: requesting,
+            error: requestError,
+            onConfirm: sendEditRequest,
+            children: (
+              <textarea
+                value={requestReason}
+                onChange={(e) => setRequestReason(e.target.value)}
+                autoFocus
+                rows={4}
+                maxLength={MAX_REASON_LENGTH}
+                placeholder="Why does the grade need to change?"
+                aria-label="Reason for changing the grade"
+                className="mt-3 w-full resize-y rounded-lg border border-gray-200 bg-surface px-3 py-2 text-sm text-gray-800 outline-none transition-colors placeholder:text-gray-400 focus:border-brand-600 focus:ring-2 focus:ring-brand-600/30"
+              />
+            ),
+          }}
+        />
+      )}
     </div>
   );
 }

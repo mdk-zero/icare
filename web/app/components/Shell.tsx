@@ -217,12 +217,14 @@ export default function Shell({ role, navItems, isActive, children }: ShellProps
   const peekSuppressed = useRef(false);
   const rail = isDesktop && collapsed && !hoverPeek && !focusPeek && !bellOpen;
   // Keeps the live stream open for every role so arrival toasts fire on pages
-  // that have no bell of their own (admins). The bell below reads the
-  // same store for its badge and preview.
+  // that have no bell of their own. The bell below reads the same store for
+  // its badge and preview.
   const { unread } = useNotifications();
-  // Faculty hear from their students; super admins get account requests.
-  const hasBell = role === "faculty" || role === "super_admin";
-  const notificationsHref = role === "super_admin" ? "/super-admin/notifications" : "/faculty/notifications";
+  // Faculty hear from their students, admins get grade change requests, and
+  // super admins get account requests.
+  const hasBell = role === "faculty" || role === "admin" || role === "super_admin";
+  const notificationsHref =
+    role === "super_admin" ? "/super-admin/notifications" : role === "admin" ? "/admin/notifications" : "/faculty/notifications";
 
   const { logo, logoIsWordmark, portalLabel, mobileRoleLabel, profileHref, homeHref } =
     config[role];
