@@ -172,13 +172,7 @@ export async function POST(request: NextRequest) {
     // Dean hands over the temporary password shown in the response instead.
     let warning: string | undefined;
     if (role === 'student') {
-      const origin = request.headers.get('origin') ?? 'http://localhost:3000';
-      const emailResult = await sendStudentInvitationEmail(
-        normalizedEmail,
-        trimmedName,
-        `${origin}/login`,
-        tempPassword,
-      );
+      const emailResult = await sendStudentInvitationEmail(normalizedEmail, trimmedName, tempPassword);
       if (!emailResult.success) {
         warning =
           'User created but the invitation email could not be sent. Share the temporary password below manually.';

@@ -101,8 +101,7 @@ export async function POST(request: NextRequest) {
     // The invitation is student-worded; other roles get the password handed over.
     let warning: string | undefined;
     if (role === 'student') {
-      const origin = request.headers.get('origin') ?? 'http://localhost:3000';
-      const sent = await sendStudentInvitationEmail(email, name, `${origin}/login`, tempPassword);
+      const sent = await sendStudentInvitationEmail(email, name, tempPassword);
       if (!sent.success) warning = 'The invitation email could not be sent. Share the temporary password manually.';
     }
 

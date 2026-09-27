@@ -261,9 +261,21 @@ function buildPasswordChangeHtml(otp: string, name: string): string {
   );
 }
 
-function buildWelcomeHtml(name: string, loginUrl: string, password: string): string {
+/**
+ * Where students get the app, from MOBILE_APP_URL (a store or download page).
+ * Students sign in on the mobile app only: the web turns them away. So the
+ * email never links to the web login; without this set it has no button.
+ */
+function mobileAppUrl(): string | null {
+  const url = process.env.MOBILE_APP_URL?.trim();
+  return url && url.startsWith("https://") ? url : null;
+}
+
+function buildWelcomeHtml(name: string, email: string, password: string): string {
   const safeName = htmlEscape(name);
-  const safeLoginUrl = htmlEscape(loginUrl);
+  const safeEmail = htmlEscape(email);
+  const appUrl = mobileAppUrl();
+  const safeAppUrl = appUrl ? htmlEscape(appUrl) : null;
   const safePassword = htmlEscape(password);
   const year = new Date().getFullYear();
 
@@ -292,7 +304,8 @@ function buildWelcomeHtml(name: string, loginUrl: string, password: string): str
                 ML-driven clinical competency assessment and adaptive learning system for nursing students.
               </p>
               <p style="margin:0 0 24px;font-size:15px;color:#475569;line-height:1.6;">
-                You can now sign in to access your skill assessments, scenarios, and track your performance.
+                Open the <strong>iCARE++ mobile app</strong> and sign in with <strong>${safeEmail}</strong> and the
+                temporary password below to access your skill assessments and scenarios, and track your performance.
               </p>
               <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f0f9fa;border:1px solid #d0ebea;border-radius:10px;padding:16px 20px;margin-bottom:24px;">
                 <tr>
@@ -305,15 +318,15 @@ function buildWelcomeHtml(name: string, loginUrl: string, password: string): str
               <p style="margin:0 0 24px;font-size:13px;color:#94a3b8;">
                 For security, you will be asked to change this password the first time you sign in.
               </p>
-              <table cellpadding="0" cellspacing="0" style="margin:0 auto 28px;">
+              ${safeAppUrl ? `<table cellpadding="0" cellspacing="0" style="margin:0 auto 28px;">
                 <tr>
                   <td align="center" style="border-radius:12px;background:linear-gradient(135deg,#0D7377,#0A5C5F);">
-                    <a href="${safeLoginUrl}" style="display:inline-block;padding:14px 40px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:12px;">
-                      Sign In to iCARE++
+                    <a href="${safeAppUrl}" style="display:inline-block;padding:14px 40px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:12px;">
+                      Get the iCARE++ app
                     </a>
                   </td>
                 </tr>
-              </table>
+              </table>` : ""}
               <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f8fafc;border-radius:10px;padding:16px 20px;margin-bottom:24px;">
                 <tr>
                   <td style="font-size:13px;color:#64748b;line-height:1.5;">
@@ -472,14 +485,9 @@ export async function sendEmailChangedNotice(oldEmail: string, name: string, new
 export async function sendStudentInvitationEmail(
   email: string,
   name: string,
-  loginUrl: string,
   password: string,
 ): Promise<EmailResult> {
   try {
-    if (!loginUrl || !loginUrl.startsWith("http")) {
-      return { success: false, error: "A valid login URL is required" };
-    }
-
     if (!password) {
       return { success: false, error: "A temporary password is required" };
     }
@@ -487,7 +495,7 @@ export async function sendStudentInvitationEmail(
     await sendEmail({
       to: email,
       subject: "Welcome to iCARE++ – Your Account Has Been Created",
-      html: buildWelcomeHtml(name, loginUrl, password),
+      html: buildWelcomeHtml(name, email, password),
     });
 
     return { success: true };

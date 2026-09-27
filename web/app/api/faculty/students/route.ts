@@ -198,10 +198,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unable to create student' }, { status: 500 });
     }
 
-    const origin = request.headers.get('origin') ?? 'http://localhost:3000';
-    const loginUrl = `${origin}/login`;
-
-    const emailResult = await sendStudentInvitationEmail(normalizedEmail, trimmedName, loginUrl, tempPassword);
+    const emailResult = await sendStudentInvitationEmail(normalizedEmail, trimmedName, tempPassword);
 
     if (!emailResult.success) {
       return NextResponse.json(

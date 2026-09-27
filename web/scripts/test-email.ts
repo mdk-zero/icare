@@ -33,7 +33,6 @@ async function main() {
   const result = await sendStudentInvitationEmail(
     to,
     'Test Recipient',
-    process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000/login',
     'TEST-PASSWORD-1234',
   );
 
