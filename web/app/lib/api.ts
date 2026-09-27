@@ -3471,3 +3471,161 @@ export async function fetchStudentReflections(studentId: string): Promise<{ enab
     return { enabled: true, reflections: [] };
   }
 }
+
+// ─── Case presentations (migration 056) ─────────────────────────────────────
+
+export type CaseSubmissionStatus = 'not_started' | 'draft' | 'submitted' | 'graded';
+
+export interface CasePresentation {
+  id: string;
+  title: string;
+  instructions: string;
+  deadline: string | null;
+  section_ids: string[];
+  sections: { id: string; name: string }[];
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CasePresentationSummary extends CasePresentation {
+  counts: {
+    total: number;
+    not_started: number;
+    draft: number;
+    submitted: number;
+    graded: number;
+    late: number;
+  };
+}
+
+export interface CaseRosterEntry {
+  submission_id: string;
+  student_id: string;
+  student_name: string;
+  section_name: string | null;
+  status: CaseSubmissionStatus;
+  patient_initials: string | null;
+  submitted_at: string | null;
+  graded_at: string | null;
+  score: number | null;
+  late: boolean;
+}
+
+export interface CaseObservationsData {
+  vitals: {
+    heart_rate: number | null;
+    bp_systolic: number | null;
+    bp_diastolic: number | null;
+    temperature_c: number | null;
+    respiratory_rate: number | null;
+    oxygen_saturation: number | null;
+    pain_score: number | null;
+    notes: string;
+    observed_at: string | null;
+  }[];
+  tpr: { temperature_c: number | null; pulse: number | null; respiration: number | null; remarks: string; observed_at: string | null }[];
+  ivf: { solution: string; volume_ml: number | null; rate_ml_hr: number | null; site: string; remarks: string; observed_at: string | null }[];
+}
+
+export interface CaseSubmission {
+  id: string;
+  presentation_id: string;
+  student_id: string;
+  status: CaseSubmissionStatus;
+  patient_initials: string | null;
+  age: number | null;
+  sex: 'male' | 'female' | null;
+  hospital: string;
+  ward: string;
+  admitting_diagnosis: string;
+  chief_complaint: string;
+  history: string;
+  medications: string;
+  nursing_diagnoses: string;
+  interventions: string;
+  observations: CaseObservationsData;
+  submitted_at: string | null;
+  graded_at: string | null;
+  score: number | null;
+  remarks: string;
+  late: boolean;
+  updated_at: string;
+}
+
+export interface CaseCriterionInfo {
+  key: string;
+  label: string;
+  description: string;
+}
+
+export interface CaseRating {
+  criterion: string;
+  rating: TaskRating;
+  remarks: string;
+}
+
+export interface CaseGradingData {
+  submission: CaseSubmission;
+  presentation: CasePresentation;
+  student: { id: string; name: string | null; section_id: string | null } | null;
+  ratings: CaseRating[];
+  criteria: CaseCriterionInfo[];
+}
+
+type CaseResult<T> = { data: T; error?: undefined } | { data?: undefined; error: string; missing?: string[] };
+
+async function caseRequest<T>(url: string, init?: { method: string; body?: unknown }): Promise<CaseResult<T>> {
+  try {
+    const res = await apiFetch(url, {
+      method: init?.method ?? 'GET',
+      headers: init?.body === undefined ? undefined : { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: init?.body === undefined ? undefined : JSON.stringify(init.body),
+    });
+    const json = (await res.json().catch(() => ({}))) as T & { error?: string; missing?: string[] };
+    if (!res.ok) return { error: json.error ?? 'Something went wrong', missing: json.missing };
+    return { data: json };
+  } catch (err) {
+    console.error(`${init?.method ?? 'GET'} ${url} failed`, err);
+    return { error: 'Something went wrong. Please try again.' };
+  }
+}
+
+export const fetchCasePresentations = () =>
+  caseRequest<{ presentations: CasePresentationSummary[] }>('/api/faculty/cases');
+
+export const createCasePresentation = (input: {
+  title: string;
+  instructions: string;
+  deadline: string | null;
+  section_ids: string[];
+}) => caseRequest<{ presentation: CasePresentation; student_count: number }>('/api/faculty/cases', { method: 'POST', body: input });
+
+export const fetchCasePresentation = (id: string) =>
+  caseRequest<{ presentation: CasePresentation & { can_manage: boolean }; roster: CaseRosterEntry[] }>(`/api/faculty/cases/${id}`);
+
+export const updateCasePresentation = (
+  id: string,
+  patch: Partial<{ title: string; instructions: string; deadline: string | null; section_ids: string[] }>,
+) => caseRequest<{ ok: true; students_added: number }>(`/api/faculty/cases/${id}`, { method: 'PATCH', body: patch });
+
+export const deleteCasePresentation = (id: string) =>
+  caseRequest<{ ok: true }>(`/api/faculty/cases/${id}`, { method: 'DELETE' });
+
+export const fetchCaseSubmission = (id: string) =>
+  caseRequest<CaseGradingData>(`/api/faculty/cases/submissions/${id}`);
+
+export const gradeCaseSubmission = (
+  id: string,
+  body: {
+    ratings?: Record<string, TaskRating | null>;
+    rating_remarks?: Record<string, string>;
+    remarks?: string;
+    finalize?: boolean;
+  },
+) =>
+  caseRequest<{ ok: true; ratings: CaseRating[]; score: number; status: CaseSubmissionStatus }>(
+    `/api/faculty/cases/submissions/${id}`,
+    { method: 'PUT', body },
+  );
