@@ -10,8 +10,10 @@ import {
   faSearch,
   faXmark,
   faUserPlus,
+  faBrain,
 } from "@fortawesome/free-solid-svg-icons";
 import {
+  runFacultyMlJob,
   fetchFacultyStudents,
   fetchFacultyTeams,
   fetchGroupSummaries,
@@ -23,7 +25,12 @@ import PageHeader from "../../components/PageHeader";
 import AssignCasesModal from "./AssignCasesModal";
 import Avatar from "../../components/Avatar";
 import { EcgLoader } from "../../components/EcgLoader";
+import MlRunProgress, { mlRunFraction, mlRunLabel, type MlRun } from "../../components/MlRunProgress";
+import { toast } from "../../components/Toast";
 import { usePageData } from "../../lib/use-page-data";
+
+/** Long enough to read a sentence with numbers in it. */
+const ML_TOAST_MS = 8000;
 
 const byName = (a: { name: string }, b: { name: string }) =>
   a.name.localeCompare(b.name, undefined, { numeric: true });
@@ -123,7 +130,7 @@ function AvatarStack({ members, max = 5 }: { members: FacultyTeam["members"]; ma
 export default function TeamsClient() {
   const { data, loading } = usePageData("faculty:teams", fetchFacultyTeams);
   // Risk labels come from the roster, which carries each student's latest prediction.
-  const { data: roster } = usePageData("faculty:students", () => fetchFacultyStudents());
+  const { data: roster, refresh: refreshRoster } = usePageData("faculty:students", () => fetchFacultyStudents());
   const { data: summaryData } = usePageData("faculty:group-summaries", fetchGroupSummaries);
   const summaries: SummaryMap = new Map((summaryData?.groups ?? []).map((g) => [g.team_id, g]));
   const [openId, setOpenId] = useState<string | null>(null);
@@ -134,6 +141,42 @@ export default function TeamsClient() {
   const sections = data ? buildSections(data) : [];
   const open = sections.find((s) => s.id === openId) ?? null;
   const totalGroups = sections.reduce((n, s) => n + s.groups.length, 0);
+
+  const [mlRun, setMlRun] = useState<MlRun | null>(null);
+  const runningMl = mlRun !== null;
+
+  /**
+   * Runs both jobs for this faculty member's own students, prediction first so
+   * the recommender sees fresh risk scores, and stops at the first failure
+   * rather than reporting a half-run. The roster is reloaded afterwards: the
+   * low-performing / on-track badges below are what this rewrites.
+   */
+  const handleRunMl = async () => {
+    setMlRun({ job: "predict", fraction: 0 });
+    const predictions = await runFacultyMlJob("predict", (fraction) => setMlRun({ job: "predict", fraction }));
+    if (predictions.error) {
+      toast(predictions.error, "error", ML_TOAST_MS);
+      setMlRun(null);
+      return;
+    }
+    setMlRun({ job: "recommend", fraction: 0 });
+    const recommendations = await runFacultyMlJob("recommend", (fraction) => setMlRun({ job: "recommend", fraction }));
+    if (recommendations.error) {
+      toast(recommendations.error, "error", ML_TOAST_MS);
+      setMlRun(null);
+      return;
+    }
+    const scored = Number(predictions.result?.scored ?? 0);
+    const atRisk = Number(predictions.result?.at_risk ?? 0);
+    const recs = Number(recommendations.result?.recommendations ?? 0);
+    toast(
+      `Scored ${scored} of your students (${atRisk} at risk) and wrote ${plural(recs, "recommendation")}. Predictions reach the Analytics charts after the warehouse is refreshed.`,
+      "success",
+      ML_TOAST_MS,
+    );
+    setMlRun(null);
+    await refreshRoster();
+  };
 
   return (
     <div>
@@ -148,6 +191,18 @@ export default function TeamsClient() {
             ? `You supervise ${plural(totalGroups, "group")} across ${plural(sections.length, "section")}. Your admin sets up the groups.`
             : "The student groups you supervise, by section. Your admin sets up the groups."
         }
+        action={{
+          icon: runningMl ? <EcgLoader /> : <FontAwesomeIcon icon={faBrain} className="h-4 w-4" />,
+          onClick: handleRunMl,
+          text: mlRun ? `${Math.round(mlRunFraction(mlRun) * 100)}%` : "Assess",
+          disabled: runningMl || sections.length === 0,
+          label: mlRun
+            ? mlRunLabel(mlRun)
+            : sections.length === 0
+              ? "You need a group before the ML jobs have anyone to assess"
+              : "Run ML Jobs — score your students for risk and refresh their skill assessment recommendations",
+          below: mlRun && <MlRunProgress run={mlRun} />,
+        }}
       />
 
       {loading && !data ? (
