@@ -12,9 +12,10 @@ import {
   SkeletonScreen,
   SkeletonBlock,
   RoomPages,
+  Badge,
 } from '@/components/ui';
 import { useApiData } from '@/hooks/useApiData';
-import { fetchWard, fetchAiTips, AiTip, WardRoom, WardPatient, WardAssignment } from '@/lib/api';
+import { fetchWard, fetchAiTips, fetchMyCases, AiTip, WardRoom, WardPatient, WardAssignment, CaseListItem } from '@/lib/api';
 
 /**
  * The Clinic tab: the ward's rooms, four to a page. Students find the room
@@ -145,20 +146,25 @@ export default function ClinicScreen() {
   const { data, loading, refreshing, error, fromCache, refresh, reload } = useApiData(fetchWard);
   // Separate call: a slow LLM generation must never hold up the ward.
   const tips = useApiData(fetchAiTips);
+  const cases = useApiData(fetchMyCases);
 
   // Charting auto-checks system tasks, so the counters are stale on return.
   useFocusEffect(
     React.useCallback(() => {
       if (data) reload();
+      // A case edited or handed in comes back with a new status.
+      cases.reload();
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [reload]),
   );
 
   const refreshTips = tips.refresh;
+  const refreshCases = cases.refresh;
   const handleRefresh = React.useCallback(() => {
     refresh();
     refreshTips();
-  }, [refresh, refreshTips]);
+    refreshCases();
+  }, [refresh, refreshTips, refreshCases]);
 
   const openAssignment = React.useCallback(
     (assignment: WardAssignment) => {
@@ -186,6 +192,7 @@ export default function ClinicScreen() {
       .find((roomId): roomId is string => Boolean(roomId)) ?? null;
 
   const tipList = tips.data?.tips ?? [];
+  const caseList = cases.data ?? [];
   const showTips = tips.loading || tipList.length > 0 || Boolean(tips.error);
 
   return (
@@ -234,6 +241,24 @@ export default function ClinicScreen() {
           ))
         : null}
 
+      {caseList.length > 0 || cases.loading ? (
+        <View style={styles.section}>
+          <SectionHeader title="Hospital Cases" subtitle="Write up a patient from your duty — initials only" />
+          {cases.loading && caseList.length === 0 ? (
+            <View style={styles.tipCard}>
+              <View style={styles.tipBody}>
+                <SkeletonBlock width="60%" height={13} />
+                <SkeletonBlock width="35%" height={11} style={styles.tipSkeletonLine} />
+              </View>
+            </View>
+          ) : (
+            caseList.map((item) => (
+              <CaseCard key={item.id} item={item} onPress={() => router.push(`/cases/${item.id}`)} />
+            ))
+          )}
+        </View>
+      ) : null}
+
       {showTips ? (
         <View style={styles.section}>
           <SectionHeader title="AI Study Tips" subtitle="Generated from your assigned scenarios" />
@@ -267,6 +292,49 @@ export default function ClinicScreen() {
       </View>
 
     </ScrollView>
+  );
+}
+
+const CASE_STATUS: Record<CaseListItem['status'], { label: string; variant: 'default' | 'warning' | 'info' | 'success' }> = {
+  not_started: { label: 'Not started', variant: 'default' },
+  draft: { label: 'Draft', variant: 'warning' },
+  submitted: { label: 'Handed in', variant: 'info' },
+  graded: { label: 'Graded', variant: 'success' },
+};
+
+function CaseCard({ item, onPress }: { item: CaseListItem; onPress: () => void }) {
+  const { Palette, Accent, Shadow, Type } = useTheme();
+  const styles = React.useMemo(() => createStyles(Palette, Accent, Shadow, Type), [Palette, Accent, Shadow, Type]);
+  const status = CASE_STATUS[item.status];
+  const due = item.presentation.deadline
+    ? new Date(item.presentation.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    : null;
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.tipCard, styles.caseCard, pressed && styles.pressedCard]}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${item.presentation.title}, ${status.label}`}
+    >
+      <View style={[styles.bannerIcon, { backgroundColor: Accent.teal.bg }]}>
+        <Ionicons name="document-text-outline" size={17} color={Accent.teal.fg} />
+      </View>
+      <View style={styles.tipBody}>
+        <Text style={Type.itemTitle} numberOfLines={1}>
+          {item.presentation.title}
+        </Text>
+        <View style={styles.caseMeta}>
+          <Badge label={status.label} variant={status.variant} size="sm" />
+          {item.late ? <Badge label="Late" variant="danger" size="sm" /> : null}
+          {item.status === 'graded' && item.score !== null ? (
+            <Text style={Type.caption}>{item.score}%</Text>
+          ) : due ? (
+            <Text style={Type.caption}>Due {due}</Text>
+          ) : null}
+        </View>
+      </View>
+      <Ionicons name="chevron-forward" size={17} color={Palette.textFaint} />
+    </Pressable>
   );
 }
 
@@ -416,6 +484,16 @@ function createStyles(
     },
     tipBody: {
       flex: 1,
+    },
+    caseCard: {
+      alignItems: 'center',
+    },
+    caseMeta: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      flexWrap: 'wrap',
+      gap: Spacing.sm,
+      marginTop: 6,
     },
     tipTitle: Type.itemTitle,
     tipScenario: {

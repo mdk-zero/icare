@@ -874,3 +874,113 @@ export async function fetchGoals(): Promise<StudentGoal[]> {
 export async function setGoalStatus(goalId: string, status: 'open' | 'met'): Promise<void> {
   await api(`/api/student/goals/${goalId}`, { method: 'PATCH', body: { status } });
 }
+
+// ---------------------------------------------------------------
+// Hospital case presentations (write up a real duty patient, initials only)
+// ---------------------------------------------------------------
+
+export type CaseStatus = 'not_started' | 'draft' | 'submitted' | 'graded';
+
+export interface CaseVitalsEntry {
+  heart_rate: number | null;
+  bp_systolic: number | null;
+  bp_diastolic: number | null;
+  temperature_c: number | null;
+  respiratory_rate: number | null;
+  oxygen_saturation: number | null;
+  pain_score: number | null;
+  notes: string;
+  observed_at: string | null;
+}
+
+export interface CaseTprEntry {
+  temperature_c: number | null;
+  pulse: number | null;
+  respiration: number | null;
+  remarks: string;
+  observed_at: string | null;
+}
+
+export interface CaseIvfEntry {
+  solution: string;
+  volume_ml: number | null;
+  rate_ml_hr: number | null;
+  site: string;
+  remarks: string;
+  observed_at: string | null;
+}
+
+export interface CaseObservations {
+  vitals: CaseVitalsEntry[];
+  tpr: CaseTprEntry[];
+  ivf: CaseIvfEntry[];
+}
+
+export interface CasePresentationInfo {
+  id: string;
+  title: string;
+  instructions: string;
+  deadline: string | null;
+}
+
+export interface CaseListItem {
+  id: string;
+  status: CaseStatus;
+  patient_initials: string | null;
+  submitted_at: string | null;
+  graded_at: string | null;
+  score: number | null;
+  updated_at: string;
+  late: boolean;
+  presentation: CasePresentationInfo;
+}
+
+/** The fields a student edits; the server whitelists exactly these. */
+export interface CaseDraft {
+  patient_initials: string | null;
+  age: number | null;
+  sex: 'male' | 'female' | null;
+  hospital: string;
+  ward: string;
+  admitting_diagnosis: string;
+  chief_complaint: string;
+  history: string;
+  medications: string;
+  nursing_diagnoses: string;
+  interventions: string;
+  observations: CaseObservations;
+}
+
+export interface CaseDetail extends CaseDraft {
+  id: string;
+  status: CaseStatus;
+  submitted_at: string | null;
+  graded_at: string | null;
+  score: number | null;
+  remarks: string;
+  late: boolean;
+  updated_at: string;
+  presentation: CasePresentationInfo;
+  ratings: { criterion: string; rating: TaskRating; remarks: string }[];
+  criteria: { key: string; label: string; description: string }[];
+}
+
+export async function fetchMyCases(): Promise<CachedResult<CaseListItem[]>> {
+  const result = await cachedGet<{ cases: CaseListItem[] }>('/api/student/cases');
+  return { ...result, data: result.data.cases ?? [] };
+}
+
+export async function fetchCase(id: string): Promise<CachedResult<CaseDetail>> {
+  const result = await cachedGet<{ case: CaseDetail }>(`/api/student/cases/${id}`);
+  return { ...result, data: result.data.case };
+}
+
+/** Saves the draft; not queued offline, since a later edit would race it. */
+export async function saveCaseDraft(id: string, patch: Partial<CaseDraft>): Promise<CaseDetail> {
+  const result = await api<{ case: CaseDetail }>(`/api/student/cases/${id}`, { method: 'PATCH', body: patch });
+  return result.case;
+}
+
+export async function submitCase(id: string): Promise<void> {
+  await api(`/api/student/cases/${id}/submit`, { method: 'POST' });
+}
