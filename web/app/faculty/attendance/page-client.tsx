@@ -50,6 +50,11 @@ import {
   type ShiftType,
 } from "../../lib/shifts";
 import { EcgLoader } from "../../components/EcgLoader";
+import {
+  SkeletonShiftCalendar,
+  SkeletonShiftRoster,
+  SkeletonStatTile,
+} from "../../components/skeletons";
 
 const NO_SHIFTS: FacultyShift[] = [];
 const NO_SECTIONS: Section[] = [];
@@ -149,44 +154,48 @@ export default function AttendanceClient() {
       />
 
       <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatTile
-          icon={faClipboardList}
-          value={shifts.length}
-          label="Shifts scheduled"
-          caption={
-            unmarked > 0 ? `${unmarked} past shift${unmarked === 1 ? "" : "s"} unmarked` : undefined
-          }
-        />
-        <StatTile
-          icon={faPercent}
-          value={overall.rate === null ? "—" : `${overall.rate}%`}
-          label="Attendance rate"
-          caption="Present or late, of those marked"
-          iconBg="bg-emerald-50"
-          iconColor="text-emerald-600"
-        />
-        <StatTile
-          icon={faUserCheck}
-          value={overall.present + overall.late}
-          label="Attended"
-          caption={overall.late > 0 ? `${overall.late} late` : undefined}
-          iconBg="bg-brand-600/10"
-          iconColor="text-brand-600"
-        />
-        <StatTile
-          icon={faUsers}
-          value={overall.absent}
-          label="Absent"
-          caption={overall.excused > 0 ? `${overall.excused} excused separately` : undefined}
-          iconBg="bg-rose-50"
-          iconColor="text-rose-600"
-        />
+        {loading ? (
+          Array.from({ length: 4 }).map((_, i) => <SkeletonStatTile key={i} />)
+        ) : (
+          <>
+            <StatTile
+              icon={faClipboardList}
+              value={shifts.length}
+              label="Shifts scheduled"
+              caption={
+                unmarked > 0 ? `${unmarked} past shift${unmarked === 1 ? "" : "s"} unmarked` : undefined
+              }
+            />
+            <StatTile
+              icon={faPercent}
+              value={overall.rate === null ? "—" : `${overall.rate}%`}
+              label="Attendance rate"
+              caption="Present or late, of those marked"
+              iconBg="bg-emerald-50"
+              iconColor="text-emerald-600"
+            />
+            <StatTile
+              icon={faUserCheck}
+              value={overall.present + overall.late}
+              label="Attended"
+              caption={overall.late > 0 ? `${overall.late} late` : undefined}
+              iconBg="bg-brand-600/10"
+              iconColor="text-brand-600"
+            />
+            <StatTile
+              icon={faUsers}
+              value={overall.absent}
+              label="Absent"
+              caption={overall.excused > 0 ? `${overall.excused} excused separately` : undefined}
+              iconBg="bg-rose-50"
+              iconColor="text-rose-600"
+            />
+          </>
+        )}
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center p-12">
-          <EcgLoader size="lg" className="text-brand-600" />
-        </div>
+        <SkeletonShiftCalendar />
       ) : shifts.length === 0 ? (
         <div className="rounded-xl border border-hairline bg-surface p-12 text-center shadow-tile">
           <FontAwesomeIcon
@@ -878,8 +887,9 @@ function ShiftRoster({
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center p-16">
-        <EcgLoader size="lg" className="text-brand-600" />
+      <div>
+        <BackButton onBack={onBack} />
+        <SkeletonShiftRoster />
       </div>
     );
   }

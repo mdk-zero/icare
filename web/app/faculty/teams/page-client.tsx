@@ -25,6 +25,7 @@ import PageHeader from "../../components/PageHeader";
 import AssignCasesModal from "./AssignCasesModal";
 import Avatar from "../../components/Avatar";
 import { EcgLoader } from "../../components/EcgLoader";
+import { SkeletonTeamGrid } from "../../components/skeletons";
 import MlRunProgress, { mlRunFraction, mlRunLabel, type MlRun } from "../../components/MlRunProgress";
 import { toast } from "../../components/Toast";
 import { usePageData } from "../../lib/use-page-data";
@@ -207,9 +208,7 @@ export default function TeamsClient() {
       />
 
       {loading && !data ? (
-        <div className="flex justify-center p-16">
-          <EcgLoader size="lg" className="text-brand-600" />
-        </div>
+        <SkeletonTeamGrid />
       ) : sections.length === 0 ? (
         <div className="rounded-xl border border-dashed border-gray-300 bg-surface p-12 text-center">
           <FontAwesomeIcon icon={faPeopleGroup} className="h-8 w-8 text-gray-300" />

@@ -465,3 +465,114 @@ export function SkeletonSidebar({ collapsed = false }: { collapsed?: boolean }) 
     </div>
   );
 }
+
+/** Mirrors the faculty teams section card: display-size name + chevron, the
+ *  groups/count line, then an avatar stack beside a status pill. */
+export function SkeletonTeamGrid({ cards = 6 }: { cards?: number }) {
+  return (
+    <div>
+      <div className="mb-5 h-11 max-w-md rounded-xl border border-hairline bg-surface animate-pulse" />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {Array.from({ length: cards }).map((_, i) => (
+          <div
+            key={i}
+            className="flex flex-col rounded-xl border border-hairline bg-surface p-5 shadow-tile animate-pulse"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="h-7 w-32 rounded bg-gray-100" />
+              <div className="mt-2 h-3.5 w-3.5 rounded bg-gray-100" />
+            </div>
+            <div className="mt-2 h-3.5 w-48 rounded bg-gray-100" />
+            <div className="mt-auto flex items-center justify-between gap-3 pt-5">
+              <div className="flex -space-x-2">
+                {Array.from({ length: 5 }).map((_, j) => (
+                  <div key={j} className="h-8 w-8 rounded-full bg-gray-100 ring-2 ring-surface" />
+                ))}
+              </div>
+              <div className="h-5 w-28 rounded-full bg-gray-100" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Mirrors the attendance month calendar: toolbar, weekday header, and six
+ *  rows of day cells so the page keeps its height when shifts arrive. */
+export function SkeletonShiftCalendar() {
+  return (
+    <div className="overflow-hidden rounded-xl border border-hairline bg-surface shadow-tile animate-pulse">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-hairline px-4 py-3">
+        <div className="flex items-center gap-1.5">
+          <div className="h-8 w-16 rounded-lg bg-gray-100" />
+          <div className="h-8 w-8 rounded-lg bg-gray-100" />
+          <div className="h-8 w-8 rounded-lg bg-gray-100" />
+          <div className="ml-1.5 h-4 w-32 rounded bg-gray-100" />
+        </div>
+        <div className="h-8 w-32 rounded-lg bg-gray-100" />
+      </div>
+      <div className="grid grid-cols-7 border-b border-hairline bg-subtle">
+        {Array.from({ length: 7 }).map((_, i) => (
+          <div key={i} className="flex justify-center px-2 py-2.5">
+            <div className="h-2.5 w-8 rounded bg-gray-100" />
+          </div>
+        ))}
+      </div>
+      <div className="grid grid-cols-7">
+        {Array.from({ length: 42 }).map((_, i) => (
+          <div
+            key={i}
+            className="min-h-[104px] border-b border-r border-hairline p-1.5 [&:nth-child(7n)]:border-r-0"
+          >
+            <div className="mb-1 flex justify-end">
+              <div className="h-6 w-6 rounded-full bg-gray-100" />
+            </div>
+            {i % 5 === 2 && <div className="h-4 w-full rounded bg-gray-100" />}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Mirrors a shift's roster view below its back button: header, the
+ *  status/actions row, then one row per student with their mark buttons. */
+export function SkeletonShiftRoster({ rows = 6 }: { rows?: number }) {
+  return (
+    <div className="animate-pulse">
+      <div className="mb-6 space-y-2.5">
+        <div className="h-6 w-32 rounded-full bg-gray-100" />
+        <div className="h-8 w-72 rounded bg-gray-100" />
+        <div className="h-4 w-96 max-w-full rounded bg-gray-100" />
+      </div>
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <div className="h-6 w-20 rounded-full bg-gray-100" />
+        <div className="h-4 w-36 rounded bg-gray-100" />
+        <div className="ml-auto flex items-center gap-2">
+          <div className="h-9 w-36 rounded-xl bg-gray-100" />
+          <div className="h-9 w-28 rounded-xl bg-gray-100" />
+          <div className="h-9 w-24 rounded-xl bg-gray-100" />
+        </div>
+      </div>
+      <div className="overflow-hidden rounded-xl border border-hairline bg-surface shadow-tile">
+        <ul className="divide-y divide-hairline">
+          {Array.from({ length: rows }).map((_, i) => (
+            <li key={i} className="flex flex-wrap items-center gap-3 px-4 py-3">
+              <div className="min-w-0 flex-1 space-y-1.5">
+                <div className="h-4 w-40 rounded bg-gray-100" />
+                <div className="h-3 w-56 rounded bg-gray-100" />
+              </div>
+              <div className="h-5 w-16 rounded-full bg-gray-100" />
+              <div className="flex items-center gap-1">
+                {Array.from({ length: 4 }).map((_, j) => (
+                  <div key={j} className="h-6 w-14 rounded-lg bg-gray-100" />
+                ))}
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}
