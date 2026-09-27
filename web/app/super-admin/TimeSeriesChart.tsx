@@ -199,25 +199,11 @@ export default function TimeSeriesChart({
                 );
               })
             : series.map((s, si) => {
-                let d = "";
-                let pen = false;
-                points.forEach((p, i) => {
-                  const v = p.values[si];
-                  if (v === null) {
-                    pen = false;
-                    return;
-                  }
-                  d += `${pen ? "L" : "M"}${x(i)},${y(v)} `;
-                  pen = true;
-                });
-                // A reading with no neighbour on either side draws no line
-                // segment at all, so it gets a dot or it vanishes.
-                const isolated = points.flatMap((p, i) => {
-                  const v = p.values[si];
-                  const prev = i > 0 ? points[i - 1].values[si] : null;
-                  const next = i < n - 1 ? points[i + 1].values[si] : null;
-                  return v !== null && prev === null && next === null ? [{ i, v }] : [];
-                });
+                // Empty buckets (null) are stepped over, not broken on: the
+                // line joins the readings either side, and the x-axis still
+                // shows how much time passed between them.
+                const measured = points.flatMap((p, i) => (p.values[si] === null ? [] : [{ i, v: p.values[si]! }]));
+                const d = measured.map(({ i, v }, k) => `${k === 0 ? "M" : "L"}${x(i)},${y(v)}`).join(" ");
                 return (
                   <g key={s.label}>
                     <path
@@ -228,9 +214,10 @@ export default function TimeSeriesChart({
                       strokeLinejoin="round"
                       strokeLinecap="round"
                     />
-                    {isolated.map(({ i, v }) => (
-                      <circle key={i} cx={x(i)} cy={y(v)} r={3} fill={s.color} />
-                    ))}
+                    {/* A single reading draws no segment, so it needs a dot. */}
+                    {measured.length === 1 && (
+                      <circle cx={x(measured[0].i)} cy={y(measured[0].v)} r={3} fill={s.color} />
+                    )}
                   </g>
                 );
               })}

@@ -58,7 +58,8 @@ export interface FilledBucket {
  * two busy hours drew two fat bars and a line sloping straight across the
  * quiet hours in between. This lays out every bucket from `since` to `now`:
  * an empty one counts zero requests and has no latency, so bars sit at zero
- * and lines break there instead of inventing a trend.
+ * and each reading sits at its real time — the line joins readings across
+ * the quiet hours, but the axis shows how long they were.
  */
 export function fillBuckets(summary: MetricsSummary | null | undefined, now = Date.now()): FilledBucket[] {
   const series = summary?.series ?? [];
