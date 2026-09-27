@@ -51,6 +51,9 @@ export default function StatTile({
   href,
   className = "",
 }: StatTileProps) {
+  // A zero reads as "nothing yet" on a KPI, so it shows the same dash as a
+  // missing figure. Only a bare zero: a ratio like "0/5" keeps its meaning.
+  const shown = value === 0 || value === "0" || value === "0%" ? "—" : value;
   const interactive = Boolean(onClick || href);
   const isUp = (change ?? 0) >= 0;
   const isGood = goodDirection === "up" ? isUp : !isUp;
@@ -84,7 +87,7 @@ export default function StatTile({
       <span
         className={`relative mt-3.5 block font-display text-[2.75rem] font-bold leading-none tabular-nums ${valueColor}`}
       >
-        {value}
+        {shown}
       </span>
       <span className="relative mt-3 flex min-h-[1rem] flex-wrap items-center gap-1.5 text-xs">
         {change === null && <span className="font-semibold text-gray-400">—</span>}
