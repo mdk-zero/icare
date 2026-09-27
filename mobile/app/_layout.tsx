@@ -30,9 +30,6 @@ function AuthStack() {
       <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
       <Stack.Screen name="clinic/room/[id]" options={{ title: 'Room' }} />
       <Stack.Screen name="clinic/patient/[id]" options={{ title: 'Patient' }} />
-      <Stack.Screen name="clinic/patient/[id]/vitals" options={{ title: 'Vital Signs' }} />
-      <Stack.Screen name="clinic/patient/[id]/tpr" options={{ title: 'TPR Sheet' }} />
-      <Stack.Screen name="clinic/patient/[id]/ivf" options={{ title: 'IVF Sheet' }} />
       <Stack.Screen name="clinic/assignment/[id]" options={{ title: 'Scenario' }} />
       <Stack.Screen name="cases/[id]" options={{ title: 'Case Write-up' }} />
       <Stack.Screen name="quiz/[id]" options={{ title: 'Skill Assessment' }} />

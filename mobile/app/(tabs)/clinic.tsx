@@ -18,10 +18,10 @@ import { useApiData } from '@/hooks/useApiData';
 import { fetchWard, fetchAiTips, fetchMyCases, AiTip, WardRoom, WardPatient, WardAssignment, CaseListItem } from '@/lib/api';
 
 /**
- * The Clinic tab: the ward's rooms, four to a page. Students find the room
- * with their patient, walk into it, find the patient attached to their
- * scenario, and chart on them. Everything the tab needs arrives in one
- * cached read (/api/student/ward), so the rooms still show offline.
+ * The Clinic tab: the student's hospital case write-ups, then the ward's
+ * rooms, four to a page. Students find the room with their patient and walk
+ * into it to read the scenario brief and task checklist. The ward arrives in
+ * one cached read (/api/student/ward), so the rooms still show offline.
  */
 
 function AssignmentBanner({
@@ -148,7 +148,7 @@ export default function ClinicScreen() {
   const tips = useApiData(fetchAiTips);
   const cases = useApiData(fetchMyCases);
 
-  // Charting auto-checks system tasks, so the counters are stale on return.
+  // Faculty check tasks off in the meantime, so the counters are stale on return.
   useFocusEffect(
     React.useCallback(() => {
       if (data) reload();

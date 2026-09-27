@@ -7,7 +7,6 @@ import {
   faCheckDouble,
   faCommentMedical,
   faHandHoldingMedical,
-  faLaptopMedical,
 } from "@fortawesome/free-solid-svg-icons";
 import type { GradingTask } from "../../../lib/api";
 import {
@@ -235,10 +234,8 @@ function TaskGroup({
 }: TaskGroupProps) {
   const rows = checklistRows(task);
   const hasSteps = task.steps.length > 0;
-  const isAuto = task.verification === "system";
   const { earned, max } = taskPoints(task);
   const weight = totalPoints > 0 ? Math.round((task.points / totalPoints) * 100) : 0;
-  const trigger = task.system_trigger === "vitals" ? "recording vitals" : "charting";
 
   // Rows nobody has rated yet — the ones a header checkmark fills in.
   const openRows = rows.filter((r) => r.implied || r.level === null);
@@ -284,8 +281,8 @@ function TaskGroup({
                   {task.category}
                 </span>
                 <span className="flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">
-                  <FontAwesomeIcon icon={isAuto ? faLaptopMedical : faHandHoldingMedical} className="h-2.5 w-2.5" />
-                  {isAuto ? "Auto-tracked" : "Hands-on"}
+                  <FontAwesomeIcon icon={faHandHoldingMedical} className="h-2.5 w-2.5" />
+                  Hands-on
                 </span>
                 <span
                   title={`${task.points} of ${totalPoints} points`}
@@ -299,11 +296,12 @@ function TaskGroup({
                   {task.description}
                 </p>
               )}
-              {isAuto && (
+              {/* Before migration 057 charting on the ward ticked some tasks by itself;
+                  those completions stay, and are marked as such. */}
+              {task.completed_via === "system" && (
                 <p className="mt-1 text-xs text-gray-400">
-                  {task.completed_via === "system"
-                    ? `Auto-completed from the student's ${trigger}${task.completed_at ? ` · ${formatWhen(task.completed_at)}` : ""}`
-                    : `Not detected — completes from the student's ${trigger}`}
+                  Checked off by the student&apos;s ward charting
+                  {task.completed_at ? ` · ${formatWhen(task.completed_at)}` : ""}
                 </p>
               )}
               {status && <p className="mt-1 text-xs text-gray-400">{status}</p>}

@@ -942,7 +942,7 @@ async function main() {
 
         const { data: tasks } = await supabase
           .from('scenario_tasks')
-          .select('id, points, verification, skill_id, scenario_task_steps(id)')
+          .select('id, points, skill_id, scenario_task_steps(id)')
           .eq('scenario_id', scenarioId)
           .order('sort_order', { ascending: true });
 
@@ -977,10 +977,10 @@ async function main() {
           return {
             assignment_id: assignment.id,
             task_id: t.id,
-            // A system task is closed by the student's own charting; a
-            // faculty task by the faculty member signing it off.
-            completed_by: t.verification === 'system' ? member.studentId : member.facultyId,
-            completed_via: t.verification,
+            // Every task is rated in person by the faculty member; students
+            // no longer chart on the ward, so nothing completes by itself.
+            completed_by: member.facultyId,
+            completed_via: 'faculty' as const,
             completed_at: submittedAt.toISOString(),
             rating,
             remarks,

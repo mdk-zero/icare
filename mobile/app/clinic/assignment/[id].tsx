@@ -56,10 +56,10 @@ function PatientCase({
 
 /**
  * Brief-only view of a scenario assignment. A scenario with a patient linked is
- * worked on the patient hub (app/clinic/patient/[id].tsx), where the checklist,
- * the record actions and the hand-in sit together. This screen is where an
- * assignment lands when faculty never set scenarios.patient_id — the student
- * can still read the brief and submit, but there is nothing to chart on.
+ * worked on the patient hub (app/clinic/patient/[id].tsx), where the checklist
+ * and the hand-in sit together. This screen is where an assignment lands when
+ * faculty never set scenarios.patient_id — the student can still read the
+ * brief and submit.
  */
 export default function ScenarioBriefScreen() {
   const { id } = useLocalSearchParams();
@@ -76,8 +76,7 @@ export default function ScenarioBriefScreen() {
   const tasks = useMemo(() => taskResult?.tasks ?? [], [taskResult]);
   const taskAssignment = taskResult?.assignment ?? null;
 
-  // Coming back from recording vitals / charting should reflect the tasks that
-  // auto-completed while the student was away.
+  // Faculty check tasks off while the student is elsewhere; refresh on return.
   useFocusEffect(
     React.useCallback(() => {
       reload();
@@ -124,15 +123,12 @@ export default function ScenarioBriefScreen() {
   const totalCount = tasks.length;
   const totalPoints = tasks.reduce((sum, t) => sum + t.points, 0);
   const earnedPoints = tasks.filter((t) => t.is_completed).reduce((sum, t) => sum + t.points, 0);
-  const autoPending = tasks.filter((t) => t.verification === 'system' && !t.is_completed).length;
 
   const handleSubmit = () => {
     if (!assignment) return;
     Alert.alert(
       'Submit for Review',
-      autoPending > 0
-        ? `${autoPending} automatic task${autoPending === 1 ? '' : 's'} (record vitals / chart) ${autoPending === 1 ? 'is' : 'are'} still not done. Submit anyway? Your instructor verifies the hands-on tasks and finalizes your score.`
-        : 'Submit your work for faculty review? Your instructor verifies the remaining hands-on tasks and finalizes your score.',
+      'Submit your work for faculty review? Your instructor rates each task and finalizes your score.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -266,9 +262,6 @@ export default function ScenarioBriefScreen() {
       {scenario?.patient_id && (
         <Card style={styles.blockCard}>
           <Text style={styles.blockLabel}>Assigned Patient</Text>
-          <Text style={styles.patientLinkHint}>
-            Recording vitals or charting here automatically checks off the matching tasks below.
-          </Text>
           <View style={styles.patientLinkRow}>
             <Pressable
               style={({ pressed }) => [styles.patientLinkButton, pressed && styles.patientLinkPressed]}
@@ -276,13 +269,6 @@ export default function ScenarioBriefScreen() {
             >
               <Ionicons name="folder-open-outline" size={16} color={Palette.primary} />
               <Text style={styles.patientLinkText}>Patient Chart</Text>
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [styles.patientLinkButton, pressed && styles.patientLinkPressed]}
-              onPress={() => router.push(`/clinic/patient/${scenario.patient_id}/vitals`)}
-            >
-              <Ionicons name="pulse-outline" size={16} color={Palette.primary} />
-              <Text style={styles.patientLinkText}>Record Vitals</Text>
             </Pressable>
           </View>
         </Card>
@@ -325,16 +311,9 @@ export default function ScenarioBriefScreen() {
               color={task.is_completed ? Accent.green.fg : Palette.textMuted}
             />
             <View style={styles.checkText}>
-              <View style={styles.checkTitleRow}>
-                <Text style={[styles.checkTitle, task.is_completed && styles.checkTitleDone]}>
-                  {task.title}
-                </Text>
-                <Badge
-                  label={task.verification === 'system' ? 'Auto' : 'Faculty'}
-                  variant={task.verification === 'system' ? 'info' : 'default'}
-                  size="sm"
-                />
-              </View>
+              <Text style={[styles.checkTitle, task.is_completed && styles.checkTitleDone]}>
+                {task.title}
+              </Text>
               <Text style={styles.checkDescription}>{task.description}</Text>
               {task.rating && TASK_RATING_LABEL[task.rating] && (
                 <View style={styles.ratingRow}>
@@ -344,13 +323,8 @@ export default function ScenarioBriefScreen() {
               {task.remarks ? <Text style={styles.remarks}>{task.remarks}</Text> : null}
               {task.is_completed ? (
                 <Text style={styles.doneHint}>
-                  {task.completed_via === 'system' ? 'Auto-completed' : 'Verified by faculty'}
-                </Text>
-              ) : task.verification === 'system' ? (
-                <Text style={styles.autoHint}>
-                  {task.system_trigger === 'vitals'
-                    ? 'Completes when you record vitals for this patient'
-                    : 'Completes when you chart in the patient record'}
+                  {/* Charting used to tick some tasks by itself; those stay as done. */}
+                  {task.completed_via === 'system' ? 'Completed' : 'Verified by faculty'}
                 </Text>
               ) : (
                 <Text style={styles.facultyHint}>Your instructor verifies this</Text>
@@ -430,7 +404,6 @@ function createStyles(
   },
   caseKey: { fontSize: 13, color: Palette.textSecondary, textTransform: 'capitalize' },
   caseValue: { fontSize: 13, fontWeight: '600', color: Palette.ink, flexShrink: 1, textAlign: 'right' },
-  patientLinkHint: { fontSize: 13, color: Palette.textSecondary, lineHeight: 19, marginBottom: Spacing.md },
   patientLinkRow: { flexDirection: 'row', gap: Spacing.md },
   patientLinkButton: {
     flex: 1,
@@ -470,11 +443,9 @@ function createStyles(
     gap: Spacing.md,
   },
   checkText: { flex: 1 },
-  checkTitleRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, flexWrap: 'wrap' },
   checkTitle: { ...Type.itemTitle },
   checkTitleDone: { color: Accent.green.fg },
   checkDescription: { fontSize: 12, color: Palette.textSecondary, marginTop: 2, lineHeight: 17 },
-  autoHint: { fontSize: 11, color: Accent.blue.fg, marginTop: 4 },
   facultyHint: { fontSize: 11, color: Palette.textMuted, marginTop: 4 },
   doneHint: { fontSize: 11, color: Accent.green.fg, marginTop: 4, fontWeight: '600' },
   ratingRow: { flexDirection: 'row', marginTop: 6 },

@@ -62,8 +62,6 @@ interface TaskRow {
   scenario_id: string;
   title: string;
   category: string;
-  verification: string;
-  system_trigger: string | null;
 }
 
 /** Days until the deadline, or null when there isn't one. */
@@ -127,8 +125,6 @@ function buildPrompt(
       const done = completedCountByAssignment.get(a.id) ?? 0;
       const objectives = objectiveList(scenario?.learning_objectives);
 
-      const autoTasks = tasks.filter((t) => t.verification === 'system');
-      const facultyTasks = tasks.filter((t) => t.verification === 'faculty');
 
       const lines = [
         `- Scenario: "${scenario?.title ?? 'Unknown scenario'}"`,
@@ -142,16 +138,10 @@ function buildPrompt(
       if (objectives.length > 0) {
         lines.push(`  Learning objectives: ${objectives.slice(0, 5).join('; ')}`);
       }
-      if (autoTasks.length > 0) {
+      // Every task is rated in person by the instructor during RetDem.
+      if (tasks.length > 0) {
         lines.push(
-          `  Tasks that check off automatically when the student acts in the app: ${autoTasks
-            .map((t) => `${t.title} (triggered by ${t.system_trigger === 'vitals' ? 'recording vitals' : 'charting'})`)
-            .join('; ')}`,
-        );
-      }
-      if (facultyTasks.length > 0) {
-        lines.push(
-          `  Tasks a faculty member checks off in person: ${facultyTasks.map((t) => t.title).join('; ')}`,
+          `  Tasks the instructor rates as the student demonstrates them: ${tasks.map((t) => t.title).join('; ')}`,
         );
       }
       return lines.join('\n');
@@ -185,11 +175,11 @@ Return ONLY a valid JSON object with this exact structure (no markdown, no expla
 
 Guidelines:
 - Return ${Math.min(MAX_TIPS, Math.max(2, open.length + 1))} tips, ordered most useful first.
-- "title" is an imperative phrase of at most 5 words, e.g. "Chart vitals as you go".
+- "title" is an imperative phrase of at most 5 words, e.g. "Rehearse your hand hygiene".
 - "tip" is ONE sentence, at most 25 words, giving concrete clinical or workflow advice the student can act on today. Be specific to the scenario's category, objectives, and task list — never generic study advice like "review your notes".
 - "scenario_title" must be copied exactly from one of the open scenarios above when the tip is about that scenario, or null when the tip spans several of them.
 - Prioritise required scenarios and near or passed deadlines. Say plainly when something is overdue.
-- At most one tip may be about workflow (deadlines, ordering, using the app's automatic check-off); the rest must be clinical.
+- At most one tip may be about workflow (deadlines, ordering what to practise); the rest must be clinical.
 - If a past score is low, one tip may address that weakness, but only in terms of the scenarios listed above.
 - Plain, encouraging, professional language for a student nurse. This is simulation training, so give no medical advice about real patients.`;
 }
@@ -267,7 +257,7 @@ export async function GET() {
         .in('id', scenarioIds),
       supabase
         .from('scenario_tasks')
-        .select('scenario_id, title, category, verification, system_trigger')
+        .select('scenario_id, title, category')
         .in('scenario_id', openScenarioIds)
         .order('sort_order', { ascending: true }),
       fetchTaskCompletions(supabase, openAssignmentIds).then(({ rows, error }) => ({

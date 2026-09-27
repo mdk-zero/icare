@@ -24,25 +24,25 @@ export interface SkillSelection {
   sections?: string[];
 }
 
-/** Vital-sign skills complete on their own when the student records vitals in the app. */
-const VITALS_SKILLS = new Set(['1-1', '1-4', '1-5', '1-6', '1-7', '14-1']);
-
 const POINTS_PER_SKILL = 10;
 
 function categoryFor(skill: Pick<SkillDetail, 'title'>): ScenarioTaskCategory {
   return /^(Assessing|Monitoring|Using a Pulse Oximeter)/.test(skill.title) ? 'assessment' : 'intervention';
 }
 
-/** The task a skill becomes: its title, goal, and how it is verified. */
+/**
+ * The task a skill becomes: its title and goal. Every skill is rated by the
+ * instructor during RetDem — students no longer chart on the ward, so nothing
+ * completes on its own (migration 057).
+ */
 export function skillTaskFields(skill: Pick<SkillDetail, 'id' | 'title' | 'goal'>) {
-  const vitals = VITALS_SKILLS.has(skill.id);
   return {
     title: skillTaskTitle(skill),
     description: skill.goal ? `Goal: ${skill.goal}` : '',
     category: categoryFor(skill),
     points: POINTS_PER_SKILL,
-    verification: (vitals ? 'system' : 'faculty') as 'system' | 'faculty',
-    system_trigger: (vitals ? 'vitals' : null) as 'vitals' | null,
+    verification: 'faculty' as const,
+    system_trigger: null,
   };
 }
 

@@ -16,7 +16,7 @@ import {
   isNetworkError,
   setToken,
 } from './client';
-import { evaluateVitals, VitalSignsInput, AnomalyReason } from './vitals-rules';
+import type { AnomalyReason } from './vitals-rules';
 import type { TaskRating } from './task-ratings';
 
 // ---------------------------------------------------------------
@@ -188,7 +188,7 @@ export interface WardPatient {
   gender: string | null;
   room_id: string | null;
   room_number: string | null;
-  /** Only an assigned patient may be charted on; the server enforces it too. */
+  /** Only an assigned patient shows its scenario brief and checklist. */
   is_assigned: boolean;
   /** Withheld by the server for patients this student is not assigned to. */
   diagnosis?: string | null;
@@ -232,73 +232,6 @@ export async function fetchWard(): Promise<CachedResult<WardResult>> {
       assignments: result.data.assignments ?? [],
     },
   };
-}
-
-// ---------------------------------------------------------------
-// Vitals (5.2 + 5.3 outbox + 5.5 anomaly UX)
-// ---------------------------------------------------------------
-
-export interface VitalReading {
-  id: string;
-  patient_id: string;
-  recorded_at: string;
-  heart_rate: number | null;
-  bp_systolic: number | null;
-  bp_diastolic: number | null;
-  temperature_c: number | null;
-  respiratory_rate: number | null;
-  oxygen_saturation: number | null;
-  pain_score: number | null;
-  notes: string | null;
-  is_anomaly: boolean;
-  anomaly_reasons: AnomalyReason[];
-  patients?: { name: string; room_number: string | null } | null;
-}
-
-export async function fetchMyVitals(patientId?: string): Promise<CachedResult<VitalReading[]>> {
-  const path = patientId
-    ? `/api/student/vitals?patient_id=${encodeURIComponent(patientId)}`
-    : '/api/student/vitals';
-  const result = await cachedGet<{ readings: VitalReading[] }>(path);
-  return { ...result, data: result.data.readings ?? [] };
-}
-
-export interface VitalSubmission extends VitalSignsInput {
-  patient_id: string;
-  notes?: string;
-}
-
-export interface VitalSubmitResult {
-  queued: boolean;
-  /** Server evaluation when online, local rule evaluation when queued. */
-  is_anomaly: boolean;
-  anomaly_reasons: AnomalyReason[];
-}
-
-export async function submitVitalReading(input: VitalSubmission): Promise<VitalSubmitResult> {
-  try {
-    const result = await api<{ reading: VitalReading }>('/api/student/vitals', {
-      method: 'POST',
-      body: input,
-    });
-    return {
-      queued: false,
-      is_anomaly: result.reading.is_anomaly,
-      anomaly_reasons: result.reading.anomaly_reasons ?? [],
-    };
-  } catch (err) {
-    if (!isNetworkError(err)) throw err;
-    // Offline: queue the write and flag with the same rule thresholds the
-    // server applies (Phase 5.5), so feedback works with no connection.
-    await enqueueWrite({
-      label: 'Vital signs entry',
-      path: '/api/student/vitals',
-      method: 'POST',
-      body: input,
-    });
-    const local = evaluateVitals(input);
-    return { queued: true, is_anomaly: local.is_anomaly, anomaly_reasons: local.reasons };
-  }
 }
 
 // ---------------------------------------------------------------
@@ -462,8 +395,8 @@ export async function fetchScenarioTasks(
 }
 
 /**
- * Hand the assignment in for faculty review. System tasks auto-complete as the
- * student works; faculty verify the hands-on tasks and finalize the score.
+ * Hand the assignment in for faculty review. Faculty rate each task and
+ * finalize the score.
  */
 export async function submitScenarioAssignment(
   assignmentId: string,
@@ -502,92 +435,6 @@ export interface AiTipsResult {
 export async function fetchAiTips(): Promise<CachedResult<AiTipsResult>> {
   const result = await cachedGet<AiTipsResult>('/api/student/tips');
   return { ...result, data: { ...result.data, tips: result.data.tips ?? [] } };
-}
-
-// ---------------------------------------------------------------
-// EHR (5.2 + 5.3 outbox)
-// ---------------------------------------------------------------
-
-export type EhrType = 'tpr' | 'ivf' | 'note';
-
-export interface EhrRecord {
-  id: string;
-  patient_id: string;
-  created_at: string;
-  // tpr
-  shift?: string | null;
-  temperature_c?: number | null;
-  pulse?: number | null;
-  respiration?: number | null;
-  remarks?: string | null;
-  // ivf
-  solution?: string;
-  volume_ml?: number | null;
-  rate_ml_hr?: number | null;
-  site?: string | null;
-  status?: 'ongoing' | 'completed' | 'discontinued';
-  ended_at?: string | null;
-  // note
-  content?: string;
-  reviewed_by?: string | null;
-  reviewed_at?: string | null;
-  patients?: { name: string; room_number: string | null } | null;
-}
-
-export async function fetchEhrRecords(
-  type: EhrType,
-  patientId?: string,
-): Promise<CachedResult<EhrRecord[]>> {
-  const path = patientId
-    ? `/api/student/ehr?type=${type}&patient_id=${encodeURIComponent(patientId)}`
-    : `/api/student/ehr?type=${type}`;
-  const result = await cachedGet<{ records: EhrRecord[] }>(path);
-  return { ...result, data: result.data.records ?? [] };
-}
-
-export interface EhrSubmitResult {
-  queued: boolean;
-  record: EhrRecord | null;
-}
-
-export async function createEhrRecord(
-  type: EhrType,
-  patientId: string,
-  fields: Record<string, unknown>,
-): Promise<EhrSubmitResult> {
-  const body = { type, patient_id: patientId, ...fields };
-  try {
-    const result = await api<{ record: EhrRecord }>('/api/student/ehr', {
-      method: 'POST',
-      body,
-    });
-    return { queued: false, record: result.record };
-  } catch (err) {
-    if (!isNetworkError(err)) throw err;
-    const labels: Record<EhrType, string> = {
-      tpr: 'TPR entry',
-      ivf: 'IVF record',
-      note: 'Progress note',
-    };
-    await enqueueWrite({
-      label: labels[type],
-      path: '/api/student/ehr',
-      method: 'POST',
-      body,
-    });
-    return { queued: true, record: null };
-  }
-}
-
-export async function updateIvfStatus(
-  id: string,
-  status: 'completed' | 'discontinued',
-): Promise<EhrRecord> {
-  const result = await api<{ record: EhrRecord }>('/api/student/ehr', {
-    method: 'PATCH',
-    body: { id, status },
-  });
-  return result.record;
 }
 
 // ---------------------------------------------------------------

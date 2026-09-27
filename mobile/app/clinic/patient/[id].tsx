@@ -6,8 +6,6 @@ import {
   StyleSheet,
   Pressable,
   RefreshControl,
-  TextInput,
-  ActivityIndicator,
   Alert,
 } from 'react-native';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
@@ -18,11 +16,8 @@ import { useTheme } from '@/hooks/useTheme';
 import { useApiData } from '@/hooks/useApiData';
 import {
   fetchWard,
-  fetchEhrRecords,
   fetchScenarioTasks,
-  createEhrRecord,
   submitScenarioAssignment,
-  EhrRecord,
   ScenarioTask,
   ScenarioTasksResult,
   WardVitals,
@@ -30,23 +25,15 @@ import {
 import { isNetworkError } from '@/lib/client';
 
 /**
- * The patient hub — the end of the ward walk-through and the only place a
- * student charts. It carries the scenario brief, the task checklist, the four
- * record actions (vitals, TPR, IVF, progress note) and the hand-in, so the
- * whole clinical loop closes on the patient rather than in a separate runner.
+ * The patient hub — the end of the ward walk-through. It carries the scenario
+ * brief, the latest vitals, the task checklist and the hand-in. Students no
+ * longer chart here: RetDem is a skills demonstration, rated by the instructor
+ * task by task, and what students write up is a real hospital case (Clinic →
+ * Hospital Cases), not this simulated patient.
  *
- * A patient outside the student's scenarios stops at a read-only summary; the
- * server would refuse the write anyway (isPatientAssigned), this just says so
- * before the round trip.
+ * A patient outside the student's scenarios stops at a read-only summary.
  */
 
-type HistoryEntry = { kind: 'tpr' | 'ivf'; record: EhrRecord };
-
-const IVF_STATUS_VARIANT: Record<string, 'info' | 'success' | 'warning'> = {
-  ongoing: 'info',
-  completed: 'success',
-  discontinued: 'warning',
-};
 
 function formatTimestamp(iso: string) {
   return new Date(iso).toLocaleString([], {
@@ -96,33 +83,6 @@ function VitalsGrid({
   );
 }
 
-function RecordButton({
-  label,
-  icon,
-  accent,
-  styles,
-  onPress,
-}: {
-  label: string;
-  icon: React.ComponentProps<typeof Ionicons>['name'];
-  accent: { fg: string; bg: string };
-  styles: ReturnType<typeof createStyles>;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      style={({ pressed }) => [styles.recordButton, pressed && styles.pressed]}
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={`Record ${label}`}
-    >
-      <View style={[styles.recordIcon, { backgroundColor: accent.bg }]}>
-        <Ionicons name={icon} size={20} color={accent.fg} />
-      </View>
-      <Text style={styles.recordLabel}>{label}</Text>
-    </Pressable>
-  );
-}
 
 export default function PatientHubScreen() {
   const { id } = useLocalSearchParams();
@@ -143,7 +103,6 @@ export default function PatientHubScreen() {
   const assignmentId = assignment?.id ?? null;
   const isAssigned = Boolean(patient?.is_assigned && assignmentId);
 
-  const [chart, setChart] = React.useState<{ tpr: EhrRecord[]; ivf: EhrRecord[]; notes: EhrRecord[] } | null>(null);
   const [taskResult, setTaskResult] = React.useState<ScenarioTasksResult | null>(null);
   const [chartError, setChartError] = React.useState<string | null>(null);
 
@@ -152,22 +111,15 @@ export default function PatientHubScreen() {
   const loadChart = React.useCallback(async () => {
     if (!assignmentId) return;
     try {
-      const [tpr, ivf, notes, tasks] = await Promise.all([
-        fetchEhrRecords('tpr', patientId),
-        fetchEhrRecords('ivf', patientId),
-        fetchEhrRecords('note', patientId),
-        fetchScenarioTasks(assignmentId),
-      ]);
-      setChart({ tpr: tpr.data, ivf: ivf.data, notes: notes.data });
+      const tasks = await fetchScenarioTasks(assignmentId);
       setTaskResult(tasks.data);
       setChartError(null);
     } catch (err) {
-      setChartError(err instanceof Error ? err.message : 'Unable to load this patient’s records');
+      setChartError(err instanceof Error ? err.message : 'Unable to load this scenario’s tasks');
     }
-  }, [assignmentId, patientId]);
+  }, [assignmentId]);
 
-  // Charting auto-checks the matching system tasks, so everything is stale on
-  // the way back from a record screen.
+  // Faculty check tasks off while the student is elsewhere; refresh on return.
   useFocusEffect(
     React.useCallback(() => {
       reload();
@@ -175,12 +127,8 @@ export default function PatientHubScreen() {
     }, [reload, loadChart]),
   );
 
-  const [note, setNote] = React.useState('');
-  const [savingNote, setSavingNote] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
   const [elapsed, setElapsed] = React.useState(0);
-  const noteInputRef = React.useRef<TextInput>(null);
-  const focusNote = React.useCallback(() => noteInputRef.current?.focus(), []);
 
   const tasks = taskResult?.tasks ?? [];
   const status = taskResult?.assignment.status ?? assignment?.status ?? 'pending';
@@ -195,36 +143,11 @@ export default function PatientHubScreen() {
     return () => clearInterval(timer);
   }, [isActive]);
 
-  const handleAddNote = async () => {
-    const content = note.trim();
-    if (!content) return;
-    setSavingNote(true);
-    try {
-      const result = await createEhrRecord('note', patientId, { content });
-      setNote('');
-      if (result.queued) {
-        Alert.alert(
-          'Saved Offline',
-          'No connection right now — the progress note is queued and will sync automatically.',
-        );
-      } else {
-        await loadChart();
-      }
-    } catch (err) {
-      Alert.alert('Error', err instanceof Error ? err.message : 'Unable to save the note');
-    } finally {
-      setSavingNote(false);
-    }
-  };
-
   const handleSubmit = () => {
     if (!assignmentId) return;
-    const autoPending = tasks.filter((t) => t.verification === 'system' && !t.is_completed).length;
     Alert.alert(
       'Submit for Review',
-      autoPending > 0
-        ? `${autoPending} automatic task${autoPending === 1 ? '' : 's'} (record vitals / chart) ${autoPending === 1 ? 'is' : 'are'} still not done. Submit anyway? Your instructor verifies the hands-on tasks and finalizes your score.`
-        : 'Submit your work for faculty review? Your instructor verifies the remaining hands-on tasks and finalizes your score.',
+      'Submit your work for faculty review? Your instructor rates each task and finalizes your score.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -264,13 +187,6 @@ export default function PatientHubScreen() {
     );
   }
 
-  const history: HistoryEntry[] = [
-    ...(chart?.tpr ?? []).map((record) => ({ kind: 'tpr' as const, record })),
-    ...(chart?.ivf ?? []).map((record) => ({ kind: 'ivf' as const, record })),
-  ]
-    .sort((a, b) => new Date(b.record.created_at).getTime() - new Date(a.record.created_at).getTime())
-    .slice(0, 6);
-
   const vitals = patient.latest_vitals ?? null;
   const completedCount = tasks.filter((t) => t.is_completed).length;
   const totalPoints = tasks.reduce((sum, t) => sum + t.points, 0);
@@ -306,8 +222,8 @@ export default function PatientHubScreen() {
             <Text style={styles.viewOnlyTitle}>View only</Text>
           </View>
           <Text style={styles.viewOnlyBody}>
-            This patient is not part of a scenario assigned to you, so you cannot chart on them. Your
-            instructor assigns the patient you are responsible for.
+            This patient is not part of a scenario assigned to you. Your instructor assigns the
+            patient you are responsible for.
           </Text>
         </Card>
       ) : (
@@ -408,41 +324,6 @@ export default function PatientHubScreen() {
             )}
           </Card>
 
-          <Text style={[styles.sectionTitle, styles.sectionSpacer]}>Record</Text>
-          <Text style={styles.recordHint}>
-            Recording vitals or charting here automatically checks off the matching tasks below.
-          </Text>
-          <View style={styles.recordRow}>
-            <RecordButton
-              label="Vitals"
-              icon="pulse-outline"
-              accent={Accent.red}
-              styles={styles}
-              onPress={() => router.push(`/clinic/patient/${patientId}/vitals`)}
-            />
-            <RecordButton
-              label="TPR"
-              icon="thermometer-outline"
-              accent={Accent.amber}
-              styles={styles}
-              onPress={() => router.push(`/clinic/patient/${patientId}/tpr`)}
-            />
-            <RecordButton
-              label="IVF"
-              icon="water-outline"
-              accent={Accent.cyan}
-              styles={styles}
-              onPress={() => router.push(`/clinic/patient/${patientId}/ivf`)}
-            />
-            <RecordButton
-              label="Note"
-              icon="create-outline"
-              accent={Accent.violet}
-              styles={styles}
-              onPress={focusNote}
-            />
-          </View>
-
           <Text style={[styles.sectionTitle, styles.sectionSpacer]}>Clinical Tasks</Text>
           <Card style={styles.blockCard}>
             {chartError ? <Text style={styles.emptyText}>{chartError}</Text> : null}
@@ -457,26 +338,14 @@ export default function PatientHubScreen() {
                   color={task.is_completed ? Accent.green.fg : Palette.textMuted}
                 />
                 <View style={styles.checkText}>
-                  <View style={styles.checkTitleRow}>
-                    <Text style={[styles.checkTitle, task.is_completed && styles.checkTitleDone]}>
-                      {task.title}
-                    </Text>
-                    <Badge
-                      label={task.verification === 'system' ? 'Auto' : 'Faculty'}
-                      variant={task.verification === 'system' ? 'info' : 'default'}
-                      size="sm"
-                    />
-                  </View>
+                  <Text style={[styles.checkTitle, task.is_completed && styles.checkTitleDone]}>
+                    {task.title}
+                  </Text>
                   <Text style={styles.checkDescription}>{task.description}</Text>
                   {task.is_completed ? (
                     <Text style={[styles.checkHint, { color: Accent.green.fg }]}>
-                      {task.completed_via === 'system' ? 'Auto-completed' : 'Verified by faculty'}
-                    </Text>
-                  ) : task.verification === 'system' ? (
-                    <Text style={[styles.checkHint, { color: Accent.blue.fg }]}>
-                      {task.system_trigger === 'vitals'
-                        ? 'Completes when you record vitals for this patient'
-                        : 'Completes when you chart in the patient record'}
+                      {/* Charting used to tick some tasks by itself; those stay as done. */}
+                      {task.completed_via === 'system' ? 'Completed' : 'Verified by faculty'}
                     </Text>
                   ) : (
                     <Text style={styles.checkHint}>Your instructor verifies this</Text>
@@ -486,121 +355,6 @@ export default function PatientHubScreen() {
               </View>
             ))}
           </Card>
-
-          <Text style={[styles.sectionTitle, styles.sectionSpacer]}>Record History</Text>
-          {history.length > 0 ? (
-            <Card style={styles.blockCard}>
-              {history.map((entry, index) => {
-                const { record } = entry;
-                const isTpr = entry.kind === 'tpr';
-                const accent = isTpr ? Accent.amber : Accent.cyan;
-                const parts: string[] = [];
-                if (isTpr) {
-                  if (record.temperature_c != null) parts.push(`${record.temperature_c}°C`);
-                  if (record.pulse != null) parts.push(`P ${record.pulse}`);
-                  if (record.respiration != null) parts.push(`R ${record.respiration}`);
-                } else {
-                  if (record.volume_ml != null) parts.push(`${record.volume_ml} ml`);
-                  if (record.rate_ml_hr != null) parts.push(`${record.rate_ml_hr} ml/hr`);
-                  if (record.site) parts.push(record.site);
-                }
-                return (
-                  <View
-                    key={`${entry.kind}-${record.id}`}
-                    style={[styles.historyItem, index < history.length - 1 && styles.historyBorder]}
-                  >
-                    <View style={[styles.historyIcon, { backgroundColor: accent.bg }]}>
-                      <Ionicons
-                        name={isTpr ? 'thermometer-outline' : 'water-outline'}
-                        size={16}
-                        color={accent.fg}
-                      />
-                    </View>
-                    <View style={styles.historyBody}>
-                      <View style={styles.historyTopRow}>
-                        <Text style={styles.historyTitle}>{isTpr ? 'TPR' : (record.solution ?? 'IVF')}</Text>
-                        {!isTpr && (
-                          <Badge
-                            label={record.status ?? 'ongoing'}
-                            variant={IVF_STATUS_VARIANT[record.status ?? 'ongoing'] ?? 'info'}
-                            size="sm"
-                          />
-                        )}
-                      </View>
-                      <Text style={styles.historyValues}>{parts.join('  ·  ') || 'No values recorded'}</Text>
-                      <Text style={styles.historyTime}>{formatTimestamp(record.created_at)}</Text>
-                    </View>
-                  </View>
-                );
-              })}
-            </Card>
-          ) : (
-            <Card style={styles.blockCard}>
-              <Text style={styles.emptyText}>No TPR or IVF entries charted for this patient yet</Text>
-            </Card>
-          )}
-
-          <Text style={[styles.sectionTitle, styles.sectionSpacer]}>Progress Notes</Text>
-          <Card style={styles.composer}>
-            <TextInput
-              ref={noteInputRef}
-              style={styles.noteInput}
-              value={note}
-              onChangeText={setNote}
-              placeholder="Add a progress note for this patient…"
-              placeholderTextColor={Palette.textMuted}
-              multiline
-              editable={!savingNote}
-            />
-            <Pressable
-              style={({ pressed }) => [
-                styles.noteButton,
-                (!note.trim() || savingNote) && styles.noteButtonDisabled,
-                pressed && styles.pressed,
-              ]}
-              onPress={handleAddNote}
-              disabled={!note.trim() || savingNote}
-            >
-              {savingNote ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <>
-                  <Ionicons name="add" size={18} color="#fff" />
-                  <Text style={styles.noteButtonText}>Save note</Text>
-                </>
-              )}
-            </Pressable>
-          </Card>
-
-          {(chart?.notes ?? []).length > 0 ? (
-            (chart?.notes ?? []).map((record) => (
-              <Card key={record.id} style={styles.recordCard}>
-                <View style={styles.recordCardHeader}>
-                  <View
-                    style={[
-                      styles.recordType,
-                      { backgroundColor: record.reviewed_at ? Accent.green.bg : Accent.amber.bg },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.recordTypeText,
-                        { color: record.reviewed_at ? Accent.green.fg : Accent.amber.fg },
-                      ]}
-                    >
-                      {record.reviewed_at ? 'REVIEWED' : 'PENDING REVIEW'}
-                    </Text>
-                  </View>
-                  <Text style={styles.recordDate}>{new Date(record.created_at).toLocaleDateString()}</Text>
-                </View>
-                <Text style={styles.recordContent}>{record.content}</Text>
-              </Card>
-            ))
-          ) : (
-            <Card style={styles.blockCard}>
-              <Text style={styles.emptyText}>No progress notes for this patient yet</Text>
-            </Card>
-          )}
 
           {/* The help flag belongs where the student is working, not buried in
               settings — this is the ERD's assistance request. */}
@@ -695,79 +449,13 @@ function createStyles(
     anomalyBody: { flex: 1 },
     anomalyText: { fontSize: 12, color: Accent.red.fg, fontWeight: '600' },
     anomalyAdvice: { fontSize: 12, color: Accent.red.fg, marginTop: 4, lineHeight: 18 },
-    recordHint: { fontSize: 12, color: Palette.textSecondary, marginBottom: Spacing.md, marginTop: -Spacing.sm },
-    recordRow: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.lg },
-    recordButton: {
-      flex: 1,
-      alignItems: 'center',
-      backgroundColor: Palette.surface,
-      borderRadius: Radius.lg,
-      paddingVertical: Spacing.lg,
-      borderWidth: 1,
-      borderColor: Palette.border,
-      ...Shadow.card,
-    },
-    recordIcon: {
-      width: 38,
-      height: 38,
-      borderRadius: Radius.md,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginBottom: Spacing.sm,
-    },
-    recordLabel: { fontSize: 12, fontWeight: '700', color: Palette.ink },
     checkRow: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.md, paddingVertical: Spacing.sm },
     checkText: { flex: 1 },
-    checkTitleRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
     checkTitle: { fontSize: 14, fontWeight: '700', color: Palette.ink, flexShrink: 1 },
     checkTitleDone: { textDecorationLine: 'line-through', color: Palette.textMuted },
     checkDescription: { fontSize: 12, color: Palette.textSecondary, marginTop: 2, lineHeight: 18 },
     checkHint: { fontSize: 11, color: Palette.textMuted, marginTop: 4 },
     checkPoints: { fontSize: 12, fontWeight: '700', color: Palette.textSecondary },
-    historyItem: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.md, paddingVertical: Spacing.md },
-    historyBorder: { borderBottomWidth: 1, borderBottomColor: Palette.borderLight },
-    historyIcon: {
-      width: 32,
-      height: 32,
-      borderRadius: Radius.sm,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    historyBody: { flex: 1 },
-    historyTopRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-    historyTitle: { fontSize: 14, fontWeight: '700', color: Palette.ink },
-    historyValues: { fontSize: 13, color: Palette.textSecondary, marginTop: 2 },
-    historyTime: { fontSize: 11, color: Palette.textMuted, marginTop: 2 },
-    composer: { marginBottom: Spacing.lg },
-    noteInput: {
-      minHeight: 80,
-      fontSize: 14,
-      color: Palette.text,
-      textAlignVertical: 'top',
-      marginBottom: Spacing.md,
-    },
-    noteButton: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: 6,
-      backgroundColor: Palette.primary,
-      borderRadius: Radius.md,
-      paddingVertical: Spacing.md,
-    },
-    noteButtonDisabled: { opacity: 0.5 },
-    noteButtonText: { color: '#fff', fontSize: 14, fontWeight: '700' },
-    recordCard: { marginBottom: Spacing.md },
-    recordCardHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      marginBottom: Spacing.sm,
-    },
-    recordType: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: Radius.sm },
-    recordTypeText: { fontSize: 10, fontWeight: '800', letterSpacing: 0.3 },
-    recordDate: { fontSize: 11, color: Palette.textMuted },
-    recordContent: { fontSize: 14, color: Palette.text, lineHeight: 21 },
     assistButton: {
       flexDirection: 'row',
       alignItems: 'center',

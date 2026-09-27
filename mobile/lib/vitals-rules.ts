@@ -1,6 +1,7 @@
-// Rule-based vital signs anomaly detection (manuscript F3, Objective 2.3).
-// Pure TypeScript with no server dependencies so the same thresholds can be
-// bundled into the mobile app later for offline flagging (PLAN Phase 5.5).
+// Vital sign reference ranges and the anomaly shape the server reports
+// (web/app/lib/vitals/rules.ts evaluates readings). Students no longer chart on
+// the ward, so the app only uses these to type the ward's latest vitals and to
+// bound what a hospital case's observation forms accept.
 // Adult clinical reference ranges; not a diagnostic tool.
 
 export interface VitalSignsInput {
@@ -56,62 +57,3 @@ export const VITAL_RULES: VitalRule[] = [
   { field: 'respiratory_rate', label: 'Respiratory rate', unit: '/min', low: 12, high: 20, criticalLow: 8, criticalHigh: 30, min: 0, max: 120 },
   { field: 'oxygen_saturation', label: 'Oxygen saturation', unit: '%', low: 95, high: 100, criticalLow: 90, min: 0, max: 100 },
 ];
-
-/** Pain is scored, not ranged: 7+ on the 0–10 scale is flagged as severe. */
-const SEVERE_PAIN_THRESHOLD = 7;
-
-export interface VitalsEvaluation {
-  is_anomaly: boolean;
-  reasons: AnomalyReason[];
-}
-
-export function evaluateVitals(input: VitalSignsInput): VitalsEvaluation {
-  const reasons: AnomalyReason[] = [];
-
-  for (const rule of VITAL_RULES) {
-    const value = input[rule.field];
-    if (value === null || value === undefined || Number.isNaN(value)) continue;
-
-    if (rule.criticalLow !== undefined && value < rule.criticalLow) {
-      reasons.push({
-        field: rule.field,
-        value,
-        severity: 'critical',
-        message: `${rule.label} ${value} ${rule.unit} is critically low (below ${rule.criticalLow})`,
-      });
-    } else if (rule.criticalHigh !== undefined && value > rule.criticalHigh) {
-      reasons.push({
-        field: rule.field,
-        value,
-        severity: 'critical',
-        message: `${rule.label} ${value} ${rule.unit} is critically high (above ${rule.criticalHigh})`,
-      });
-    } else if (value < rule.low) {
-      reasons.push({
-        field: rule.field,
-        value,
-        severity: 'warning',
-        message: `${rule.label} ${value} ${rule.unit} is below the normal range (${rule.low}–${rule.high})`,
-      });
-    } else if (value > rule.high) {
-      reasons.push({
-        field: rule.field,
-        value,
-        severity: 'warning',
-        message: `${rule.label} ${value} ${rule.unit} is above the normal range (${rule.low}–${rule.high})`,
-      });
-    }
-  }
-
-  const pain = input.pain_score;
-  if (pain !== null && pain !== undefined && !Number.isNaN(pain) && pain >= SEVERE_PAIN_THRESHOLD) {
-    reasons.push({
-      field: 'pain_score',
-      value: pain,
-      severity: 'warning',
-      message: `Pain score ${pain}/10 indicates severe pain`,
-    });
-  }
-
-  return { is_anomaly: reasons.length > 0, reasons };
-}

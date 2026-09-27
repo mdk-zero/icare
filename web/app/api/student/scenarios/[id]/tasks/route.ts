@@ -10,8 +10,7 @@ interface RouteParams {
 
 // GET /api/student/scenarios/:assignmentId/tasks
 // Returns the scenario's tasks with each one's completion state for this
-// student's assignment (system tasks auto-complete; faculty tasks are checked
-// off on the web). Faculty ratings and notes are released with the final score,
+// student's assignment (faculty check tasks off on the web). Faculty ratings and notes are released with the final score,
 // not while the instructor is still grading.
 export async function GET(_request: Request, { params }: RouteParams) {
   const session = await readSession();
