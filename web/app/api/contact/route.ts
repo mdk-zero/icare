@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { sendAccessRequestEmail, sendAccessRequestReceipt } from '@/app/lib/auth/email';
 import { clientIp, consumeRateLimit } from '@/app/lib/auth/rate-limit';
+import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 
 // Where access requests land: the project's own inbox on i-care.dev, which
 // the registrar forwards on to the dev team. Overridable per deployment with a
@@ -22,7 +23,43 @@ function field(body: Record<string, unknown>, key: keyof typeof LIMITS): string 
   return trimmed.length > 0 && trimmed.length <= LIMITS[key] ? trimmed : null;
 }
 
-/** Public "contact us" form: mails an account request to the dev team. */
+type AccessRequest = { name: string; email: string; subject: string; message: string };
+
+/**
+ * Drops the request into every super admin's notification feed, since they
+ * are the ones who create accounts. Returns whether at least one landed.
+ */
+async function notifySuperAdmins(req: AccessRequest): Promise<boolean> {
+  try {
+    const supabase = getSupabaseAdmin();
+    const { data: admins, error } = await supabase
+      .from('users')
+      .select('id')
+      .eq('role', 'super_admin');
+    if (error) throw error;
+    if (!admins?.length) return false;
+
+    const { error: insertError } = await supabase.from('notifications').insert(
+      admins.map((admin) => ({
+        user_id: admin.id,
+        type: 'system' as const,
+        title: `Account request from ${req.name}`,
+        body: `${req.email} · ${req.subject}: ${req.message}`,
+        data: { kind: 'access_request', name: req.name, email: req.email, subject: req.subject },
+      })),
+    );
+    if (insertError) throw insertError;
+    return true;
+  } catch (err) {
+    console.error('Failed to notify super admins of access request', err);
+    return false;
+  }
+}
+
+/**
+ * Public "contact us" form: mails an account request to the dev team and
+ * notifies the super admins in-app.
+ */
 export async function POST(request: NextRequest) {
   let body: Record<string, unknown>;
   try {
@@ -49,10 +86,20 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  try {
-    await sendAccessRequestEmail(DEV_TEAM_EMAILS, { name, email, subject, message });
-  } catch (err) {
-    console.error('Contact request failed', err);
+  const accessRequest = { name, email, subject, message };
+  const [mailed, notified] = await Promise.all([
+    sendAccessRequestEmail(DEV_TEAM_EMAILS, accessRequest).then(
+      () => true,
+      (err) => {
+        console.error('Contact request failed', err);
+        return false;
+      },
+    ),
+    notifySuperAdmins(accessRequest),
+  ]);
+  // Either channel reaching someone who can act on it counts as delivered;
+  // failing the request then would only invite a duplicate retry.
+  if (!mailed && !notified) {
     return NextResponse.json(
       { error: 'Your message could not be sent. Please try again later.' },
       { status: 500 },

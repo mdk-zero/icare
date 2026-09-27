@@ -47,7 +47,11 @@ const TYPE_META: Record<
   },
 };
 
-export default function FacultyNotificationsClient() {
+export default function FacultyNotificationsClient({
+  emptyHint = "New submissions, deadlines, and alerts from your students will land here as they happen.",
+}: {
+  emptyHint?: string;
+} = {}) {
   // Shared live store: inserts arrive over SSE and read state stays in step
   // with the sidebar badge.
   const {
@@ -124,7 +128,7 @@ export default function FacultyNotificationsClient() {
           </p>
           <p className="mt-1 max-w-xs text-sm text-foreground/50">
             {notifications.length === 0
-              ? "New submissions, deadlines, and alerts from your students will land here as they happen."
+              ? emptyHint
               : `You don't have any ${filter === "unread" ? "unread" : filter} notifications right now.`}
           </p>
         </div>

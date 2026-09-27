@@ -220,6 +220,9 @@ export default function Shell({ role, navItems, isActive, children }: ShellProps
   // that have no bell of their own (admins). The bell below reads the
   // same store for its badge and preview.
   const { unread } = useNotifications();
+  // Faculty hear from their students; super admins get account requests.
+  const hasBell = role === "faculty" || role === "super_admin";
+  const notificationsHref = role === "super_admin" ? "/super-admin/notifications" : "/faculty/notifications";
 
   const { logo, logoIsWordmark, portalLabel, mobileRoleLabel, profileHref, homeHref } =
     config[role];
@@ -484,7 +487,7 @@ export default function Shell({ role, navItems, isActive, children }: ShellProps
                         className="w-full h-full object-contain brightness-0 invert"
                       />
                       {/* The bell is clipped off the rail; this keeps unread news visible. */}
-                      {role === "faculty" && unread > 0 && (
+                      {hasBell && unread > 0 && (
                         <span className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-[#0b3d3d]" />
                       )}
                     </span>
@@ -493,9 +496,13 @@ export default function Shell({ role, navItems, isActive, children }: ShellProps
                 {/* Beside the logo, where the eye lands first, rather than tucked
                     after the profile card. Centred on the 48px wordmark, not on the
                     wordmark plus the portal label under it. */}
-                {role === "faculty" && (
+                {hasBell && (
                   <div className="mt-1.5 shrink-0 self-start">
-                    <NotificationsPopover variant="sidebar" onOpenChange={setBellOpen} />
+                    <NotificationsPopover
+                      variant="sidebar"
+                      onOpenChange={setBellOpen}
+                      allHref={notificationsHref}
+                    />
                   </div>
                 )}
                 <button
@@ -802,7 +809,7 @@ export default function Shell({ role, navItems, isActive, children }: ShellProps
               </div>
             </div>
             <div className="flex items-center gap-2">
-              {role === "faculty" && <NotificationsPopover variant="topbar" />}
+              {hasBell && <NotificationsPopover variant="topbar" allHref={notificationsHref} />}
               <span className="px-2 py-1.5 bg-gradient-to-br from-[#0b3d3d] to-[#146464] text-white text-xs font-medium rounded-lg">
                 {mobileRoleLabel}
               </span>

@@ -63,9 +63,12 @@ const PANEL_HEIGHT = 430;
 export default function NotificationsPopover({
   variant,
   onOpenChange,
+  allHref = "/faculty/notifications",
 }: {
   variant: Variant;
   onOpenChange?: (open: boolean) => void;
+  /** Where "See all notifications" goes; each portal has its own page. */
+  allHref?: string;
 }) {
   const router = useRouter();
   const { notifications, unread, loading, markRead, markAllRead } = useNotifications();
@@ -127,7 +130,7 @@ export default function NotificationsPopover({
 
   const goToAll = () => {
     setOpen(false);
-    router.push("/faculty/notifications");
+    router.push(allHref);
   };
 
   // Read items live on the notifications page only; the popup is for what
@@ -243,7 +246,7 @@ export default function NotificationsPopover({
                     </div>
                     <p className="text-sm font-semibold text-foreground">All caught up</p>
                     <p className="mt-0.5 text-xs text-foreground/50">
-                      New alerts from your students will land here.
+                      New alerts will land here.
                     </p>
                   </div>
                 ) : (
