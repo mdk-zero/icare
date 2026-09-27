@@ -251,8 +251,8 @@ export default function AdminReportsClient() {
       type: "faculty",
       label: "Faculty",
       icon: faUserTie,
-      blurb: "A faculty member's sections and the students under them.",
-      contents: ["Section and student counts", "Assigned sections"],
+      blurb: "The groups a faculty member supervises and the grading they have done.",
+      contents: ["Groups and students", "Grades given and awaiting", "Group averages"],
       noun: "faculty",
       list: {
         items: facultyTargets,
@@ -297,8 +297,8 @@ export default function AdminReportsClient() {
       type: "users",
       label: "Users",
       icon: faUsers,
-      blurb: "An account's role, sign-in history and activity.",
-      contents: ["Role and join date", "Sign-in history", "Assessment attempts"],
+      blurb: "An account's role and sign-ins, plus a student's grades or a faculty member's groups.",
+      contents: ["Role and join date", "Sign-in history", "Grades or supervision"],
       noun: "users",
       list: {
         items: userTargets,
@@ -328,8 +328,8 @@ export default function AdminReportsClient() {
       type: "summary",
       label: "Admin summary",
       icon: faBuilding,
-      blurb: "Faculty, rooms and users on one page — nothing to pick.",
-      contents: ["Headcount by role", "Faculty roster", "Room roster"],
+      blurb: "Faculty, rooms, users and grading progress on one page — nothing to pick.",
+      contents: ["Headcount by role", "Grading progress", "Faculty roster", "Room roster"],
       noun: "records",
       scope:
         facultyTargets && roomTargets && userTargets
@@ -343,7 +343,7 @@ export default function AdminReportsClient() {
       <PageHeader
         badge={{ icon: <FontAwesomeIcon icon={faFileLines} className="h-3 w-3" />, label: "Report Center" }}
         title="Reports"
-        subtitle="Preview and export PDF or CSV reports on faculty, rooms and users"
+        subtitle="Preview and download PDF reports on your faculty, rooms and users"
       />
       <ReportCenter
         endpoint="/api/admin/reports"

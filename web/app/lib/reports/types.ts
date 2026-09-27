@@ -4,6 +4,5 @@ export interface RecentReport {
   /** null for a whole-scope report (roster, admin summary, "all faculty"). */
   target_id: string | null;
   subject: string;
-  format: 'pdf' | 'csv';
   created_at: string;
 }

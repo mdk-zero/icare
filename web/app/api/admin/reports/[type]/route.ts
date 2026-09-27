@@ -4,7 +4,7 @@ import { getAdminScope } from '@/app/lib/admin-scope';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { logAudit } from '@/app/lib/audit';
 import { renderReport, type ReportMeta } from '@/app/lib/reports/kit';
-import { slugify } from '@/app/lib/reports/csv';
+import { slugify } from '@/app/lib/reports/data';
 import {
   ADMIN_REPORT_NEEDS_TARGET,
   buildAdminFacultyReport,
@@ -33,7 +33,6 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
   const url = new URL(request.url);
   const id = url.searchParams.get('id')?.trim() ?? '';
-  const format = url.searchParams.get('format') === 'csv' ? 'csv' : 'pdf';
 
   if (ADMIN_REPORT_NEEDS_TARGET[type] && !id) {
     return NextResponse.json({ error: `A target id is required for ${type} reports` }, { status: 400 });
@@ -80,23 +79,16 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         entityType: type,
         entityId: id || session.uid,
         // target_id is what "Generate again" on the Reports page replays.
-        details: { report: type, format, subject: result.subject, target_id: id || null },
+        details: { report: type, format: 'pdf', subject: result.subject, target_id: id || null },
       },
       request,
     );
 
-    const filename = `icare-admin-${type}-report-${slugify(result.subject)}.${format}`;
+    const filename = `icare-admin-${type}-report-${slugify(result.subject)}.pdf`;
     const headers = {
       'Content-Disposition': `attachment; filename="${filename}"`,
       'Cache-Control': 'no-store',
     };
-
-    if (format === 'csv') {
-      return new NextResponse(result.csv, {
-        status: 200,
-        headers: { ...headers, 'Content-Type': 'text/csv; charset=utf-8' },
-      });
-    }
 
     const pdf = await renderReport(result.pdf);
     return new NextResponse(new Uint8Array(pdf), {

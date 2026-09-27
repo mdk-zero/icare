@@ -132,7 +132,7 @@ export function ReportShell({
         <View style={styles.header}>
           <View style={styles.headerText}>
             <Text style={styles.brand}>{heading}</Text>
-            <Text style={styles.subtitle}>{meta.campus} · College of Health Sciences</Text>
+            <Text style={styles.subtitle}>{meta.campus}, College of Health Sciences</Text>
           </View>
           {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf's Image has no alt */}
           {LOGO && <Image src={LOGO} style={styles.logo} />}
@@ -158,7 +158,7 @@ export function ReportShell({
         {children}
 
         <Text style={styles.footer} fixed>
-          iCARE++ · Generated live from current records · Confidential academic record
+          iCARE++  |  Generated live from current records  |  Confidential academic record
         </Text>
       </Page>
     </Document>
@@ -185,20 +185,27 @@ export function StatGrid({ items }: { items: { label: string; value: string | nu
 export function Table({
   head,
   rows,
+  widths,
   emptyText = 'No records yet.',
 }: {
   head: string[];
   rows: (string | number)[][];
+  /** Relative column widths; by default the first is 3 and the rest 1. */
+  widths?: number[];
   emptyText?: string;
 }) {
   if (rows.length === 0) {
     return <Text style={styles.empty}>{emptyText}</Text>;
   }
+  const cellStyle = (i: number) => {
+    const base = i === 0 ? styles.cellWide : styles.cell;
+    return widths?.[i] ? [base, { flex: widths[i] }] : base;
+  };
   return (
     <View>
       <View style={[styles.row, styles.headRow]}>
         {head.map((label, i) => (
-          <Text key={label} style={i === 0 ? styles.cellWide : styles.cell}>
+          <Text key={label} style={cellStyle(i)}>
             {label}
           </Text>
         ))}
@@ -206,7 +213,7 @@ export function Table({
       {rows.map((row, r) => (
         <View key={r} style={styles.row} wrap={false}>
           {row.map((cell, i) => (
-            <Text key={i} style={i === 0 ? styles.cellWide : styles.cell}>
+            <Text key={i} style={cellStyle(i)}>
               {String(cell)}
             </Text>
           ))}

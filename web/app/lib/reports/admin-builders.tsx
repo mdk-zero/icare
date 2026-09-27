@@ -2,7 +2,7 @@ import { adminVisibleUserIds, ownsFaculty, type AdminScope } from '@/app/lib/adm
 import { Text } from '@react-pdf/renderer';
 import type { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { ReportShell, StatGrid, Table, styles, type ReportMeta, type ReportDocument } from './kit';
-import { toCsv, toCsvBlocks, type CsvCell } from './csv';
+import { avg, date as fmtDate, grade, gradeTile, groupNames, pct, plural, studentWork } from './data';
 
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
 
@@ -24,21 +24,87 @@ export const ADMIN_REPORT_NEEDS_TARGET: Record<AdminReportType, boolean> = {
 export interface BuiltReport {
   subject: string;
   pdf: ReportDocument;
-  csv: string;
 }
 
 export type BuildResult = BuiltReport | { error: string; status: number };
 
-function fmtDate(value: string | null): string {
-  return value ? new Date(value).toLocaleDateString() : '—';
-}
+const lead = { fontSize: 10, color: '#4b5563', marginTop: 10, marginBottom: 12, lineHeight: 1.4 } as const;
 
 // ---------------------------------------------------------------------------
-// Faculty — one faculty member's sections and student counts
+// Faculty — the groups each faculty member supervises, and their grading
 // ---------------------------------------------------------------------------
 
 /** Pads an empty id list so an `in` filter matches nothing rather than erroring. */
 const idsOrNone = (ids: readonly string[]) => (ids.length ? [...ids] : ['00000000-0000-0000-0000-000000000000']);
+
+interface FacultyLoad {
+  groups: { id: string; label: string; section: string }[];
+  studentIds: string[];
+  scenariosGraded: number;
+  casesGraded: number;
+  /** Handed in by their students and not graded yet. */
+  awaiting: number;
+}
+
+/**
+ * What each faculty member looks after since groups (048/051): the members of
+ * the groups they supervise, not whole sections, and the grades they gave.
+ */
+async function facultyLoad(supabase: Supabase, facultyIds: readonly string[]): Promise<Map<string, FacultyLoad>> {
+  const load = new Map<string, FacultyLoad>(
+    facultyIds.map((id) => [id, { groups: [], studentIds: [], scenariosGraded: 0, casesGraded: 0, awaiting: 0 }]),
+  );
+  if (facultyIds.length === 0) return load;
+
+  const { data: teams } = await supabase
+    .from('teams')
+    .select('id, name, faculty_id, sections(name)')
+    .in('faculty_id', [...facultyIds]);
+  const teamOwner = new Map<string, string>();
+  for (const t of teams ?? []) {
+    const section = (t as unknown as { sections: { name: string } | null }).sections?.name ?? 'No section';
+    load.get(t.faculty_id as string)?.groups.push({ id: t.id, label: `${section} / ${t.name}`, section });
+    teamOwner.set(t.id, t.faculty_id as string);
+  }
+
+  const teamIds = [...teamOwner.keys()];
+  const { data: members } = teamIds.length
+    ? await supabase.from('team_members').select('team_id, student_id').in('team_id', teamIds)
+    : { data: [] as { team_id: string; student_id: string }[] };
+  const supervisorOf = new Map<string, string>();
+  for (const m of members ?? []) {
+    const owner = teamOwner.get(m.team_id as string);
+    if (!owner) continue;
+    load.get(owner)!.studentIds.push(m.student_id as string);
+    supervisorOf.set(m.student_id as string, owner);
+  }
+
+  const students = [...supervisorOf.keys()];
+  const [scenarios, cases, waitingScenarios, waitingCases] = await Promise.all([
+    supabase.from('scenario_assignments').select('finalized_by').eq('status', 'completed').in('finalized_by', [...facultyIds]),
+    supabase.from('case_submissions').select('graded_by').eq('status', 'graded').in('graded_by', [...facultyIds]),
+    supabase
+      .from('scenario_assignments')
+      .select('student_id')
+      .neq('status', 'completed')
+      .not('submitted_at', 'is', null)
+      .in('student_id', idsOrNone(students)),
+    supabase.from('case_submissions').select('student_id').eq('status', 'submitted').in('student_id', idsOrNone(students)),
+  ]);
+  for (const r of scenarios.data ?? []) {
+    const e = load.get(r.finalized_by as string);
+    if (e) e.scenariosGraded += 1;
+  }
+  for (const r of cases.data ?? []) {
+    const e = load.get(r.graded_by as string);
+    if (e) e.casesGraded += 1;
+  }
+  for (const r of [...(waitingScenarios.data ?? []), ...(waitingCases.data ?? [])]) {
+    const e = load.get(supervisorOf.get(r.student_id as string) ?? '');
+    if (e) e.awaiting += 1;
+  }
+  return load;
+}
 
 export async function buildAdminFacultyReport(
   supabase: Supabase,
@@ -50,88 +116,76 @@ export async function buildAdminFacultyReport(
   if (!facultyId) {
     let facultyQuery = supabase
       .from('users')
-      .select('id, name, email, created_at, last_login_at')
+      .select('id, name, email, last_login_at')
       .eq('role', 'faculty')
       .order('name');
     if (scope) facultyQuery = facultyQuery.in('id', idsOrNone(scope.facultyIds));
     const { data: allFaculty } = await facultyQuery;
+    const faculty = allFaculty ?? [];
+    const load = await facultyLoad(supabase, faculty.map((f) => f.id));
 
-    const ids = (allFaculty ?? []).map((f) => f.id);
-    const { data: links } = ids.length
-      ? await supabase.from('faculty_sections').select('faculty_id, sections(id, name)').in('faculty_id', ids)
-      : { data: [] as unknown[] };
-
-    const sectionsByFaculty = new Map<string, { id: string; name: string }[]>();
-    for (const l of links ?? []) {
-      const row = l as unknown as { faculty_id: string; sections: { id: string; name: string } | null };
-      if (!row.sections) continue;
-      const list = sectionsByFaculty.get(row.faculty_id) ?? [];
-      list.push(row.sections);
-      sectionsByFaculty.set(row.faculty_id, list);
-    }
-
-    const { data: students } = await supabase
-      .from('users')
-      .select('section_id')
-      .eq('role', 'student')
-      .not('section_id', 'is', null);
-
-    const studentsPerSection = new Map<string, number>();
-    for (const s of students ?? []) {
-      if (!s.section_id) continue;
-      studentsPerSection.set(s.section_id, (studentsPerSection.get(s.section_id) ?? 0) + 1);
-    }
-
-    const rows = (allFaculty ?? []).map((f) => {
-      const sects = sectionsByFaculty.get(f.id) ?? [];
-      const count = sects.reduce((sum, s) => sum + (studentsPerSection.get(s.id) ?? 0), 0);
-      return [`${f.name}\n${f.email}`, String(sects.length), String(count)];
-    });
-
-    const totalSections = new Set<string>();
-    for (const list of sectionsByFaculty.values()) {
-      for (const s of list) totalSections.add(s.id);
-    }
-    const totalStudents = (allFaculty ?? []).reduce((sum, f) => {
-      const sects = sectionsByFaculty.get(f.id) ?? [];
-      return sum + sects.reduce((s, sect) => s + (studentsPerSection.get(sect.id) ?? 0), 0);
-    }, 0);
-    const withSections = (allFaculty ?? []).filter((f) => (sectionsByFaculty.get(f.id) ?? []).length > 0).length;
-    const withoutSections = (allFaculty ?? []).length - withSections;
-    const description = `This report covers all ${allFaculty?.length ?? 0} faculty members across ${totalSections.size} sections, supervising ${totalStudents} students. ${withSections} faculty have section assignments and ${withoutSections} have none yet.`;
-
-    const metaRows = [
-      { label: 'Scope', value: 'All Faculty' },
-      { label: 'Total', value: String(allFaculty?.length ?? 0) },
-    ];
+    const totals = [...load.values()].reduce(
+      (t, l) => ({
+        groups: t.groups + l.groups.length,
+        students: t.students + l.studentIds.length,
+        graded: t.graded + l.scenariosGraded + l.casesGraded,
+        awaiting: t.awaiting + l.awaiting,
+      }),
+      { groups: 0, students: 0, graded: 0, awaiting: 0 },
+    );
+    const withoutGroups = faculty.filter((f) => (load.get(f.id)?.groups.length ?? 0) === 0).length;
 
     const pdf = (
       <ReportShell
         title="All Faculty Report"
         heading="All Faculty Report"
         meta={meta}
-        metaRows={metaRows}
+        metaRows={[
+          { label: 'Scope', value: scope ? 'Your faculty' : 'All faculty' },
+          { label: 'Faculty', value: String(faculty.length) },
+        ]}
       >
-        <Text style={{ fontSize: 10, color: '#4b5563', marginTop: 10, marginBottom: 12, lineHeight: 1.4 }}>{description}</Text>
-        <Text style={styles.sectionTitle}>Faculty Roster</Text>
+        <Text style={lead}>
+          {plural(faculty.length, 'faculty member')} {faculty.length === 1 ? 'supervises' : 'supervise'}{' '}
+          {plural(totals.groups, 'group')} with {plural(totals.students, 'student')}.{' '}
+          {withoutGroups > 0
+            ? `${withoutGroups} ${withoutGroups === 1 ? 'has' : 'have'} no group yet.`
+            : 'Every one of them has a group.'}
+        </Text>
+        <StatGrid
+          items={[
+            { label: 'Faculty', value: faculty.length },
+            { label: 'Students supervised', value: totals.students },
+            { label: 'Grades given', value: totals.graded },
+            { label: 'Awaiting grade', value: totals.awaiting },
+          ]}
+        />
+        <Text style={styles.sectionTitle}>Faculty</Text>
         <Table
-          head={['Name / Email', 'Sections', 'Students']}
-          rows={rows}
+          head={['Name / Email', 'Groups', 'Students', 'Graded', 'Awaiting', 'Last login']}
+          widths={[3, 0.9, 1, 0.9, 1, 1.4]}
+          rows={faculty.map((f) => {
+            const l = load.get(f.id)!;
+            return [
+              `${f.name}\n${f.email}`,
+              l.groups.length,
+              l.studentIds.length,
+              l.scenariosGraded + l.casesGraded,
+              l.awaiting,
+              fmtDate(f.last_login_at),
+            ];
+          })}
           emptyText="No faculty accounts yet."
         />
+        <Text style={{ fontSize: 8, color: '#6b7280', marginTop: 6 }}>
+          Students are the members of the groups each faculty member supervises. Graded counts scenarios
+          and case presentations they graded. Awaiting counts work their students handed in that is not
+          graded yet.
+        </Text>
       </ReportShell>
     );
 
-    const csv = toCsvBlocks([
-      { title: 'All Faculty Report', head: [], rows: [] },
-      { title: description, head: ['Name', 'Email', 'Sections', 'Students'], rows: (allFaculty ?? []).map((f) => {
-        const sects = sectionsByFaculty.get(f.id) ?? [];
-        const count = sects.reduce((sum, s) => sum + (studentsPerSection.get(s.id) ?? 0), 0);
-        return [f.name, f.email, String(sects.length), String(count)] as CsvCell[];
-      }) },
-    ]);
-
-    return { subject: 'all-faculty', pdf, csv };
+    return { subject: 'all-faculty', pdf };
   }
 
   const { data: faculty } = await supabase
@@ -140,73 +194,69 @@ export async function buildAdminFacultyReport(
     .eq('id', facultyId)
     .eq('role', 'faculty')
     .maybeSingle();
-
   if (!faculty) return { error: 'Faculty not found', status: 404 };
 
-  const { data: links } = await supabase
-    .from('faculty_sections')
-    .select('sections(id, name)')
-    .eq('faculty_id', facultyId);
+  const l = (await facultyLoad(supabase, [facultyId])).get(facultyId)!;
+  const work = await studentWork(supabase, l.studentIds);
+  const { data: memberRows } = l.groups.length
+    ? await supabase.from('team_members').select('team_id, student_id').in('team_id', l.groups.map((g) => g.id))
+    : { data: [] as { team_id: string; student_id: string }[] };
 
-  const sections = (links ?? [])
-    .map((l) => (l as unknown as { sections: { id: string; name: string } | null }).sections)
-    .filter(Boolean) as { id: string; name: string }[];
-
-  const { count: studentCount } = sections.length
-    ? await supabase
-        .from('users')
-        .select('id', { count: 'exact', head: true })
-        .eq('role', 'student')
-        .in('section_id', sections.map((s) => s.id))
-    : { count: 0 };
-
-  const joinedYear = faculty.created_at ? new Date(faculty.created_at).getFullYear() : '—';
-  const sectionList = sections.map((s) => s.name).join(', ') || 'none';
-  const sectionSummary = sections.length === 1 ? '1 section' : `${sections.length} sections`;
-  const description = `${faculty.name} has been a faculty member since ${joinedYear}, handling ${sectionSummary} (${sectionList}) with ${studentCount ?? 0} students.`;
-
-  const metaRows = [
-    { label: 'Faculty', value: faculty.name },
-    { label: 'Email', value: faculty.email },
-    { label: 'Joined', value: fmtDate(faculty.created_at) },
-  ];
+  const groupRows = l.groups
+    .sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }))
+    .map((g) => {
+      const ids = (memberRows ?? []).filter((m) => m.team_id === g.id).map((m) => m.student_id as string);
+      const graded = ids.flatMap((id) => {
+        const a = work.get(id)?.scenarioAverage;
+        return a === null || a === undefined ? [] : [a];
+      });
+      return [g.label, ids.length, `${graded.length}/${ids.length}`, grade(avg(graded))];
+    });
+  const sections = [...new Set(l.groups.map((g) => g.section))].sort();
 
   const pdf = (
     <ReportShell
       title={`Faculty Report - ${faculty.name}`}
       heading="Faculty Report"
       meta={meta}
-      metaRows={metaRows}
+      metaRows={[
+        { label: 'Faculty', value: faculty.name },
+        { label: 'Email', value: faculty.email },
+        { label: 'Joined', value: fmtDate(faculty.created_at) },
+        { label: 'Last login', value: fmtDate(faculty.last_login_at) },
+        { label: 'Sections', value: sections.join(', ') || 'None' },
+      ]}
     >
-      <Text style={{ fontSize: 10, color: '#4b5563', marginBottom: 12, lineHeight: 1.4 }}>{description}</Text>
       <Text style={styles.sectionTitle}>Summary</Text>
       <StatGrid
         items={[
-          { label: 'Sections', value: sections.length },
-          { label: 'Students', value: studentCount ?? 0 },
+          { label: 'Groups', value: l.groups.length },
+          { label: 'Students', value: l.studentIds.length },
+          { label: 'Scenarios graded', value: l.scenariosGraded },
+          { label: 'Cases graded', value: l.casesGraded },
+          { label: 'Awaiting grade', value: l.awaiting },
         ]}
       />
 
-      <Text style={styles.sectionTitle}>Assigned Sections</Text>
+      <Text style={styles.sectionTitle}>Groups supervised</Text>
       <Table
-        head={['Section', 'Students']}
-        rows={sections.map((s) => [s.name, 0])}
-        emptyText="No sections assigned yet."
+        head={['Group', 'Members', 'Graded', 'Scenario average']}
+        widths={[3, 1, 1, 2]}
+        rows={groupRows}
+        emptyText="Not supervising any group yet."
       />
     </ReportShell>
   );
 
-  const csv = toCsvBlocks([
-    { title: `Faculty report — ${faculty.name}`, head: [], rows: [[description]] },
-    {
-      title: 'Sections',
-      head: ['Section'],
-      rows: sections.map((s) => [s.name]),
-    },
-  ]);
-
-  return { subject: faculty.name, pdf, csv };
+  return { subject: faculty.name, pdf };
 }
+
+const ROLE_LABEL: Record<string, string> = {
+  student: 'Student',
+  faculty: 'Faculty',
+  admin: 'Admin',
+  super_admin: 'Super admin',
+};
 
 // ---------------------------------------------------------------------------
 // Rooms — one room's details and current assignments
@@ -254,7 +304,7 @@ export async function buildAdminRoomReport(
         meta={meta}
         metaRows={metaRows}
       >
-        <Text style={{ fontSize: 10, color: '#4b5563', marginTop: 10, marginBottom: 12, lineHeight: 1.4 }}>{description}</Text>
+        <Text style={lead}>{description}</Text>
         <Text style={styles.sectionTitle}>Room Roster</Text>
         <Table
           head={['Room', 'Number', 'Capacity', 'Occupied', 'Status']}
@@ -264,12 +314,7 @@ export async function buildAdminRoomReport(
       </ReportShell>
     );
 
-    const csv = toCsvBlocks([
-      { title: 'All Rooms Report', head: [], rows: [] },
-      { title: description, head: ['Room', 'Number', 'Capacity', 'Occupied', 'Status'], rows: rows as CsvCell[][] },
-    ]);
-
-    return { subject: 'all-rooms', pdf, csv };
+    return { subject: 'all-rooms', pdf };
   }
 
   const { data: room } = await supabase
@@ -312,7 +357,7 @@ export async function buildAdminRoomReport(
       meta={meta}
       metaRows={metaRows}
     >
-      <Text style={{ fontSize: 10, color: '#4b5563', marginBottom: 12, lineHeight: 1.4 }}>{description}</Text>
+      <Text style={lead}>{description}</Text>
       <Text style={styles.sectionTitle}>Occupancy</Text>
       <StatGrid
         items={[
@@ -331,20 +376,11 @@ export async function buildAdminRoomReport(
     </ReportShell>
   );
 
-  const csv = toCsvBlocks([
-    { title: `Room report — ${room.name}`, head: [], rows: [[description]] },
-    {
-      title: 'Occupants',
-      head: ['Student', 'Email', 'Since'],
-      rows: occupants.map((o) => [o.name, o.email, o.since] as CsvCell[]),
-    },
-  ]);
-
-  return { subject: room.name, pdf, csv };
+  return { subject: room.name, pdf };
 }
 
 // ---------------------------------------------------------------------------
-// Users — one user's account details
+// Users — accounts, and for one user what they have been graded on or grade
 // ---------------------------------------------------------------------------
 
 export async function buildAdminUserReport(
@@ -366,7 +402,7 @@ export async function buildAdminUserReport(
 
     const rows = (users ?? []).map((u) => [
       `${u.name}\n${u.email}`,
-      u.role,
+      ROLE_LABEL[u.role] ?? u.role,
       fmtDate(u.created_at),
       fmtDate(u.last_login_at),
     ]);
@@ -393,7 +429,7 @@ export async function buildAdminUserReport(
         meta={meta}
         metaRows={metaRows}
       >
-        <Text style={{ fontSize: 10, color: '#4b5563', marginTop: 10, marginBottom: 12, lineHeight: 1.4 }}>{description}</Text>
+        <Text style={lead}>{description}</Text>
         <Text style={styles.sectionTitle}>Overview</Text>
         <StatGrid
           items={[
@@ -411,70 +447,82 @@ export async function buildAdminUserReport(
       </ReportShell>
     );
 
-    const csv = toCsvBlocks([
-      { title: 'All Users Report', head: [], rows: [] },
-      { title: description, head: ['Name', 'Email', 'Role', 'Joined', 'Last login'], rows: (users ?? []).map((u) => [u.name, u.email, u.role, fmtDate(u.created_at), fmtDate(u.last_login_at)] as CsvCell[]) },
-    ]);
-
-    return { subject: 'all-users', pdf, csv };
+    return { subject: 'all-users', pdf };
   }
 
   const { data: user } = await supabase
     .from('users')
-    .select('id, name, email, role, created_at, last_login_at')
+    .select('id, name, email, role, section_id, created_at, last_login_at')
     .eq('id', userId)
     .maybeSingle();
 
   if (!user) return { error: 'User not found', status: 404 };
 
-  const { count: attemptCount } = await supabase
-    .from('assessment_attempts')
-    .select('id', { count: 'exact', head: true })
-    .eq('student_id', userId);
-
   const joinedDate = fmtDate(user.created_at);
   const lastLogin = fmtDate(user.last_login_at);
-  const description = `Report for ${user.name}, a ${user.role} since ${joinedDate}. Last logged in on ${lastLogin} with ${attemptCount ?? 0} assessment ${attemptCount === 1 ? 'attempt' : 'attempts'} on record.`;
+  const isStudent = user.role === 'student';
 
-  const metaRows = [
-    { label: 'Name', value: user.name },
-    { label: 'Email', value: user.email },
-    { label: 'Role', value: user.role },
-    { label: 'Joined', value: joinedDate },
-    { label: 'Last login', value: lastLogin },
-  ];
+  const [groups, work, { data: section }] = await Promise.all([
+    isStudent ? groupNames(supabase, [userId]) : Promise.resolve(new Map<string, string>()),
+    isStudent ? studentWork(supabase, [userId]) : Promise.resolve(null),
+    user.section_id
+      ? supabase.from('sections').select('name').eq('id', user.section_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
+  const w = work?.get(userId);
+  const load = user.role === 'faculty' ? (await facultyLoad(supabase, [userId])).get(userId)! : null;
 
   const pdf = (
     <ReportShell
       title={`User Report - ${user.name}`}
       heading="User Report"
       meta={meta}
-      metaRows={metaRows}
+      metaRows={[
+        { label: 'Name', value: user.name },
+        { label: 'Email', value: user.email },
+        { label: 'Role', value: ROLE_LABEL[user.role] ?? user.role },
+        ...(isStudent
+          ? [
+              { label: 'Section', value: section?.name ?? 'Unassigned' },
+              { label: 'Group', value: groups.get(userId) ?? 'No group' },
+            ]
+          : []),
+        { label: 'Joined', value: joinedDate },
+        { label: 'Last login', value: lastLogin },
+      ]}
     >
-      <Text style={{ fontSize: 10, color: '#4b5563', marginBottom: 12, lineHeight: 1.4 }}>{description}</Text>
-      <Text style={styles.sectionTitle}>Activity</Text>
-      <StatGrid
-        items={[
-          { label: 'Assessment attempts', value: attemptCount ?? 0 },
-        ]}
-      />
+      {w && (
+        <>
+          <Text style={styles.sectionTitle}>Graded work</Text>
+          <StatGrid
+            items={[
+              { label: 'Scenarios graded', value: `${w.scenariosGraded}/${w.scenariosAssigned}` },
+              gradeTile('Scenario grade', w.scenarioAverage),
+              { label: 'Case presentations', value: pct(w.caseAverage) },
+              { label: 'Skill Assessments', value: pct(w.quizAverage) },
+            ]}
+          />
+        </>
+      )}
+      {load && (
+        <>
+          <Text style={styles.sectionTitle}>Supervision</Text>
+          <StatGrid
+            items={[
+              { label: 'Groups', value: load.groups.length },
+              { label: 'Students', value: load.studentIds.length },
+              { label: 'Grades given', value: load.scenariosGraded + load.casesGraded },
+              { label: 'Awaiting grade', value: load.awaiting },
+            ]}
+          />
+        </>
+      )}
     </ReportShell>
   );
 
-  const csv = toCsvBlocks([
-    { title: `User report — ${user.name}`, head: [], rows: [[description]] },
-    { title: 'Details', head: ['Field', 'Value'], rows: [
-      ['Name', user.name],
-      ['Email', user.email],
-      ['Role', user.role],
-      ['Joined', joinedDate],
-      ['Last login', lastLogin],
-      ['Assessment attempts', attemptCount ?? 0],
-    ] as CsvCell[][] },
-  ]);
-
-  return { subject: user.name, pdf, csv };
+  return { subject: user.name, pdf };
 }
+
 
 // ---------------------------------------------------------------------------
 // Summary — all faculty, rooms, and users at a glance
@@ -539,10 +587,17 @@ export async function buildAdminSummaryReport(
   const totalRooms = rooms?.length ?? 0;
   const totalCapacity = (rooms ?? []).reduce((sum, r) => sum + (r.capacity ?? 0), 0);
   const totalOccupied = (rooms ?? []).reduce((sum, r) => sum + (occupancy.get(r.id) ?? 0), 0);
-  const description = `Admin overview with ${totalStudents} students, ${totalFaculty} faculty, ${totalAdmins} admins, and ${totalRooms} rooms (${totalOccupied}/${totalCapacity} capacity occupied).`;
+  const studentIds = scope ? scope.studentIds : null;
+  const load = await facultyLoad(supabase, (faculty ?? []).map((f) => f.id));
+  const awaiting = [...load.values()].reduce((sum, l) => sum + l.awaiting, 0);
+  const gradesGiven = [...load.values()].reduce((sum, l) => sum + l.scenariosGraded + l.casesGraded, 0);
+  const inGroups = new Set([...load.values()].flatMap((l) => l.studentIds));
+  const ungrouped = studentIds === null ? null : studentIds.filter((id) => !inGroups.has(id)).length;
+
+  const description = `Admin overview with ${plural(totalStudents, 'student')}, ${totalFaculty} faculty, ${plural(totalAdmins, 'admin')} and ${plural(totalRooms, 'room')} (${totalOccupied} of ${totalCapacity} places occupied).`;
 
   const metaRows = [
-    { label: 'Generated for', value: 'Admin Overview' },
+    { label: 'Scope', value: scope ? 'Your faculty and students' : 'Everyone' },
   ];
 
   const pdf = (
@@ -552,7 +607,7 @@ export async function buildAdminSummaryReport(
       meta={meta}
       metaRows={metaRows}
     >
-      <Text style={{ fontSize: 10, color: '#4b5563', marginBottom: 12, lineHeight: 1.4 }}>{description}</Text>
+      <Text style={lead}>{description}</Text>
       <Text style={styles.sectionTitle}>Overview</Text>
       <StatGrid
         items={[
@@ -563,9 +618,19 @@ export async function buildAdminSummaryReport(
         ]}
       />
 
+      <Text style={styles.sectionTitle}>Grading</Text>
+      <StatGrid
+        items={[
+          { label: 'Grades given', value: gradesGiven },
+          { label: 'Awaiting grade', value: awaiting },
+          { label: 'Students in no supervised group', value: ungrouped ?? '—' },
+        ]}
+      />
+
       <Text style={styles.sectionTitle}>Faculty</Text>
       <Table
         head={['Name', 'Email', 'Joined', 'Last login']}
+        widths={[2, 2.6, 1.2, 1.2]}
         rows={facultyRows}
         emptyText="No faculty accounts yet."
       />
@@ -579,19 +644,5 @@ export async function buildAdminSummaryReport(
     </ReportShell>
   );
 
-  const csv = toCsvBlocks([
-    { title: 'Admin summary report', head: [], rows: [[description]] },
-    {
-      title: 'Faculty',
-      head: ['Name', 'Email', 'Joined', 'Last login'],
-      rows: facultyRows as CsvCell[][],
-    },
-    {
-      title: 'Rooms',
-      head: ['Room', 'Number', 'Capacity', 'Occupied', 'Status'],
-      rows: roomRows as CsvCell[][],
-    },
-  ]);
-
-  return { subject: 'admin-summary', pdf, csv };
+  return { subject: 'admin-summary', pdf };
 }

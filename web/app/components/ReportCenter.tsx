@@ -8,7 +8,6 @@ import {
   faClockRotateLeft,
   faDownload,
   faEye,
-  faFileCsv,
   faFilePdf,
   faSearch,
 } from "@fortawesome/free-solid-svg-icons";
@@ -17,7 +16,6 @@ import {
   fetchRecentReports,
   fetchReport,
   saveBlob,
-  type ReportFormat,
 } from "../lib/reports/client";
 import type { RecentReport } from "../lib/reports/types";
 import { timeAgo } from "../faculty/_overview/format";
@@ -153,7 +151,7 @@ export default function ReportCenter({
   const [facetValue, setFacetValue] = useState("all");
   const [sortId, setSortId] = useState<string | null>(null);
   const [shown, setShown] = useState(PAGE);
-  /** `${type}:${id|all}:${format}` of the download in flight. */
+  /** `${type}:${id|all}` of the download in flight. */
   const [busy, setBusy] = useState<string | null>(null);
   const [preview, setPreview] = useState<{
     type: string;
@@ -247,14 +245,11 @@ export default function ReportCenter({
     setShown(PAGE);
   };
 
-  const busyFormat = (type: string, targetId: string | null): ReportFormat | null => {
-    const prefix = `${type}:${targetId ?? "all"}:`;
-    return busy?.startsWith(prefix) ? (busy.slice(prefix.length) as ReportFormat) : null;
-  };
+  const isBusy = (type: string, targetId: string | null) => busy === `${type}:${targetId ?? "all"}`;
 
-  const download = async (type: string, targetId: string | null, format: ReportFormat) => {
-    setBusy(`${type}:${targetId ?? "all"}:${format}`);
-    const result = await fetchReport(endpoint, type, targetId, format);
+  const download = async (type: string, targetId: string | null) => {
+    setBusy(`${type}:${targetId ?? "all"}`);
+    const result = await fetchReport(endpoint, type, targetId);
     setBusy(null);
     if ("error" in result) {
       toast(result.error, "error");
@@ -269,7 +264,7 @@ export default function ReportCenter({
     releasePreviewFile();
     const seq = ++previewSeq.current;
     setPreview({ type, targetId, subject, state: { status: "loading" } });
-    void fetchReport(endpoint, type, targetId, "pdf").then((result) => {
+    void fetchReport(endpoint, type, targetId).then((result) => {
       if (seq !== previewSeq.current) return;
       if ("error" in result) {
         setPreview((p) => p && { ...p, state: { status: "error", error: result.error } });
@@ -288,15 +283,15 @@ export default function ReportCenter({
     setPreview(null);
   }, [releasePreviewFile]);
 
-  const downloadFromPreview = (format: ReportFormat) => {
+  const downloadFromPreview = () => {
     if (!preview) return;
     const file = previewFile.current;
-    if (format === "pdf" && file) {
+    if (file) {
       saveBlob(file.blob, file.filename);
       toast(`Downloaded ${file.filename}`);
       return;
     }
-    void download(preview.type, preview.targetId, format);
+    void download(preview.type, preview.targetId);
   };
 
   const runSuggestion = (s: Suggestion) => {
@@ -313,27 +308,6 @@ export default function ReportCenter({
   /* --- pieces -------------------------------------------------------- */
 
   const actions = (type: string, targetId: string | null, subject: string, primary = false) => {
-    const pending = busyFormat(type, targetId);
-    const formatButton = (format: ReportFormat) => (
-      <button
-        type="button"
-        onClick={() => void download(type, targetId, format)}
-        disabled={busy !== null}
-        title={`Download ${format.toUpperCase()}`}
-        aria-label={`Download ${subject} as ${format.toUpperCase()}`}
-        className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 disabled:opacity-50"
-      >
-        {pending === format ? (
-          <EcgLoader />
-        ) : (
-          <FontAwesomeIcon
-            icon={format === "pdf" ? faFilePdf : faFileCsv}
-            className="h-3.5 w-3.5 text-gray-400"
-          />
-        )}
-        {format.toUpperCase()}
-      </button>
-    );
     return (
       <div className="flex shrink-0 items-center gap-1">
         <button
@@ -349,8 +323,17 @@ export default function ReportCenter({
           <FontAwesomeIcon icon={faEye} className="h-3.5 w-3.5" />
           Preview
         </button>
-        {formatButton("pdf")}
-        {formatButton("csv")}
+        <button
+          type="button"
+          onClick={() => void download(type, targetId)}
+          disabled={busy !== null}
+          title="Download PDF"
+          aria-label={`Download ${subject} as PDF`}
+          className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 disabled:opacity-50"
+        >
+          {isBusy(type, targetId) ? <EcgLoader /> : <FontAwesomeIcon icon={faFilePdf} className="h-3.5 w-3.5 text-gray-400" />}
+          PDF
+        </button>
       </div>
     );
   };
@@ -733,7 +716,7 @@ export default function ReportCenter({
             <ul className="divide-y divide-hairline">
               {history.map((r) => {
                 const def = describe(r.type)!;
-                const pending = busyFormat(r.type, r.target_id) === r.format;
+                const pending = isBusy(r.type, r.target_id);
                 return (
                   <li key={`${r.type}:${r.target_id ?? "all"}`} className="flex items-center gap-1 px-2 py-1.5">
                     <button
@@ -748,16 +731,16 @@ export default function ReportCenter({
                           {r.subject}
                         </span>
                         <span className="block truncate text-xs text-gray-400">
-                          {def.label} · {r.format.toUpperCase()} · {timeAgo(r.created_at)}
+                          {def.label} · {timeAgo(r.created_at)}
                         </span>
                       </span>
                     </button>
                     <button
                       type="button"
-                      onClick={() => void download(r.type, r.target_id, r.format)}
+                      onClick={() => void download(r.type, r.target_id)}
                       disabled={busy !== null}
-                      title={`Generate this ${r.format.toUpperCase()} again`}
-                      aria-label={`Generate ${r.subject} ${r.format.toUpperCase()} again`}
+                      title="Generate this PDF again"
+                      aria-label={`Generate ${r.subject} PDF again`}
                       className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-subtle hover:text-brand-600 disabled:opacity-50"
                     >
                       {pending ? <EcgLoader /> : <FontAwesomeIcon icon={faDownload} className="h-3.5 w-3.5" />}
@@ -776,7 +759,7 @@ export default function ReportCenter({
           kind={`${previewDef?.label ?? "Report"} report`}
           subject={preview.subject}
           state={preview.state}
-          downloading={busyFormat(preview.type, preview.targetId)}
+          downloading={isBusy(preview.type, preview.targetId)}
           onDownload={downloadFromPreview}
           onRetry={() => openPreview(preview.type, preview.targetId, preview.subject)}
           onClose={closePreview}

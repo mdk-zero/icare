@@ -6,12 +6,10 @@ import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import {
   faArrowUpRightFromSquare,
   faArrowsRotate,
-  faFileCsv,
   faFilePdf,
   faXmark,
 } from "@fortawesome/free-solid-svg-icons";
 import { EcgLoader } from "./EcgLoader";
-import type { ReportFormat } from "../lib/reports/client";
 
 export type PreviewState =
   | { status: "loading" }
@@ -40,8 +38,8 @@ export default function ReportPreviewModal({
   /** "Jane Cruz" */
   subject: string;
   state: PreviewState;
-  downloading: ReportFormat | null;
-  onDownload: (format: ReportFormat) => void;
+  downloading: boolean;
+  onDownload: () => void;
   onRetry: () => void;
   onClose: () => void;
 }) {
@@ -142,21 +140,8 @@ export default function ReportPreviewModal({
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => onDownload("csv")}
-              disabled={downloading !== null}
-              className="flex items-center gap-2 rounded-lg border border-gray-200 bg-surface px-3.5 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-60"
-            >
-              {downloading === "csv" ? (
-                <EcgLoader />
-              ) : (
-                <FontAwesomeIcon icon={faFileCsv} className="h-3.5 w-3.5 text-gray-500" />
-              )}
-              Download CSV
-            </button>
-            <button
-              type="button"
-              onClick={() => onDownload("pdf")}
-              disabled={state.status !== "ready" || downloading !== null}
+              onClick={onDownload}
+              disabled={state.status !== "ready" || downloading}
               className="flex items-center gap-2 rounded-lg bg-brand-600 px-3.5 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-700 disabled:opacity-60"
             >
               <FontAwesomeIcon icon={faFilePdf} className="h-3.5 w-3.5" />

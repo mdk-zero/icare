@@ -4,7 +4,7 @@ import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { canSeeStudent, getScopedStudentIds } from '@/app/lib/admin-scope';
 import { logAudit } from '@/app/lib/audit';
 import { renderReport, type ReportMeta } from '@/app/lib/reports/kit';
-import { slugify } from '@/app/lib/reports/csv';
+import { slugify } from '@/app/lib/reports/data';
 import { getFacultySectionIds, isStudentInFacultySections } from '@/app/lib/roster';
 import {
   REPORT_NEEDS_TARGET,
@@ -25,8 +25,8 @@ interface RouteParams {
 }
 
 /**
- * One endpoint for every report subject and format:
- *   GET /api/faculty/reports/<type>?id=<targetId>&format=pdf|csv
+ * One endpoint for every report subject, as a PDF:
+ *   GET /api/faculty/reports/<type>?id=<targetId>
  * `roster` needs no id; the others do.
  */
 export async function GET(request: NextRequest, { params }: RouteParams) {
@@ -43,7 +43,6 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
   const url = new URL(request.url);
   const id = url.searchParams.get('id')?.trim() ?? '';
-  const format = url.searchParams.get('format') === 'csv' ? 'csv' : 'pdf';
 
   if (REPORT_NEEDS_TARGET[type] && !id) {
     return NextResponse.json({ error: `A target id is required for ${type} reports` }, { status: 400 });
@@ -90,7 +89,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         result = await buildAssessmentReport(supabase, meta, id, scope);
         break;
       case 'roster':
-        result = await buildRosterReport(supabase, meta, session);
+        result = await buildRosterReport(supabase, meta, session, scope);
         break;
       case 'discharge':
         result = await buildDischargeReport(supabase, meta, id);
@@ -115,23 +114,16 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         entityId: id || session.uid,
         // target_id is what "Generate again" on the Reports page replays;
         // entity_id can't carry it, since whole-scope reports log the actor there.
-        details: { report: type, format, subject: result.subject, target_id: id || null },
+        details: { report: type, format: 'pdf', subject: result.subject, target_id: id || null },
       },
       request,
     );
 
-    const filename = `icare-${type}-report-${slugify(result.subject)}.${format}`;
+    const filename = `icare-${type}-report-${slugify(result.subject)}.pdf`;
     const headers = {
       'Content-Disposition': `attachment; filename="${filename}"`,
       'Cache-Control': 'no-store',
     };
-
-    if (format === 'csv') {
-      return new NextResponse(result.csv, {
-        status: 200,
-        headers: { ...headers, 'Content-Type': 'text/csv; charset=utf-8' },
-      });
-    }
 
     const pdf = await renderReport(result.pdf);
     return new NextResponse(new Uint8Array(pdf), {

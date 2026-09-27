@@ -271,8 +271,8 @@ export default function FacultyReportsClient() {
       type: "student",
       label: "Student",
       icon: faUser,
-      blurb: "One student's skill area profile, skill assessment history and clinical activity.",
-      contents: ["Score summary", "Skill areas", "Recent attempts", "Clinical activity"],
+      blurb: "Everything one student has been graded on: scenarios, case presentations, skill assessments and attendance.",
+      contents: ["Averages and attendance", "Scenario grades", "Case presentations", "Skill assessments", "Skill areas"],
       noun: "students",
       list: {
         items: studentTargets,
@@ -294,8 +294,8 @@ export default function FacultyReportsClient() {
       type: "section",
       label: "Section",
       icon: faLayerGroup,
-      blurb: "The whole class: roster, averages and skill area means.",
-      contents: ["Class summary", "Roster with averages", "Skill area means"],
+      blurb: "The whole class, by group and by student, with skill area means.",
+      contents: ["Class summary", "Group averages", "Every student's grades", "Skill area means"],
       noun: "sections",
       list: {
         items: sectionTargets,
@@ -325,8 +325,8 @@ export default function FacultyReportsClient() {
       type: "scenario",
       label: "Scenario",
       icon: faNotesMedical,
-      blurb: "Who a scenario went to, how many finished, and how they scored.",
-      contents: ["Completion rate", "Average score", "Every assignment"],
+      blurb: "Who a scenario went to, what is awaiting a grade, and how it was graded.",
+      contents: ["Graded and awaiting", "Grades by level", "Every student with group"],
       noun: "scenarios",
       list: {
         items: scenarioTargets,
@@ -346,8 +346,8 @@ export default function FacultyReportsClient() {
       type: "assessment",
       label: "Assessment",
       icon: faListCheck,
-      blurb: "How a skill assessment went: attempts, score bands and pass rate.",
-      contents: ["Attempts and pass rate", "Score distribution", "Every attempt"],
+      blurb: "How a skill assessment went for everyone given it: best scores, bands and pass rate.",
+      contents: ["Pass rate", "Score distribution", "Every student, late ones flagged"],
       noun: "assessments",
       list: {
         items: assessmentTargets,
@@ -368,7 +368,7 @@ export default function FacultyReportsClient() {
       label: "Roster summary",
       icon: faUsers,
       blurb: "Every student you supervise, one row each — nothing to pick.",
-      contents: ["Overall average", "Students without attempts", "Every student with section"],
+      contents: ["Scenario and quiz averages", "Students with nothing graded", "Every student with section and group"],
       noun: "students",
       scope:
         studentTargets && sections.data
@@ -382,7 +382,7 @@ export default function FacultyReportsClient() {
       <PageHeader
         badge={{ icon: <FontAwesomeIcon icon={faFileLines} className="h-3 w-3" />, label: "Report Center" }}
         title="Reports"
-        subtitle="Preview and export PDF or CSV reports on your students, sections, scenarios and assessments"
+        subtitle="Preview and download PDF reports on your students, sections, scenarios and assessments"
       />
       <ReportCenter
         endpoint="/api/faculty/reports"

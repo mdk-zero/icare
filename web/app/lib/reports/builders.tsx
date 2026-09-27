@@ -2,10 +2,24 @@ import { Text, View } from '@react-pdf/renderer';
 import type { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { getFacultyStudentIds } from '@/app/lib/roster';
 import { ReportShell, StatGrid, Table, styles, type ReportMeta, type ReportDocument } from './kit';
-import { toCsv, toCsvBlocks, type CsvCell } from './csv';
+import {
+  CASE_STATUS_LABEL,
+  NEEDS_PRACTICE_BELOW,
+  PASSING_SCORE,
+  avg,
+  date,
+  grade,
+  gradeTile,
+  groupNames,
+  isLate,
+  pct,
+  scenarioStatus,
+  studentWork,
+} from './data';
 import { tallyAttendance, type ShiftAttendanceStatus } from '../shifts';
 import { isActiveSkillArea } from '@/scripts/taylors-chapters';
 import { CASE_CRITERIA, isLateSubmission, type CaseObservations } from '../case-rubric';
+import { isLateSubmission as isLateAttempt } from '../assessment-timing';
 import { ratingLabel, scoreDescriptor, type TaskRating } from '../task-ratings';
 
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
@@ -37,26 +51,20 @@ export interface BuiltReport {
   /** Used for the filename and the PDF document title. */
   subject: string;
   pdf: ReportDocument;
-  csv: string;
 }
 
 export type BuildResult = BuiltReport | { error: string; status: number };
 
-function avg(values: number[]): number | null {
-  if (values.length === 0) return null;
-  return Math.round(values.reduce((sum, v) => sum + v, 0) / values.length);
-}
+/**
+ * The students a report may name: a faculty member's group members, an admin's
+ * students, or null for no limit.
+ */
+export type StudentScope = readonly string[] | null;
 
-function fmt(value: number | null, suffix = ''): string {
-  return value === null ? '—' : `${value}${suffix}`;
-}
-
-function date(value: string | null): string {
-  return value ? new Date(value).toLocaleDateString() : '—';
-}
+const note = { fontSize: 8, color: '#6b7280', marginTop: 6 } as const;
 
 // ---------------------------------------------------------------------------
-// Student — competency profile for one student
+// Student — everything one student has been graded on
 // ---------------------------------------------------------------------------
 
 export async function buildStudentReport(
@@ -64,138 +72,171 @@ export async function buildStudentReport(
   meta: ReportMeta,
   studentId: string,
 ): Promise<BuildResult> {
-  const [
-    { data: student },
-    { data: scores },
-    { data: attempts },
-    { count: readings },
-    { count: anomalies },
-    { count: tpr },
-    { count: ivf },
-    { data: notes },
-  ] = await Promise.all([
-    supabase.from('users').select('id, name, email').eq('id', studentId).eq('role', 'student').maybeSingle(),
+  const { data: student } = await supabase
+    .from('users')
+    .select('id, name, email, sections(name)')
+    .eq('id', studentId)
+    .eq('role', 'student')
+    .maybeSingle();
+  if (!student) return { error: 'Student not found', status: 404 };
+
+  const [groups, { data: scenarios }, cases, { data: attempts }, { data: scores }, { data: shifts }] = await Promise.all([
+    groupNames(supabase, [studentId]),
+    supabase
+      .from('scenario_assignments')
+      .select('status, score, submitted_at, completed_at, deadline, scenarios(title)')
+      .eq('student_id', studentId)
+      .order('assigned_at', { ascending: false }),
+    supabase
+      .from('case_submissions')
+      .select('status, score, submitted_at, case_presentations(title, deadline)')
+      .eq('student_id', studentId)
+      .order('created_at', { ascending: false }),
+    supabase
+      .from('assessment_attempts')
+      .select('score, submitted_at, time_taken_seconds, assessments(title, time_limit_seconds)')
+      .eq('student_id', studentId)
+      .eq('status', 'submitted')
+      .order('submitted_at', { ascending: false }),
     supabase
       .from('competency_scores')
       .select('score, created_at, competency_areas(name)')
       .eq('student_id', studentId)
       .order('created_at', { ascending: false }),
-    supabase
-      .from('assessment_attempts')
-      .select('score, submitted_at, assessments(title)')
-      .eq('student_id', studentId)
-      .eq('status', 'submitted')
-      .order('submitted_at', { ascending: false }),
-    supabase.from('vital_sign_readings').select('id', { count: 'exact', head: true }).eq('recorded_by', studentId),
-    supabase
-      .from('vital_sign_readings')
-      .select('id', { count: 'exact', head: true })
-      .eq('recorded_by', studentId)
-      .eq('is_anomaly', true),
-    supabase.from('tpr_records').select('id', { count: 'exact', head: true }).eq('recorded_by', studentId),
-    supabase.from('ivf_records').select('id', { count: 'exact', head: true }).eq('recorded_by', studentId),
-    supabase.from('progress_notes').select('id, reviewed_at').eq('author_id', studentId),
+    supabase.from('shift_assignments').select('attendance_status, shifts!inner(status)').eq('student_id', studentId),
   ]);
+  if (cases.error) console.error('Report: failed to read case submissions', cases.error);
 
-  if (!student) return { error: 'Student not found', status: 404 };
+  const scenarioRows = (scenarios ?? []).map((a) => {
+    const title = (a as unknown as { scenarios: { title: string } | null }).scenarios?.title ?? 'Unknown scenario';
+    const late = isLate(a.submitted_at, a.deadline);
+    return {
+      title,
+      status: scenarioStatus(a),
+      handedIn: a.submitted_at ? `${date(a.submitted_at)}${late ? ' (late)' : ''}` : '—',
+      score: a.status === 'completed' && a.score !== null ? Number(a.score) : null,
+    };
+  });
+  const scenarioScores = scenarioRows.flatMap((r) => (r.score === null ? [] : [r.score]));
+
+  const caseRows = (cases.data ?? []).map((c) => {
+    const p = (c as unknown as { case_presentations: { title: string; deadline: string | null } | null }).case_presentations;
+    const late = isLate(c.submitted_at, p?.deadline ?? null);
+    return {
+      title: p?.title ?? 'Case presentation',
+      status: CASE_STATUS_LABEL[c.status as string] ?? String(c.status),
+      handedIn: c.submitted_at ? `${date(c.submitted_at)}${late ? ' (late)' : ''}` : '—',
+      score: c.status === 'graded' && c.score !== null ? Number(c.score) : null,
+    };
+  });
+  const caseScores = caseRows.flatMap((r) => (r.score === null ? [] : [r.score]));
+
+  const quizRows = (attempts ?? []).map((a) => {
+    const quiz = (a as unknown as { assessments: { title: string; time_limit_seconds: number | null } | null }).assessments;
+    const late = isLateAttempt(a.time_taken_seconds, quiz?.time_limit_seconds ?? null);
+    return {
+      title: quiz?.title ?? 'Unknown assessment',
+      submitted: `${date(a.submitted_at)}${late ? ' (late)' : ''}`,
+      score: a.score === null ? null : Math.round(Number(a.score)),
+    };
+  });
+  const quizScores = quizRows.flatMap((r) => (r.score === null ? [] : [r.score]));
 
   // Rows arrive newest-first, so the first hit per area is the latest score.
-  const byCompetency = new Map<string, { latest: number; count: number }>();
+  const byArea = new Map<string, { latest: number; count: number }>();
   for (const record of scores ?? []) {
-    const name =
-      (record as unknown as { competency_areas: { name: string } | null }).competency_areas?.name ?? 'Unknown';
+    const name = (record as unknown as { competency_areas: { name: string } | null }).competency_areas?.name ?? 'Unknown';
     if (!isActiveSkillArea(name)) continue;
-    const entry = byCompetency.get(name);
-    if (entry) entry.count += 1;
-    else byCompetency.set(name, { latest: Number(record.score), count: 1 });
+    const e = byArea.get(name);
+    if (e) e.count += 1;
+    else byArea.set(name, { latest: Math.round(Number(record.score)), count: 1 });
   }
-  const competencies = [...byCompetency.entries()]
-    .map(([name, v]) => ({ name, ...v }))
-    .sort((a, b) => a.name.localeCompare(b.name));
+  const areas = [...byArea.entries()].sort(([a], [b]) => a.localeCompare(b));
 
-  const scored = (attempts ?? []).filter((a) => a.score !== null).map((a) => Number(a.score));
-  const recent = (attempts ?? []).slice(0, 10).map((a) => ({
-    title: (a as unknown as { assessments: { title: string } | null }).assessments?.title ?? 'Unknown assessment',
-    score: a.score !== null ? Math.round(Number(a.score)) : null,
-    submittedAt: date(a.submitted_at),
-  }));
+  // A cancelled shift is nobody's absence.
+  const attendance = tallyAttendance(
+    (shifts ?? [])
+      .filter((s) => (s as unknown as { shifts: { status: string } }).shifts.status !== 'cancelled')
+      .map((s) => s.attendance_status as ShiftAttendanceStatus),
+  );
 
-  const reviewedNotes = (notes ?? []).filter((n) => (n as { reviewed_at: string | null }).reviewed_at !== null).length;
-
-  const metaRows = [
-    { label: 'Student', value: student.name },
-    { label: 'Email', value: student.email },
-  ];
+  const section = (student as unknown as { sections: { name: string } | null }).sections?.name ?? 'Unassigned';
 
   const pdf = (
     <ReportShell
-      title={`Skill Area Report - ${student.name}`}
-      heading="Student Skill Area Report"
+      title={`Student Report - ${student.name}`}
+      heading="Student Progress Report"
       meta={meta}
-      metaRows={metaRows}
+      metaRows={[
+        { label: 'Student', value: student.name },
+        { label: 'Email', value: student.email },
+        { label: 'Section', value: section },
+        { label: 'Group', value: groups.get(studentId) ?? 'No group' },
+      ]}
     >
       <Text style={styles.sectionTitle}>Summary</Text>
       <StatGrid
         items={[
-          { label: 'Skill areas', value: competencies.length },
-          { label: 'Skill Assessment attempts', value: attempts?.length ?? 0 },
-          { label: 'Average score', value: fmt(avg(scored), '%') },
-          { label: 'Best score', value: fmt(scored.length ? Math.max(...scored) : null, '%') },
+          gradeTile('Scenario average', avg(scenarioScores)),
+          gradeTile('Case presentation average', avg(caseScores)),
+          { label: 'Skill Assessment average', value: pct(avg(quizScores)) },
+          { label: 'Attendance', value: pct(attendance.rate) },
         ]}
+      />
+
+      <Text style={styles.sectionTitle}>Scenarios</Text>
+      <Table
+        head={['Scenario', 'Status', 'Handed in', 'Grade']}
+        widths={[3, 1.3, 1.3, 1.9]}
+        rows={scenarioRows.map((r) => [r.title, r.status, r.handedIn, grade(r.score)])}
+        emptyText="No scenarios assigned yet."
+      />
+
+      <Text style={styles.sectionTitle}>Case presentations</Text>
+      <Table
+        head={['Presentation', 'Status', 'Handed in', 'Grade']}
+        widths={[3, 1.3, 1.3, 1.9]}
+        rows={caseRows.map((r) => [r.title, r.status, r.handedIn, grade(r.score)])}
+        emptyText="No case presentations assigned yet."
+      />
+
+      <Text style={styles.sectionTitle}>Skill Assessments</Text>
+      <Table
+        head={['Assessment', 'Submitted', 'Score']}
+        rows={quizRows.map((r) => [r.title, r.submitted, pct(r.score)])}
+        emptyText="No Skill Assessments submitted yet."
       />
 
       <Text style={styles.sectionTitle}>Skill areas</Text>
       <Table
         head={['Area', 'Ratings', 'Latest']}
-        rows={competencies.map((c) => [c.name, c.count, `${Math.round(c.latest)}%`])}
+        rows={areas.map(([name, a]) => [name, a.count, `${a.latest}%`])}
         emptyText="No skill area ratings recorded yet."
       />
 
-      <Text style={styles.sectionTitle}>Recent assessment attempts</Text>
-      <Table
-        head={['Assessment', 'Submitted', 'Score']}
-        rows={recent.map((r) => [r.title, r.submittedAt, r.score === null ? '—' : `${r.score}%`])}
-        emptyText="No submitted attempts yet."
-      />
-
-      <Text style={styles.sectionTitle}>Clinical activity</Text>
+      <Text style={styles.sectionTitle}>Clinical attendance</Text>
       <StatGrid
         items={[
-          { label: 'Vitals recorded', value: readings ?? 0 },
-          { label: 'Anomalies flagged', value: anomalies ?? 0 },
-          { label: 'TPR / IVF records', value: `${tpr ?? 0} / ${ivf ?? 0}` },
-          { label: 'Notes reviewed', value: `${reviewedNotes} / ${notes?.length ?? 0}` },
+          { label: 'Present', value: attendance.present },
+          { label: 'Late', value: attendance.late },
+          { label: 'Absent', value: attendance.absent },
+          { label: 'Excused', value: attendance.excused },
         ]}
       />
+      <Text style={note}>
+        Grades use the verbal scale faculty grade on: Excellent, Satisfactory or Needs Practice. Skill
+        Assessments pass at {PASSING_SCORE}%. Attendance counts late as attended and leaves excused and
+        unmarked shifts out.
+      </Text>
     </ReportShell>
   );
 
-  const csv = toCsvBlocks([
-    { title: `Skill area report — ${student.name} (${student.email})`, head: ['Generated at'], rows: [[meta.generatedAt]] },
-    {
-      title: 'Skill areas',
-      head: ['Area', 'Ratings', 'Latest score'],
-      rows: competencies.map((c) => [c.name, c.count, Math.round(c.latest)]),
-    },
-    {
-      title: 'Assessment attempts',
-      head: ['Assessment', 'Submitted', 'Score'],
-      rows: recent.map((r) => [r.title, r.submittedAt, r.score]),
-    },
-  ]);
-
-  return { subject: student.name, pdf, csv };
+  return { subject: student.name, pdf };
 }
 
 // ---------------------------------------------------------------------------
-// Section — one class at a glance
+// Section — one class at a glance, by student and by group
 // ---------------------------------------------------------------------------
-
-/**
- * The students a report may name: a faculty member's group members, an admin's
- * students, or null for no limit.
- */
-export type StudentScope = readonly string[] | null;
 
 export async function buildSectionReport(
   supabase: Supabase,
@@ -208,106 +249,110 @@ export async function buildSectionReport(
 
   const { data: sectionStudents } = await supabase
     .from('users')
-    .select('id, name, email')
+    .select('id, name')
     .eq('role', 'student')
     .eq('section_id', sectionId)
     .order('name');
   const students = (sectionStudents ?? []).filter((s) => !scope || scope.includes(s.id));
-
   const ids = students.map((s) => s.id);
-  const [{ data: scores }, { data: attempts }] = await Promise.all([
+
+  const [groups, work, { data: scores }] = await Promise.all([
+    groupNames(supabase, ids),
+    studentWork(supabase, ids),
     ids.length
-      ? supabase.from('competency_scores').select('student_id, score, competency_areas(name)').in('student_id', ids)
-      : Promise.resolve({ data: [] as unknown[] }),
-    ids.length
-      ? supabase.from('assessment_attempts').select('student_id, score').eq('status', 'submitted').in('student_id', ids)
+      ? supabase.from('competency_scores').select('score, competency_areas(name)').in('student_id', ids)
       : Promise.resolve({ data: [] as unknown[] }),
   ]);
 
-  const attemptsByStudent = new Map<string, number[]>();
-  for (const a of (attempts ?? []) as { student_id: string; score: number | null }[]) {
-    if (a.score === null) continue;
-    const list = attemptsByStudent.get(a.student_id) ?? [];
-    list.push(Number(a.score));
-    attemptsByStudent.set(a.student_id, list);
+  const roster = students.map((s) => ({ ...s, group: groups.get(s.id) ?? null, work: work.get(s.id)! }));
+  const scenarioAverages = roster.flatMap((r) => (r.work.scenarioAverage === null ? [] : [r.work.scenarioAverage]));
+  const quizAverages = roster.flatMap((r) => (r.work.quizAverage === null ? [] : [r.work.quizAverage]));
+  const needsPractice = scenarioAverages.filter((s) => s < NEEDS_PRACTICE_BELOW).length;
+
+  const byGroup = new Map<string, typeof roster>();
+  for (const r of roster) {
+    const key = r.group ?? 'No group';
+    byGroup.set(key, [...(byGroup.get(key) ?? []), r]);
   }
+  const groupRows = [...byGroup.entries()]
+    .sort(([a], [b]) => (a === 'No group' ? 1 : b === 'No group' ? -1 : a.localeCompare(b, undefined, { numeric: true })))
+    .map(([name, members]) => {
+      const graded = members.flatMap((m) => (m.work.scenarioAverage === null ? [] : [m.work.scenarioAverage]));
+      return [name, members.length, `${graded.length}/${members.length}`, grade(avg(graded))];
+    });
 
   const byArea = new Map<string, number[]>();
   for (const s of (scores ?? []) as { score: number; competency_areas: { name: string } | null }[]) {
     const name = s.competency_areas?.name ?? 'Unknown';
     if (!isActiveSkillArea(name)) continue;
-    const list = byArea.get(name) ?? [];
-    list.push(Number(s.score));
-    byArea.set(name, list);
+    byArea.set(name, [...(byArea.get(name) ?? []), Number(s.score)]);
   }
   const areaRows = [...byArea.entries()]
-    .map(([name, list]) => ({ name, count: list.length, mean: avg(list) }))
-    .sort((a, b) => a.name.localeCompare(b.name));
-
-  const roster = (students ?? []).map((s) => {
-    const list = attemptsByStudent.get(s.id) ?? [];
-    return { name: s.name, email: s.email, attempts: list.length, mean: avg(list) };
-  });
-  const classMean = avg(roster.flatMap((r) => (r.mean === null ? [] : [r.mean])));
-  const belowThreshold = roster.filter((r) => r.mean !== null && r.mean < 75).length;
-
-  const metaRows = [
-    { label: 'Section', value: section.name },
-    { label: 'Students', value: String(roster.length) },
-  ];
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([name, list]) => [name, list.length, pct(avg(list))]);
 
   const pdf = (
     <ReportShell
       title={`Section Report - ${section.name}`}
       heading="Section Performance Report"
       meta={meta}
-      metaRows={metaRows}
+      metaRows={[
+        { label: 'Section', value: section.name },
+        { label: 'Students', value: String(roster.length) },
+        { label: 'Groups', value: String([...byGroup.keys()].filter((g) => g !== 'No group').length) },
+      ]}
     >
       <Text style={styles.sectionTitle}>Summary</Text>
       <StatGrid
         items={[
           { label: 'Students', value: roster.length },
-          { label: 'Class average', value: fmt(classMean, '%') },
-          { label: 'Below 75%', value: belowThreshold },
-          { label: 'Skill areas', value: areaRows.length },
+          gradeTile('Scenario average', avg(scenarioAverages)),
+          { label: 'Skill Assessment average', value: pct(avg(quizAverages)) },
+          { label: 'Needs Practice', value: needsPractice },
         ]}
       />
 
-      <Text style={styles.sectionTitle}>Roster</Text>
+      <Text style={styles.sectionTitle}>Groups</Text>
       <Table
-        head={['Student', 'Attempts', 'Average']}
-        rows={roster.map((r) => [r.name, r.attempts, fmt(r.mean, '%')])}
+        head={['Group', 'Members', 'Graded', 'Scenario average']}
+        widths={[3, 1, 1, 2]}
+        rows={groupRows}
+        emptyText="No students in this section yet."
+      />
+
+      <Text style={styles.sectionTitle}>Students</Text>
+      <Table
+        head={['Student', 'Group', 'Scenarios', 'Scenario grade', 'Case grade', 'Quiz average']}
+        widths={[2.3, 1.1, 1, 2, 1, 1.3]}
+        rows={roster.map((r) => [
+          r.name,
+          r.group ?? '—',
+          `${r.work.scenariosGraded}/${r.work.scenariosAssigned}`,
+          grade(r.work.scenarioAverage),
+          pct(r.work.caseAverage),
+          pct(r.work.quizAverage),
+        ])}
         emptyText="No students in this section yet."
       />
 
       <Text style={styles.sectionTitle}>Skill areas (section mean)</Text>
       <Table
         head={['Area', 'Ratings', 'Mean']}
-        rows={areaRows.map((a) => [a.name, a.count, fmt(a.mean, '%')])}
+        rows={areaRows}
         emptyText="No skill area ratings recorded for this section yet."
       />
+      <Text style={note}>
+        Scenarios counts graded out of assigned. Needs Practice counts students whose scenario average is
+        below {NEEDS_PRACTICE_BELOW}%.
+      </Text>
     </ReportShell>
   );
 
-  const csv = toCsvBlocks([
-    { title: `Section report — ${section.name}`, head: ['Generated at'], rows: [[meta.generatedAt]] },
-    {
-      title: 'Roster',
-      head: ['Student', 'Email', 'Attempts', 'Average score'],
-      rows: roster.map((r) => [r.name, r.email, r.attempts, r.mean]),
-    },
-    {
-      title: 'Skill areas',
-      head: ['Area', 'Ratings', 'Mean score'],
-      rows: areaRows.map((a) => [a.name, a.count, a.mean]),
-    },
-  ]);
-
-  return { subject: section.name, pdf, csv };
+  return { subject: section.name, pdf };
 }
 
 // ---------------------------------------------------------------------------
-// Scenario — assignment and completion for one scenario
+// Scenario — who was given one scenario, and how they were graded
 // ---------------------------------------------------------------------------
 
 export async function buildScenarioReport(
@@ -318,82 +363,89 @@ export async function buildScenarioReport(
 ): Promise<BuildResult> {
   const { data: scenario } = await supabase
     .from('scenarios')
-    .select('id, title, difficulty, category, created_at')
+    .select('id, title, difficulty, category')
     .eq('id', scenarioId)
     .maybeSingle();
   if (!scenario) return { error: 'Scenario not found', status: 404 };
 
   const { data: allAssignments } = await supabase
     .from('scenario_assignments')
-    .select('student_id, status, score, time_taken, assigned_at, completed_at, deadline, users!scenario_assignments_student_id_fkey(name)')
+    .select('student_id, status, score, submitted_at, completed_at, deadline, users!scenario_assignments_student_id_fkey(name)')
     .eq('scenario_id', scenarioId)
     .order('assigned_at', { ascending: false });
   const assignments = (allAssignments ?? []).filter((a) => !scope || scope.includes(a.student_id as string));
+  const groups = await groupNames(supabase, assignments.map((a) => a.student_id as string));
 
-  const rows = assignments.map((a) => {
-    const studentName =
-      (a as unknown as { users: { name: string } | null }).users?.name ?? 'Unknown student';
-    return {
-      name: studentName,
-      status: a.status as string,
-      score: a.score === null ? null : Number(a.score),
-      completedAt: date(a.completed_at),
-      minutes: a.time_taken === null ? null : Math.round(Number(a.time_taken) / 60),
-    };
-  });
+  const rows = assignments
+    .map((a) => ({
+      name: (a as unknown as { users: { name: string } | null }).users?.name ?? 'Unknown student',
+      group: groups.get(a.student_id as string) ?? '—',
+      status: scenarioStatus(a),
+      late: isLate(a.submitted_at, a.deadline),
+      handedIn: a.submitted_at,
+      score: a.status === 'completed' && a.score !== null ? Number(a.score) : null,
+    }))
+    .sort((a, b) => a.group.localeCompare(b.group, undefined, { numeric: true }) || a.name.localeCompare(b.name));
 
-  const completed = rows.filter((r) => r.status === 'completed');
-  const scored = completed.flatMap((r) => (r.score === null ? [] : [r.score]));
-  const completionRate = rows.length > 0 ? Math.round((completed.length / rows.length) * 100) : null;
-
-  const metaRows = [
-    { label: 'Scenario', value: scenario.title },
-    { label: 'Difficulty', value: String(scenario.difficulty) },
-    { label: 'Category', value: String(scenario.category) },
-  ];
+  const graded = rows.flatMap((r) => (r.score === null ? [] : [r.score]));
+  const awaiting = rows.filter((r) => r.status === 'Awaiting grade').length;
+  const levels = ['Excellent', 'Satisfactory', 'Needs Practice'].map((label) => [
+    label,
+    graded.filter((s) => scoreDescriptor(s) === label).length,
+  ]);
 
   const pdf = (
     <ReportShell
       title={`Scenario Report - ${scenario.title}`}
       heading="Scenario Report"
       meta={meta}
-      metaRows={metaRows}
+      metaRows={[
+        { label: 'Scenario', value: scenario.title },
+        { label: 'Difficulty', value: String(scenario.difficulty) },
+        { label: 'Category', value: String(scenario.category) },
+      ]}
     >
       <Text style={styles.sectionTitle}>Summary</Text>
       <StatGrid
         items={[
           { label: 'Assigned', value: rows.length },
-          { label: 'Completed', value: completed.length },
-          { label: 'Completion rate', value: fmt(completionRate, '%') },
-          { label: 'Average score', value: fmt(avg(scored), '%') },
+          { label: 'Awaiting grade', value: awaiting },
+          { label: 'Graded', value: graded.length },
+          gradeTile('Average grade', avg(graded)),
         ]}
       />
 
-      <Text style={styles.sectionTitle}>Assignments</Text>
+      <Text style={styles.sectionTitle}>Grades</Text>
+      <Table head={['Level', 'Students']} rows={levels} emptyText="Nothing graded yet." />
+
+      <Text style={styles.sectionTitle}>Students</Text>
       <Table
-        head={['Student', 'Status', 'Completed', 'Score']}
-        rows={rows.map((r) => [r.name, r.status, r.completedAt, fmt(r.score, '%')])}
+        head={['Student', 'Group', 'Status', 'Handed in', 'Grade']}
+        widths={[2.4, 1, 1.4, 1.4, 1.9]}
+        rows={rows.map((r) => [
+          r.name,
+          r.group,
+          r.status,
+          r.handedIn ? `${date(r.handedIn)}${r.late ? ' (late)' : ''}` : '—',
+          grade(r.score),
+        ])}
         emptyText="This scenario has not been assigned yet."
       />
     </ReportShell>
   );
 
-  const csv = toCsvBlocks([
-    { title: `Scenario report — ${scenario.title}`, head: ['Generated at'], rows: [[meta.generatedAt]] },
-    {
-      title: 'Assignments',
-      head: ['Student', 'Status', 'Completed at', 'Score', 'Minutes taken'],
-      rows: rows.map((r) => [r.name, r.status, r.completedAt, r.score, r.minutes] as CsvCell[]),
-    },
-  ]);
-
-  return { subject: scenario.title, pdf, csv };
+  return { subject: scenario.title, pdf };
 }
 
 // ---------------------------------------------------------------------------
-// Assessment — attempt distribution for one quiz
+// Assessment — one Skill Assessment, per student
 // ---------------------------------------------------------------------------
 
+/**
+ * One row per student who was given the assessment (assessment_assignments)
+ * or sat it anyway: target_sections only makes it visible, so it is not who
+ * was given it.
+ */
 export async function buildAssessmentReport(
   supabase: Supabase,
   meta: ReportMeta,
@@ -402,89 +454,111 @@ export async function buildAssessmentReport(
 ): Promise<BuildResult> {
   const { data: assessment } = await supabase
     .from('assessments')
-    .select('id, title, difficulty, category, is_published')
+    .select('id, title, difficulty, is_published, time_limit_seconds')
     .eq('id', assessmentId)
     .maybeSingle();
   if (!assessment) return { error: 'Assessment not found', status: 404 };
 
-  const { data: allAttempts } = await supabase
-    .from('assessment_attempts')
-    .select('student_id, status, score, submitted_at, time_taken_seconds, users(name)')
-    .eq('assessment_id', assessmentId)
-    .order('submitted_at', { ascending: false });
-  const attempts = (allAttempts ?? []).filter((a) => !scope || scope.includes(a.student_id as string));
+  const [{ data: assigned }, { data: allAttempts }] = await Promise.all([
+    supabase
+      .from('assessment_assignments')
+      .select('student_id, deadline, users!assessment_assignments_student_id_fkey(name)')
+      .eq('assessment_id', assessmentId),
+    supabase
+      .from('assessment_attempts')
+      .select('student_id, status, score, submitted_at, time_taken_seconds, users(name)')
+      .eq('assessment_id', assessmentId),
+  ]);
 
-  const rows = attempts.map((a) => ({
-    name: (a as unknown as { users: { name: string } | null }).users?.name ?? 'Unknown student',
-    status: a.status as string,
-    score: a.score === null ? null : Math.round(Number(a.score)),
-    submittedAt: date(a.submitted_at),
-    minutes: a.time_taken_seconds === null ? null : Math.round(Number(a.time_taken_seconds) / 60),
-  }));
+  const students = new Map<string, { name: string; assigned: boolean; attempts: NonNullable<typeof allAttempts> }>();
+  for (const a of assigned ?? []) {
+    const name = (a as unknown as { users: { name: string } | null }).users?.name ?? 'Unknown student';
+    students.set(a.student_id as string, { name, assigned: true, attempts: [] });
+  }
+  for (const a of allAttempts ?? []) {
+    const id = a.student_id as string;
+    const name = (a as unknown as { users: { name: string } | null }).users?.name ?? 'Unknown student';
+    const e = students.get(id) ?? { name, assigned: false, attempts: [] };
+    e.attempts.push(a);
+    students.set(id, e);
+  }
+  const inScope = [...students.entries()].filter(([id]) => !scope || scope.includes(id));
+  const groups = await groupNames(supabase, inScope.map(([id]) => id));
 
-  const submitted = rows.filter((r) => r.status === 'submitted' && r.score !== null);
-  const scored = submitted.map((r) => r.score as number);
-  const passRate =
-    submitted.length > 0 ? Math.round((scored.filter((s) => s >= 75).length / submitted.length) * 100) : null;
+  const rows = inScope
+    .map(([id, s]) => {
+      const submitted = s.attempts.filter((a) => a.status === 'submitted' && a.score !== null);
+      const best = submitted.length ? Math.max(...submitted.map((a) => Math.round(Number(a.score)))) : null;
+      const latest = submitted.map((a) => a.submitted_at as string).sort().at(-1) ?? null;
+      const late = submitted.some((a) => isLateAttempt(a.time_taken_seconds, assessment.time_limit_seconds));
+      const status = submitted.length
+        ? 'Submitted'
+        : s.attempts.some((a) => a.status === 'in_progress')
+          ? 'In progress'
+          : 'Not started';
+      return { name: s.name, group: groups.get(id) ?? '—', status, attempts: submitted.length, best, latest, late };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
 
-  // Distribution gives a shape the raw list does not.
+  const bests = rows.flatMap((r) => (r.best === null ? [] : [r.best]));
+  const passRate = bests.length ? Math.round((bests.filter((s) => s >= PASSING_SCORE).length / bests.length) * 100) : null;
   const bands = [
-    { label: '90–100', test: (s: number) => s >= 90 },
-    { label: '75–89', test: (s: number) => s >= 75 && s < 90 },
-    { label: '60–74', test: (s: number) => s >= 60 && s < 75 },
+    { label: '90-100', test: (s: number) => s >= 90 },
+    { label: `${PASSING_SCORE}-89`, test: (s: number) => s >= PASSING_SCORE && s < 90 },
+    { label: `60-${PASSING_SCORE - 1}`, test: (s: number) => s >= 60 && s < PASSING_SCORE },
     { label: 'Below 60', test: (s: number) => s < 60 },
-  ].map((b) => ({ label: b.label, count: scored.filter(b.test).length }));
-
-  const metaRows = [
-    { label: 'Assessment', value: assessment.title },
-    { label: 'Difficulty', value: String(assessment.difficulty) },
-    { label: 'Status', value: assessment.is_published ? 'Published' : 'Draft' },
-  ];
+  ].map((b) => [b.label, bests.filter(b.test).length]);
 
   const pdf = (
     <ReportShell
       title={`Assessment Report - ${assessment.title}`}
-      heading="Assessment Report"
+      heading="Skill Assessment Report"
       meta={meta}
-      metaRows={metaRows}
+      metaRows={[
+        { label: 'Assessment', value: assessment.title },
+        { label: 'Difficulty', value: String(assessment.difficulty) },
+        { label: 'Status', value: assessment.is_published ? 'Published' : 'Draft' },
+        {
+          label: 'Time limit',
+          value: assessment.time_limit_seconds ? `${Math.round(assessment.time_limit_seconds / 60)} min` : 'None',
+        },
+      ]}
     >
       <Text style={styles.sectionTitle}>Summary</Text>
       <StatGrid
         items={[
-          { label: 'Attempts', value: rows.length },
-          { label: 'Submitted', value: submitted.length },
-          { label: 'Average', value: fmt(avg(scored), '%') },
-          { label: 'Pass rate (≥75)', value: fmt(passRate, '%') },
+          { label: 'Students', value: rows.length },
+          { label: 'Submitted', value: bests.length },
+          { label: 'Average best score', value: pct(avg(bests)) },
+          { label: `Pass rate (${PASSING_SCORE}% and up)`, value: pct(passRate) },
         ]}
       />
 
-      <Text style={styles.sectionTitle}>Score distribution</Text>
-      <Table
-        head={['Band', 'Students']}
-        rows={bands.map((b) => [b.label, b.count])}
-        emptyText="No submitted attempts yet."
-      />
+      <Text style={styles.sectionTitle}>Score distribution (best attempt)</Text>
+      <Table head={['Band', 'Students']} rows={bands} emptyText="No submitted attempts yet." />
 
-      <Text style={styles.sectionTitle}>Attempts</Text>
+      <Text style={styles.sectionTitle}>Students</Text>
       <Table
-        head={['Student', 'Status', 'Submitted', 'Score']}
-        rows={rows.map((r) => [r.name, r.status, r.submittedAt, fmt(r.score, '%')])}
-        emptyText="No attempts recorded yet."
+        head={['Student', 'Group', 'Status', 'Attempts', 'Last submitted', 'Best']}
+        widths={[2.4, 1, 1.2, 1, 1.6, 0.8]}
+        rows={rows.map((r) => [
+          r.name,
+          r.group,
+          r.status,
+          r.attempts,
+          r.latest ? `${date(r.latest)}${r.late ? ' (late)' : ''}` : '—',
+          pct(r.best),
+        ])}
+        emptyText="This assessment has not been given to anyone yet."
       />
+      <Text style={note}>
+        Late marks an attempt handed in more than a minute past the time limit. It is still graded and
+        counted.
+      </Text>
     </ReportShell>
   );
 
-  const csv = toCsvBlocks([
-    { title: `Assessment report — ${assessment.title}`, head: ['Generated at'], rows: [[meta.generatedAt]] },
-    { title: 'Score distribution', head: ['Band', 'Students'], rows: bands.map((b) => [b.label, b.count]) },
-    {
-      title: 'Attempts',
-      head: ['Student', 'Status', 'Submitted at', 'Score', 'Minutes taken'],
-      rows: rows.map((r) => [r.name, r.status, r.submittedAt, r.score, r.minutes] as CsvCell[]),
-    },
-  ]);
-
-  return { subject: assessment.title, pdf, csv };
+  return { subject: assessment.title, pdf };
 }
 
 // ---------------------------------------------------------------------------
@@ -495,12 +569,9 @@ export async function buildRosterReport(
   supabase: Supabase,
   meta: ReportMeta,
   session: { uid: string; role: string },
+  scope: StudentScope = null,
 ): Promise<BuildResult> {
-  let query = supabase
-    .from('users')
-    .select('id, name, email, sections(name)')
-    .eq('role', 'student')
-    .order('name');
+  let query = supabase.from('users').select('id, name, sections(name)').eq('role', 'student').order('name');
 
   if (session.role === 'faculty') {
     // The members of the groups they supervise.
@@ -509,74 +580,66 @@ export async function buildRosterReport(
       return { error: 'You have no students in your groups yet', status: 400 };
     }
     query = query.in('id', studentIds);
+  } else if (scope) {
+    // An admin's own students (migration 053).
+    if (scope.length === 0) return { error: 'You have no students yet', status: 400 };
+    query = query.in('id', [...scope]);
   }
 
   const { data: students } = await query;
   const ids = (students ?? []).map((s) => s.id);
+  const [groups, work] = await Promise.all([groupNames(supabase, ids), studentWork(supabase, ids)]);
 
-  const { data: attempts } = ids.length
-    ? await supabase.from('assessment_attempts').select('student_id, score').eq('status', 'submitted').in('student_id', ids)
-    : { data: [] as unknown[] };
-
-  const byStudent = new Map<string, number[]>();
-  for (const a of (attempts ?? []) as { student_id: string; score: number | null }[]) {
-    if (a.score === null) continue;
-    const list = byStudent.get(a.student_id) ?? [];
-    list.push(Number(a.score));
-    byStudent.set(a.student_id, list);
-  }
-
-  const rows = (students ?? []).map((s) => {
-    const list = byStudent.get(s.id) ?? [];
-    return {
-      name: s.name,
-      email: s.email,
-      section: (s as unknown as { sections: { name: string } | null }).sections?.name ?? 'Unassigned',
-      attempts: list.length,
-      mean: avg(list),
-    };
-  });
-
-  const overall = avg(rows.flatMap((r) => (r.mean === null ? [] : [r.mean])));
-  const noActivity = rows.filter((r) => r.attempts === 0).length;
-
-  const metaRows = [
-    { label: 'Scope', value: session.role === 'admin' ? 'All students' : 'Your groups' },
-    { label: 'Students', value: String(rows.length) },
-  ];
+  const rows = (students ?? []).map((s) => ({
+    name: s.name,
+    section: (s as unknown as { sections: { name: string } | null }).sections?.name ?? 'Unassigned',
+    group: groups.get(s.id) ?? '—',
+    work: work.get(s.id)!,
+  }));
+  const scenarioAverages = rows.flatMap((r) => (r.work.scenarioAverage === null ? [] : [r.work.scenarioAverage]));
+  const quizAverages = rows.flatMap((r) => (r.work.quizAverage === null ? [] : [r.work.quizAverage]));
+  const noWork = rows.filter(
+    (r) => r.work.scenariosGraded === 0 && r.work.casesGraded === 0 && r.work.quizAttempts === 0,
+  ).length;
 
   const pdf = (
     <ReportShell
       title="Roster Summary Report"
       heading="Roster Summary Report"
       meta={meta}
-      metaRows={metaRows}
+      metaRows={[
+        { label: 'Scope', value: session.role === 'admin' ? 'Your students' : 'Your groups' },
+        { label: 'Students', value: String(rows.length) },
+      ]}
     >
       <Text style={styles.sectionTitle}>Summary</Text>
       <StatGrid
         items={[
           { label: 'Students', value: rows.length },
-          { label: 'Overall average', value: fmt(overall, '%') },
-          { label: 'No attempts yet', value: noActivity },
-          { label: 'Below 75%', value: rows.filter((r) => r.mean !== null && r.mean < 75).length },
+          gradeTile('Scenario average', avg(scenarioAverages)),
+          { label: 'Skill Assessment average', value: pct(avg(quizAverages)) },
+          { label: 'Nothing graded yet', value: noWork },
         ]}
       />
 
       <Text style={styles.sectionTitle}>Students</Text>
       <Table
-        head={['Student', 'Section', 'Attempts', 'Average']}
-        rows={rows.map((r) => [r.name, r.section, r.attempts, fmt(r.mean, '%')])}
+        head={['Student', 'Section', 'Group', 'Scenario grade', 'Case grade', 'Quiz average']}
+        widths={[2.3, 1, 1, 2, 1, 1.3]}
+        rows={rows.map((r) => [
+          r.name,
+          r.section,
+          r.group,
+          grade(r.work.scenarioAverage),
+          pct(r.work.caseAverage),
+          pct(r.work.quizAverage),
+        ])}
         emptyText="No students on your roster yet."
       />
     </ReportShell>
   );
 
-  const csv = toCsv(
-    ['Student', 'Email', 'Section', 'Attempts', 'Average score'],
-    rows.map((r) => [r.name, r.email, r.section, r.attempts, r.mean] as CsvCell[]),
-  );
-
-  return { subject: 'roster-summary', pdf, csv };
+  return { subject: 'roster-summary', pdf };
 }
 
 /**
@@ -726,48 +789,7 @@ export async function buildDischargeReport(
     </ReportShell>
   );
 
-  const csv = toCsvBlocks([
-    {
-      title: 'Discharge summary',
-      head: ['Field', 'Value'],
-      rows: [
-        ['Patient', name],
-        ['Record ID', patient?.mimic_id ?? ''],
-        ['Diagnosis', summary.diagnosis || ''],
-        ['Room', summary.room_label || ''],
-        ['Admitted', date(summary.admitted_at)],
-        ['Discharged', date(summary.discharged_at)],
-        ['Length of stay (days)', days === null ? '' : days],
-        ['Vitals readings', vitals.readings ?? 0],
-        ['Flagged readings', vitals.flagged ?? 0],
-        ['TPR sheets', ehr.tpr ?? 0],
-        ['IVF records', ehr.ivf ?? 0],
-        ['IVF still running', ehr.ivf_ongoing ?? 0],
-        ['Progress notes', ehr.notes ?? 0],
-      ] as CsvCell[][],
-    },
-    {
-      title: 'Vital signs',
-      head: ['Vital', 'Min', 'Avg', 'Max', 'Readings'],
-      rows: vitalRows as CsvCell[][],
-    },
-    {
-      title: 'Abnormal findings',
-      head: ['Severity', 'Finding', 'Recommendation'],
-      rows: (vitals.findings ?? []).map((f) => [
-        f.severity,
-        f.message,
-        f.recommendation ?? '',
-      ]) as CsvCell[][],
-    },
-    {
-      title: 'Follow-up recommendations',
-      head: ['#', 'Title', 'Detail'],
-      rows: followUp.map((f, i) => [i + 1, f.title ?? '', f.detail ?? '']) as CsvCell[][],
-    },
-  ]);
-
-  return { subject: name, pdf, csv };
+  return { subject: name, pdf };
 }
 
 /**
@@ -862,13 +884,6 @@ export async function buildAttendanceReport(
     ),
   );
 
-  const SHORT: Record<ShiftAttendanceStatus, string> = {
-    scheduled: '–',
-    present: 'P',
-    late: 'L',
-    absent: 'A',
-    excused: 'E',
-  };
 
   const summaryRows = perStudent.map(({ student, tally }) => [
     student.name,
@@ -921,7 +936,7 @@ export async function buildAttendanceReport(
             .filter((v): v is ShiftAttendanceStatus => !!v);
           const t = tallyAttendance(statuses);
           return [
-            `${shift.label || shift.shift_type.toUpperCase()} · ${date(shift.starts_at)}`,
+            `${shift.label || shift.shift_type.toUpperCase()}, ${date(shift.starts_at)}`,
             t.total - t.scheduled,
             t.present + t.late,
             t.absent,
@@ -936,26 +951,7 @@ export async function buildAttendanceReport(
     </ReportShell>
   );
 
-  const csv = toCsvBlocks([
-    {
-      title: `Attendance — ${section.name}`,
-      head: ['Student', 'Present', 'Late', 'Absent', 'Excused', 'Rate'],
-      rows: summaryRows as CsvCell[][],
-    },
-    {
-      title: 'Shift grid (P present, L late, A absent, E excused, - unmarked)',
-      head: ['Student', ...counted.map((s) => `${s.label || s.shift_type.toUpperCase()} ${date(s.starts_at)}`)],
-      rows: studentList.map((student) => [
-        student.name,
-        ...counted.map((shift) => {
-          const status = grid.get(student.id)?.get(shift.id);
-          return status ? SHORT[status] : '';
-        }),
-      ]) as CsvCell[][],
-    },
-  ]);
-
-  return { subject: section.name, pdf, csv };
+  return { subject: section.name, pdf };
 }
 
 // ---------------------------------------------------------------------------
@@ -1044,7 +1040,7 @@ export async function buildCaseReport(
         { label: 'Student', value: studentName },
         { label: 'Presentation', value: title },
         { label: 'Patient', value: patient },
-        { label: 'Hospital / ward', value: [c.hospital, c.ward].filter(Boolean).join(' · ') || '—' },
+        { label: 'Hospital / ward', value: [c.hospital, c.ward].filter(Boolean).join(', ') || '—' },
         { label: 'Admitting diagnosis', value: c.admitting_diagnosis || '—' },
         { label: 'Handed in', value: `${date(c.submitted_at)}${late ? ' (late)' : ''}` },
         { label: 'Graded', value: date(c.graded_at) },
@@ -1096,26 +1092,5 @@ export async function buildCaseReport(
     </ReportShell>
   );
 
-  const csv = toCsvBlocks([
-    {
-      title: 'Case presentation',
-      head: ['Field', 'Value'],
-      rows: [
-        ['Student', studentName],
-        ['Presentation', title],
-        ['Patient', patient],
-        ['Hospital', c.hospital],
-        ['Ward', c.ward],
-        ['Admitting diagnosis', c.admitting_diagnosis],
-        ...narrative.map(([label, text]) => [label, text]),
-        ['Handed in', date(c.submitted_at)],
-        ['Late', late ? 'yes' : 'no'],
-        ['Score', score ?? ''],
-        ['Instructor remarks', c.remarks],
-      ] as CsvCell[][],
-    },
-    { title: 'Rubric', head: ['Criterion', 'Rating', 'Remarks'], rows: rubricRows as CsvCell[][] },
-  ]);
-
-  return { subject: `${studentName} ${title}`, pdf, csv };
+  return { subject: `${studentName} ${title}`, pdf };
 }

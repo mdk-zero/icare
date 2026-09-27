@@ -63,7 +63,6 @@ export async function GET() {
         type,
         target_id: target,
         subject: typeof details.subject === 'string' ? details.subject : type,
-        format: details.format === 'csv' ? 'csv' : 'pdf',
         created_at: row.created_at,
       });
       if (reports.length === LIMIT) break;
