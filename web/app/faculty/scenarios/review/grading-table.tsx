@@ -59,15 +59,12 @@ interface GradingTableProps {
   rubric: Rubric;
   /** A saved grade not being edited: shown, but nothing can be changed. */
   readOnly?: boolean;
-  /** Rows (sub-task or task ids) with a save in flight. */
-  savingKeys: ReadonlySet<string>;
   onRateTask: (task: GradingTask, rating: TaskRating | null) => void;
   onRateSteps: (task: GradingTask, changes: Map<string, TaskRating | null>) => void;
   noteDrafts: Record<string, string>;
   openNotes: ReadonlySet<string>;
   onOpenNote: (taskId: string) => void;
   onNoteChange: (taskId: string, value: string) => void;
-  onNoteBlur: (task: GradingTask) => void;
 }
 
 /**
@@ -81,14 +78,12 @@ export default function GradingTable({
   totalPoints,
   rubric,
   readOnly = false,
-  savingKeys,
   onRateTask,
   onRateSteps,
   noteDrafts,
   openNotes,
   onOpenNote,
   onNoteChange,
-  onNoteBlur,
 }: GradingTableProps) {
   if (loading) {
     return (
@@ -153,7 +148,6 @@ export default function GradingTable({
               index={i}
               totalPoints={totalPoints}
               readOnly={readOnly}
-              savingKeys={savingKeys}
               onRateTask={onRateTask}
               onRateSteps={onRateSteps}
               noteOpen={openNotes.has(task.id) || Boolean(task.remarks)}
@@ -161,7 +155,6 @@ export default function GradingTable({
               noteValue={noteDrafts[task.id] ?? task.remarks ?? ""}
               onOpenNote={onOpenNote}
               onNoteChange={onNoteChange}
-              onNoteBlur={onNoteBlur}
             />
           ))}
         </table>
@@ -206,7 +199,6 @@ interface TaskGroupProps {
   index: number;
   totalPoints: number;
   readOnly: boolean;
-  savingKeys: ReadonlySet<string>;
   onRateTask: (task: GradingTask, rating: TaskRating | null) => void;
   onRateSteps: (task: GradingTask, changes: Map<string, TaskRating | null>) => void;
   noteOpen: boolean;
@@ -214,7 +206,6 @@ interface TaskGroupProps {
   noteValue: string;
   onOpenNote: (taskId: string) => void;
   onNoteChange: (taskId: string, value: string) => void;
-  onNoteBlur: (task: GradingTask) => void;
 }
 
 function TaskGroup({
@@ -222,7 +213,6 @@ function TaskGroup({
   index,
   totalPoints,
   readOnly,
-  savingKeys,
   onRateTask,
   onRateSteps,
   noteOpen,
@@ -230,7 +220,6 @@ function TaskGroup({
   noteValue,
   onOpenNote,
   onNoteChange,
-  onNoteBlur,
 }: TaskGroupProps) {
   const rows = checklistRows(task);
   const hasSteps = task.steps.length > 0;
@@ -324,7 +313,6 @@ function TaskGroup({
               {openRows.length > 0 && !readOnly && (
                 <button
                   onClick={() => fillOpenRows(option.key)}
-                  disabled={openRows.some((r) => savingKeys.has(r.key))}
                   title={`Rate the ${openRows.length} unrated sub-task${openRows.length === 1 ? "" : "s"} ${option.label}`}
                   aria-label={`Rate the ${openRows.length} unrated sub-tasks of ${task.title} ${option.label}`}
                   className={`mx-auto grid h-6 w-6 place-items-center rounded-md border border-dashed border-gray-300 text-transparent opacity-40 transition-all group-hover/task:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600/40 disabled:opacity-30 ${RATING_STYLE[option.key].hover}`}
@@ -340,7 +328,6 @@ function TaskGroup({
               option={option.key}
               label={task.title}
               readOnly={readOnly}
-              saving={savingKeys.has(rows[0].key)}
               onRate={rateRow}
             />
           ),
@@ -381,7 +368,6 @@ function TaskGroup({
                   option={option.key}
                   label={step.title}
                   readOnly={readOnly}
-                  saving={savingKeys.has(row.key)}
                   onRate={rateRow}
                 />
               ))}
@@ -406,7 +392,6 @@ function TaskGroup({
               value={noteValue}
               autoFocus={noteAutoFocus}
               onChange={(e) => onNoteChange(task.id, e.target.value)}
-              onBlur={() => onNoteBlur(task)}
               readOnly={readOnly}
               maxLength={MAX_REMARKS_LENGTH}
               rows={2}
@@ -427,11 +412,10 @@ interface RatingCellProps {
   /** The row's title, for the checkmark's accessible name. */
   label: string;
   readOnly: boolean;
-  saving: boolean;
   onRate: (row: ChecklistRow, option: TaskRating) => void;
 }
 
-function RatingCell({ row, option, label, readOnly, saving, onRate }: RatingCellProps) {
+function RatingCell({ row, option, label, readOnly, onRate }: RatingCellProps) {
   const style = RATING_STYLE[option];
   const shown = row.level === option;
   const checked = shown && !row.implied;
@@ -449,7 +433,7 @@ function RatingCell({ row, option, label, readOnly, saving, onRate }: RatingCell
           shown && row.implied ? " (counts until rated)" : ""
         }`}
         tabIndex={tabbable ? 0 : -1}
-        disabled={saving || readOnly}
+        disabled={readOnly}
         onClick={() => onRate(row, option)}
         onKeyDown={moveWithinRow}
         title={
@@ -461,9 +445,7 @@ function RatingCell({ row, option, label, readOnly, saving, onRate }: RatingCell
               ? `Counts as ${ratingLabel(option)} until rated — click to confirm`
               : `${ratingLabel(option)} — ${formatPoints(points)} points`
         }
-        className={`group mx-auto grid h-7 w-7 place-items-center rounded-full border transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600/40 disabled:cursor-wait ${readOnly ? "disabled:cursor-default" : ""} ${
-          saving ? "opacity-60" : ""
-        } ${checked ? style.checked : shown ? style.implied : `border-gray-300 bg-surface text-transparent ${readOnly ? "" : style.hover}`}`}
+        className={`group mx-auto grid h-7 w-7 place-items-center rounded-full border transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600/40 disabled:cursor-default ${checked ? style.checked : shown ? style.implied : `border-gray-300 bg-surface text-transparent ${readOnly ? "" : style.hover}`}`}
       >
         <FontAwesomeIcon icon={faCheck} className={`h-3 w-3 ${shown ? "" : "opacity-70"}`} />
       </button>

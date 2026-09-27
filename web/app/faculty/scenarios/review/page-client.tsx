@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -12,6 +12,7 @@ import {
   faLock,
   faPenToSquare,
   faFloppyDisk,
+  faRotateLeft,
   faMagnifyingGlass,
   faStopwatch,
   faTriangleExclamation,
@@ -94,6 +95,12 @@ function matchesFilter(a: ScenarioAssignment, filter: Filter) {
 const ALL_GROUPS = "__all";
 const NO_GROUP = "__none";
 
+/** Whether a task's grade on the sheet differs from the one saved. Notes are tracked apart. */
+const gradeChanged = (t: GradingTask, saved: GradingTask) =>
+  t.rating !== saved.rating ||
+  t.completed_via !== saved.completed_via ||
+  t.steps.some((s, i) => s.rating !== saved.steps[i]?.rating);
+
 const formatWhen = (iso: string) =>
   new Date(iso).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
@@ -156,13 +163,15 @@ export default function FacultyScenarioReviewClient() {
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  // Checklist rows (sub-task ids, or task ids for tasks without sub-tasks) mid-save.
-  const [savingKeys, setSavingKeys] = useState<ReadonlySet<string>>(() => new Set());
   const [finalizing, setFinalizing] = useState(false);
   // A saved grade opens locked; Edit unlocks it until the next Save.
   const [editing, setEditing] = useState(false);
 
   const gradingRef = useRef<HTMLElement>(null);
+
+  // Ratings clicked since the last save, as the whole sheet; null when there are none.
+  // Nothing reaches the server until Save, so it is kept apart from the cached grading.
+  const [draftTasks, setDraftTasks] = useState<GradingTask[] | null>(null);
 
   // Notes being typed, and the criteria whose note box was opened, per task.
   const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
@@ -182,19 +191,16 @@ export default function FacultyScenarioReviewClient() {
     data: gradingData,
     loading: tasksLoading,
     refresh: reloadTasks,
-    setData: setGradingData,
   } = usePageData(
     selectedId ? `faculty:assignment-grading:${selectedId}` : null,
     async () => (await fetchFacultyAssignmentTasks(selectedId!)) ?? NO_GRADING,
   );
-  const tasks = gradingData?.tasks ?? NO_TASKS;
+  const savedTasks = gradingData?.tasks ?? NO_TASKS;
+  const tasks = draftTasks ?? savedTasks;
   const ratingsEnabled = gradingData?.ratingsEnabled ?? true;
   const stepsEnabled = gradingData?.stepsEnabled ?? true;
   const setTasks = (update: (previous: GradingTask[]) => GradingTask[]) =>
-    setGradingData((previous) => {
-      const base = previous ?? NO_GRADING;
-      return { ...base, tasks: update(base.tasks) };
-    });
+    setDraftTasks((previous) => update(previous ?? savedTasks));
 
   const selected = assignments.find((a) => a.id === selectedId) ?? null;
   const finalized = selected?.status === "completed";
@@ -275,28 +281,62 @@ export default function FacultyScenarioReviewClient() {
     };
   }, [studentGroups, groupFilter]);
 
-  const resetNotes = () => {
+  // --- Unsaved changes -------------------------------------------------------
+  const savedById = useMemo(() => new Map(savedTasks.map((t) => [t.id, t])), [savedTasks]);
+  /** The note typed for a task, if it differs from the saved one; undefined when unchanged. */
+  const changedNote = (t: GradingTask): string | null | undefined => {
+    const draft = noteDrafts[t.id];
+    if (draft === undefined) return undefined;
+    const next = draft.trim() || null;
+    return next === (savedById.get(t.id)?.remarks ?? null) ? undefined : next;
+  };
+  const changedTasks = tasks.filter((t) => {
+    const saved = savedById.get(t.id);
+    return saved && (gradeChanged(t, saved) || (changedNote(t) !== undefined && hasCompletion(t)));
+  });
+  const dirty = changedTasks.length > 0;
+
+  // Leaving the page drops the draft, so ask first.
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
+
+  const confirmDiscard = () => !dirty || window.confirm("Discard your unsaved ratings and notes?");
+
+  const resetDraft = () => {
+    setDraftTasks(null);
     setNoteDrafts({});
     setOpenNotes(new Set());
   };
 
+  const discardChanges = () => {
+    resetDraft();
+    setEditing(false);
+  };
+
   const selectStudent = (studentId: string) => {
+    if (!confirmDiscard()) return;
     setSelectedStudentId(studentId);
     setFilter("assigned");
     setSelectedId(null);
-    resetNotes();
+    resetDraft();
   };
 
   const backToStudents = () => {
+    if (!confirmDiscard()) return;
     setSelectedStudentId(null);
     setSelectedId(null);
-    resetNotes();
+    resetDraft();
   };
 
   const selectAssignment = (id: string) => {
+    if (id === selectedId || !confirmDiscard()) return;
     setSelectedId(id);
     setEditing(false);
-    resetNotes();
+    resetDraft();
     // Stacked below the queue on narrow screens, the rubric would open out of sight.
     if (!window.matchMedia("(min-width: 1024px)").matches) {
       requestAnimationFrame(() => gradingRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
@@ -319,9 +359,8 @@ export default function FacultyScenarioReviewClient() {
     new Map(tasks.filter(hasCompletion).map((t) => [t.id, { rating: t.rating }])),
     new Map(tasks.map((t) => [t.id, stepGrades(t)])),
   );
-  // Always the live grade from `tasks`, not the assignment record's stored
-  // score — that only matters to the queue list and other pages, which
-  // `applyScore` keeps in sync after each edit (see handleRateTask/handleNoteBlur).
+  // Always the grade on the sheet, unsaved clicks included, not the assignment
+  // record's stored score — that only changes when Save goes through.
   const shownScore = projectedScore;
   // Every gradable row on the sheet: each sub-task, or a task that has none.
   const rows = tasks.flatMap(checklistRows);
@@ -339,93 +378,80 @@ export default function FacultyScenarioReviewClient() {
   const unratedImplied = impliedByLevel.reduce((sum, g) => sum + g.count, 0);
   const rowNoun = (n: number) => (n === 1 ? "row" : "rows");
 
-  const markSaving = (keys: readonly string[], saving: boolean) =>
-    setSavingKeys((prev) => {
-      const next = new Set(prev);
-      for (const key of keys) {
-        if (saving) next.add(key);
-        else next.delete(key);
-      }
-      return next;
-    });
-
-  // Finalizing doesn't lock grading — this patches the queue's stored score
-  // (and the student's) so a correction to an already-finalized grade shows
-  // up immediately everywhere, not just in the panel that's open.
-  const applyScore = (score: number | undefined) => {
-    if (score === undefined || !selectedId) return;
-    setAssignments((prev) => prev.map((a) => (a.id === selectedId ? { ...a, score } : a)));
-  };
-
-  const handleRateTask = async (task: GradingTask, rating: TaskRating | null) => {
-    if (!selectedId || savingKeys.has(task.id)) return;
-    const assignmentId = selectedId;
-    markSaving([task.id], true);
+  // Clicks only change the sheet; Save sends them.
+  const handleRateTask = (task: GradingTask, rating: TaskRating | null) => {
+    if (locked || finalizing) return;
     setTasks((prev) => prev.map((t) => (t.id === task.id ? withRating(t, rating) : t)));
-    const result = await saveTaskRating(assignmentId, task.id, { rating });
-    if (result.ok) {
-      applyScore(result.score);
-    } else {
-      toast(result.error, "error");
-      await reloadTasks();
-    }
-    markSaving([task.id], false);
   };
 
-  const handleRateSteps = async (task: GradingTask, changes: Map<string, TaskRating | null>) => {
-    const keys = [...changes.keys()];
-    if (!selectedId || keys.length === 0 || keys.some((k) => savingKeys.has(k))) return;
-    const assignmentId = selectedId;
-    markSaving(keys, true);
+  const handleRateSteps = (task: GradingTask, changes: Map<string, TaskRating | null>) => {
+    if (locked || finalizing || changes.size === 0) return;
     setTasks((prev) => prev.map((t) => (t.id === task.id ? withStepChanges(t, changes) : t)));
-    const result = await saveStepRatings(
-      assignmentId,
-      task.id,
-      keys.map((stepId) => ({ step_id: stepId, rating: changes.get(stepId) ?? null })),
-    );
-    if (result.ok) {
-      applyScore(result.score);
-    } else {
-      toast(result.error, "error");
-      await reloadTasks();
-    }
-    markSaving(keys, false);
   };
 
-  const handleNoteBlur = async (task: GradingTask) => {
-    if (!selectedId) return;
-    const draft = noteDrafts[task.id];
-    if (draft === undefined) return;
-    const next = draft.trim() || null;
-    if (next === (task.remarks ?? null)) return;
-    const assignmentId = selectedId;
-    setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, remarks: next } : t)));
-    const result = await saveTaskRating(assignmentId, task.id, { remarks: next });
-    if (result.ok) {
-      applyScore(result.score);
-    } else {
-      toast(result.error, "error");
-      await reloadTasks();
+  /** Sends every changed rating and note; false (after a toast) if one was refused. */
+  const saveChanges = async (assignmentId: string): Promise<boolean> => {
+    for (const t of changedTasks) {
+      const saved = savedById.get(t.id)!;
+      const note = hasCompletion(t) ? changedNote(t) : undefined;
+      const requests: Promise<Awaited<ReturnType<typeof saveTaskRating>>>[] = [];
+      if (t.steps.length > 0) {
+        // Every sub-task's final level, so the server lands exactly on the sheet.
+        if (gradeChanged(t, saved)) {
+          const result = await saveStepRatings(
+            assignmentId,
+            t.id,
+            t.steps.map((s) => ({ step_id: s.id, rating: s.rating })),
+          );
+          if (!result.ok) {
+            toast(result.error, "error");
+            return false;
+          }
+        }
+        // A note hangs on the completion row the sub-task ratings just wrote.
+        if (note !== undefined) requests.push(saveTaskRating(assignmentId, t.id, { remarks: note }));
+      } else {
+        const grade: { rating?: TaskRating | null; remarks?: string | null } = {};
+        if (gradeChanged(t, saved)) grade.rating = t.rating;
+        if (note !== undefined) grade.remarks = note;
+        requests.push(saveTaskRating(assignmentId, t.id, grade));
+      }
+      for (const result of await Promise.all(requests)) {
+        if (!result.ok) {
+          toast(result.error, "error");
+          return false;
+        }
+      }
     }
+    return true;
   };
 
   /** Save the grade: the scenario becomes Completed and the student sees it. Saving an edit re-scores it. */
   const handleSave = async () => {
     if (!selectedId) return;
+    const assignmentId = selectedId;
     setFinalizing(true);
-    const result = await finalizeScenarioAssignment(selectedId);
+    if (!(await saveChanges(assignmentId))) {
+      // Some changes may have landed: re-read what was saved, and keep the draft to retry.
+      await reloadTasks();
+      setFinalizing(false);
+      return;
+    }
+    const result = await finalizeScenarioAssignment(assignmentId);
     if (result) {
       setAssignments((prev) =>
         prev.map((a) =>
-          a.id === selectedId
+          a.id === assignmentId
             ? { ...a, status: "completed", score: result.score, completed_at: a.completed_at ?? new Date().toISOString() }
             : a,
         ),
       );
       await reloadTasks();
+      resetDraft();
       toast(`Saved — ${scoreDescriptor(result.score)} (${result.score}%)`);
       setEditing(false);
     } else {
+      await reloadTasks();
       toast("Unable to save the grade. Please try again.", "error");
     }
     setFinalizing(false);
@@ -446,7 +472,7 @@ export default function FacultyScenarioReviewClient() {
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <button
-          onClick={() => router.push("/faculty/scenarios")}
+          onClick={() => confirmDiscard() && router.push("/faculty/scenarios")}
           className="flex items-center gap-2 rounded-lg border border-gray-200 bg-surface px-3 py-2 text-sm font-medium text-gray-700 transition-all hover:bg-gray-50"
         >
           <FontAwesomeIcon icon={faChevronLeft} className="h-3.5 w-3.5" />
@@ -823,15 +849,13 @@ export default function FacultyScenarioReviewClient() {
                 loading={tasksLoading}
                 totalPoints={totalPoints}
                 rubric={gradingData?.rubric ?? DEFAULT_RUBRIC}
-                readOnly={locked}
-                savingKeys={savingKeys}
+                readOnly={locked || finalizing}
                 onRateTask={handleRateTask}
                 onRateSteps={handleRateSteps}
                 noteDrafts={noteDrafts}
                 openNotes={openNotes}
                 onOpenNote={(taskId) => setOpenNotes((open) => new Set(open).add(taskId))}
                 onNoteChange={(taskId, value) => setNoteDrafts((d) => ({ ...d, [taskId]: value }))}
-                onNoteBlur={handleNoteBlur}
               />
 
               {/* Finalize — opaque, not translucent: this sits over the criteria
@@ -867,6 +891,11 @@ export default function FacultyScenarioReviewClient() {
                         </span>
                       </p>
                       <p className="text-xs text-gray-400">
+                        {dirty && (
+                          <span className="font-medium text-amber-600">
+                            Unsaved changes on {changedTasks.length} {changedTasks.length === 1 ? "task" : "tasks"} ·{" "}
+                          </span>
+                        )}
                         {unratedMissing > 0
                           ? `${unratedMissing} unrated ${rowNoun(unratedMissing)} ${unratedMissing === 1 ? "earns" : "earn"} no points`
                           : !selected.submitted_at
@@ -888,6 +917,17 @@ export default function FacultyScenarioReviewClient() {
                       Edit
                     </button>
                   ) : (
+                    <>
+                    {(dirty || finalized) && (
+                      <button
+                        onClick={discardChanges}
+                        disabled={finalizing}
+                        className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-surface px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-tile transition-all hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <FontAwesomeIcon icon={faRotateLeft} className="h-3.5 w-3.5" />
+                        {finalized ? "Cancel" : "Discard"}
+                      </button>
+                    )}
                     <button
                       onClick={handleSave}
                       disabled={finalizing || tasksLoading || tasks.length === 0 || ungraded}
@@ -897,6 +937,7 @@ export default function FacultyScenarioReviewClient() {
                       {finalizing ? <EcgLoader /> : <FontAwesomeIcon icon={faFloppyDisk} className="h-3.5 w-3.5" />}
                       {finalizing ? "Saving…" : "Save"}
                     </button>
+                    </>
                   )}
                 </div>
               </div>
