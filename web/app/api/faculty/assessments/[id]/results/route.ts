@@ -4,6 +4,7 @@ import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { getScopedStudentIds } from '@/app/lib/admin-scope';
 
 import { isMissingTeamTables } from '@/app/lib/teams';
+import { isLateSubmission } from '@/app/lib/assessment-timing';
 
 type Status = 'submitted' | 'in_progress' | 'not_started';
 
@@ -38,7 +39,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
     const { data: assessment, error: assessmentError } = await supabase
       .from('assessments')
-      .select('id, title, total_questions, max_attempts, target_sections, is_published')
+      .select('id, title, total_questions, max_attempts, target_sections, is_published, time_limit_seconds')
       .eq('id', id)
       .maybeSingle();
 
@@ -182,6 +183,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
         latest_score: latest?.score ?? null,
         latest_submitted_at: latest?.submitted_at ?? null,
         latest_time_taken_seconds: latest?.time_taken_seconds ?? null,
+        latest_late: isLateSubmission(latest?.time_taken_seconds, assessment.time_limit_seconds as number | null),
       };
     });
 

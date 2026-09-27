@@ -39,6 +39,8 @@ interface StudentResult {
   latest_score: number | null;
   latest_submitted_at: string | null;
   latest_time_taken_seconds: number | null;
+  /** The latest submission came in after the time limit (still graded). */
+  latest_late: boolean;
 }
 
 /** Stable empty fallback, so the filter memos are not invalidated every render. */
@@ -511,6 +513,14 @@ export default function AssessmentResultsClient({ assessmentId }: { assessmentId
                         </td>
                         <td className="px-4 py-4 text-sm text-gray-500 sm:px-6">
                           {formatDuration(r.latest_time_taken_seconds)}
+                          {r.latest_late && (
+                            <span
+                              className="ml-2 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700"
+                              title="Submitted after the time limit. Still graded and counted."
+                            >
+                              Late
+                            </span>
+                          )}
                         </td>
                       </tr>
                     ))}

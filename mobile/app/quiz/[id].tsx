@@ -32,6 +32,11 @@ export default function QuizInterfaceScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<AttemptResult | null>(null);
   const [remaining, setRemaining] = useState<number | null>(null);
+  // When time runs out, as a wall-clock instant: JS timers pause while the app
+  // is in the background, so counting ticks would fall behind the server,
+  // which times the attempt from started_at.
+  const deadlineRef = useRef<number | null>(null);
+  const autoSubmittedRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -39,8 +44,15 @@ export default function QuizInterfaceScreen() {
       .then((attempt) => {
         if (cancelled) return;
         setStarted(attempt);
-        if (attempt.assessment.time_limit_seconds) {
-          setRemaining(attempt.assessment.time_limit_seconds);
+        const limit = attempt.assessment.time_limit_seconds;
+        if (limit) {
+          // A resumed attempt keeps its original clock. A fresh one starts
+          // now, which avoids trusting the device's clock against the server's.
+          const elapsedMs = attempt.resumed
+            ? Math.max(0, Date.now() - new Date(attempt.attempt.started_at).getTime())
+            : 0;
+          deadlineRef.current = Date.now() + limit * 1000 - elapsedMs;
+          setRemaining(Math.max(0, Math.ceil((deadlineRef.current - Date.now()) / 1000)));
         }
       })
       .catch((err) => {
@@ -100,15 +112,27 @@ export default function QuizInterfaceScreen() {
   useEffect(() => {
     answersRef.current = answers;
   });
+  const timed = remaining !== null;
   useEffect(() => {
-    if (remaining === null || result) return;
-    if (remaining <= 0) {
-      Alert.alert("Time's up", 'Submitting your answers now.');
-      doSubmit(answersRef.current);
-      return;
-    }
-    const timer = setTimeout(() => setRemaining((r) => (r === null ? null : r - 1)), 1000);
-    return () => clearTimeout(timer);
+    if (!timed || result) return;
+    // Read from the deadline, not decremented, so time spent in the
+    // background counts. Ticking on its own keeps the countdown moving when a
+    // tick lands on the same second as the last one.
+    const timer = setInterval(() => {
+      const deadline = deadlineRef.current;
+      if (deadline !== null) setRemaining(Math.max(0, Math.ceil((deadline - Date.now()) / 1000)));
+    }, 500);
+    return () => clearInterval(timer);
+  }, [timed, result]);
+
+  useEffect(() => {
+    if (remaining === null || remaining > 0 || result) return;
+    // Once: a failed submit re-renders with the clock still at zero, and must
+    // not re-alert and re-submit in a loop. The submit button still works.
+    if (autoSubmittedRef.current) return;
+    autoSubmittedRef.current = true;
+    Alert.alert("Time's up", 'Submitting your answers now.');
+    doSubmit(answersRef.current);
   }, [remaining, result, doSubmit]);
 
   const handleSelect = (index: number) => {
@@ -172,6 +196,7 @@ export default function QuizInterfaceScreen() {
           </Text>
           <Text style={styles.resultSub}>
             {started.assessment.title} · {formatClock(result.time_taken_seconds)}
+            {result.late ? ' · submitted after the time limit' : ''}
           </Text>
         </Card>
 

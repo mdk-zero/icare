@@ -3,6 +3,7 @@ import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { logAudit } from '@/app/lib/audit';
 import { deriveCompetencyScoresForAttempt } from '@/app/lib/competency';
+import { isLateSubmission } from '@/app/lib/assessment-timing';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -54,16 +55,19 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     const { data: attempt } = await supabase
       .from('assessment_attempts')
-      .select('id, assessment_id, student_id, assignment_id, status, started_at')
+      .select('id, assessment_id, student_id, assignment_id, status, started_at, score, time_taken_seconds, assessments(time_limit_seconds)')
       .eq('id', attemptId)
       .single();
 
     if (!attempt || attempt.student_id !== session.uid) {
       return NextResponse.json({ error: 'Attempt not found' }, { status: 404 });
     }
-    if (attempt.status !== 'in_progress') {
-      return NextResponse.json({ error: 'Attempt already submitted' }, { status: 409 });
+    if (attempt.status !== 'in_progress' && attempt.status !== 'submitted') {
+      return NextResponse.json({ error: 'Attempt already closed' }, { status: 409 });
     }
+    // A retry of a submit that already went through (the client timed out
+    // waiting, or a double-tap): answer with the result again, write nothing.
+    const alreadySubmitted = attempt.status === 'submitted';
 
     // Grade against the paper this attempt was actually served, not the whole
     // bank: a 20-question paper drawn from a 50-question bank would otherwise
@@ -181,38 +185,66 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         };
       });
 
-      // Store criteria scores
-      if (criteriaBreakdown.length > 0) {
-        await supabase.from('attempt_criteria_scores').insert(
-          criteriaBreakdown.map((cb) => ({
-            attempt_id: attemptId,
-            criteria_id: cb.criteria_id,
-            competency_id: assessmentCriteria.find((c) => c.id === cb.criteria_id)?.competency_id ?? '',
-            criteria_name: cb.criteria_name,
-            weight: cb.weight,
-            correct: cb.correct,
-            total: cb.total,
-            score: cb.score,
-            weighted_score: cb.weighted_score,
-          })),
-        );
-
-        // Roll the breakdown up into per-competency standing. Awaited so the
-        // scores exist by the time the student is redirected to their results,
-        // but never allowed to fail the submission — the attempt is already
-        // graded and saved, and the backfill can recover a missed roll-up.
-        try {
-          await deriveCompetencyScoresForAttempt(supabase, attemptId);
-        } catch (err) {
-          console.error('Competency derivation failed for attempt', attemptId, err);
-        }
-      }
     }
+    const timeLimit = (attempt.assessments as unknown as { time_limit_seconds: number | null } | null)
+      ?.time_limit_seconds;
+    const respond = (finalScore: number, timeTaken: number) =>
+      NextResponse.json({
+        score: finalScore,
+        correct: correctCount,
+        total: questions.length,
+        time_taken_seconds: timeTaken,
+        // Graded and counted either way; a late one is flagged, not refused.
+        late: isLateSubmission(timeTaken, timeLimit),
+        criteria_breakdown: criteriaBreakdown,
+        results: [...graded]
+          .sort((a, b) => a.position - b.position)
+          .map((g) => ({
+            question_id: g.question_id,
+            selected_index: g.selected_index,
+            correct_index: g.correct_index,
+            is_correct: g.is_correct,
+            explanation: g.explanation,
+          })),
+      });
+
+    if (alreadySubmitted) {
+      return respond(Number(attempt.score ?? score), Number(attempt.time_taken_seconds ?? 0));
+    }
+
     const timeTaken = Math.max(
       0,
       Math.round((Date.now() - new Date(attempt.started_at).getTime()) / 1000),
     );
+    const late = isLateSubmission(timeTaken, timeLimit);
 
+    // Finalizing the attempt is what claims the submission: one conditional
+    // UPDATE, so when a double-tap or a retry races this request exactly one
+    // of them moves it out of in_progress. It goes first so a failure in the
+    // writes below can never leave an attempt that can't be submitted again.
+    const { data: finalized, error: attemptError } = await supabase
+      .from('assessment_attempts')
+      .update({
+        status: 'submitted',
+        submitted_at: new Date().toISOString(),
+        score,
+        time_taken_seconds: timeTaken,
+      })
+      .eq('id', attemptId)
+      .eq('status', 'in_progress')
+      .select('id');
+    if (attemptError) {
+      console.error('Failed to finalize attempt', attemptError);
+      return NextResponse.json({ error: 'Unable to finalize attempt' }, { status: 500 });
+    }
+    if (!finalized || finalized.length === 0) {
+      // The other request won; it is saving the same result.
+      return respond(score, timeTaken);
+    }
+
+    // The score is saved; the per-question answers and the criteria breakdown
+    // are detail for review. A failure here is logged, not surfaced — the
+    // backfill scripts can rebuild the breakdown.
     const { error: answersError } = await supabase.from('attempt_answers').insert(
       graded.map((g) => ({
         attempt_id: attemptId,
@@ -222,23 +254,35 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         time_spent_seconds: g.time_spent_seconds,
       })),
     );
-    if (answersError) {
-      console.error('Failed to save attempt answers', answersError);
-      return NextResponse.json({ error: 'Unable to save answers' }, { status: 500 });
+    if (answersError) console.error('Failed to save answers for attempt', attemptId, answersError);
+
+    if (criteriaBreakdown.length > 0) {
+      const { error: criteriaError } = await supabase.from('attempt_criteria_scores').insert(
+        criteriaBreakdown.map((cb) => ({
+          attempt_id: attemptId,
+          criteria_id: cb.criteria_id,
+          competency_id: assessmentCriteria.find((c) => c.id === cb.criteria_id)?.competency_id ?? '',
+          criteria_name: cb.criteria_name,
+          weight: cb.weight,
+          correct: cb.correct,
+          total: cb.total,
+          score: cb.score,
+          weighted_score: cb.weighted_score,
+        })),
+      );
+      if (criteriaError) console.error('Failed to save criteria scores for attempt', attemptId, criteriaError);
     }
 
-    const { error: attemptError } = await supabase
-      .from('assessment_attempts')
-      .update({
-        status: 'submitted',
-        submitted_at: new Date().toISOString(),
-        score,
-        time_taken_seconds: timeTaken,
-      })
-      .eq('id', attemptId);
-    if (attemptError) {
-      console.error('Failed to finalize attempt', attemptError);
-      return NextResponse.json({ error: 'Unable to finalize attempt' }, { status: 500 });
+    // Roll the breakdown up into per-competency standing. Only the request
+    // that finalized the attempt gets here, so it runs once. Awaited so the
+    // scores exist by the time the student sees their results, but never
+    // allowed to fail the submission; the backfill can recover a missed one.
+    if (criteriaBreakdown.length > 0) {
+      try {
+        await deriveCompetencyScoresForAttempt(supabase, attemptId);
+      } catch (err) {
+        console.error('Competency derivation failed for attempt', attemptId, err);
+      }
     }
 
     if (attempt.assignment_id) {
@@ -260,27 +304,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           correct: correctCount,
           total: questions.length,
           time_taken_seconds: timeTaken,
+          late,
         },
       },
       request,
     );
 
-    return NextResponse.json({
-      score,
-      correct: correctCount,
-      total: questions.length,
-      time_taken_seconds: timeTaken,
-      criteria_breakdown: criteriaBreakdown,
-      results: graded
-        .sort((a, b) => a.position - b.position)
-        .map((g) => ({
-          question_id: g.question_id,
-          selected_index: g.selected_index,
-          correct_index: g.correct_index,
-          is_correct: g.is_correct,
-          explanation: g.explanation,
-        })),
-    });
+    return respond(score, timeTaken);
   } catch (err) {
     console.error('Submit attempt failed', err);
     return NextResponse.json({ error: 'Unable to submit attempt' }, { status: 500 });
