@@ -691,7 +691,13 @@ export default function FacultyScenariosClient() {
           />
           <StatTile
             icon={faUsers}
-            value={scenarios.reduce((sum, s) => sum + s.student_count, 0)}
+            value={
+              new Set(
+                scenarios.flatMap(
+                  (s) => (s as SimulationScenario & { student_ids?: string[] }).student_ids ?? [],
+                ),
+              ).size
+            }
             label="Students Assigned"
             iconBg="bg-emerald-50"
             iconColor="text-emerald-600"

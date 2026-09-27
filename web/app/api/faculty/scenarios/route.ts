@@ -67,8 +67,8 @@ export async function GET() {
       // as "3 students" on a card that only lists one of them.
       const ownAssigned =
         facultyStudentIds === null
-          ? assigned.length
-          : assigned.filter((a) => facultyStudentIds.has(a.student_id)).length;
+          ? assigned
+          : assigned.filter((a) => facultyStudentIds.has(a.student_id));
       return {
         id: s.id,
         created_by: s.created_by,
@@ -82,7 +82,10 @@ export async function GET() {
         updated_at: s.updated_at,
         patient_id: s.patient_id,
         patient_name: (s as unknown as { patients: { name: string } | null }).patients?.name ?? null,
-        student_count: ownAssigned,
+        student_count: ownAssigned.length,
+        // Lets the page count distinct students across scenarios; one student
+        // on three scenarios is one student, not three.
+        student_ids: [...new Set(ownAssigned.map((a) => a.student_id))],
       };
     });
 
