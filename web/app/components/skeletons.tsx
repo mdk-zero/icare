@@ -171,18 +171,22 @@ export function SkeletonNotificationItem() {
   );
 }
 
+/** Mirrors the student detail profile card: avatar, name, AI Summary, 4 stat tiles. */
 export function SkeletonProfileHeader() {
   return (
-    <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04)] p-5 animate-pulse">
-      <div className="flex items-center gap-4 mb-5">
-        <div className="w-14 h-14 bg-gray-100 rounded-full" />
-        <div className="space-y-1.5">
-          <div className="h-5 w-40 bg-gray-100 rounded" />
-          <div className="h-3.5 w-48 bg-gray-100 rounded" />
-          <div className="h-3 w-28 bg-gray-100 rounded" />
+    <div className="flex h-full flex-col rounded-xl border border-hairline bg-surface p-3 shadow-tile animate-pulse">
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className="h-16 w-16 shrink-0 rounded-full bg-gray-100" />
+          <div className="space-y-2">
+            <div className="h-7 w-44 rounded bg-gray-100" />
+            <div className="h-4 w-52 rounded bg-gray-100" />
+            <div className="h-5 w-24 rounded-full bg-gray-100" />
+          </div>
         </div>
+        <div className="h-9 w-32 shrink-0 rounded-lg bg-gray-100" />
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div className="grid flex-1 grid-cols-1 sm:grid-cols-2 gap-3">
         {Array.from({ length: 4 }).map((_, i) => (
           <SkeletonStatTile key={i} />
         ))}
@@ -191,30 +195,63 @@ export function SkeletonProfileHeader() {
   );
 }
 
+/** Mirrors the student detail At-Risk Prediction card. */
 export function SkeletonRiskPredictionCard() {
   return (
-    <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04)] p-5 animate-pulse">
-      <div className="flex items-center gap-2 mb-3">
-        <div className="w-8 h-8 bg-gray-100 rounded-lg" />
-        <div className="h-4 w-32 bg-gray-100 rounded" />
+    <div className="h-full rounded-xl border border-hairline bg-surface p-3 shadow-tile animate-pulse">
+      <div className="mb-4 flex items-center gap-2">
+        <div className="h-9 w-9 rounded-lg bg-gray-100" />
+        <div className="h-4 w-36 rounded bg-gray-100" />
       </div>
       <div className="space-y-3">
-        {Array.from({ length: 3 }).map((_, i) => (
-          <div key={i} className="flex items-center justify-between">
-            <div className="h-3.5 w-16 bg-gray-100 rounded" />
-            <div className="h-3.5 w-12 bg-gray-100 rounded" />
+        <div className="flex items-center justify-between">
+          <div className="h-3.5 w-24 rounded bg-gray-100" />
+          <div className="h-3.5 w-14 rounded bg-gray-100" />
+        </div>
+        <div>
+          <div className="mb-1 flex items-center justify-between">
+            <div className="h-3.5 w-28 rounded bg-gray-100" />
+            <div className="h-3.5 w-10 rounded bg-gray-100" />
           </div>
-        ))}
-        <div className="border-t border-gray-100 pt-3 space-y-1.5">
-          <div className="h-3.5 w-20 bg-gray-100 rounded" />
+          <div className="h-2 rounded-full bg-gray-100" />
+        </div>
+        <div className="space-y-2 border-t border-hairline pt-3">
+          <div className="h-3.5 w-40 rounded bg-gray-100" />
           {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-gray-100 rounded-full" />
-              <div className="h-3 w-28 bg-gray-100 rounded" />
+            <div key={i} className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="h-2 w-2 rounded-full bg-gray-100" />
+                <div className="h-3 w-28 rounded bg-gray-100" />
+              </div>
+              <div className="h-3 w-16 rounded bg-gray-100" />
             </div>
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Mirrors the student detail tab tiles: icon, label and hint, count. */
+export function SkeletonTabTiles({ count = 4 }: { count?: number }) {
+  return (
+    <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      {Array.from({ length: count }).map((_, i) => (
+        <div
+          key={i}
+          className="flex items-center gap-4 rounded-2xl border border-hairline bg-surface p-4 animate-pulse"
+        >
+          <div className="h-12 w-12 shrink-0 rounded-xl bg-gray-100" />
+          <div className="flex-1 space-y-1.5">
+            <div className="h-4 w-24 rounded bg-gray-100" />
+            <div className="h-3 w-32 rounded bg-gray-100" />
+          </div>
+          <div className="space-y-1.5">
+            <div className="ml-auto h-6 w-6 rounded bg-gray-100" />
+            <div className="h-2.5 w-10 rounded bg-gray-100" />
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -264,16 +301,22 @@ export function SkeletonInsightCard() {
   );
 }
 
+/** Mirrors a Performance tab row: icon, title and date, score. */
 export function SkeletonTabContent() {
   return (
-    <div className="space-y-3 animate-pulse">
+    <div className="space-y-2 animate-pulse">
       {Array.from({ length: 4 }).map((_, i) => (
-        <div key={i} className="flex items-center justify-between p-3.5 bg-gray-50 rounded-lg">
-          <div className="space-y-1.5">
-            <div className="h-3.5 w-40 bg-gray-100 rounded" />
-            <div className="h-3 w-28 bg-gray-100 rounded" />
+        <div key={i} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+          <div className="h-9 w-9 shrink-0 rounded-full bg-gray-100" />
+          <div className="flex-1 space-y-1.5">
+            <div className="h-4 w-48 bg-gray-100 rounded" />
+            <div className="h-3.5 w-32 bg-gray-100 rounded" />
+            <div className="h-3 w-24 bg-gray-100 rounded" />
           </div>
-          <div className="h-5 w-10 bg-gray-100 rounded" />
+          <div className="space-y-1.5">
+            <div className="ml-auto h-5 w-12 bg-gray-100 rounded" />
+            <div className="h-2.5 w-16 bg-gray-100 rounded" />
+          </div>
         </div>
       ))}
     </div>

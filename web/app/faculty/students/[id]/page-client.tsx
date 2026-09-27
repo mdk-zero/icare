@@ -41,7 +41,12 @@ import {
   type StudentQuizAttempt,
 } from "../../../lib/api";
 import { scoreDescriptor } from "../../../lib/task-ratings";
-import { SkeletonProfileHeader, SkeletonRiskPredictionCard, SkeletonTabContent } from "../../../components/skeletons";
+import {
+  SkeletonProfileHeader,
+  SkeletonRiskPredictionCard,
+  SkeletonTabContent,
+  SkeletonTabTiles,
+} from "../../../components/skeletons";
 import Card from "../../../components/Card";
 import Avatar from "../../../components/Avatar";
 import StatTile from "../../../components/StatTile";
@@ -473,26 +478,33 @@ export default function StudentDetailClient() {
 
   const needsImprovement = competencies.filter((c) => c.level === 'needs_improvement');
 
+  // The back row is static, so it renders for real; everything below mirrors
+  // the loaded layout so nothing shifts when the data lands.
+  const backRow = (
+    <div className="mb-4 flex items-center justify-between gap-4">
+      <button
+        onClick={() => router.push('/faculty/teams')}
+        className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
+      >
+        <FontAwesomeIcon icon={faChevronLeft} className="w-5 h-5" />
+        Back to My Groups
+      </button>
+      <LiveClock variant="compact" />
+    </div>
+  );
+
   if (loading) {
     return (
       <div>
-        <div className="h-5 w-32 bg-gray-200 rounded animate-pulse mb-4" />
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {backRow}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
           <div className="lg:col-span-2">
             <SkeletonProfileHeader />
           </div>
           <SkeletonRiskPredictionCard />
         </div>
-        <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden animate-pulse">
-          <div className="border-b border-hairline">
-            <div className="flex gap-4 px-4">
-              {Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="py-4">
-                  <div className="h-4 w-20 bg-gray-200 rounded" />
-                </div>
-              ))}
-            </div>
-          </div>
+        <SkeletonTabTiles />
+        <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden">
           <div className="p-6">
             <SkeletonTabContent />
           </div>
@@ -517,16 +529,7 @@ export default function StudentDetailClient() {
 
   return (
     <div>
-      <div className="mb-4 flex items-center justify-between gap-4">
-        <button 
-          onClick={() => router.push('/faculty/teams')}
-          className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
-        >
-          <FontAwesomeIcon icon={faChevronLeft} className="w-5 h-5" />
-          Back to My Groups
-        </button>
-        <LiveClock variant="compact" />
-      </div>
+      {backRow}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
         <div className="lg:col-span-2">
