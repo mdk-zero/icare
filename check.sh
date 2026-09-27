@@ -108,7 +108,7 @@ tracked_secrets() {
   local bad
   bad=$(git -C "$ROOT" ls-files |
     grep -E '(^|/)\.env(\.[^/]*)?$|service-account[^/]*\.json$|\.(pem|p12|pfx|jks|keystore)$' |
-    grep -v '\.env\.example$' || true)
+    grep -vE '\.env(\.[^/]*)?\.example$' || true)
   [ -z "$bad" ] && return 0
   printf 'These files look like secrets and are tracked by git:\n%s\n' "$bad"
   printf 'Untrack with `git rm --cached <file>` — and rotate the credential,\n'
@@ -151,7 +151,7 @@ secret_scan() {
   while IFS= read -r f; do
     [ -f "$ROOT/$f" ] || continue                     # deleted since HEAD
     case "$f" in
-      check.sh|*.env.example|*package-lock.json|*.lock|\
+      check.sh|*.env.example|*.env.*.example|*package-lock.json|*.lock|\
       *.png|*.jpg|*.jpeg|*.webp|*.gif|*.ico|*.svg|*.ttf|*.otf|*.woff|*.woff2)
         continue ;;
     esac
