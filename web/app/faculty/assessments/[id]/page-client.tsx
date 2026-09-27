@@ -19,7 +19,7 @@ import {
 import { SkeletonQuestionCard } from "../../../components/skeletons";
 import { toast } from "../../../components/Toast";
 import ConfirmModal from "../../../components/ConfirmModal";
-import { fetchSections, fetchSkillCatalog, type Section, type SkillSummary, apiFetch } from "../../../lib/api";
+import { fetchSections, fetchSkillCatalog, getCurrentUser, type Section, type SkillSummary, apiFetch } from "../../../lib/api";
 import { EcgLoader } from "../../../components/EcgLoader";
 import LiveClock from "../../../components/LiveClock";
 
@@ -34,6 +34,7 @@ const formInputClassName =
 
 interface AssessmentDetail {
   id: string;
+  created_by: string | null;
   title: string;
   description: string;
   difficulty: string;
@@ -126,8 +127,13 @@ export default function AssessmentQuestionsClient({
   assessmentId: string;
 }) {
   const router = useRouter();
+  const me = getCurrentUser();
   const [assessment, setAssessment] = useState<AssessmentDetail | null>(null);
   const [questions, setQuestions] = useState<AssessmentQuestion[]>([]);
+  // Mirrors the server's guardAssessmentEdit: the creator may change it, and
+  // so may an admin (the server also checks the admin owns the creator).
+  // Everyone else views it read-only.
+  const canEdit = !assessment || me?.role === "admin" || assessment.created_by === me?.id;
   const [loading, setLoading] = useState(true);
   const [confirmAction, setConfirmAction] = useState<{ title: string; message: string; action: () => void; loading?: boolean; error?: string | null } | null>(null);
 
@@ -252,12 +258,13 @@ export default function AssessmentQuestionsClient({
 
       if (assessRes.ok) {
         const json = (await assessRes.json()) as {
-          assessment: { questions: AssessmentQuestion[]; title: string; description: string; difficulty: string; category: string; time_limit_seconds: number | null; question_count: number; total_questions: number | null; max_attempts: number | null; target_sections: string[] | null };
+          assessment: { questions: AssessmentQuestion[]; created_by: string | null; title: string; description: string; difficulty: string; category: string; time_limit_seconds: number | null; question_count: number; total_questions: number | null; max_attempts: number | null; target_sections: string[] | null };
           blockers?: PublishBlocker[];
         };
         const a = json.assessment;
         setAssessment({
           id: assessmentId,
+          created_by: a.created_by ?? null,
           title: a.title,
           description: a.description,
           difficulty: a.difficulty,
@@ -1061,19 +1068,27 @@ export default function AssessmentQuestionsClient({
                   <FontAwesomeIcon icon={faChartSimple} className="w-3.5 h-3.5" />
                   Results
                 </button>
-                <button
-                  onClick={() => setEditingDetails(true)}
-                  title="Edit details"
-                  className="p-2 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 shrink-0"
-                >
-                  <FontAwesomeIcon icon={faPen} className="w-4 h-4" />
-                </button>
+                {canEdit && (
+                  <button
+                    onClick={() => setEditingDetails(true)}
+                    title="Edit details"
+                    className="p-2 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 shrink-0"
+                  >
+                    <FontAwesomeIcon icon={faPen} className="w-4 h-4" />
+                  </button>
+                )}
               </div>
             )}
           </div>
           <LiveClock variant="full" className="hidden shrink-0 border-l border-hairline pl-4 lg:block" />
         </div>
       </header>
+
+      {!canEdit && (
+        <div className="bg-subtle border border-hairline rounded-xl p-4 text-sm text-gray-600">
+          View only — only the faculty member who created this assessment can change it. You can still assign it and see its results.
+        </div>
+      )}
 
       {blockers.length > 0 && (
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
@@ -1115,7 +1130,7 @@ export default function AssessmentQuestionsClient({
         </button>
 
         {showCriteriaEditor && (
-          <div className="px-4 pb-4 space-y-2 border-t border-gray-100 pt-3">
+          <fieldset disabled={!canEdit} className="px-4 pb-4 space-y-2 border-t border-gray-100 pt-3 min-w-0">
             {criteria.length > 0 && (
               <div className="space-y-2">
                 <div className="flex items-center gap-3 px-3 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
@@ -1233,7 +1248,7 @@ export default function AssessmentQuestionsClient({
                 Weights total {totalWeight}% — they should sum to 100%
               </p>
             )}
-          </div>
+          </fieldset>
         )}
       </div>
 
@@ -1492,7 +1507,7 @@ export default function AssessmentQuestionsClient({
                         <span className="text-xs text-gray-400">Has explanation</span>
                       )}
                     </div>
-                    <div className="flex items-center gap-1.5">
+                    <div className={`flex items-center gap-1.5 ${canEdit ? "" : "hidden"}`}>
                       <button
                         onClick={() => handleDuplicateQuestion(q.id)}
                         title="Duplicate"
@@ -1600,7 +1615,7 @@ export default function AssessmentQuestionsClient({
           </div>
         )}
 
-        <div className="flex items-center justify-center gap-3 pt-2 flex-wrap">
+        <div className={`flex items-center justify-center gap-3 pt-2 flex-wrap ${canEdit ? "" : "hidden"}`}>
           <button
             onClick={handleAddQuestion}
             className="flex items-center gap-2 px-6 py-3 bg-brand-600 text-white rounded-xl text-sm font-medium hover:bg-brand-700 transition-colors"

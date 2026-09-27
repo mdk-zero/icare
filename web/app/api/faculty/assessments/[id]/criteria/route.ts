@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { guardAssessmentEdit } from '@/app/lib/assessment-access';
 
 export async function GET(
   _request: NextRequest,
@@ -83,6 +84,8 @@ export async function POST(
 
   try {
     const supabase = getSupabaseAdmin();
+    const denied = await guardAssessmentEdit(supabase, session, { assessmentId: id });
+    if (denied) return denied;
 
     const sortOrder = typeof sort_order === 'number' ? sort_order : 0;
 

@@ -3,6 +3,7 @@ import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { citedSkillId, isMissingSkillColumn } from '@/app/lib/taylor-skills';
 import { logAudit } from '@/app/lib/audit';
+import { guardAssessmentEdit } from '@/app/lib/assessment-access';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -98,6 +99,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
   try {
     const supabase = getSupabaseAdmin();
+    const denied = await guardAssessmentEdit(supabase, session, { questionId: id });
+    if (denied) return denied;
 
     const { data: current } = await supabase
       .from('questions')
@@ -195,6 +198,8 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
   try {
     const supabase = getSupabaseAdmin();
+    const denied = await guardAssessmentEdit(supabase, session, { questionId: id });
+    if (denied) return denied;
     const { error } = await supabase.from('questions').delete().eq('id', id);
     if (error) {
       console.error('Failed to delete question', error);

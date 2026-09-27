@@ -3,6 +3,7 @@ import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { citedSkillId, isMissingSkillColumn } from '@/app/lib/taylor-skills';
 import { logAudit } from '@/app/lib/audit';
+import { guardAssessmentEdit } from '@/app/lib/assessment-access';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -67,6 +68,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
   try {
     const supabase = getSupabaseAdmin();
+    const denied = await guardAssessmentEdit(supabase, session, { assessmentId });
+    if (denied) return denied;
 
     const { data: assessment } = await supabase
       .from('assessments')

@@ -20,7 +20,7 @@ import {
 import PageHeader from "../../components/PageHeader";
 import { SkeletonAssessmentCard, SkeletonStatTile } from "../../components/skeletons";
 import StatTile from "../../components/StatTile";
-import { fetchFacultySections, type Section, apiFetch } from "../../lib/api";
+import { fetchFacultySections, getCurrentUser, type Section, apiFetch } from "../../lib/api";
 import { toast } from "../../components/Toast";
 import ConfirmModal from "../../components/ConfirmModal";
 import { usePageData } from "../../lib/use-page-data";
@@ -49,6 +49,7 @@ type Difficulty = "beginner" | "intermediate" | "advanced";
 
 interface Assessment {
   id: string;
+  created_by: string | null;
   title: string;
   description: string;
   difficulty: Difficulty;
@@ -97,6 +98,10 @@ const NO_SECTIONS: Section[] = [];
 
 export default function FacultyAssessmentsClient() {
   const router = useRouter();
+  const me = getCurrentUser();
+  // Mirrors the server's guardAssessmentEdit (the server also checks that an
+  // admin owns the creator). Others can open, assign and read results.
+  const canChange = (a: Assessment) => me?.role === "admin" || a.created_by === me?.id;
   const { data, loading, refresh: loadAssessments } = usePageData(
     "faculty:assessments",
     async () => {
@@ -548,6 +553,7 @@ export default function FacultyAssessmentsClient() {
                         >
                           <FontAwesomeIcon icon={faUserPlus} className="w-3.5 h-3.5" />
                         </button>
+                        {canChange(a) && (
                         <button
                           onClick={() => togglePublish(a)}
                           disabled={busy}
@@ -556,20 +562,23 @@ export default function FacultyAssessmentsClient() {
                         >
                           <FontAwesomeIcon icon={a.is_published ? faEyeSlash : faGlobe} className="w-3.5 h-3.5" />
                         </button>
+                        )}
                         <button
                           onClick={() => router.push(`/faculty/assessments/${a.id}`)}
-                          title="Edit details"
+                          title={canChange(a) ? "Edit details" : "View"}
                           className="p-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"
                         >
                           <FontAwesomeIcon icon={faPen} className="w-3.5 h-3.5" />
                         </button>
-                        <button
-                          onClick={() => setConfirmDelete(a)}
-                          title="Delete"
-                          className="p-2 rounded-lg border border-red-200 text-red-600 hover:bg-red-50"
-                        >
-                          <FontAwesomeIcon icon={faTrash} className="w-3.5 h-3.5" />
-                        </button>
+                        {canChange(a) && (
+                          <button
+                            onClick={() => setConfirmDelete(a)}
+                            title="Delete"
+                            className="p-2 rounded-lg border border-red-200 text-red-600 hover:bg-red-50"
+                          >
+                            <FontAwesomeIcon icon={faTrash} className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                         <button
                           onClick={() => router.push(`/faculty/assessments/${a.id}/results`)}
                           title="View student results"

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { guardAssessmentEdit } from '@/app/lib/assessment-access';
 
 export async function PATCH(
   request: NextRequest,
@@ -76,6 +77,8 @@ export async function PATCH(
 
   try {
     const supabase = getSupabaseAdmin();
+    const denied = await guardAssessmentEdit(supabase, session, { criterionId: id });
+    if (denied) return denied;
     const { data, error } = await supabase
       .from('assessment_criteria')
       .update(update)
@@ -109,6 +112,8 @@ export async function DELETE(
 
   try {
     const supabase = getSupabaseAdmin();
+    const denied = await guardAssessmentEdit(supabase, session, { criterionId: id });
+    if (denied) return denied;
     const { error } = await supabase.from('assessment_criteria').delete().eq('id', id);
 
     if (error) {

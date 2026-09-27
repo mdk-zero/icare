@@ -4,6 +4,7 @@ import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { callAI, aiErrorResponse } from '@/app/lib/ai/generate';
 import { getSkills, isSkillId, type SkillDetail } from '@/app/lib/taylor-skills';
 import { ACTIVE_SKILL_AREA_IDS } from '@/scripts/taylors-chapters';
+import { guardAssessmentEdit } from '@/app/lib/assessment-access';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -158,6 +159,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
   try {
     const supabase = getSupabaseAdmin();
+    const denied = await guardAssessmentEdit(supabase, session, { assessmentId });
+    if (denied) return denied;
 
     const [{ data: assessment }, { data: competencies }] = await Promise.all([
       supabase

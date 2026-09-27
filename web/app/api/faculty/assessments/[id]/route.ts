@@ -3,6 +3,7 @@ import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { logAudit } from '@/app/lib/audit';
 import { assessmentPublishBlockers } from '@/app/lib/assessment-validation';
+import { guardAssessmentEdit } from '@/app/lib/assessment-access';
 
 const validDifficulties = ['beginner', 'intermediate', 'advanced'] as const;
 
@@ -172,6 +173,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
   try {
     const supabase = getSupabaseAdmin();
+    const denied = await guardAssessmentEdit(supabase, session, { assessmentId: id });
+    if (denied) return denied;
 
     if (targetSectionNames) {
       const { data: known } = await supabase
@@ -252,6 +255,8 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
   try {
     const supabase = getSupabaseAdmin();
+    const denied = await guardAssessmentEdit(supabase, session, { assessmentId: id });
+    if (denied) return denied;
     const { error } = await supabase.from('assessments').delete().eq('id', id);
 
     if (error) {
