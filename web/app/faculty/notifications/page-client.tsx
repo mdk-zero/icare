@@ -15,6 +15,7 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import PageHeader from "../../components/PageHeader";
+import AccessRequestActions from "../../components/AccessRequestActions";
 
 type Filter = "all" | "unread" | "alert" | "warning";
 
@@ -213,6 +214,14 @@ export default function FacultyNotificationsClient({
                             <p className="mt-0.5 text-sm leading-relaxed text-foreground/60">
                               {notification.message}
                             </p>
+                            {notification.access_request && (
+                              <div className="mt-2.5">
+                                <AccessRequestActions
+                                  notificationId={notification.id}
+                                  request={notification.access_request}
+                                />
+                              </div>
+                            )}
                             <div className="mt-2 flex items-center gap-2">
                               <span className="text-xs text-foreground/40">
                                 {formatTimestamp(notification.created_at)}

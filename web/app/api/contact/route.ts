@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { sendAccessRequestEmail, sendAccessRequestReceipt } from '@/app/lib/auth/email';
 import { clientIp, consumeRateLimit } from '@/app/lib/auth/rate-limit';
@@ -39,13 +40,23 @@ async function notifySuperAdmins(req: AccessRequest): Promise<boolean> {
     if (error) throw error;
     if (!admins?.length) return false;
 
+    // One id across every admin's copy, so whoever accepts or declines it
+    // settles it for all of them.
+    const requestId = randomUUID();
     const { error: insertError } = await supabase.from('notifications').insert(
       admins.map((admin) => ({
         user_id: admin.id,
         type: 'system' as const,
         title: `Account request from ${req.name}`,
         body: `${req.email} · ${req.subject}: ${req.message}`,
-        data: { kind: 'access_request', name: req.name, email: req.email, subject: req.subject },
+        data: {
+          kind: 'access_request',
+          request_id: requestId,
+          status: 'pending',
+          name: req.name,
+          email: req.email,
+          subject: req.subject,
+        },
       })),
     );
     if (insertError) throw insertError;

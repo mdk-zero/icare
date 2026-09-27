@@ -15,6 +15,7 @@ import {
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import { useNotifications } from "../lib/notifications-live";
 import { FacultyNotification } from "../lib/api";
+import AccessRequestActions from "./AccessRequestActions";
 
 type Variant = "sidebar" | "topbar";
 
@@ -252,12 +253,14 @@ export default function NotificationsPopover({
                 ) : (
                   preview.map((notification, i) => {
                     const meta = TYPE_META[notification.type] ?? TYPE_META.info;
-                    return (
+                    const button = (
                       <button
                         key={notification.id}
                         onClick={() => markRead(notification.id)}
                         style={{ animationDelay: `${Math.min(i, 5) * 30}ms` }}
-                        className="flex w-full animate-rise items-start gap-2.5 rounded-xl bg-brand-500/[0.05] px-2.5 py-2.5 text-left transition-colors hover:bg-brand-500/[0.09]"
+                        className={`flex w-full animate-rise items-start gap-2.5 rounded-xl px-2.5 py-2.5 text-left transition-colors hover:bg-brand-500/[0.09] ${
+                          notification.access_request ? "" : "bg-brand-500/[0.05]"
+                        }`}
                       >
                         <span
                           className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${meta.chip}`}
@@ -282,6 +285,20 @@ export default function NotificationsPopover({
                           className="mt-1 h-2 w-2 shrink-0 rounded-full bg-brand-500"
                         />
                       </button>
+                    );
+                    if (!notification.access_request) return button;
+                    // Buttons can't nest, so the actions sit under the item's button.
+                    return (
+                      <div key={notification.id} className="rounded-xl bg-brand-500/[0.05]">
+                        {button}
+                        <div className="px-2.5 pb-2.5 pl-[3.25rem]">
+                          <AccessRequestActions
+                            notificationId={notification.id}
+                            request={notification.access_request}
+                            onNavigate={() => setOpen(false)}
+                          />
+                        </div>
+                      </div>
                     );
                   })
                 )}

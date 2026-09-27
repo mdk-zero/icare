@@ -1178,6 +1178,18 @@ export interface FacultyNotification {
   is_read: boolean;
   created_at: string;
   student_id?: string;
+  /** Set on a super admin's copy of a sign-up page account request. */
+  access_request?: AccessRequestInfo;
+}
+
+export type AccessRequestStatus = 'pending' | 'accepted' | 'declined';
+
+export interface AccessRequestInfo {
+  id: string;
+  name: string;
+  email: string;
+  status: AccessRequestStatus;
+  resolved_by_name?: string;
 }
 
 export interface FacultyAlert {
@@ -2452,7 +2464,44 @@ export function toFacultyNotification(n: ServerNotification): FacultyNotificatio
     is_read: n.read_at !== null,
     created_at: n.created_at,
     student_id: typeof n.data?.student_id === 'string' ? n.data.student_id : undefined,
+    access_request: toAccessRequest(n.data),
   };
+}
+
+function toAccessRequest(data: Record<string, unknown> | undefined): AccessRequestInfo | undefined {
+  if (data?.kind !== 'access_request' || typeof data.request_id !== 'string') return undefined;
+  const status = data.status === 'accepted' || data.status === 'declined' ? data.status : 'pending';
+  return {
+    id: data.request_id,
+    name: typeof data.name === 'string' ? data.name : '',
+    email: typeof data.email === 'string' ? data.email : '',
+    status,
+    resolved_by_name: typeof data.resolved_by_name === 'string' ? data.resolved_by_name : undefined,
+  };
+}
+
+/**
+ * Settles an account request for every super admin. Accepting is called once
+ * the account exists; declining also tells the requester.
+ */
+export async function resolveAccessRequest(
+  requestId: string,
+  status: 'accepted' | 'declined',
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const res = await apiFetch(`/api/super-admin/access-requests/${encodeURIComponent(requestId)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ status }),
+    });
+    if (res.ok) return { ok: true };
+    const json = (await res.json().catch(() => ({}))) as { error?: string };
+    return { ok: false, error: json.error ?? 'Could not update the request' };
+  } catch (err) {
+    console.error('resolveAccessRequest() failed', err);
+    return { ok: false, error: 'Connection error' };
+  }
 }
 
 export async function fetchNotifications(): Promise<{ notifications: FacultyNotification[]; total: number; unread: number } | null> {

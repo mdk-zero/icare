@@ -569,3 +569,26 @@ export async function sendAccessRequestReceipt(to: string, replyTo: string): Pro
     </div>`,
   });
 }
+
+/**
+ * Tells a requester their account request was declined. Fixed wording for the
+ * same reason as the receipt: the address came from a public form.
+ */
+export async function sendAccessRequestDeclined(to: string, replyTo: string): Promise<void> {
+  if (shouldSkipSending()) {
+    console.log(`[DEV] Access request declined notice to ${to}`);
+    return;
+  }
+
+  await sendEmail({
+    to,
+    replyTo,
+    subject: "About your iCARE++ account request",
+    html: `
+    <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 32px; color: #0f172a;">
+      <h2 style="color: #0d7377; margin: 0 0 16px;">We couldn't approve your request</h2>
+      <p style="line-height: 1.6; margin: 0 0 12px;">Thanks for your interest in iCARE++. After review, the team wasn't able to create an account for this request.</p>
+      <p style="line-height: 1.6; margin: 0 0 12px;">If you think this is a mistake, reply to this email and it will reach the team.</p>
+    </div>`,
+  });
+}

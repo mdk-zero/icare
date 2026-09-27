@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faCopy,
@@ -11,7 +12,7 @@ import {
   faTrash,
   faUsers,
 } from "@fortawesome/free-solid-svg-icons";
-import { apiFetch, getCurrentUser } from "@/app/lib/api";
+import { apiFetch, getCurrentUser, resolveAccessRequest } from "@/app/lib/api";
 import { usePageData } from "@/app/lib/use-page-data";
 import PageHeader from "../../components/PageHeader";
 import FilterSelect from "../../components/FilterSelect";
@@ -146,8 +147,31 @@ export default function SuperAdminUsersClient() {
 
   const [changingEmail, setChangingEmail] = useState<Account | null>(null);
 
+  // The sign-up request an Accept from the notifications brought us here for;
+  // it is marked accepted only once its account is saved.
+  const [fromRequest, setFromRequest] = useState<string | null>(null);
+
+  // Watched rather than read once: Accept from the bell can land here while
+  // this page is already open.
+  const params = useSearchParams();
+  useEffect(() => {
+    const requestId = params.get("request");
+    if (!requestId) return;
+    setForm({ ...blankForm(), name: params.get("name") ?? "", email: params.get("email") ?? "" });
+    setFromRequest(requestId);
+    setEditing("new");
+    // A refresh shouldn't reopen the form for a request already handled.
+    window.history.replaceState(null, "", window.location.pathname);
+  }, [params]);
+
+  const closeEditor = () => {
+    setEditing(null);
+    setFromRequest(null);
+  };
+
   const openCreate = () => {
     setForm(blankForm());
+    setFromRequest(null);
     setEditing("new");
   };
 
@@ -188,12 +212,18 @@ export default function SuperAdminUsersClient() {
     }
     const saved = json.user;
     setUsers((prev) => (creating ? [saved, ...prev] : prev.map((u) => (u.id === saved.id ? saved : u))));
-    setEditing(null);
+    let requestWarning: string | undefined;
+    if (creating && fromRequest) {
+      const settled = await resolveAccessRequest(fromRequest, "accepted");
+      if (!settled.ok) requestWarning = `Account created, but the request could not be marked accepted: ${settled.error}`;
+    }
+    closeEditor();
     if (creating && json.password) {
       setRevealed({
         email: saved.email,
         password: json.password,
         note:
+          requestWarning ??
           json.warning ??
           (saved.role === "student"
             ? "An invitation with this password was emailed to the student."
@@ -453,7 +483,13 @@ export default function SuperAdminUsersClient() {
       </div>
 
       {editing && (
-        <Modal title={editing === "new" ? "New account" : "Edit account"} onClose={() => setEditing(null)}>
+        <Modal title={editing === "new" ? "New account" : "Edit account"} onClose={closeEditor}>
+          {fromRequest && (
+            <p className="mb-4 rounded-xl bg-brand-600/10 px-3 py-2 text-sm text-brand-700">
+              From an account request. Check the details and pick a role; the request is marked accepted
+              once the account is created.
+            </p>
+          )}
           <div className="space-y-3">
             <div>
               <label className={LABEL} htmlFor="acct-name">Full name</label>
@@ -566,7 +602,7 @@ export default function SuperAdminUsersClient() {
             )}
           </div>
           <div className="flex justify-end gap-3 mt-6">
-            <button type="button" onClick={() => setEditing(null)} className="px-4 py-2 text-gray-600 hover:text-gray-800">
+            <button type="button" onClick={closeEditor} className="px-4 py-2 text-gray-600 hover:text-gray-800">
               Cancel
             </button>
             <button
