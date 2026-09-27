@@ -867,9 +867,9 @@ export default function FacultyAnalyticsClient() {
         ? trendSeries[0]
         : null;
   // Only the chapters the app teaches from; see ACTIVE_CHAPTERS.
-  const competencies = Object.entries(summary?.competency_breakdown ?? {}).filter(([name]) => isActiveSkillArea(name)).sort(
-    (a, b) => b[1] - a[1],
-  );
+  const competencies = Object.entries(summary?.competency_breakdown ?? {})
+    .filter(([name]) => isActiveSkillArea(name))
+    .sort((a, b) => b[1] - a[1]);
   const topStudents = summary?.top_students ?? [];
   // The card shows the podium and a little more; the full ranking opens on
   // its own page with the same scope, so it lists the same students in order.

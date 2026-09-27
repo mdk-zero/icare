@@ -1,0 +1,4 @@
+- Check if registration of new user works on super admin
+- Fix UI of super admin
+- Email should be validated and can be modified for each user except for the student. There should be ownership checks before actually changing an email of an account.
+- Do you remember the Run ML Jobs button? I need you to add it back to groupings page on the faculty side.
