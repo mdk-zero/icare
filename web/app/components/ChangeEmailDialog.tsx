@@ -19,7 +19,8 @@ interface Props {
 
 /**
  * Two steps, one dialog: enter the new address and send it a code, then enter
- * the code. The change only happens on the second step (POST then PUT on
+ * the code. Render it outside any <form> — it has forms of its own — and its
+ * submits stop here, so they never reach a form further up the React tree. The change only happens on the second step (POST then PUT on
  * /api/users/:id/email), so closing half-way leaves the account untouched.
  */
 export default function ChangeEmailDialog({ userId, currentEmail, whose, onClose, onChanged }: Props) {
@@ -97,6 +98,7 @@ export default function ChangeEmailDialog({ userId, currentEmail, whose, onClose
             className="space-y-3"
             onSubmit={(e) => {
               e.preventDefault();
+              e.stopPropagation();
               void sendCode();
             }}
           >
@@ -137,6 +139,7 @@ export default function ChangeEmailDialog({ userId, currentEmail, whose, onClose
             className="space-y-3"
             onSubmit={(e) => {
               e.preventDefault();
+              e.stopPropagation();
               void confirm();
             }}
           >

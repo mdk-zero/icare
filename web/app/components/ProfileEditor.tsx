@@ -412,23 +412,6 @@ export default function ProfileEditor({
                     </button>
                   </p>
                 )}
-                {changingEmail && (
-                  <ChangeEmailDialog
-                    userId={user.id}
-                    currentEmail={user.email}
-                    whose="your"
-                    onClose={() => setChangingEmail(false)}
-                    onChanged={async (email) => {
-                      setChangingEmail(false);
-                      const fresh = await refreshCurrentUser();
-                      if (fresh) {
-                        setUser(fresh);
-                        onUserUpdate?.(fresh);
-                      }
-                      toast(`You now sign in with ${email}.`);
-                    }}
-                  />
-                )}
               </div>
             </div>
 
@@ -458,6 +441,24 @@ export default function ProfileEditor({
               </button>
             </div>
           </form>
+          {/* Outside the form: the dialog has forms of its own, and HTML can't nest them. */}
+          {changingEmail && (
+            <ChangeEmailDialog
+              userId={user.id}
+              currentEmail={user.email}
+              whose="your"
+              onClose={() => setChangingEmail(false)}
+              onChanged={async (email) => {
+                setChangingEmail(false);
+                const fresh = await refreshCurrentUser();
+                if (fresh) {
+                  setUser(fresh);
+                  onUserUpdate?.(fresh);
+                }
+                toast(`You now sign in with ${email}.`);
+              }}
+            />
+          )}
         </SectionCard>
 
         <SectionCard
