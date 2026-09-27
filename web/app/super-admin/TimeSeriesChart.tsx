@@ -68,13 +68,16 @@ export default function TimeSeriesChart({
   const [width, setWidth] = useState(600);
   const [hover, setHover] = useState<number | null>(null);
 
+  // The plot box isn't mounted while there are no points, so observe it again
+  // once they arrive; otherwise the chart keeps the default width and overflows.
+  const empty = points.length === 0;
   useEffect(() => {
     const el = wrapRef.current;
     if (!el) return;
     const observer = new ResizeObserver(([entry]) => setWidth(Math.max(240, entry.contentRect.width)));
     observer.observe(el);
     return () => observer.disconnect();
-  }, []);
+  }, [empty]);
 
   const innerW = width - PAD.left - PAD.right;
   const innerH = height - PAD.top - PAD.bottom;
