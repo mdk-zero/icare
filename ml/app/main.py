@@ -15,6 +15,7 @@ workflow's curl doesn't, and gets the same JSON body it always has.
 from __future__ import annotations
 
 import asyncio
+import hmac
 import json
 import logging
 from collections.abc import AsyncIterator, Callable
@@ -38,7 +39,8 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname
 
 
 def verify_secret(x_icare_ml_key: str | None = Header(default=None)) -> None:
-    if x_icare_ml_key != get_settings().ml_service_secret:
+    expected = get_settings().ml_service_secret.encode()
+    if not hmac.compare_digest((x_icare_ml_key or "").encode(), expected):
         raise HTTPException(status_code=401, detail="invalid or missing X-ICARE-ML-KEY")
 
 

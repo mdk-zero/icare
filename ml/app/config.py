@@ -21,12 +21,21 @@ class Settings:
     models_dir: Path
 
 
+def _required_secret() -> str:
+    # An empty secret would let an empty X-ICARE-ML-KEY header through, which
+    # is the same as no auth at all on a public URL.
+    secret = os.environ["ML_SERVICE_SECRET"].strip()
+    if not secret:
+        raise RuntimeError("ML_SERVICE_SECRET is empty; set it to the web app's value")
+    return secret
+
+
 @lru_cache
 def get_settings() -> Settings:
     return Settings(
         supabase_url=os.environ["SUPABASE_URL"].rstrip("/"),
         service_role_key=os.environ["SUPABASE_SERVICE_ROLE_KEY"],
-        ml_service_secret=os.environ["ML_SERVICE_SECRET"],
+        ml_service_secret=_required_secret(),
         risk_threshold=float(os.environ.get("ML_RISK_THRESHOLD", "0.5")),
         primary_model_kind=os.environ.get("ML_PRIMARY_MODEL_KIND", "random_forest"),
         schedule_enabled=os.environ.get("ML_SCHEDULE_ENABLED", "true").lower() == "true",
