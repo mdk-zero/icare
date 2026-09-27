@@ -34,8 +34,10 @@ npm run test:api:report
 ```
 
 The `:report` variants sign in as the super admin account from `.env.test` and save the run.
-It then shows under **Test Results → Frontend tests / API tests**, next to the health checks
-and benchmarks. Set `TEST_REPORT_URL` to report to a different deployment from the one
+It shows under **Test Results → Frontend tests / API tests**, next to the health checks and
+benchmarks, live: each test appears there as it finishes, with a progress bar, and the run
+turns into the usual summary when it ends. A run that stops sending (Ctrl+C, a crash) shows
+as stopped. Set `TEST_REPORT_URL` to report to a different deployment from the one
 tested. Saving needs migration 054 on that database.
 
 Useful Playwright options: `npx playwright test --headed` (watch it), `--ui` (step through),

@@ -1,15 +1,16 @@
 /**
  * Runs the Postman collection with Newman against TEST_BASE_URL, using the
- * accounts from web/.env.test, and (with TEST_REPORT=1) sends the results to
- * /super-admin/tests. Exits non-zero when any request fails, for CI.
+ * accounts from web/.env.test, and (with TEST_REPORT=1) streams the results to
+ * /super-admin/tests as each request finishes. Exits non-zero when any request fails, for CI.
  *
  *   npm run test:api
  */
 import newman from 'newman';
+import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { accounts, baseUrl, reportEnabled } from '../env.mjs';
-import { reportRun } from '../report.mjs';
+import { startLiveRun } from '../report.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const PREFIX = { super_admin: 'super', admin: 'admin', faculty: 'faculty', student: 'student' };
@@ -27,10 +28,28 @@ function suiteOf(item) {
   return names.join(' › ');
 }
 
+const collectionPath = join(here, 'icare-api.postman_collection.json');
+
+/** Requests in the collection, counting into folders. */
+function countRequests(items) {
+  return items.reduce((n, item) => n + (item.item ? countRequests(item.item) : 1), 0);
+}
+
+const live = reportEnabled
+  ? await startLiveRun('api', {
+      runner: 'Postman / Newman',
+      planned: countRequests(JSON.parse(readFileSync(collectionPath, 'utf8')).item),
+    })
+  : null;
+
+// What has finished so far, keyed by item id, for the live view.
+const done = new Map();
+const failures = new Map();
+
 const started = Date.now();
 newman.run(
   {
-    collection: join(here, 'icare-api.postman_collection.json'),
+    collection: collectionPath,
     envVar: envVars,
     reporters: ['cli'],
     timeoutRequest: 30_000,
@@ -58,9 +77,31 @@ newman.run(
     }
     const results = [...rows.values()];
 
-    if (reportEnabled) {
-      await reportRun('api', results, { duration_ms: Date.now() - started, runner: 'Postman / Newman' });
-    }
+    await live?.finish(results, { duration_ms: Date.now() - started });
     process.exit(results.some((r) => r.status === 'failed') ? 1 : 0);
   },
-);
+)
+  .on('request', (err, { item, response }) => {
+    if (err) failures.set(item.id, [err.message]);
+    done.set(item.id, { response });
+  })
+  .on('assertion', (err, { item }) => {
+    if (err) failures.set(item.id, [...(failures.get(item.id) ?? []), err.message]);
+  })
+  .on('item', (_err, { item }) => {
+    if (!live) return;
+    const request = done.get(item.id);
+    const errors = failures.get(item.id) ?? [];
+    done.set(item.id, {
+      ...request,
+      row: {
+        suite: suiteOf(item),
+        name: item.name,
+        // No request means the folder skipped it (that role isn't configured).
+        status: errors.length ? 'failed' : request?.response ? 'passed' : 'skipped',
+        duration_ms: request?.response?.responseTime ?? 0,
+        error: errors.length ? errors.join('\n') : null,
+      },
+    });
+    live.update([...done.values()].map((d) => d.row).filter(Boolean));
+  });

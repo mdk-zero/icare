@@ -1,26 +1,37 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { isMissingMigration, requireSuperAdmin } from '@/app/lib/auth/super-admin';
-import { saveTestRun } from '@/app/lib/system-tests';
+import { parseSuiteCases, saveTestRun, suiteSummary } from '@/app/lib/system-tests';
 
 const KINDS = ['benchmark', 'dw_benchmark', 'health', 'e2e', 'api'];
 
-/** Recent runs, newest first, optionally of one kind. */
+/**
+ * Recent runs, newest first, optionally of one kind. With `since` (the `now`
+ * of an earlier response), only the Playwright/Postman runs that started or
+ * changed after it: the Test Results page polls this to follow a live run.
+ */
 export async function GET(request: NextRequest) {
   const guard = await requireSuperAdmin();
   if (guard.response) return guard.response;
 
+  // Taken before the query, so a change that lands during it is picked up next time.
+  const now = new Date().toISOString();
   const kind = request.nextUrl.searchParams.get('kind');
+  const since = request.nextUrl.searchParams.get('since');
   let query = getSupabaseAdmin()
     .from('system_test_runs')
     .select('id, kind, created_at, summary, results, users:run_by(name)')
     .order('created_at', { ascending: false })
-    .limit(kind ? 20 : 100);
+    .limit(kind || since ? 20 : 100);
   if (kind && KINDS.includes(kind)) query = query.eq('kind', kind);
+  if (since) {
+    if (Number.isNaN(Date.parse(since))) return NextResponse.json({ error: 'Invalid since' }, { status: 400 });
+    query = query.in('kind', ['e2e', 'api']).gt('summary->>updated_at', new Date(since).toISOString());
+  }
 
   const { data, error } = await query;
   if (error) {
-    if (isMissingMigration(error)) return NextResponse.json({ runs: [], pending_migration: true });
+    if (isMissingMigration(error)) return NextResponse.json({ runs: [], pending_migration: true, now });
     console.error('Failed to list test runs', error);
     return NextResponse.json({ error: 'Unable to list test runs' }, { status: 500 });
   }
@@ -28,7 +39,10 @@ export async function GET(request: NextRequest) {
     ...run,
     run_by_name: (users as unknown as { name?: string } | null)?.name ?? null,
   }));
-  return NextResponse.json({ runs });
+  return NextResponse.json(
+    { runs, now },
+    { headers: { 'Cache-Control': 'no-store' } },
+  );
 }
 
 interface BenchmarkRow {
@@ -42,55 +56,17 @@ interface BenchmarkRow {
   rps: number;
 }
 
-interface SuiteCase {
-  suite: string;
-  name: string;
-  status: 'passed' | 'failed' | 'skipped';
-  duration_ms: number;
-  error: string | null;
-}
-
-const SUITE_STATUSES = ['passed', 'failed', 'skipped'];
-const str = (v: unknown, max: number) => (typeof v === 'string' ? v.slice(0, max) : null);
-
 /**
  * A Playwright or Postman run reported by web/tests/report.mjs. The suites
  * run on a developer machine or in CI, never on the server, so this only
- * checks the shape and keeps it.
+ * checks the shape and keeps it. With `live: true` the run is opened empty
+ * and filled in through PATCH /api/super-admin/test-runs/[id] as tests finish.
  */
 async function saveSuiteRun(kind: 'e2e' | 'api', body: Record<string, unknown>, runBy: string) {
-  if (!Array.isArray(body.results) || body.results.length === 0 || body.results.length > 1000) {
-    return NextResponse.json({ error: 'Invalid test results' }, { status: 400 });
-  }
-  const results: SuiteCase[] = [];
-  for (const raw of body.results) {
-    const r = raw as Record<string, unknown>;
-    const status = r.status as SuiteCase['status'];
-    const duration = Number(r.duration_ms);
-    const name = str(r.name, 300);
-    if (!name || !SUITE_STATUSES.includes(status) || !Number.isFinite(duration) || duration < 0) {
-      return NextResponse.json({ error: 'Invalid test results' }, { status: 400 });
-    }
-    results.push({
-      suite: str(r.suite, 200) ?? '',
-      name,
-      status,
-      duration_ms: Math.round(duration),
-      error: str(r.error, 2000),
-    });
-  }
-  const meta = (body.meta ?? {}) as Record<string, unknown>;
-  const count = (status: string) => results.filter((r) => r.status === status).length;
-  const summary = {
-    total: results.length,
-    passed: count('passed'),
-    failed: count('failed'),
-    skipped: count('skipped'),
-    duration_ms: Math.round(Number(meta.duration_ms) || results.reduce((sum, r) => sum + r.duration_ms, 0)),
-    base_url: str(meta.base_url, 200),
-    runner: str(meta.runner, 80),
-    commit: str(meta.commit, 40),
-  };
+  const live = body.live === true;
+  const results = parseSuiteCases(body.results, { allowEmpty: live });
+  if (!results) return NextResponse.json({ error: 'Invalid test results' }, { status: 400 });
+  const summary = suiteSummary(results, (body.meta ?? {}) as Record<string, unknown>, live ? 'running' : 'done');
   const saved = await saveTestRun(getSupabaseAdmin(), { kind, runBy, summary, results });
   return NextResponse.json({
     run: { id: saved.id, kind, created_at: new Date().toISOString(), summary, results },

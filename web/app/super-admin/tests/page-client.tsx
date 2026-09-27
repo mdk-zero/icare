@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faCircleCheck,
@@ -82,6 +82,10 @@ type SuiteRun = TestRun<
     base_url: string | null;
     runner: string | null;
     commit: string | null;
+    /** Runs reported before live reporting have none of these. */
+    planned?: number | null;
+    status?: "running" | "done" | "interrupted";
+    updated_at?: string;
   },
   SuiteCase[]
 >;
@@ -89,6 +93,23 @@ type SuiteRun = TestRun<
 interface RunsPayload {
   runs: TestRun[];
   pending_migration?: boolean;
+  /** Server time of the response; the next poll asks for changes after it. */
+  now?: string;
+}
+
+/** Poll often while a suite is running, and gently otherwise to notice a new one. */
+const POLL_LIVE_MS = 2000;
+const POLL_IDLE_MS = 5000;
+/** Playwright's per-test timeout is 45 s; a run silent for longer than this has died. */
+const STALE_MS = 2 * 60_000;
+
+type LiveState = "running" | "interrupted" | null;
+
+function liveState(run: SuiteRun, now: number): LiveState {
+  const { status, updated_at } = run.summary;
+  if (status === "interrupted") return "interrupted";
+  if (status !== "running") return null;
+  return updated_at && now - Date.parse(updated_at) > STALE_MS ? "interrupted" : "running";
 }
 
 const STATUS: Record<Status, { icon: IconDefinition; className: string; label: string }> = {
@@ -119,6 +140,53 @@ export default function TestsClient() {
   const addRun = (run: TestRun) =>
     setData((prev) => ({ ...(prev ?? { runs: [] }), runs: [run, ...(prev?.runs ?? [])] }));
 
+  // Follow Playwright/Postman runs as their reporters send results. Plain
+  // fetch, not apiFetch: the response cache would answer every poll, and each
+  // poll would count as traffic on the Performance page.
+  const since = useRef<string | null>(null);
+  // Also the clock that ages a silent run into "interrupted".
+  const [now, setNow] = useState(() => Date.now());
+  const loaded = !!data;
+  const loadedAt = data?.now;
+  const anyLive = runs.some((r) => (r.kind === "e2e" || r.kind === "api") && r.summary.status === "running");
+  useEffect(() => {
+    if (pending || !loaded) return;
+    since.current ??= loadedAt ?? new Date(Date.now() - 60_000).toISOString();
+    let stopped = false;
+    let timer: number | undefined;
+    const poll = async () => {
+      setNow(Date.now());
+      if (document.visibilityState === "visible" && since.current) {
+        try {
+          const res = await fetch(`/api/super-admin/test-runs?since=${encodeURIComponent(since.current)}`, {
+            credentials: "include",
+            cache: "no-store",
+          });
+          if (res.ok) {
+            const json = (await res.json()) as RunsPayload;
+            if (json.now) since.current = json.now;
+            if (!stopped && json.runs.length) {
+              setData((prev) => {
+                const byId = new Map((prev?.runs ?? []).map((r) => [r.id, r]));
+                for (const run of json.runs) byId.set(run.id, run);
+                const merged = [...byId.values()].sort((a, b) => b.created_at.localeCompare(a.created_at));
+                return { ...(prev ?? { runs: [] }), runs: merged };
+              });
+            }
+          }
+        } catch {
+          // Offline for a moment; the next poll catches up.
+        }
+      }
+      if (!stopped) timer = window.setTimeout(poll, anyLive ? POLL_LIVE_MS : POLL_IDLE_MS);
+    };
+    timer = window.setTimeout(poll, anyLive ? POLL_LIVE_MS : POLL_IDLE_MS);
+    return () => {
+      stopped = true;
+      window.clearTimeout(timer);
+    };
+  }, [anyLive, pending, loaded, loadedAt, setData]);
+
   const ofKind = <T extends TestRun>(kind: TestRun["kind"]) => runs.filter((r) => r.kind === kind) as T[];
 
   return (
@@ -138,6 +206,7 @@ export default function TestsClient() {
         <SuiteSection
           kind="e2e"
           runs={ofKind<SuiteRun>("e2e")}
+          now={now}
           icon={faDisplay}
           title="Frontend tests (Playwright)"
           subtitle="A real browser signs in and clicks through each portal, checking what users see"
@@ -146,6 +215,7 @@ export default function TestsClient() {
         <SuiteSection
           kind="api"
           runs={ofKind<SuiteRun>("api")}
+          now={now}
           icon={faCode}
           title="API tests (Postman)"
           subtitle="Every endpoint's status codes, response shape and role restrictions, run with Newman"
@@ -604,6 +674,7 @@ const CASE_STATUS: Record<SuiteCase["status"], { icon: IconDefinition; className
 function SuiteSection({
   kind,
   runs,
+  now,
   icon,
   title,
   subtitle,
@@ -611,22 +682,28 @@ function SuiteSection({
 }: {
   kind: "e2e" | "api";
   runs: SuiteRun[];
+  now: number;
   icon: IconDefinition;
   title: string;
   subtitle: string;
   command: string;
 }) {
-  const [picked, setPicked] = useState<SuiteRun | null>(null);
+  // By id: polling replaces the run objects as results arrive.
+  const [pickedId, setPickedId] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
-  const shown = picked ?? runs[0] ?? null;
+  const shown = runs.find((r) => r.id === pickedId) ?? runs[0] ?? null;
 
+  const live = shown ? liveState(shown, now) : null;
+  // While a run is live every result is shown, so each test appears as it finishes.
+  const listAll = showAll || live === "running";
   const groups = new Map<string, SuiteCase[]>();
   for (const c of shown?.results ?? []) {
-    if (!showAll && c.status !== "failed") continue;
+    if (!listAll && c.status !== "failed") continue;
     groups.set(c.suite, [...(groups.get(c.suite) ?? []), c]);
   }
   const s = shown?.summary;
-  const verdict = !s ? null : s.failed > 0 ? "fail" : s.passed > 0 ? "pass" : "warn";
+  const verdict = !s || live === "running" ? null : s.failed > 0 ? "fail" : s.passed > 0 ? "pass" : "warn";
+  const planned = s?.planned ?? null;
 
   return (
     <section className={`${CARD} p-4 sm:p-5`} aria-labelledby={`suite-${kind}`}>
@@ -646,9 +723,36 @@ function SuiteSection({
           <span className={`inline-flex items-center gap-1.5 text-sm font-medium ${STATUS[verdict].className}`}>
             <FontAwesomeIcon icon={STATUS[verdict].icon} className="w-4 h-4" />
             {verdict === "fail" ? `${s!.failed} failing` : verdict === "pass" ? "All passing" : "Nothing ran"}
+            {live === "interrupted" && <span className="text-gray-500 font-normal">· stopped early</span>}
+          </span>
+        )}
+        {live === "running" && (
+          <span className="inline-flex items-center gap-2 text-sm font-medium text-brand-700" role="status">
+            <span className="relative flex w-2.5 h-2.5">
+              <span className="absolute inline-flex h-full w-full rounded-full bg-brand-600 opacity-60 animate-ping motion-reduce:animate-none" />
+              <span className="relative inline-flex w-2.5 h-2.5 rounded-full bg-brand-600" />
+            </span>
+            Running · {s!.total}
+            {planned ? ` of ${planned}` : ""} done
           </span>
         )}
       </div>
+
+      {live === "running" && planned ? (
+        <div
+          className="h-1.5 rounded-full bg-subtle overflow-hidden mb-4"
+          role="progressbar"
+          aria-label="Tests finished"
+          aria-valuemin={0}
+          aria-valuemax={planned}
+          aria-valuenow={Math.min(s!.total, planned)}
+        >
+          <div
+            className="h-full rounded-full bg-brand-600 transition-[width] duration-500"
+            style={{ width: `${Math.min(100, (s!.total / planned) * 100)}%` }}
+          />
+        </div>
+      ) : null}
 
       {!shown || !s ? (
         <p className="text-sm text-gray-500">
@@ -683,15 +787,20 @@ function SuiteSection({
               </>
             )}
             {s.skipped > 0 && " · skipped tests had no test account configured"}
+            {live === "interrupted" && " · the run stopped before every test finished"}
           </p>
 
-          <label className="inline-flex items-center gap-2 text-sm text-gray-600 mb-2 cursor-pointer">
-            <input type="checkbox" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} />
-            Show every test, not just failures
-          </label>
+          {live !== "running" && (
+            <label className="inline-flex items-center gap-2 text-sm text-gray-600 mb-2 cursor-pointer">
+              <input type="checkbox" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} />
+              Show every test, not just failures
+            </label>
+          )}
 
           {groups.size === 0 ? (
-            <p className="text-sm text-gray-500">{s.failed === 0 ? "No failures in this run." : ""}</p>
+            <p className="text-sm text-gray-500">
+              {live === "running" ? "Waiting for the first test to finish…" : s.failed === 0 ? "No failures in this run." : ""}
+            </p>
           ) : (
             <div className="space-y-3">
               {[...groups].map(([suite, cases]) => (
@@ -730,8 +839,12 @@ function SuiteSection({
       <History
         runs={runs}
         selected={shown}
-        onSelect={setPicked}
-        describe={(r) => `${r.summary.passed} passed · ${r.summary.failed} failed · ${r.summary.skipped} skipped`}
+        onSelect={(r) => setPickedId(r.id)}
+        describe={(r) => {
+          const counts = `${r.summary.passed} passed · ${r.summary.failed} failed · ${r.summary.skipped} skipped`;
+          const state = liveState(r, now);
+          return state === "running" ? `Running · ${counts}` : state === "interrupted" ? `Stopped · ${counts}` : counts;
+        }}
       />
     </section>
   );
