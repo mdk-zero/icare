@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { readSession } from '@/app/lib/auth/session';
+import { readSession, updateUser } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { adminVisibleUserIds, getAdminScope } from '@/app/lib/admin-scope';
 import { logAudit } from '@/app/lib/audit';
-import { parseSex } from '@/app/lib/auth/user';
+import { applyRoleChangeReporting, parseSex } from '@/app/lib/auth/user';
 
 /** Admin and super admin accounts are the super admin's to make (migration 054). */
 const ASSIGNABLE_ROLES = ['student', 'faculty'] as const;
@@ -68,20 +68,23 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     if (scope && !adminVisibleUserIds(scope, session.uid).includes(id)) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
+    // Admins cannot change their own role (checked above), so only another
+    // account's role can be changing here.
+    let previousRole: string | null = null;
     if (id !== session.uid) {
       const { data: target } = await supabase.from('users').select('role').eq('id', id).maybeSingle();
       if (!target || !MANAGEABLE_ROLES.includes(target.role as string)) {
         return NextResponse.json({ error: 'User not found' }, { status: 404 });
       }
+      previousRole = target.role as string;
     }
     // Someone made faculty by this admin becomes this admin's faculty.
     if (scope && updates.role === 'faculty') updates.admin_id = session.uid;
-    const { data: user, error } = await supabase
-      .from('users')
-      .update(updates)
-      .eq('id', id)
-      .select('id, email, name, role, picture_url, sex, created_at, last_login_at')
-      .maybeSingle();
+    // A role change signs the account out everywhere, in the same write.
+    const { data: user, error } = await updateUser(id, updates, {
+      revoke: previousRole !== null && updates.role !== undefined && updates.role !== previousRole,
+      columns: 'id, email, name, role, picture_url, sex, created_at, last_login_at',
+    });
 
     if (error) {
       console.error('Failed to update user', error);
@@ -90,14 +93,17 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
-
     await logAudit(
       session,
       { action: 'user.update', entityType: 'users', entityId: id, details: updates },
       request,
     );
+    const warning =
+      updates.role !== undefined && previousRole
+        ? await applyRoleChangeReporting(supabase, id, user.role as string)
+        : undefined;
 
-    return NextResponse.json({ user });
+    return NextResponse.json({ user, warning });
   } catch (err) {
     console.error('Update user failed', err);
     return NextResponse.json({ error: 'Unable to update user' }, { status: 500 });

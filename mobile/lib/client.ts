@@ -80,6 +80,20 @@ export async function setToken(token: string, remember: boolean = true): Promise
   await clearPersistedToken();
 }
 
+/**
+ * Swaps in a re-issued token (after a password change the server signs out
+ * every older token), keeping whichever "remember me" choice the old one had.
+ */
+export async function replaceToken(token: string): Promise<void> {
+  if (memoryToken) {
+    memoryToken = token;
+    return;
+  }
+  // Signed out while the request was in flight: stay signed out.
+  if (!(await getPersistedToken())) return;
+  return setPersistedToken(token);
+}
+
 export async function clearToken(): Promise<void> {
   memoryToken = null;
   return clearPersistedToken();
@@ -249,6 +263,38 @@ interface RequestOptions {
  */
 const REQUEST_TIMEOUT_MS = 15_000;
 
+/**
+ * Called when a signed-in request comes back 401: the session may have been
+ * revoked (a password or role change elsewhere). hooks/useAuth.tsx confirms
+ * with the server before signing out, since a request that raced a token
+ * swap can 401 while the new token is fine.
+ */
+let unauthorizedListener: (() => void) | null = null;
+
+/**
+ * Password changes in flight. Each one revokes this device's token on the
+ * server before its response brings the replacement, so a 401 meanwhile is
+ * expected and must not sign the user out.
+ */
+let tokenSwapsInFlight = 0;
+
+export function isTokenSwapInFlight(): boolean {
+  return tokenSwapsInFlight > 0;
+}
+
+export async function duringTokenSwap<T>(run: () => Promise<T>): Promise<T> {
+  tokenSwapsInFlight += 1;
+  try {
+    return await run();
+  } finally {
+    tokenSwapsInFlight -= 1;
+  }
+}
+
+export function onUnauthorized(listener: (() => void) | null): void {
+  unauthorizedListener = listener;
+}
+
 export async function api<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { method = "GET", body, auth = true } = options;
   const headers: Record<string, string> = { "Content-Type": "application/json" };
@@ -274,6 +320,9 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
     clearTimeout(timer);
   }
   setOnline(true);
+  if (response.status === 401 && headers.Authorization && path !== "/api/auth/session") {
+    unauthorizedListener?.();
+  }
   return parseResponse<T>(response);
 }
 
@@ -369,6 +418,28 @@ export interface OutboxItem {
   method: "POST" | "PATCH";
   body: unknown;
   createdAt: string;
+  /** Who queued it; absent on items queued before owners were recorded. */
+  ownerId?: string;
+}
+
+/**
+ * The account the current token belongs to, read from the token itself: that
+ * is the account a request is actually sent as. Not verified — the server
+ * does that — only used to keep one account's queued writes from going out
+ * under another's token.
+ */
+async function tokenUserId(): Promise<string | null> {
+  const token = await getToken();
+  const payload = token?.split(".")[1];
+  if (!payload) return null;
+  try {
+    const b64 = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const json = globalThis.atob(b64 + "=".repeat((4 - (b64.length % 4)) % 4));
+    const uid = (JSON.parse(json) as { uid?: unknown }).uid;
+    return typeof uid === "string" ? uid : null;
+  } catch {
+    return null;
+  }
 }
 
 export async function getOutbox(): Promise<OutboxItem[]> {
@@ -387,6 +458,7 @@ export async function enqueueWrite(
     ...item,
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     createdAt: new Date().toISOString(),
+    ownerId: (await tokenUserId()) ?? undefined,
   };
   const outbox = await getOutbox();
   outbox.push(queued);
@@ -403,8 +475,11 @@ export interface FlushResult {
 
 /**
  * Send queued writes in order. Stops at the first network failure (still
- * offline); server-rejected items are dropped so one bad entry can't block
- * the queue.
+ * offline), when signed out, and at a 401 (the session was revoked or
+ * expired: the writes wait for their owner to sign back in). Other
+ * server-rejected items are dropped so one bad entry can't block the queue.
+ * So are items queued under a different account than the current token's:
+ * they must never be sent as someone else, and their labels are not shown.
  */
 export async function flushOutbox(): Promise<FlushResult> {
   const outbox = await getOutbox();
@@ -413,12 +488,21 @@ export async function flushOutbox(): Promise<FlushResult> {
 
   while (outbox.length > 0) {
     const item = outbox[0];
+    // Checked per item: the token can change between sends (a sign-in).
+    const currentUserId = await tokenUserId();
+    if (!currentUserId) break;
+    if (item.ownerId && item.ownerId !== currentUserId) {
+      rejected.push({ label: "A change saved under another account", error: "Discarded" });
+      outbox.shift();
+      continue;
+    }
     try {
       await api(item.path, { method: item.method, body: item.body });
       sent += 1;
       outbox.shift();
     } catch (err) {
       if (isNetworkError(err)) break;
+      if (err instanceof ApiError && err.status === 401) break;
       rejected.push({
         label: item.label,
         error: err instanceof Error ? err.message : "Rejected by server",

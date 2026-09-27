@@ -1,6 +1,7 @@
 import { randomInt } from 'crypto';
 import { getSupabaseAdmin } from '../supabase/server';
 import { isMissingMigration } from './super-admin';
+import { updateUser } from './session';
 import { hashPassword, verifyPassword } from './password';
 
 export interface ResetableUser {
@@ -132,13 +133,12 @@ async function countWrongOtp(resetId: string): Promise<OtpCheck> {
 }
 
 export async function updateUserPassword(userId: string, newPassword: string): Promise<void> {
-  const supabase = getSupabaseAdmin();
   const passwordHash = await hashPassword(newPassword);
-
-  const { error } = await supabase
-    .from('users')
-    .update({ password_hash: passwordHash, force_password_change: false })
-    .eq('id', userId);
-
+  // Whoever knew the old password, or holds a session opened with it, is out.
+  const { error } = await updateUser(
+    userId,
+    { password_hash: passwordHash, force_password_change: false },
+    { revoke: true },
+  );
   if (error) throw error;
 }

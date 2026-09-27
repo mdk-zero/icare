@@ -14,6 +14,14 @@ export interface SessionPayload {
   uid: string;
   role: UserRole;
   email: string;
+  /** When the token was issued, in seconds (the standard claim). */
+  iat?: number;
+  /**
+   * When the token was issued, in milliseconds. It is compared with
+   * users.sessions_valid_after; whole seconds can't separate a token revoked
+   * by a cutoff from one issued just after it.
+   */
+  iatMs?: number;
 }
 
 export function getSecret(): Uint8Array {
@@ -25,7 +33,10 @@ export function getSecret(): Uint8Array {
 }
 
 export async function signSession(payload: SessionPayload): Promise<string> {
-  return await new SignJWT({ ...payload })
+  // Only the identity claims: callers pass a read session back in, and its
+  // old iat must not ride along.
+  const { uid, role, email } = payload;
+  return await new SignJWT({ uid, role, email, iat_ms: Date.now() })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime('7d')
@@ -44,6 +55,8 @@ export async function verifySession(token: string): Promise<SessionPayload | nul
         uid: payload.uid,
         role: payload.role as UserRole,
         email: payload.email,
+        iat: typeof payload.iat === 'number' ? payload.iat : undefined,
+        iatMs: typeof payload.iat_ms === 'number' ? payload.iat_ms : undefined,
       };
     }
     return null;

@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { SESSION_COOKIE, verifySession } from '@/app/lib/auth/jwt';
+import { SESSION_COOKIE, verifySession, type SessionPayload } from '@/app/lib/auth/jwt';
+import { liveSession } from '@/app/lib/auth/live-user';
 import { isDeveloperEmail } from '@/app/lib/auth/developer-allowlist';
 import { IMPERSONATION_RETURN_COOKIE } from '@/app/lib/dev/impersonation';
 
@@ -76,7 +77,7 @@ export async function proxy(request: NextRequest) {
   if (!isProtected && !isAuthPage) return NextResponse.next();
 
   const token = request.cookies.get(SESSION_COOKIE)?.value;
-  const session = token ? await verifySession(token) : null;
+  const session = token ? await pageSession(token) : null;
 
   if (isProtected && !session) {
     const login = new URL('/login', request.url);
@@ -93,11 +94,52 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL(homeFor(session.role), request.url));
   }
 
+  // A cookie that verifies but whose session was revoked (deleted account,
+  // password or role change): drop it. Otherwise the page's first API call
+  // gets a 401 and sends the user to /login, /login bounces them back here,
+  // and the two loop forever.
+  if (isAuthPage && token && !session) {
+    const response = NextResponse.next();
+    response.cookies.delete(SESSION_COOKIE);
+    return response;
+  }
+
   if (isProtected && session && wrongPortal(session.role, pathname)) {
     return NextResponse.redirect(new URL(homeFor(session.role), request.url));
   }
 
   return NextResponse.next();
+}
+
+/**
+ * The session behind a page navigation, checked against the live user row
+ * the same way readSession() checks it for the API, so a deleted or revoked
+ * session counts as signed out. Routing still uses the token's role: the
+ * portal layouts gate on the role the client stored at sign-in, and routing
+ * on a different one would bounce the two off each other. A role change
+ * revokes the token (059), so the next sign-in brings both up to date.
+ * If the database can't be reached, fall back to the signature alone: this
+ * is a routing guard, and the API routes still check for themselves.
+ */
+const PAGE_SESSION_TIMEOUT_MS = 2000;
+
+async function pageSession(token: string): Promise<SessionPayload | null> {
+  const claims = await verifySession(token);
+  if (!claims) return null;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    // A hung lookup must not hold every page navigation hostage.
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error('timed out')), PAGE_SESSION_TIMEOUT_MS);
+    });
+    const live = await Promise.race([liveSession(claims), timeout]);
+    return live ? claims : null;
+  } catch (err) {
+    console.error('Proxy live session check failed; using the token alone', err);
+    return claims;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /**

@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { logAudit } from '@/app/lib/audit';
-import { parseSex } from '@/app/lib/auth/user';
+import { applyRoleChangeReporting, parseSex } from '@/app/lib/auth/user';
 import { DevError } from '@/app/lib/dev/catalog';
 import { devErrorResponse, devNotFound, requireDeveloper } from '@/app/lib/dev/guard';
+import { reissueSession, updateUser, type SessionPayload } from '@/app/lib/auth/session';
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -89,16 +90,24 @@ export async function PATCH(request: NextRequest, { params }: Params) {
 
     if (Object.keys(patch).length === 0) throw new DevError('Nothing to update');
 
-    // The role in a live session JWT is seven days stale by design, so a
-    // demotion here does not take effect until the target signs in again.
-    // Flagged in the response rather than silently tolerated.
     const supabase = getSupabaseAdmin();
-    const { data, error } = await supabase
-      .from('users')
-      .update(patch)
-      .eq('id', id)
-      .select('id, email, name, role, sex, section_id, force_password_change')
-      .maybeSingle();
+    let previousRole: string | null = null;
+    if (patch.role !== undefined) {
+      const { data: before, error: beforeError } = await supabase
+        .from('users')
+        .select('role')
+        .eq('id', id)
+        .maybeSingle();
+      // Without the old role there is no telling whether to revoke.
+      if (beforeError) throw new DevError(beforeError.message, 500);
+      if (!before) throw new DevError('User not found', 404);
+      previousRole = before.role as string;
+    }
+    // A role change signs the account out everywhere, in the same write.
+    const { data, error } = await updateUser(id, patch, {
+      revoke: previousRole !== null && patch.role !== previousRole,
+      columns: 'id, email, name, role, sex, section_id, force_password_change',
+    });
     if (error) throw new DevError(error.message, 400);
     if (!data) throw new DevError('User not found', 404);
 
@@ -112,14 +121,16 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       },
       request,
     );
+    // Sessions read the live role, and a change signs the account out
+    // everywhere, so nothing lingers under the old role.
+    const warning = previousRole ? await applyRoleChangeReporting(supabase, id, data.role as string) : undefined;
+    // Changing their own role signs the developer out with everyone else's
+    // sessions; keep this console session going.
+    if (previousRole && previousRole !== data.role && id === session.uid) {
+      await reissueSession({ ...session, role: data.role as SessionPayload['role'] });
+    }
 
-    return NextResponse.json({
-      user: data,
-      warning:
-        patch.role !== undefined
-          ? 'Their existing session keeps the old role until they sign in again.'
-          : undefined,
-    });
+    return NextResponse.json({ user: data, warning });
   } catch (err) {
     return devErrorResponse(err);
   }

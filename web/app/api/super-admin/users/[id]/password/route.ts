@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { requireSuperAdmin } from '@/app/lib/auth/super-admin';
 import { generateRandomPassword, hashPassword } from '@/app/lib/auth/password';
 import { logAudit } from '@/app/lib/audit';
+import { updateUser } from '@/app/lib/auth/session';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -18,14 +18,14 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   const { id } = await params;
 
   try {
-    const supabase = getSupabaseAdmin();
     const password = generateRandomPassword();
-    const { data, error } = await supabase
-      .from('users')
-      .update({ password_hash: await hashPassword(password), force_password_change: true })
-      .eq('id', id)
-      .select('id')
-      .maybeSingle();
+    // Resetting is what you do to a compromised account: sessions opened
+    // with the old password end now, not when their tokens expire.
+    const { data, error } = await updateUser(
+      id,
+      { password_hash: await hashPassword(password), force_password_change: true },
+      { revoke: true },
+    );
     if (error) {
       console.error('Failed to reset password', error);
       return NextResponse.json({ error: 'Unable to reset password' }, { status: 500 });

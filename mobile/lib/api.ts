@@ -14,6 +14,8 @@ import {
   clearToken,
   enqueueWrite,
   isNetworkError,
+  duringTokenSwap,
+  replaceToken,
   setToken,
 } from './client';
 import type { AnomalyReason } from './vitals-rules';
@@ -113,16 +115,23 @@ export async function checkPasswordResetCode(email: string, otp: string): Promis
   });
 }
 
-/** Consumes the code and sets the new password. */
+/**
+ * Consumes the code and sets the new password. The reset signs out every
+ * session; when this device is signed in to the same account, the server
+ * sends a fresh token back so it stays signed in.
+ */
 export async function resetPassword(
   email: string,
   otp: string,
   newPassword: string,
 ): Promise<{ message: string }> {
-  return api('/api/auth/forgot-password/verify', {
-    method: 'POST',
-    body: { email, otp, newPassword },
-    auth: false,
+  return duringTokenSwap(async () => {
+    const result = await api<{ message: string; sessionToken?: string }>(
+      '/api/auth/forgot-password/verify',
+      { method: 'POST', body: { email, otp, newPassword } },
+    );
+    if (result.sessionToken) await replaceToken(result.sessionToken);
+    return { message: result.message };
   });
 }
 
@@ -297,6 +306,8 @@ export interface AttemptResult {
   correct: number;
   total: number;
   time_taken_seconds: number;
+  /** Submitted after the time limit: still graded and counted, but flagged to faculty. */
+  late?: boolean;
   results: {
     question_id: string;
     selected_index: number | null;
@@ -608,10 +619,13 @@ export async function updateProfile(name: string): Promise<User> {
 export async function completeForcedPasswordChange(
   newPassword: string,
 ): Promise<{ success: boolean }> {
-  return api('/api/users/change-password', {
+  const result = await api<{ success: boolean; sessionToken?: string }>('/api/users/change-password', {
     method: 'POST',
     body: { newPassword },
   });
+  // The change signs out every older token, this device's included.
+  if (result.sessionToken) await replaceToken(result.sessionToken);
+  return { success: result.success };
 }
 
 /**

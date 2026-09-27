@@ -235,6 +235,8 @@ export function isAuthenticated(): boolean {
 export async function refreshCurrentUser(): Promise<User | null> {
   try {
     const res = await apiFetch(SESSION_ENDPOINT, { credentials: 'include' });
+    // A server error says nothing about the session; keep what we had.
+    if (res.status >= 500) return getCurrentUser();
     if (!res.ok) {
       mirrorToStorage(null);
       return null;

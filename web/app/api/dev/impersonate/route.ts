@@ -5,6 +5,7 @@ import { SESSION_COOKIE, signSession, verifySession } from '@/app/lib/auth/sessi
 import { logAudit } from '@/app/lib/audit';
 import { DevError } from '@/app/lib/dev/catalog';
 import { devErrorResponse, devNotFound, requireDeveloper } from '@/app/lib/dev/guard';
+import { liveSession } from '@/app/lib/auth/live-user';
 import {
   encodeFlag,
   homeForRole,
@@ -131,9 +132,12 @@ export async function DELETE(request: NextRequest) {
     const returnToken = store.get(IMPERSONATION_RETURN_COOKIE)?.value;
     if (!returnToken) return devNotFound();
 
-    const original = await verifySession(returnToken);
+    // Checked against the live row too: the developer's own sessions may have
+    // been revoked (password or role change) while they were impersonating.
+    const parked = await verifySession(returnToken);
+    const original = parked ? await liveSession(parked) : null;
     if (!original) {
-      // The parked token expired. Clear everything and send them to login
+      // The parked token expired or was revoked. Clear everything and send them to login
       // rather than leaving a dead cookie that keeps offering a way back.
       const response = NextResponse.json(
         { error: 'Your original session expired — sign in again' },
@@ -151,7 +155,7 @@ export async function DELETE(request: NextRequest) {
 
     await logAudit(original, { action: 'dev.impersonate.stop' }, request);
 
-    const response = NextResponse.json({ user: original, home: '/developer' });
+    const response = NextResponse.json({ user: { uid: original.uid, role: original.role, email: original.email }, home: '/developer' });
     response.cookies.set({
       name: SESSION_COOKIE,
       value: returnToken,

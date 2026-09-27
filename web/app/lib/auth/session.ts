@@ -1,6 +1,8 @@
 import { SignJWT, jwtVerify } from 'jose';
 import { cookies, headers } from 'next/headers';
-import { SESSION_COOKIE, getSecret, verifySession } from './jwt';
+import { getSupabaseAdmin } from '../supabase/server';
+import { isMissingColumn, liveSession } from './live-user';
+import { SESSION_COOKIE, getSecret, signSession, verifySession } from './jwt';
 import type { SessionPayload } from './jwt';
 
 // Signing and verification live in ./jwt so middleware can share them without
@@ -38,19 +40,66 @@ export async function clearSessionCookie(): Promise<void> {
   });
 }
 
+/** The signed-in user, checked against their live row (see liveSession). */
 export async function readSession(): Promise<SessionPayload | null> {
-  const store = await cookies();
-  const token = store.get(SESSION_COOKIE)?.value;
-  if (token) return verifySession(token);
+  const claims = await readTokenClaims();
+  return claims ? liveSession(claims) : null;
+}
 
-  // Mobile clients (Expo app) send the same JWT the login route returns
-  // as `sessionToken`, in an Authorization bearer header instead of a cookie.
+/**
+ * Updates a user row and, when `revoke` is set, signs out every existing
+ * session of theirs in the same statement: tokens issued before now stop
+ * working at their next request. One write, so a password or role change and
+ * its revocation land together or not at all. Call reissueSession() after it
+ * to keep the caller's own device signed in.
+ *
+ * Before migration 059 there is no cutoff column; the update is retried
+ * without it, and nothing is revoked.
+ */
+export async function updateUser(
+  userId: string,
+  fields: Record<string, unknown>,
+  { revoke, columns = 'id' }: { revoke: boolean; columns?: string },
+) {
+  const supabase = getSupabaseAdmin();
+  const run = async (f: Record<string, unknown>) => {
+    const { data, error } = await supabase.from('users').update(f).eq('id', userId).select(columns).maybeSingle();
+    return { data: data as Record<string, unknown> | null, error };
+  };
+  if (!revoke) return run(fields);
+  const result = await run({ ...fields, sessions_valid_after: new Date().toISOString() });
+  if (!result.error || !isMissingColumn(result.error)) return result;
+  console.warn('users.sessions_valid_after is missing (apply migration 059); sessions not revoked');
+  return run(fields);
+}
+
+/**
+ * A fresh token for this user after updateUser(..., { revoke: true }), set as the web
+ * cookie. Returned only to bearer-token (mobile) callers, which must store it
+ * in place of their old one; a cookie client has no use for it in page script.
+ */
+export async function reissueSession(session: SessionPayload): Promise<string | undefined> {
+  const token = await signSession(session);
+  await setSessionCookie(token);
+  const authorization = (await headers()).get('authorization');
+  return authorization?.startsWith('Bearer ') ? token : undefined;
+}
+
+/** The token's claims, signature-checked but not looked up. */
+async function readTokenClaims(): Promise<SessionPayload | null> {
+  // Mobile clients (Expo app) send the JWT the login route returns as
+  // `sessionToken`, in an Authorization bearer header. It wins over a cookie:
+  // React Native keeps cookies in a native store, which can still hold one
+  // from an earlier sign-in after the app has swapped in a fresh token.
   const headerStore = await headers();
   const authorization = headerStore.get('authorization');
   if (authorization?.startsWith('Bearer ')) {
     return verifySession(authorization.slice('Bearer '.length));
   }
-  return null;
+
+  const store = await cookies();
+  const token = store.get(SESSION_COOKIE)?.value;
+  return token ? verifySession(token) : null;
 }
 
 export interface GoogleOnboardingPayload {

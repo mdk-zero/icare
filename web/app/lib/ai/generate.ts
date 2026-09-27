@@ -1,4 +1,5 @@
 import { callOpenRouter } from './openrouter';
+import { headers } from 'next/headers';
 import { readSession } from '../auth/session';
 import { consumeRateLimit } from '../auth/rate-limit';
 
@@ -87,12 +88,15 @@ export class AiRateLimitedError extends Error {}
  * session, and only the global budget applies.
  */
 async function enforceAiBudget(): Promise<void> {
-  let userId: string | null = null;
+  let inRequest = true;
   try {
-    userId = (await readSession())?.uid ?? null;
+    await headers();
   } catch {
-    // No request scope — a script, not a route.
+    inRequest = false; // A script, not a route.
   }
+  // Inside a request, a failed session lookup must fail the call rather than
+  // quietly skip the per-user budget.
+  const userId = inRequest ? ((await readSession())?.uid ?? null) : null;
   const allowed =
     (!userId || (await consumeRateLimit(`ai:user:${userId}`, AI_PER_USER_PER_HOUR, 60 * 60 * 1000))) &&
     (await consumeRateLimit('ai:global', AI_GLOBAL_PER_DAY, 24 * 60 * 60 * 1000));

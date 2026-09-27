@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { requireSuperAdmin } from '@/app/lib/auth/super-admin';
-import { parseSex } from '@/app/lib/auth/user';
+import { applyRoleChangeReporting, parseSex } from '@/app/lib/auth/user';
 import { logAudit } from '@/app/lib/audit';
 import { countSuperAdmins, isAccountRole, selectAccounts, toAccount } from '@/app/lib/super-admin-users';
+import { updateUser } from '@/app/lib/auth/session';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -68,7 +69,11 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     }
     if (nextRole !== 'student' && updates.role !== undefined) updates.section_id = null;
 
-    const { error } = await supabase.from('users').update(updates).eq('id', id);
+    // A role change signs the account out everywhere, in the same write.
+    const { data: updated, error } = await updateUser(id, updates, {
+      revoke: nextRole !== target.role,
+      columns: 'id, role',
+    });
     if (error) {
       console.error('Failed to update account', error);
       const message = error.message?.includes('admin_id')
@@ -82,9 +87,13 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       { action: 'user.update', entityType: 'users', entityId: id, details: { ...updates, by: 'super_admin' } },
       request,
     );
+    const warning =
+      updates.role !== undefined && updated
+        ? await applyRoleChangeReporting(supabase, id, updated.role as string)
+        : undefined;
 
     const { users } = await selectAccounts(supabase, { id });
-    return NextResponse.json({ user: users[0] ? toAccount(users[0]) : null });
+    return NextResponse.json({ user: users[0] ? toAccount(users[0]) : null, warning });
   } catch (err) {
     console.error('Update account failed', err);
     return NextResponse.json({ error: 'Unable to update user' }, { status: 500 });

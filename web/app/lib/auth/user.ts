@@ -1,4 +1,6 @@
 import { getSupabaseAdmin, type DbUser, type UserRole, type UserSex } from '../supabase/server';
+import { isMissingColumn } from './live-user';
+import { isMissingMigration } from './super-admin';
 
 export interface PublicUser {
   id: string;
@@ -138,4 +140,65 @@ export async function touchLastLogin(userId: string) {
     .from('users')
     .update({ last_login_at: new Date().toISOString() })
     .eq('id', userId);
+}
+
+/**
+ * Clears whatever only other roles may hold, after an account's role is set
+ * and audited. Call it whenever a role was part of the update. The update
+ * itself revokes existing sessions when the role changed (updateUser).
+ *
+ * An ex-faculty member loses their sections, legacy student links and groups.
+ * An ex-admin's faculty stop pointing at them; the 053 trigger would otherwise
+ * refuse any later edit to those faculty rows. A non-student leaves their
+ * section, group and faculty links. This depends only on the new role, so
+ * running it again repairs a change that failed halfway.
+ */
+export async function applyRoleChange(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  userId: string,
+  role: string,
+): Promise<void> {
+  const cleanups = [];
+  if (role !== 'faculty') {
+    cleanups.push(
+      supabase.from('faculty_sections').delete().eq('faculty_id', userId),
+      supabase.from('faculty_students').delete().eq('faculty_id', userId),
+      supabase.from('teams').update({ faculty_id: null }).eq('faculty_id', userId),
+    );
+  }
+  if (role !== 'admin') {
+    cleanups.push(supabase.from('users').update({ admin_id: null }).eq('admin_id', userId));
+  }
+  if (role !== 'student') {
+    cleanups.push(
+      supabase.from('users').update({ section_id: null }).eq('id', userId),
+      supabase.from('team_members').delete().eq('student_id', userId),
+      supabase.from('faculty_students').delete().eq('student_id', userId),
+    );
+  }
+  const results = await Promise.all(cleanups);
+  // A table or column a later migration adds (teams 048/051, admin_id 053)
+  // may not exist yet; then there is nothing of that kind to clear.
+  const failed = results.find((r) => r.error && !isMissingColumn(r.error) && !isMissingMigration(r.error));
+  if (failed?.error) throw failed.error;
+}
+
+/**
+ * applyRoleChange for routes, run after the role change is committed and
+ * audited: a failed cleanup must not report the change itself as failed.
+ * Returns a warning to pass on instead. Saving the role again repeats the
+ * cleanup.
+ */
+export async function applyRoleChangeReporting(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  userId: string,
+  role: string,
+): Promise<string | undefined> {
+  try {
+    await applyRoleChange(supabase, userId, role);
+    return undefined;
+  } catch (err) {
+    console.error('Role cleanup failed for user', userId, err);
+    return 'The role was changed, but clearing links left over from the old role failed. Save the role again to retry.';
+  }
 }

@@ -8,7 +8,16 @@ import React, {
 } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as apiClient from "@/lib/api";
-import { getToken, clearToken, flushOutbox, isNetworkError } from "@/lib/client";
+import {
+  ApiError,
+  clearCache,
+  clearToken,
+  flushOutbox,
+  getToken,
+  isNetworkError,
+  isTokenSwapInFlight,
+  onUnauthorized,
+} from "@/lib/client";
 import { startNotificationStream, stopNotificationStream } from "@/lib/notifications-live";
 
 const USER_KEY = "@icare_user";
@@ -58,13 +67,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         // Server reachable but the token is invalid/expired.
         await clearToken();
+        await clearCache();
         await AsyncStorage.removeItem(USER_KEY);
         setUser(null);
       }
     } catch (error) {
-      if (isNetworkError(error)) {
-        // Offline with a stored token: restore the last-known identity so
-        // cached data stays usable with no connection.
+      // Offline, or the server failed (5xx) — neither says the session is
+      // gone. Restore the last-known identity so cached data stays usable.
+      if (isNetworkError(error) || (error instanceof ApiError && error.status >= 500)) {
         const stored = await AsyncStorage.getItem(USER_KEY);
         if (stored) setUser(JSON.parse(stored) as apiClient.User);
       } else {
@@ -73,6 +83,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsBootstrapping(false);
     }
+  }, []);
+
+  // A 401 on a signed-in request: ask the server whether the session is really
+  // gone before acting, then sign out cleanly instead of leaving the app
+  // looking signed in while every call fails.
+  useEffect(() => {
+    let checking = false;
+    onUnauthorized(() => {
+      if (checking || isTokenSwapInFlight()) return;
+      checking = true;
+      // Give an in-flight password change time to store its fresh token, so
+      // the check below runs with it rather than the one just revoked.
+      new Promise((resolve) => setTimeout(resolve, 3000))
+        .then(() => apiClient.fetchSession())
+        .then(async (sessionUser) => {
+          if (sessionUser || isTokenSwapInFlight()) return;
+          stopNotificationStream();
+          await clearToken();
+          // Cached reads are keyed by path, not user: the next account on
+          // this device must not see them.
+          await clearCache();
+          await AsyncStorage.removeItem(USER_KEY);
+          setUser(null);
+        })
+        .catch(() => {
+          // Offline or a server error: nothing is known, so keep the session.
+        })
+        .finally(() => {
+          checking = false;
+        });
+    });
+    return () => onUnauthorized(null);
   }, []);
 
   useEffect(() => {

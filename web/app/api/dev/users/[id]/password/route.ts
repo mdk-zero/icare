@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { generateRandomPassword, hashPassword } from '@/app/lib/auth/password';
 import { logAudit } from '@/app/lib/audit';
+import { reissueSession, updateUser } from '@/app/lib/auth/session';
 import { DevError } from '@/app/lib/dev/catalog';
 import { devErrorResponse, devNotFound, requireDeveloper } from '@/app/lib/dev/guard';
 
@@ -31,16 +31,12 @@ export async function POST(request: NextRequest, { params }: Params) {
       throw new DevError('Password must be at least 8 characters');
     }
 
-    const supabase = getSupabaseAdmin();
-    const { data, error } = await supabase
-      .from('users')
-      .update({
-        password_hash: await hashPassword(plaintext),
-        force_password_change: body.force_change !== false,
-      })
-      .eq('id', id)
-      .select('id, email, name')
-      .maybeSingle();
+    // Whoever held the old password, or a session opened with it, is out.
+    const { data, error } = await updateUser(
+      id,
+      { password_hash: await hashPassword(plaintext), force_password_change: body.force_change !== false },
+      { revoke: true, columns: 'id, email, name' },
+    );
     if (error) throw new DevError(error.message, 400);
     if (!data) throw new DevError('User not found', 404);
 
@@ -54,6 +50,9 @@ export async function POST(request: NextRequest, { params }: Params) {
       },
       request,
     );
+    // Resetting their own password signs the developer out with every other
+    // session; keep this console session going.
+    if (id === session.uid) await reissueSession(session);
     return NextResponse.json({ user: data, password: plaintext });
   } catch (err) {
     return devErrorResponse(err);

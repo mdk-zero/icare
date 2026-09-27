@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { readSession } from '@/app/lib/auth/session';
+import { readSession, reissueSession, updateUser } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { hashPassword, verifyPassword } from '@/app/lib/auth/password';
 import {
@@ -82,6 +82,9 @@ export async function POST(request: Request) {
 
       if (updateError) throw updateError;
 
+      // Not revoked: the only session is the one that just used the temporary
+      // password, and installed app builds that predate sessionToken would be
+      // signed out in the middle of their first sign-in.
       return NextResponse.json({ success: true });
     }
 
@@ -103,8 +106,9 @@ export async function POST(request: Request) {
         const valid = await verifyPassword(currentPassword, user.password_hash!);
         if (!valid) {
           return NextResponse.json(
+            // Not 401: clients read that as "signed out" and leave the form.
             { error: 'Current password is incorrect' },
-            { status: 401 },
+            { status: 400 },
           );
         }
       }
@@ -146,14 +150,15 @@ export async function POST(request: Request) {
     if (check !== 'ok') return otpRejected(check);
 
     const newHash = await hashPassword(newPassword);
-    const { error: updateError } = await supabase
-      .from('users')
-      .update({ password_hash: newHash, force_password_change: false })
-      .eq('id', session.uid);
-
+    // Every other device signs out; this one gets a fresh token.
+    const { error: updateError } = await updateUser(
+      session.uid,
+      { password_hash: newHash, force_password_change: false },
+      { revoke: true },
+    );
     if (updateError) throw updateError;
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, sessionToken: await reissueSession(session) });
   } catch (err) {
     console.error('POST /api/users/change-password failed', err);
     return NextResponse.json(
