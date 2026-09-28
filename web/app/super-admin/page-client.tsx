@@ -29,12 +29,73 @@ interface Overview {
   pending_migration: boolean;
 }
 
+// Same hues as the Dean's "Users by Role" donut, plus one for Admins.
 const ROLES = [
-  { key: "student", label: "Students" },
-  { key: "faculty", label: "Instructors" },
-  { key: "admin", label: "Deans" },
-  { key: "super_admin", label: "Admins" },
+  { key: "student", label: "Students", color: "#2a8a98" },
+  { key: "faculty", label: "Instructors", color: "#f59e0b" },
+  { key: "admin", label: "Deans", color: "#7c3aed" },
+  { key: "super_admin", label: "Admins", color: "#e87ba4" },
 ];
+
+/** Donut of accounts per role with the total in the middle and a legend below. */
+function RolePie({ byRole, total, dash }: { byRole: Record<string, number> | null; total: number; dash: string }) {
+  const r = 45;
+  const c = 2 * Math.PI * r;
+  const gap = total > 0 && ROLES.filter((role) => (byRole?.[role.key] ?? 0) > 0).length > 1 ? 2.5 : 0;
+  let offset = 0;
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="relative mx-auto aspect-square w-full max-w-[11rem]">
+        <svg viewBox="0 0 120 120" className="h-full w-full -rotate-90" role="img" aria-label="Accounts by role">
+          <circle cx="60" cy="60" r={r} fill="none" className="stroke-gray-200" strokeWidth="18" />
+          {total > 0 &&
+            ROLES.map((role) => {
+              const len = ((byRole?.[role.key] ?? 0) / total) * c;
+              const el =
+                len > 0 ? (
+                  <circle
+                    key={role.key}
+                    cx="60"
+                    cy="60"
+                    r={r}
+                    fill="none"
+                    stroke={role.color}
+                    strokeWidth="18"
+                    strokeDasharray={`${Math.max(len - gap, 0.1)} ${c}`}
+                    strokeDashoffset={-offset}
+                  >
+                    <title>{`${role.label}: ${byRole?.[role.key] ?? 0}`}</title>
+                  </circle>
+                ) : null;
+              offset += len;
+              return el;
+            })}
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <p className="text-3xl font-bold text-gray-900 tabular-nums">{byRole ? total.toLocaleString() : dash}</p>
+          <p className="text-xs text-gray-500">Accounts</p>
+        </div>
+      </div>
+      <ul className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+        {ROLES.map((role) => {
+          const count = byRole?.[role.key] ?? 0;
+          return (
+            <li key={role.key} className="flex items-center gap-2">
+              <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: role.color }} />
+              <span className="text-gray-600 truncate">{role.label}</span>
+              <span className="ml-auto font-semibold text-gray-900 tabular-nums">
+                {byRole ? count : dash}
+                {byRole && total > 0 && (
+                  <span className="ml-1 text-xs font-normal text-gray-400">{Math.round((100 * count) / total)}%</span>
+                )}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
 
 function ago(iso: string): string {
   const minutes = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
@@ -148,23 +209,7 @@ export default function SuperAdminDashboardClient() {
 
         <section className={`${CARD} p-4`}>
           <h2 className="font-semibold text-gray-800 mb-3">Accounts by role</h2>
-          <ul className="space-y-3">
-            {ROLES.map((r) => {
-              const count = data?.accounts.by_role[r.key] ?? 0;
-              const share = data?.accounts.total ? count / data.accounts.total : 0;
-              return (
-                <li key={r.key}>
-                  <div className="flex justify-between text-sm mb-1">
-                    <span className="text-gray-600">{r.label}</span>
-                    <span className="font-semibold text-gray-900 tabular-nums">{data ? count : dash}</span>
-                  </div>
-                  <div className="h-2 rounded-full bg-subtle overflow-hidden">
-                    <div className="h-full rounded-full" style={{ width: `${share * 100}%`, background: "var(--chart-1)" }} />
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
+          <RolePie byRole={data?.accounts.by_role ?? null} total={data?.accounts.total ?? 0} dash={dash} />
         </section>
       </div>
 
