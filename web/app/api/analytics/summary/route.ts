@@ -62,6 +62,25 @@ async function readSectionTrend(
   }
 }
 
+/**
+ * One warehouse refresh at a time per server instance. The page asks for the
+ * current and the previous period at once, and both find the same stale
+ * warehouse; without this each ran its own ETL, and the slower of the two
+ * held up the page.
+ */
+let refreshing: ReturnType<typeof runRefresh> | null = null;
+
+function runRefresh(supabase: ReturnType<typeof getSupabaseAdmin>) {
+  return Promise.resolve(supabase.rpc('run_dw_etl')).then(({ error }) => ({ error }));
+}
+
+function refreshWarehouse(supabase: ReturnType<typeof getSupabaseAdmin>) {
+  refreshing ??= runRefresh(supabase).finally(() => {
+    refreshing = null;
+  });
+  return refreshing;
+}
+
 function isStale(summary: Summary): boolean {
   const lastRun = summary?.etl?.last_run_at;
   if (!lastRun) return true;
@@ -95,7 +114,7 @@ export async function GET(request: NextRequest) {
     // Empty or stale warehouse → refresh it and re-read. A failed ETL is
     // non-fatal: we still return whatever the warehouse currently holds.
     if (isStale(summary)) {
-      const { error: etlError } = await supabase.rpc('run_dw_etl');
+      const { error: etlError } = await refreshWarehouse(supabase);
       if (etlError) {
         console.error('Warehouse auto-ETL failed', etlError);
       } else {
@@ -104,14 +123,17 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    if (summary?.top_students?.length) {
-      summary = { ...summary, top_students: await withStudentAvatars(supabase, summary.top_students) };
-    }
+    // Avatars and the per-section split don't depend on each other, so they
+    // are read side by side. The split is opt-in: only the performance chart
+    // needs it, not the previous-period comparison or the admin dashboard.
+    const wantsTrend = !!summary && request.nextUrl.searchParams.get('section_trend') === '1';
+    const [topStudents, sectionTrend] = await Promise.all([
+      summary?.top_students?.length ? withStudentAvatars(supabase, summary.top_students) : null,
+      wantsTrend ? readSectionTrend(supabase, args, summary?.sections ?? []) : null,
+    ]);
+    if (summary && topStudents) summary = { ...summary, top_students: topStudents };
 
-    // Opt-in: only the performance chart needs the split, not the
-    // previous-period comparison or the admin dashboard.
-    if (summary && request.nextUrl.searchParams.get('section_trend') === '1') {
-      const sectionTrend = await readSectionTrend(supabase, args, summary.sections ?? []);
+    if (summary && wantsTrend) {
       return NextResponse.json({
         summary: { ...summary, section_trend: sectionTrend },
         bucket: args.p_bucket,

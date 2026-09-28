@@ -195,7 +195,7 @@ export function SkeletonProfileHeader() {
   );
 }
 
-/** Mirrors the student detail At-Risk Prediction card. */
+/** Mirrors the student detail Low Performance Prediction card. */
 export function SkeletonRiskPredictionCard() {
   return (
     <div className="h-full rounded-xl border border-hairline bg-surface p-3 shadow-tile animate-pulse">

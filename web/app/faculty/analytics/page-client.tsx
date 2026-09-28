@@ -19,6 +19,7 @@ import {
 import {
   fetchAnalyticsSummary,
   fetchFacultySections,
+  fetchGroupSummaries,
   generateAnalyticsNarrative,
   AnalyticsNarrative,
   AnalyticsBucket,
@@ -27,7 +28,6 @@ import {
 import {
   SkeletonStatTile,
   SkeletonChartArea,
-  SkeletonCompetencyGrid,
 } from "../../components/skeletons";
 import PageHeader from "../../components/PageHeader";
 import StatTile from "../../components/StatTile";
@@ -36,7 +36,7 @@ import { usePageData } from "../../lib/use-page-data";
 import { MODEL_EVAL_SNAPSHOT, DEFAULT_MODEL_KIND } from "../../lib/model-eval-snapshot";
 import { EcgLoader } from "../../components/EcgLoader";
 import AiThinking from "../../components/AiThinking";
-import { Leaderboard } from "./Leaderboard";
+import { Leaderboard, LeaderboardSkeleton } from "./Leaderboard";
 import GroupPerformance from "./GroupPerformance";
 import { parseDay, formatRange } from "./dates";
 import { buildTrendSeries, TrendLegend, TrendLineChart, TrendTable } from "./SectionTrendChart";
@@ -741,7 +741,7 @@ export default function FacultyAnalyticsClient() {
   // A second, quieter fetch for the immediately preceding period of equal
   // length, purely to power each KPI card's "vs last period" badge.
   const prevRangeValue = useMemo(() => previousRange(from, to), [from, to]);
-  const { data: prevAnalytics } = usePageData(
+  const { data: prevAnalytics, loading: prevLoading } = usePageData(
     `faculty:analytics:prev:${sectionKey}:${prevRangeValue.from}:${prevRangeValue.to}`,
     () =>
       fetchAnalyticsSummary({
@@ -752,6 +752,15 @@ export default function FacultyAnalyticsClient() {
     { keepPreviousData: true },
   );
   const prevSummary = prevAnalytics?.summary ?? null;
+
+  // Performance by Group reads the same cache entry, so this doesn't fetch it
+  // twice; it's here so the first paint waits for the groups too.
+  const { loading: groupsLoading } = usePageData("faculty:group-summaries", fetchGroupSummaries);
+
+  // Every panel appears at once: the skeleton stays until the summary, the
+  // previous period behind the "vs" badges and the groups have all arrived,
+  // rather than badges and the group chart popping in after the rest.
+  const firstLoad = loading || prevLoading || groupsLoading;
 
   const applyPreset = useCallback((id: PresetId) => {
     setPreset(id);
@@ -1062,21 +1071,31 @@ export default function FacultyAnalyticsClient() {
       {/* Refetches dim the panels in place rather than tearing the page down
           to skeletons, so changing a filter doesn't make the layout jump —
           only the very first load, with nothing cached yet, shows skeletons,
-          and even then the header and filters above stay live. */}
-      {loading ? (
+          and even then the header and filters above stay live. The skeleton
+          follows the panels' own grid, so nothing moves when they land. */}
+      {firstLoad ? (
         <div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-            {Array.from({ length: 4 }).map((_, i) => (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+            {Array.from({ length: 3 }).map((_, i) => (
               <SkeletonStatTile key={i} />
             ))}
           </div>
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
-            <div className="lg:col-span-2">
-              <SkeletonChartArea />
-            </div>
-            <SkeletonChartArea />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+            <SkeletonChartArea height="h-56" />
+            <SkeletonChartArea height="h-56" />
           </div>
-          <SkeletonCompetencyGrid />
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+            <Card padding="md">
+              <div className="mb-5 flex items-center gap-2.5 animate-pulse">
+                <div className="h-10 w-10 rounded-xl bg-gray-100" />
+                <div className="h-4 w-44 rounded bg-gray-100" />
+              </div>
+              <LeaderboardSkeleton rows={7} />
+            </Card>
+            <div className="lg:col-span-2">
+              <SkeletonChartArea height="h-64" />
+            </div>
+          </div>
         </div>
       ) : (
         <div className={`transition-opacity duration-200 ${refreshing ? "opacity-60" : ""}`}>
