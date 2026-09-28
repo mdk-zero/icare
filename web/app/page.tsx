@@ -18,39 +18,39 @@ import { Icon, ICONS } from "./components/landing/Icon";
 
 const pillars = [
   {
-    title: "Practice",
-    text: "Branching patient scenarios with live vitals and EHR charting.",
+    title: "For Student Nurses",
+    text: "Practice clinical judgment safely, with scenarios that prepare you before stepping into the real ward.",
   },
   {
-    title: "Assess",
-    text: "Checklist-graded tasks and adaptive skill assessments, scored the same way every time.",
+    title: "For Instructors",
+    text: "Objective scoring and AI-assisted scenario creation, without the grading backlog.",
   },
   {
-    title: "Understand",
-    text: "Competency dashboards for students, faculty and administrators.",
+    title: "For Deans",
+    text: "Program-wide visibility into where every student actually stands.",
   },
 ];
 
 const steps = [
   {
     step: "01",
-    title: "Assess",
+    title: "Get Your Case",
     description:
-      "Students engage with realistic clinical scenarios that evaluate their current competency level across key nursing domains.",
+      "Log in and open your assigned scenario. No handouts, no waiting for a room — it's already there.",
     icon: ICONS.clock,
   },
   {
     step: "02",
-    title: "Adapt",
+    title: "Work the Case",
     description:
-      "The ML engine analyzes performance and dynamically adjusts scenario difficulty, focusing on individual knowledge gaps.",
+      "Assess the patient, chart it, make the calls. Every click gets logged as you go, not after.",
     icon: ICONS.bolt,
   },
   {
     step: "03",
-    title: "Excel",
+    title: "Check Your Score",
     description:
-      "Build clinical confidence with measurable progress, detailed feedback, and competency validation at every step.",
+      "See what you got right, what you missed, and exactly what to practice next — same day, not next week.",
     icon: ICONS.star,
   },
 ];
@@ -61,42 +61,31 @@ const roles = [
   {
     title: "Students",
     description:
-      "Engage with adaptive scenarios, practice EHR charting, monitor live vitals, and track your competency growth through detailed analytics — all at your own pace.",
+      "Engage with clinical scenarios, practice EHR charting, adaptive quizzes, and track your competency growth through detailed analytics — all at your own pace.",
     action: "Sign in to practice",
-    href: "/login",
-    highlights: [
-      "Adaptive scenarios and skill assessments",
-      "EHR charting and vitals monitoring",
-      "Personalized progress dashboard",
-      "Competency tracking and feedback",
-    ],
+    href: " ",
+    highlights: ["Clinical Scenarios", "Adaptive Quizzes", "EHR Charting"],
     icon: ICONS.academicCap,
   },
   {
-    title: "Faculty",
+    title: "Instructors",
     description:
-      "Create scenarios and assessments with AI assistance, monitor student performance in real time, identify at-risk learners early, and generate comprehensive reports.",
-    action: "Request faculty account activation",
+      "Create scenarios and quiz assessments with AI assistance, monitor student performance in real time, and generate student reports.",
+    action: "Create an instructor account",
     href: "/signup",
-    highlights: [
-      "AI-assisted scenario and assessment creation",
-      "Real-time student performance monitoring",
-      "At-risk student identification and alerts",
-      "Detailed analytics and exportable reports",
-    ],
+    highlights: ["AI-assisted CMS", "Student performance monitoring", "Detailed Analytics"],
     icon: ICONS.userGroup,
   },
   {
     title: "Administrators",
     description:
-      "Manage students, faculty, and rooms from a single dashboard. Access institution-wide analytics, audit logs, and configuration settings to keep your program running smoothly.",
-    action: "Request admin account activation",
+      "Manage students, instructors, and rooms from a single system. Access institution-wide analytics, audit logs, and configuration settings to keep your program running smoothly.",
+    action: "Set up your program",
     href: "/signup",
     highlights: [
-      "Centralised user and room management",
+      "Centralized user and room management",
       "Institution-wide analytics and reporting",
       "Full audit trail and compliance logs",
-      "System configuration and settings",
     ],
     icon: ICONS.shieldCheck,
   },
@@ -126,7 +115,7 @@ const comparison = [
     dimension: "Feedback",
     traditional: "Feedback comes days or weeks after exams or clinical rotations.",
     icare:
-      "Instant analytics and progress tracking give students and faculty actionable insights immediately.",
+      "Instant analytics and progress tracking give students and instructors actionable insights immediately.",
     icon: ICONS.chart,
   },
 ];
@@ -156,37 +145,37 @@ const faqs = [
   {
     question: "Who can use iCARE++?",
     answer:
-      "iCARE++ is designed for nursing students, faculty, and program administrators at institutions of all sizes — from diploma programs to university-level nursing schools. The platform supports multiple cohorts and can be configured for your program’s specific curriculum.",
+      "iCARE++ is designed for nursing students, laboratory instructors, and program administrators at institutions of all sizes — from diploma programs to university-level nursing schools. The platform supports multiple cohorts and can be configured for your program’s specific curriculum.",
   },
   {
     question: "How does the ML-driven assessment work?",
     answer:
-      "The machine learning model analyzes every student response across scenarios, skill assessments, and EHR entries to build a detailed competency profile. It identifies knowledge gaps, adjusts difficulty in real time, and provides objective scoring that eliminates grading bias. Faculty get a clear picture of each student’s strengths and areas needing improvement.",
+      "The machine learning model analyzes every student response across scenarios, quizzes, and EHR entries to build a detailed competency profile. It identifies knowledge gaps, adjusts difficulty in real time, and provides objective scoring that eliminates grading bias. Laboratory instructors get a clear picture of each student’s skill strengths and areas needing improvement.",
   },
   {
-    question: "Can faculty create their own scenarios?",
+    question: "Can a laboratory instructor create their own scenarios?",
     answer:
-      "Yes. Faculty can build custom scenarios from scratch using an intuitive editor, or use the AI-assisted scenario generator to create realistic patient cases in minutes. Scenarios can be tailored to specific learning objectives, nursing domains, and difficulty levels.",
+      "Yes. An instructor can build custom scenarios from scratch using an intuitive editor, or use the AI-assisted scenario generator to create realistic patient cases in minutes. Scenarios can be tailored to specific learning objectives, nursing domains, and difficulty levels.",
   },
   {
     question: "What kind of analytics are available?",
     answer:
-      "Faculty and administrators have access to real-time dashboards showing competency scores, at-risk student flags, cohort trends, scenario completion rates, time-on-task metrics, and detailed per-student reports. All data is exportable for accreditation review and curriculum planning.",
+      "Instructors and administrators have access to real-time dashboards showing skill scores per nursing chapter, top and low performing students, student progress, patient case completion rates, and detailed per-student reports. All data is exportable for accreditation review and curriculum planning.",
   },
   {
-    question: "Is iCARE++ suitable for all nursing programs?",
+    question: "Is iCARE++ suitable for all nursing courses?",
     answer:
-      "Absolutely. The platform supports medical-surgical, pediatrics, maternity, critical care, and community health nursing. Scenario difficulty can be calibrated from first-year fundamentals through advanced practice. Content is customizable to match your program’s specific competencies and curriculum.",
+      "Absolutely. The platform supports medical-surgical, pediatrics, maternity, critical care, and community health nursing. Patient cases difficulty can be calibrated from first-year fundamentals through advanced practice. Content is customizable to match your course's specific skills and curriculum.",
   },
   {
     question: "How is student data protected?",
     answer:
-      "iCARE++ uses industry-standard encryption for data at rest and in transit, secure authentication via Supabase, and follows data privacy best practices including audit trails that record all access and changes. The platform is designed with FERPA and institutional compliance in mind.",
+      "iCARE++ uses industry-standard encryption for data at rest and in transit, secure authentication via Supabase, and follows data privacy best practices including audit trails that record all access and changes.",
   },
 ];
 
 const mission = [
-  { title: "Practice like it’s real", text: "Realistic scenarios, not static case studies." },
+  { title: "Practice like it’s real", text: "Realistic patient cases, not static case studies." },
   { title: "Score without bias", text: "Consistent evaluation, every student, every time." },
   {
     title: "Feedback that arrives in time",
@@ -370,9 +359,9 @@ export default function LandingPage() {
                 className="lp-enter mt-7 font-display text-[2.6rem] font-bold leading-[1.02] tracking-[-0.035em] text-gray-900 sm:text-6xl lg:text-[3.6rem] xl:text-[4.1rem]"
                 style={delay(80)}
               >
-                Sharpen clinical{" "}
+                Bridging the gap between{" "}
                 <span className="relative inline-block whitespace-nowrap">
-                  judgment,
+                  nursing practice
                   <svg
                     aria-hidden="true"
                     viewBox="0 0 300 24"
@@ -390,15 +379,15 @@ export default function LandingPage() {
                     />
                   </svg>
                 </span>{" "}
-                <span className="text-brand-600 dark:text-brand-700">one scenario at a time.</span>
+                <span className="text-brand-600 dark:text-brand-700">and digital healthcare.</span>
               </h1>
 
               <p
                 className="lp-enter mt-7 max-w-xl text-lg leading-relaxed text-gray-500 sm:text-xl"
                 style={delay(160)}
               >
-                A scalable machine learning&ndash;driven clinical competency assessment and adaptive
-                learning system for nursing students.
+                See what your students are practicing, how they’re performing, and where they need
+                support.
               </p>
 
               <div className="lp-enter mt-10 flex flex-wrap items-center gap-3" style={delay(240)}>
@@ -465,7 +454,7 @@ export default function LandingPage() {
                 <div className="absolute -left-2 top-[3%] hidden w-[13.5rem] animate-float-medium rounded-2xl border border-hairline bg-surface/90 p-3.5 shadow-overlay backdrop-blur-md sm:block xl:-left-8">
                   <div className="flex items-center justify-between">
                     <span className="font-mono text-[10px] uppercase tracking-wider text-gray-400">
-                      Bed 4 · Live
+                      Bed 4 · Room 1
                     </span>
                     <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-rose-500">
                       <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-rose-500" />
@@ -522,7 +511,7 @@ export default function LandingPage() {
                     <p className="font-display text-lg font-bold leading-none text-gray-900 tabular">
                       92%
                     </p>
-                    <p className="mt-1 text-[11px] text-gray-500">Vital Signs</p>
+                    <p className="mt-1 text-[11px] text-gray-500">Excellent</p>
                   </div>
                 </div>
 
@@ -539,22 +528,22 @@ export default function LandingPage() {
                       // One from the top, middle and bottom of the scale, so the
                       // card reads as grading rather than a row of praise.
                       {
-                        task: "Hand hygiene",
+                        task: "Assessing Respiration",
                         rating: "Excellent",
                         tone: "bg-emerald-100 text-emerald-700",
                         performed: true,
                       },
                       {
-                        task: "Identifies patient",
+                        task: "Tracheostomy Care",
                         rating: "Satisfactory",
-                        tone: "bg-blue-100 text-blue-700",
+                        tone: "bg-amber-100 text-amber-700",
                         performed: true,
                       },
                       {
-                        task: "Counts 1 minute",
+                        task: "Deaccessing an Implanted Port",
                         rating: "Needs Practice",
-                        tone: "bg-amber-100 text-amber-700",
-                        performed: true,
+                        tone: "bg-rose-100 text-rose-700",
+                        performed: false,
                       },
                     ].map(({ task, rating, tone, performed }) => (
                       <li key={task} className="flex items-center justify-between gap-2">
@@ -589,21 +578,35 @@ export default function LandingPage() {
             <div className="mt-8 grid gap-12 lg:grid-cols-12 lg:gap-16">
               <Reveal className="lg:col-span-7">
                 <h2 className="font-display text-3xl font-bold leading-[1.15] tracking-tight text-gray-900 sm:text-4xl lg:text-[2.9rem]">
-                  Where nursing students{" "}
-                  <span className="text-brand-600 dark:text-brand-700">practice patient care</span>,
-                  get graded on the same skill checklists their clinical instructors use, and see{" "}
-                  <span className="bg-gradient-to-t from-amber-300/70 from-30% to-transparent to-30% box-decoration-clone dark:from-amber-400/35">
-                    exactly what to work on next.
+                  A <span className="text-brand-600 dark:text-brand-700">platform</span> for
+                  practicing clinical skills, documenting simulated care, and{" "}
+                  <span className="relative inline-block whitespace-nowrap">
+                    building competency.
+                    <svg
+                      aria-hidden="true"
+                      viewBox="0 0 300 24"
+                      preserveAspectRatio="none"
+                      className="absolute -bottom-1.5 left-0 h-3 w-full text-amber-400 sm:-bottom-2 sm:h-4"
+                    >
+                      <path
+                        className="lp-underline"
+                        pathLength={1}
+                        d="M4 17 C 70 6, 170 4, 296 11"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="7"
+                        strokeLinecap="round"
+                      />
+                    </svg>
                   </span>
                 </h2>
               </Reveal>
               <Reveal className="lg:col-span-5 lg:pt-2" delay={120}>
                 <p className="leading-relaxed text-gray-500 sm:text-lg">
-                  iCARE++ is a comprehensive clinical competency platform purpose-built for nursing
-                  education. It combines adaptive learning, realistic patient simulation, and
-                  machine learning&ndash;driven assessment to help students develop and demonstrate
-                  clinical competence. Educators gain real-time visibility into student progress,
-                  while administrators get the tools they need to manage programs at scale.
+                  iCARE++ helps nursing students build clinical competence through adaptive
+                  learning, realistic patient simulation, and machine learning&ndash;driven
+                  assessment&ndash;while giving instructors real&ndash;time visibility into student
+                  progress.
                 </p>
                 <ol className="mt-10 divide-y divide-hairline border-y border-hairline">
                   {pillars.map((p, i) => (
@@ -697,7 +700,7 @@ export default function LandingPage() {
             />
 
             <div className="mt-14 grid gap-5 lg:grid-cols-6">
-              {/* Scenarios */}
+              {/* Patient Case */}
               <Reveal className="lg:col-span-4">
                 <article className="group grid h-full items-center gap-8 overflow-hidden rounded-3xl border border-hairline bg-surface p-7 transition-shadow duration-300 hover:shadow-tile-hover sm:grid-cols-2 sm:p-9">
                   <div>
@@ -705,11 +708,10 @@ export default function LandingPage() {
                       <Icon d={ICONS.documentSearch} />
                     </div>
                     <h3 className="mt-6 font-display text-2xl font-bold text-gray-900">
-                      Immersive Scenarios
+                      Patient Cases
                     </h3>
                     <p className="mt-3 text-sm leading-relaxed text-gray-500">
-                      Branching patient cases where every decision changes the outcome — not
-                      multiple choice.
+                      Branching patient cases where every skill is measured.
                     </p>
                   </div>
                   <div
@@ -743,14 +745,14 @@ export default function LandingPage() {
                     <Icon d={ICONS.sparkles} />
                   </div>
                   <h3 className="mt-6 font-display text-2xl font-bold text-gray-900">
-                    Bias-Free Scoring
+                    Observation
                   </h3>
                   <p className="mt-3 text-sm leading-relaxed text-gray-500">
                     The same response gets the same score, every time — no evaluator mood, no
                     inconsistency.
                   </p>
                   <div aria-hidden="true" className="mt-auto pt-7">
-                    {/* The three Taylor's checklist levels, Excellent down to Needs Practice. */}
+                    {/* The six task ratings, Excellent down to Needs Practice. */}
                     <div className="flex items-end gap-1">
                       {["h-10 bg-brand-600", "h-7 bg-brand-400", "h-4 bg-amber-300"].map((bar) => (
                         <span key={bar} className={`flex-1 rounded-md ${bar}`} />
@@ -758,7 +760,7 @@ export default function LandingPage() {
                     </div>
                     <div className="mt-2 flex justify-between font-mono text-[9px] uppercase tracking-wider text-gray-400">
                       <span>Excellent</span>
-                      <span>Needs practice</span>
+                      <span>Needs Practice</span>
                     </div>
                   </div>
                 </article>
@@ -771,10 +773,10 @@ export default function LandingPage() {
                     <Icon d={ICONS.chart} />
                   </div>
                   <h3 className="mt-6 font-display text-2xl font-bold text-gray-900">
-                    Answers, Not Just Grades
+                    Feedbacks, Not Just Grades
                   </h3>
                   <p className="mt-3 text-sm leading-relaxed text-gray-500">
-                    Dashboards flag exactly which competencies are weak — days before an exam would.
+                    Dashboards flag exactly which skills are weak — before clinical duty.
                   </p>
                   <div aria-hidden="true" className="mt-auto space-y-3 pt-7">
                     {[
@@ -1171,8 +1173,8 @@ export default function LandingPage() {
                     Ready to sharpen clinical judgment?
                   </h3>
                   <p className="mt-2 text-white/65">
-                    Faculty and administrators can create an account today. Students sign in with
-                    the account from their program.
+                    Instructors and administrators can create an account today. Students sign in
+                    with the account from their program.
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-3">
