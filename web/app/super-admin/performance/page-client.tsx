@@ -7,6 +7,7 @@ import { apiFetch } from "@/app/lib/api";
 import { usePageData } from "@/app/lib/use-page-data";
 import PageHeader from "../../components/PageHeader";
 import TimeSeriesChart from "../TimeSeriesChart";
+import SpeedGauge, { type SpeedScale } from "../SpeedGauge";
 import {
   BUCKET_MINUTES,
   fillBuckets,
@@ -24,6 +25,10 @@ const RANGES = [
   { value: "7d", label: "7 days" },
   { value: "30d", label: "30 days" },
 ] as const;
+
+/** A typical request should be quick; the slowest 5% get more headroom. */
+const MEDIAN_SCALE: SpeedScale = { fast: 300, slow: 1000, max: 3000 };
+const P95_SCALE: SpeedScale = { fast: 800, slow: 2500, max: 6000 };
 
 type SortKey = "requests" | "p50_ms" | "p95_ms" | "errors";
 
@@ -65,8 +70,6 @@ export default function PerformanceClient() {
       label: "Throughput",
       value: totals ? `${(totals.requests / windowMinutes).toFixed(totals.requests / windowMinutes < 10 ? 2 : 0)}/min` : "—",
     },
-    { label: "Median response", value: formatMs(totals?.p50_ms) },
-    { label: "95th percentile", value: formatMs(totals?.p95_ms) },
     { label: "Reliability", value: totals ? formatPct(reliability(totals.requests, totals.errors)) : "—" },
   ];
 
@@ -106,13 +109,33 @@ export default function PerformanceClient() {
         <div className={`${CARD} p-6 text-sm text-rose-700`}>Couldn&apos;t load the metrics.</div>
       ) : (
         <>
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-5">
-            {tiles.map((t) => (
-              <div key={t.label} className={`${CARD} p-4`}>
-                <p className="text-2xl font-bold text-gray-800 tabular-nums">{loading && !data ? "–" : t.value}</p>
-                <p className="text-xs text-gray-500">{t.label}</p>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-5">
+            <section className={`${CARD} p-4 lg:col-span-2`}>
+              <h2 className="font-semibold text-gray-800">Speed</h2>
+              <p className="text-xs text-gray-500 mb-4">How long users wait for an answer in this window</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <SpeedGauge
+                  label="Median response"
+                  hint="Half of all requests are faster"
+                  value={totals?.requests ? totals.p50_ms : null}
+                  scale={MEDIAN_SCALE}
+                />
+                <SpeedGauge
+                  label="95th percentile"
+                  hint="The slowest 1 in 20 take longer"
+                  value={totals?.requests ? totals.p95_ms : null}
+                  scale={P95_SCALE}
+                />
               </div>
-            ))}
+            </section>
+            <div className="grid grid-cols-3 lg:grid-cols-1 gap-3">
+              {tiles.map((t) => (
+                <div key={t.label} className={`${CARD} p-4 flex flex-col justify-center`}>
+                  <p className="text-2xl font-bold text-gray-800 tabular-nums">{loading && !data ? "–" : t.value}</p>
+                  <p className="text-xs text-gray-500">{t.label}</p>
+                </div>
+              ))}
+            </div>
           </div>
 
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 mb-5">

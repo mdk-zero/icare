@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
+import Link from "next/link";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import {
@@ -41,8 +42,8 @@ interface AdminFacultyRow {
   sections: { id: string; name: string }[];
 }
 
-/** How many of the busiest rooms to show — a ranking reads better short. */
-const TOP_ROOMS = 5;
+/** How many of the busiest rooms the bed board shows; the Rooms page has the rest. */
+const TOP_ROOMS = 8;
 /** Podium (three) plus the two runners-up beneath it. */
 const TOP_STUDENTS = 5;
 
@@ -292,77 +293,167 @@ function MiniStat({
   );
 }
 
-/** Each room keeps its own colour, by rank, so a gauge can be told apart from
- * its neighbours; the number and name under it carry the meaning. */
-const ROOM_GAUGE_COLORS = [
-  { from: "#155663", to: "#2a8a98", chip: "text-[#1b6b7b]" },
-  { from: "#f97316", to: "#fbbf24", chip: "text-orange-500" },
-  { from: "#7c3aed", to: "#a78bfa", chip: "text-purple-600" },
-  { from: "#2563eb", to: "#38bdf8", chip: "text-blue-600" },
-  { from: "#e11d48", to: "#fb7185", chip: "text-rose-600" },
-] as const;
-
-/** Thick semicircle gauge for one room: gradient arc over a pale track, a door
- * disc in the middle, then the percentage, name and beds beneath. */
-function RoomGauge({
-  id,
-  name,
-  sublabel,
-  percent,
-  beds,
-  colorIndex,
-}: {
-  id: string;
-  name: string;
-  sublabel: string;
-  percent: number;
-  beds: string;
-  colorIndex: number;
-}) {
-  const color = ROOM_GAUGE_COLORS[colorIndex % ROOM_GAUGE_COLORS.length];
-  const fill = Math.min(Math.max(percent, 0), 100);
-  const arc = "M16,60 A44,44 0 0 1 104,60";
-  const gradId = `roomGauge-${id}`;
+/** One bed seen from above: a frame with a pillow at the head. Occupied beds
+ * are solid, free ones a dashed outline, and beds in a room that is closed
+ * (inactive or under maintenance) are hatched — out of service either way. */
+function BedGlyph({ state }: { state: "occupied" | "free" | "closed" }) {
   return (
-    <div className="flex flex-col items-center rounded-2xl border border-hairline bg-gradient-to-b from-gray-50 to-transparent px-3 pb-4 pt-5 text-center">
-      <div className="relative w-full max-w-[11rem]">
-        <svg
-          viewBox="0 0 120 70"
-          className="block w-full"
-          role="img"
-          aria-label={`${name}: ${percent}% occupied`}
-        >
-          <defs>
-            <linearGradient id={gradId} x1="0%" y1="100%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor={color.from} />
-              <stop offset="100%" stopColor={color.to} />
-            </linearGradient>
-          </defs>
-          <path d={arc} pathLength={100} fill="none" strokeWidth="16" className="stroke-gray-200" />
-          {fill > 0 && (
-            <path
-              d={arc}
-              pathLength={100}
-              fill="none"
-              stroke={`url(#${gradId})`}
-              strokeWidth="16"
-              strokeDasharray={`${fill} 100`}
-              style={{ transition: "stroke-dasharray 700ms ease-out" }}
-            />
-          )}
-        </svg>
-        <span
-          className={`absolute left-1/2 top-[58%] flex h-[26%] w-[26%] min-h-7 min-w-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-surface shadow-tile ${color.chip}`}
-        >
-          <FontAwesomeIcon icon={faDoorOpen} className="h-3.5 w-3.5" />
-        </span>
-        <span className="absolute -bottom-3 left-[6%] text-[10px] text-gray-400">0%</span>
-        <span className="absolute -bottom-3 right-[4%] text-[10px] text-gray-400">100%</span>
+    <svg viewBox="0 0 22 14" className="h-3.5 w-[22px] shrink-0" aria-hidden>
+      {state === "occupied" ? (
+        <>
+          <rect x="0.5" y="0.5" width="21" height="13" rx="3" className="fill-brand-600" />
+          <rect x="2.5" y="3" width="4.5" height="8" rx="1.5" className="fill-white/70" />
+        </>
+      ) : state === "free" ? (
+        <rect
+          x="0.75"
+          y="0.75"
+          width="20.5"
+          height="12.5"
+          rx="3"
+          fill="none"
+          strokeWidth="1.5"
+          strokeDasharray="3 2"
+          className="stroke-gray-300"
+        />
+      ) : (
+        <>
+          <rect x="0.5" y="0.5" width="21" height="13" rx="3" className="fill-gray-100 stroke-gray-300" />
+          <path d="M4 13 L13 1 M10 13 L19 1" strokeWidth="1.25" className="stroke-gray-300" />
+        </>
+      )}
+    </svg>
+  );
+}
+
+/** A room drawn as more beds than this falls back to a fill bar, so a large
+ * open ward doesn't turn its tile into a wall of glyphs. */
+const MAX_BED_GLYPHS = 16;
+
+/** One room on the bed board: its number and name, a glyph per bed, and a
+ * plain count of who is in them. Beds are whole things, so they are counted
+ * and drawn, not swept by a needle. */
+function RoomBedCard({
+  name,
+  roomNumber,
+  status,
+  occupied,
+  capacity,
+}: {
+  name: string;
+  roomNumber: string;
+  status: string;
+  occupied: number;
+  capacity: number;
+}) {
+  const tone = ROOM_STATUS_TONE[status] ?? ROOM_STATUS_TONE.inactive;
+  const closed = status !== "active";
+  const filled = Math.min(occupied, capacity);
+  const free = Math.max(capacity - occupied, 0);
+  const over = Math.max(occupied - capacity, 0);
+  const pct = capacity > 0 ? Math.round((100 * occupied) / capacity) : 0;
+  const flag = closed
+    ? { text: tone.label, className: tone.badge }
+    : over > 0
+      ? { text: `${over} over`, className: "bg-rose-100 text-rose-600" }
+      : capacity > 0 && free === 0
+        ? { text: "Full", className: "bg-amber-100 text-amber-700" }
+        : occupied === 0
+          ? { text: "Empty", className: "bg-gray-100 text-gray-500" }
+          : null;
+
+  return (
+    <div
+      className={`flex min-w-0 flex-col rounded-xl border border-hairline p-3.5 ${
+        closed ? "bg-subtle" : "bg-surface"
+      }`}
+    >
+      <div className="flex min-h-5 items-center justify-between gap-2">
+        <p className="truncate font-mono text-[11px] font-semibold tracking-wider text-gray-400">
+          RM {roomNumber}
+        </p>
+        {flag && (
+          <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${flag.className}`}>
+            {flag.text}
+          </span>
+        )}
       </div>
-      <p className="mt-2 font-display text-2xl font-bold tabular-nums text-gray-900">{percent}%</p>
-      <p className="mt-0.5 w-full truncate text-sm font-semibold text-gray-900">{name}</p>
-      <p className="w-full truncate text-xs text-gray-400">{sublabel}</p>
-      <p className="text-xs font-medium tabular-nums text-gray-500">{beds}</p>
+      <p className="truncate text-sm font-semibold text-gray-900" title={name}>
+        {name}
+      </p>
+
+      <div
+        className="my-3 flex min-h-[14px] flex-wrap gap-1"
+        role="img"
+        aria-label={`${name}: ${occupied} of ${capacity} beds occupied${closed ? `, room ${tone.label.toLowerCase()}` : ""}`}
+      >
+        {capacity === 0 ? (
+          <span className="text-xs text-gray-400">No beds set</span>
+        ) : capacity > MAX_BED_GLYPHS ? (
+          <div className="h-3.5 w-full overflow-hidden rounded-[4px] bg-gray-100">
+            <div
+              className={`h-full rounded-[4px] ${closed ? "bg-gray-300" : "bg-brand-600"}`}
+              style={{ width: `${Math.min(pct, 100)}%`, transition: "width 600ms ease-out" }}
+            />
+          </div>
+        ) : (
+          Array.from({ length: capacity }).map((_, i) => (
+            <BedGlyph key={i} state={closed ? "closed" : i < filled ? "occupied" : "free"} />
+          ))
+        )}
+      </div>
+
+      <div className="mt-auto flex items-baseline justify-between gap-2 border-t border-hairline pt-2">
+        <p className="text-xs tabular-nums text-gray-500">
+          <span className="font-semibold text-gray-900">{occupied}</span>/{capacity} beds
+          {!closed && free > 0 && <span className="hidden text-gray-400 sm:inline"> · {free} free</span>}
+        </p>
+        <p className="font-display text-sm font-bold tabular-nums text-gray-700">{pct}%</p>
+      </div>
+    </div>
+  );
+}
+
+/** Every bed in the program on one strip: occupied, free, and out of service
+ * (beds in rooms that are closed), each segment sized by its count. */
+function BedStrip({ occupied, free, closed }: { occupied: number; free: number; closed: number }) {
+  const total = occupied + free + closed;
+  if (total === 0) return null;
+  const parts = [
+    { key: "occupied", label: "Occupied", n: occupied, bar: "bg-brand-600", dot: "bg-brand-600" },
+    { key: "free", label: "Free", n: free, bar: "bg-brand-600/20", dot: "bg-brand-600/40" },
+    {
+      key: "closed",
+      label: "Out of service",
+      n: closed,
+      bar: "bg-[repeating-linear-gradient(135deg,var(--color-gray-200)_0_4px,var(--color-gray-100)_4px_8px)]",
+      dot: "bg-gray-300",
+    },
+  ].filter((p) => p.n > 0);
+  return (
+    <div className="mb-5">
+      <div
+        className="flex h-3 w-full gap-0.5 overflow-hidden rounded-full"
+        role="img"
+        aria-label={`${occupied} beds occupied, ${free} free, ${closed} out of service`}
+      >
+        {parts.map((p) => (
+          <div
+            key={p.key}
+            className={`h-full first:rounded-l-full last:rounded-r-full ${p.bar}`}
+            style={{ width: `${(100 * p.n) / total}%`, transition: "width 600ms ease-out" }}
+          />
+        ))}
+      </div>
+      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+        {parts.map((p) => (
+          <span key={p.key} className="flex items-center gap-1.5 text-xs text-gray-500">
+            <span className={`h-2 w-2 rounded-full ${p.dot}`} />
+            {p.label}
+            <span className="font-semibold tabular-nums text-gray-800">{p.n}</span>
+          </span>
+        ))}
+      </div>
     </div>
   );
 }
@@ -605,15 +696,18 @@ function SkeletonPodiumCard({ first = false }: { first?: boolean }) {
   );
 }
 
-/** Mirrors RoomGauge: a semicircle over a percentage, the room's name and its beds. */
-function SkeletonGauge() {
+/** Mirrors RoomBedCard: number and name, a row of beds, then the count. */
+function SkeletonRoomCard() {
   return (
-    <div className="flex flex-col items-center rounded-2xl border border-hairline px-3 pb-4 pt-5">
-      <Bone className="aspect-[120/70] w-full max-w-[11rem] rounded-t-full" />
-      <Bone className="mt-4 h-7 w-16" />
-      <Bone className="mt-2 h-4 w-3/4" />
-      <Bone className="mt-1.5 h-3 w-1/2" />
-      <Bone className="mt-1.5 h-3 w-1/3" />
+    <div className="rounded-xl border border-hairline p-3.5">
+      <Bone className="h-2.5 w-12" />
+      <Bone className="mt-1.5 h-4 w-3/4" />
+      <div className="my-3 flex gap-1.5">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Bone key={i} className="h-3.5 w-[22px] rounded-[3px]" />
+        ))}
+      </div>
+      <Bone className="h-3 w-1/2" />
     </div>
   );
 }
@@ -677,9 +771,11 @@ function AnalyticsSkeleton() {
 
       <Panel className="mb-6">
         <SkeletonHeading subtitle="w-40" />
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-5">
+        <Bone className="mb-2 h-3 w-full rounded-full" />
+        <Bone className="mb-5 h-3 w-56" />
+        <div className="grid grid-cols-2 gap-2.5 sm:gap-3 xl:grid-cols-4">
           {Array.from({ length: TOP_ROOMS }).map((_, i) => (
-            <SkeletonGauge key={i} />
+            <SkeletonRoomCard key={i} />
           ))}
         </div>
       </Panel>
@@ -854,6 +950,12 @@ export default function AdminAnalyticsClient() {
   const totalBeds = roomList.reduce((n, r) => n + r.capacity, 0);
   const occupiedBeds = roomList.reduce((n, r) => n + r.patients_assigned, 0);
   const overallOccupancy = totalBeds > 0 ? Math.round((100 * occupiedBeds) / totalBeds) : 0;
+  // Beds in a closed room can't take a patient, so the strip sets them apart
+  // from the free ones rather than counting them as spare capacity.
+  const closedBeds = roomList
+    .filter((r) => r.status !== "active")
+    .reduce((n, r) => n + Math.max(r.capacity - r.patients_assigned, 0), 0);
+  const freeBeds = Math.max(totalBeds - occupiedBeds - closedBeds, 0);
   const rooms = roomList
     .map((r) => ({
       ...r,
@@ -1091,12 +1193,16 @@ export default function AdminAnalyticsClient() {
             </Panel>
           </div>
 
-          {/* Room Utilization: one gauge per busiest room */}
+          {/* Room Utilization: a bed board of the busiest rooms */}
           <Panel className="mb-6">
             <CardHeading
               icon={faBuilding}
               title="Room Utilization"
-              subtitle={`Top ${TOP_ROOMS} busiest rooms`}
+              subtitle={
+                roomList.length > TOP_ROOMS
+                  ? `Busiest ${TOP_ROOMS} of ${roomList.length} rooms, bed by bed`
+                  : "Every room, bed by bed"
+              }
               tag={liveTag}
               aside={
                 roomList.length > 0 ? (
@@ -1114,22 +1220,29 @@ export default function AdminAnalyticsClient() {
             {roomList.length === 0 ? (
               <p className="py-8 text-center text-sm text-gray-400">No rooms configured.</p>
             ) : (
-              <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-5">
-                {rooms.map((room, i) => {
-                  const tone = ROOM_STATUS_TONE[room.status] ?? ROOM_STATUS_TONE.inactive;
-                  return (
-                    <RoomGauge
+              <>
+                <BedStrip occupied={occupiedBeds} free={freeBeds} closed={closedBeds} />
+                <div className="grid grid-cols-2 gap-2.5 sm:gap-3 xl:grid-cols-4">
+                  {rooms.map((room) => (
+                    <RoomBedCard
                       key={room.id}
-                      id={room.id}
                       name={room.name}
-                      sublabel={`Room ${room.room_number} · ${tone.label}`}
-                      percent={room.utilization_pct}
-                      beds={`${room.patients_assigned}/${room.capacity} beds`}
-                      colorIndex={i}
+                      roomNumber={room.room_number}
+                      status={room.status}
+                      occupied={room.patients_assigned}
+                      capacity={room.capacity}
                     />
-                  );
-                })}
-              </div>
+                  ))}
+                </div>
+                {roomList.length > TOP_ROOMS && (
+                  <Link
+                    href="/admin/rooms"
+                    className="mt-3 inline-block text-xs font-medium text-brand-600 hover:text-brand-700"
+                  >
+                    See all {roomList.length} rooms →
+                  </Link>
+                )}
+              </>
             )}
           </Panel>
 
