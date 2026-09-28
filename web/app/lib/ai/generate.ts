@@ -1,4 +1,5 @@
 import { callOpenRouter } from './openrouter';
+import { providerFetch } from './record';
 import { headers } from 'next/headers';
 import { readSession } from '../auth/session';
 import { consumeRateLimit } from '../auth/rate-limit';
@@ -16,7 +17,7 @@ async function callGemini(prompt: string, attempt = 1): Promise<Record<string, u
   const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
-  const res = await fetch(url, {
+  const res = await providerFetch('gemini', model, url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({

@@ -17,6 +17,7 @@ export interface SeriesPoint {
 interface Props {
   series: SeriesDef[];
   points: SeriesPoint[];
+  /** Bars stack every series in a bucket, first series at the bottom. */
   kind?: "line" | "bar";
   format: (value: number) => string;
   /** How the x labels and tooltip read a bucket. */
@@ -95,9 +96,12 @@ export default function TimeSeriesChart({
   const top = useMemo(() => {
     if (yMax !== undefined) return yMax;
     let max = 0;
-    for (const p of points) for (const v of p.values) if (v !== null && v > max) max = v;
+    for (const p of points) {
+      if (kind === "bar") max = Math.max(max, p.values.reduce<number>((sum, v) => sum + (v ?? 0), 0));
+      else for (const v of p.values) if (v !== null && v > max) max = v;
+    }
     return niceMax(max);
-  }, [points, yMax]);
+  }, [points, yMax, kind]);
 
   const n = points.length;
   const x = (i: number) =>
@@ -132,7 +136,7 @@ export default function TimeSeriesChart({
         <div className="flex flex-wrap gap-4 mb-2 text-xs text-gray-600">
           {series.map((s) => (
             <span key={s.label} className="inline-flex items-center gap-1.5">
-              <span className="inline-block w-3 h-0.5 rounded" style={{ background: s.color }} />
+              <span className={`inline-block ${kind === "bar" ? "w-2.5 h-2.5 rounded-sm" : "w-3 h-0.5 rounded"}`} style={{ background: s.color }} />
               {s.label}
             </span>
           ))}
@@ -183,19 +187,27 @@ export default function TimeSeriesChart({
 
           {kind === "bar"
             ? points.map((p, i) => {
-                const v = p.values[0];
-                if (v === null || v <= 0) return null;
-                const h = Math.max(1, PAD.top + innerH - y(v));
                 const bx = x(i) - barW / 2;
-                const by = PAD.top + innerH - h;
-                const r = Math.min(4, barW / 2, h);
+                const visible = p.values.map((v, si) => ({ v: v ?? 0, si })).filter((seg) => seg.v > 0);
+                let stacked = 0;
                 return (
-                  <path
-                    key={p.t}
-                    d={`M${bx},${by + h} V${by + r} Q${bx},${by} ${bx + r},${by} H${bx + barW - r} Q${bx + barW},${by} ${bx + barW},${by + r} V${by + h} Z`}
-                    fill={series[0].color}
-                    opacity={hover === null || hover === i ? 1 : 0.55}
-                  />
+                  <g key={p.t} opacity={hover === null || hover === i ? 1 : 0.55}>
+                    {visible.map(({ v, si }, k) => {
+                      const y0 = y(stacked);
+                      stacked += v;
+                      const y1 = Math.min(y(stacked), y0 - 1);
+                      const h = y0 - y1;
+                      // Only the top segment of the stack gets rounded corners.
+                      const r = k === visible.length - 1 ? Math.min(4, barW / 2, h) : 0;
+                      return (
+                        <path
+                          key={si}
+                          d={`M${bx},${y0} V${y1 + r} Q${bx},${y1} ${bx + r},${y1} H${bx + barW - r} Q${bx + barW},${y1} ${bx + barW},${y1 + r} V${y0} Z`}
+                          fill={series[si].color}
+                        />
+                      );
+                    })}
+                  </g>
                 );
               })
             : series.map((s, si) => {

@@ -157,6 +157,7 @@ export default function SuperAdminDashboardClient() {
   const totals = data?.metrics?.totals;
   const health = data?.latest_runs.health;
   const bench = data?.latest_runs.benchmark;
+  const ai = data?.metrics?.ai;
   const dw = data?.latest_runs.dw_benchmark;
   const dash = loading && !data ? "–" : "—";
 
@@ -220,12 +221,23 @@ export default function SuperAdminDashboardClient() {
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 mb-5">
         <section className={`${CARD} p-4 xl:col-span-2`}>
           <h2 className="font-semibold text-gray-800">Requests per hour</h2>
-          <p className="text-xs text-gray-500 mb-3">Last 24 hours of API traffic from the web app</p>
+          <p className="text-xs text-gray-500 mb-3">
+            {ai
+              ? `Last 24 hours of API traffic from the web app, and the ${ai.requests.toLocaleString()} calls the server made to AI providers`
+              : "Last 24 hours of API traffic from the web app"}
+          </p>
           <TimeSeriesChart
-            ariaLabel="API requests per hour over the last 24 hours"
+            ariaLabel={ai ? "API requests and AI provider calls per hour over the last 24 hours" : "API requests per hour over the last 24 hours"}
             kind="bar"
-            series={[{ label: "Requests", color: "var(--chart-1)" }]}
-            points={fillBuckets(data?.metrics).map((b) => ({ t: b.bucket, values: [b.requests] }))}
+            series={[
+              { label: ai ? "App requests" : "Requests", color: "var(--chart-1)" },
+              // Before migration 060 there is no AI count, so no series rather than a row of zeros.
+              ...(ai ? [{ label: "AI provider calls", color: "var(--chart-2)" }] : []),
+            ]}
+            points={fillBuckets(data?.metrics).map((b) => ({
+              t: b.bucket,
+              values: ai ? [b.requests, b.ai_requests ?? 0] : [b.requests],
+            }))}
             bucket="hour"
             format={(v) => Math.round(v).toLocaleString()}
             height={200}

@@ -6,6 +6,8 @@ export interface MetricsBucket {
   p50_ms: number;
   p95_ms: number;
   errors: number;
+  /** Calls the server made to AI providers in this bucket (060; absent before). */
+  ai_requests?: number;
 }
 
 export interface MetricsRoute {
@@ -23,6 +25,8 @@ export interface MetricsSummary {
   bucket?: "minute" | "hour" | "day";
   since?: string;
   totals?: { requests: number; avg_ms: number | null; p50_ms: number | null; p95_ms: number | null; errors: number };
+  /** AI provider calls, kept out of the app figures above (060). Errors include 429s. */
+  ai?: { requests: number; p50_ms: number | null; p95_ms: number | null; errors: number };
   series?: MetricsBucket[];
   routes?: MetricsRoute[];
 }
@@ -51,6 +55,7 @@ export interface FilledBucket {
   p50_ms: number | null;
   p95_ms: number | null;
   errors: number;
+  ai_requests?: number;
 }
 
 /**
@@ -74,7 +79,7 @@ export function fillBuckets(summary: MetricsSummary | null | undefined, now = Da
 
   const out: FilledBucket[] = [];
   for (let k = first; k <= last; k++) {
-    out.push(byKey.get(k) ?? { bucket: new Date(k * step).toISOString(), requests: 0, p50_ms: null, p95_ms: null, errors: 0 });
+    out.push(byKey.get(k) ?? { bucket: new Date(k * step).toISOString(), requests: 0, p50_ms: null, p95_ms: null, errors: 0, ai_requests: 0 });
   }
   return out;
 }
