@@ -4,7 +4,6 @@ import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { getScopedStudentIds } from '@/app/lib/admin-scope';
 import { logAudit } from '@/app/lib/audit';
 
-const validDifficulties = ['beginner', 'intermediate', 'advanced'] as const;
 const validCategories = [
   'Cardiac Emergency',
   'Respiratory Emergency',
@@ -30,7 +29,7 @@ export async function GET() {
     const { data, error } = await supabase
       .from('assessments')
       .select(
-        'id, created_by, title, description, difficulty, category, time_limit_seconds, is_published, is_ai_generated, target_sections, total_questions, max_attempts, created_at, updated_at, questions(count)',
+        'id, created_by, title, description, category, time_limit_seconds, is_published, is_ai_generated, target_sections, total_questions, max_attempts, created_at, updated_at, questions(count)',
       )
       .order('created_at', { ascending: false })
       .limit(500);
@@ -71,7 +70,6 @@ export async function GET() {
       created_by: a.created_by,
       title: a.title,
       description: a.description,
-      difficulty: a.difficulty,
       category: a.category,
       time_limit_seconds: a.time_limit_seconds,
       is_published: a.is_published,
@@ -110,10 +108,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const { title, description, difficulty, category, time_limit_seconds, max_attempts, target_sections } = body as {
+  const { title, description, category, time_limit_seconds, max_attempts, target_sections } = body as {
     title?: unknown;
     description?: unknown;
-    difficulty?: unknown;
     category?: unknown;
     time_limit_seconds?: unknown;
     max_attempts?: unknown;
@@ -122,9 +119,6 @@ export async function POST(request: NextRequest) {
 
   if (typeof title !== 'string' || title.trim().length === 0) {
     return NextResponse.json({ error: 'Title is required' }, { status: 400 });
-  }
-  if (!validDifficulties.includes(difficulty as (typeof validDifficulties)[number])) {
-    return NextResponse.json({ error: 'Invalid difficulty' }, { status: 400 });
   }
   if (!validCategories.includes(category as (typeof validCategories)[number])) {
     return NextResponse.json({ error: 'Invalid category' }, { status: 400 });
@@ -176,7 +170,6 @@ export async function POST(request: NextRequest) {
         created_by: session.uid,
         title: title.trim(),
         description: typeof description === 'string' ? description.trim() : '',
-        difficulty: difficulty as (typeof validDifficulties)[number],
         category: category as (typeof validCategories)[number],
         time_limit_seconds: timeLimit,
         max_attempts: maxAttempts,

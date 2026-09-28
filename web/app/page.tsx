@@ -96,7 +96,7 @@ const comparison = [
     dimension: "Learning path",
     traditional: "All students follow the same curriculum regardless of existing skill gaps.",
     icare:
-      "ML dynamically adjusts patient case difficulty and content to target each student’s weak areas.",
+      "ML points each student to the patient cases and quizzes that target their weak areas.",
     icon: ICONS.bolt,
   },
   {
@@ -150,12 +150,12 @@ const faqs = [
   {
     question: "How does the ML-driven assessment work?",
     answer:
-      "The machine learning model analyzes every student response across patient cases, quizzes, and EHR entries to build a detailed competency profile. It identifies knowledge gaps, adjusts difficulty in real time, and provides objective scoring that eliminates grading bias. Laboratory instructors get a clear picture of each student’s skill strengths and areas needing improvement.",
+      "The machine learning model analyzes every student response across patient cases, quizzes, and EHR entries to build a detailed competency profile. It identifies knowledge gaps and provides objective scoring that eliminates grading bias. Laboratory instructors get a clear picture of each student’s skill strengths and areas needing improvement.",
   },
   {
     question: "Can a laboratory instructor create their own patient cases?",
     answer:
-      "Yes. An instructor can build custom patient cases from scratch using an intuitive editor, or use the AI-assisted patient case generator to write one in minutes. Patient cases can be tailored to specific learning objectives, nursing domains, and difficulty levels.",
+      "Yes. An instructor can build custom patient cases from scratch using an intuitive editor, or use the AI-assisted patient case generator to write one in minutes. Patient cases can be tailored to specific learning objectives and nursing domains.",
   },
   {
     question: "What kind of analytics are available?",
@@ -165,7 +165,7 @@ const faqs = [
   {
     question: "Is iCARE++ suitable for all nursing courses?",
     answer:
-      "Absolutely. The platform supports medical-surgical, pediatrics, maternity, critical care, and community health nursing. Patient cases difficulty can be calibrated from first-year fundamentals through advanced practice. Content is customizable to match your course's specific skills and curriculum.",
+      "Absolutely. The platform supports medical-surgical, pediatrics, maternity, critical care, and community health nursing. Content is customizable to match your course's specific skills and curriculum.",
   },
   {
     question: "How is student data protected?",

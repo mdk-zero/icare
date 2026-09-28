@@ -18,7 +18,7 @@ export async function GET() {
     const supabase = getSupabaseAdmin();
     const { data, error } = await supabase
       .from('learning_recommendations')
-      .select('id, assessment_id, rank, reason, created_at, assessments(id, title, description, difficulty, category), competency_areas(name)')
+      .select('id, assessment_id, rank, reason, created_at, assessments(id, title, description, category), competency_areas(name)')
       .eq('student_id', session.uid)
       .is('dismissed_at', null)
       .is('completed_at', null)

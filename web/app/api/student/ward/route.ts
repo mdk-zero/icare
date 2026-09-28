@@ -27,7 +27,6 @@ interface ScenarioRow {
   title: string;
   patient_id: string | null;
   description: string | null;
-  difficulty: string | null;
   category: string | null;
   learning_objectives: unknown;
 }
@@ -63,7 +62,7 @@ export async function GET() {
     if (scenarioIds.length > 0) {
       const { data: scenarios } = await supabase
         .from('scenarios')
-        .select('id, title, patient_id, description, difficulty, category, learning_objectives')
+        .select('id, title, patient_id, description, category, learning_objectives')
         .in('id', scenarioIds);
       scenariosById = new Map((scenarios ?? []).map((s) => [s.id, s as ScenarioRow]));
     }
@@ -186,7 +185,6 @@ export async function GET() {
         scenario_id: assignment.scenario_id,
         scenario_title: scenario?.title ?? 'Unknown Patient Case',
         description: scenario?.description ?? null,
-        difficulty: scenario?.difficulty ?? null,
         category: scenario?.category ?? null,
         learning_objectives: scenario?.learning_objectives ?? null,
         patient_id: scenario?.patient_id ?? null,

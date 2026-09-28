@@ -9,7 +9,9 @@ import {
   scenarioVisibleToFaculty,
 } from '@/app/lib/scenario-visibility';
 
-const validDifficulties = ['beginner', 'intermediate', 'advanced'] as const;
+// Difficulty is retired from the product, but scenarios.difficulty is still
+// NOT NULL with no default, so new cases get one fixed value nothing reads.
+const RETIRED_DIFFICULTY = 'intermediate';
 
 function forbiddenResponse() {
   return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -30,7 +32,7 @@ export async function GET() {
     const { data: scenarios, error } = await supabase
       .from('scenarios')
       .select(
-        'id, created_by, title, description, difficulty, category, learning_objectives, is_ai_generated, created_at, updated_at, patient_id, patients(name), scenario_assignments(student_id)',
+        'id, created_by, title, description, category, learning_objectives, is_ai_generated, created_at, updated_at, patient_id, patients(name), scenario_assignments(student_id)',
       )
       .order('created_at', { ascending: false })
       .limit(500);
@@ -74,7 +76,6 @@ export async function GET() {
         created_by: s.created_by,
         title: s.title,
         description: s.description,
-        difficulty: s.difficulty,
         category: s.category,
         learning_objectives: Array.isArray(s.learning_objectives) ? s.learning_objectives : [],
         is_ai_generated: s.is_ai_generated,
@@ -115,7 +116,6 @@ export async function POST(request: NextRequest) {
   const {
     title,
     description,
-    difficulty,
     category,
     patient_case,
     patient_id,
@@ -125,7 +125,6 @@ export async function POST(request: NextRequest) {
   } = body as {
     title?: unknown;
     description?: unknown;
-    difficulty?: unknown;
     category?: unknown;
     patient_case?: unknown;
     patient_id?: unknown;
@@ -136,10 +135,6 @@ export async function POST(request: NextRequest) {
 
   if (typeof title !== 'string' || title.trim().length === 0) {
     return NextResponse.json({ error: 'Title is required' }, { status: 400 });
-  }
-
-  if (!validDifficulties.includes(difficulty as typeof validDifficulties[number])) {
-    return NextResponse.json({ error: 'Invalid difficulty' }, { status: 400 });
   }
 
 
@@ -187,7 +182,7 @@ export async function POST(request: NextRequest) {
         patient_id: linkedPatientId,
         title: title.trim(),
         description: typeof description === 'string' ? description.trim() : '',
-        difficulty: difficulty as typeof validDifficulties[number],
+        difficulty: RETIRED_DIFFICULTY,
         category: resolved.names[0],
         patient_case: patient_case && typeof patient_case === 'object' ? patient_case : {},
         learning_objectives: sanitizedLearningObjectives,

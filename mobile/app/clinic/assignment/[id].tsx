@@ -18,12 +18,6 @@ import { isNetworkError } from '@/lib/client';
 import { ReflectionCard } from '@/components/ReflectionCard';
 import { scoreDescriptor, TASK_RATING_BADGE, TASK_RATING_LABEL } from '@/lib/task-ratings';
 
-const DIFFICULTY_VARIANT: Record<Scenario['difficulty'], 'success' | 'warning' | 'danger'> = {
-  beginner: 'success',
-  intermediate: 'warning',
-  advanced: 'danger',
-};
-
 function formatTime(seconds: number) {
   const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;
@@ -181,7 +175,6 @@ export default function ScenarioBriefScreen() {
           label={isCompleted ? 'Completed' : isSubmitted ? 'Awaiting Review' : assignment.status === 'overdue' ? 'Overdue' : assignment.status === 'in_progress' ? 'In Progress' : 'Pending'}
           variant={isCompleted ? 'success' : isSubmitted ? 'info' : assignment.status === 'overdue' ? 'danger' : assignment.status === 'in_progress' ? 'warning' : 'default'}
         />
-        {scenario && <Badge label={scenario.difficulty} variant={DIFFICULTY_VARIANT[scenario.difficulty]} />}
         {assignment.required && isActive && <Badge label="Required" variant="danger" />}
         {assignment.team_name ? <Badge label={assignment.team_name} variant="info" /> : null}
       </View>

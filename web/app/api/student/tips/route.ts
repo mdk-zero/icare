@@ -53,7 +53,6 @@ interface ScenarioRow {
   id: string;
   title: string;
   description: string | null;
-  difficulty: string;
   category: string;
   learning_objectives: unknown;
 }
@@ -128,7 +127,7 @@ function buildPrompt(
 
       const lines = [
         `- Patient Case: "${scenario?.title ?? 'Unknown patient case'}"`,
-        `  Category: ${scenario?.category ?? 'unknown'}, difficulty: ${scenario?.difficulty ?? 'unknown'}`,
+        `  Category: ${scenario?.category ?? 'unknown'}`,
         `  Status: ${a.status}, ${a.required ? 'required' : 'optional'}, ${deadlineLabel(a.deadline)}`,
         `  Task progress: ${done} of ${tasks.length} checked off`,
       ];
@@ -253,7 +252,7 @@ export async function GET() {
     const [scenariosRes, tasksRes, completionsRes, cacheRes] = await Promise.all([
       supabase
         .from('scenarios')
-        .select('id, title, description, difficulty, category, learning_objectives')
+        .select('id, title, description, category, learning_objectives')
         .in('id', scenarioIds),
       supabase
         .from('scenario_tasks')

@@ -96,8 +96,7 @@ app asks for the stream to show a percentage; the nightly workflow doesn't.
 - **Recommender (Phase 3.6)** — TF-IDF over each published assessment's
   question-competency tags, matched against a per-student weakness profile
   (answer accuracy blended with faculty-validated scores; unexplored
-  competencies get a neutral exploration weight), scaled by a difficulty
-  match factor. Computed live; registered in `ml_models` for auditability.
+  competencies get a neutral exploration weight). Computed live; registered in `ml_models` for auditability.
 
 ## Evaluation (Phase 3.7 / manuscript Ch. IV)
 

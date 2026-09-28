@@ -209,7 +209,6 @@ export interface WardAssignment {
   scenario_id: string;
   scenario_title: string;
   description: string | null;
-  difficulty: string | null;
   category: string | null;
   learning_objectives: string[] | null;
   patient_id: string | null;
@@ -251,7 +250,6 @@ export interface StudentAssessment {
   id: string;
   title: string;
   description: string;
-  difficulty: 'beginner' | 'intermediate' | 'advanced';
   category: string;
   time_limit_seconds: number | null;
   question_count: number;
@@ -356,7 +354,6 @@ export interface Scenario {
   id: string;
   title: string;
   description: string;
-  difficulty: 'beginner' | 'intermediate' | 'advanced';
   category: string;
   patient_id: string | null;
   patient_case: Record<string, unknown>;
@@ -497,7 +494,6 @@ export interface Recommendation {
     id: string;
     title: string;
     description: string;
-    difficulty: 'beginner' | 'intermediate' | 'advanced';
     category: string;
   } | null;
   competency_areas: { name: string } | null;

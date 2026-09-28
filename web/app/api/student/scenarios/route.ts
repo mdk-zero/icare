@@ -32,7 +32,7 @@ export async function GET() {
     const scenarioIds = [...new Set(assignments.map((a) => a.scenario_id))];
     const { data: scenarios, error: scenariosError } = await supabase
       .from('scenarios')
-      .select('id, title, difficulty, category, patient_id')
+      .select('id, title, category, patient_id')
       .in('id', scenarioIds);
 
     if (scenariosError) {

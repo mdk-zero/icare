@@ -41,7 +41,6 @@ const STALE_DAYS = 7;
 interface AssessmentRow {
   id: string;
   title: string;
-  difficulty: string;
   is_published: boolean;
   question_count: number;
   student_count: number;
@@ -242,7 +241,7 @@ export default function FacultyReportsClient() {
       scenarios.data?.map((s) => ({
         id: s.id,
         label: s.title,
-        sub: `${s.difficulty} · ${s.category} · ${plural(s.student_count, "student")} assigned`,
+        sub: `${s.category} · ${plural(s.student_count, "student")} assigned`,
         badges: s.student_count === 0 ? [{ text: "Unassigned", tone: "slate" as const }] : [],
         createdAt: s.created_at,
         flag: s.student_count > 0,
@@ -255,7 +254,7 @@ export default function FacultyReportsClient() {
       assessments.data?.map((a) => ({
         id: a.id,
         label: a.title,
-        sub: `${a.difficulty} · ${plural(a.question_count, "question")} · ${plural(a.student_count, "student")} assigned`,
+        sub: `${plural(a.question_count, "question")} · ${plural(a.student_count, "student")} assigned`,
         badges: a.is_published ? [] : [{ text: "Draft", tone: "slate" as const }],
         createdAt: a.created_at,
         flag: a.is_published,

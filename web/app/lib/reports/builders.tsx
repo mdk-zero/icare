@@ -363,7 +363,7 @@ export async function buildScenarioReport(
 ): Promise<BuildResult> {
   const { data: scenario } = await supabase
     .from('scenarios')
-    .select('id, title, difficulty, category')
+    .select('id, title, category')
     .eq('id', scenarioId)
     .maybeSingle();
   if (!scenario) return { error: 'Patient case not found', status: 404 };
@@ -401,7 +401,6 @@ export async function buildScenarioReport(
       meta={meta}
       metaRows={[
         { label: 'Patient Case', value: scenario.title },
-        { label: 'Difficulty', value: String(scenario.difficulty) },
         { label: 'Category', value: String(scenario.category) },
       ]}
     >
@@ -454,7 +453,7 @@ export async function buildAssessmentReport(
 ): Promise<BuildResult> {
   const { data: assessment } = await supabase
     .from('assessments')
-    .select('id, title, difficulty, is_published, time_limit_seconds')
+    .select('id, title, is_published, time_limit_seconds')
     .eq('id', assessmentId)
     .maybeSingle();
   if (!assessment) return { error: 'Assessment not found', status: 404 };
@@ -516,7 +515,6 @@ export async function buildAssessmentReport(
       meta={meta}
       metaRows={[
         { label: 'Assessment', value: assessment.title },
-        { label: 'Difficulty', value: String(assessment.difficulty) },
         { label: 'Status', value: assessment.is_published ? 'Published' : 'Draft' },
         {
           label: 'Time limit',

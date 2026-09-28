@@ -118,7 +118,6 @@ export interface StudentAssessment {
   id: string;
   title: string;
   description: string;
-  difficulty: 'beginner' | 'intermediate' | 'advanced';
   category: string;
   time_limit_seconds: number | null;
   question_count: number;
@@ -1092,7 +1091,6 @@ export interface SimulationScenario {
   id: string;
   title: string;
   description: string;
-  difficulty: string;
   category: string;
   patient_case: any;
   patient_id?: string | null;
@@ -1550,7 +1548,6 @@ export interface LearningRecommendation {
     id: string;
     title: string;
     description: string;
-    difficulty: 'beginner' | 'intermediate' | 'advanced';
     category: string;
   } | null;
   competency_areas: { name: string } | null;
@@ -1880,7 +1877,6 @@ export async function generateAIScenario(
       skills: json.scenario.skills ?? [],
       title: json.scenario.title || 'AI Generated Patient Case',
       description: json.scenario.description || prompt,
-      difficulty: json.scenario.difficulty || 'intermediate',
       // Must stay on the scenario_category enum or the save is rejected.
       category: json.scenario.category || 'General',
       patient_case: json.scenario.patient_case || { generated_by_ai: true },
@@ -1896,8 +1892,6 @@ export interface ScenarioBatchOptions {
   count: number;
   /** Empty spreads the batch across every category. */
   categories?: string[];
-  /** Omit to cycle beginner → intermediate → advanced. */
-  difficulty?: string;
   topic?: string;
   /** Titles to steer away from — used to chain sub-batches without repeats. */
   avoidTitles?: string[];
@@ -1909,7 +1903,6 @@ export interface ScenarioBatchOptions {
 export interface ScenarioDraft {
   title: string;
   description: string;
-  difficulty: string;
   category: string;
   patient_case: Record<string, unknown>;
   learning_objectives: string[];
@@ -1932,7 +1925,6 @@ export async function generateScenarioBatch(
       body: JSON.stringify({
         count: options.count,
         categories: options.categories,
-        difficulty: options.difficulty,
         topic: options.topic,
         avoid_titles: options.avoidTitles,
         lesson_text: options.lessonText,
@@ -1956,7 +1948,6 @@ export async function generateScenarioBatch(
 }
 
 export async function suggestAIScenario(
-  difficulty?: string,
   category?: string,
   patientId?: string,
 ): Promise<
@@ -1968,7 +1959,7 @@ export async function suggestAIScenario(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({ difficulty, category, patient_id: patientId }),
+      body: JSON.stringify({ category, patient_id: patientId }),
     });
 
     const json = (await res.json()) as {

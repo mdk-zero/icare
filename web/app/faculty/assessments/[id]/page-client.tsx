@@ -37,7 +37,6 @@ interface AssessmentDetail {
   created_by: string | null;
   title: string;
   description: string;
-  difficulty: string;
   category: string;
   time_limit_seconds: number | null;
   question_count: number;
@@ -171,7 +170,7 @@ export default function AssessmentQuestionsClient({
 
   // inline detail editing
   const [editingDetails, setEditingDetails] = useState(false);
-  const [detailForm, setDetailForm] = useState({ title: "", description: "", difficulty: "beginner", category: "General", time_limit_minutes: "", max_attempts: "", target_sections: [] as string[] });
+  const [detailForm, setDetailForm] = useState({ title: "", description: "", category: "General", time_limit_minutes: "", max_attempts: "", target_sections: [] as string[] });
   const [savingDetails, setSavingDetails] = useState(false);
   const [sections, setSections] = useState<Section[]>([]);
 
@@ -208,7 +207,6 @@ export default function AssessmentQuestionsClient({
       body: JSON.stringify({
         title: detailForm.title.trim(),
         description: detailForm.description,
-        difficulty: detailForm.difficulty,
         category: detailForm.category,
         time_limit_seconds: detailForm.time_limit_minutes ? Number(detailForm.time_limit_minutes) * 60 : null,
         total_questions: totalQuestions,
@@ -229,7 +227,6 @@ export default function AssessmentQuestionsClient({
         ...prev,
         title: detailForm.title.trim(),
         description: detailForm.description,
-        difficulty: detailForm.difficulty as "beginner" | "intermediate" | "advanced",
         category: detailForm.category,
         time_limit_seconds: detailForm.time_limit_minutes ? Number(detailForm.time_limit_minutes) * 60 : null,
         total_questions: totalQuestions,
@@ -258,7 +255,7 @@ export default function AssessmentQuestionsClient({
 
       if (assessRes.ok) {
         const json = (await assessRes.json()) as {
-          assessment: { questions: AssessmentQuestion[]; created_by: string | null; title: string; description: string; difficulty: string; category: string; time_limit_seconds: number | null; question_count: number; total_questions: number | null; max_attempts: number | null; target_sections: string[] | null };
+          assessment: { questions: AssessmentQuestion[]; created_by: string | null; title: string; description: string; category: string; time_limit_seconds: number | null; question_count: number; total_questions: number | null; max_attempts: number | null; target_sections: string[] | null };
           blockers?: PublishBlocker[];
         };
         const a = json.assessment;
@@ -267,7 +264,6 @@ export default function AssessmentQuestionsClient({
           created_by: a.created_by ?? null,
           title: a.title,
           description: a.description,
-          difficulty: a.difficulty,
           category: a.category,
           time_limit_seconds: a.time_limit_seconds,
           question_count: a.question_count ?? json.assessment.questions.length,
@@ -278,7 +274,6 @@ export default function AssessmentQuestionsClient({
         setDetailForm({
           title: a.title,
           description: a.description ?? "",
-          difficulty: a.difficulty,
           category: a.category,
           time_limit_minutes: a.time_limit_seconds ? String(Math.round(a.time_limit_seconds / 60)) : "",
           max_attempts: a.max_attempts ? String(a.max_attempts) : "",
@@ -891,18 +886,6 @@ export default function AssessmentQuestionsClient({
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
-                    <label className={formLabelClassName}>Difficulty</label>
-                    <select
-                      value={detailForm.difficulty}
-                      onChange={(e) => setDetailForm((f) => ({ ...f, difficulty: e.target.value }))}
-                      className={formInputClassName}
-                    >
-                      <option value="beginner">Beginner</option>
-                      <option value="intermediate">Intermediate</option>
-                      <option value="advanced">Advanced</option>
-                    </select>
-                  </div>
-                  <div>
                     <label className={formLabelClassName}>Category</label>
                     <select
                       value={detailForm.category}
@@ -1036,7 +1019,6 @@ export default function AssessmentQuestionsClient({
                   </div>
                   <p className="text-sm text-gray-500 mt-1">
                     <span className="px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">{assessment.category}</span>{" "}
-                    <span className="px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">{assessment.difficulty}</span>{" "}
                     {assessment.question_count} question{assessment.question_count !== 1 ? "s" : ""}
                     {assessment.time_limit_seconds &&
                       ` · ${Math.round(assessment.time_limit_seconds / 60)} min limit`}

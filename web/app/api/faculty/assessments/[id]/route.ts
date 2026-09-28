@@ -5,8 +5,6 @@ import { logAudit } from '@/app/lib/audit';
 import { assessmentPublishBlockers } from '@/app/lib/assessment-validation';
 import { guardAssessmentEdit } from '@/app/lib/assessment-access';
 
-const validDifficulties = ['beginner', 'intermediate', 'advanced'] as const;
-
 interface RouteParams {
   params: Promise<{ id: string }>;
 }
@@ -25,7 +23,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
     const { data: assessment, error } = await supabase
       .from('assessments')
       .select(
-        'id, created_by, title, description, difficulty, category, time_limit_seconds, is_published, is_ai_generated, target_sections, total_questions, max_attempts, created_at, updated_at, questions(id, position, content, options, correct_index, question_type, points, explanation, difficulty, criteria_id, question_competencies(competency_id))',
+        'id, created_by, title, description, category, time_limit_seconds, is_published, is_ai_generated, target_sections, total_questions, max_attempts, created_at, updated_at, questions(id, position, content, options, correct_index, question_type, points, explanation, criteria_id, question_competencies(competency_id))',
       )
       .eq('id', id)
       .single();
@@ -44,7 +42,6 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
         question_type: q.question_type ?? 'multiple_choice',
         points: q.points ?? 1,
         explanation: q.explanation,
-        difficulty: q.difficulty,
         criteria_id: q.criteria_id ?? null,
         competency_ids: (
           (q as unknown as { question_competencies: { competency_id: string }[] })
@@ -87,7 +84,6 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   const {
     title,
     description,
-    difficulty,
     category,
     time_limit_seconds,
     is_published,
@@ -97,7 +93,6 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   } = body as {
     title?: unknown;
     description?: unknown;
-    difficulty?: unknown;
     category?: unknown;
     time_limit_seconds?: unknown;
     is_published?: unknown;
@@ -115,12 +110,6 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   }
   if (description !== undefined) {
     updates.description = typeof description === 'string' ? description.trim() : '';
-  }
-  if (difficulty !== undefined) {
-    if (!validDifficulties.includes(difficulty as (typeof validDifficulties)[number])) {
-      return NextResponse.json({ error: 'Invalid difficulty' }, { status: 400 });
-    }
-    updates.difficulty = difficulty;
   }
   if (category !== undefined) updates.category = category;
   if (time_limit_seconds !== undefined) {

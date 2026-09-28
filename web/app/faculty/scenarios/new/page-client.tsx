@@ -9,7 +9,6 @@ import {
   faSearch,
   faCheck,
   faSave,
-  faChevronDown,
   faDoorOpen,
   faTriangleExclamation,
   faFileImport,
@@ -45,13 +44,9 @@ const inputClassName =
 
 const labelClassName = "block text-sm font-bold text-gray-800 mb-2";
 
-const selectClassName =
-  "w-full px-4 py-3 bg-surface border border-gray-400 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 focus:bg-surface transition-all text-sm appearance-none shadow-sm cursor-pointer";
-
 const emptyForm = {
   title: "",
   description: "",
-  difficulty: "intermediate" as "beginner" | "intermediate" | "advanced",
   category: "",
   learningObjectives: "",
   patientId: "",
@@ -180,7 +175,6 @@ export default function NewScenarioClient() {
         ...prev,
         title: preview.title ?? prev.title,
         description: preview.description ?? prev.description,
-        difficulty: (preview.difficulty as typeof prev.difficulty) ?? prev.difficulty,
         category: preview.category ?? prev.category,
         learningObjectives: (preview.learning_objectives ?? []).join("\n"),
       }));
@@ -207,7 +201,6 @@ export default function NewScenarioClient() {
     const newScenario = await createScenario({
       title: form.title,
       description: form.description,
-      difficulty: form.difficulty,
       category: form.category || "General",
       patient_id: form.patientId || null,
       learning_objectives: form.learningObjectives
@@ -399,36 +392,14 @@ export default function NewScenarioClient() {
                 className={inputClassName + " resize-none"}
               />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className={labelClassName}>Difficulty</label>
-                <div className="relative">
-                  <select
-                    value={form.difficulty}
-                    onChange={(e) =>
-                      setForm({ ...form, difficulty: e.target.value as typeof form.difficulty })
-                    }
-                    className={selectClassName + " pr-10"}
-                  >
-                    <option value="beginner">Beginner</option>
-                    <option value="intermediate">Intermediate</option>
-                    <option value="advanced">Advanced</option>
-                  </select>
-                  <FontAwesomeIcon
-                    icon={faChevronDown}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className={labelClassName}>Category</label>
-                <CategoryPicker
-                  value={form.category}
-                  onChange={(category) => setForm((prev) => ({ ...prev, category }))}
-                  categories={categories}
-                  loading={loadingCategories}
-                />
-              </div>
+            <div>
+              <label className={labelClassName}>Category</label>
+            <CategoryPicker
+              value={form.category}
+              onChange={(category) => setForm((prev) => ({ ...prev, category }))}
+              categories={categories}
+              loading={loadingCategories}
+            />
             </div>
             <div>
               <label className={labelClassName}>Learning Objectives</label>

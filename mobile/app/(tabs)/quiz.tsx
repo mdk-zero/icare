@@ -9,16 +9,6 @@ import { fetchAssessments, StudentAssessment } from '@/lib/api';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 
-function difficultyAccent(
-  Accent: ReturnType<typeof useTheme>['Accent'],
-): Record<string, { fg: string; bg: string }> {
-  return {
-    beginner: Accent.green,
-    intermediate: Accent.amber,
-    advanced: Accent.red,
-  };
-}
-
 function formatTimeLimit(seconds: number | null): string {
   if (!seconds) return 'No time limit';
   return `${Math.round(seconds / 60)} min`;
@@ -37,8 +27,6 @@ function QuizCard({
   Accent: ReturnType<typeof useTheme>['Accent'];
   styles: ReturnType<typeof createStyles>;
 }) {
-  const DIFFICULTY_ACCENT = difficultyAccent(Accent);
-  const difficulty = DIFFICULTY_ACCENT[quiz.difficulty] ?? Accent.slate;
   const attempted = quiz.attempt_count > 0;
   const exhausted = quiz.attempts_remaining === 0;
   const dueSoon = quiz.assignment?.deadline
@@ -57,11 +45,11 @@ function QuizCard({
       disabled={exhausted}
     >
       <View style={styles.quizHeader}>
-        <View style={[styles.quizIcon, { backgroundColor: attempted ? Accent.green.bg : difficulty.bg }]}>
+        <View style={[styles.quizIcon, { backgroundColor: attempted ? Accent.green.bg : Accent.teal.bg }]}>
           <Ionicons
             name={attempted ? 'checkmark' : 'document-text'}
             size={19}
-            color={attempted ? Accent.green.fg : difficulty.fg}
+            color={attempted ? Accent.green.fg : Accent.teal.fg}
           />
         </View>
         <View style={styles.quizInfo}>
@@ -83,13 +71,9 @@ function QuizCard({
         <View style={styles.categoryBadge}>
           <Text style={styles.categoryText}>{quiz.category}</Text>
         </View>
-        <View style={[styles.difficultyBadge, { backgroundColor: difficulty.bg }]}>
-          <View style={[styles.difficultyDot, { backgroundColor: difficulty.fg }]} />
-          <Text style={[styles.difficultyText, { color: difficulty.fg }]}>{quiz.difficulty}</Text>
-        </View>
         {quiz.assignment?.required && !attempted && (
-          <View style={[styles.difficultyBadge, { backgroundColor: Accent.red.bg }]}>
-            <Text style={[styles.difficultyText, { color: Accent.red.fg }]}>Required</Text>
+          <View style={[styles.badge, { backgroundColor: Accent.red.bg }]}>
+            <Text style={[styles.badgeText, { color: Accent.red.fg }]}>Required</Text>
           </View>
         )}
       </View>
@@ -341,23 +325,16 @@ function createStyles(
     fontWeight: '600',
     color: Palette.textSecondary,
   },
-  difficultyBadge: {
+  badge: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: Radius.pill,
   },
-  difficultyDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    marginRight: 5,
-  },
-  difficultyText: {
+  badgeText: {
     fontSize: 11,
     fontWeight: '600',
-    textTransform: 'capitalize',
   },
   quizFooter: {
     flexDirection: 'row',

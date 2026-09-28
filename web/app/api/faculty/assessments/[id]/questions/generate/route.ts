@@ -60,7 +60,7 @@ Rules:
 }
 
 function buildPrompt(
-  assessment: { title: string; description: string; category: string; difficulty: string },
+  assessment: { title: string; description: string; category: string },
   competencyNames: string[],
   topic: string,
   count: number,
@@ -69,8 +69,7 @@ function buildPrompt(
 
 Assessment context:
 - Title: ${assessment.title}
-- Category: ${assessment.category}
-- Difficulty: ${assessment.difficulty}${assessment.description ? `\n- Description: ${assessment.description}` : ''}${topic ? `\n- Instructor focus request: "${topic.replace(/"/g, '\\"')}"` : ''}
+- Category: ${assessment.category}${assessment.description ? `\n- Description: ${assessment.description}` : ''}${topic ? `\n- Instructor focus request: "${topic.replace(/"/g, '\\"')}"` : ''}
 
 Write exactly ${count} multiple-choice questions. Return ONLY a valid JSON object with this exact structure (no markdown, no explanations):
 
@@ -89,7 +88,7 @@ Write exactly ${count} multiple-choice questions. Return ONLY a valid JSON objec
 Competency list: ${competencyNames.length > 0 ? competencyNames.join(', ') : '(none defined)'}
 
 Guidelines:
-- Questions must match the assessment's difficulty and category and be clinically accurate.
+- Questions must match the assessment's category and be clinically accurate.
 - Exactly 4 plausible options per question; only one is correct; correct_index is 0-based.
 - Vary which option index is correct across questions.
 - Explanations should teach, briefly citing the clinical rationale.
@@ -165,7 +164,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const [{ data: assessment }, { data: competencies }] = await Promise.all([
       supabase
         .from('assessments')
-        .select('title, description, category, difficulty')
+        .select('title, description, category')
         .eq('id', assessmentId)
         .maybeSingle(),
       supabase.from('competency_areas').select('id, name').in('id', [...ACTIVE_SKILL_AREA_IDS]).order('name'),
@@ -207,7 +206,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     const generated = await callAI(
       buildPrompt(
-        assessment as { title: string; description: string; category: string; difficulty: string },
+        assessment as { title: string; description: string; category: string },
         competencyList.map((c) => c.name),
         topic,
         count,

@@ -7,11 +7,9 @@ import {
   buildScenarioPrompt,
   fetchPatientContext,
   isValidCategory,
-  isValidDifficulty,
   sanitizeScenario,
   type PatientContext,
   type ScenarioCategory,
-  type ScenarioDifficulty,
 } from '@/app/lib/ai/scenario';
 
 const scenarioFocuses = [
@@ -91,14 +89,12 @@ async function pickSuggestedPatient(supabase: ReturnType<typeof getSupabaseAdmin
 
 function generateSuggestionPrompt(
   patient: PatientContext,
-  difficulty: ScenarioDifficulty | null,
   category: ScenarioCategory | null,
 ): string {
   const focus = scenarioFocuses[Math.floor(Math.random() * scenarioFocuses.length)];
-  const difficultyText = difficulty ? `${difficulty}-level` : 'appropriate-difficulty';
   const categoryText = category ? `${category}` : 'nursing education';
 
-  return `Create a ${difficultyText} ${categoryText} patient case for ${patient.name}, a ${patient.age}-year-old ${patient.gender} admitted with ${patient.diagnosis}. The patient case should focus on ${focus}.`;
+  return `Create a ${categoryText} patient case for ${patient.name}, a ${patient.age}-year-old ${patient.gender} admitted with ${patient.diagnosis}. The patient case should focus on ${focus}.`;
 }
 
 export async function POST(request: NextRequest) {
@@ -106,14 +102,13 @@ export async function POST(request: NextRequest) {
   if (!session) return unauthorizedResponse();
   if (!['faculty', 'admin'].includes(session.role)) return forbiddenResponse();
 
-  let body: { difficulty?: unknown; category?: unknown; patient_id?: unknown };
+  let body: { category?: unknown; patient_id?: unknown };
   try {
-    body = (await request.json()) as { difficulty?: unknown; category?: unknown; patient_id?: unknown };
+    body = (await request.json()) as { category?: unknown; patient_id?: unknown };
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const difficulty = isValidDifficulty(body.difficulty) ? body.difficulty : null;
   const category = isValidCategory(body.category) ? body.category : null;
 
   try {
@@ -133,7 +128,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const prompt = generateSuggestionPrompt(patient, difficulty, category);
+    const prompt = generateSuggestionPrompt(patient, category);
     const generated = await callAI(buildScenarioPrompt(prompt, patient));
     const scenario = sanitizeScenario(generated);
 

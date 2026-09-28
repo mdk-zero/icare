@@ -8,8 +8,7 @@ that tag highly and rare tags are up-weighted across the catalog.
 Student side: a weakness profile over the same tag vocabulary —
 1 - accuracy from graded attempt answers, blended with faculty-validated
 competency scores; competencies without history get a neutral exploration
-weight. Ranking = cosine(assessment tags, weakness profile) x a difficulty
-match factor derived from the student's average score.
+weight. Ranking = cosine(assessment tags, weakness profile).
 """
 
 from __future__ import annotations
@@ -27,21 +26,10 @@ from .progress import Progress, Report
 from .registry import ensure_recommender_registered
 
 NEUTRAL_WEAKNESS = 0.5
-DIFFICULTY_ORDER = {"beginner": 0, "intermediate": 1, "advanced": 2}
-# match factor by |student level - assessment difficulty|
-DIFFICULTY_FACTOR = {0: 1.0, 1: 0.85, 2: 0.7}
 
 
 def _tag_token(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
-
-
-def _student_level(avg_score: float, attempts: float) -> int:
-    if attempts == 0 or avg_score < 50:
-        return 0
-    if avg_score < 75:
-        return 1
-    return 2
 
 
 class RecommenderContext:
@@ -54,7 +42,7 @@ class RecommenderContext:
         self.comp_token = {c["id"]: _tag_token(c["name"]) for c in competencies}
 
         assessments = db.select(
-            "assessments", "id,title,difficulty",
+            "assessments", "id,title",
             [("is_published", "eq", "true")],
         )
         questions = db.select("questions", "id,assessment_id")
@@ -115,18 +103,13 @@ class RecommenderContext:
             return []
         profile_vector = profile_vector / norm
 
-        level = _student_level(
-            student.features["avg_score"], student.features["attempts_count"]
-        )
         exclude = student.attempted_assessment_ids | student.assigned_assessment_ids
 
         scored = []
         for i, assessment in enumerate(self.assessments):
             if assessment["id"] in exclude:
                 continue
-            similarity = float(self.item_matrix[i] @ profile_vector)
-            gap = abs(DIFFICULTY_ORDER.get(assessment["difficulty"], 0) - level)
-            score = similarity * DIFFICULTY_FACTOR[gap]
+            score = float(self.item_matrix[i] @ profile_vector)
             if score <= 0:
                 continue
             scored.append((score, assessment))

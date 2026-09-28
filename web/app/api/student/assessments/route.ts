@@ -26,7 +26,7 @@ export async function GET() {
       await Promise.all([
         supabase
           .from('assessments')
-          .select('id, title, description, difficulty, category, time_limit_seconds, target_sections, total_questions, max_attempts, questions(count)')
+          .select('id, title, description, category, time_limit_seconds, target_sections, total_questions, max_attempts, questions(count)')
           .eq('is_published', true)
           .order('created_at', { ascending: false })
           .limit(200),
@@ -98,7 +98,6 @@ export async function GET() {
         id: a.id,
         title: a.title,
         description: a.description,
-        difficulty: a.difficulty,
         category: a.category,
         time_limit_seconds: a.time_limit_seconds,
         // What this student will actually be asked, not how big the bank is —

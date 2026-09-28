@@ -26,7 +26,7 @@ interface GeneratedDraft {
 }
 
 function buildPrompt(
-  assessment: { title: string; description: string; category: string; difficulty: string },
+  assessment: { title: string; description: string; category: string },
   competencyNames: string[],
   lessonText: string,
   questionTypes: QuestionType[],
@@ -46,7 +46,6 @@ function buildPrompt(
 Assessment context:
 - Title: ${assessment.title}
 - Category: ${assessment.category}
-- Difficulty: ${assessment.difficulty}
 
 Lesson material (this is the ONLY source you may draw questions from):
 """
@@ -79,7 +78,7 @@ Guidelines:
 - Every question must be answerable strictly from the lesson material above.
 - For multiple_choice: exactly 4 plausible options, only one correct, correct_index is 0-based; vary which option is correct across questions.
 - For short_answer: "expected_answer" is the single correct term/phrase; restate it inside "explanation" too (e.g. "Expected answer: X — ...").
-- Questions must match the assessment's difficulty and category and be clinically accurate.
+- Questions must match the assessment's category and be clinically accurate.
 - The "competency" field is REQUIRED on every question — always pick the single closest-matching name from the competency list above. Only use null if the list is empty. Never invent a name outside the provided list.`;
 }
 
@@ -268,7 +267,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const [{ data: assessment }, { data: competencies }] = await Promise.all([
       supabase
         .from('assessments')
-        .select('title, description, category, difficulty')
+        .select('title, description, category')
         .eq('id', assessmentId)
         .maybeSingle(),
       supabase.from('competency_areas').select('id, name').in('id', [...ACTIVE_SKILL_AREA_IDS]).order('name'),
@@ -281,7 +280,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const competencyList = (competencies ?? []) as { id: string; name: string }[];
     const generated = await callAI(
       buildPrompt(
-        assessment as { title: string; description: string; category: string; difficulty: string },
+        assessment as { title: string; description: string; category: string },
         competencyList.map((c) => c.name),
         lesson.text,
         questionTypes,

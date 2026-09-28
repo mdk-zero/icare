@@ -59,8 +59,6 @@ const CATEGORIES = [
   "General",
 ] as const;
 
-type Difficulty = "beginner" | "intermediate" | "advanced";
-
 export default function AssessmentNewClient() {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -95,7 +93,6 @@ export default function AssessmentNewClient() {
   const [form, setForm] = useState({
     title: "",
     description: "",
-    difficulty: "beginner" as Difficulty,
     category: "General" as (typeof CATEGORIES)[number],
     time_limit_minutes: "",
     max_attempts: "",
@@ -134,7 +131,6 @@ export default function AssessmentNewClient() {
             title: form.title.trim(),
             description: form.description,
             category: form.category,
-            difficulty: form.difficulty,
             time_limit_seconds: form.time_limit_minutes
               ? Number(form.time_limit_minutes) * 60
               : null,
@@ -275,40 +271,24 @@ export default function AssessmentNewClient() {
               className={inputClassName}
             />
           </div>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <label className={labelClassName}>Difficulty</label>
-              <SelectField
-                value={form.difficulty}
-                disabled={busy}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, difficulty: e.target.value as Difficulty }))
-                }
-              >
-                <option value="beginner">Beginner</option>
-                <option value="intermediate">Intermediate</option>
-                <option value="advanced">Advanced</option>
-              </SelectField>
-            </div>
-            <div>
-              <label className={labelClassName}>Category</label>
-              <SelectField
-                value={form.category}
-                disabled={busy}
-                onChange={(e) =>
-                  setForm((f) => ({
-                    ...f,
-                    category: e.target.value as (typeof CATEGORIES)[number],
-                  }))
-                }
-              >
-                {CATEGORIES.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </SelectField>
-            </div>
+          <div>
+            <label className={labelClassName}>Category</label>
+            <SelectField
+              value={form.category}
+              disabled={busy}
+              onChange={(e) =>
+                setForm((f) => ({
+                  ...f,
+                  category: e.target.value as (typeof CATEGORIES)[number],
+                }))
+              }
+            >
+              {CATEGORIES.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </SelectField>
           </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>

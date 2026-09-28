@@ -21,9 +21,9 @@ const TOUR = [
     number: "02",
     title: "ML-Powered Adaptive Assessments",
     description:
-      "Machine learning algorithms analyze every student response in real time, adjusting question difficulty and patient case complexity to target individual knowledge gaps. Each assessment delivers a precise competency profile.",
+      "Machine learning algorithms analyze every student response in real time, recommending the quizzes and patient cases that target individual knowledge gaps. Each assessment delivers a precise competency profile.",
     capabilities: [
-      "Dynamic difficulty adjustment based on performance",
+      "Recommendations that follow each student's performance",
       "Instant competency scoring with detailed breakdowns",
       "Multiple formats: quizzes, OSCEs, case studies",
       "Identifies strengths and knowledge gaps automatically",

@@ -234,7 +234,6 @@ export default function PatientHubScreen() {
                 label={isFinalized ? 'Completed' : isSubmitted ? 'Awaiting Review' : status === 'overdue' ? 'Overdue' : status === 'in_progress' ? 'In Progress' : 'Pending'}
                 variant={isFinalized ? 'success' : isSubmitted ? 'info' : status === 'overdue' ? 'danger' : status === 'in_progress' ? 'warning' : 'default'}
               />
-              {assignment?.difficulty ? <Badge label={assignment.difficulty} size="sm" /> : null}
             </View>
             <Text style={styles.scenarioTitle}>{assignment?.scenario_title}</Text>
             <Text style={styles.scenarioMeta}>

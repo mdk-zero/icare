@@ -4,8 +4,6 @@ import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { ensureCategories } from '@/app/lib/scenario-categories';
 import { MAX_RUBRIC_LENGTH, TASK_RATINGS } from '@/app/lib/task-ratings';
 
-const validDifficulties = ['beginner', 'intermediate', 'advanced'] as const;
-
 interface RouteParams {
   params: Promise<{ id: string }>;
 }
@@ -31,7 +29,6 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   const {
     title,
     description,
-    difficulty,
     category,
     patient_case,
     patient_id,
@@ -40,7 +37,6 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   } = body as {
     title?: unknown;
     description?: unknown;
-    difficulty?: unknown;
     category?: unknown;
     patient_case?: unknown;
     patient_id?: unknown;
@@ -59,13 +55,6 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
   if (description !== undefined) {
     updateData.description = typeof description === 'string' ? description.trim() : '';
-  }
-
-  if (difficulty !== undefined) {
-    if (!validDifficulties.includes(difficulty as typeof validDifficulties[number])) {
-      return NextResponse.json({ error: 'Invalid difficulty' }, { status: 400 });
-    }
-    updateData.difficulty = difficulty;
   }
 
 

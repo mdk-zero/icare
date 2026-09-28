@@ -1,8 +1,6 @@
 import { catalogPromptLines, isSkillId } from '@/app/lib/taylor-skills';
 import type { getSupabaseAdmin } from '@/app/lib/supabase/server';
 
-export const VALID_DIFFICULTIES = ['beginner', 'intermediate', 'advanced'] as const;
-
 export const VALID_CATEGORIES = [
   'Cardiac Emergency',
   'Respiratory Emergency',
@@ -16,12 +14,7 @@ export const VALID_CATEGORIES = [
   'General',
 ] as const;
 
-export type ScenarioDifficulty = (typeof VALID_DIFFICULTIES)[number];
 export type ScenarioCategory = (typeof VALID_CATEGORIES)[number];
-
-export function isValidDifficulty(value: unknown): value is ScenarioDifficulty {
-  return typeof value === 'string' && (VALID_DIFFICULTIES as readonly string[]).includes(value);
-}
 
 export function isValidCategory(value: unknown): value is ScenarioCategory {
   return typeof value === 'string' && (VALID_CATEGORIES as readonly string[]).includes(value);
@@ -105,7 +98,6 @@ export function sanitizePatientCase(input: unknown): PatientCase {
 export interface SanitizedScenario {
   title: string;
   description: string;
-  difficulty: ScenarioDifficulty;
   category: string;
   patient_case: PatientCase;
   learning_objectives: string[];
@@ -115,9 +107,8 @@ export interface SanitizedScenario {
 
 /**
  * Coerces a raw AI object into something the scenarios table will accept.
- * difficulty must land on its enum and category on an existing category
- * (matched ignoring case, returned in its stored spelling), or the insert is
- * rejected.
+ * category must land on an existing category (matched ignoring case,
+ * returned in its stored spelling), or the insert is rejected.
  */
 export function sanitizeScenario(
   input: Record<string, unknown>,
@@ -131,7 +122,6 @@ export function sanitizeScenario(
   return {
     title: typeof input.title === 'string' ? input.title : 'AI Generated Scenario',
     description: typeof input.description === 'string' ? input.description : '',
-    difficulty: isValidDifficulty(input.difficulty) ? input.difficulty : 'intermediate',
     category: categories.find((c) => c.toLowerCase() === rawCategory) ?? 'General',
     patient_case: sanitizePatientCase(input.patient_case),
     learning_objectives:
@@ -163,7 +153,6 @@ export function patientRecordBlock(patient: PatientContext, label = 'patient rec
 export const SCENARIO_JSON_SHAPE = `{
   "title": "string",
   "description": "string",
-  "difficulty": "beginner" | "intermediate" | "advanced",
   "category": "string",
   "patient_case": {
     "chief_complaint": "string",
@@ -184,7 +173,6 @@ export const SCENARIO_JSON_SHAPE = `{
 }`;
 
 export const SCENARIO_GUIDELINES = `- If a patient record is provided, base vitals/diagnosis on it but craft a coherent teaching case.
-- Difficulty should match clinical complexity.
 - Learning objectives must be measurable and nursing-focused.
 - Keep the scenario clinically plausible and safe for educational use.
 - "skills" lists the 2 to 6 Taylor's clinical nursing skills the student performs in this case, most important first, by id from this catalog only:

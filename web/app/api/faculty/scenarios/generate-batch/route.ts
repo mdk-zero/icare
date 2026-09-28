@@ -8,12 +8,10 @@ import {
   PATIENT_CONTEXT_COLUMNS,
   SCENARIO_GUIDELINES,
   SCENARIO_JSON_SHAPE,
-  isValidDifficulty,
   lessonBlock,
   patientRecordBlock,
   sanitizeScenario,
   type PatientContext,
-  type ScenarioDifficulty,
   type SanitizedScenario,
 } from '@/app/lib/ai/scenario';
 
@@ -23,12 +21,10 @@ export const maxDuration = 60;
 const MAX_BATCH = 12;
 /** Both providers cap output at 4096 tokens, which fits roughly four full scenarios. */
 const CHUNK_SIZE = 4;
-const DIFFICULTY_CYCLE: ScenarioDifficulty[] = ['beginner', 'intermediate', 'advanced'];
 
 /** One scenario the AI has been asked to write, with the slot it must fill. */
 interface PlannedSlot {
   category: string;
-  difficulty: ScenarioDifficulty;
   patient: PatientContext | null;
 }
 
@@ -50,21 +46,19 @@ function shuffle<T>(items: T[]): T[] {
 }
 
 /**
- * Spreads the requested count across categories and difficulties so the library
+ * Spreads the requested count across categories so the library
  * comes out varied instead of ten takes on the same case.
  */
 function planSlots(
   count: number,
   categories: string[],
   allCategories: string[],
-  difficulty: ScenarioDifficulty | null,
   patients: PatientContext[],
 ): PlannedSlot[] {
   const categoryPool = categories.length > 0 ? categories : shuffle(allCategories);
 
   return Array.from({ length: count }, (_, i) => ({
     category: categoryPool[i % categoryPool.length],
-    difficulty: difficulty ?? DIFFICULTY_CYCLE[i % DIFFICULTY_CYCLE.length],
     patient: patients.length > 0 ? patients[i % patients.length] : null,
   }));
 }
@@ -80,7 +74,7 @@ function buildBatchPrompt(
       const patientBlock = slot.patient
         ? `\n   Base it on ${patientRecordBlock(slot.patient, 'patient record')}`
         : '';
-      return `${i + 1}. Category: "${slot.category}" — Difficulty: "${slot.difficulty}"${patientBlock}`;
+      return `${i + 1}. Category: "${slot.category}"${patientBlock}`;
     })
     .join('\n\n');
 
@@ -115,7 +109,7 @@ ${SCENARIO_JSON_SHAPE.split('\n').map((line) => `    ${line}`).join('\n')}
   ]
 }
 
-The "scenarios" array must contain exactly ${slots.length} objects, in the same order as the briefs, and each object's "category" and "difficulty" must match its brief.
+The "scenarios" array must contain exactly ${slots.length} objects, in the same order as the briefs, and each object's "category" must match its brief.
 
 Guidelines:
 ${SCENARIO_GUIDELINES}`;
@@ -144,7 +138,6 @@ async function generateChunk(
       ...scenario,
       // The plan is what the faculty asked for, so it wins over whatever the model labelled it.
       category: slot.category,
-      difficulty: slot.difficulty,
       patient_id: slot.patient?.id ?? null,
     };
   });
@@ -158,7 +151,6 @@ export async function POST(request: NextRequest) {
   let body: {
     count?: unknown;
     categories?: unknown;
-    difficulty?: unknown;
     topic?: unknown;
     avoid_titles?: unknown;
     lesson_text?: unknown;
@@ -175,7 +167,6 @@ export async function POST(request: NextRequest) {
   }
   const count = Math.min(requestedCount, MAX_BATCH);
 
-  const difficulty = isValidDifficulty(body.difficulty) ? body.difficulty : null;
   const topic = typeof body.topic === 'string' ? body.topic.trim().slice(0, 500) : '';
   const lessonText =
     typeof body.lesson_text === 'string' ? body.lesson_text.trim().slice(0, MAX_LESSON_CHARS) : '';
@@ -228,7 +219,7 @@ export async function POST(request: NextRequest) {
       ...avoidTitles,
     ];
 
-    const slots = planSlots(count, categories, allCategories, difficulty, patients);
+    const slots = planSlots(count, categories, allCategories, patients);
 
     const scenarios: (SanitizedScenario & { patient_id: string | null })[] = [];
     const failures: string[] = [];

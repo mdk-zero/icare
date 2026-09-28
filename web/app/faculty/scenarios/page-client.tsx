@@ -7,16 +7,13 @@ import {
   faRobot,
   faPlus,
   faSearch,
-  faFilter,
   faTimes,
   faEye,
   faUserPlus,
-  faBookOpen,
   faListCheck,
   faHeartbeat,
   faStethoscope,
   faCalendarDay,
-  faGraduationCap,
   faHospitalUser,
   faNotesMedical,
   faExclamationTriangle,
@@ -73,20 +70,6 @@ const MAX_PER_REQUEST = 12;
 const NO_SCENARIOS: SimulationScenario[] = [];
 const NO_STUDENTS: FacultyStudent[] = [];
 
-/**
- * The library reads as a progression, so the grid is grouped in this order
- * rather than sorted by it.
- *
- * -600 not -500 on the markers: the dark theme rethemes 50/100/200/600/700/800
- * of the tinted ramps, so a 500 would keep its light-mode saturation on a dark
- * surface.
- */
-const DIFFICULTY_SECTIONS = [
-  { key: "beginner", label: "Beginner", marker: "bg-emerald-600" },
-  { key: "intermediate", label: "Intermediate", marker: "bg-amber-600" },
-  { key: "advanced", label: "Advanced", marker: "bg-rose-600" },
-];
-
 const labelClassName = "block text-sm font-bold text-gray-800 mb-2";
 
 export default function FacultyScenariosClient() {
@@ -94,7 +77,6 @@ export default function FacultyScenariosClient() {
 
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [difficultyFilter, setDifficultyFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
 
   const [patients, setPatients] = useState<FacultyPatient[]>([]);
@@ -106,7 +88,6 @@ export default function FacultyScenariosClient() {
   const [batchCount, setBatchCount] = useState(6);
   const [batchCountInput, setBatchCountInput] = useState("6");
   const [batchCategories, setBatchCategories] = useState<string[]>([]);
-  const [batchDifficulty, setBatchDifficulty] = useState("");
   const [batchTopic, setBatchTopic] = useState("");
   // How the library's grounded patients are placed into rooms on save.
   const [batchRoomMode, setBatchRoomMode] = useState<"fill" | "spread">("fill");
@@ -193,45 +174,10 @@ export default function FacultyScenariosClient() {
         scenario.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         scenario.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
         scenario.category.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesDifficulty =
-        difficultyFilter === "all" || scenario.difficulty === difficultyFilter;
       const matchesCategory = categoryFilter === "all" || scenario.category === categoryFilter;
-      return matchesSearch && matchesDifficulty && matchesCategory;
+      return matchesSearch && matchesCategory;
     });
-  }, [scenarios, searchQuery, difficultyFilter, categoryFilter]);
-
-  /**
-   * Difficulty is a heading rather than a badge on each card, so an empty
-   * level is left out entirely. A difficulty outside the three known values
-   * still gets its own section rather than dropping off the page.
-   */
-  const difficultyGroups = useMemo(() => {
-    const byDifficulty = new Map<string, SimulationScenario[]>();
-    for (const scenario of filteredScenarios) {
-      const bucket = byDifficulty.get(scenario.difficulty);
-      if (bucket) bucket.push(scenario);
-      else byDifficulty.set(scenario.difficulty, [scenario]);
-    }
-
-    const known = DIFFICULTY_SECTIONS.map(({ key, label, marker }) => ({
-      key,
-      label,
-      marker,
-      items: byDifficulty.get(key) ?? [],
-    }));
-
-    const unrecognised = [...byDifficulty.keys()]
-      .filter((key) => !DIFFICULTY_SECTIONS.some((section) => section.key === key))
-      .sort((a, b) => a.localeCompare(b))
-      .map((key) => ({
-        key,
-        label: key.charAt(0).toUpperCase() + key.slice(1),
-        marker: "bg-gray-400",
-        items: byDifficulty.get(key) ?? [],
-      }));
-
-    return [...known, ...unrecognised].filter((group) => group.items.length > 0);
-  }, [filteredScenarios]);
+  }, [scenarios, searchQuery, categoryFilter]);
 
   const linkModalFilteredPatients = useMemo(() => {
     const q = linkPatientSearchQuery.toLowerCase();
@@ -337,7 +283,6 @@ export default function FacultyScenariosClient() {
         {
           count: chunkCount,
           categories,
-          difficulty: batchDifficulty || undefined,
           topic: batchTopic.trim() || undefined,
           lessonText: batchLesson.lesson?.lessonText,
           avoidTitles: collected.map((s) => s.title),
@@ -409,7 +354,6 @@ export default function FacultyScenariosClient() {
       const created = await createScenario({
         title: draft.title,
         description: draft.description,
-        difficulty: draft.difficulty,
         category: draft.category,
         patient_case: draft.patient_case,
         patient_id: draft.patient_id,
@@ -456,30 +400,6 @@ export default function FacultyScenariosClient() {
     setShowBatchModal(false);
     setBatchDrafts(null);
     setBatchSelected([]);
-  };
-
-  const getDifficultyColor = (difficulty: string) => {
-    switch (difficulty) {
-      case "advanced":
-        return "bg-rose-100 text-rose-700 border-rose-200";
-      case "intermediate":
-        return "bg-amber-100 text-amber-700 border-amber-200";
-      case "beginner":
-        return "bg-emerald-100 text-emerald-700 border-emerald-200";
-      default:
-        return "bg-gray-100 text-gray-700 border-gray-200";
-    }
-  };
-
-  const getDifficultyIcon = (difficulty: string) => {
-    switch (difficulty) {
-      case "advanced":
-        return faExclamationTriangle;
-      case "beginner":
-        return faGraduationCap;
-      default:
-        return faBookOpen;
-    }
   };
 
   const handleViewDetails = (scenario: SimulationScenario) => {
@@ -723,26 +643,6 @@ export default function FacultyScenariosClient() {
               className={inputClassName + " pl-10"}
             />
           </div>
-          <div className="relative min-w-0 flex-[1_1_10rem] sm:w-44 sm:flex-none">
-            <FontAwesomeIcon
-              icon={faFilter}
-              className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500"
-            />
-            <select
-              value={difficultyFilter}
-              onChange={(e) => setDifficultyFilter(e.target.value)}
-              className={selectClassName + " pl-10 pr-10 w-full"}
-            >
-              <option value="all">All Difficulties</option>
-              <option value="beginner">Beginner</option>
-              <option value="intermediate">Intermediate</option>
-              <option value="advanced">Advanced</option>
-            </select>
-            <FontAwesomeIcon
-              icon={faChevronDown}
-              className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none"
-            />
-          </div>
           <div className="relative min-w-0 flex-[1_1_10rem] sm:w-48 sm:flex-none">
             <FontAwesomeIcon
               icon={faHospitalUser}
@@ -809,11 +709,11 @@ export default function FacultyScenariosClient() {
           <FontAwesomeIcon icon={faNotesMedical} className="w-12 h-12 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-gray-700">No patient cases found</h3>
           <p className="text-gray-500 text-sm mt-1">
-            {searchQuery || difficultyFilter !== "all" || categoryFilter !== "all"
+            {searchQuery || categoryFilter !== "all"
               ? "Try adjusting your filters."
               : "Generate a starter library, or create your first patient case by hand."}
           </p>
-          {!searchQuery && difficultyFilter === "all" && categoryFilter === "all" && (
+          {!searchQuery && categoryFilter === "all" && (
             <button
               onClick={openBatchModal}
               className="mt-4 inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-brand-600 to-brand-800 text-white font-medium rounded-xl hover:from-brand-700 hover:to-brand-900 transition-all shadow-lg shadow-[0_4px_14px_-2px_rgb(27_107_123_/_0.45)]"
@@ -824,92 +724,76 @@ export default function FacultyScenariosClient() {
           )}
         </div>
       ) : (
-        <div className="space-y-6">
-          {difficultyGroups.map((group) => (
-            <section key={group.key} className="space-y-3">
-              <div className="flex items-center gap-2.5">
-                <span className={`h-2 w-2 shrink-0 rounded-full ${group.marker}`} aria-hidden />
-                <h2 className="text-sm font-semibold uppercase tracking-[0.08em] text-gray-700">
-                  {group.label}
-                </h2>
-                <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium tabular-nums text-gray-600">
-                  {group.items.length}
-                </span>
-                <span className="h-px flex-1 bg-hairline" aria-hidden />
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {group.items.map((scenario) => (
-                  <div
-                    key={scenario.id}
-                    className="group bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200 overflow-hidden flex flex-col"
-                  >
-                    <div className="p-3 border-b border-hairline flex-1">
-                      <div className="flex items-start justify-between mb-3">
-                        <h3 className="font-semibold text-gray-900 line-clamp-2 pr-2">
-                          {scenario.title}
-                        </h3>
-                        {scenario.is_ai_generated && (
-                          <span className="px-2 py-1 bg-brand-100 text-brand-700 text-xs font-medium rounded-full flex items-center gap-1 whitespace-nowrap">
-                            <FontAwesomeIcon icon={faRobot} className="w-3 h-3" />
-                            AI
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-sm text-gray-500 line-clamp-2 mb-4">{scenario.description}</p>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="px-2.5 py-1 bg-gray-100 text-gray-700 text-xs font-medium rounded-full">
-                          {scenario.category}
-                        </span>
-                        {scenario.patient_name && (
-                          <span className="px-2.5 py-1 bg-teal-50 text-teal-700 text-xs font-medium rounded-full flex items-center gap-1">
-                            <FontAwesomeIcon icon={faUsers} className="w-3 h-3" />
-                            {scenario.patient_name}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="p-5 bg-subtle">
-                      <div className="flex items-center justify-between text-sm mb-4">
-                        <span className="text-gray-500 flex items-center gap-1.5">
-                          <FontAwesomeIcon icon={faUsers} className="w-3.5 h-3.5" />
-                          {scenario.student_count} students
-                        </span>
-                        <span className="text-gray-400 flex items-center gap-1.5">
-                          <FontAwesomeIcon icon={faCalendarDay} className="w-3.5 h-3.5" />
-                          {new Date(scenario.created_at).toLocaleDateString()}
-                        </span>
-                      </div>
-                      <ActionsMenu
-                        actions={[
-                          { label: "View", icon: faEye, onClick: () => handleViewDetails(scenario) },
-                          {
-                            label: "Edit",
-                            icon: faPenToSquare,
-                            onClick: () => router.push(`/faculty/scenarios/${scenario.id}/edit`),
-                          },
-                          {
-                            label: "Assign",
-                            icon: faUserPlus,
-                            onClick: () => handleOpenAssignModal(scenario),
-                          },
-                          {
-                            label: scenario.patient_name ? "Change patient" : "Link patient",
-                            icon: faHospitalUser,
-                            onClick: () => handleOpenLinkPatientModal(scenario),
-                          },
-                          {
-                            label: "Delete",
-                            icon: faTrash,
-                            danger: true,
-                            onClick: () => handleOpenDeleteModal(scenario),
-                          },
-                        ]}
-                      />
-                    </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredScenarios.map((scenario) => (
+              <div
+                key={scenario.id}
+                className="group bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200 overflow-hidden flex flex-col"
+              >
+                <div className="p-3 border-b border-hairline flex-1">
+                  <div className="flex items-start justify-between mb-3">
+                    <h3 className="font-semibold text-gray-900 line-clamp-2 pr-2">
+                      {scenario.title}
+                    </h3>
+                    {scenario.is_ai_generated && (
+                      <span className="px-2 py-1 bg-brand-100 text-brand-700 text-xs font-medium rounded-full flex items-center gap-1 whitespace-nowrap">
+                        <FontAwesomeIcon icon={faRobot} className="w-3 h-3" />
+                        AI
+                      </span>
+                    )}
                   </div>
-                ))}
+                  <p className="text-sm text-gray-500 line-clamp-2 mb-4">{scenario.description}</p>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="px-2.5 py-1 bg-gray-100 text-gray-700 text-xs font-medium rounded-full">
+                      {scenario.category}
+                    </span>
+                    {scenario.patient_name && (
+                      <span className="px-2.5 py-1 bg-teal-50 text-teal-700 text-xs font-medium rounded-full flex items-center gap-1">
+                        <FontAwesomeIcon icon={faUsers} className="w-3 h-3" />
+                        {scenario.patient_name}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="p-5 bg-subtle">
+                  <div className="flex items-center justify-between text-sm mb-4">
+                    <span className="text-gray-500 flex items-center gap-1.5">
+                      <FontAwesomeIcon icon={faUsers} className="w-3.5 h-3.5" />
+                      {scenario.student_count} students
+                    </span>
+                    <span className="text-gray-400 flex items-center gap-1.5">
+                      <FontAwesomeIcon icon={faCalendarDay} className="w-3.5 h-3.5" />
+                      {new Date(scenario.created_at).toLocaleDateString()}
+                    </span>
+                  </div>
+                  <ActionsMenu
+                    actions={[
+                      { label: "View", icon: faEye, onClick: () => handleViewDetails(scenario) },
+                      {
+                        label: "Edit",
+                        icon: faPenToSquare,
+                        onClick: () => router.push(`/faculty/scenarios/${scenario.id}/edit`),
+                      },
+                      {
+                        label: "Assign",
+                        icon: faUserPlus,
+                        onClick: () => handleOpenAssignModal(scenario),
+                      },
+                      {
+                        label: scenario.patient_name ? "Change patient" : "Link patient",
+                        icon: faHospitalUser,
+                        onClick: () => handleOpenLinkPatientModal(scenario),
+                      },
+                      {
+                        label: "Delete",
+                        icon: faTrash,
+                        danger: true,
+                        onClick: () => handleOpenDeleteModal(scenario),
+                      },
+                    ]}
+                  />
+                </div>
               </div>
-            </section>
           ))}
         </div>
       )}
@@ -1086,27 +970,6 @@ export default function FacultyScenariosClient() {
                   )}
 
                   <div>
-                    <label className={labelClassName}>Difficulty</label>
-                    <div className="relative">
-                      <select
-                        value={batchDifficulty}
-                        onChange={(e) => setBatchDifficulty(e.target.value)}
-                        disabled={batchGenerating}
-                        className={selectClassName + " pr-10"}
-                      >
-                        <option value="">Mixed — cycle beginner to advanced</option>
-                        <option value="beginner">Beginner only</option>
-                        <option value="intermediate">Intermediate only</option>
-                        <option value="advanced">Advanced only</option>
-                      </select>
-                      <FontAwesomeIcon
-                        icon={faChevronDown}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
                     <label className={labelClassName}>Teaching focus (optional)</label>
                     <input
                       type="text"
@@ -1277,13 +1140,6 @@ export default function FacultyScenariosClient() {
                               {draft.description}
                             </p>
                             <div className="flex items-center gap-2 flex-wrap mt-2">
-                              <span
-                                className={`px-2 py-0.5 rounded-full text-xs font-medium border ${getDifficultyColor(
-                                  draft.difficulty,
-                                )}`}
-                              >
-                                {draft.difficulty}
-                              </span>
                               <span className="px-2 py-0.5 bg-gray-100 text-gray-700 text-xs font-medium rounded-full">
                                 {draft.category}
                               </span>
@@ -1402,17 +1258,6 @@ export default function FacultyScenariosClient() {
                 </button>
               </div>
               <div className="flex items-center gap-3 mt-4 flex-wrap">
-                <span
-                  className={`px-3 py-1 rounded-full text-sm font-semibold border flex items-center gap-1 ${getDifficultyColor(
-                    selectedScenario.difficulty,
-                  )}`}
-                >
-                  <FontAwesomeIcon
-                    icon={getDifficultyIcon(selectedScenario.difficulty)}
-                    className="w-3 h-3"
-                  />
-                  {selectedScenario.difficulty}
-                </span>
                 <span className="px-3 py-1 bg-gray-100 text-gray-700 text-sm font-semibold rounded-full">
                   {selectedScenario.category}
                 </span>
