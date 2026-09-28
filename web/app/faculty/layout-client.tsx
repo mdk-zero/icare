@@ -35,7 +35,7 @@ const navItems: NavItem[] = [
   { id: "overview", label: "Overview", href: "/faculty", icon: faHouse, section: "General" },
   {
     id: "teams",
-    label: "My Groups",
+    label: "Students",
     href: "/faculty/teams",
     icon: faPeopleGroup,
     section: "Teaching",
@@ -108,7 +108,7 @@ const navItems: NavItem[] = [
 
 function isActive(item: NavItem, pathname: string) {
   if (item.href === "/faculty") return pathname === "/faculty";
-  // Student profiles are opened from My Groups, so they count as part of it.
+  // Student profiles are opened from Students, so they count as part of it.
   if (item.id === "teams" && pathname.startsWith("/faculty/students")) return true;
   return pathname.startsWith(item.href);
 }

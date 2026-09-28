@@ -191,7 +191,7 @@ export default function AttentionList({
           href="/faculty/teams"
           className="text-sm font-medium text-brand-600 transition-colors hover:text-brand-700"
         >
-          My groups →
+          Students →
         </Link>
       </footer>
     </section>

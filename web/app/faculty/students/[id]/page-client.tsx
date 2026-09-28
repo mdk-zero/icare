@@ -487,7 +487,7 @@ export default function StudentDetailClient() {
         className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
       >
         <FontAwesomeIcon icon={faChevronLeft} className="w-5 h-5" />
-        Back to My Groups
+        Back to Students
       </button>
       <LiveClock variant="compact" />
     </div>
@@ -521,7 +521,7 @@ export default function StudentDetailClient() {
           onClick={() => router.push('/faculty/teams')}
           className="mt-4 px-4 py-2 text-brand-600 font-medium"
         >
-          Back to My Groups
+          Back to Students
         </button>
       </div>
     );

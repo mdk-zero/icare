@@ -196,7 +196,7 @@ export default function TeamsClient() {
           icon: <FontAwesomeIcon icon={faPeopleGroup} className="h-3.5 w-3.5" />,
           label: "Teaching",
         }}
-        title="My Groups"
+        title="Students"
         subtitle={
           totalGroups > 0
             ? `You supervise ${plural(totalGroups, "group")} across ${plural(sections.length, "section")}. Your dean sets up the groups; you can move students between your own.`
