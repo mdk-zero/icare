@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   faBedPulse,
+  faBookOpen,
   faCalendarCheck,
   faChartBar,
   faClipboardList,
@@ -60,6 +61,14 @@ const navItems: NavItem[] = [
     label: "Case Presentations",
     href: "/faculty/cases",
     icon: faFilePrescription,
+    section: "Teaching",
+  },
+  // Study materials per Taylor's skill that students open in the mobile app.
+  {
+    id: "library",
+    label: "Library",
+    href: "/faculty/library",
+    icon: faBookOpen,
     section: "Teaching",
   },
   // Monitoring is the single clinical destination: the room layout and census

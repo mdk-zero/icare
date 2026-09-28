@@ -3789,3 +3789,130 @@ export const gradeCaseSubmission = (
     `/api/faculty/cases/submissions/${id}`,
     { method: 'PUT', body },
   );
+
+// ---------------------------------------------------------------------------
+// Library (migration 061): study materials per Taylor's skill.
+// ---------------------------------------------------------------------------
+
+export type LibraryKind = 'video' | 'note' | 'pdf' | 'slides' | 'link';
+
+export interface LibraryMaterial {
+  id: string;
+  skill_id: string;
+  kind: LibraryKind;
+  title: string;
+  description: string;
+  youtube_id: string | null;
+  body_md: string | null;
+  url: string | null;
+  file_path: string | null;
+  file_name: string | null;
+  file_size: number | null;
+  mime_type: string | null;
+  target_sections: string[] | null;
+  status: 'draft' | 'published';
+  published_at: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  author_name?: string;
+  mine?: boolean;
+  views?: number;
+}
+
+export interface LibrarySkill {
+  id: string;
+  chapter: number;
+  chapterId: string;
+  area: string;
+  title: string;
+}
+
+export interface LibrarySuggestion {
+  id: string;
+  skill_id: string;
+  youtube_id: string;
+  title: string;
+  channel: string;
+}
+
+/** What the add/edit form sends; the content field is the one its kind needs. */
+export interface LibraryMaterialInput {
+  skill_id: string;
+  kind: LibraryKind;
+  title: string;
+  description: string;
+  youtube_url?: string;
+  body_md?: string;
+  url?: string;
+  file_path?: string;
+  file_name?: string;
+  file_size?: number;
+  mime_type?: string;
+  target_sections: string[];
+  publish?: boolean;
+}
+
+export const fetchLibrary = () =>
+  caseRequest<{ skills: LibrarySkill[]; sections: Section[]; materials: LibraryMaterial[]; enabled: boolean }>(
+    '/api/faculty/library',
+  );
+
+export const fetchLibraryMaterial = (id: string) =>
+  caseRequest<{ material: LibraryMaterial; file: { direct: string; embed: string } | null }>(`/api/faculty/library/${id}`);
+
+export const createLibraryMaterial = (input: LibraryMaterialInput) =>
+  caseRequest<{ material: LibraryMaterial }>('/api/faculty/library', { method: 'POST', body: input });
+
+export const updateLibraryMaterial = (id: string, input: Omit<LibraryMaterialInput, 'publish'>) =>
+  caseRequest<{ material: LibraryMaterial }>(`/api/faculty/library/${id}`, { method: 'PATCH', body: input });
+
+export const setLibraryMaterialStatus = (id: string, action: 'publish' | 'unpublish') =>
+  caseRequest<{ material: LibraryMaterial }>(`/api/faculty/library/${id}`, { method: 'PATCH', body: { action } });
+
+export const deleteLibraryMaterial = (id: string) =>
+  caseRequest<{ ok: true }>(`/api/faculty/library/${id}`, { method: 'DELETE' });
+
+export const fetchLibrarySuggestions = () =>
+  caseRequest<{ suggestions: LibrarySuggestion[] }>('/api/faculty/library/suggestions');
+
+export const publishLibrarySuggestion = (suggestionId: string, target_sections: string[]) =>
+  caseRequest<{ material: LibraryMaterial }>('/api/faculty/library/suggestions', {
+    method: 'POST',
+    body: { suggestionId, target_sections },
+  });
+
+/**
+ * Uploads a PDF or PowerPoint file for a material: asks the API for a one-time
+ * Storage URL, then sends the file straight there, reporting progress (0–1).
+ * Resolves to the stored path and file details the material is saved with.
+ */
+export async function uploadLibraryFile(
+  file: File,
+  onProgress: (fraction: number) => void,
+): Promise<{ data: { kind: 'pdf' | 'slides'; file_path: string; file_name: string; file_size: number; mime_type: string } } | { error: string }> {
+  const ticket = await caseRequest<{ kind: 'pdf' | 'slides'; path: string; uploadUrl: string }>(
+    '/api/faculty/library/upload-url',
+    { method: 'POST', body: { fileName: file.name, mime: file.type, size: file.size } },
+  );
+  if (ticket.error !== undefined) return { error: ticket.error };
+  const { kind, path, uploadUrl } = ticket.data;
+
+  const form = new FormData();
+  form.append('cacheControl', '3600');
+  form.append('', file);
+  const ok = await new Promise<boolean>((resolve) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', uploadUrl);
+    xhr.setRequestHeader('x-upsert', 'false');
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onProgress(e.loaded / e.total);
+    };
+    xhr.onload = () => resolve(xhr.status >= 200 && xhr.status < 300);
+    xhr.onerror = () => resolve(false);
+    xhr.send(form);
+  });
+  if (!ok) return { error: 'The upload failed. Check your connection and try again.' };
+  onProgress(1);
+  return { data: { kind, file_path: path, file_name: file.name, file_size: file.size, mime_type: file.type } };
+}

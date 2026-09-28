@@ -36,7 +36,7 @@ export async function GET() {
   return NextResponse.json({
     suggestions: (suggestions.data ?? [])
       .filter((s) => !added.has(`${s.skill_id}|${s.youtube_id}`))
-      .map(({ sort_order: _, ...s }) => s),
+      .map((s) => ({ id: s.id, skill_id: s.skill_id, youtube_id: s.youtube_id, title: s.title, channel: s.channel })),
   });
 }
 
