@@ -18,6 +18,7 @@ import { getStudentsWithWork } from "@/app/lib/faculty-dashboard";
 import PageHeader from "@/app/components/PageHeader";
 import StatTile from "@/app/components/StatTile";
 import { deanActorFilter } from "@/app/lib/audit-trail";
+import { lastName } from "@/app/faculty/_overview/format";
 
 export const metadata: Metadata = {
   title: "Overview | iCARE++",
@@ -176,7 +177,9 @@ async function loadDashboard(viewerId: string) {
     .select("student_id");
 
   const users = (usersRes.data ?? []).filter((u) => !visible || visible.has(u.id));
-  const usersById = new Map((usersRes.data ?? []).map((u) => [u.id as string, { name: u.name as string }]));
+  const usersById = new Map(
+    (usersRes.data ?? []).map((u) => [u.id as string, { name: u.name as string }]),
+  );
   const sections = (sectionsRes.data ?? []).filter(
     (sec) => !scope || scope.sectionIds.includes(sec.id),
   );
@@ -378,7 +381,7 @@ export default async function AdminDashboard() {
     activity,
   } = await loadDashboard(session.uid);
 
-  const firstName = viewerName ? viewerName.split(" ")[0] : null;
+  const surname = viewerName ? lastName(viewerName) : null;
   const today = new Date().toLocaleDateString("en-US", {
     weekday: "long",
     year: "numeric",
@@ -401,7 +404,7 @@ export default async function AdminDashboard() {
           icon: <FontAwesomeIcon icon={faHouse} className="w-3.5 h-3.5" />,
           label: "Dean Dashboard",
         }}
-        title={firstName ? `Welcome back, ${firstName}!` : "Welcome back!"}
+        title={surname ? `Welcome back, Dean ${surname}!` : "Welcome back!"}
         subtitle={`${today} • Here's what's happening across the program today.`}
       />
 

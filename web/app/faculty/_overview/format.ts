@@ -80,7 +80,7 @@ const SURNAME_PARTICLES = new Set([
 const NAME_SUFFIXES = new Set(["jr", "sr", "ii", "iii", "iv", "rn"]);
 
 /** Last token(s) of a stored `name` string, particles kept with their surname. */
-function lastName(fullName: string): string {
+export function lastName(fullName: string): string {
   const parts = fullName.trim().split(/\s+/).filter(Boolean);
   const strip = (part: string) => part.toLowerCase().replace(/[.,]/g, "");
   while (parts.length > 1 && NAME_SUFFIXES.has(strip(parts[parts.length - 1]))) {
