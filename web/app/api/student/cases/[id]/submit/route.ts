@@ -71,7 +71,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           data: { case_submission_id: id, case_presentation_id: row.presentation_id, student_id: session.uid },
         })),
       );
-      if (notifyError) console.error('Failed to notify faculty of case submission', notifyError);
+      if (notifyError) console.error('Failed to notify instructor of case submission', notifyError);
     }
 
     await logAudit(

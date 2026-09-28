@@ -35,7 +35,7 @@ export async function GET() {
       : { data: [] as { id: string; name: string }[], error: null };
 
     if (error) {
-      console.error('Failed to list faculty sections', error);
+      console.error('Failed to list instructor sections', error);
       return NextResponse.json({ error: 'Unable to list sections' }, { status: 500 });
     }
 
@@ -43,7 +43,7 @@ export async function GET() {
 
     return NextResponse.json({ sections });
   } catch (err) {
-    console.error('List faculty sections failed', err);
+    console.error('List instructor sections failed', err);
     return NextResponse.json({ error: 'Unable to list sections' }, { status: 500 });
   }
 }

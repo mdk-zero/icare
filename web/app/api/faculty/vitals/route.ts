@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ readings: readings ?? [] });
   } catch (err) {
-    console.error('Fetch faculty vital readings failed', err);
+    console.error('Fetch instructor vital readings failed', err);
     return NextResponse.json({ error: 'Unable to fetch readings' }, { status: 500 });
   }
 }

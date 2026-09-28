@@ -88,7 +88,7 @@ interface UserTarget extends Target {
 
 const byName = (a: Target, b: Target) => a.label.localeCompare(b.label);
 
-const ROLE_LABEL: Record<string, string> = { student: "Student", faculty: "Faculty", admin: "Admin" };
+const ROLE_LABEL: Record<string, string> = { student: "Student", faculty: "Instructor", admin: "Dean" };
 
 /** What's worth pulling now — from the lists already on the page, no AI. */
 function suggestFor(
@@ -108,7 +108,7 @@ function suggestFor(
       title:
         unassigned.length === 1
           ? `${unassigned[0].label} has no sections`
-          : `${unassigned.length} faculty without sections`,
+          : `${plural(unassigned.length, "instructor")} without sections`,
       detail: "They can't see or report on any students until they're assigned.",
       cta: "Show them",
       action: { kind: "filter", type: "faculty", filter: "no-sections" },
@@ -160,12 +160,12 @@ function suggestFor(
         id: "summary",
         icon: faBuilding,
         tone: "brand",
-        title: "Admin summary",
+        title: "Dean summary",
         detail: last
           ? `Last pulled ${sinceLabel(last.created_at)}.`
-          : "Faculty, rooms and users on one page.",
+          : "Instructors, rooms and users on one page.",
         cta: "Preview",
-        action: { kind: "preview", type: "summary", targetId: null, subject: "Admin summary" },
+        action: { kind: "preview", type: "summary", targetId: null, subject: "Dean summary" },
       });
     }
   }
@@ -249,9 +249,9 @@ export default function AdminReportsClient() {
   const types = [
     defineReportType<FacultyTarget>({
       type: "faculty",
-      label: "Faculty",
+      label: "Instructor",
       icon: faUserTie,
-      blurb: "The groups a faculty member supervises and the grading they have done.",
+      blurb: "The groups an instructor supervises and the grading they have done.",
       contents: ["Groups and students", "Grades given and awaiting", "Group averages"],
       noun: "faculty",
       list: {
@@ -263,7 +263,7 @@ export default function AdminReportsClient() {
           { id: "students", label: "Most students", compare: (a, b) => b.students - a.students || byName(a, b) },
           { id: "name", label: "A–Z", compare: byName },
         ],
-        all: { label: "All faculty" },
+        all: { label: "All instructors" },
       },
     }),
     defineReportType<RoomTarget>({
@@ -297,7 +297,7 @@ export default function AdminReportsClient() {
       type: "users",
       label: "Users",
       icon: faUsers,
-      blurb: "An account's role and sign-ins, plus a student's grades or a faculty member's groups.",
+      blurb: "An account's role and sign-ins, plus a student's grades or an instructor's groups.",
       contents: ["Role and join date", "Sign-in history", "Grades or supervision"],
       noun: "users",
       list: {
@@ -326,14 +326,14 @@ export default function AdminReportsClient() {
     }),
     defineReportType({
       type: "summary",
-      label: "Admin summary",
+      label: "Dean summary",
       icon: faBuilding,
-      blurb: "Faculty, rooms, users and grading progress on one page — nothing to pick.",
-      contents: ["Headcount by role", "Grading progress", "Faculty roster", "Room roster"],
+      blurb: "Instructors, rooms, users and grading progress on one page — nothing to pick.",
+      contents: ["Headcount by role", "Grading progress", "Instructor roster", "Room roster"],
       noun: "records",
       scope:
         facultyTargets && roomTargets && userTargets
-          ? `Covers ${plural(facultyTargets.length, "faculty member")}, ${plural(roomTargets.length, "room")} and ${plural(userTargets.length, "user")}.`
+          ? `Covers ${plural(facultyTargets.length, "instructor")}, ${plural(roomTargets.length, "room")} and ${plural(userTargets.length, "user")}.`
           : undefined,
     }),
   ];
@@ -343,7 +343,7 @@ export default function AdminReportsClient() {
       <PageHeader
         badge={{ icon: <FontAwesomeIcon icon={faFileLines} className="h-3 w-3" />, label: "Report Center" }}
         title="Reports"
-        subtitle="Preview and download PDF reports on your faculty, rooms and users"
+        subtitle="Preview and download PDF reports on your instructors, rooms and users"
       />
       <ReportCenter
         endpoint="/api/admin/reports"

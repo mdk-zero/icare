@@ -119,7 +119,7 @@ export async function GET() {
 
     return NextResponse.json({ stats, recent_activities, overview });
   } catch (err) {
-    console.error("Fetch faculty dashboard failed", err);
+    console.error("Fetch instructor dashboard failed", err);
     return NextResponse.json(
       { error: "Unable to fetch dashboard" },
       { status: 500 },

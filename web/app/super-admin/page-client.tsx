@@ -31,9 +31,9 @@ interface Overview {
 
 const ROLES = [
   { key: "student", label: "Students" },
-  { key: "faculty", label: "Faculty" },
-  { key: "admin", label: "Admins" },
-  { key: "super_admin", label: "Super admins" },
+  { key: "faculty", label: "Instructors" },
+  { key: "admin", label: "Deans" },
+  { key: "super_admin", label: "Admins" },
 ];
 
 function ago(iso: string): string {

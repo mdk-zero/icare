@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import AssessmentQuestionsClient from "./page-client";
 
 export const metadata: Metadata = {
-  title: "Manage Questions | iCARE++ Faculty",
+  title: "Manage Questions | iCARE++ Instructor",
 };
 
 export default async function AssessmentQuestionsPage({

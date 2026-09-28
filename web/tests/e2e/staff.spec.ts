@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { requireAccount, signIn } from './helpers';
 
-test.describe('Admin portal', () => {
+test.describe('Dean portal', () => {
   test.beforeEach(async ({ page }) => {
     requireAccount('admin');
     await signIn(page, 'admin');
@@ -13,7 +13,7 @@ test.describe('Admin portal', () => {
     expect(res?.status()).toBe(404);
   });
 
-  test('the super admin portal is off limits', async ({ page }) => {
+  test('the admin portal is off limits', async ({ page }) => {
     await page.goto('/super-admin');
     await expect(page).toHaveURL(/\/admin(\?|$)/);
   });
@@ -27,7 +27,7 @@ test.describe('Admin portal', () => {
   });
 });
 
-test.describe('Faculty portal', () => {
+test.describe('Instructor portal', () => {
   test.beforeEach(async ({ page }) => {
     requireAccount('faculty');
     await signIn(page, 'faculty');
@@ -37,7 +37,7 @@ test.describe('Faculty portal', () => {
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
   });
 
-  test('admin and super admin portals are off limits', async ({ page }) => {
+  test('dean and admin portals are off limits', async ({ page }) => {
     await page.goto('/admin');
     await expect(page).toHaveURL(/\/faculty(\?|$)/);
     await page.goto('/super-admin');

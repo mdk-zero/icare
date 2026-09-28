@@ -28,7 +28,7 @@ export default function RubricEditor({
         <div>
           <p className="text-sm font-bold text-gray-800">Grading rubric</p>
           <p className="mt-0.5 text-xs text-gray-500">
-            What each checklist level means on this scenario. Faculty see it while grading.
+            What each checklist level means on this scenario. Instructors see it while grading.
           </p>
         </div>
         {customised && (

@@ -108,7 +108,7 @@ export default function AccountScreen() {
               {avatarUrl ? 'Your profile photo' : 'No photo yet'}
             </Text>
             <Text style={styles.photoSub}>
-              Shown on your dashboard and to your faculty. JPEG or PNG, cropped to a square.
+              Shown on your dashboard and to your instructor. JPEG or PNG, cropped to a square.
             </Text>
             <Pressable onPress={changeAvatar} disabled={uploading} hitSlop={8}>
               <Text style={[styles.photoAction, uploading && styles.photoActionBusy]}>

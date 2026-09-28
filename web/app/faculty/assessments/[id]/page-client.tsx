@@ -1086,7 +1086,7 @@ export default function AssessmentQuestionsClient({
 
       {!canEdit && (
         <div className="bg-subtle border border-hairline rounded-xl p-4 text-sm text-gray-600">
-          View only — only the faculty member who created this assessment can change it. You can still assign it and see its results.
+          View only — only the instructor who created this assessment can change it. You can still assign it and see its results.
         </div>
       )}
 

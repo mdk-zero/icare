@@ -107,7 +107,7 @@ export default function FacultyClient() {
       error?: string;
     };
     if (!res.ok || !json.user) {
-      flash(json.error ?? "Failed to create faculty");
+      flash(json.error ?? "Failed to create instructor");
       return;
     }
     setData((previous) => ({
@@ -117,7 +117,7 @@ export default function FacultyClient() {
     setShowAddModal(false);
     setNewFaculty({ name: "", email: "" });
     if (json.password) setTempPassword({ email: json.user.email, password: json.password });
-    flash("Faculty account created");
+    flash("Instructor account created");
   };
 
   const openAssignModal = (member: Faculty) => {
@@ -159,15 +159,15 @@ export default function FacultyClient() {
       <PageHeader
         badge={{
           icon: <FontAwesomeIcon icon={faUsers} className="w-3.5 h-3.5" />,
-          label: "Faculty Management",
+          label: "Instructor Management",
         }}
-        title="Faculty"
-        subtitle="Manage faculty accounts and their handled sections"
+        title="Instructors"
+        subtitle="Manage instructor accounts and their handled sections"
         action={{
           icon: <FontAwesomeIcon icon={faPlus} className="h-4 w-4" />,
           onClick: () => setShowAddModal(true),
-          label: "Add a faculty account",
-          text: "Add Faculty",
+          label: "Add an instructor account",
+          text: "Add Instructor",
         }}
       />
 
@@ -194,9 +194,9 @@ export default function FacultyClient() {
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
-        <StatTile icon={faUsers} value={faculty.length} label="Total Faculty" />
+        <StatTile icon={faUsers} value={faculty.length} label="Total Instructors" />
         <StatTile icon={faUsers} value={sections.length} label="Sections" />
-        <StatTile icon={faUsers} value={facultyWithoutSections} label="Faculty Without Sections" />
+        <StatTile icon={faUsers} value={facultyWithoutSections} label="Instructors Without Sections" />
       </div>
 
       <div className="flex items-center gap-3 mb-3">
@@ -223,7 +223,7 @@ export default function FacultyClient() {
           <table className="w-full">
             <thead className="bg-subtle border-b border-gray-100">
               <tr>
-                <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Faculty Member</th>
+                <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Instructor</th>
                 <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Sections</th>
                 <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Students</th>
                 <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Joined</th>
@@ -233,12 +233,12 @@ export default function FacultyClient() {
             <tbody className="divide-y divide-hairline">
               {loading ? (
                 <tr>
-                  <td colSpan={5} className="py-12 text-center text-gray-400">Loading faculty…</td>
+                  <td colSpan={5} className="py-12 text-center text-gray-400">Loading instructors…</td>
                 </tr>
               ) : filteredFaculty.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="py-12 text-center text-gray-400">
-                    {filterSection ? "No faculty match the selected filter" : "No faculty accounts yet — add one to get started"}
+                    {filterSection ? "No instructors match the selected filter" : "No instructor accounts yet — add one to get started"}
                   </td>
                 </tr>
               ) : (
@@ -295,7 +295,7 @@ export default function FacultyClient() {
       {showAddModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-surface rounded-xl p-4 w-full max-w-lg mx-4 shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-hairline">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Add New Faculty</h3>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Add New Instructor</h3>
             <div className="space-y-2">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Full Name</label>
@@ -333,7 +333,7 @@ export default function FacultyClient() {
                 disabled={busy}
                 className="px-4 py-2 bg-brand-600 text-white rounded-xl font-medium hover:bg-brand-700 disabled:opacity-60 transition-all"
               >
-                {busy ? "Creating…" : "Add Faculty"}
+                {busy ? "Creating…" : "Add Instructor"}
               </button>
             </div>
           </div>
@@ -348,7 +348,7 @@ export default function FacultyClient() {
                 Assign Sections to {selectedFaculty.name}
               </h3>
               <p className="text-sm text-gray-500">
-                This faculty member handles every student in the checked sections
+                This instructor handles every student in the checked sections
               </p>
               <p className="mt-2 flex flex-wrap items-center gap-x-3 text-sm text-gray-600">
                 <span className="truncate">{selectedFaculty.email}</span>

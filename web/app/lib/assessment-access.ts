@@ -42,7 +42,7 @@ export async function guardAssessmentEdit(
     if (ownsFaculty(await getAdminScope(supabase, session.uid), createdBy)) return null;
   }
   return NextResponse.json(
-    { error: 'Only the faculty member who created this assessment can change it.' },
+    { error: 'Only the instructor who created this assessment can change it.' },
     { status: 403 },
   );
 }

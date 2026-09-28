@@ -4,7 +4,7 @@ import ClientAdminLayout from "./layout-client";
 import { EcgLoader } from "../components/EcgLoader";
 
 export const metadata: Metadata = {
-  title: "Admin | iCARE++",
+  title: "Dean | iCARE++",
 };
 
 export default function AdminLayout({

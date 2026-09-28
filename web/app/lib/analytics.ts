@@ -96,7 +96,7 @@ export async function resolveSummaryArgs(
       sectionIds = requested.length > 0 ? managed.filter((id) => requested.includes(id)) : managed;
       studentIds = members;
     } catch (err) {
-      console.error('Failed to read faculty groups', err);
+      console.error('Failed to read instructor groups', err);
       return { error: 'Unable to read your groups' };
     }
   } else if (session.role === 'admin') {
@@ -108,7 +108,7 @@ export async function resolveSummaryArgs(
         studentIds = scope.studentIds;
       }
     } catch (err) {
-      console.error('Failed to read the admin scope', err);
+      console.error('Failed to read the dean scope', err);
       return { error: 'Unable to read your sections' };
     }
   }

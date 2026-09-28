@@ -29,18 +29,12 @@ import ThemeSetting from "./ThemeSetting";
 import LocalCacheSetting from "./LocalCacheSetting";
 import { toast } from "./Toast";
 import ChangeEmailDialog from "./ChangeEmailDialog";
+import { ROLE_LABEL } from "../lib/role-labels";
 
 interface ProfileEditorProps {
   changePasswordHref: string;
   onUserUpdate?: (user: User) => void;
 }
-
-const ROLE_LABEL: Record<User["role"], string> = {
-  super_admin: "Super Administrator",
-  admin: "Administrator",
-  faculty: "Faculty",
-  student: "Student",
-};
 
 /** The sidebar's teal, so the credential band reads as part of the chrome. */
 const BAND_GRADIENT = "linear-gradient(120deg, #0b3d3d 0%, #0f5252 45%, #146464 100%)";

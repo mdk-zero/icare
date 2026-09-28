@@ -32,6 +32,7 @@ import BackgroundTasks from "./BackgroundTasks";
 import NotificationsPopover from "./NotificationsPopover";
 import CacheConsentBanner from "./CacheConsentBanner";
 import { onCacheClear } from "../lib/request-cache";
+import { roleLabel } from "../lib/role-labels";
 
 export interface NavItem {
   id: string;
@@ -53,16 +54,16 @@ const config = {
     // 602x200 wordmark — must run at its own aspect ratio, never boxed into a square.
     logo: "/logo-white-no-bg.png",
     logoIsWordmark: true,
-    portalLabel: "Faculty Portal",
-    mobileRoleLabel: "Faculty",
+    portalLabel: "Instructor Portal",
+    mobileRoleLabel: "Instructor",
     profileHref: "/faculty/settings",
     homeHref: "/faculty",
   },
   admin: {
     logo: "/logo-white-no-bg.png",
     logoIsWordmark: true,
-    portalLabel: "Admin Portal",
-    mobileRoleLabel: "Admin",
+    portalLabel: "Dean Portal",
+    mobileRoleLabel: "Dean",
     profileHref: "/admin/settings",
     homeHref: "/admin",
   },
@@ -70,7 +71,7 @@ const config = {
     logo: "/logo-white-no-bg.png",
     logoIsWordmark: true,
     portalLabel: "System Administration",
-    mobileRoleLabel: "Super Admin",
+    mobileRoleLabel: "Admin",
     profileHref: "/super-admin/settings",
     homeHref: "/super-admin",
   },
@@ -547,7 +548,7 @@ export default function Shell({ role, navItems, isActive, children }: ShellProps
                       {user.name}
                     </span>
                     <span className="block font-mono text-[10px] uppercase tracking-[0.14em] text-white/55 leading-none mt-1">
-                      {user.role}
+                      {roleLabel(user.role)}
                     </span>
                   </span>
                 </Link>

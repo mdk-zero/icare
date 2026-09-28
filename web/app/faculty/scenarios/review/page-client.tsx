@@ -489,7 +489,7 @@ export default function FacultyScenarioReviewClient() {
     } else if (state.status === "accepted" || state.status === "not_required") {
       setEditing(true);
     } else if (state.status === "pending") {
-      toast("Your request is still waiting for your admin's answer.");
+      toast("Your request is still waiting for your dean's answer.");
     } else {
       setRequestError(null);
       setRequestReason("");
@@ -512,7 +512,7 @@ export default function FacultyScenarioReviewClient() {
     }
     setRequestReason(null);
     void refreshEditState();
-    toast("Request sent. You'll be notified when your admin answers.");
+    toast("Request sent. You'll be notified when your dean answers.");
   };
 
   const submittedCount = assignments.filter(isSubmitted).length;
@@ -944,12 +944,12 @@ export default function FacultyScenarioReviewClient() {
                         {editState?.status === "not_required"
                           ? "Edit to change a rating or note."
                           : editState?.status === "accepted"
-                            ? `${editState.resolved_by_name ?? "Your admin"} approved a change. Saving it uses the approval up.`
+                            ? `${editState.resolved_by_name ?? "Your dean"} approved a change. Saving it uses the approval up.`
                             : editState?.status === "pending"
-                              ? `Change requested ${formatWhen(editState.requested_at)} and waiting for your admin.`
+                              ? `Change requested ${formatWhen(editState.requested_at)} and waiting for your dean.`
                               : editState?.status === "declined"
-                                ? `${editState.resolved_by_name ?? "Your admin"} declined your last request. You can ask again.`
-                                : "Changing a saved grade needs your admin's permission."}
+                                ? `${editState.resolved_by_name ?? "Your dean"} declined your last request. You can ask again.`
+                                : "Changing a saved grade needs your dean's permission."}
                       </p>
                     </>
                   ) : (
@@ -1029,7 +1029,7 @@ export default function FacultyScenarioReviewClient() {
           onClose={() => setRequestReason(null)}
           config={{
             title: "Ask to change this grade",
-            message: `${selected.student_name}'s grade on "${selected.scenario_title}" is saved. Your admin will be notified, and you can edit it once they accept.`,
+            message: `${selected.student_name}'s grade on "${selected.scenario_title}" is saved. Your dean will be notified, and you can edit it once they accept.`,
             confirmLabel: "Send request",
             danger: false,
             loading: requesting,

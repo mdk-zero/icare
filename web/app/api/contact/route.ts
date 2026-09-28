@@ -62,7 +62,7 @@ async function notifySuperAdmins(req: AccessRequest): Promise<boolean> {
     if (insertError) throw insertError;
     return true;
   } catch (err) {
-    console.error('Failed to notify super admins of access request', err);
+    console.error('Failed to notify admins of access request', err);
     return false;
   }
 }

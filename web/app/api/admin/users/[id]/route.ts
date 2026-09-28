@@ -45,7 +45,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'You cannot change your own role' }, { status: 400 });
     }
     if (typeof role !== 'string' || !(ASSIGNABLE_ROLES as readonly string[]).includes(role)) {
-      return NextResponse.json({ error: 'Role must be student or faculty' }, { status: 400 });
+      return NextResponse.json({ error: 'Role must be student or instructor' }, { status: 400 });
     }
     updates.role = role;
   }

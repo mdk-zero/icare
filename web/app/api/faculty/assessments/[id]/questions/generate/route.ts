@@ -70,7 +70,7 @@ function buildPrompt(
 Assessment context:
 - Title: ${assessment.title}
 - Category: ${assessment.category}
-- Difficulty: ${assessment.difficulty}${assessment.description ? `\n- Description: ${assessment.description}` : ''}${topic ? `\n- Faculty focus request: "${topic.replace(/"/g, '\\"')}"` : ''}
+- Difficulty: ${assessment.difficulty}${assessment.description ? `\n- Description: ${assessment.description}` : ''}${topic ? `\n- Instructor focus request: "${topic.replace(/"/g, '\\"')}"` : ''}
 
 Write exactly ${count} multiple-choice questions. Return ONLY a valid JSON object with this exact structure (no markdown, no explanations):
 

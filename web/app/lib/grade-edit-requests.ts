@@ -85,4 +85,4 @@ export async function spendGradeEditApproval(
 }
 
 export const EDIT_NEEDS_APPROVAL =
-  'This grade is saved. Ask your admin for permission before changing it.';
+  'This grade is saved. Ask your dean for permission before changing it.';

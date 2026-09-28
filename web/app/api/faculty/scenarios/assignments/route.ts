@@ -148,7 +148,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ assignments: formatted });
   } catch (err) {
-    console.error('Fetch faculty assignments failed', err);
+    console.error('Fetch instructor assignments failed', err);
     return NextResponse.json({ error: 'Unable to fetch assignments' }, { status: 500 });
   }
 }

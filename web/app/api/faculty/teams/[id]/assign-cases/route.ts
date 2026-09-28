@@ -97,7 +97,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         return NextResponse.json({ error: 'This group is not in your sections' }, { status: 403 });
       }
       if (!scenarioVisibleToFaculty(holders, roster)) {
-        return NextResponse.json({ error: 'This case belongs to another faculty member' }, { status: 403 });
+        return NextResponse.json({ error: 'This case belongs to another instructor' }, { status: 403 });
       }
     }
 

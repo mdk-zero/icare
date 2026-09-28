@@ -72,9 +72,9 @@ export async function authorizeEmailChange(
   }
   if (session.role === 'admin') {
     const { data: me } = await supabase.from('users').select('role').eq('id', session.uid).maybeSingle();
-    if (me?.role !== 'admin' || target.role !== 'faculty') return fail(403, 'You can only change the email of faculty you manage');
+    if (me?.role !== 'admin' || target.role !== 'faculty') return fail(403, 'You can only change the email of instructors you manage');
     const scope = await getAdminScope(supabase, session.uid);
-    if (!ownsFaculty(scope, target.id)) return fail(403, 'You can only change the email of faculty you manage');
+    if (!ownsFaculty(scope, target.id)) return fail(403, 'You can only change the email of instructors you manage');
     return { ok: true, value: target as EmailTarget };
   }
   return fail(403, 'Forbidden');

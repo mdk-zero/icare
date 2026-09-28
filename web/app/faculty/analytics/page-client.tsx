@@ -1004,8 +1004,8 @@ export default function FacultyAnalyticsClient() {
 
           {sections.length === 0 && (
             <p className="border-t border-hairline px-4 py-2.5 text-xs text-amber-700">
-              You don&apos;t manage any sections yet, so there is nothing to report on. An admin
-              assigns sections from Admin → Faculty.
+              You don&apos;t manage any sections yet, so there is nothing to report on. A dean
+              assigns sections from Dean → Instructors.
             </p>
           )}
         </div>

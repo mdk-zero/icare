@@ -219,7 +219,7 @@ export default function QuizScreen() {
           <Text style={styles.emptyText}>Check back later for new quizzes.</Text>
         </View>
       ) : assigned.length === 0 && completed.length === 0 && !error ? (
-        <EmptyState icon="document-text-outline" message="No skill assessments published yet — check back once your faculty publishes one." />
+        <EmptyState icon="document-text-outline" message="No skill assessments published yet — check back once your instructor publishes one." />
       ) : null}
 
       {completed.length > 0 && (

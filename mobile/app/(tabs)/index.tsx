@@ -377,7 +377,7 @@ export default function DashboardScreen() {
                 <FontAwesome6 name="clipboard-list" size={18} color={Teal.primary} />
               </View>
               <Text style={styles.emptyTasks}>
-                No scenarios assigned yet — your faculty will assign them here.
+                No scenarios assigned yet — your instructor will assign them here.
               </Text>
             </View>
           ) : nextTask && laterTasks.length === 0 ? (

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import PatientsManager from "../../components/PatientsManager";
 
 export const metadata: Metadata = {
-  title: "Wards | iCARE++ Admin",
+  title: "Wards | iCARE++ Dean",
 };
 
 /**

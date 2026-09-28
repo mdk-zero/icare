@@ -125,7 +125,7 @@ export default function AssignSectionsClient() {
     const warning =
       `Delete section "${section.name}"? Its students become unassigned` +
       (handlers.length > 0
-        ? ` and it is removed from ${handlers.length} faculty member${handlers.length === 1 ? "" : "s"}.`
+        ? ` and it is removed from ${handlers.length} instructor${handlers.length === 1 ? "" : "s"}.`
         : ".");
     if (!window.confirm(warning)) return;
     setBusy(true);
@@ -180,10 +180,10 @@ export default function AssignSectionsClient() {
       <PageHeader
         badge={{
           icon: <FontAwesomeIcon icon={faUsers} className="w-3.5 h-3.5" />,
-          label: "Faculty Management",
+          label: "Instructor Management",
         }}
         title="Sections"
-        subtitle="Manage sections and assign them to faculty"
+        subtitle="Manage sections and assign them to instructors"
       />
 
       <div className="mb-4">
@@ -192,7 +192,7 @@ export default function AssignSectionsClient() {
           className="inline-flex items-center gap-2 px-3 py-2 bg-surface border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-all"
         >
           <FontAwesomeIcon icon={faArrowLeft} className="w-3.5 h-3.5" />
-          Back to faculty
+          Back to instructors
         </button>
       </div>
 
@@ -249,7 +249,7 @@ export default function AssignSectionsClient() {
                         </span>
                         <p className="flex-1 text-sm text-gray-500 truncate">
                           {handlers.length === 0
-                            ? "No faculty assigned"
+                            ? "No instructor assigned"
                             : handlers.map((f) => f.name).join(", ")}
                         </p>
                         <button
@@ -268,10 +268,10 @@ export default function AssignSectionsClient() {
             </div>
 
             <div className="bg-surface rounded-xl p-4 border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)]">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Faculty Members</h2>
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">Instructors</h2>
               {faculty.length === 0 ? (
                 <p className="text-gray-400 text-sm text-center py-6">
-                  No faculty accounts yet — create one from Faculty Management first
+                  No instructor accounts yet — create one from Instructor Management first
                 </p>
               ) : (
                 <div className="space-y-2">
@@ -316,7 +316,7 @@ export default function AssignSectionsClient() {
                   <h2 className="text-lg font-semibold text-gray-900">
                     {selectedFaculty
                       ? `${selectedFaculty.name}'s Sections`
-                      : "Select a faculty member"}
+                      : "Select an instructor"}
                   </h2>
                   <p className="text-sm text-gray-500">
                     {selectedSections.length} of {sections.length} section

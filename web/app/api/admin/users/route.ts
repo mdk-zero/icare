@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Email is required' }, { status: 400 });
   }
   if (typeof role !== 'string' || !(ASSIGNABLE_ROLES as readonly string[]).includes(role)) {
-    return NextResponse.json({ error: 'Role must be student or faculty' }, { status: 400 });
+    return NextResponse.json({ error: 'Role must be student or instructor' }, { status: 400 });
   }
   if (section_id !== undefined && section_id !== null && typeof section_id !== 'string') {
     return NextResponse.json({ error: 'Invalid section_id' }, { status: 400 });
@@ -133,7 +133,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Section not found' }, { status: 400 });
       }
       if (scope && !scope.sectionIds.includes(sectionId)) {
-        return NextResponse.json({ error: 'That section belongs to another admin' }, { status: 403 });
+        return NextResponse.json({ error: 'That section belongs to another dean' }, { status: 403 });
       }
     }
 

@@ -224,7 +224,7 @@ export async function buildStudentReport(
         ]}
       />
       <Text style={note}>
-        Grades use the verbal scale faculty grade on: Excellent, Satisfactory or Needs Practice. Skill
+        Grades use the verbal scale instructors grade on: Excellent, Satisfactory or Needs Practice. Skill
         Assessments pass at {PASSING_SCORE}%. Attendance counts late as attended and leaves excused and
         unmarked shifts out.
       </Text>

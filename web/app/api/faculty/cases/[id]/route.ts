@@ -131,7 +131,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     if (loaded.response) return loaded.response;
     const presentation = loaded.presentation;
     if (!canManagePresentation(session, presentation)) {
-      return NextResponse.json({ error: 'Only the faculty member who created this can change it' }, { status: 403 });
+      return NextResponse.json({ error: 'Only the instructor who created this can change it' }, { status: 403 });
     }
 
     const update: Record<string, unknown> = {};
@@ -199,7 +199,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     const loaded = await loadPresentation(supabase, id);
     if (loaded.response) return loaded.response;
     if (!canManagePresentation(session, loaded.presentation)) {
-      return NextResponse.json({ error: 'Only the faculty member who created this can delete it' }, { status: 403 });
+      return NextResponse.json({ error: 'Only the instructor who created this can delete it' }, { status: 403 });
     }
 
     const { count, error: countError } = await supabase

@@ -71,7 +71,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   const session = await readSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (!needsEditApproval(session.role)) {
-    return NextResponse.json({ error: 'Only faculty need permission to change a grade' }, { status: 400 });
+    return NextResponse.json({ error: 'Only instructors need permission to change a grade' }, { status: 400 });
   }
 
   let body: unknown;
@@ -99,7 +99,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const latest = await latestGradeEditRequest(supabase, id, session.uid);
     const state = toState(latest?.data ?? null);
     if (state.status === 'pending') {
-      return NextResponse.json({ error: 'You already asked; wait for your admin to answer' }, { status: 409 });
+      return NextResponse.json({ error: 'You already asked; wait for your dean to answer' }, { status: 409 });
     }
     if (state.status === 'accepted') {
       return NextResponse.json({ error: 'You already have permission to change this grade' }, { status: 409 });
@@ -122,7 +122,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       approvers = (admins ?? []).map((a) => a.id as string);
     }
     if (approvers.length === 0) {
-      return NextResponse.json({ error: 'There is no admin to ask' }, { status: 409 });
+      return NextResponse.json({ error: 'There is no dean to ask' }, { status: 409 });
     }
 
     const facultyName = me?.name ?? session.email;

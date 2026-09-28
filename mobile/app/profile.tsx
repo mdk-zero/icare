@@ -238,7 +238,7 @@ export default function ProfileScreen() {
         <View style={styles.listCard}>
           {competencies.length === 0 && (
             <Text style={styles.emptyListText}>
-              Skill area scores appear here once your faculty validates your work.
+              Skill area scores appear here once your instructor validates your work.
             </Text>
           )}
           {competencies.map((comp, index) => {

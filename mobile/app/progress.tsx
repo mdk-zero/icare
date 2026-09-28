@@ -76,7 +76,7 @@ export default function ProgressScreen() {
         <Card>
           {categoryStats.length === 0 && (
             <Text style={styles.emptyText}>
-              {error ?? 'No skill area scores yet — they appear as your faculty validates your work.'}
+              {error ?? 'No skill area scores yet — they appear as your instructor validates your work.'}
             </Text>
           )}
           {categoryStats.map((stat, index) => (

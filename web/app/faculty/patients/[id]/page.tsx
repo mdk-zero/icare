@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import PatientChart from "../../../components/PatientChart";
 
 export const metadata: Metadata = {
-  title: "Patient Chart | iCARE++ Faculty",
+  title: "Patient Chart | iCARE++ Instructor",
 };
 
 export default function FacultyPatientChartPage() {

@@ -660,7 +660,7 @@ export default function NewScenarioClient() {
       {rooms.length === 0 && !loadingData && (
         <p className="mt-2 text-xs text-gray-400 flex items-center gap-1.5">
           <FontAwesomeIcon icon={faTriangleExclamation} className="w-3 h-3" />
-          No rooms exist yet — create them in Admin → Rooms.
+          No rooms exist yet — create them in Dean → Wards.
         </p>
       )}
     </div>

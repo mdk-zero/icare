@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import CasePresentationClient from "./page-client";
 
 export const metadata: Metadata = {
-  title: "Case Presentation | iCARE++ Faculty",
+  title: "Case Presentation | iCARE++ Instructor",
 };
 
 export default async function CasePresentationPage({ params }: { params: Promise<{ id: string }> }) {

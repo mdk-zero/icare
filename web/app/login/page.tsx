@@ -21,7 +21,7 @@ import logo_white from "../../public/logo-white-no-bg.png";
 import { EcgLoader } from "../components/EcgLoader";
 import { DriftingKit, RotatingWords } from "../components/AuthShowcase";
 
-const STUDENT_MESSAGE = "Students sign in on the iCARE++ mobile app. The web portal is for faculty and administrators.";
+const STUDENT_MESSAGE = "Students sign in on the iCARE++ mobile app. The web portal is for instructors, deans and admins.";
 
 export default function LoginPage() {
   const router = useRouter();

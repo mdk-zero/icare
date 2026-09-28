@@ -915,7 +915,7 @@ export default function StudentDetailClient() {
                               className="w-3 h-3"
                             />
                             {c.source === "faculty_validation"
-                              ? "Faculty validated"
+                              ? "Instructor validated"
                               : `From assessments${c.attempts > 0 ? ` (${c.attempts})` : ""}`}
                           </span>
                         </div>

@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
       pending: all.filter((a) => a.status === 'pending').length,
     });
   } catch (err) {
-    console.error('Fetch faculty alerts failed', err);
+    console.error('Fetch instructor alerts failed', err);
     return NextResponse.json({ error: 'Unable to fetch alerts' }, { status: 500 });
   }
 }

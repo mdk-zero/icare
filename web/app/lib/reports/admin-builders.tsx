@@ -112,7 +112,7 @@ export async function buildAdminFacultyReport(
   facultyId: string,
   scope: AdminScope | null = null,
 ): Promise<BuildResult> {
-  if (facultyId && !ownsFaculty(scope, facultyId)) return { error: 'Faculty not found', status: 404 };
+  if (facultyId && !ownsFaculty(scope, facultyId)) return { error: 'Instructor not found', status: 404 };
   if (!facultyId) {
     let facultyQuery = supabase
       .from('users')
@@ -137,16 +137,16 @@ export async function buildAdminFacultyReport(
 
     const pdf = (
       <ReportShell
-        title="All Faculty Report"
-        heading="All Faculty Report"
+        title="All Instructors Report"
+        heading="All Instructors Report"
         meta={meta}
         metaRows={[
-          { label: 'Scope', value: scope ? 'Your faculty' : 'All faculty' },
-          { label: 'Faculty', value: String(faculty.length) },
+          { label: 'Scope', value: scope ? 'Your instructors' : 'All instructors' },
+          { label: 'Instructors', value: String(faculty.length) },
         ]}
       >
         <Text style={lead}>
-          {plural(faculty.length, 'faculty member')} {faculty.length === 1 ? 'supervises' : 'supervise'}{' '}
+          {plural(faculty.length, 'instructor')} {faculty.length === 1 ? 'supervises' : 'supervise'}{' '}
           {plural(totals.groups, 'group')} with {plural(totals.students, 'student')}.{' '}
           {withoutGroups > 0
             ? `${withoutGroups} ${withoutGroups === 1 ? 'has' : 'have'} no group yet.`
@@ -154,13 +154,13 @@ export async function buildAdminFacultyReport(
         </Text>
         <StatGrid
           items={[
-            { label: 'Faculty', value: faculty.length },
+            { label: 'Instructors', value: faculty.length },
             { label: 'Students supervised', value: totals.students },
             { label: 'Grades given', value: totals.graded },
             { label: 'Awaiting grade', value: totals.awaiting },
           ]}
         />
-        <Text style={styles.sectionTitle}>Faculty</Text>
+        <Text style={styles.sectionTitle}>Instructors</Text>
         <Table
           head={['Name / Email', 'Groups', 'Students', 'Graded', 'Awaiting', 'Last login']}
           widths={[3, 0.9, 1, 0.9, 1, 1.4]}
@@ -175,10 +175,10 @@ export async function buildAdminFacultyReport(
               fmtDate(f.last_login_at),
             ];
           })}
-          emptyText="No faculty accounts yet."
+          emptyText="No instructor accounts yet."
         />
         <Text style={{ fontSize: 8, color: '#6b7280', marginTop: 6 }}>
-          Students are the members of the groups each faculty member supervises. Graded counts scenarios
+          Students are the members of the groups each instructor supervises. Graded counts scenarios
           and case presentations they graded. Awaiting counts work their students handed in that is not
           graded yet.
         </Text>
@@ -194,7 +194,7 @@ export async function buildAdminFacultyReport(
     .eq('id', facultyId)
     .eq('role', 'faculty')
     .maybeSingle();
-  if (!faculty) return { error: 'Faculty not found', status: 404 };
+  if (!faculty) return { error: 'Instructor not found', status: 404 };
 
   const l = (await facultyLoad(supabase, [facultyId])).get(facultyId)!;
   const work = await studentWork(supabase, l.studentIds);
@@ -216,11 +216,11 @@ export async function buildAdminFacultyReport(
 
   const pdf = (
     <ReportShell
-      title={`Faculty Report - ${faculty.name}`}
-      heading="Faculty Report"
+      title={`Instructor Report - ${faculty.name}`}
+      heading="Instructor Report"
       meta={meta}
       metaRows={[
-        { label: 'Faculty', value: faculty.name },
+        { label: 'Instructor', value: faculty.name },
         { label: 'Email', value: faculty.email },
         { label: 'Joined', value: fmtDate(faculty.created_at) },
         { label: 'Last login', value: fmtDate(faculty.last_login_at) },
@@ -253,9 +253,9 @@ export async function buildAdminFacultyReport(
 
 const ROLE_LABEL: Record<string, string> = {
   student: 'Student',
-  faculty: 'Faculty',
-  admin: 'Admin',
-  super_admin: 'Super admin',
+  faculty: 'Instructor',
+  admin: 'Dean',
+  super_admin: 'Admin',
 };
 
 // ---------------------------------------------------------------------------
@@ -415,7 +415,7 @@ export async function buildAdminUserReport(
     const studentCount = byRole.get('student') ?? 0;
     const facultyCount = byRole.get('faculty') ?? 0;
     const adminCount = byRole.get('admin') ?? 0;
-    const description = `This report covers all ${users?.length ?? 0} users: ${studentCount} students, ${facultyCount} faculty, and ${adminCount} admins.`;
+    const description = `This report covers all ${users?.length ?? 0} users: ${studentCount} students, ${facultyCount} instructors, and ${adminCount} deans.`;
 
     const metaRows = [
       { label: 'Scope', value: 'All Users' },
@@ -434,8 +434,8 @@ export async function buildAdminUserReport(
         <StatGrid
           items={[
             { label: 'Students', value: studentCount },
-            { label: 'Faculty', value: facultyCount },
-            { label: 'Admins', value: adminCount },
+            { label: 'Instructors', value: facultyCount },
+            { label: 'Deans', value: adminCount },
           ]}
         />
         <Text style={styles.sectionTitle}>User Roster</Text>
@@ -594,16 +594,16 @@ export async function buildAdminSummaryReport(
   const inGroups = new Set([...load.values()].flatMap((l) => l.studentIds));
   const ungrouped = studentIds === null ? null : studentIds.filter((id) => !inGroups.has(id)).length;
 
-  const description = `Admin overview with ${plural(totalStudents, 'student')}, ${totalFaculty} faculty, ${plural(totalAdmins, 'admin')} and ${plural(totalRooms, 'room')} (${totalOccupied} of ${totalCapacity} places occupied).`;
+  const description = `Dean overview with ${plural(totalStudents, 'student')}, ${totalFaculty} instructors, ${plural(totalAdmins, 'dean')} and ${plural(totalRooms, 'room')} (${totalOccupied} of ${totalCapacity} places occupied).`;
 
   const metaRows = [
-    { label: 'Scope', value: scope ? 'Your faculty and students' : 'Everyone' },
+    { label: 'Scope', value: scope ? 'Your instructors and students' : 'Everyone' },
   ];
 
   const pdf = (
     <ReportShell
-      title="Admin Summary Report"
-      heading="Admin Summary Report"
+      title="Dean Summary Report"
+      heading="Dean Summary Report"
       meta={meta}
       metaRows={metaRows}
     >
@@ -612,8 +612,8 @@ export async function buildAdminSummaryReport(
       <StatGrid
         items={[
           { label: 'Students', value: totalStudents },
-          { label: 'Faculty', value: totalFaculty },
-          { label: 'Admins', value: totalAdmins },
+          { label: 'Instructors', value: totalFaculty },
+          { label: 'Deans', value: totalAdmins },
           { label: 'Rooms', value: totalRooms },
         ]}
       />
@@ -627,12 +627,12 @@ export async function buildAdminSummaryReport(
         ]}
       />
 
-      <Text style={styles.sectionTitle}>Faculty</Text>
+      <Text style={styles.sectionTitle}>Instructors</Text>
       <Table
         head={['Name', 'Email', 'Joined', 'Last login']}
         widths={[2, 2.6, 1.2, 1.2]}
         rows={facultyRows}
-        emptyText="No faculty accounts yet."
+        emptyText="No instructor accounts yet."
       />
 
       <Text style={styles.sectionTitle}>Rooms</Text>

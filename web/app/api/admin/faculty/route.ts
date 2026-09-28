@@ -36,8 +36,8 @@ export async function GET() {
     ]);
 
     if (facultyRes.error) {
-      console.error('Failed to list faculty', facultyRes.error);
-      return NextResponse.json({ error: 'Unable to list faculty' }, { status: 500 });
+      console.error('Failed to list instructors', facultyRes.error);
+      return NextResponse.json({ error: 'Unable to list instructor' }, { status: 500 });
     }
 
     const studentsPerSection = new Map<string, number>();
@@ -68,7 +68,7 @@ export async function GET() {
 
     return NextResponse.json({ faculty });
   } catch (err) {
-    console.error('List faculty failed', err);
-    return NextResponse.json({ error: 'Unable to list faculty' }, { status: 500 });
+    console.error('List instructors failed', err);
+    return NextResponse.json({ error: 'Unable to list instructor' }, { status: 500 });
   }
 }

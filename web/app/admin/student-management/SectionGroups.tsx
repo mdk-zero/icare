@@ -149,7 +149,7 @@ export default function SectionGroups({
           </h3>
           <p className="text-sm text-gray-500">
             {groups.length === 0
-              ? "Split the section into groups, then give each one a faculty member."
+              ? "Split the section into groups, then give each one an instructor."
               : `${groups.length} group${groups.length === 1 ? "" : "s"} · ${grouped} of ${studentCount} students grouped`}
           </p>
         </div>
@@ -279,7 +279,7 @@ export default function SectionGroups({
               <label className="mb-3 block">
                 <span className="mb-1 flex items-center gap-1.5 text-xs font-medium text-gray-500">
                   <FontAwesomeIcon icon={faUserTie} className="h-3 w-3" />
-                  Faculty
+                  Instructor
                 </span>
                 <select
                   value={group.faculty_id ?? ""}
@@ -291,12 +291,12 @@ export default function SectionGroups({
                       () => assignTeamFaculty(group.id, facultyId),
                       who
                         ? { pending: `Assigning ${who} to ${group.name}…`, done: `${who} now supervises ${group.name}` }
-                        : { pending: `Removing the faculty from ${group.name}…`, done: `${group.name} has no faculty now` },
+                        : { pending: `Removing the instructor from ${group.name}…`, done: `${group.name} has no instructor now` },
                     );
                   }}
                   className={selectClass}
                 >
-                  <option value="">No faculty yet</option>
+                  <option value="">No instructor yet</option>
                   {faculty.map((f) => (
                     <option key={f.id} value={f.id}>
                       {f.name}

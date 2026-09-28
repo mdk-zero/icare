@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
   }
   const adminId = typeof body.admin_id === 'string' && body.admin_id ? body.admin_id : null;
   if (adminId && role !== 'faculty') {
-    return NextResponse.json({ error: 'Only faculty belong to an admin' }, { status: 400 });
+    return NextResponse.json({ error: 'Only instructors belong to a dean' }, { status: 400 });
   }
 
   try {
@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
     if (error || !created) {
       console.error('Failed to create account', error);
       const message = error?.message?.includes('admin_id')
-        ? 'The owning admin must be an admin account'
+        ? 'The owning dean must be a dean account'
         : 'Unable to create user';
       return NextResponse.json({ error: message }, { status: 500 });
     }

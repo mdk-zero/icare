@@ -161,7 +161,7 @@ async function notifySectionFaculty(
     );
   } catch (err) {
     // A failed notification must not fail the help request itself.
-    console.error('Failed to notify faculty of assistance request', err);
+    console.error('Failed to notify instructor of assistance request', err);
   }
 }
 

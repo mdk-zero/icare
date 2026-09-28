@@ -12,9 +12,9 @@ export default function FacultySettingsClient() {
       <PageHeader
         badge={{
           icon: <FontAwesomeIcon icon={faGear} className="w-3.5 h-3.5" />,
-          label: "Faculty Settings",
+          label: "Instructor Settings",
         }}
-        title="Faculty Settings"
+        title="Instructor Settings"
         subtitle="Manage your profile and account security"
       />
       <ProfileEditor

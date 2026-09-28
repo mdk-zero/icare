@@ -122,7 +122,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
       rubric: resolveRubric(rubricRes.error ? null : rubricRes.data?.rubric),
     });
   } catch (err) {
-    console.error('Fetch faculty assignment tasks failed', err);
+    console.error('Fetch instructor assignment tasks failed', err);
     return NextResponse.json({ error: 'Unable to fetch tasks' }, { status: 500 });
   }
 }

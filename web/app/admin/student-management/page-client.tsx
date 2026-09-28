@@ -178,7 +178,7 @@ function SectionFormModal({
               <p className="text-sm text-gray-500">
                 {section
                   ? `Currently “${section.name}”`
-                  : "Sections group students and their faculty"}
+                  : "Sections group students and their instructors"}
               </p>
             </div>
           </div>
@@ -220,7 +220,7 @@ function SectionFormModal({
 
           {section && (
             <p className="rounded-lg border border-hairline bg-subtle p-2.5 text-xs text-gray-500">
-              Students and faculty stay attached. Assessments aimed at this section are updated to
+              Students and instructors stay attached. Assessments aimed at this section are updated to
               the new name automatically.
             </p>
           )}
@@ -364,7 +364,7 @@ function DeleteSectionModal({
                 />
                 <span>
                   {impact.faculty.length === 0 ? (
-                    "No faculty member handles this section."
+                    "No instructor handles this section."
                   ) : (
                     <>
                       Removed from{" "}

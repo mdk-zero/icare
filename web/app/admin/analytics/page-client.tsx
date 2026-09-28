@@ -187,8 +187,8 @@ function BarRow({
 
 const ROLE_SLICES = [
   { key: "student", label: "Students", color: "#2a8a98" },
-  { key: "faculty", label: "Faculty", color: "#f59e0b" },
-  { key: "admin", label: "Admins", color: "#7c3aed" },
+  { key: "faculty", label: "Instructors", color: "#f59e0b" },
+  { key: "admin", label: "Deans", color: "#7c3aed" },
 ] as const;
 
 /** Large donut of who the users are, with each role's share, name and count in
@@ -950,7 +950,7 @@ export default function AdminAnalyticsClient() {
               icon={faUsers}
               value={totalUsers}
               label="Total Users"
-              caption="Students, faculty and admins"
+              caption="Students, instructors and deans"
             />
             <StatTile
               icon={faUserCheck}
@@ -985,7 +985,7 @@ export default function AdminAnalyticsClient() {
             <Panel>
               <CardHeading
                 icon={faUserTie}
-                title="Faculty Performance"
+                title="Instructor Performance"
                 subtitle="Ranked by their students' average submitted score"
                 tag={rangeTag}
               />

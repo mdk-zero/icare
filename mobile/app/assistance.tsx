@@ -62,7 +62,7 @@ export default function AssistanceScreen() {
           'You are offline. Your request is queued and will be sent as soon as you reconnect.',
         );
       } else {
-        Alert.alert('Instructor notified', 'Your request has been sent to the faculty on duty.');
+        Alert.alert('Instructor notified', 'Your request has been sent to the instructor on duty.');
       }
       await reload();
     } catch (err) {
@@ -113,7 +113,7 @@ export default function AssistanceScreen() {
         <View style={styles.headerInfo}>
           <Text style={styles.headerTitle}>Request Assistance</Text>
           <Text style={styles.headerDesc}>
-            Raises a flag with the faculty handling your section.
+            Raises a flag with the instructor handling your section.
           </Text>
         </View>
       </View>

@@ -57,11 +57,11 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       .eq('id', update.faculty_id)
       .maybeSingle();
     if (!faculty || faculty.role !== 'faculty') {
-      return NextResponse.json({ error: 'That user is not a faculty member' }, { status: 400 });
+      return NextResponse.json({ error: 'That user is not an instructor' }, { status: 400 });
     }
     // An admin puts only their own faculty in charge (migration 053).
     if (session.role === 'admin' && !ownsFaculty(await getAdminScope(supabase, session.uid), update.faculty_id)) {
-      return NextResponse.json({ error: 'That faculty member belongs to another admin' }, { status: 403 });
+      return NextResponse.json({ error: 'That instructor belongs to another dean' }, { status: 403 });
     }
   }
 
@@ -82,7 +82,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         { faculty_id: update.faculty_id, section_id: team.section_id },
         { onConflict: 'faculty_id,section_id', ignoreDuplicates: true },
       );
-    if (linkError) console.error('Failed to link faculty to section', linkError);
+    if (linkError) console.error('Failed to link instructor to section', linkError);
   }
   return NextResponse.json({ ok: true });
 }

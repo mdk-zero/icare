@@ -376,7 +376,7 @@ function UserDrawer({
           ))}
         </dl>
 
-        <Block title={ownerEnabled ? "Role, section & admin" : "Role & section"}>
+        <Block title={ownerEnabled ? "Role, section & dean" : "Role & section"}>
           <div className="flex gap-2">
             <select
               className="dc-field"
@@ -404,15 +404,15 @@ function UserDrawer({
           </div>
           {ownerEnabled && role === "faculty" && (
             <label className="mt-2 block text-[11.5px]" style={{ color: "var(--dc-dim)" }}>
-              Belongs to admin
+              Belongs to dean
               <select
                 className="dc-field mt-1"
                 value={adminId}
                 onChange={(event) => setAdminId(event.target.value)}
               >
-                <option value="">no admin</option>
+                <option value="">no dean</option>
                 {user.admin_id && !admins.some((admin) => admin.id === user.admin_id) && (
-                  <option value={user.admin_id}>current admin (not in this list)</option>
+                  <option value={user.admin_id}>current dean (not in this list)</option>
                 )}
                 {admins.map((admin) => (
                   <option key={admin.id} value={admin.id}>

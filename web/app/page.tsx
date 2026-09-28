@@ -77,7 +77,7 @@ const roles = [
     icon: ICONS.userGroup,
   },
   {
-    title: "Administrators",
+    title: "Deans",
     description:
       "Manage students, instructors, and rooms from a single system. Access institution-wide analytics, audit logs, and configuration settings to keep your program running smoothly.",
     action: "Set up your program",
@@ -832,7 +832,7 @@ export default function LandingPage() {
                     <ul className="space-y-3">
                       {[
                         "Unlimited student accounts",
-                        "AI scenario generator for faculty",
+                        "AI scenario generator for instructors",
                         "Full competency analytics dashboard",
                       ].map((item) => (
                         <li key={item} className="flex items-start gap-2.5 text-sm text-white/85">
@@ -884,7 +884,7 @@ export default function LandingPage() {
               index="05"
               eyebrow="Who it’s for"
               title="Designed for every role in nursing education"
-              intro="Whether you’re a student honing your skills, faculty shaping the next generation, or an administrator overseeing the program — iCARE++ has you covered."
+              intro="Whether you’re a student honing your skills, an instructor shaping the next generation, or a dean overseeing the program — iCARE++ has you covered."
             />
 
             <Reveal className="mt-14">

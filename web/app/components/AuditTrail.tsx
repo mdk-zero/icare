@@ -9,6 +9,7 @@ import PageHeader from "./PageHeader";
 import FilterSelect from "./FilterSelect";
 import Avatar from "./Avatar";
 import { formatAuditDetails } from "../lib/audit-details";
+import { roleLabel } from "../lib/role-labels";
 
 interface AuditRow {
   id: string;
@@ -187,9 +188,9 @@ export default function AuditTrail({ scope }: { scope: "own" | "system" }) {
               onChange={(e) => withPageReset(setRoleFilter)(e.target.value)}
             >
               <option value="all">All Roles</option>
-              <option value="super_admin">Super Admin</option>
-              <option value="admin">Admin</option>
-              <option value="faculty">Faculty</option>
+              <option value="super_admin">Admin</option>
+              <option value="admin">Dean</option>
+              <option value="faculty">Instructor</option>
               <option value="student">Student</option>
             </FilterSelect>
           )}
@@ -316,7 +317,7 @@ export default function AuditTrail({ scope }: { scope: "own" | "system" }) {
                               <span
                                 className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium ${ROLE_BADGE[log.actor_role] ?? "bg-gray-100 text-gray-600"}`}
                               >
-                                {log.actor_role.replace("_", " ")}
+                                {roleLabel(log.actor_role)}
                               </span>
                             )}
                           </div>

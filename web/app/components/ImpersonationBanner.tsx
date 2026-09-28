@@ -11,6 +11,7 @@ import {
   type ImpersonationFlag,
 } from "../lib/dev/impersonation";
 import { EcgLoader } from "./EcgLoader";
+import { roleLabel } from "../lib/role-labels";
 
 function readFlag(): ImpersonationFlag | null {
   if (typeof document === "undefined") return null;
@@ -63,7 +64,7 @@ export default function ImpersonationBanner() {
     >
       <FontAwesomeIcon icon={faUserSecret} className="h-3.5 w-3.5" />
       <span>
-        Signed in as <strong className="font-semibold">{flag.name}</strong> ({flag.role})
+        Signed in as <strong className="font-semibold">{flag.name}</strong> ({roleLabel(flag.role)})
         {flag.by && <> · impersonated by {flag.by}</>}
       </span>
       <button

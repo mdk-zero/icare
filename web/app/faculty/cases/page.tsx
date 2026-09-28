@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import FacultyCasesClient from "./page-client";
 
 export const metadata: Metadata = {
-  title: "Case Presentations | iCARE++ Faculty",
+  title: "Case Presentations | iCARE++ Instructor",
 };
 
 export default function FacultyCasesPage() {

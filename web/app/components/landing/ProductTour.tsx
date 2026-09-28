@@ -39,7 +39,7 @@ const TOUR = [
       "Chart patient histories, medications, and assessments",
       "Review lab results and diagnostic imaging",
       "Practice structured clinical reasoning workflows",
-      "Faculty can review and provide feedback on entries",
+      "Instructors can review and provide feedback on entries",
     ],
     icon: ICONS.documentText,
   },
@@ -73,12 +73,12 @@ const TOUR = [
     number: "06",
     title: "AI-Powered Recommendations",
     description:
-      "An intelligent recommendation engine suggests personalised learning paths based on each student’s performance history. Faculty receive actionable insights to target remediation where it matters most.",
+      "An intelligent recommendation engine suggests personalised learning paths based on each student’s performance history. Instructors receive actionable insights to target remediation where it matters most.",
     capabilities: [
       "Personalized learning paths based on performance data",
       "Suggested scenarios and skill assessments to address weak areas",
       "Spaced repetition scheduling for knowledge retention",
-      "Faculty insights for targeted remediation",
+      "Instructor insights for targeted remediation",
     ],
     icon: ICONS.lightBulb,
   },

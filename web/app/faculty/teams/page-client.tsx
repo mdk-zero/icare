@@ -190,8 +190,8 @@ export default function TeamsClient() {
         title="My Groups"
         subtitle={
           totalGroups > 0
-            ? `You supervise ${plural(totalGroups, "group")} across ${plural(sections.length, "section")}. Your admin sets up the groups.`
-            : "The student groups you supervise, by section. Your admin sets up the groups."
+            ? `You supervise ${plural(totalGroups, "group")} across ${plural(sections.length, "section")}. Your dean sets up the groups.`
+            : "The student groups you supervise, by section. Your dean sets up the groups."
         }
         action={{
           icon: runningMl ? <EcgLoader /> : <FontAwesomeIcon icon={faBrain} className="h-4 w-4" />,
@@ -214,7 +214,7 @@ export default function TeamsClient() {
           <FontAwesomeIcon icon={faPeopleGroup} className="h-8 w-8 text-gray-300" />
           <p className="mt-3 font-semibold text-gray-700">No groups assigned to you yet</p>
           <p className="mx-auto mt-1 max-w-sm text-sm text-gray-500">
-            When your admin puts you in charge of a group, its section shows up here.
+            When your dean puts you in charge of a group, its section shows up here.
           </p>
         </div>
       ) : (

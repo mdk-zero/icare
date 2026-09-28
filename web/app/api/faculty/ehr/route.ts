@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
     }
     return NextResponse.json({ records: records ?? [] });
   } catch (err) {
-    console.error('Fetch faculty EHR records failed', err);
+    console.error('Fetch instructor EHR records failed', err);
     return NextResponse.json({ error: 'Unable to fetch records' }, { status: 500 });
   }
 }

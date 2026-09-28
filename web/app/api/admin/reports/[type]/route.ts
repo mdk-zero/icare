@@ -96,7 +96,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       headers: { ...headers, 'Content-Type': 'application/pdf' },
     });
   } catch (err) {
-    console.error(`Generate admin ${type} report failed`, err);
+    console.error(`Generate dean ${type} report failed`, err);
     return NextResponse.json({ error: 'Unable to generate report' }, { status: 500 });
   }
 }

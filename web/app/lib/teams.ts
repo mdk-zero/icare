@@ -53,7 +53,7 @@ export interface TeamRow {
 
 /** Migration 051 adds teams.faculty_id; until then groups simply have no supervisor. */
 export const TEAM_FACULTY_NEEDS_MIGRATION =
-  'Assigning faculty to groups needs database migration 051 (team_faculty) applied first.';
+  'Assigning instructors to groups needs database migration 051 (team_faculty) applied first.';
 
 /** Every team in the given sections with its members, and each student's team. */
 export async function loadTeams(

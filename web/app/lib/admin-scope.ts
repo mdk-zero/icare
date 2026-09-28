@@ -31,8 +31,8 @@ export async function getAdminScope(supabase: Supabase, adminId: string): Promis
   if (error) {
     // 42703: no admin_id column yet (053 not applied).
     if (error.code === '42703' || error.code === 'PGRST204') return null;
-    console.error('Failed to read the admin faculty', error);
-    throw new Error('Unable to read your faculty');
+    console.error('Failed to read the dean instructors', error);
+    throw new Error('Unable to read your instructors');
   }
   const facultyIds = (faculty ?? []).map((f) => f.id as string);
 
@@ -48,7 +48,7 @@ export async function getAdminScope(supabase: Supabase, adminId: string): Promis
   ]);
   const failed = links.error ?? allLinks.error ?? allSections.error;
   if (failed) {
-    console.error('Failed to read the admin sections', failed);
+    console.error('Failed to read the dean sections', failed);
     throw new Error('Unable to read your sections');
   }
 
@@ -69,7 +69,7 @@ export async function getAdminScope(supabase: Supabase, adminId: string): Promis
     supabase.from('users').select('id').eq('role', 'student').is('section_id', null).limit(5000),
   ]);
   if (inSections.error || unsectioned.error) {
-    console.error('Failed to read the admin students', inSections.error ?? unsectioned.error);
+    console.error('Failed to read the dean students', inSections.error ?? unsectioned.error);
     throw new Error('Unable to read your students');
   }
   const studentIds = [

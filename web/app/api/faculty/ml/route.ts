@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
       ),
     );
   } catch (err) {
-    console.error('Faculty ML run failed', err);
+    console.error('Instructor ML run failed', err);
     return NextResponse.json({ error: 'ML run failed' }, { status: 500 });
   }
 }

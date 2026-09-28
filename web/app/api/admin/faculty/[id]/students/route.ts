@@ -42,10 +42,10 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       .maybeSingle();
     const scope = await getAdminScope(supabase, session.uid);
     if (!faculty || !ownsFaculty(scope, facultyId)) {
-      return NextResponse.json({ error: 'Faculty not found' }, { status: 404 });
+      return NextResponse.json({ error: 'Instructor not found' }, { status: 404 });
     }
     if (scope && studentIds.some((id) => !scope.studentIds.includes(id))) {
-      return NextResponse.json({ error: 'Some students belong to another admin' }, { status: 403 });
+      return NextResponse.json({ error: 'Some students belong to another dean' }, { status: 403 });
     }
 
     if (studentIds.length > 0) {
@@ -67,7 +67,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       .delete()
       .eq('faculty_id', facultyId);
     if (deleteError) {
-      console.error('Failed to clear faculty roster', deleteError);
+      console.error('Failed to clear instructor roster', deleteError);
       return NextResponse.json({ error: 'Unable to update roster' }, { status: 500 });
     }
 
@@ -76,7 +76,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         .from('faculty_students')
         .insert(studentIds.map((student_id) => ({ faculty_id: facultyId, student_id })));
       if (insertError) {
-        console.error('Failed to insert faculty roster', insertError);
+        console.error('Failed to insert instructor roster', insertError);
         return NextResponse.json({ error: 'Unable to update roster' }, { status: 500 });
       }
     }
@@ -94,7 +94,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     return NextResponse.json({ success: true, student_ids: studentIds });
   } catch (err) {
-    console.error('Update faculty roster failed', err);
+    console.error('Update instructor roster failed', err);
     return NextResponse.json({ error: 'Unable to update roster' }, { status: 500 });
   }
 }

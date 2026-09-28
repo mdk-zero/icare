@@ -32,7 +32,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
 
     if (body.role !== undefined) {
       if (typeof body.role !== 'string' || !(ROLES as readonly string[]).includes(body.role)) {
-        throw new DevError('Role must be student, faculty, or admin');
+        throw new DevError('Role must be student, instructor, or dean');
       }
       patch.role = body.role;
     }

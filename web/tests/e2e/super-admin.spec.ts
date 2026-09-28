@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { accounts } from '../env.mjs';
 import { requireAccount, signIn } from './helpers';
 
-test.describe('Super admin portal', () => {
+test.describe('Admin portal', () => {
   test.beforeEach(async ({ page }) => {
     requireAccount('super_admin');
     await signIn(page, 'super_admin');
@@ -51,7 +51,7 @@ test.describe('Super admin portal', () => {
     await page.getByRole('button', { name: 'Create a new account' }).click();
     const dialog = page.getByRole('dialog', { name: 'New account' });
     await expect(dialog).toBeVisible();
-    await expect(dialog.getByLabel('Role')).toContainText('Super Administrator');
+    await expect(dialog.getByLabel('Role')).toContainText('Admin');
     await dialog.getByRole('button', { name: 'Cancel' }).click();
     await expect(dialog).toBeHidden();
   });
@@ -78,7 +78,7 @@ test.describe('Super admin portal', () => {
     }
   });
 
-  test('teaching portals send the super admin back', async ({ page }) => {
+  test('teaching portals send the admin back', async ({ page }) => {
     for (const path of ['/admin', '/faculty']) {
       await page.goto(path);
       await expect(page).toHaveURL(/\/super-admin(\?|$)/);

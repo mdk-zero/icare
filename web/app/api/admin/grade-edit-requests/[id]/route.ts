@@ -79,7 +79,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         status,
       },
     });
-    if (notifyError) console.error('Failed to notify faculty of grade edit decision', notifyError);
+    if (notifyError) console.error('Failed to notify instructor of grade edit decision', notifyError);
 
     await logAudit(
       session,

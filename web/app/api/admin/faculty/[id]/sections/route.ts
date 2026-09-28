@@ -43,14 +43,14 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     // An admin manages only their own faculty, within their own sections.
     const scope = await getAdminScope(supabase, session.uid);
     if (!faculty || !ownsFaculty(scope, facultyId)) {
-      return NextResponse.json({ error: 'Faculty not found' }, { status: 404 });
+      return NextResponse.json({ error: 'Instructor not found' }, { status: 404 });
     }
     if (scope) {
       const { data: current } = await supabase.from('faculty_sections').select('section_id').eq('faculty_id', facultyId);
       const allowed = new Set([...scope.sectionIds, ...(current ?? []).map((c) => c.section_id as string)]);
       const outside = sectionIds.filter((id) => !allowed.has(id));
       if (outside.length > 0) {
-        return NextResponse.json({ error: 'Some sections belong to another admin', invalid: outside }, { status: 403 });
+        return NextResponse.json({ error: 'Some sections belong to another dean', invalid: outside }, { status: 403 });
       }
     }
 
@@ -69,7 +69,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       .delete()
       .eq('faculty_id', facultyId);
     if (deleteError) {
-      console.error('Failed to clear faculty sections', deleteError);
+      console.error('Failed to clear instructor sections', deleteError);
       return NextResponse.json({ error: 'Unable to update sections' }, { status: 500 });
     }
 
@@ -78,7 +78,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         .from('faculty_sections')
         .insert(sectionIds.map((section_id) => ({ faculty_id: facultyId, section_id })));
       if (insertError) {
-        console.error('Failed to insert faculty sections', insertError);
+        console.error('Failed to insert instructor sections', insertError);
         return NextResponse.json({ error: 'Unable to update sections' }, { status: 500 });
       }
     }
@@ -96,7 +96,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     return NextResponse.json({ success: true, section_ids: sectionIds });
   } catch (err) {
-    console.error('Update faculty sections failed', err);
+    console.error('Update instructor sections failed', err);
     return NextResponse.json({ error: 'Unable to update sections' }, { status: 500 });
   }
 }

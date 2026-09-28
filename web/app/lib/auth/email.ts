@@ -300,7 +300,7 @@ function buildWelcomeHtml(name: string, email: string, password: string): string
             <td style="padding:32px 40px;">
               <h2 style="margin:0 0 8px;font-size:20px;color:#0f172a;font-weight:600;">Welcome, ${safeName}!</h2>
               <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">
-                A faculty member has created an account for you on <strong>iCARE++</strong> — a scalable,
+                An instructor has created an account for you on <strong>iCARE++</strong> — a scalable,
                 ML-driven clinical competency assessment and adaptive learning system for nursing students.
               </p>
               <p style="margin:0 0 24px;font-size:15px;color:#475569;line-height:1.6;">
@@ -338,7 +338,7 @@ function buildWelcomeHtml(name: string, email: string, password: string): string
                 </tr>
               </table>
               <p style="margin:0;font-size:13px;color:#94a3b8;">
-                If you believe this account was created in error, please contact your faculty administrator.
+                If you believe this account was created in error, please contact your instructor.
               </p>
             </td>
           </tr>

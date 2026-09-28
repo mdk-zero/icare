@@ -60,9 +60,9 @@ const EMPTY: AccountsPayload = { users: [], sections: [], owner_enabled: false }
 
 const ROLES: { value: Role; label: string; plural: string }[] = [
   { value: "student", label: "Student", plural: "Students" },
-  { value: "faculty", label: "Faculty", plural: "Faculty" },
-  { value: "admin", label: "Administrator", plural: "Admins" },
-  { value: "super_admin", label: "Super Administrator", plural: "Super admins" },
+  { value: "faculty", label: "Instructor", plural: "Instructors" },
+  { value: "admin", label: "Dean", plural: "Deans" },
+  { value: "super_admin", label: "Admin", plural: "Admins" },
 ];
 
 const ROLE_LABEL = Object.fromEntries(ROLES.map((r) => [r.value, r.label])) as Record<Role, string>;
@@ -288,7 +288,7 @@ export default function SuperAdminUsersClient() {
   const placement = (user: Account) => {
     if (user.role === "student") return user.section_name ?? "No section";
     if (user.role === "faculty" && payload.owner_enabled) {
-      return (user.admin_id ? admins.find((a) => a.id === user.admin_id)?.name : null) ?? "No admin";
+      return (user.admin_id ? admins.find((a) => a.id === user.admin_id)?.name : null) ?? "No dean";
     }
     return "—";
   };
@@ -579,14 +579,14 @@ export default function SuperAdminUsersClient() {
             )}
             {form.role === "faculty" && payload.owner_enabled && (
               <div>
-                <label className={LABEL} htmlFor="acct-owner">Belongs to admin</label>
+                <label className={LABEL} htmlFor="acct-owner">Belongs to dean</label>
                 <select
                   id="acct-owner"
                   value={form.admin_id}
                   onChange={(e) => setForm({ ...form, admin_id: e.target.value })}
                   className={INPUT}
                 >
-                  <option value="">No admin</option>
+                  <option value="">No dean</option>
                   {admins.map((a) => (
                     <option key={a.id} value={a.id}>
                       {a.name}

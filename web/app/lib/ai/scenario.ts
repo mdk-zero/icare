@@ -230,10 +230,10 @@ export function buildScenarioPrompt(
 ): string {
   const patientBlock = patient ? `\nUse ${patientRecordBlock(patient, 'patient record as the basis for the scenario')}\n` : '';
   const request = userPrompt
-    ? `Faculty request: "${userPrompt.replace(/"/g, '\\"')}"`
-    : 'Faculty request: build a case that puts the lesson below into practice.';
+    ? `Instructor request: "${userPrompt.replace(/"/g, '\\"')}"`
+    : 'Instructor request: build a case that puts the lesson below into practice.';
   const lessonFocus = [
-    userPrompt && 'Centre the case on the part of the lesson the faculty request points to.',
+    userPrompt && 'Centre the case on the part of the lesson the instructor request points to.',
     patient && "Keep the patient record's diagnosis and vitals, and apply the lesson to this patient's care.",
   ]
     .filter(Boolean)

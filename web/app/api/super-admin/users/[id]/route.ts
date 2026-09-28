@@ -35,7 +35,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   if (parsedSex.sex !== undefined) updates.sex = parsedSex.sex;
   if (body.admin_id !== undefined) {
     if (body.admin_id !== null && typeof body.admin_id !== 'string') {
-      return NextResponse.json({ error: 'Invalid admin' }, { status: 400 });
+      return NextResponse.json({ error: 'Invalid dean' }, { status: 400 });
     }
     updates.admin_id = body.admin_id || null;
   }
@@ -60,7 +60,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         return NextResponse.json({ error: 'You cannot change your own role' }, { status: 400 });
       }
       if ((await countSuperAdmins(supabase)) <= 1) {
-        return NextResponse.json({ error: 'The last super admin cannot be demoted' }, { status: 400 });
+        return NextResponse.json({ error: 'The last admin cannot be demoted' }, { status: 400 });
       }
     }
     // A section only means something on a student, an owner only on faculty.
@@ -77,7 +77,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     if (error) {
       console.error('Failed to update account', error);
       const message = error.message?.includes('admin_id')
-        ? 'The owning admin must be an admin account'
+        ? 'The owning dean must be a dean account'
         : 'Unable to update user';
       return NextResponse.json({ error: message }, { status: 500 });
     }
@@ -115,7 +115,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     const { data: target } = await supabase.from('users').select('id, email, role').eq('id', id).maybeSingle();
     if (!target) return NextResponse.json({ error: 'User not found' }, { status: 404 });
     if (target.role === 'super_admin' && (await countSuperAdmins(supabase)) <= 1) {
-      return NextResponse.json({ error: 'The last super admin cannot be deleted' }, { status: 400 });
+      return NextResponse.json({ error: 'The last admin cannot be deleted' }, { status: 400 });
     }
 
     const { error } = await supabase.from('users').delete().eq('id', id);

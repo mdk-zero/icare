@@ -4,7 +4,7 @@ import ClientFacultyLayout from "./layout-client";
 import { EcgLoader } from "../components/EcgLoader";
 
 export const metadata: Metadata = {
-  title: "Faculty | iCARE++",
+  title: "Instructor | iCARE++",
 };
 
 export default function FacultyLayout({

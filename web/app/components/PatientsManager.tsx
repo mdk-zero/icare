@@ -1030,7 +1030,7 @@ export default function PatientsManager({
         </div>
       ) : !selectedGroup && planView ? (
         /* The ward map: a navigation surface, so selecting a room opens its
-           census below. Rooms an admin has not placed only exist on cards. */
+           census below. Rooms a dean has not placed only exist on cards. */
         <div>
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <h2 className="flex items-center gap-2 font-display text-base font-semibold text-gray-900">
@@ -1088,7 +1088,7 @@ export default function PatientsManager({
               </div>
             ) : (
               <p className="text-xs text-gray-500">
-                Arranged by an admin. Select a room to open its census.
+                Arranged by a dean. Select a room to open its census.
               </p>
             )}
           </div>
@@ -1129,7 +1129,7 @@ export default function PatientsManager({
                 <p className="mt-3 rounded-xl border border-hairline bg-surface p-6 text-center text-sm text-gray-500">
                   {manageRooms
                     ? "No rooms have been placed yet. Choose Edit Layout to arrange them, or switch to Card Layout to browse the census."
-                    : "No rooms have been placed on the floor plan yet. An admin can arrange them under Wards, or switch to Card Layout to browse the census."}
+                    : "No rooms have been placed on the floor plan yet. A dean can arrange them under Wards, or switch to Card Layout to browse the census."}
                 </p>
               )}
             </>

@@ -128,7 +128,7 @@ export default function ScenarioBriefScreen() {
     if (!assignment) return;
     Alert.alert(
       'Submit for Review',
-      'Submit your work for faculty review? Your instructor rates each task and finalizes your score.',
+      'Submit your work for instructor review? Your instructor rates each task and finalizes your score.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -324,7 +324,7 @@ export default function ScenarioBriefScreen() {
               {task.is_completed ? (
                 <Text style={styles.doneHint}>
                   {/* Charting used to tick some tasks by itself; those stay as done. */}
-                  {task.completed_via === 'system' ? 'Completed' : 'Verified by faculty'}
+                  {task.completed_via === 'system' ? 'Completed' : 'Verified by instructor'}
                 </Text>
               ) : (
                 <Text style={styles.facultyHint}>Your instructor verifies this</Text>
