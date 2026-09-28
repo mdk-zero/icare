@@ -15,7 +15,7 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import PageHeader from "../../components/PageHeader";
-import AccessRequestActions from "../../components/AccessRequestActions";
+import AccessRequestActions, { useOpenAccessRequest } from "../../components/AccessRequestActions";
 import GradeEditRequestActions from "../../components/GradeEditRequestActions";
 
 type Filter = "all" | "unread" | "alert" | "warning";
@@ -64,6 +64,7 @@ export default function FacultyNotificationsClient({
     markRead,
     markAllRead,
   } = useNotifications();
+  const openAccessRequest = useOpenAccessRequest();
 
   const [filter, setFilter] = useState<Filter>("all");
 
@@ -177,11 +178,23 @@ export default function FacultyNotificationsClient({
                     const meta = TYPE_META[notification.type] ?? TYPE_META.info;
                     const unread = !notification.is_read;
                     const delay = (gi * 6 + Math.min(i, 8)) * 35;
+                    // A pending account request opens its create form when the
+                    // card is clicked, as Accept does; its own buttons still act alone.
+                    const pendingRequest =
+                      notification.access_request?.status === "pending" ? notification.access_request : null;
                     return (
                       <div
                         key={notification.id}
                         style={{ animationDelay: `${delay}ms` }}
-                        className={`animate-rise rounded-2xl border p-4 shadow-tile transition-all hover:shadow-tile-hover ${
+                        onClick={
+                          pendingRequest
+                            ? (e) => {
+                                if ((e.target as HTMLElement).closest("button, a")) return;
+                                openAccessRequest(notification.id, pendingRequest);
+                              }
+                            : undefined
+                        }
+                        className={`animate-rise rounded-2xl border p-4 shadow-tile transition-all hover:shadow-tile-hover ${pendingRequest ? "cursor-pointer " : ""}${
                           unread
                             ? "border-brand-500/30 bg-brand-500/[0.045]"
                             : "border-hairline bg-surface"

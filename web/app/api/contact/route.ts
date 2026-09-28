@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { sendAccessRequestEmail, sendAccessRequestReceipt } from '@/app/lib/auth/email';
 import { clientIp, consumeRateLimit } from '@/app/lib/auth/rate-limit';
+import { findPendingAccessRequest } from '@/app/lib/access-requests';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 
 // Where access requests land: the project's own inbox on i-care.dev, which
@@ -24,7 +25,8 @@ function field(body: Record<string, unknown>, key: keyof typeof LIMITS): string 
   return trimmed.length > 0 && trimmed.length <= LIMITS[key] ? trimmed : null;
 }
 
-type AccessRequest = { name: string; email: string; subject: string; message: string };
+type Sex = 'female' | 'male';
+type AccessRequest = { name: string; email: string; sex: Sex; subject: string; message: string };
 
 /**
  * Drops the request into every super admin's notification feed, since they
@@ -48,13 +50,14 @@ async function notifySuperAdmins(req: AccessRequest): Promise<boolean> {
         user_id: admin.id,
         type: 'system' as const,
         title: `Account request from ${req.name}`,
-        body: `${req.email} · ${req.subject}: ${req.message}`,
+        body: `${req.email} · ${req.sex === 'female' ? 'Female' : 'Male'} · ${req.subject}: ${req.message}`,
         data: {
           kind: 'access_request',
           request_id: requestId,
           status: 'pending',
           name: req.name,
           email: req.email,
+          sex: req.sex,
           subject: req.subject,
         },
       })),
@@ -83,11 +86,24 @@ export async function POST(request: NextRequest) {
   const email = field(body, 'email');
   const subject = field(body, 'subject');
   const message = field(body, 'message');
-  if (!name || !email || !subject || !message) {
+  const sex: Sex | null = body.sex === 'female' || body.sex === 'male' ? body.sex : null;
+  if (!name || !email || !sex || !subject || !message) {
     return NextResponse.json({ error: 'Fill in every field.' }, { status: 400 });
   }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return NextResponse.json({ error: 'Enter a valid email address.' }, { status: 400 });
+  }
+
+  // Checked before the rate limit so a repeat doesn't use up an attempt.
+  if (await findPendingAccessRequest(email)) {
+    return NextResponse.json(
+      {
+        code: 'already_requested',
+        error:
+          "You've already submitted a request with this email. The iCARE++ team will get back to you once it's reviewed.",
+      },
+      { status: 409 },
+    );
   }
 
   if (!(await consumeRateLimit(`contact:${clientIp(request)}`, MAX_REQUESTS, WINDOW_MS))) {
@@ -97,7 +113,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const accessRequest = { name, email, subject, message };
+  const accessRequest = { name, email, sex, subject, message };
   const [mailed, notified] = await Promise.all([
     sendAccessRequestEmail(DEV_TEAM_EMAILS, accessRequest).then(
       () => true,

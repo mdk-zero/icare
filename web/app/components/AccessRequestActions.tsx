@@ -8,6 +8,20 @@ import { AccessRequestInfo, resolveAccessRequest } from "../lib/api";
 import { markRead, refreshNotifications } from "../lib/notifications-live";
 
 /**
+ * Opens the Users page with the create form filled in from a request, as
+ * Accept does. Clicking the notification itself goes the same way.
+ */
+export function useOpenAccessRequest() {
+  const router = useRouter();
+  return (notificationId: string, request: AccessRequestInfo) => {
+    void markRead(notificationId);
+    const query = new URLSearchParams({ request: request.id, name: request.name, email: request.email });
+    if (request.sex) query.set("sex", request.sex);
+    router.push(`/super-admin/users?${query}`);
+  };
+}
+
+/**
  * Accept / Decline on a sign-up page account request. Accept opens the Users
  * page with the create form filled in; the request is marked accepted only
  * once that account is saved. Decline settles it here and emails the requester.
@@ -22,7 +36,7 @@ export default function AccessRequestActions({
   /** Called before Accept routes away, e.g. to close the bell's popup. */
   onNavigate?: () => void;
 }) {
-  const router = useRouter();
+  const openRequest = useOpenAccessRequest();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -44,10 +58,8 @@ export default function AccessRequestActions({
   }
 
   const accept = () => {
-    void markRead(notificationId);
     onNavigate?.();
-    const query = new URLSearchParams({ request: request.id, name: request.name, email: request.email });
-    router.push(`/super-admin/users?${query}`);
+    openRequest(notificationId, request);
   };
 
   const decline = async () => {

@@ -1213,6 +1213,8 @@ export interface AccessRequestInfo {
   id: string;
   name: string;
   email: string;
+  /** Absent on requests sent before the form asked for it. */
+  sex?: 'female' | 'male';
   status: AccessRequestStatus;
   resolved_by_name?: string;
 }
@@ -2570,6 +2572,7 @@ function toAccessRequest(data: Record<string, unknown> | undefined): AccessReque
     id: data.request_id,
     name: typeof data.name === 'string' ? data.name : '',
     email: typeof data.email === 'string' ? data.email : '',
+    sex: data.sex === 'female' || data.sex === 'male' ? data.sex : undefined,
     status,
     resolved_by_name: typeof data.resolved_by_name === 'string' ? data.resolved_by_name : undefined,
   };

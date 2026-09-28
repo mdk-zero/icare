@@ -15,7 +15,7 @@ import {
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import { useNotifications } from "../lib/notifications-live";
 import { FacultyNotification } from "../lib/api";
-import AccessRequestActions from "./AccessRequestActions";
+import AccessRequestActions, { useOpenAccessRequest } from "./AccessRequestActions";
 import GradeEditRequestActions from "./GradeEditRequestActions";
 
 type Variant = "sidebar" | "topbar";
@@ -74,6 +74,7 @@ export default function NotificationsPopover({
 }) {
   const router = useRouter();
   const { notifications, unread, loading, markRead, markAllRead } = useNotifications();
+  const openAccessRequest = useOpenAccessRequest();
 
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
@@ -257,7 +258,15 @@ export default function NotificationsPopover({
                     const button = (
                       <button
                         key={notification.id}
-                        onClick={() => markRead(notification.id)}
+                        onClick={() => {
+                          // A pending account request opens its create form, as Accept does.
+                          if (notification.access_request?.status === "pending") {
+                            setOpen(false);
+                            openAccessRequest(notification.id, notification.access_request);
+                          } else {
+                            void markRead(notification.id);
+                          }
+                        }}
                         style={{ animationDelay: `${Math.min(i, 5) * 30}ms` }}
                         className={`flex w-full animate-rise items-start gap-2.5 rounded-xl px-2.5 py-2.5 text-left transition-colors hover:bg-brand-500/[0.09] ${
                           notification.access_request || notification.grade_edit_request ? "" : "bg-brand-500/[0.05]"

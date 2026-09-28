@@ -157,7 +157,13 @@ export default function SuperAdminUsersClient() {
   useEffect(() => {
     const requestId = params.get("request");
     if (!requestId) return;
-    setForm({ ...blankForm(), name: params.get("name") ?? "", email: params.get("email") ?? "" });
+    const sex = params.get("sex");
+    setForm({
+      ...blankForm(),
+      name: params.get("name") ?? "",
+      email: params.get("email") ?? "",
+      sex: sex === "female" || sex === "male" ? sex : "",
+    });
     setFromRequest(requestId);
     setEditing("new");
     // A refresh shouldn't reopen the form for a request already handled.
