@@ -16,13 +16,14 @@ import {
   faHeart,
 } from "@fortawesome/free-solid-svg-icons";
 import logo_white from "../../public/logo-white-no-bg.png";
+import logo_colour from "../../public/logo-no-bg.png";
 import { EcgLoader } from "../components/EcgLoader";
 
 /** Shared with login/signup so the three auth surfaces read as one screen. */
 const FIELD_CLASS =
-  "auth-input w-full py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-[#7DD3D8]/30 focus:border-[#7DD3D8]/50 transition-all";
+  "auth-input w-full py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-(--auth-accent)/30 focus:border-(--auth-accent)/50 transition-all";
 const SUBMIT_CLASS =
-  "w-full bg-[#2B9095] hover:bg-[#19797D] text-white border border-white/20 py-3 px-6 rounded-xl font-semibold transition-all duration-200 shadow-lg shadow-black/20 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer";
+  "w-full bg-[#2B9095] hover:bg-[#19797D] text-[#fff] border border-[#ffffff33] py-3 px-6 rounded-xl font-semibold transition-all duration-200 shadow-lg shadow-black/20 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer";
 
 export default function ForgotPasswordPage() {
   const [step, setStep] = useState<"email" | "code" | "reset" | "success">("email");
@@ -140,16 +141,16 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className="min-h-screen flex relative overflow-hidden bg-gradient-to-r from-[#0D7377] via-30% via-[#0A4A4D] to-[#050c0d]">
+    <div className="auth-screen min-h-screen flex relative overflow-hidden bg-gradient-to-r from-(--auth-bg-1) via-30% via-(--auth-bg-2) to-(--auth-bg-3)">
       {/* ───────── Shared abstract layer, spans the full screen ───────── */}
       <div className="absolute inset-0 opacity-[0.07] [mask-image:linear-gradient(90deg,black_0%,black_60%,transparent_100%)] pointer-events-none">
         <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
           <defs>
             <pattern id="forgotGridMinor" width="28" height="28" patternUnits="userSpaceOnUse">
-              <path d="M28 0H0v28" fill="none" stroke="#ffffff" strokeWidth="0.5" />
+              <path d="M28 0H0v28" fill="none" stroke="var(--color-white)" strokeWidth="0.5" />
             </pattern>
             <pattern id="forgotGridMajor" width="140" height="140" patternUnits="userSpaceOnUse">
-              <path d="M140 0H0v140" fill="none" stroke="#ffffff" strokeWidth="1" />
+              <path d="M140 0H0v140" fill="none" stroke="var(--color-white)" strokeWidth="1" />
             </pattern>
           </defs>
           <rect width="100%" height="100%" fill="url(#forgotGridMinor)" />
@@ -158,7 +159,7 @@ export default function ForgotPasswordPage() {
       </div>
 
       <div className="absolute top-0 left-0 w-[500px] h-[500px] bg-white/[0.05] rounded-full blur-3xl -translate-y-1/3 -translate-x-1/4 animate-float-slow pointer-events-none" />
-      <div className="absolute top-1/3 left-1/3 w-[350px] h-[350px] bg-[#7DD3D8]/10 rounded-full blur-3xl animate-float-medium pointer-events-none" />
+      <div className="absolute top-1/3 left-1/3 w-[350px] h-[350px] bg-(--auth-accent)/10 rounded-full blur-3xl animate-float-medium pointer-events-none" />
       <div
         className="absolute bottom-0 right-[15%] w-[450px] h-[450px] bg-brand-900/30 rounded-full blur-3xl animate-float-slow pointer-events-none"
         style={{ animationDelay: "-3s" }}
@@ -170,15 +171,19 @@ export default function ForgotPasswordPage() {
         <div className="relative z-10 flex flex-col w-full px-14 xl:px-20 py-10 xl:py-14 text-white">
           <div className="flex-1 flex flex-col justify-center max-w-xl py-10">
             <div className="mb-12 opacity-0 animate-fade-in-up">
-              <Image
-                src={logo_white}
+              <Image src={logo_colour}
                 alt="iCare++ Logo"
-                className="h-14 w-auto drop-shadow-md"
+                className="h-14 w-auto drop-shadow-md dark:hidden"
+                priority
+              />
+              <Image src={logo_white}
+                alt="iCare++ Logo"
+                className="h-14 w-auto drop-shadow-md hidden dark:block"
                 priority
               />
             </div>
 
-            <p className="opacity-0 animate-fade-in-up [animation-delay:100ms] text-[11px] font-semibold uppercase tracking-[0.28em] text-[#7DD3D8] mb-4">
+            <p className="opacity-0 animate-fade-in-up [animation-delay:100ms] text-[11px] font-semibold uppercase tracking-[0.28em] text-(--auth-accent) mb-4">
               Clinical Competency Platform
             </p>
             <h2 className="opacity-0 animate-fade-in-up [animation-delay:200ms] text-4xl xl:text-[2.75rem] font-semibold tracking-tight leading-[1.12] mb-5">
@@ -217,7 +222,7 @@ export default function ForgotPasswordPage() {
                   className="opacity-0 animate-fade-in-up flex items-start gap-4"
                   style={{ animationDelay: feature.delay }}
                 >
-                  <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-white/10 border border-white/10 backdrop-blur-md flex items-center justify-center text-[#7DD3D8]">
+                  <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-white/10 border border-white/10 backdrop-blur-md flex items-center justify-center text-(--auth-accent)">
                     <FontAwesomeIcon icon={feature.icon} className="w-5 h-5" />
                   </div>
                   <div>
@@ -237,7 +242,8 @@ export default function ForgotPasswordPage() {
           {/* Mobile header */}
           <div className="lg:hidden flex flex-col items-center mb-6">
             <div className="mb-3">
-              <Image src={logo_white} alt="iCare++ Logo" className="h-12 w-auto" priority />
+              <Image src={logo_colour} alt="iCare++ Logo" className="h-12 w-auto dark:hidden" priority />
+              <Image src={logo_white} alt="iCare++ Logo" className="h-12 w-auto hidden dark:block" priority />
             </div>
           </div>
 
@@ -269,7 +275,7 @@ export default function ForgotPasswordPage() {
             )}
 
             {message && step === "code" && (
-              <div className="p-3.5 mb-5 bg-[#7DD3D8]/10 border border-[#7DD3D8]/20 rounded-xl text-[#7DD3D8] text-sm">
+              <div className="p-3.5 mb-5 bg-(--auth-accent)/10 border border-(--auth-accent)/20 rounded-xl text-(--auth-accent) text-sm">
                 {message}
               </div>
             )}
@@ -418,8 +424,8 @@ export default function ForgotPasswordPage() {
 
             {step === "success" && (
               <div className="text-center py-2">
-                <div className="w-14 h-14 rounded-full bg-[#7DD3D8]/10 border border-[#7DD3D8]/20 flex items-center justify-center mx-auto mb-5">
-                  <FontAwesomeIcon icon={faCheck} className="w-7 h-7 text-[#7DD3D8]" />
+                <div className="w-14 h-14 rounded-full bg-(--auth-accent)/10 border border-(--auth-accent)/20 flex items-center justify-center mx-auto mb-5">
+                  <FontAwesomeIcon icon={faCheck} className="w-7 h-7 text-(--auth-accent)" />
                 </div>
                 <Link href="/login" className={`${SUBMIT_CLASS} inline-flex`}>
                   Go to sign in
@@ -431,7 +437,7 @@ export default function ForgotPasswordPage() {
               <div className="mt-5 text-center">
                 <Link
                   href="/login"
-                  className="text-sm text-[#7DD3D8] hover:text-white font-medium transition-colors"
+                  className="text-sm text-(--auth-accent) hover:text-white font-medium transition-colors"
                 >
                   Back to sign in
                 </Link>

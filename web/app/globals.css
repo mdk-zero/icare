@@ -599,15 +599,41 @@ html {
 .auth-input:-webkit-autofill:hover,
 .auth-input:-webkit-autofill:focus,
 .auth-input:autofill {
-  -webkit-text-fill-color: #ffffff;
-  caret-color: #ffffff;
-  border-color: rgb(255 255 255 / 0.1);
+  -webkit-text-fill-color: var(--color-white);
+  caret-color: var(--color-white);
+  border-color: color-mix(in oklab, var(--color-white) 10%, transparent);
   transition:
     background-color 600000s 0s,
     color 600000s 0s;
 }
 .auth-input:-webkit-autofill:focus {
-  border-color: rgb(125 211 216 / 0.5);
+  border-color: color-mix(in oklab, var(--auth-accent) 50%, transparent);
+}
+
+/*
+ * Auth screens (login, contact, forgot password) follow the theme. They are
+ * written for the dark teal backdrop, so light mode re-points the colours the
+ * markup is built from rather than restyling every element: inside
+ * .auth-screen, "white" becomes the deep ink, "black" (shadows, tints) a soft
+ * teal, the aqua accent a readable teal, and the pale reds deep enough to read
+ * on white. Buttons that sit on solid teal spell out real white.
+ */
+.auth-screen {
+  --auth-bg-1: #0d7377;
+  --auth-bg-2: #0a4a4d;
+  --auth-bg-3: #050c0d;
+  --auth-accent: #7dd3d8;
+}
+:root:not(.dark) .auth-screen {
+  --auth-bg-1: #d9eff1;
+  --auth-bg-2: #eef8f9;
+  --auth-bg-3: #ffffff;
+  --auth-accent: #1b6b7b;
+  --color-white: #0f3d42;
+  --color-black: #7fb6be;
+  --color-red-300: #b91c1c;
+  --color-red-400: #dc2626;
+  --color-brand-900: #b7dfe6;
 }
 
 /* Auth brand panel motion (components/AuthShowcase.tsx). The reduced-motion

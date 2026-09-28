@@ -6,19 +6,24 @@ import Image from "next/image";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faCircleExclamation,
+  faHourglassHalf,
+  faCheck,
+  faPaperPlane,
   faUser,
   faEnvelope,
-  faTag,
+  faPen,
+  faVenusMars,
   faBolt,
   faChartColumn,
   faHeart,
 } from "@fortawesome/free-solid-svg-icons";
 import logo_white from "../../public/logo-white-no-bg.png";
+import logo_colour from "../../public/logo-no-bg.png";
 import { EcgLoader } from "../components/EcgLoader";
 import { DriftingKit, RotatingWords } from "../components/AuthShowcase";
 
 const inputClass =
-  "auth-input w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-[#7DD3D8]/30 focus:border-[#7DD3D8]/50 transition-all";
+  "auth-input w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-(--auth-accent)/30 focus:border-(--auth-accent)/50 transition-all";
 const iconInputClass = `${inputClass} pl-11`;
 
 /*
@@ -53,10 +58,16 @@ export default function ContactUsPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [subject, setSubject] = useState("Requesting account creation");
+  const [sex, setSex] = useState<"" | "female" | "male">("");
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  // Set when this email already has a request waiting; it replaces the form.
+  const [notice, setNotice] = useState("");
   const [sent, setSent] = useState(false);
+  const [followUp, setFollowUp] = useState("");
+  const [followUpState, setFollowUpState] = useState<"idle" | "sending" | "sent">("idle");
+  const [followUpError, setFollowUpError] = useState("");
 
   useEffect(() => {
     document.body.style.overflow = "hidden";
@@ -68,17 +79,24 @@ export default function ContactUsPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setNotice("");
+    if (!sex) {
+      setError("Select your sex.");
+      return;
+    }
     setIsLoading(true);
 
     try {
       const res = await fetch("/api/contact", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, subject, message }),
+        body: JSON.stringify({ name, email, sex, subject, message }),
       });
       if (!res.ok) {
-        const data = (await res.json().catch(() => ({}))) as { error?: string };
-        setError(data.error ?? "Your message could not be sent. Please try again.");
+        const data = (await res.json().catch(() => ({}))) as { error?: string; code?: string };
+        const text = data.error ?? "Your message could not be sent. Please try again.";
+        if (data.code === "already_requested") setNotice(text);
+        else setError(text);
         return;
       }
       setSent(true);
@@ -89,17 +107,47 @@ export default function ContactUsPage() {
     }
   };
 
+  const sendFollowUp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFollowUpError("");
+    setFollowUpState("sending");
+    try {
+      const res = await fetch("/api/contact/follow-up", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, message: followUp }),
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        setFollowUpError(data.error ?? "Your follow-up could not be sent. Please try again.");
+        setFollowUpState("idle");
+        return;
+      }
+      setFollowUpState("sent");
+    } catch {
+      setFollowUpError("Connection error. Please try again.");
+      setFollowUpState("idle");
+    }
+  };
+
+  const tryAnotherEmail = () => {
+    setNotice("");
+    setFollowUp("");
+    setFollowUpState("idle");
+    setFollowUpError("");
+  };
+
   return (
-    <div className="min-h-screen flex relative overflow-hidden bg-gradient-to-r from-[#0D7377] via-30% via-[#0A4A4D] to-[#050c0d]">
+    <div className="auth-screen min-h-screen flex relative overflow-hidden bg-gradient-to-r from-(--auth-bg-1) via-30% via-(--auth-bg-2) to-(--auth-bg-3)">
       {/* ───────── Shared abstract layer, spans the full screen ───────── */}
       <div className="absolute inset-0 opacity-[0.07] [mask-image:linear-gradient(90deg,black_0%,black_60%,transparent_100%)] pointer-events-none">
         <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
           <defs>
             <pattern id="signupGridMinor" width="28" height="28" patternUnits="userSpaceOnUse">
-              <path d="M28 0H0v28" fill="none" stroke="#ffffff" strokeWidth="0.5" />
+              <path d="M28 0H0v28" fill="none" stroke="var(--color-white)" strokeWidth="0.5" />
             </pattern>
             <pattern id="signupGridMajor" width="140" height="140" patternUnits="userSpaceOnUse">
-              <path d="M140 0H0v140" fill="none" stroke="#ffffff" strokeWidth="1" />
+              <path d="M140 0H0v140" fill="none" stroke="var(--color-white)" strokeWidth="1" />
             </pattern>
           </defs>
           <rect width="100%" height="100%" fill="url(#signupGridMinor)" />
@@ -108,7 +156,7 @@ export default function ContactUsPage() {
       </div>
 
       <div className="absolute top-0 left-0 w-[500px] h-[500px] bg-white/[0.05] rounded-full blur-3xl -translate-y-1/3 -translate-x-1/4 animate-float-slow pointer-events-none" />
-      <div className="absolute top-1/3 left-1/3 w-[350px] h-[350px] bg-[#7DD3D8]/10 rounded-full blur-3xl animate-float-medium pointer-events-none" />
+      <div className="absolute top-1/3 left-1/3 w-[350px] h-[350px] bg-(--auth-accent)/10 rounded-full blur-3xl animate-float-medium pointer-events-none" />
       <div
         className="absolute bottom-0 right-[15%] w-[450px] h-[450px] bg-brand-900/30 rounded-full blur-3xl animate-float-slow pointer-events-none"
         style={{ animationDelay: "-3s" }}
@@ -122,15 +170,19 @@ export default function ContactUsPage() {
         <div className="relative z-10 flex flex-col w-full px-14 xl:px-20 py-10 xl:py-14 text-white">
           <div className="flex-1 flex flex-col justify-center max-w-xl py-10 -mt-20">
             <div className="mb-12 opacity-0 animate-fade-in-up">
-              <Image
-                src={logo_white}
+              <Image src={logo_colour}
                 alt="iCare++ Logo"
-                className="h-14 w-auto drop-shadow-md"
+                className="h-14 w-auto drop-shadow-md dark:hidden"
+                priority
+              />
+              <Image src={logo_white}
+                alt="iCare++ Logo"
+                className="h-14 w-auto drop-shadow-md hidden dark:block"
                 priority
               />
             </div>
 
-            <p className="opacity-0 animate-fade-in-up [animation-delay:100ms] text-[11px] font-semibold uppercase tracking-[0.28em] text-[#7DD3D8] mb-4">
+            <p className="opacity-0 animate-fade-in-up [animation-delay:100ms] text-[11px] font-semibold uppercase tracking-[0.28em] text-(--auth-accent) mb-4">
               Clinical Competency Platform
             </p>
             <h2 className="opacity-0 animate-fade-in-up [animation-delay:200ms] text-4xl xl:text-[2.75rem] font-semibold tracking-tight leading-[1.12] mb-5">
@@ -171,7 +223,7 @@ export default function ContactUsPage() {
                   className="opacity-0 animate-fade-in-up flex items-start gap-4"
                   style={{ animationDelay: feature.delay }}
                 >
-                  <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-white/10 border border-white/10 backdrop-blur-md flex items-center justify-center text-[#7DD3D8]">
+                  <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-white/10 border border-white/10 backdrop-blur-md flex items-center justify-center text-(--auth-accent)">
                     <FontAwesomeIcon icon={feature.icon} className="w-5 h-5" />
                   </div>
                   <div>
@@ -191,7 +243,8 @@ export default function ContactUsPage() {
           {/* Mobile header */}
           <div className="lg:hidden flex flex-col items-center mb-6">
             <div className="p-3.5 bg-white/10 border border-white/10 backdrop-blur-md rounded-2xl mb-3">
-              <Image src={logo_white} alt="iCare++ Logo" className="h-12 w-auto" priority />
+              <Image src={logo_colour} alt="iCare++ Logo" className="h-12 w-auto dark:hidden" priority />
+              <Image src={logo_white} alt="iCare++ Logo" className="h-12 w-auto hidden dark:block" priority />
             </div>
           </div>
 
@@ -207,14 +260,14 @@ export default function ContactUsPage() {
             {sent ? (
               <div className="py-6 text-center" role="status">
                 <style>{sentStyles}</style>
-                <span className="sent-badge relative mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[#7DD3D8]/15 text-[#7DD3D8]">
+                <span className="sent-badge relative mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-(--auth-accent)/15 text-(--auth-accent)">
                   <span
                     aria-hidden
-                    className="sent-ring absolute inset-0 rounded-full border-2 border-[#7DD3D8]"
+                    className="sent-ring absolute inset-0 rounded-full border-2 border-(--auth-accent)"
                   />
                   <span
                     aria-hidden
-                    className="sent-ring sent-ring-late absolute inset-0 rounded-full border border-[#7DD3D8]"
+                    className="sent-ring sent-ring-late absolute inset-0 rounded-full border border-(--auth-accent)"
                   />
                   <svg
                     aria-hidden
@@ -245,6 +298,68 @@ export default function ContactUsPage() {
                   <span className="text-white/80">{email}</span>. Please wait for the team to
                   validate your account; we&apos;ll write again once it&apos;s ready.
                 </p>
+              </div>
+            ) : notice ? (
+              <div className="py-6 text-center" role="status">
+                <span className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-(--auth-accent)/15 text-(--auth-accent) animate-fade-in-up">
+                  <FontAwesomeIcon icon={faHourglassHalf} className="h-6 w-6" />
+                </span>
+                <h2 className="opacity-0 animate-fade-in-up [animation-delay:100ms] text-xl font-semibold text-white mb-2">
+                  Request already submitted
+                </h2>
+                <p className="opacity-0 animate-fade-in-up [animation-delay:200ms] text-sm text-white/60 leading-relaxed">
+                  <span className="text-white/80">{email}</span>{" "}
+                  already has a request waiting
+                  for review. The iCARE++ team will get back to you once it&apos;s been checked.
+                </p>
+
+                {followUpState === "sent" ? (
+                  <p className="mt-5 flex items-center justify-center gap-2 rounded-xl border border-(--auth-accent)/30 bg-(--auth-accent)/10 px-4 py-3 text-sm text-white/85 animate-fade-in-up">
+                    <FontAwesomeIcon icon={faCheck} className="h-4 w-4 text-(--auth-accent)" />
+                    Follow-up sent. The team has been reminded.
+                  </p>
+                ) : (
+                  <form
+                    onSubmit={sendFollowUp}
+                    className="opacity-0 animate-fade-in-up [animation-delay:300ms] mt-5 text-left"
+                  >
+                    <label htmlFor="follow-up" className="block text-sm font-medium text-white/70 mb-1.5">
+                      Haven&apos;t heard back? Send a follow-up
+                    </label>
+                    <textarea
+                      id="follow-up"
+                      value={followUp}
+                      onChange={(e) => setFollowUp(e.target.value)}
+                      required
+                      maxLength={2000}
+                      rows={3}
+                      className={`${inputClass} resize-none`}
+                      placeholder="Add anything the team should know, or ask about your request."
+                    />
+                    {followUpError && (
+                      <p className="mt-2 flex items-start gap-2 text-sm text-red-300">
+                        <FontAwesomeIcon icon={faCircleExclamation} className="mt-0.5 h-4 w-4 text-red-400" />
+                        {followUpError}
+                      </p>
+                    )}
+                    <button
+                      type="submit"
+                      disabled={followUpState === "sending" || !followUp.trim()}
+                      className="mt-3 w-full bg-[#2B9095] hover:bg-[#19797D] text-[#fff] border border-[#ffffff33] py-2.5 px-6 rounded-xl text-sm font-semibold transition-all duration-200 shadow-lg shadow-black/20 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <FontAwesomeIcon icon={faPaperPlane} className="h-3.5 w-3.5" />
+                      {followUpState === "sending" ? "Sending…" : "Send follow-up"}
+                    </button>
+                  </form>
+                )}
+
+                <button
+                  type="button"
+                  onClick={tryAnotherEmail}
+                  className="opacity-0 animate-fade-in-up [animation-delay:400ms] mt-4 text-sm font-medium text-(--auth-accent) hover:underline cursor-pointer"
+                >
+                  Use a different email
+                </button>
               </div>
             ) : (
               <>
@@ -308,28 +423,63 @@ export default function ContactUsPage() {
                     </div>
                   </div>
 
-                  <div>
-                    <label
-                      htmlFor="subject"
-                      className="block text-sm font-medium text-white/70 mb-1.5"
-                    >
-                      Subject <span className="text-red-400">*</span>
-                    </label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                        <FontAwesomeIcon icon={faTag} className="h-4 w-4 text-white/35" />
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-5">
+                    <div className="sm:col-span-3">
+                      <label
+                        htmlFor="subject"
+                        className="block text-sm font-medium text-white/70 mb-1.5"
+                      >
+                        Subject <span className="text-red-400">*</span>
+                      </label>
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                          <FontAwesomeIcon icon={faPen} className="h-4 w-4 text-white/35" />
+                        </div>
+                        <input
+                          type="text"
+                          id="subject"
+                          value={subject}
+                          onChange={(e) => setSubject(e.target.value)}
+                          required
+                          maxLength={150}
+                          className={iconInputClass}
+                          placeholder="What's this about?"
+                        />
                       </div>
-                      <input
-                        type="text"
-                        id="subject"
-                        value={subject}
-                        onChange={(e) => setSubject(e.target.value)}
-                        required
-                        maxLength={150}
-                        className={iconInputClass}
-                        placeholder="What's this about?"
-                      />
                     </div>
+                    <fieldset className="sm:col-span-2">
+                      <legend className="block text-sm font-medium text-white/70 mb-1.5">
+                        Sex <span className="text-red-400">*</span>
+                      </legend>
+                      {/* Radios styled as a two-way toggle: a native select's
+                          option list ignores the auth theme. */}
+                      <div className="auth-input flex h-[50px] items-center gap-1 rounded-xl border border-white/10 bg-white/5 p-1">
+                        <FontAwesomeIcon icon={faVenusMars} className="mx-2.5 h-4 w-4 shrink-0 text-white/35" />
+                        {(["female", "male"] as const).map((value) => (
+                          <label
+                            key={value}
+                            className={`flex h-full flex-1 cursor-pointer items-center justify-center rounded-lg text-sm transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-(--auth-accent)/40 ${
+                              sex === value
+                                ? "bg-[#2B9095] font-semibold text-[#fff]"
+                                : "text-white/60 hover:bg-white/5 hover:text-white"
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              name="sex"
+                              value={value}
+                              checked={sex === value}
+                              onChange={() => {
+                                setSex(value);
+                                setError("");
+                              }}
+                              className="sr-only"
+                            />
+                            {value === "female" ? "Female" : "Male"}
+                          </label>
+                        ))}
+                      </div>
+                    </fieldset>
                   </div>
 
                   <div>
@@ -354,7 +504,7 @@ export default function ContactUsPage() {
                   <button
                     type="submit"
                     disabled={isLoading}
-                    className="w-full bg-[#2B9095] hover:bg-[#19797D] text-white border border-white/20 py-3 px-6 rounded-xl font-semibold transition-all duration-200 shadow-lg shadow-black/20 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
+                    className="w-full bg-[#2B9095] hover:bg-[#19797D] text-[#fff] border border-[#ffffff33] py-3 px-6 rounded-xl font-semibold transition-all duration-200 shadow-lg shadow-black/20 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
                   >
                     {isLoading ? (
                       <>
@@ -374,7 +524,7 @@ export default function ContactUsPage() {
                 Already have an account?{" "}
                 <Link
                   href="/login"
-                  className="text-[#7DD3D8] hover:text-white font-medium transition-colors"
+                  className="text-(--auth-accent) hover:text-white font-medium transition-colors"
                 >
                   Sign in
                 </Link>

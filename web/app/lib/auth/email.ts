@@ -516,7 +516,7 @@ export async function sendStudentInvitationEmail(
  */
 export async function sendAccessRequestEmail(
   to: string[],
-  request: { name: string; email: string; subject: string; message: string },
+  request: { name: string; email: string; sex?: 'female' | 'male'; subject: string; message: string },
 ): Promise<void> {
   const name = htmlEscape(request.name);
   const email = htmlEscape(request.email);
@@ -537,6 +537,7 @@ export async function sendAccessRequestEmail(
       <h2 style="color: #0d7377; margin: 0 0 16px;">New account activation request</h2>
       <p style="margin: 0 0 4px;"><strong>Name:</strong> ${name}</p>
       <p style="margin: 0 0 4px;"><strong>Email:</strong> <a href="mailto:${email}">${email}</a></p>
+      ${request.sex ? `<p style="margin: 0 0 4px;"><strong>Sex:</strong> ${request.sex === "female" ? "Female" : "Male"}</p>` : ""}
       <p style="margin: 0 0 16px;"><strong>Subject:</strong> ${subject}</p>
       <div style="background: #f0f9fa; border: 1px solid #d0ebea; border-radius: 12px; padding: 16px; line-height: 1.6;">${message}</div>
       <p style="font-size: 13px; color: #64748b; margin-top: 24px;">Reply to this email to answer them directly. Create the account from Admin &rarr; Users once they are validated.</p>

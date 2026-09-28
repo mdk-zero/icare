@@ -46,7 +46,7 @@ export function RotatingWords({ words, interval = 2600 }: { words: string[]; int
       <span
         key={index}
         aria-hidden
-        className="auth-word inline-block bg-gradient-to-r from-[#7DD3D8] via-white to-[#7DD3D8] bg-[length:200%_100%] bg-clip-text text-transparent"
+        className="auth-word inline-block bg-gradient-to-r from-(--auth-accent) via-(--color-white) to-(--auth-accent) bg-[length:200%_100%] bg-clip-text text-transparent"
       >
         {words[index]}
       </span>
@@ -125,7 +125,7 @@ export function DriftingKit() {
             >
               <FontAwesomeIcon
                 icon={d.icon}
-                style={{ width: d.size, height: d.size, color: "#7DD3D8" }}
+                style={{ width: d.size, height: d.size, color: "var(--auth-accent)" }}
               />
             </div>
           </div>
