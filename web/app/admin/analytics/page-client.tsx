@@ -28,8 +28,8 @@ import {
 import type { Section } from "../../lib/api";
 import { usePageData } from "../../lib/use-page-data";
 import PageHeader from "../../components/PageHeader";
-import Avatar from "../../components/Avatar";
 import StatTile from "../../components/StatTile";
+import { PodiumLeaderboard } from "../../faculty/analytics/Leaderboard";
 import AnalyticsFilterBar, {
   formatRangeLabel,
   rangeForPreset,
@@ -119,61 +119,6 @@ function CardHeading({
       <div className="flex shrink-0 items-center gap-4">
         {aside}
         {tag}
-      </div>
-    </div>
-  );
-}
-
-/** Medal for the top three, a plain number below that — the same ranking
- * language the student leaderboard uses. */
-function rankBadgeClass(rank: number): string {
-  if (rank === 1) return "bg-gradient-to-br from-amber-300 to-amber-500 text-white shadow-sm";
-  if (rank === 2) return "bg-gradient-to-br from-slate-300 to-slate-400 text-white shadow-sm";
-  if (rank === 3) return "bg-gradient-to-br from-orange-300 to-orange-500 text-white shadow-sm";
-  return "bg-gray-100 text-gray-500";
-}
-
-/** One row shared by every list below: a badge, a proportional fill bar
- * behind the text, and a bold trailing figure — magnitude and rank both
- * legible at a glance instead of a plain number in a table cell. */
-function BarRow({
-  badge,
-  badgeClass,
-  label,
-  sublabel,
-  fillPct,
-  fillClass,
-  trailing,
-  trailingSub,
-}: {
-  badge: ReactNode;
-  badgeClass: string;
-  label: string;
-  sublabel?: string;
-  fillPct: number;
-  fillClass: string;
-  trailing: ReactNode;
-  trailingSub?: string;
-}) {
-  return (
-    <div className="relative flex items-center gap-3 overflow-hidden rounded-xl border border-hairline bg-surface p-3">
-      <div
-        className={`absolute inset-y-0 left-0 transition-all duration-700 ease-out ${fillClass}`}
-        style={{ width: `${Math.min(Math.max(fillPct, 0), 100)}%` }}
-        aria-hidden
-      />
-      <span
-        className={`relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${badgeClass}`}
-      >
-        {badge}
-      </span>
-      <div className="relative z-10 min-w-0 flex-1">
-        <p className="truncate text-sm font-semibold text-gray-900">{label}</p>
-        {sublabel && <p className="truncate text-xs text-gray-400">{sublabel}</p>}
-      </div>
-      <div className="relative z-10 shrink-0 text-right">
-        <p className="text-sm font-bold tabular-nums text-gray-800">{trailing}</p>
-        {trailingSub && <p className="text-[11px] text-gray-400">{trailingSub}</p>}
       </div>
     </div>
   );
@@ -658,7 +603,7 @@ function SkeletonTile() {
   );
 }
 
-/** Mirrors BarRow: a rank badge, two lines of text, a trailing figure. */
+/** Mirrors a leaderboard row: a rank badge, two lines of text, a trailing figure. */
 function SkeletonBarRow() {
   return (
     <div className="flex items-center gap-3 rounded-xl border border-hairline bg-surface p-3">
@@ -732,8 +677,8 @@ function AnalyticsSkeleton() {
     <div className="animate-pulse" role="status" aria-busy="true">
       <span className="sr-only">Loading analytics…</span>
 
-      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, i) => (
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+        {Array.from({ length: 3 }).map((_, i) => (
           <SkeletonTile key={i} />
         ))}
       </div>
@@ -868,18 +813,16 @@ export default function AdminAnalyticsClient() {
     const users = usersRes.ok
       ? (((await usersRes.json()) as { users?: { role: string }[] }).users ?? [])
       : [];
-    const totalUsers = users.length;
     const roleCounts = { student: 0, faculty: 0, admin: 0 };
     for (const u of users) {
       if (u.role === "student" || u.role === "faculty" || u.role === "admin")
         roleCounts[u.role] += 1;
     }
 
-    return { totalUsers, roleCounts, rooms };
+    return { roleCounts, rooms };
   });
 
   const summary = analytics?.summary ?? null;
-  const totalUsers = live?.totalUsers ?? 0;
   const roleCounts = live?.roleCounts ?? { student: 0, faculty: 0, admin: 0 };
   const allRooms = live?.rooms;
 
@@ -939,12 +882,12 @@ export default function AdminAnalyticsClient() {
     .filter((s) => s.students > 0)
     .map((s) => ({ ...s, active_students: s.active_students ?? 0 }));
   const topStudents = (summary?.top_students ?? []).slice(0, TOP_STUDENTS);
-  const podium = topStudents.slice(0, 3);
-  const runnersUp = topStudents.slice(3);
-
-  // Silver, gold, bronze left to right, gold raised — but only when all three
-  // exist; a shorter list just reads in rank order.
-  const podiumOrder = podium.length === 3 ? [1, 0, 2] : podium.map((_, i) => i);
+  // The full ranking opens on its own page with the same scope.
+  const leaderboardHref = `/admin/analytics/leaderboard?${new URLSearchParams({
+    ...(sectionIds.length > 0 ? { sections: sectionIds.join(",") } : {}),
+    from,
+    to,
+  })}`;
 
   // The live figures gate it too: without them the tiles would read zero and
   // the rooms panel "No rooms configured" until they landed.
@@ -986,13 +929,7 @@ export default function AdminAnalyticsClient() {
         <AnalyticsSkeleton />
       ) : (
         <>
-          <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <StatTile
-              icon={faUsers}
-              value={totalUsers}
-              label="Total Users"
-              caption="Students, instructors and deans"
-            />
+          <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
             <StatTile
               icon={faUserCheck}
               value={activeStudents}
@@ -1030,74 +967,16 @@ export default function AdminAnalyticsClient() {
                 subtitle="Highest average submitted score"
                 tag={rangeTag}
               />
-              {topStudents.length === 0 ? (
-                <p className="py-8 text-center text-sm text-gray-400">No submitted attempts yet.</p>
-              ) : (
-                <>
-                  <div className="grid grid-cols-3 items-end gap-3 sm:gap-6">
-                    {podiumOrder.map((idx) => {
-                      const s = podium[idx];
-                      const rank = idx + 1;
-                      const first = rank === 1;
-                      return (
-                        <div
-                          key={s.student_key}
-                          className={`relative flex flex-col items-center rounded-2xl border px-3 pb-4 text-center ${
-                            first
-                              ? "border-amber-200 bg-gradient-to-b from-amber-50 to-transparent pt-6 sm:pb-6"
-                              : "border-hairline bg-gradient-to-b from-gray-50 to-transparent pt-4"
-                          }`}
-                        >
-                          <span
-                            className={`absolute -top-3 flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${rankBadgeClass(rank)}`}
-                          >
-                            {rank}
-                          </span>
-                          <Avatar
-                            name={s.name}
-                            src={s.picture_url}
-                            userId={s.student_key}
-                            sex={s.sex}
-                            size={first ? "xl" : "lg"}
-                            tone="brand"
-                          />
-                          <p className="mt-2 w-full truncate text-sm font-semibold text-gray-900">
-                            {s.name}
-                          </p>
-                          <p className="w-full truncate text-xs text-gray-400">
-                            {s.section ?? "No section"}
-                          </p>
-                          <p
-                            className={`mt-2 font-display font-bold tabular-nums ${
-                              first ? "text-3xl text-amber-600" : "text-2xl text-brand-600"
-                            }`}
-                          >
-                            {Math.round(s.average_score)}%
-                          </p>
-                          <p className="text-[11px] text-gray-400">
-                            {s.attempts} attempt{s.attempts === 1 ? "" : "s"}
-                          </p>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  {runnersUp.length > 0 && (
-                    <div className="mt-4 grid grid-cols-1 gap-2">
-                      {runnersUp.map((s, i) => (
-                        <BarRow
-                          key={s.student_key}
-                          badge={i + 4}
-                          badgeClass={rankBadgeClass(i + 4)}
-                          label={s.name}
-                          sublabel={`${s.section ?? "No section"} · ${s.attempts} attempt${s.attempts === 1 ? "" : "s"}`}
-                          fillPct={s.average_score}
-                          fillClass="bg-brand-600/[0.06]"
-                          trailing={`${Math.round(s.average_score)}%`}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </>
+              <PodiumLeaderboard students={topStudents} />
+              {topStudents.length > 0 && (
+                <div className="mt-4 flex justify-end border-t border-hairline pt-3">
+                  <Link
+                    href={leaderboardHref}
+                    className="text-sm font-medium text-brand-600 transition-colors hover:text-brand-700"
+                  >
+                    View full leaderboard →
+                  </Link>
+                </div>
               )}
             </Panel>
           </div>
