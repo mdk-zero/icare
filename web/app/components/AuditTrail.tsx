@@ -5,10 +5,10 @@ import { usePageData } from "@/app/lib/use-page-data";
 import { useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faClock, faMagnifyingGlass } from "@fortawesome/free-solid-svg-icons";
-import PageHeader from "../../components/PageHeader";
-import FilterSelect from "../../components/FilterSelect";
-import Avatar from "../../components/Avatar";
-import { formatAuditDetails } from "../../lib/audit-details";
+import PageHeader from "./PageHeader";
+import FilterSelect from "./FilterSelect";
+import Avatar from "./Avatar";
+import { formatAuditDetails } from "../lib/audit-details";
 
 interface AuditRow {
   id: string;
@@ -36,6 +36,7 @@ const NO_LOGS: AuditRow[] = [];
 const NO_ENTITY_TYPES: string[] = [];
 
 const ROLE_BADGE: Record<string, string> = {
+  super_admin: "bg-rose-50 text-rose-700",
   admin: "bg-orange-50 text-orange-700",
   faculty: "bg-purple-50 text-purple-700",
   student: "bg-blue-50 text-blue-700",
@@ -55,7 +56,13 @@ function csvEscape(value: string): string {
   return /[",\n]/.test(value) ? `"${value.replaceAll('"', '""')}"` : value;
 }
 
-export default function AdminAuditClient() {
+/**
+ * The audit trail table. "own" is an admin's Activity Log — only what they
+ * did, so the role filter has nothing to choose between; "system" is the
+ * super admin's view of every actor and role.
+ */
+export default function AuditTrail({ scope }: { scope: "own" | "system" }) {
+  const endpoint = scope === "system" ? "/api/super-admin/audit" : "/api/admin/audit";
   // filters
   const [search, setSearch] = useState("");
   const [appliedSearch, setAppliedSearch] = useState("");
@@ -78,8 +85,8 @@ export default function AdminAuditClient() {
 
   // The query string is the key, so paging back to a page already looked at —
   // or clearing a filter — is served from memory.
-  const { data, loading } = usePageData(`admin:audit:${query}`, async () => {
-    const res = await apiFetch(`/api/admin/audit?${query}`, {
+  const { data, loading } = usePageData(`audit:${scope}:${query}`, async () => {
+    const res = await apiFetch(`${endpoint}?${query}`, {
       credentials: "include",
     });
     if (!res.ok)
@@ -144,14 +151,18 @@ export default function AdminAuditClient() {
           label: "Activity Log",
         }}
         title="Audit Trail"
-        subtitle="Append-only audit trail of every action across all roles"
+        subtitle={
+          scope === "system"
+            ? "Append-only audit trail of every action across all roles"
+            : "Your activity history — every action you've taken, logged and unremovable"
+        }
       />
 
       {/* Filters */}
       <div className="bg-surface rounded-xl p-4 border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] mb-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
           <form
-            className="lg:col-span-2 relative"
+            className={`${scope === "system" ? "lg:col-span-2" : "lg:col-span-3"} relative`}
             onSubmit={(e) => {
               e.preventDefault();
               setAppliedSearch(search.trim());
@@ -170,15 +181,18 @@ export default function AdminAuditClient() {
               className="w-full pl-11 pr-4 py-2.5 bg-surface border border-gray-200 rounded-xl text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-600/50 focus:border-brand-600 transition-all"
             />
           </form>
-          <FilterSelect
-            value={roleFilter}
-            onChange={(e) => withPageReset(setRoleFilter)(e.target.value)}
-          >
-            <option value="all">All Roles</option>
-            <option value="admin">Admin</option>
-            <option value="faculty">Faculty</option>
-            <option value="student">Student</option>
-          </FilterSelect>
+          {scope === "system" && (
+            <FilterSelect
+              value={roleFilter}
+              onChange={(e) => withPageReset(setRoleFilter)(e.target.value)}
+            >
+              <option value="all">All Roles</option>
+              <option value="super_admin">Super Admin</option>
+              <option value="admin">Admin</option>
+              <option value="faculty">Faculty</option>
+              <option value="student">Student</option>
+            </FilterSelect>
+          )}
           <FilterSelect
             value={entityFilter}
             onChange={(e) => withPageReset(setEntityFilter)(e.target.value)}
@@ -302,7 +316,7 @@ export default function AdminAuditClient() {
                               <span
                                 className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium ${ROLE_BADGE[log.actor_role] ?? "bg-gray-100 text-gray-600"}`}
                               >
-                                {log.actor_role}
+                                {log.actor_role.replace("_", " ")}
                               </span>
                             )}
                           </div>

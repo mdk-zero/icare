@@ -5,8 +5,8 @@ import { logAudit } from "@/app/lib/audit";
 import { formatAuditDetails } from "@/app/lib/audit-details";
 
 // Backed by the canonical append-only audit_logs table (manuscript F7) —
-// reads and inserts only, no update or delete surface. Faculty see their
-// own activity; admins see the full trail.
+// reads and inserts only, no update or delete surface. Faculty and admins
+// see only their own activity; the full trail is the super admin's.
 
 interface AuditLogRow {
   id: string;
@@ -41,9 +41,7 @@ export async function GET(request: NextRequest) {
       .order("created_at", { ascending: false })
       .limit(200);
 
-    if (session.role === "faculty") {
-      query = query.eq("actor_id", session.uid);
-    }
+    query = query.eq("actor_id", session.uid);
     if (action && action !== "all") {
       query = query.ilike("action", `%${action}%`);
     }

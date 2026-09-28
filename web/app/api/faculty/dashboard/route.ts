@@ -14,8 +14,8 @@ import { formatAuditDetails } from "@/app/lib/audit-details";
  * (admins see every student). Replaces the hardcoded numbers the dashboard
  * used to ship with.
  *
- * `recent_activities` mirrors /api/faculty/audit: faculty see their own trail,
- * admins see everyone's — less sign-ins and page views, which are most of the
+ * `recent_activities` mirrors /api/faculty/audit: the viewer's own trail,
+ * less sign-ins and page views, which are most of the
  * trail and none of what anyone wants to see on arrival.
  *
  * `overview` carries the rest of the landing page: see buildFacultyOverview.
@@ -47,14 +47,12 @@ export async function GET() {
     const students = await getScopedStudents(supabase, session);
     const ids = students.map((s) => s.id);
 
-    let auditQuery = supabase
+    const auditQuery = supabase
       .from("audit_logs")
       .select("id, actor_id, action, details, created_at, actor:users(name)")
+      .eq("actor_id", session.uid)
       .order("created_at", { ascending: false })
       .limit(40);
-    if (session.role === "faculty") {
-      auditQuery = auditQuery.eq("actor_id", session.uid);
-    }
 
     const [risks, alerts, assignments, reviewed, audit] = await Promise.all([
       getLatestRiskByStudent(supabase, ids),

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
+  faClockRotateLeft,
   faFlaskVial,
   faGaugeHigh,
   faGear,
@@ -15,6 +16,7 @@ import { getCurrentUser, refreshCurrentUser } from "../lib/api";
 const navItems: NavItem[] = [
   { id: "dashboard", label: "Dashboard", href: "/super-admin", icon: faHouse, section: "General" },
   { id: "users", label: "Users", href: "/super-admin/users", icon: faUsers, section: "Accounts" },
+  { id: "audit", label: "Activity Log", href: "/super-admin/audit", icon: faClockRotateLeft, section: "System" },
   { id: "performance", label: "Performance", href: "/super-admin/performance", icon: faGaugeHigh, section: "System" },
   { id: "tests", label: "Test Results", href: "/super-admin/tests", icon: faFlaskVial, section: "System" },
   { id: "settings", label: "Settings", href: "/super-admin/settings", icon: faGear, section: "Account" },

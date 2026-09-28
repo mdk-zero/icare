@@ -162,10 +162,11 @@ async function loadDashboard(viewerId: string) {
     // Only admitted patients hold a bed; check-out clears room_id anyway, the
     // status filter keeps a hand-edited discharged row from counting.
     supabase.from("patients").select("room_id").eq("status", "admitted").not("room_id", "is", null),
-    (visible
-      ? supabase.from("audit_logs").select("action, created_at, actor:users(name)").in("actor_id", [...visible])
-      : supabase.from("audit_logs").select("action, created_at, actor:users(name)")
-    )
+    // The admin's own activity only; the whole trail is the super admin's.
+    supabase
+      .from("audit_logs")
+      .select("action, created_at, actor:users(name)")
+      .eq("actor_id", viewerId)
       .order("created_at", { ascending: false })
       .limit(5),
   ]);
@@ -455,7 +456,7 @@ export default async function AdminDashboard() {
         </Panel>
 
         <Panel>
-          <PanelHeader title="Recent Activity" subtitle="Latest actions across the console">
+          <PanelHeader title="Recent Activity" subtitle="Your latest actions">
             <Link
               href="/admin/audit"
               className="text-sm text-brand-600 font-medium hover:text-brand-700 transition-colors"
