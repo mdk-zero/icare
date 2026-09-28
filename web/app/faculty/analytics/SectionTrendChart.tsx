@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import type { AnalyticsBucket, AnalyticsSummary, Section } from "../../lib/api";
+import { TARGET_SCORE } from "../../lib/performance-target";
 import { formatBucket } from "./dates";
 
 /*
@@ -293,7 +294,7 @@ export function TrendLineChart({
           viewBox={`0 0 ${W} ${H}`}
           className="absolute inset-0 block overflow-visible"
           role="img"
-          aria-label={`Average quiz score over time for ${shown.map((s) => s.name).join(", ")}. Use the table view for exact values.`}
+          aria-label={`Average quiz score over time for ${shown.map((s) => s.name).join(", ")}. Dashed line marks the ${TARGET_SCORE}% target. Use the table view for exact values.`}
           tabIndex={0}
           onPointerMove={onPointerMove}
           onPointerLeave={() => setHover(null)}
@@ -324,6 +325,17 @@ export function TrendLineChart({
             </g>
           ))}
 
+          {/* The target sits under the data in a neutral dash — every hue belongs to a section. */}
+          <line
+            x1={PAD_L}
+            y1={y(TARGET_SCORE)}
+            x2={W - padR}
+            y2={y(TARGET_SCORE)}
+            stroke="var(--color-gray-500)"
+            strokeWidth="1.5"
+            strokeDasharray="6 4"
+          />
+
           {/* A lone line keeps a faint wash under it; overlapping washes would muddy. */}
           {drawn.length === 1 && drawn[0].pts.length > 1 && (
             <path
@@ -346,6 +358,21 @@ export function TrendLineChart({
               />
             ) : null,
           )}
+
+          {/* Named over the lines, with a surface halo so a crossing line can't swallow it. */}
+          <text
+            x={W - padR - 4}
+            y={y(TARGET_SCORE) - 5}
+            textAnchor="end"
+            fontSize="10"
+            fontWeight="600"
+            fill="var(--color-gray-600)"
+            stroke="var(--color-surface)"
+            strokeWidth="3"
+            paintOrder="stroke"
+          >
+            Target {TARGET_SCORE}%
+          </text>
 
           {hover !== null && (
             <line
@@ -437,6 +464,10 @@ export function TrendLineChart({
               );
             })}
           </ul>
+          <p className="mt-1.5 flex items-center gap-2 border-t border-hairline pt-1.5 text-[11px] text-gray-500">
+            <span className="w-2 shrink-0 border-t-[1.5px] border-dashed border-gray-500" />
+            Target {TARGET_SCORE}%
+          </p>
         </div>
       )}
     </div>

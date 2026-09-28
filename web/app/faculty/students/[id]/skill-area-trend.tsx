@@ -1,5 +1,7 @@
 "use client";
 
+import { TARGET_SCORE } from "../../../lib/performance-target";
+
 /**
  * How each skill area has moved over time: every recorded score (from skill
  * assessments and faculty validation) as a small line, oldest to newest, with
@@ -24,7 +26,7 @@ export default function SkillAreaTrend({
   return (
     <div>
       <h3 className="mb-1 font-semibold text-gray-900">Progress over time</h3>
-      <p className="mb-3 text-xs text-gray-500">Each score recorded for a skill area, oldest to newest.</p>
+      <p className="mb-3 text-xs text-gray-500">Each score recorded for a skill area, oldest to newest. The dashed line is the {TARGET_SCORE}% target.</p>
       <ul className="divide-y divide-hairline rounded-xl border border-hairline">
         {areas.map(({ name, points }) => {
           const first = points[0].score;
@@ -58,7 +60,7 @@ function Sparkline({ values, label }: { values: number[]; label: string }) {
   const d = values.map((v, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
   return (
     <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} role="img" aria-label={label} className="shrink-0 text-brand-600">
-      <line x1="0" x2={w} y1={y(75)} y2={y(75)} className="stroke-gray-200" strokeDasharray="2 3" />
+      <line x1="0" x2={w} y1={y(TARGET_SCORE)} y2={y(TARGET_SCORE)} className="stroke-gray-400" strokeDasharray="2 3" />
       {values.length > 1 && <path d={d} fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinejoin="round" />}
       <circle cx={x(values.length - 1)} cy={y(values[values.length - 1])} r="2.5" fill="currentColor" />
     </svg>
