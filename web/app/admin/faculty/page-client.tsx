@@ -17,6 +17,16 @@ interface SectionRef {
   name: string;
 }
 
+interface GroupRef {
+  id: string;
+  name: string;
+  section_id: string;
+  section_name: string;
+  faculty_id: string | null;
+  faculty_name: string | null;
+  member_count: number;
+}
+
 interface Faculty {
   id: string;
   name: string;
@@ -26,12 +36,14 @@ interface Faculty {
   created_at: string;
   last_login_at: string | null;
   sections: SectionRef[];
+  groups: GroupRef[];
   student_count: number;
 }
 
 // Stable empty fallbacks, so nothing downstream sees a new array each render.
 const NO_FACULTY: Faculty[] = [];
 const NO_SECTIONS: SectionRef[] = [];
+const NO_GROUPS: GroupRef[] = [];
 
 function formatDate(value: string | null): string {
   if (!value) return "Never";
@@ -52,7 +64,7 @@ export default function FacultyClient() {
   const [newFaculty, setNewFaculty] = useState({ name: "", email: "" });
 
   const [selectedFaculty, setSelectedFaculty] = useState<Faculty | null>(null);
-  const [selectedSections, setSelectedSections] = useState<string[]>([]);
+  const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
   const [filterSection, setFilterSection] = useState("");
   const [changingEmail, setChangingEmail] = useState<Faculty | null>(null);
 
@@ -63,21 +75,22 @@ export default function FacultyClient() {
         apiFetch("/api/admin/faculty", { credentials: "include" }),
         apiFetch("/api/sections", { credentials: "include" }),
       ]);
-      const faculty = facultyRes.ok
-        ? ((await facultyRes.json()) as { faculty?: Faculty[] }).faculty ?? NO_FACULTY
-        : NO_FACULTY;
+      const { faculty = NO_FACULTY, groups = NO_GROUPS } = facultyRes.ok
+        ? ((await facultyRes.json()) as { faculty?: Faculty[]; groups?: GroupRef[] })
+        : {};
       const sections = sectionsRes.ok
         ? ((await sectionsRes.json()) as { sections?: SectionRef[] }).sections ?? NO_SECTIONS
         : NO_SECTIONS;
-      return { faculty, sections };
+      return { faculty, sections, groups };
     },
   );
 
   const faculty = data?.faculty ?? NO_FACULTY;
   const sections = data?.sections ?? NO_SECTIONS;
+  const groups = data?.groups ?? NO_GROUPS;
 
   const filteredFaculty = faculty.filter((f) => {
-    if (filterSection === "__none__") return f.sections.length === 0;
+    if (filterSection === "__none__") return f.groups.length === 0;
     if (filterSection && !f.sections.some((s) => s.id === filterSection)) return false;
     return true;
   });
@@ -102,7 +115,7 @@ export default function FacultyClient() {
     });
     setBusy(false);
     const json = (await res.json()) as {
-      user?: Omit<Faculty, "sections" | "student_count">;
+      user?: Omit<Faculty, "sections" | "groups" | "student_count">;
       password?: string;
       error?: string;
     };
@@ -111,8 +124,12 @@ export default function FacultyClient() {
       return;
     }
     setData((previous) => ({
-      faculty: [...(previous?.faculty ?? []), { ...json.user!, sections: [], student_count: 0 }],
+      faculty: [
+        ...(previous?.faculty ?? []),
+        { ...json.user!, sections: [], groups: [], student_count: 0 },
+      ],
       sections: previous?.sections ?? NO_SECTIONS,
+      groups: previous?.groups ?? NO_GROUPS,
     }));
     setShowAddModal(false);
     setNewFaculty({ name: "", email: "" });
@@ -122,37 +139,37 @@ export default function FacultyClient() {
 
   const openAssignModal = (member: Faculty) => {
     setSelectedFaculty(member);
-    setSelectedSections(member.sections.map((s) => s.id));
+    setSelectedGroups(member.groups.map((g) => g.id));
   };
 
-  const toggleSection = (sectionId: string) => {
-    setSelectedSections((prev) =>
-      prev.includes(sectionId) ? prev.filter((id) => id !== sectionId) : [...prev, sectionId],
+  const toggleGroup = (groupId: string) => {
+    setSelectedGroups((prev) =>
+      prev.includes(groupId) ? prev.filter((id) => id !== groupId) : [...prev, groupId],
     );
   };
 
   const handleSaveAssignments = async () => {
     if (!selectedFaculty) return;
     setBusy(true);
-    const res = await apiFetch(`/api/admin/faculty/${selectedFaculty.id}/sections`, {
+    const res = await apiFetch(`/api/admin/faculty/${selectedFaculty.id}/groups`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({ section_ids: selectedSections }),
+      body: JSON.stringify({ team_ids: selectedGroups }),
     });
     setBusy(false);
     if (!res.ok) {
       const json = (await res.json()) as { error?: string };
-      flash(json.error ?? "Failed to save sections");
+      flash(json.error ?? "Failed to save groups");
       return;
     }
     setSelectedFaculty(null);
-    flash("Sections updated");
-    // Reload so section names and student counts stay accurate.
+    flash("Groups updated");
+    // Reload: a moved group changes another instructor's row too.
     await loadData();
   };
 
-  const facultyWithoutSections = faculty.filter((f) => f.sections.length === 0).length;
+  const facultyWithoutGroups = faculty.filter((f) => f.groups.length === 0).length;
 
   return (
     <div>
@@ -162,7 +179,7 @@ export default function FacultyClient() {
           label: "Instructor Management",
         }}
         title="Instructors"
-        subtitle="Manage instructor accounts and their handled sections"
+        subtitle="Manage instructor accounts and the groups they handle"
         action={{
           icon: <FontAwesomeIcon icon={faPlus} className="h-4 w-4" />,
           onClick: () => setShowAddModal(true),
@@ -195,14 +212,14 @@ export default function FacultyClient() {
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
         <StatTile icon={faUsers} value={faculty.length} label="Total Instructors" />
-        <StatTile icon={faUsers} value={sections.length} label="Sections" />
-        <StatTile icon={faUsers} value={facultyWithoutSections} label="Instructors Without Sections" />
+        <StatTile icon={faUsers} value={groups.length} label="Groups" />
+        <StatTile icon={faUsers} value={facultyWithoutGroups} label="Instructors Without Groups" />
       </div>
 
       <div className="flex items-center gap-3 mb-3">
         <FilterSelect value={filterSection} onChange={(e) => setFilterSection(e.target.value)}>
           <option value="">All Sections</option>
-          <option value="__none__">No Section</option>
+          <option value="__none__">No Group</option>
           {sections.map((s) => (
             <option key={s.id} value={s.id}>Section {s.name}</option>
           ))}
@@ -224,7 +241,7 @@ export default function FacultyClient() {
             <thead className="bg-subtle border-b border-gray-100">
               <tr>
                 <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Instructor</th>
-                <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Sections</th>
+                <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Groups</th>
                 <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Students</th>
                 <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Joined</th>
                 <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Last Login</th>
@@ -264,16 +281,16 @@ export default function FacultyClient() {
                       </div>
                     </td>
                     <td className="py-3 px-4">
-                      {member.sections.length === 0 ? (
+                      {member.groups.length === 0 ? (
                         <span className="text-sm text-gray-400">None</span>
                       ) : (
                         <div className="flex flex-wrap gap-1.5">
-                          {member.sections.map((s) => (
+                          {member.groups.map((g) => (
                             <span
-                              key={s.id}
+                              key={g.id}
                               className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-brand-600/10 text-brand-600 border border-brand-600/20"
                             >
-                              {s.name}
+                              {g.section_name} · {g.name}
                             </span>
                           ))}
                         </div>
@@ -345,10 +362,11 @@ export default function FacultyClient() {
           <div className="bg-surface rounded-xl p-4 w-full max-w-lg mx-4 shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-hairline max-h-[80vh] overflow-hidden flex flex-col">
             <div className="mb-4">
               <h3 className="text-lg font-semibold text-gray-900">
-                Assign Sections to {selectedFaculty.name}
+                Assign Groups to {selectedFaculty.name}
               </h3>
               <p className="text-sm text-gray-500">
-                This instructor handles every student in the checked sections
+                This instructor handles the students in the checked groups. A group has one
+                instructor, so checking another&apos;s group moves it here.
               </p>
               <p className="mt-2 flex flex-wrap items-center gap-x-3 text-sm text-gray-600">
                 <span className="truncate">{selectedFaculty.email}</span>
@@ -362,7 +380,7 @@ export default function FacultyClient() {
               </p>
             </div>
 
-            <div className="flex-1 overflow-y-auto space-y-2 mb-4">
+            <div className="flex-1 overflow-y-auto space-y-4 mb-4">
               {sections.length === 0 ? (
                 <p className="text-gray-400 text-sm text-center py-8">
                   No sections yet — create them on the{" "}
@@ -375,33 +393,65 @@ export default function FacultyClient() {
                 </p>
               ) : (
                 sections.map((section) => {
-                  const otherFaculty = faculty.filter(
-                    (f) =>
-                      f.id !== selectedFaculty.id &&
-                      f.sections.some((s) => s.id === section.id),
-                  );
+                  const sectionGroups = groups.filter((g) => g.section_id === section.id);
                   return (
-                    <label
-                      key={section.id}
-                      className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
-                        selectedSections.includes(section.id)
-                          ? "border-brand-600 bg-brand-600/5"
-                          : "border-gray-200 hover:border-gray-300"
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedSections.includes(section.id)}
-                        onChange={() => toggleSection(section.id)}
-                        className="w-4 h-4 text-brand-600 rounded focus:ring-brand-600"
-                      />
-                      <p className="flex-1 font-medium text-gray-800">Section {section.name}</p>
-                      {otherFaculty.length > 0 && (
-                        <span className="text-xs text-gray-400 shrink-0">
-                          Also with {otherFaculty.map((f) => f.name).join(", ")}
-                        </span>
+                    <div key={section.id}>
+                      <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                        Section {section.name}
+                      </p>
+                      {sectionGroups.length === 0 ? (
+                        <p className="rounded-xl border border-dashed border-gray-200 p-3 text-sm text-gray-400">
+                          No groups yet — create them in{" "}
+                          <button
+                            onClick={() => router.push("/admin/student-management")}
+                            className="text-brand-600 font-medium hover:underline"
+                          >
+                            Student Management
+                          </button>
+                        </p>
+                      ) : (
+                        <div className="space-y-2">
+                          {sectionGroups.map((group) => {
+                            const checked = selectedGroups.includes(group.id);
+                            // May be another dean's instructor when a section is shared.
+                            const holder =
+                              group.faculty_id && group.faculty_id !== selectedFaculty.id
+                                ? (group.faculty_name ?? "another instructor")
+                                : null;
+                            return (
+                              <label
+                                key={group.id}
+                                className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                                  checked
+                                    ? "border-brand-600 bg-brand-600/5"
+                                    : "border-gray-200 hover:border-gray-300"
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={() => toggleGroup(group.id)}
+                                  className="w-4 h-4 text-brand-600 rounded focus:ring-brand-600"
+                                />
+                                <div className="min-w-0 flex-1">
+                                  <p className="font-medium text-gray-800">{group.name}</p>
+                                  <p className="text-xs text-gray-400">
+                                    {group.member_count} student{group.member_count === 1 ? "" : "s"}
+                                  </p>
+                                </div>
+                                {holder && (
+                                  <span
+                                    className={`text-xs shrink-0 ${checked ? "text-amber-600" : "text-gray-400"}`}
+                                  >
+                                    {checked ? `Moves from ${holder}` : `With ${holder}`}
+                                  </span>
+                                )}
+                              </label>
+                            );
+                          })}
+                        </div>
                       )}
-                    </label>
+                    </div>
                   );
                 })
               )}
@@ -409,7 +459,7 @@ export default function FacultyClient() {
 
             <div className="flex justify-between items-center pt-4 border-t border-gray-200">
               <p className="text-sm text-gray-500">
-                {selectedSections.length} section{selectedSections.length !== 1 ? "s" : ""} selected
+                {selectedGroups.length} group{selectedGroups.length !== 1 ? "s" : ""} selected
               </p>
               <div className="flex gap-3">
                 <button
@@ -423,7 +473,7 @@ export default function FacultyClient() {
                   disabled={busy}
                   className="px-4 py-2 bg-brand-600 text-white rounded-xl font-medium hover:bg-brand-700 transition-all disabled:opacity-50"
                 >
-                  {busy ? "Saving…" : "Save Sections"}
+                  {busy ? "Saving…" : "Save Groups"}
                 </button>
               </div>
             </div>

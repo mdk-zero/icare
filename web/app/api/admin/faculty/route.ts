@@ -2,8 +2,13 @@ import { NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { getAdminScope } from '@/app/lib/admin-scope';
+import { compareTeamNames, isMissingTeamTables, loadTeams, manageableSectionIds } from '@/app/lib/teams';
 
-/** Faculty overview: the admin's own faculty, each with its assigned sections and derived student count. */
+/**
+ * Faculty overview: the admin's own faculty, each with the groups they
+ * supervise, those groups' sections, and the students in them; plus every
+ * group in the admin's sections, for the assignment picker.
+ */
 export async function GET() {
   const session = await readSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -14,7 +19,7 @@ export async function GET() {
   try {
     const supabase = getSupabaseAdmin();
     const scope = await getAdminScope(supabase, session.uid);
-    if (scope && scope.facultyIds.length === 0) return NextResponse.json({ faculty: [] });
+    if (scope && scope.facultyIds.length === 0) return NextResponse.json({ faculty: [], groups: [] });
 
     let facultyQuery = supabase
       .from('users')
@@ -24,15 +29,13 @@ export async function GET() {
     // Each admin has their own faculty (migration 053).
     if (scope) facultyQuery = facultyQuery.in('id', scope.facultyIds);
 
-    const [facultyRes, linksRes, studentsRes] = await Promise.all([
+    const sectionIds = await manageableSectionIds(supabase, session.role, session.uid);
+    const [facultyRes, sectionsRes, loaded] = await Promise.all([
       facultyQuery,
-      supabase.from('faculty_sections').select('faculty_id, sections(id, name)'),
-      supabase
-        .from('users')
-        .select('section_id')
-        .eq('role', 'student')
-        .not('section_id', 'is', null)
-        .limit(5000),
+      sectionIds.length
+        ? supabase.from('sections').select('id, name').in('id', sectionIds)
+        : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+      loadTeams(supabase, sectionIds),
     ]);
 
     if (facultyRes.error) {
@@ -40,33 +43,42 @@ export async function GET() {
       return NextResponse.json({ error: 'Unable to list instructor' }, { status: 500 });
     }
 
-    const studentsPerSection = new Map<string, number>();
-    for (const row of studentsRes.data ?? []) {
-      if (!row.section_id) continue;
-      studentsPerSection.set(row.section_id, (studentsPerSection.get(row.section_id) ?? 0) + 1);
+    if (loaded.error && !isMissingTeamTables(loaded.error)) {
+      console.error('Failed to load groups', loaded.error);
+      return NextResponse.json({ error: 'Unable to list instructor' }, { status: 500 });
     }
 
-    const sectionsByFaculty = new Map<string, { id: string; name: string }[]>();
-    for (const row of linksRes.data ?? []) {
-      const section = row.sections as unknown as { id: string; name: string } | null;
-      if (!section) continue;
-      const list = sectionsByFaculty.get(row.faculty_id) ?? [];
-      list.push(section);
-      sectionsByFaculty.set(row.faculty_id, list);
-    }
+    const sectionName = new Map((sectionsRes.data ?? []).map((s) => [s.id as string, s.name as string]));
+    const groups = loaded.teams
+      .map((t) => ({
+        id: t.id,
+        name: t.name,
+        section_id: t.section_id,
+        section_name: sectionName.get(t.section_id) ?? '',
+        faculty_id: t.faculty_id,
+        faculty_name: t.faculty_name,
+        member_count: t.members.length,
+      }))
+      .sort(
+        (a, b) =>
+          a.section_name.localeCompare(b.section_name, undefined, { numeric: true }) ||
+          compareTeamNames(a.name, b.name),
+      );
 
+    // An instructor sees only the members of the groups they supervise, so
+    // that is what their student count is.
     const faculty = (facultyRes.data ?? []).map((f) => {
-      const sections = (sectionsByFaculty.get(f.id) ?? []).sort((a, b) =>
-        a.name.localeCompare(b.name),
-      );
-      const studentCount = sections.reduce(
-        (sum, s) => sum + (studentsPerSection.get(s.id) ?? 0),
-        0,
-      );
-      return { ...f, sections, student_count: studentCount };
+      const own = groups.filter((g) => g.faculty_id === f.id);
+      const sections = [...new Map(own.map((g) => [g.section_id, { id: g.section_id, name: g.section_name }])).values()];
+      return {
+        ...f,
+        groups: own,
+        sections,
+        student_count: own.reduce((sum, g) => sum + g.member_count, 0),
+      };
     });
 
-    return NextResponse.json({ faculty });
+    return NextResponse.json({ faculty, groups });
   } catch (err) {
     console.error('List instructors failed', err);
     return NextResponse.json({ error: 'Unable to list instructor' }, { status: 500 });
