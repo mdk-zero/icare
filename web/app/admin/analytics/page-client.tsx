@@ -11,7 +11,6 @@ import {
   faDoorOpen,
   faExclamationTriangle,
   faRotate,
-  faUserTie,
   faBuilding,
   faTrophy,
   faLayerGroup,
@@ -37,18 +36,12 @@ import AnalyticsFilterBar, {
   type PresetId,
 } from "../../components/AnalyticsFilterBar";
 
-interface AdminFacultyRow {
-  name: string;
-  sections: { id: string; name: string }[];
-}
-
 /** How many of the busiest rooms the bed board shows; the Rooms page has the rest. */
 const TOP_ROOMS = 8;
 /** Podium (three) plus the two runners-up beneath it. */
 const TOP_STUDENTS = 5;
 
 // Stable empty fallbacks, so nothing downstream sees a new value each render.
-const NO_SECTION_FACULTY = new Map<string, string[]>();
 const NO_SECTIONS: Section[] = [];
 
 /** The frame every chart card on the page shares. */
@@ -745,16 +738,7 @@ function AnalyticsSkeleton() {
         ))}
       </div>
 
-      <div className="mb-4 grid grid-cols-1 gap-6 xl:grid-cols-2">
-        <Panel>
-          <SkeletonHeading subtitle="w-64" />
-          <div className="space-y-2">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <SkeletonBarRow key={i} />
-            ))}
-          </div>
-        </Panel>
-
+      <div className="mb-4">
         <Panel>
           <SkeletonHeading subtitle="w-48" />
           <div className="grid grid-cols-3 items-end gap-3 sm:gap-6">
@@ -866,7 +850,7 @@ export default function AdminAnalyticsClient() {
     refresh: reloadSummary,
   } = usePageData(
     `admin:analytics:${sectionKey}:${from}:${to}`,
-    () => fetchAnalyticsSummary({ sectionIds, from, to, sectionTrend: true }),
+    () => fetchAnalyticsSummary({ sectionIds, from, to }),
     { keepPreviousData: true },
   );
 
@@ -877,14 +861,10 @@ export default function AdminAnalyticsClient() {
     loading: liveLoading,
     refresh: reloadLive,
   } = usePageData("admin:analytics:live", async () => {
-    const [facultyRes, usersRes, rooms] = await Promise.all([
-      apiFetch("/api/admin/faculty", { credentials: "include" }),
+    const [usersRes, rooms] = await Promise.all([
       apiFetch("/api/admin/users", { credentials: "include" }),
       fetchRooms(),
     ]);
-    const facultyJson = facultyRes.ok
-      ? ((await facultyRes.json()) as { faculty?: AdminFacultyRow[] })
-      : {};
     const users = usersRes.ok
       ? (((await usersRes.json()) as { users?: { role: string }[] }).users ?? [])
       : [];
@@ -895,19 +875,10 @@ export default function AdminAnalyticsClient() {
         roleCounts[u.role] += 1;
     }
 
-    // Which faculty teach each section, so the performance ranking below can
-    // read by name instead of by section code.
-    const sectionFaculty = new Map<string, string[]>();
-    for (const f of facultyJson.faculty ?? []) {
-      for (const s of f.sections) {
-        sectionFaculty.set(s.id, [...(sectionFaculty.get(s.id) ?? []), f.name]);
-      }
-    }
-    return { sectionFaculty, totalUsers, roleCounts, rooms };
+    return { totalUsers, roleCounts, rooms };
   });
 
   const summary = analytics?.summary ?? null;
-  const sectionFaculty = live?.sectionFaculty ?? NO_SECTION_FACULTY;
   const totalUsers = live?.totalUsers ?? 0;
   const roleCounts = live?.roleCounts ?? { student: 0, faculty: 0, admin: 0 };
   const allRooms = live?.rooms;
@@ -963,38 +934,6 @@ export default function AdminAnalyticsClient() {
     }))
     .sort((a, b) => b.utilization_pct - a.utilization_pct)
     .slice(0, TOP_ROOMS);
-
-  // Section performance rolled up from the weekly trend, then relabeled by
-  // whoever teaches that section — a faculty ranking built on their
-  // students' own submitted scores, not a self-reported figure.
-  const sectionAgg = new Map<string, { name: string; weightedScore: number; attempts: number }>();
-  for (const row of summary?.section_trend ?? []) {
-    const entry = sectionAgg.get(row.section_id) ?? {
-      name: row.section_name,
-      weightedScore: 0,
-      attempts: 0,
-    };
-    entry.weightedScore += row.average_score * row.attempts;
-    entry.attempts += row.attempts;
-    sectionAgg.set(row.section_id, entry);
-  }
-  const facultyPerf = Array.from(sectionAgg.entries())
-    .map(([sectionId, agg]) => {
-      const students = summary?.sections.find((s) => s.id === sectionId)?.students ?? 0;
-      const names = sectionFaculty.get(sectionId);
-      const label = names && names.length > 0 ? names.join(" & ") : agg.name;
-      return {
-        sectionId,
-        label,
-        sectionName: agg.name,
-        avgScore: agg.attempts > 0 ? Math.round(agg.weightedScore / agg.attempts) : 0,
-        attempts: agg.attempts,
-        students,
-      };
-    })
-    .filter((r) => r.attempts > 0)
-    .sort((a, b) => b.avgScore - a.avgScore);
-  const facultyPerfMax = Math.max(...facultyPerf.map((f) => f.avgScore), 1);
 
   const sectionEngagement = (summary?.sections ?? [])
     .filter((s) => s.students > 0)
@@ -1082,37 +1021,7 @@ export default function AdminAnalyticsClient() {
             />
           </div>
 
-          {/* Faculty Performance + Top Students, side by side */}
-          <div className="grid grid-cols-1 gap-6 xl:grid-cols-2 mb-4">
-            <Panel>
-              <CardHeading
-                icon={faUserTie}
-                title="Instructor Performance"
-                subtitle="Ranked by their students' average submitted score"
-                tag={rangeTag}
-              />
-              {facultyPerf.length === 0 ? (
-                <p className="py-8 text-center text-sm text-gray-400">
-                  No submitted attempts in range yet — rankings appear once students start.
-                </p>
-              ) : (
-                <div className="space-y-2">
-                  {facultyPerf.map((f, i) => (
-                    <BarRow
-                      key={f.sectionId}
-                      badge={i + 1}
-                      badgeClass={rankBadgeClass(i + 1)}
-                      label={f.label}
-                      sublabel={`${f.sectionName !== f.label ? `${f.sectionName} · ` : ""}${f.students} student${f.students === 1 ? "" : "s"} · ${f.attempts} attempt${f.attempts === 1 ? "" : "s"}`}
-                      fillPct={(f.avgScore / facultyPerfMax) * 100}
-                      fillClass="bg-brand-600/[0.06]"
-                      trailing={`${f.avgScore}%`}
-                    />
-                  ))}
-                </div>
-              )}
-            </Panel>
-
+          <div className="mb-4">
             {/* Top students: podium for the first three, rows for the rest */}
             <Panel>
               <CardHeading
