@@ -1,15 +1,10 @@
-import type { Metadata } from "next";
-import PatientsManager from "../../components/PatientsManager";
-
-export const metadata: Metadata = {
-  title: "Patient Records | iCARE++ Admin",
-};
+import { redirect } from "next/navigation";
 
 /**
- * Same manager the faculty portal uses — /api/faculty/patients already admits
- * admins (isFacultyOrAdmin), so this needed a route and a nav entry, not a
- * parallel implementation.
+ * Folded into Wards, whose census tab renders the same manager. Kept as a
+ * redirect rather than deleted: this path is in bookmarks, and the patient
+ * chart still lives beneath it at /admin/patients/[id].
  */
 export default function AdminPatientsPage() {
-  return <PatientsManager chartBase="/admin/patients" />;
+  redirect("/admin/wards");
 }

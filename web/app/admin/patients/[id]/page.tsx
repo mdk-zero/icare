@@ -6,5 +6,5 @@ export const metadata: Metadata = {
 };
 
 export default function AdminPatientChartPage() {
-  return <PatientChart backHref="/admin/patients" />;
+  return <PatientChart backHref="/admin/wards" />;
 }

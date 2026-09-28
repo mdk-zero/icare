@@ -411,6 +411,8 @@ interface PatientsManagerProps {
    * patient id. Each portal passes its own: the shells bounce the other role.
    */
   chartBase?: string;
+  /** Drops the page header, for a host page (admin Wards) that renders its own. */
+  hideHeader?: boolean;
 }
 
 export default function PatientsManager({
@@ -419,6 +421,7 @@ export default function PatientsManager({
   subtitle = "Browse patients by their assigned room, then open a room's census",
   showFloorPlan = false,
   chartBase,
+  hideHeader = false,
 }: PatientsManagerProps = {}) {
   const [search, setSearch] = useState("");
   const [roomSearch, setRoomSearch] = useState("");
@@ -769,14 +772,16 @@ export default function PatientsManager({
 
   return (
     <div>
-      <PageHeader
-        badge={{
-          icon: <FontAwesomeIcon icon={faBuilding} className="w-3.5 h-3.5" />,
-          label: badgeLabel,
-        }}
-        title={title}
-        subtitle={subtitle}
-      />
+      {!hideHeader && (
+        <PageHeader
+          badge={{
+            icon: <FontAwesomeIcon icon={faBuilding} className="w-3.5 h-3.5" />,
+            label: badgeLabel,
+          }}
+          title={title}
+          subtitle={subtitle}
+        />
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
         {loading ? (
@@ -941,7 +946,7 @@ export default function PatientsManager({
               Room Layout
             </h2>
             <p className="text-xs text-gray-500">
-              Arranged in Admin · Rooms. Select a room to open its census.
+              Arranged in Admin · Wards. Select a room to open its census.
             </p>
           </div>
           <FloorPlanCanvas
@@ -960,7 +965,7 @@ export default function PatientsManager({
           {rooms.every((r) => r.plan_x == null) && (
             <p className="mt-3 rounded-xl border border-hairline bg-surface p-6 text-center text-sm text-gray-500">
               No rooms have been placed on the floor plan yet. An admin can arrange them under
-              Rooms, or switch to Card Layout to browse the census.
+              Wards › Rooms, or switch to Card Layout to browse the census.
             </p>
           )}
         </div>

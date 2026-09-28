@@ -1,11 +1,6 @@
-import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 
-export const metadata: Metadata = {
-  title: "Rooms | iCARE++",
-};
-
-import RoomsClient from "./page-client";
-
+/** Folded into Wards as its Rooms tab; kept as a redirect for bookmarks. */
 export default function RoomsPage() {
-  return <RoomsClient />;
+  redirect("/admin/wards?tab=rooms");
 }

@@ -3,11 +3,10 @@
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
+  faBedPulse,
   faChartBar,
   faClockRotateLeft,
-  faDoorOpen,
   faFileLines,
-  faHospitalUser,
   faHouse,
   faUserTie,
   faUsers,
@@ -32,8 +31,9 @@ const navItems: NavItem[] = [
   { id: "overview", label: "Overview", href: "/admin", icon: faHouse, section: "General" },
   { id: "students", label: "Students", href: "/admin/student-management", icon: faUsers, section: "Management" },
   { id: "faculty", label: "Faculty", href: "/admin/faculty", icon: faUserTie, section: "Management" },
-  { id: "patients", label: "Patients", href: "/admin/patients", icon: faHospitalUser, section: "Management" },
-  { id: "rooms", label: "Rooms", href: "/admin/rooms", icon: faDoorOpen, section: "Management" },
+  // Patients and Rooms folded into one page, as on the faculty side. The
+  // patient chart keeps its /admin/patients/[id] route, so it counts here too.
+  { id: "wards", label: "Wards", href: "/admin/wards", icon: faBedPulse, section: "Management" },
   { id: "analytics", label: "Analytics", href: "/admin/analytics", icon: faChartBar, section: "Data" },
   { id: "reports", label: "Reports", href: "/admin/reports", icon: faFileLines, section: "Data" },
   { id: "audit", label: "Activity Log", href: "/admin/audit", icon: faClockRotateLeft, section: "Administration" },
@@ -41,6 +41,7 @@ const navItems: NavItem[] = [
 
 function isActive(item: NavItem, pathname: string) {
   if (item.href === "/admin") return pathname === "/admin";
+  if (item.id === "wards" && pathname.startsWith("/admin/patients")) return true;
   return pathname.startsWith(item.href);
 }
 

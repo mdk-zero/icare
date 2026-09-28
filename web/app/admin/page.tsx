@@ -402,7 +402,7 @@ export default async function AdminDashboard() {
           }
         />
         <StatTile
-          href="/admin/rooms"
+          href="/admin/wards"
           icon={faDoorOpen}
           value={`${occupiedRooms}/${activeRoomCount}`}
           label="Rooms in Use"

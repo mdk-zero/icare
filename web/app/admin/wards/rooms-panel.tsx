@@ -80,7 +80,8 @@ function sameRect(a: Rect | null | undefined, b: Rect | null | undefined): boole
   return a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h;
 }
 
-export default function RoomsClient() {
+/** `embedded` drops the page header, for when Wards hosts this under its own. */
+export default function RoomsClient({ embedded = false }: { embedded?: boolean } = {}) {
   const [roomFilter, setRoomFilter] = useState("all");
   const [view, setView] = useState<"cards" | "plan">("cards");
   const [formOpen, setFormOpen] = useState(false);
@@ -155,16 +156,18 @@ export default function RoomsClient() {
 
   return (
     <div>
-      <PageHeader
-        badge={{
-          icon: (
-            <FontAwesomeIcon icon={faBuilding} className="w-3.5 h-3.5" />
-          ),
-          label: "Room Management",
-        }}
-        title="Rooms"
-        subtitle="Manage clinical rooms, track occupancy, and assign students"
-      />
+      {!embedded && (
+        <PageHeader
+          badge={{
+            icon: (
+              <FontAwesomeIcon icon={faBuilding} className="w-3.5 h-3.5" />
+            ),
+            label: "Room Management",
+          }}
+          title="Rooms"
+          subtitle="Manage clinical rooms, track occupancy, and assign students"
+        />
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         <StatTile icon={faDoorOpen} value={rooms.length} label="Total Rooms" />
