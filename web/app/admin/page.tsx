@@ -170,10 +170,14 @@ async function loadDashboard(viewerId: string) {
       .order("created_at", { ascending: false })
       .limit(5),
   ]);
-  const { data: memberRows, error: membersError } = await supabase.from("team_members").select("student_id");
+  const { data: memberRows, error: membersError } = await supabase
+    .from("team_members")
+    .select("student_id");
 
   const users = (usersRes.data ?? []).filter((u) => !visible || visible.has(u.id));
-  const sections = (sectionsRes.data ?? []).filter((sec) => !scope || scope.sectionIds.includes(sec.id));
+  const sections = (sectionsRes.data ?? []).filter(
+    (sec) => !scope || scope.sectionIds.includes(sec.id),
+  );
   const facultySections = (facultySectionsRes.data ?? []).filter(
     (fs) => !scope || scope.sectionIds.includes(fs.section_id),
   );
@@ -195,13 +199,17 @@ async function loadDashboard(viewerId: string) {
   // Faculty see only the students in the groups they supervise, so a sectioned
   // student in no group is seen by nobody.
   const grouped = new Set((memberRows ?? []).map((m) => m.student_id as string));
-  const ungroupedStudents = membersError ? 0 : students.filter((st) => st.section_id && !grouped.has(st.id)).length;
+  const ungroupedStudents = membersError
+    ? 0
+    : students.filter((st) => st.section_id && !grouped.has(st.id)).length;
   const sectionRows: SectionRow[] = sections
-    .map((sec): SectionRow => ({
-      id: sec.id,
-      name: sec.name,
-      students: studentsBySection.get(sec.id) ?? 0,
-    }))
+    .map(
+      (sec): SectionRow => ({
+        id: sec.id,
+        name: sec.name,
+        students: studentsBySection.get(sec.id) ?? 0,
+      }),
+    )
     .filter((sec) => sec.students > 0)
     .sort((a, b) => a.name.localeCompare(b.name));
 
@@ -224,7 +232,11 @@ async function loadDashboard(viewerId: string) {
   const withWork = await getStudentsWithWork(supabase, [...studentIds]);
   const latestRisk = new Map<string, string>();
   for (const p of predictions) {
-    if (studentIds.has(p.student_id) && withWork.has(p.student_id) && !latestRisk.has(p.student_id)) {
+    if (
+      studentIds.has(p.student_id) &&
+      withWork.has(p.student_id) &&
+      !latestRisk.has(p.student_id)
+    ) {
       latestRisk.set(p.student_id, p.risk);
     }
   }
@@ -248,7 +260,7 @@ async function loadDashboard(viewerId: string) {
     attention.push({
       key: "unassigned",
       message: `${plural(unassignedStudents, "student")} not assigned to a section`,
-      detail: "No faculty can see them until they're placed in a section.",
+      detail: "No instructor can see them until they're placed in a section.",
       href: "/admin/student-management",
       action: "Assign",
     });
@@ -257,26 +269,29 @@ async function loadDashboard(viewerId: string) {
     attention.push({
       key: "ungrouped",
       message: `${plural(ungroupedStudents, "student")} not in a group`,
-      detail: "Faculty only see the students in the groups they supervise.",
+      detail: "Instructors only see the students in the groups they supervise.",
       href: "/admin/student-management",
       action: "Group them",
     });
   }
   if (uncoveredSections.length > 0) {
-    const names = uncoveredSections.slice(0, 3).map((s) => s.name).join(", ");
+    const names = uncoveredSections
+      .slice(0, 3)
+      .map((s) => s.name)
+      .join(", ");
     const more = uncoveredSections.length > 3 ? ` +${uncoveredSections.length - 3} more` : "";
     attention.push({
       key: "uncovered",
-      message: `${plural(uncoveredSections.length, "section")} without a faculty member`,
+      message: `${plural(uncoveredSections.length, "section")} without an instructor`,
       detail: `${names}${more} — their students have no one reviewing them.`,
       href: "/admin/faculty/assignment",
-      action: "Assign faculty",
+      action: "Assign instructor",
     });
   }
   if (facultyWithoutSections > 0) {
     attention.push({
       key: "idle-faculty",
-      message: `${plural(facultyWithoutSections, "faculty account")} with no sections`,
+      message: `${plural(facultyWithoutSections, "instructor account")} with no sections`,
       detail: "They can sign in but have no students to see.",
       href: "/admin/faculty/assignment",
       action: "Assign",
@@ -375,7 +390,7 @@ export default async function AdminDashboard() {
       <PageHeader
         badge={{
           icon: <FontAwesomeIcon icon={faHouse} className="w-3.5 h-3.5" />,
-          label: "Admin Dashboard",
+          label: "Dean Dashboard",
         }}
         title={firstName ? `Welcome back, ${firstName}!` : "Welcome back!"}
         subtitle={`${today} • Here's what's happening across the program today.`}
@@ -412,49 +427,6 @@ export default async function AdminDashboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <Panel className="lg:col-span-2">
-          <PanelHeader
-            title="Needs Your Attention"
-            subtitle="Things only an admin can fix"
-          >
-            {attention.length > 0 && (
-              <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700">
-                {attention.length} open
-              </span>
-            )}
-          </PanelHeader>
-          {attention.length === 0 ? (
-            <div className="p-10 text-center">
-              <span className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
-                <FontAwesomeIcon icon={faCircleCheck} className="h-5 w-5" />
-              </span>
-              <p className="text-gray-500 font-medium">Nothing needs your attention</p>
-              <p className="text-sm text-gray-400 mt-1">
-                Every student is placed, every section has a faculty member, and the risk check is current.
-              </p>
-            </div>
-          ) : (
-            <div className="divide-y divide-hairline">
-              {attention.map((item) => (
-                <Link
-                  key={item.key}
-                  href={item.href}
-                  className="flex items-center gap-3 p-4 hover:bg-subtle transition-colors"
-                >
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-50 text-amber-600">
-                    <FontAwesomeIcon icon={faTriangleExclamation} className="h-4 w-4" />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-medium text-gray-900">{item.message}</p>
-                    <p className="text-sm text-gray-500">{item.detail}</p>
-                  </div>
-                  <span className="shrink-0 text-sm text-brand-600 font-medium">{item.action} →</span>
-                </Link>
-              ))}
-            </div>
-          )}
-        </Panel>
-
         <Panel>
           <PanelHeader title="Recent Activity" subtitle="Your latest actions">
             <Link
@@ -467,7 +439,7 @@ export default async function AdminDashboard() {
           {activity.length === 0 ? (
             <EmptyState
               title="No recorded activity yet"
-              hint="Admin and faculty actions are logged here as they happen."
+              hint="Dean and instructor actions are logged here as they happen."
             />
           ) : (
             <div className="p-4">
@@ -496,6 +468,48 @@ export default async function AdminDashboard() {
                   );
                 })}
               </ol>
+            </div>
+          )}
+        </Panel>
+        <Panel className="lg:col-span-2">
+          <PanelHeader title="Needs Your Attention" subtitle="Things only a dean can fix">
+            {attention.length > 0 && (
+              <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700">
+                {attention.length} open
+              </span>
+            )}
+          </PanelHeader>
+          {attention.length === 0 ? (
+            <div className="p-10 text-center">
+              <span className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
+                <FontAwesomeIcon icon={faCircleCheck} className="h-5 w-5" />
+              </span>
+              <p className="text-gray-500 font-medium">Nothing needs your attention</p>
+              <p className="text-sm text-gray-400 mt-1">
+                Every student is placed, every section has an instructor, and the risk check is
+                current.
+              </p>
+            </div>
+          ) : (
+            <div className="divide-y divide-hairline">
+              {attention.map((item) => (
+                <Link
+                  key={item.key}
+                  href={item.href}
+                  className="flex items-center gap-3 p-4 hover:bg-subtle transition-colors"
+                >
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-50 text-amber-600">
+                    <FontAwesomeIcon icon={faTriangleExclamation} className="h-4 w-4" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium text-gray-900">{item.message}</p>
+                    <p className="text-sm text-gray-500">{item.detail}</p>
+                  </div>
+                  <span className="shrink-0 text-sm text-brand-600 font-medium">
+                    {item.action} →
+                  </span>
+                </Link>
+              ))}
             </div>
           )}
         </Panel>
