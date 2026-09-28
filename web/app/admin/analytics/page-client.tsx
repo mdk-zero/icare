@@ -683,7 +683,7 @@ function AnalyticsSkeleton() {
         ))}
       </div>
 
-      <div className="mb-4">
+      <div className="mb-6 grid grid-cols-1 gap-6 xl:grid-cols-2">
         <Panel>
           <SkeletonHeading subtitle="w-48" />
           <div className="grid grid-cols-3 items-end gap-3 sm:gap-6">
@@ -696,18 +696,18 @@ function AnalyticsSkeleton() {
             <SkeletonBarRow />
           </div>
         </Panel>
-      </div>
 
-      <Panel className="mb-6">
+      <Panel>
         <SkeletonHeading subtitle="w-40" />
         <Bone className="mb-2 h-3 w-full rounded-full" />
         <Bone className="mb-5 h-3 w-56" />
-        <div className="grid grid-cols-2 gap-2.5 sm:gap-3 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 sm:gap-3 xl:grid-cols-2 2xl:grid-cols-4">
           {Array.from({ length: TOP_ROOMS }).map((_, i) => (
             <SkeletonRoomCard key={i} />
           ))}
         </div>
       </Panel>
+      </div>
 
       <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
         <Panel className="lg:col-span-2">
@@ -958,16 +958,21 @@ export default function AdminAnalyticsClient() {
             />
           </div>
 
-          <div className="mb-4">
-            {/* Top students: podium for the first three, rows for the rest */}
-            <Panel>
+          {/* Top students beside the room bed board; stacked below xl */}
+          <div className="mb-6 grid grid-cols-1 gap-6 xl:grid-cols-2">
+            {/* Top students: podium for the first three, rows for the rest. A
+                column so the leaderboard link stays at the bottom when the room
+                board beside it is taller. */}
+            <Panel className="flex flex-col">
               <CardHeading
                 icon={faTrophy}
                 title="Top Students"
                 subtitle="Highest average submitted score"
                 tag={rangeTag}
               />
-              <PodiumLeaderboard students={topStudents} />
+              <div className="flex-1">
+                <PodiumLeaderboard students={topStudents} />
+              </div>
               {topStudents.length > 0 && (
                 <div className="mt-4 flex justify-end border-t border-hairline pt-3">
                   <Link
@@ -979,10 +984,9 @@ export default function AdminAnalyticsClient() {
                 </div>
               )}
             </Panel>
-          </div>
 
           {/* Room Utilization: a bed board of the busiest rooms */}
-          <Panel className="mb-6">
+          <Panel>
             <CardHeading
               icon={faBuilding}
               title="Room Utilization"
@@ -1010,7 +1014,7 @@ export default function AdminAnalyticsClient() {
             ) : (
               <>
                 <BedStrip occupied={occupiedBeds} free={freeBeds} closed={closedBeds} />
-                <div className="grid grid-cols-2 gap-2.5 sm:gap-3 xl:grid-cols-4">
+                <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 sm:gap-3 xl:grid-cols-2 2xl:grid-cols-4">
                   {rooms.map((room) => (
                     <RoomBedCard
                       key={room.id}
@@ -1033,6 +1037,7 @@ export default function AdminAnalyticsClient() {
               </>
             )}
           </Panel>
+          </div>
 
           {/* Section engagement + users by role */}
           <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
