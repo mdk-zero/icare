@@ -33,14 +33,13 @@
  * relative to the moment it runs, so re-running moves the term to the new
  * today.
  *
- * It follows the groups. A group works one scenario, the same case for every
- * member, and each member is scored on their own: every member has their own
- * assignment row, carrying the group, graded by the group's supervising
- * faculty member. Groups in a section take the section's cases in turn, so
- * two groups rarely share one. Skill Assessments stay individual, and group
- * members sit the section's quizzes like everyone else. Groups in
- * GROUPS_LEFT_EMPTY are not seeded at all; they start with nothing until
- * faculty assign them a case.
+ * It follows the groups. A group works one case at a time, the same case for
+ * every member, and each member is scored on their own: every member has
+ * their own assignment row, carrying the group, graded by the group's
+ * supervising faculty member. Over the term a group works through all of its
+ * section's cases, each group starting at a different one, so two groups in a
+ * section never share a case in the same block. Quizzes stay individual and
+ * follow the member's case order.
  *
  * It grades the way faculty do. Every performed task has each of its
  * sub-tasks rated Excellent, Satisfactory or Needs Practice against the
@@ -49,7 +48,7 @@
  *
  * Scope and re-runs: this owns the (student, scenario) and (student,
  * assessment) pairs of every case and quiz in the catalog below, for every
- * student in PROFILES outside GROUPS_LEFT_EMPTY. Those are cleared and
+ * student in PROFILES. Those are cleared and
  * rebuilt on each run, so a student whose group or group case changed loses
  * the old pair rather than keeping it; anything else in the database is left
  * alone. Deleting an attempt
@@ -117,67 +116,37 @@ interface Profile {
 }
 
 /**
- * Ability is deliberately spread. A cohort where everyone scores the same
- * teaches a risk model nothing — it needs students who are actually at risk
- * and students who are plainly not.
+ * Michael Smith's four groups — every student in BSN 1101 and BSN 1102.
+ *
+ * The cohort is a strong one on purpose: all but two finish everything on
+ * time and average above 90% on both their patient cases and their quizzes.
+ * Kenji Villanueva and Paulo Hernandez are the two at-risk students — low
+ * ability, and they stopped after the first couple of blocks, so the rest of
+ * their work sits overdue. That is enough contrast for the risk model to find
+ * exactly them.
  */
 const PROFILES: Profile[] = [
-  // ---- the four that already existed --------------------------------------
+  // ---- BSN 1101 -----------------------------------------------------------
   {
     email: '23-74349@g.batstate-u.edu.ph',
     name: 'Linux Mandrake S. Adona',
     section: 'BSN 1101',
     sex: 'male',
-    ability: 0.88,
+    ability: 0.96,
     weakAt: [],
     strongAt: ['Vital Signs', 'Oxygenation'],
     taskCompletion: 1,
     engagement: 1,
   },
   {
-    email: '23-75538@g.batstate-u.edu.ph',
-    name: 'Andre A. Cachola',
-    section: 'BSN 1102',
-    sex: 'male',
-    ability: 0.72,
-    weakAt: ['Fluid, Electrolyte, and Acid–Base Balance'],
-    strongAt: ['Oxygenation'],
-    taskCompletion: 0.85,
-    engagement: 1,
-  },
-  {
-    email: 'cacholaandot@gmail.com',
-    name: 'Andot S. Wong',
-    section: 'BSN 1102',
-    sex: 'male',
-    ability: 0.45,
-    weakAt: ['Fluid, Electrolyte, and Acid–Base Balance', 'Oxygenation'],
-    strongAt: [],
-    taskCompletion: 0.5,
-    engagement: 1,
-  },
-  {
-    email: 'dotdot042822@gmail.com',
-    name: 'Dotdot I. Corpuz',
-    section: 'BSN 1102',
-    sex: 'male',
-    ability: 0.63,
-    weakAt: ['Vital Signs'],
-    strongAt: ['Oxygenation'],
-    taskCompletion: 0.7,
-    engagement: 1,
-  },
-
-  // ---- BSN 1101, which had a single student ------------------------------
-  {
     email: '23-80112@g.batstate-u.edu.ph',
     name: 'Bea R. Katigbak',
     section: 'BSN 1101',
     sex: 'female',
-    ability: 0.81,
+    ability: 0.95,
     weakAt: [],
     strongAt: ['Oxygenation', 'Fluid, Electrolyte, and Acid–Base Balance'],
-    taskCompletion: 0.95,
+    taskCompletion: 1,
     engagement: 1,
   },
   {
@@ -185,10 +154,10 @@ const PROFILES: Profile[] = [
     name: 'Miguel A. Panganiban',
     section: 'BSN 1101',
     sex: 'male',
-    ability: 0.66,
-    weakAt: ['Oxygenation'],
-    strongAt: [],
-    taskCompletion: 0.75,
+    ability: 0.94,
+    weakAt: [],
+    strongAt: ['Vital Signs'],
+    taskCompletion: 1,
     engagement: 1,
   },
   {
@@ -196,14 +165,14 @@ const PROFILES: Profile[] = [
     name: 'Trisha Mae L. Macatangay',
     section: 'BSN 1101',
     sex: 'female',
-    ability: 0.52,
-    weakAt: ['Fluid, Electrolyte, and Acid–Base Balance'],
-    strongAt: [],
-    taskCompletion: 0.6,
-    // Stopped after the first two. The gap is the point.
-    engagement: 0.67,
+    ability: 0.95,
+    weakAt: [],
+    strongAt: ['Fluid, Electrolyte, and Acid–Base Balance'],
+    taskCompletion: 1,
+    engagement: 1,
   },
   {
+    // At risk: weak, and stopped after the first two blocks.
     email: '23-80318@g.batstate-u.edu.ph',
     name: 'Kenji P. Villanueva',
     section: 'BSN 1101',
@@ -219,20 +188,108 @@ const PROFILES: Profile[] = [
     name: 'Angelica D. Manalo',
     section: 'BSN 1101',
     sex: 'female',
-    ability: 0.74,
-    weakAt: ['Fluid, Electrolyte, and Acid–Base Balance'],
+    ability: 0.96,
+    weakAt: [],
     strongAt: ['Vital Signs'],
-    taskCompletion: 0.9,
+    taskCompletion: 1,
+    engagement: 1,
+  },
+  {
+    email: '23-12355@g.batstate-u.edu.ph',
+    name: 'Miguel Fernandez',
+    section: 'BSN 1101',
+    sex: 'male',
+    ability: 0.95,
+    weakAt: [],
+    strongAt: ['Oxygenation'],
+    taskCompletion: 1,
+    engagement: 1,
+  },
+  {
+    email: '23-12356@g.batstate-u.edu.ph',
+    name: 'Bea Navarro',
+    section: 'BSN 1101',
+    sex: 'female',
+    ability: 0.94,
+    weakAt: [],
+    strongAt: ['Fluid, Electrolyte, and Acid–Base Balance'],
+    taskCompletion: 1,
+    engagement: 1,
+  },
+  {
+    email: '23-12357@g.batstate-u.edu.ph',
+    name: 'Rafael Torres',
+    section: 'BSN 1101',
+    sex: 'male',
+    ability: 0.95,
+    weakAt: [],
+    strongAt: ['Vital Signs'],
+    taskCompletion: 1,
+    engagement: 1,
+  },
+  {
+    email: '23-12358@g.batstate-u.edu.ph',
+    name: 'Camille Pascual',
+    section: 'BSN 1101',
+    sex: 'female',
+    ability: 0.96,
+    weakAt: [],
+    strongAt: ['Oxygenation'],
+    taskCompletion: 1,
+    engagement: 1,
+  },
+  {
+    email: '23-12359@g.batstate-u.edu.ph',
+    name: 'Gabriel Soriano',
+    section: 'BSN 1101',
+    sex: 'male',
+    ability: 0.94,
+    weakAt: [],
+    strongAt: ['Fluid, Electrolyte, and Acid–Base Balance'],
+    taskCompletion: 1,
     engagement: 1,
   },
 
   // ---- BSN 1102 -----------------------------------------------------------
   {
+    email: '23-75538@g.batstate-u.edu.ph',
+    name: 'Andre A. Cachola',
+    section: 'BSN 1102',
+    sex: 'male',
+    ability: 0.95,
+    weakAt: [],
+    strongAt: ['Oxygenation'],
+    taskCompletion: 1,
+    engagement: 1,
+  },
+  {
+    email: 'cacholaandot@gmail.com',
+    name: 'Andot S. Wong',
+    section: 'BSN 1102',
+    sex: 'male',
+    ability: 0.94,
+    weakAt: [],
+    strongAt: ['Vital Signs'],
+    taskCompletion: 1,
+    engagement: 1,
+  },
+  {
+    email: 'dotdot042822@gmail.com',
+    name: 'Dotdot I. Corpuz',
+    section: 'BSN 1102',
+    sex: 'male',
+    ability: 0.95,
+    weakAt: [],
+    strongAt: ['Oxygenation'],
+    taskCompletion: 1,
+    engagement: 1,
+  },
+  {
     email: '23-80519@g.batstate-u.edu.ph',
     name: 'Jomar T. Dimaculangan',
     section: 'BSN 1102',
     sex: 'male',
-    ability: 0.85,
+    ability: 0.97,
     weakAt: [],
     strongAt: ['Fluid, Electrolyte, and Acid–Base Balance', 'Oxygenation'],
     taskCompletion: 1,
@@ -243,10 +300,10 @@ const PROFILES: Profile[] = [
     name: 'Shaira Mae B. Aguilar',
     section: 'BSN 1102',
     sex: 'female',
-    ability: 0.58,
-    weakAt: ['Oxygenation'],
-    strongAt: [],
-    taskCompletion: 0.65,
+    ability: 0.94,
+    weakAt: [],
+    strongAt: ['Vital Signs'],
+    taskCompletion: 1,
     engagement: 1,
   },
   {
@@ -254,24 +311,25 @@ const PROFILES: Profile[] = [
     name: 'Renz Carlo M. Ilagan',
     section: 'BSN 1102',
     sex: 'male',
-    ability: 0.41,
-    weakAt: ['Fluid, Electrolyte, and Acid–Base Balance', 'Vital Signs'],
-    strongAt: [],
-    taskCompletion: 0.45,
-    engagement: 0.67,
+    ability: 0.95,
+    weakAt: [],
+    strongAt: ['Fluid, Electrolyte, and Acid–Base Balance'],
+    taskCompletion: 1,
+    engagement: 1,
   },
   {
     email: '23-80845@g.batstate-u.edu.ph',
     name: 'Nicole Anne S. Perez',
     section: 'BSN 1102',
     sex: 'female',
-    ability: 0.69,
+    ability: 0.96,
     weakAt: [],
     strongAt: ['Oxygenation'],
-    taskCompletion: 0.8,
+    taskCompletion: 1,
     engagement: 1,
   },
   {
+    // At risk: barely engaged, and what he did went badly.
     email: '23-80951@g.batstate-u.edu.ph',
     name: 'Paulo G. Hernandez',
     section: 'BSN 1102',
@@ -280,175 +338,7 @@ const PROFILES: Profile[] = [
     weakAt: ['Oxygenation', 'Fluid, Electrolyte, and Acid–Base Balance'],
     strongAt: [],
     taskCompletion: 0.3,
-    // Barely engaged: one piece of work, done badly. The clearest at-risk case.
     engagement: 0.34,
-  },
-
-  // ---- Michael Smith's three newer sections --------------------------------
-  {
-    email: '23-81104@g.batstate-u.edu.ph',
-    name: 'Althea Mae R. Bautista',
-    section: 'BSN 1103',
-    sex: 'female',
-    ability: 0.84,
-    weakAt: [],
-    strongAt: ['Oxygenation'],
-    taskCompletion: 0.95,
-    engagement: 1,
-  },
-  {
-    email: '23-81137@g.batstate-u.edu.ph',
-    name: 'Jerome C. Maligaya',
-    section: 'BSN 1103',
-    sex: 'male',
-    ability: 0.61,
-    weakAt: ['Vital Signs'],
-    strongAt: [],
-    taskCompletion: 0.7,
-    engagement: 1,
-  },
-  {
-    email: '23-81169@g.batstate-u.edu.ph',
-    name: 'Katrina L. Mercado',
-    section: 'BSN 1103',
-    sex: 'female',
-    ability: 0.47,
-    weakAt: ['Fluid, Electrolyte, and Acid–Base Balance', 'Oxygenation'],
-    strongAt: [],
-    taskCompletion: 0.55,
-    engagement: 0.67,
-  },
-  {
-    email: '23-81204@g.batstate-u.edu.ph',
-    name: 'Emmanuel D. Rosales',
-    section: 'BSN 1103',
-    sex: 'male',
-    ability: 0.36,
-    weakAt: ['Vital Signs'],
-    strongAt: [],
-    taskCompletion: 0.4,
-    engagement: 0.34,
-  },
-  {
-    email: '23-81238@g.batstate-u.edu.ph',
-    name: 'Precious Joy A. Tolentino',
-    section: 'BSN 1103',
-    sex: 'female',
-    ability: 0.77,
-    weakAt: [],
-    strongAt: ['Oxygenation'],
-    taskCompletion: 0.9,
-    engagement: 1,
-  },
-  {
-    email: '23-81275@g.batstate-u.edu.ph',
-    name: 'Aaron Kyle P. Navarro',
-    section: 'BSN 1104',
-    sex: 'male',
-    ability: 0.9,
-    weakAt: [],
-    strongAt: ['Vital Signs', 'Fluid, Electrolyte, and Acid–Base Balance'],
-    taskCompletion: 1,
-    engagement: 1,
-  },
-  {
-    email: '23-81312@g.batstate-u.edu.ph',
-    name: 'Bianca Rose T. Gutierrez',
-    section: 'BSN 1104',
-    sex: 'female',
-    ability: 0.68,
-    weakAt: ['Fluid, Electrolyte, and Acid–Base Balance'],
-    strongAt: [],
-    taskCompletion: 0.8,
-    engagement: 1,
-  },
-  {
-    email: '23-81348@g.batstate-u.edu.ph',
-    name: 'Christian Dave M. Lazaro',
-    section: 'BSN 1104',
-    sex: 'male',
-    ability: 0.54,
-    weakAt: ['Fluid, Electrolyte, and Acid–Base Balance'],
-    strongAt: [],
-    taskCompletion: 0.6,
-    engagement: 1,
-  },
-  {
-    email: '23-81383@g.batstate-u.edu.ph',
-    name: 'Danica Mae S. Espiritu',
-    section: 'BSN 1104',
-    sex: 'female',
-    ability: 0.4,
-    weakAt: ['Vital Signs', 'Oxygenation'],
-    strongAt: [],
-    taskCompletion: 0.45,
-    engagement: 0.67,
-  },
-  {
-    email: '23-81419@g.batstate-u.edu.ph',
-    name: 'Enrico B. Pascual',
-    section: 'BSN 1104',
-    sex: 'male',
-    ability: 0.73,
-    weakAt: [],
-    strongAt: ['Fluid, Electrolyte, and Acid–Base Balance'],
-    taskCompletion: 0.85,
-    engagement: 1,
-  },
-  {
-    email: '23-81456@g.batstate-u.edu.ph',
-    name: 'Faith Angeline C. Ramos',
-    section: 'BSN 1104',
-    sex: 'female',
-    ability: 0.31,
-    weakAt: ['Vital Signs', 'Fluid, Electrolyte, and Acid–Base Balance', 'Oxygenation'],
-    strongAt: [],
-    taskCompletion: 0.3,
-    engagement: 0.34,
-  },
-  {
-    email: '23-81492@g.batstate-u.edu.ph',
-    name: 'Gabriel John V. Soriano',
-    section: 'BSN 1105',
-    sex: 'male',
-    ability: 0.8,
-    weakAt: [],
-    strongAt: ['Vital Signs'],
-    taskCompletion: 0.9,
-    engagement: 1,
-  },
-  {
-    email: '23-81527@g.batstate-u.edu.ph',
-    name: 'Hannah Mae D. Castillo',
-    section: 'BSN 1105',
-    sex: 'female',
-    ability: 0.57,
-    weakAt: ['Oxygenation'],
-    strongAt: [],
-    taskCompletion: 0.65,
-    engagement: 1,
-  },
-  {
-    email: '23-81564@g.batstate-u.edu.ph',
-    name: 'Ivan Christopher A. Rivera',
-    section: 'BSN 1105',
-    sex: 'male',
-    ability: 0.44,
-    weakAt: ['Oxygenation'],
-    strongAt: [],
-    taskCompletion: 0.5,
-    engagement: 0.67,
-  },
-  {
-    email: '23-81598@g.batstate-u.edu.ph',
-    name: 'Jasmine Faye R. Delos Reyes',
-    section: 'BSN 1105',
-    sex: 'female',
-    ability: 0.86,
-    weakAt: [],
-    strongAt: ['Vital Signs'],
-    taskCompletion: 1,
-    engagement: 1,
   },
 ];
 
@@ -468,32 +358,30 @@ const CELLULITIS: WorkItem = { scenario: 'Cellulitis: IV Antibiotic Through a Sa
 
 /**
  * The cases each section works through over the term, in order, and so the
- * quizzes its students sit.
+ * quizzes its students sit. A group starts this cycle at its own place
+ * (see groupWork below).
  *
  * An assigned scenario is visible to whoever teaches an assigned student
- * (lib/scenario-visibility.ts), so a section only draws on its own faculty's
- * cases. Michael Smith teaches BSN 1101 and 1103–1105 and rotates his five
- * through all four — each list is the same cycle started at a different
- * point, so no two of his sections sit the same quiz in the same block. Drei
- * Cachola's BSN 1102 keeps her three, and none of them cross over.
+ * (lib/scenario-visibility.ts); Michael Smith and Drei Cachola both teach
+ * BSN 1101 and 1102, so either's cases can go to either section.
  */
 const SECTION_WORK: Record<string, WorkItem[]> = {
   'BSN 1101': [FEVER, DEHYDRATION, POST_OP, HYPERTENSION, ANAEMIA],
   'BSN 1102': [UTI, ASTHMA, CELLULITIS],
-  'BSN 1103': [HYPERTENSION, ANAEMIA, FEVER, DEHYDRATION, POST_OP],
-  'BSN 1104': [DEHYDRATION, POST_OP, HYPERTENSION, ANAEMIA, FEVER],
-  'BSN 1105': [ANAEMIA, FEVER, DEHYDRATION, POST_OP, HYPERTENSION],
 };
 
 /** Every case this seed knows, for clearing old pairs. */
 const CATALOG: WorkItem[] = [FEVER, DEHYDRATION, POST_OP, HYPERTENSION, ANAEMIA, UTI, ASTHMA, CELLULITIS];
 
 /**
- * Sections whose groups get no seeded history. Their members start empty and
- * only have work once faculty assign their group a case, and a re-run leaves
- * whatever faculty gave them alone.
+ * A group's cases: its section's cycle, started at the group's place among
+ * the section's groups, so the section's groups are on different cases in
+ * any one block.
  */
-const GROUPS_LEFT_EMPTY = new Set(['BSN 1101']);
+function groupWork(work: WorkItem[], ordinal: number): WorkItem[] {
+  const shift = ordinal % work.length;
+  return [...work.slice(shift), ...work.slice(0, shift)];
+}
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const HOUR_MS = 60 * 60 * 1000;
@@ -616,8 +504,8 @@ function chanceCorrect(profile: Profile, competencyNames: string[]): number {
  */
 function drawLevel(p: number, rng: () => number): TaskRating {
   const x = rng();
-  if (x < p * 0.7) return 'excellent';
-  if (x < p * 0.7 + (1 - p * 0.7) * 0.55) return 'satisfactory';
+  if (x < p) return 'excellent';
+  if (x < p + (1 - p) * 0.55) return 'satisfactory';
   return 'needs_practice';
 }
 
@@ -791,13 +679,8 @@ async function main() {
     studentId: string;
     facultyId: string | null;
     teamId: string | null;
-    /** The section's cases, block by block; their quizzes are this member's. */
+    /** This member's cases, block by block (their group's order); their quizzes too. */
     work: WorkItem[];
-    /**
-     * The block of the one case this member's group works, or null outside a
-     * group, where the member works every block's case.
-     */
-    groupBlock: number | null;
     /** Work beyond this index was assigned and never touched. */
     didCount: number;
   }
@@ -810,16 +693,13 @@ async function main() {
     }
     const sectionName =
       (student as unknown as { sections: { name: string } | null }).sections?.name ?? '';
-    const work = SECTION_WORK[sectionName];
-    if (!work) {
+    const sectionWork = SECTION_WORK[sectionName];
+    if (!sectionWork) {
       console.warn(`  skipped ${profile.email} — section "${sectionName}" has no work defined`);
       continue;
     }
     const group = groupOf.get(student.id) ?? null;
-    if (group && GROUPS_LEFT_EMPTY.has(sectionName)) {
-      console.log(`  skipped ${profile.email} — ${sectionName} groups start empty`);
-      continue;
-    }
+    const work = group ? groupWork(sectionWork, group.ordinal) : sectionWork;
     const members = bySection.get(sectionName) ?? [];
     members.push({
       profile,
@@ -828,7 +708,6 @@ async function main() {
       facultyId: group?.supervisor ?? facultyBySection.get(student.section_id) ?? null,
       teamId: group?.teamId ?? null,
       work,
-      groupBlock: group ? group.ordinal % work.length : null,
       didCount: Math.max(1, Math.round(profile.engagement * work.length)),
     });
     bySection.set(sectionName, members);
@@ -884,8 +763,6 @@ async function main() {
     // ---- Scenarios ------------------------------------------------------
     for (const member of members) {
       for (const [k, item] of member.work.entries()) {
-        // A group works its one case; the other blocks are quiz-only for it.
-        if (member.groupBlock !== null && k !== member.groupBlock) continue;
         const completed = k < member.didCount;
         const scenarioId = scenarioByTitle.get(item.scenario);
         if (!scenarioId) {
