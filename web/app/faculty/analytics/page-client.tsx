@@ -433,9 +433,18 @@ function wrapLabel(label: string, perLine = 14, maxLines = 2): string[] {
  * page uses, so a red bar means the same thing here as anywhere else.
  */
 function CompetencyBarChart({ items }: { items: { key: string; label: string; value: number }[] }) {
-  // The card is half the page wide, and a viewBox scales its text along with
-  // the box: at 640 the labels rendered around 5px. Narrower box, same fonts.
-  const W = 1000;
+  // Drawn at the box's real width: a fixed viewBox scales its text with the
+  // card, and this card is half the page beside the groups or all of it alone.
+  const boxRef = useRef<HTMLDivElement>(null);
+  const [measured, setMeasured] = useState<number | null>(null);
+  useEffect(() => {
+    const box = boxRef.current;
+    if (!box) return;
+    const observer = new ResizeObserver(([entry]) => setMeasured(Math.floor(entry.contentRect.width)));
+    observer.observe(box);
+    return () => observer.disconnect();
+  }, []);
+  const W = measured ?? 560;
   const H = 300;
   const padL = 36;
   const padR = 12;
@@ -460,7 +469,8 @@ function CompetencyBarChart({ items }: { items: { key: string; label: string; va
   };
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full overflow-visible">
+    <div ref={boxRef}>
+      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="block w-full overflow-visible">
       {ticks.map((t) => (
         <g key={t}>
           <line
@@ -526,7 +536,8 @@ function CompetencyBarChart({ items }: { items: { key: string; label: string; va
           </g>
         );
       })}
-    </svg>
+      </svg>
+    </div>
   );
 }
 
@@ -1085,7 +1096,37 @@ export default function FacultyAnalyticsClient() {
             ))}
           </div>
 
-          <GroupPerformance sectionIds={sectionIds} />
+          {/* Side by side; with no groups the skill areas take the whole row. */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4 items-stretch">
+            <GroupPerformance sectionIds={sectionIds} />
+            <Card padding="md" className="flex flex-col lg:only:col-span-2">
+              <div className="flex items-center gap-2.5 mb-5">
+                <div className="rounded-xl bg-brand-600/10 p-2.5">
+                  <FontAwesomeIcon icon={faLayerGroup} className="h-5 w-5 text-brand-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-900">Performance per Skill Area</h3>
+                  <p className="text-xs text-gray-400">Average score by skill area</p>
+                </div>
+              </div>
+              <div className="flex-1 flex flex-col justify-center">
+                {competencies.length === 0 ? (
+                  <p className="text-gray-400 text-sm py-12 text-center">
+                    No validated skill area scores yet — record them from each student&apos;s
+                    profile.
+                  </p>
+                ) : (
+                  <CompetencyBarChart
+                    items={competencies.map(([name, value]) => ({
+                      key: name,
+                      label: name,
+                      value,
+                    }))}
+                  />
+                )}
+              </div>
+            </Card>
+          </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4 items-stretch">
             <Card padding="md" className="flex flex-col">
@@ -1178,35 +1219,6 @@ export default function FacultyAnalyticsClient() {
             </Card>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-1 gap-4 mb-4 items-stretch">
-            <Card padding="md" className="flex flex-col">
-              <div className="flex items-center gap-2.5 mb-5">
-                <div className="rounded-xl bg-brand-600/10 p-2.5">
-                  <FontAwesomeIcon icon={faLayerGroup} className="h-5 w-5 text-brand-600" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900">Performance per Skill Area</h3>
-                  <p className="text-xs text-gray-400">Average score by skill area</p>
-                </div>
-              </div>
-              <div className="flex-1 flex flex-col justify-center">
-                {competencies.length === 0 ? (
-                  <p className="text-gray-400 text-sm py-12 text-center">
-                    No validated skill area scores yet — record them from each student&apos;s
-                    profile.
-                  </p>
-                ) : (
-                  <CompetencyBarChart
-                    items={competencies.map(([name, value]) => ({
-                      key: name,
-                      label: name,
-                      value,
-                    }))}
-                  />
-                )}
-              </div>
-            </Card>
-          </div>
         </div>
       )}
 

@@ -189,7 +189,7 @@ export default function GroupPerformance({ sectionIds }: { sectionIds: string[] 
   if (groups.length === 0) return null;
 
   return (
-    <Card padding="md" className="mb-4">
+    <Card padding="md" className="flex flex-col">
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-center gap-2.5">
           <div className="rounded-xl bg-brand-600/10 p-2.5">
