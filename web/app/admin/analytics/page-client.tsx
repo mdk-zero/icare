@@ -179,17 +179,17 @@ function BarRow({
   );
 }
 
+/** The Dean is the one reading this page, not one of the users it counts. */
 const ROLE_SLICES = [
   { key: "student", label: "Students", color: "#2a8a98" },
   { key: "faculty", label: "Instructors", color: "#f59e0b" },
-  { key: "admin", label: "Deans", color: "#7c3aed" },
 ] as const;
 
 /** Large donut of who the users are, with each role's share, name and count in
  * a row underneath. The card is stretched to match its neighbour, so the ring
  * takes the free height instead of leaving a gap. */
-function RoleDonut({ counts }: { counts: Record<"student" | "faculty" | "admin", number> }) {
-  const total = counts.student + counts.faculty + counts.admin;
+function RoleDonut({ counts }: { counts: Record<"student" | "faculty", number> }) {
+  const total = counts.student + counts.faculty;
   const r = 45;
   const c = 2 * Math.PI * r;
   const gap = 2.5;
@@ -240,7 +240,7 @@ function RoleDonut({ counts }: { counts: Record<"student" | "faculty" | "admin",
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-2 text-center">
+      <div className="grid grid-cols-2 gap-2 text-center">
         {ROLE_SLICES.map((slice) => (
           <div key={slice.key}>
             <p className="font-display text-3xl font-bold tabular-nums text-gray-900">
@@ -1216,7 +1216,7 @@ export default function AdminAnalyticsClient() {
               <CardHeading
                 icon={faUsers}
                 title="Users by Role"
-                subtitle="Everyone with an account"
+                subtitle="Students and instructors with an account"
                 tag={liveTag}
               />
               <RoleDonut counts={roleCounts} />
