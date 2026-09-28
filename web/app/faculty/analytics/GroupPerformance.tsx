@@ -12,8 +12,11 @@ const pct = (n: number | null) => (n === null ? "—" : `${n}%`);
 
 const SCALE = [0, 25, 50, 75, 100];
 
-/** One measure as a bar, its value just past the end; no score yet reads as such. */
-function Bar({
+/** Room per group, so a crowded chart scrolls sideways instead of squeezing its columns. */
+const COLUMN_MIN_W = 76;
+
+/** One measure as a column, its value just above the top; no score yet reads as a dash. */
+function Column({
   value,
   grown,
   className,
@@ -26,29 +29,32 @@ function Bar({
 }) {
   if (value === null) {
     return (
-      <div className="flex h-3 items-center">
-        <span className="text-[11px] text-gray-400">{label}: not scored yet</span>
+      <div className="flex h-full w-4 items-end justify-center sm:w-5" title={`${label}: not scored yet`}>
+        <span className="text-[11px] text-gray-400">—</span>
       </div>
     );
   }
+  const height = `${Math.min(Math.max(value, 0), 100)}%`;
   return (
-    <div className="flex h-3 items-center gap-1.5" title={`${label}: ${value}%`}>
+    <div className="relative flex h-full w-4 items-end sm:w-5" title={`${label}: ${value}%`}>
       <div
-        className={`h-full rounded-r-full transition-[width] duration-700 ease-out ${className}`}
-        style={{
-          width: grown ? `${Math.min(Math.max(value, 0), 100)}%` : "0%",
-        }}
+        className={`w-full rounded-t-md transition-[height] duration-700 ease-out ${className}`}
+        style={{ height: grown ? height : "0%" }}
       />
-      <span className="shrink-0 text-[11px] font-semibold tabular-nums text-gray-700">{value}%</span>
+      <span
+        className="absolute left-1/2 -translate-x-1/2 text-[10px] font-semibold tabular-nums text-gray-700 transition-[bottom] duration-700 ease-out"
+        style={{ bottom: `calc(${grown ? height : "0%"} + 3px)` }}
+      >
+        {value}
+      </span>
     </div>
   );
 }
 
 /**
- * One row per group: the patient case average (a group shares one case, so
- * it leads) over the quiz average, against a dashed line at the target. The
- * bars are measured in a box that stops short of the track's right edge, so a
- * 100% bar still has room for its label.
+ * One pair of columns per group: the patient case average (a group shares one
+ * case, so it leads) beside the quiz average, against a dashed line at the
+ * target. The y-axis stays put while a long row of groups scrolls under it.
  */
 function GroupBars({ groups }: { groups: GroupSummary[] }) {
   const [grown, setGrown] = useState(false);
@@ -57,51 +63,71 @@ function GroupBars({ groups }: { groups: GroupSummary[] }) {
     return () => cancelAnimationFrame(id);
   }, []);
 
-  const rowGrid = "grid grid-cols-[minmax(0,9rem)_1fr] gap-x-4 sm:grid-cols-[minmax(0,15rem)_1fr]";
+  // Both the axis and the plot sit this far down, leaving room for a 100% label.
+  const plot = "relative mt-5 h-56";
   return (
-    <div>
-      <ul className="divide-y divide-hairline" aria-label="Group averages">
-        {groups.map((g) => (
-          <li
-            key={g.team_id}
-            className={rowGrid}
-            aria-label={`${g.name}: patient case average ${pct(g.scenarios.average)}, quiz average ${pct(g.assessments.average)}`}
+    <div className="flex">
+      <div className={`${plot} w-8 shrink-0`} aria-hidden>
+        {SCALE.map((v) => (
+          <span
+            key={v}
+            className={`absolute right-2 translate-y-1/2 text-[10px] tabular-nums ${
+              v === TARGET_SCORE ? "font-semibold text-gray-700" : "text-gray-400"
+            }`}
+            style={{ bottom: `${v}%` }}
           >
-            <div className="min-w-0 py-2.5">
-              <p className="truncate text-sm font-medium text-gray-900">
-                {g.section_name && <span className="text-gray-500">{g.section_name} · </span>}
-                {g.name}
-              </p>
-              <p className="truncate text-[11px] text-gray-500">
-                {g.faculty_name ?? "No supervisor"} · {g.members} {g.members === 1 ? "member" : "members"}
-                {g.scenarios.graded > 0 && ` · ${g.scenarios.graded}/${g.scenarios.assigned} graded`}
-              </p>
-            </div>
-            <div className="relative mr-10 flex flex-col justify-center gap-1 py-2.5" aria-hidden>
-              <div
-                className="pointer-events-none absolute inset-y-0 border-l border-dashed border-gray-400"
-                style={{ left: `${TARGET_SCORE}%` }}
-              />
-              <Bar value={g.scenarios.average} grown={grown} className="bg-brand-600" label="Patient case" />
-              <Bar value={g.assessments.average} grown={grown} className="bg-brand-300" label="Quiz" />
-            </div>
-          </li>
+            {v}
+          </span>
         ))}
-      </ul>
-      <div className={`${rowGrid} border-t border-hairline`} aria-hidden>
-        <div />
-        <div className="relative mr-10 h-5">
-          {SCALE.map((v) => (
-            <span
-              key={v}
-              className={`absolute top-1 -translate-x-1/2 text-[10px] tabular-nums ${
-                v === TARGET_SCORE ? "font-semibold text-gray-700" : "text-gray-400"
-              }`}
-              style={{ left: `${v}%` }}
-            >
-              {v}
-            </span>
-          ))}
+      </div>
+
+      <div className="min-w-0 flex-1 overflow-x-auto">
+        <div style={{ minWidth: groups.length * COLUMN_MIN_W }}>
+          <div className={`${plot} border-b border-gray-300`}>
+            {SCALE.slice(1).map((v) => (
+              <div
+                key={v}
+                className="pointer-events-none absolute inset-x-0 border-t border-hairline"
+                style={{ bottom: `${v}%` }}
+                aria-hidden
+              />
+            ))}
+            <div
+              className="pointer-events-none absolute inset-x-0 border-t border-dashed border-gray-500"
+              style={{ bottom: `${TARGET_SCORE}%` }}
+              aria-hidden
+            />
+            <ul className="absolute inset-0 flex" aria-label="Group averages">
+              {groups.map((g) => (
+                <li
+                  key={g.team_id}
+                  className="flex flex-1 items-end justify-center gap-1.5 px-1"
+                  aria-label={`${g.section_name ? `${g.section_name} · ` : ""}${g.name}: patient case average ${pct(g.scenarios.average)}, quiz average ${pct(g.assessments.average)}`}
+                >
+                  <Column value={g.scenarios.average} grown={grown} className="bg-brand-600" label="Patient case" />
+                  <Column value={g.assessments.average} grown={grown} className="bg-brand-300" label="Quiz" />
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="flex" aria-hidden>
+            {groups.map((g) => (
+              <div
+                key={g.team_id}
+                className="min-w-0 flex-1 px-1 pt-2 text-center"
+                title={`${g.faculty_name ?? "No supervisor"} · ${g.members} ${g.members === 1 ? "member" : "members"}${
+                  g.scenarios.graded > 0 ? ` · ${g.scenarios.graded}/${g.scenarios.assigned} graded` : ""
+                }`}
+              >
+                {g.section_name && <p className="truncate text-[10px] text-gray-500">{g.section_name}</p>}
+                <p className="truncate text-xs font-medium text-gray-900">{g.name}</p>
+                <p className="truncate text-[10px] text-gray-400">
+                  {g.members} {g.members === 1 ? "member" : "members"}
+                </p>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>
