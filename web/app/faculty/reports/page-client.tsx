@@ -104,7 +104,7 @@ function suggestFor(
       id: "at-risk",
       icon: faTriangleExclamation,
       tone: "rose",
-      title: `${atRisk[0].label} is at risk`,
+      title: `${atRisk[0].label} is low performing`,
       detail: "Skill area profile, quiz history and clinical activity in one report.",
       cta: "Preview their report",
       action: { kind: "preview", type: "student", targetId: atRisk[0].id, subject: atRisk[0].label },
@@ -114,7 +114,7 @@ function suggestFor(
       id: "at-risk",
       icon: faTriangleExclamation,
       tone: "rose",
-      title: `${atRisk.length} students at risk`,
+      title: `${atRisk.length} students are low performing`,
       detail: "Their reports are a ready brief for the next check-in.",
       cta: "Show them",
       action: { kind: "filter", type: "student", filter: "at-risk" },
@@ -134,8 +134,8 @@ function suggestFor(
       title: worst.label,
       detail:
         (sections?.length ?? 0) > 1
-          ? `${worst.atRisk} of ${worst.students} at risk — the highest share of your sections.`
-          : `${worst.atRisk} of ${worst.students} students at risk.`,
+          ? `${worst.atRisk} of ${worst.students} low performing — the highest share of your sections.`
+          : `${worst.atRisk} of ${worst.students} students are low performing.`,
       cta: "Preview section report",
       action: { kind: "preview", type: "section", targetId: worst.id, subject: worst.label },
     });
@@ -187,7 +187,7 @@ export default function FacultyReportsClient() {
       students.data?.map((s) => {
         const idleDays = daysSince(s.last_activity);
         const badges: StudentTarget["badges"] = [];
-        if (s.risk_level === "at_risk") badges.push({ text: "At risk", tone: "rose" });
+        if (s.risk_level === "at_risk") badges.push({ text: "Low performing", tone: "rose" });
         if (idleDays === null) badges.push({ text: "No activity yet", tone: "amber" });
         else if (idleDays >= INACTIVE_DAYS) badges.push({ text: `Inactive ${idleDays}d`, tone: "amber" });
         return {
@@ -225,7 +225,7 @@ export default function FacultyReportsClient() {
         id: section.id,
         label: section.name,
         sub: plural(c.students, "student"),
-        badges: c.atRisk > 0 ? [{ text: `${c.atRisk} at risk`, tone: "rose" as const }] : [],
+        badges: c.atRisk > 0 ? [{ text: `${c.atRisk} low performing`, tone: "rose" as const }] : [],
         ...c,
       };
     });
@@ -279,7 +279,7 @@ export default function FacultyReportsClient() {
         loading: students.loading,
         failed: Boolean(students.error),
         filters: [
-          { id: "at-risk", label: "At risk", test: (t) => t.risk === "at_risk" },
+          { id: "at-risk", label: "Low performing", test: (t) => t.risk === "at_risk" },
           { id: "inactive", label: `Inactive ${INACTIVE_DAYS}d+`, test: isInactive },
           { id: "unscored", label: "Not scored yet", test: (t) => t.risk === null },
         ],
@@ -302,7 +302,7 @@ export default function FacultyReportsClient() {
         loading: sections.loading,
         failed: Boolean(sections.error),
         sorts: [
-          { id: "risk", label: "Most at risk", compare: (a, b) => b.atRisk - a.atRisk || byName(a, b) },
+          { id: "risk", label: "Most low performers", compare: (a, b) => b.atRisk - a.atRisk || byName(a, b) },
           { id: "name", label: "A–Z", compare: byName },
         ],
       },

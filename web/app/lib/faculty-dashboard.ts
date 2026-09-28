@@ -233,11 +233,11 @@ export async function buildFacultyAlerts(
       id: `risk-${studentId}`,
       student_id: studentId,
       student_name: nameOf.get(studentId) ?? 'Unknown student',
-      alert_type: 'At-Risk Prediction',
+      alert_type: 'Low Performance Prediction',
       severity: 'high',
       description: pct != null
-        ? `ML model flagged this student at risk (${pct}% probability).`
-        : 'ML model flagged this student at risk.',
+        ? `ML model flagged this student as low performing (${pct}% probability).`
+        : 'ML model flagged this student as low performing.',
       status: 'pending',
       created_at: prediction.predicted_at,
     });

@@ -17,7 +17,7 @@ function typeAccent(
   return {
     assignment_created: { ...Accent.violet, icon: 'clipboard', label: 'Assignment' },
     deadline_reminder: { ...Accent.amber, icon: 'alarm', label: 'Deadline' },
-    at_risk_flag: { ...Accent.red, icon: 'warning', label: 'At Risk' },
+    at_risk_flag: { ...Accent.red, icon: 'warning', label: 'Low Performing' },
     vitals_anomaly: { ...Accent.red, icon: 'pulse', label: 'Vitals' },
     performance_validated: { ...Accent.green, icon: 'checkmark-circle', label: 'Validated' },
     assistance_request: { ...Accent.blue, icon: 'hand-left', label: 'Assistance' },

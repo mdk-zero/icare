@@ -181,7 +181,7 @@ export default function TeamsClient() {
     const atRisk = Number(predictions.result?.at_risk ?? 0);
     const recs = Number(recommendations.result?.recommendations ?? 0);
     toast(
-      `Scored ${scored} of your students (${atRisk} at risk) and wrote ${plural(recs, "recommendation")}. Predictions reach the Analytics charts after the warehouse is refreshed.`,
+      `Scored ${scored} of your students (${atRisk} low performing) and wrote ${plural(recs, "recommendation")}.`,
       "success",
       ML_TOAST_MS,
     );

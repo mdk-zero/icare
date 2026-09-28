@@ -1065,7 +1065,7 @@ export default function AdminAnalyticsClient() {
             <StatTile
               icon={faExclamationTriangle}
               value={atRisk}
-              label="At-Risk Students"
+              label="Low Performing Students"
               caption={
                 totalStudents
                   ? `${atRiskRate}% of ${totalStudents} students`

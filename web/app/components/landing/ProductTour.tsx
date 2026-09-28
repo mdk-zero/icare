@@ -60,10 +60,10 @@ const TOUR = [
     number: "05",
     title: "Competency Analytics & Insights",
     description:
-      "Visual dashboards track progress across every clinical competency. At-risk students are flagged early, cohort trends are surfaced instantly, and detailed reports are exportable for accreditation and curriculum review.",
+      "Visual dashboards track progress across every clinical competency. Low-performing students are flagged early, cohort trends are surfaced instantly, and detailed reports are exportable for accreditation and curriculum review.",
     capabilities: [
       "Visual progress tracking across all competencies",
-      "Early at-risk identification with automated alerts",
+      "Early identification of low-performing students, with automated alerts",
       "Cohort comparison and trend analysis tools",
       "Exportable reports for accreditation and review",
     ],

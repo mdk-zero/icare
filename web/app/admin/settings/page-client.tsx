@@ -200,7 +200,7 @@ export default function SettingsClient() {
               <div className="space-y-4">
                 {[
                   { label: "Student enrollment alerts", desc: "Get notified when new students enroll" },
-                  { label: "At-risk student alerts", desc: "Receive alerts when students are flagged at-risk" },
+                  { label: "Low-performing student alerts", desc: "Receive alerts when students are flagged as low performing" },
                   { label: "Assessment deadlines", desc: "Reminders for upcoming assessment deadlines" },
                   { label: "Report generation", desc: "Notifications when reports are ready" },
                   { label: "System updates", desc: "Important system announcements" },

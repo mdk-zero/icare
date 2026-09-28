@@ -44,7 +44,7 @@ function reasons(s: Student): Reason[] {
   if (s.risk === "at_risk") {
     out.push({
       icon: faTriangleExclamation,
-      text: s.probability != null ? `At risk · ${Math.round(s.probability * 100)}%` : "At risk",
+      text: s.probability != null ? `Low performing · ${Math.round(s.probability * 100)}%` : "Low performing",
       chip: "bg-red-50 text-red-700",
       edge: "bg-red-500",
     });
@@ -119,7 +119,7 @@ export default function AttentionList({
           </span>
           <p className="font-medium text-slate-900">Everyone is on track</p>
           <p className="max-w-xs text-sm text-slate-500">
-            No one is at risk, behind on work, or gone quiet.
+            No one is low performing, behind on work, or gone quiet.
           </p>
         </div>
       ) : (

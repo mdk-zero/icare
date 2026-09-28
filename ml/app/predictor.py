@@ -126,8 +126,8 @@ def _notify_at_risk_transitions(db: Db, newly_at_risk: list[str]) -> int:
         {
             "user_id": faculty_id,
             "type": "at_risk_flag",
-            "title": "Student flagged at risk",
-            "body": f"{student.get('name') or 'A student'} was classified at-risk by the performance prediction model.",
+            "title": "Student flagged as low performing",
+            "body": f"{student.get('name') or 'A student'} was classified as low performing by the performance prediction model.",
             "data": {"student_id": student["id"], "kind": "at_risk_flag"},
         }
         for student in students

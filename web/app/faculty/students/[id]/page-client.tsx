@@ -620,7 +620,7 @@ export default function StudentDetailClient() {
                       ? "text-red-600"
                       : "text-emerald-600"
                 }
-                value={riskPrediction ? (riskPrediction.risk === "at_risk" ? "At Risk" : "Safe") : "Not scored yet"}
+                value={riskPrediction ? (riskPrediction.risk === "at_risk" ? "Low Performing" : "Safe") : "Not scored yet"}
                 valueColor={
                   !riskPrediction
                     ? "text-gray-500"
@@ -639,7 +639,7 @@ export default function StudentDetailClient() {
             <div className="p-2 bg-purple-100 rounded-lg">
               <FontAwesomeIcon icon={faBolt} className="w-5 h-5 text-purple-600" />
             </div>
-            <h3 className="font-semibold text-gray-900">At-Risk Prediction</h3>
+            <h3 className="font-semibold text-gray-900">Low Performance Prediction</h3>
           </div>
 
           {!riskPrediction ? (

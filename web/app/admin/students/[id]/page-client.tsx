@@ -216,7 +216,7 @@ export default function StudentDetailClient() {
               <StatTile icon={faClock} value={formatLastActive(student.last_login_at)} label="Last Active" />
               <StatTile
                 icon={riskLevel === "high" ? faTriangleExclamation : faShieldHalved}
-                value={riskLevel ? (riskLevel === "high" ? "At Risk" : "On Track") : "Not scored yet"}
+                value={riskLevel ? (riskLevel === "high" ? "Low Performing" : "On Track") : "Not scored yet"}
                 valueColor={
                   riskLevel === "high" ? "text-red-600" : riskLevel === "low" ? "text-emerald-600" : "text-gray-500"
                 }

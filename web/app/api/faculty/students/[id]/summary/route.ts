@@ -66,7 +66,7 @@ function buildPrompt(input: {
     : '(no validated skill area scores yet)';
 
   const predictionBlock = prediction
-    ? `Classification: ${prediction.risk === 'at_risk' ? 'AT RISK' : 'SAFE'}${prediction.probability != null ? ` (risk probability ${Math.round(prediction.probability * 100)}%)` : ''}, predicted ${prediction.predicted_at.slice(0, 10)}.\nTop factors: ${JSON.stringify(prediction.explanations)}`
+    ? `Classification: ${prediction.risk === 'at_risk' ? 'LOW PERFORMING' : 'ON TRACK'}${prediction.probability != null ? ` (risk probability ${Math.round(prediction.probability * 100)}%)` : ''}, predicted ${prediction.predicted_at.slice(0, 10)}.\nTop factors: ${JSON.stringify(prediction.explanations)}`
     : '(no ML risk prediction yet)';
 
   return `You are a clinical nursing education expert. Write a concise performance summary of the nursing student "${name}" for their faculty instructor, based only on the data below.
@@ -80,7 +80,7 @@ ${scenarioBlock}
 Faculty-validated competency scores (newest first, most recent per area listed first):
 ${competencyBlock}
 
-ML at-risk prediction:
+ML low-performance prediction (say "low performing", never "at risk"):
 ${predictionBlock}
 
 Return ONLY a valid JSON object with this exact structure (no markdown, no explanations):

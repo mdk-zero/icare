@@ -927,7 +927,7 @@ export default function FacultyAnalyticsClient() {
     {
       icon: faExclamationTriangle,
       value: `${atRisk}`,
-      label: "Students At-Risk",
+      label: "Low Performing Students",
       change: pctChange(atRisk, prevAtRisk),
       comparisonLabel,
       // Rising at-risk counts are the bad direction, unlike every other card.

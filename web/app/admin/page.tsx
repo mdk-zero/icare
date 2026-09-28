@@ -306,7 +306,7 @@ async function loadDashboard(viewerId: string) {
     attention.push({
       key: "predictions-never",
       message: "The risk check has never run",
-      detail: "Students can't be marked on track or at risk until the ML jobs have run.",
+      detail: "Students can't be marked on track or low performing until the ML jobs have run.",
       href: "/admin/student-management",
       action: "Run ML jobs",
     });
@@ -316,7 +316,7 @@ async function loadDashboard(viewerId: string) {
       attention.push({
         key: "predictions-stale",
         message: `The risk check last ran ${daysStale} days ago`,
-        detail: "It should refresh every night, so who is at risk may be out of date.",
+        detail: "It should refresh every night, so who is low performing may be out of date.",
         href: "/admin/student-management",
         action: "Run ML jobs",
       });

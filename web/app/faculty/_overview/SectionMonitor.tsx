@@ -233,7 +233,7 @@ export default function SectionMonitor({
           icon={faTriangleExclamation}
           tone={section.at_risk > 0 ? "text-red-600" : "text-slate-300"}
           value={section.at_risk}
-          label="At risk"
+          label="Low performing"
         />
         <Metric
           icon={faClock}

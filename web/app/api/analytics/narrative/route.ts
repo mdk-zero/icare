@@ -79,7 +79,7 @@ function buildPrompt(summary: WarehouseSummary, args: SummaryArgs): string {
   const safe = risk.safe ?? 0;
   const riskBlock =
     atRisk + safe > 0
-      ? `${atRisk} students classified at risk, ${safe} safe (latest ML prediction per student).`
+      ? `${atRisk} students classified low performing, ${safe} on track (latest ML prediction per student).`
       : '(the ML prediction service has not produced any predictions for these students yet)';
 
   return `You are a nursing education analyst briefing a faculty member on their cohort dashboard. Describe only the data below. Never invent a number, a student, or a trend that is not present.
@@ -102,7 +102,7 @@ ${competencyBlock}
 Clinical training activity:
 ${activityBlock}
 
-At-risk prediction:
+Low-performance prediction (call these students "low performing", never "at risk"):
 ${riskBlock}
 
 Return ONLY a valid JSON object with this exact structure (no markdown, no explanations):

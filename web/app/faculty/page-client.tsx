@@ -165,7 +165,7 @@ export default function FacultyDashboard() {
             iconBg="bg-red-50"
             iconColor="text-red-600"
             value={atRisk}
-            label="At risk"
+            label="Low performing"
             caption={
               overview.scored_at
                 ? `${total > 0 ? Math.round((atRisk / total) * 100) : 0}% · scored ${timeAgo(overview.scored_at).toLowerCase()}`

@@ -1722,7 +1722,7 @@ export default function FacultyScenariosClient() {
                                 }`}
                               >
                                 {student.risk_level === "at_risk"
-                                  ? "At risk"
+                                  ? "Low performing"
                                   : student.risk_level === "safe"
                                     ? "On track"
                                     : "Not scored yet"}

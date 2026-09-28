@@ -562,7 +562,7 @@ export default function StudentManagementClient() {
     const atRisk = Number(predictions.result?.at_risk ?? 0);
     const recs = Number(recommendations.result?.recommendations ?? 0);
     toast(
-      `Scored ${scored} student${scored === 1 ? "" : "s"} (${atRisk} at risk) and wrote ${recs} ` +
+      `Scored ${scored} student${scored === 1 ? "" : "s"} (${atRisk} low performing) and wrote ${recs} ` +
         `recommendation${recs === 1 ? "" : "s"}. Run Refresh Warehouse on Analytics to fold the ` +
         "new predictions into the charts.",
       "success",
@@ -792,7 +792,7 @@ export default function StudentManagementClient() {
         <StatTile
           icon={faTriangleExclamation}
           value={students.filter((s) => s.at_risk).length}
-          label="At Risk"
+          label="Low Performing"
           iconBg="bg-rose-50"
           iconColor="text-rose-600"
         />
@@ -822,7 +822,7 @@ export default function StudentManagementClient() {
         </div>
         <FilterSelect value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
           <option value="all">All Students</option>
-          <option value="at-risk">At Risk</option>
+          <option value="at-risk">Low Performing</option>
           <option value="safe">Safe</option>
         </FilterSelect>
         <button
@@ -1207,7 +1207,7 @@ export default function StudentManagementClient() {
                                     : "bg-emerald-50 text-emerald-600"
                               }`}
                             >
-                              {!student.scored ? "Not scored yet" : student.at_risk ? "At Risk" : "Safe"}
+                              {!student.scored ? "Not scored yet" : student.at_risk ? "Low Performing" : "Safe"}
                             </span>
                           </td>
                           <td className="px-4 py-4 text-sm text-gray-500 sm:px-6">
