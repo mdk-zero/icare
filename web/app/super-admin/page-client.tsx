@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faArrowRight, faHouse } from "@fortawesome/free-solid-svg-icons";
@@ -37,16 +38,26 @@ const ROLES = [
   { key: "super_admin", label: "Admins", color: "#e87ba4" },
 ];
 
-/** Donut of accounts per role with the total in the middle and a legend below. */
+/** Donut of accounts per role. The middle shows the total; hovering a slice or
+ * its legend entry swaps in that role's count and share. */
 function RolePie({ byRole, total, dash }: { byRole: Record<string, number> | null; total: number; dash: string }) {
+  const [active, setActive] = useState<string | null>(null);
   const r = 45;
   const c = 2 * Math.PI * r;
   const gap = total > 0 && ROLES.filter((role) => (byRole?.[role.key] ?? 0) > 0).length > 1 ? 2.5 : 0;
+  const hovered = byRole ? ROLES.find((role) => role.key === active) : undefined;
+  const hoveredCount = hovered ? (byRole?.[hovered.key] ?? 0) : 0;
   let offset = 0;
   return (
     <div className="flex flex-col gap-4">
       <div className="relative mx-auto aspect-square w-full max-w-[11rem]">
-        <svg viewBox="0 0 120 120" className="h-full w-full -rotate-90" role="img" aria-label="Accounts by role">
+        <svg
+          viewBox="0 0 120 120"
+          className="h-full w-full -rotate-90"
+          role="img"
+          aria-label={`Accounts by role: ${ROLES.map((role) => `${role.label} ${byRole?.[role.key] ?? 0}`).join(", ")}`}
+          onMouseLeave={() => setActive(null)}
+        >
           <circle cx="60" cy="60" r={r} fill="none" className="stroke-gray-200" strokeWidth="18" />
           {total > 0 &&
             ROLES.map((role) => {
@@ -60,38 +71,52 @@ function RolePie({ byRole, total, dash }: { byRole: Record<string, number> | nul
                     r={r}
                     fill="none"
                     stroke={role.color}
-                    strokeWidth="18"
+                    strokeWidth={active === role.key ? 21 : 18}
                     strokeDasharray={`${Math.max(len - gap, 0.1)} ${c}`}
                     strokeDashoffset={-offset}
-                  >
-                    <title>{`${role.label}: ${byRole?.[role.key] ?? 0}`}</title>
-                  </circle>
+                    opacity={active && active !== role.key ? 0.35 : 1}
+                    className="cursor-pointer transition-[opacity,stroke-width] duration-150"
+                    onMouseEnter={() => setActive(role.key)}
+                  />
                 ) : null;
               offset += len;
               return el;
             })}
         </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <p className="text-3xl font-bold text-gray-900 tabular-nums">{byRole ? total.toLocaleString() : dash}</p>
-          <p className="text-xs text-gray-500">Accounts</p>
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
+          {hovered ? (
+            <>
+              <p className="text-3xl font-bold text-gray-900 tabular-nums">{hoveredCount.toLocaleString()}</p>
+              <p className="text-xs text-gray-500">
+                {hovered.label}
+                {total > 0 && ` · ${Math.round((100 * hoveredCount) / total)}%`}
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-3xl font-bold text-gray-900 tabular-nums">{byRole ? total.toLocaleString() : dash}</p>
+              <p className="text-xs text-gray-500">Accounts</p>
+            </>
+          )}
         </div>
       </div>
-      <ul className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-        {ROLES.map((role) => {
-          const count = byRole?.[role.key] ?? 0;
-          return (
-            <li key={role.key} className="flex items-center gap-2">
-              <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: role.color }} />
-              <span className="text-gray-600 truncate">{role.label}</span>
-              <span className="ml-auto font-semibold text-gray-900 tabular-nums">
-                {byRole ? count : dash}
-                {byRole && total > 0 && (
-                  <span className="ml-1 text-xs font-normal text-gray-400">{Math.round((100 * count) / total)}%</span>
-                )}
-              </span>
-            </li>
-          );
-        })}
+      <ul className="flex flex-wrap justify-center gap-x-4 gap-y-2 text-sm">
+        {ROLES.map((role) => (
+          <li
+            key={role.key}
+            tabIndex={0}
+            className={`flex cursor-default items-center gap-2 rounded outline-none focus-visible:ring-2 focus-visible:ring-brand-500 transition-opacity ${
+              active && active !== role.key ? "opacity-50" : ""
+            }`}
+            onMouseEnter={() => setActive(role.key)}
+            onMouseLeave={() => setActive(null)}
+            onFocus={() => setActive(role.key)}
+            onBlur={() => setActive(null)}
+          >
+            <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: role.color }} />
+            <span className="text-gray-600">{role.label}</span>
+          </li>
+        ))}
       </ul>
     </div>
   );
