@@ -25,6 +25,11 @@ import {
   faFolderOpen,
   faMap,
   faTableCellsLarge,
+  faPenRuler,
+  faRotateLeft,
+  faCheck,
+  faDoorOpen,
+  faUserPlus,
 } from "@fortawesome/free-solid-svg-icons";
 import {
   fetchFacultyPatients,
@@ -33,11 +38,15 @@ import {
   deleteFacultyPatient,
   setPatientAdmission,
   fetchRooms,
+  saveRoomLayout,
+  deleteRoom,
   FacultyPatient,
   Room,
+  RoomPlacement,
 } from "../lib/api";
 import { SkeletonUnitGrid, SkeletonStatTile } from "./skeletons";
-import { FloorPlanCanvas } from "./FloorPlan";
+import { FloorPlanCanvas, FloorPlanEditor, layoutFromRooms, Layout, Rect } from "./FloorPlan";
+import { RoomFormModal, RoomStudentsModal } from "./RoomModals";
 import { roomStatus, ROOM_STATUS_LABEL, ROOM_STATUS_TONE } from "../lib/rooms";
 import PageHeader from "./PageHeader";
 import StatTile from "./StatTile";
@@ -411,8 +420,18 @@ interface PatientsManagerProps {
    * patient id. Each portal passes its own: the shells bounce the other role.
    */
   chartBase?: string;
-  /** Drops the page header, for a host page (admin Wards) that renders its own. */
-  hideHeader?: boolean;
+  /**
+   * Admin only: rearrange the room layout, add/edit/delete rooms, and roster
+   * students to a room. The room APIs refuse anyone else, so this is only a
+   * question of which controls to show.
+   */
+  manageRooms?: boolean;
+}
+
+/** Placement equality; two absent placements are the same placement. */
+function sameRect(a: Rect | null | undefined, b: Rect | null | undefined): boolean {
+  if (!a || !b) return !a === !b;
+  return a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h;
 }
 
 export default function PatientsManager({
@@ -421,7 +440,7 @@ export default function PatientsManager({
   subtitle = "Browse patients by their assigned room, then open a room's census",
   showFloorPlan = false,
   chartBase,
-  hideHeader = false,
+  manageRooms = false,
 }: PatientsManagerProps = {}) {
   const [search, setSearch] = useState("");
   const [roomSearch, setRoomSearch] = useState("");
@@ -441,6 +460,14 @@ export default function PatientsManager({
   const [checkInRoomId, setCheckInRoomId] = useState("");
   const [checkInBusy, setCheckInBusy] = useState(false);
   const [checkInError, setCheckInError] = useState<string | null>(null);
+  // Layout editing (manageRooms). null draft = mirror the server; an object =
+  // unsaved moves in progress.
+  const [editingLayout, setEditingLayout] = useState(false);
+  const [draftLayout, setDraftLayout] = useState<Layout | null>(null);
+  const [savingLayout, setSavingLayout] = useState(false);
+  // undefined = room form closed, null = adding a room, a Room = editing it.
+  const [roomForm, setRoomForm] = useState<Room | null | undefined>(undefined);
+  const [rosterRoom, setRosterRoom] = useState<Room | null>(null);
 
   // Fetched whole and filtered in the browser: grouping needs the unfiltered
   // roster to show each room's real size while a search is narrowing it.
@@ -582,6 +609,72 @@ export default function PatientsManager({
     () => new Set(filteredPatients.map((p) => p.room_id).filter((id): id is string => !!id)),
     [filteredPatients],
   );
+
+  const serverLayout = useMemo(() => layoutFromRooms(rooms), [rooms]);
+  const workingLayout = draftLayout ?? serverLayout;
+  const layoutDirty =
+    draftLayout !== null && rooms.some((r) => !sameRect(draftLayout[r.id], serverLayout[r.id]));
+
+  const handleLayoutChange = (roomId: string, rect: Rect | null) => {
+    setDraftLayout({ ...workingLayout, [roomId]: rect });
+  };
+
+  const handleLayoutSave = async () => {
+    if (!draftLayout) return;
+    // Only the placements that actually moved; the audit row stays honest.
+    const positions: RoomPlacement[] = rooms
+      .filter((r) => !sameRect(draftLayout[r.id], serverLayout[r.id]))
+      .map((r) => {
+        const rect = draftLayout[r.id] ?? null;
+        return rect
+          ? { id: r.id, x: rect.x, y: rect.y, w: rect.w, h: rect.h }
+          : { id: r.id, x: null, y: null, w: null, h: null };
+      });
+    if (positions.length === 0) return;
+    setSavingLayout(true);
+    const result = await saveRoomLayout(positions);
+    setSavingLayout(false);
+    if (result.error) {
+      toast(result.error, "error");
+      return;
+    }
+    setDraftLayout(null);
+    await loadPatients();
+    toast("Room layout saved");
+  };
+
+  const finishLayoutEdit = () => {
+    if (layoutDirty && !window.confirm("Discard your unsaved layout changes?")) return;
+    setDraftLayout(null);
+    setEditingLayout(false);
+  };
+
+  const handleDeleteRoom = async (room: Room) => {
+    setConfirmDelete((prev) => (prev ? { ...prev, loading: true, error: null } : null));
+    const result = await deleteRoom(room.id);
+    if (result.error) {
+      setConfirmDelete((prev) => (prev ? { ...prev, loading: false, error: result.error } : null));
+      return;
+    }
+    await loadPatients();
+    setConfirmDelete(null);
+    toast(`${room.name} deleted`);
+  };
+
+  const openDeleteRoomConfirm = (room: Room) => {
+    const beds = occupancyByRoom.get(room.id) ?? 0;
+    setConfirmDelete({
+      title: "Delete Room",
+      message: `Delete ${room.name} (Room ${room.room_number})? ${
+        beds > 0 ? `Its ${beds} patient${beds === 1 ? "" : "s"} will be left without a room. ` : ""
+      }Its student roster history is removed too.`,
+      confirmLabel: "Delete",
+      danger: true,
+      loading: false,
+      error: null,
+      onConfirm: () => handleDeleteRoom(room),
+    });
+  };
 
   const setFilter = (key: FilterKey, value: string) =>
     setFilters((prev) => ({ ...prev, [key]: value }));
@@ -772,16 +865,14 @@ export default function PatientsManager({
 
   return (
     <div>
-      {!hideHeader && (
-        <PageHeader
-          badge={{
-            icon: <FontAwesomeIcon icon={faBuilding} className="w-3.5 h-3.5" />,
-            label: badgeLabel,
-          }}
-          title={title}
-          subtitle={subtitle}
-        />
-      )}
+      <PageHeader
+        badge={{
+          icon: <FontAwesomeIcon icon={faBuilding} className="w-3.5 h-3.5" />,
+          label: badgeLabel,
+        }}
+        title={title}
+        subtitle={subtitle}
+      />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
         {loading ? (
@@ -849,8 +940,9 @@ export default function PatientsManager({
 
       {/* Top level: search rooms and filter the population, all on one wrapping
           row. The patient search lives inside a room (below), so it is not shown
-          here. Hidden while the roster loads, alongside the skeleton. */}
-      {!loading && !selectedGroup && (
+          here. Hidden while the roster loads, alongside the skeleton, and while
+          an admin is editing the layout, which has controls of its own. */}
+      {!loading && !selectedGroup && !editingLayout && (
         <div className="flex flex-wrap items-center gap-2 mb-4">
           {showFloorPlan && (
             <div className="inline-flex rounded-xl border border-gray-200 bg-surface p-1">
@@ -928,7 +1020,7 @@ export default function PatientsManager({
 
       {loading ? (
         <SkeletonUnitGrid />
-      ) : patients.length === 0 ? (
+      ) : patients.length === 0 && !(manageRooms && planView) ? (
         <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] p-12 text-center">
           <FontAwesomeIcon icon={faUsers} className="w-12 h-12 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-gray-700">No patients found</h3>
@@ -940,33 +1032,107 @@ export default function PatientsManager({
         /* The ward map: a navigation surface, so selecting a room opens its
            census below. Rooms an admin has not placed only exist on cards. */
         <div>
-          <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <h2 className="flex items-center gap-2 font-display text-base font-semibold text-gray-900">
               <FontAwesomeIcon icon={faMap} className="h-4 w-4 text-brand-600" />
-              Room Layout
+              {editingLayout ? "Editing Room Layout" : "Room Layout"}
             </h2>
-            <p className="text-xs text-gray-500">
-              Arranged in Admin · Wards. Select a room to open its census.
-            </p>
+            {editingLayout ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => setRoomForm(null)}
+                  className="inline-flex items-center gap-2 px-3 py-2 border border-gray-200 bg-surface text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  <FontAwesomeIcon icon={faDoorOpen} className="w-3.5 h-3.5" />
+                  Add Room
+                </button>
+                <button
+                  onClick={() => setDraftLayout(null)}
+                  disabled={!layoutDirty || savingLayout}
+                  className="inline-flex items-center gap-2 px-3 py-2 border border-gray-200 bg-surface text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-40"
+                >
+                  <FontAwesomeIcon icon={faRotateLeft} className="w-3.5 h-3.5" />
+                  Reset
+                </button>
+                <button
+                  onClick={handleLayoutSave}
+                  disabled={!layoutDirty || savingLayout}
+                  className="inline-flex items-center gap-2 px-3 py-2 bg-brand-600 hover:bg-[#145a68] text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-40"
+                >
+                  {savingLayout ? (
+                    <EcgLoader />
+                  ) : (
+                    <FontAwesomeIcon icon={faSave} className="w-3.5 h-3.5" />
+                  )}
+                  {savingLayout ? "Saving..." : layoutDirty ? "Save Layout" : "Saved"}
+                </button>
+                <button
+                  onClick={finishLayoutEdit}
+                  disabled={savingLayout}
+                  className="inline-flex items-center gap-2 px-3 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 text-sm font-medium rounded-lg transition-colors"
+                >
+                  <FontAwesomeIcon icon={faCheck} className="w-3.5 h-3.5" />
+                  Done
+                </button>
+              </div>
+            ) : manageRooms ? (
+              <div className="flex flex-wrap items-center gap-3">
+                <p className="text-xs text-gray-500">Select a room to open its census.</p>
+                <button
+                  onClick={() => setEditingLayout(true)}
+                  className="inline-flex items-center gap-2 px-3 py-2 border border-gray-200 bg-surface text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  <FontAwesomeIcon icon={faPenRuler} className="w-3.5 h-3.5" />
+                  Edit Layout
+                </button>
+              </div>
+            ) : (
+              <p className="text-xs text-gray-500">
+                Arranged by an admin. Select a room to open its census.
+              </p>
+            )}
           </div>
-          <FloorPlanCanvas
-            rooms={rooms}
-            occupancy={occupancyByRoom}
-            dimmedUnless={filtersActive ? matchingRoomIds : undefined}
-            onRoomClick={(room) => {
-              if (roomGroups.some((g) => g.key === room.id)) {
-                setSelectedRoomKey(room.id);
-                setSearch("");
-              } else {
-                toast(`No patients in ${room.name} yet`);
-              }
-            }}
-          />
-          {rooms.every((r) => r.plan_x == null) && (
-            <p className="mt-3 rounded-xl border border-hairline bg-surface p-6 text-center text-sm text-gray-500">
-              No rooms have been placed on the floor plan yet. An admin can arrange them under
-              Wards › Rooms, or switch to Card Layout to browse the census.
-            </p>
+          {editingLayout ? (
+            <>
+              <p className="mb-3 text-sm text-gray-500">
+                Drag a room to move it, use the corner grip to resize, and place new rooms from the
+                tray. Click a room for its students, details, or to delete it. Moves apply after{" "}
+                <span className="font-medium text-gray-700">Save Layout</span>; room edits and
+                deletions apply immediately.
+              </p>
+              <FloorPlanEditor
+                rooms={rooms}
+                layout={workingLayout}
+                occupancy={occupancyByRoom}
+                onChange={handleLayoutChange}
+                onEditRoom={(room) => setRoomForm(room)}
+                onDeleteRoom={openDeleteRoomConfirm}
+                onRosterRoom={setRosterRoom}
+              />
+            </>
+          ) : (
+            <>
+              <FloorPlanCanvas
+                rooms={rooms}
+                occupancy={occupancyByRoom}
+                dimmedUnless={filtersActive ? matchingRoomIds : undefined}
+                onRoomClick={(room) => {
+                  if (roomGroups.some((g) => g.key === room.id)) {
+                    setSelectedRoomKey(room.id);
+                    setSearch("");
+                  } else {
+                    toast(`No patients in ${room.name} yet`);
+                  }
+                }}
+              />
+              {rooms.every((r) => r.plan_x == null) && (
+                <p className="mt-3 rounded-xl border border-hairline bg-surface p-6 text-center text-sm text-gray-500">
+                  {manageRooms
+                    ? "No rooms have been placed yet. Choose Edit Layout to arrange them, or switch to Card Layout to browse the census."
+                    : "No rooms have been placed on the floor plan yet. An admin can arrange them under Wards, or switch to Card Layout to browse the census."}
+                </p>
+              )}
+            </>
           )}
         </div>
       ) : !selectedGroup ? (
@@ -1121,9 +1287,18 @@ export default function PatientsManager({
               {selectedGroup.patients.length} patient
               {selectedGroup.patients.length === 1 ? "" : "s"}
             </span>
+            {manageRooms && roomById.has(selectedGroup.key) && (
+              <button
+                onClick={() => setRosterRoom(roomById.get(selectedGroup.key) ?? null)}
+                className="ml-auto inline-flex items-center gap-2 px-3 py-2 border border-gray-200 bg-surface text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                <FontAwesomeIcon icon={faUserPlus} className="w-3.5 h-3.5" />
+                Students
+              </button>
+            )}
             <button
               onClick={openAddModal}
-              className="ml-auto inline-flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-[#145a68] text-white text-sm font-medium rounded-lg transition-colors"
+              className={`${manageRooms && roomById.has(selectedGroup.key) ? "" : "ml-auto "}inline-flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-[#145a68] text-white text-sm font-medium rounded-lg transition-colors`}
             >
               <FontAwesomeIcon icon={faPlus} className="w-3.5 h-3.5" />
               {/* Pseudo buckets are not somewhere a patient can be added "to". */}
@@ -1575,6 +1750,25 @@ export default function PatientsManager({
             </form>
           </div>
         </div>
+      )}
+      {roomForm !== undefined && (
+        <RoomFormModal
+          room={roomForm}
+          onClose={() => setRoomForm(undefined)}
+          onSaved={() => {
+            const added = roomForm === null;
+            setRoomForm(undefined);
+            void loadPatients();
+            toast(added ? "Room added — place it from the tray" : "Room updated");
+          }}
+        />
+      )}
+      {rosterRoom && (
+        <RoomStudentsModal
+          room={rosterRoom}
+          onClose={() => setRosterRoom(null)}
+          onChanged={() => void loadPatients()}
+        />
       )}
       {confirmDelete && (
         <ConfirmModal

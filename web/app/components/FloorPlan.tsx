@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faTimes, faWrench, faBan, faPen, faTrash } from "@fortawesome/free-solid-svg-icons";
+import { faTimes, faWrench, faBan, faPen, faTrash, faUserPlus } from "@fortawesome/free-solid-svg-icons";
 import type { Room } from "../lib/api";
 import { roomStatus } from "../lib/rooms";
 
@@ -233,6 +233,7 @@ export function FloorPlanEditor({
   onChange,
   onEditRoom,
   onDeleteRoom,
+  onRosterRoom,
 }: {
   rooms: Room[];
   layout: Layout;
@@ -243,6 +244,8 @@ export function FloorPlanEditor({
   onEditRoom?: (room: Room) => void;
   /** Delete the room record itself — the caller owns the confirm. */
   onDeleteRoom?: (room: Room) => void;
+  /** Open the room's student roster. */
+  onRosterRoom?: (room: Room) => void;
 }) {
   const surfaceRef = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
@@ -321,6 +324,15 @@ export function FloorPlanEditor({
             </span>
           </p>
           <div className="ml-auto flex items-center gap-1.5">
+            {onRosterRoom && (
+              <button
+                onClick={() => onRosterRoom(selectedRoom)}
+                className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-brand-700 hover:bg-brand-600/10 transition-colors"
+              >
+                <FontAwesomeIcon icon={faUserPlus} className="h-3 w-3" />
+                Students
+              </button>
+            )}
             {onEditRoom && (
               <button
                 onClick={() => onEditRoom(selectedRoom)}
