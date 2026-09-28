@@ -845,3 +845,70 @@ export async function saveCaseDraft(id: string, patch: Partial<CaseDraft>): Prom
 export async function submitCase(id: string): Promise<void> {
   await api(`/api/student/cases/${id}/submit`, { method: 'POST' });
 }
+
+// ---------------------------------------------------------------
+// Library: study materials instructors publish per Taylor's skill
+// ---------------------------------------------------------------
+
+export type LibraryKind = 'video' | 'note' | 'pdf' | 'slides' | 'link';
+
+export interface LibraryItem {
+  id: string;
+  kind: LibraryKind;
+  title: string;
+  description: string;
+  youtube_id: string | null;
+  file_name: string | null;
+  url: string | null;
+  published_at: string | null;
+  author_name: string;
+  seen: boolean;
+}
+
+export interface LibraryChapter {
+  chapter: number;
+  area: string;
+  skills: { id: string; title: string; materials: LibraryItem[] }[];
+}
+
+export interface Library {
+  chapters: LibraryChapter[];
+  total: number;
+  unseen: number;
+}
+
+export interface LibraryMaterialDetail {
+  material: {
+    id: string;
+    skill_id: string;
+    kind: LibraryKind;
+    title: string;
+    description: string;
+    youtube_id: string | null;
+    body_md: string | null;
+    url: string | null;
+    file_name: string | null;
+    file_size: number | null;
+    published_at: string | null;
+    author_name: string;
+  };
+  skill: {
+    id: string;
+    label: string;
+    area: string;
+    goal: string;
+    /** The skill's checklist, word for word. */
+    steps: { stepNo: number; section: string | null; text: string }[];
+  } | null;
+  /** direct: a 10-minute signed link to the file; embed: a viewer page for it. */
+  file: { direct: string; embed: string } | null;
+}
+
+export async function fetchLibrary(): Promise<CachedResult<Library>> {
+  return cachedGet<Library>('/api/student/library');
+}
+
+/** Opening a material records that the student has seen it. */
+export async function fetchLibraryMaterial(id: string): Promise<LibraryMaterialDetail> {
+  return api<LibraryMaterialDetail>(`/api/student/library/${encodeURIComponent(id)}`);
+}

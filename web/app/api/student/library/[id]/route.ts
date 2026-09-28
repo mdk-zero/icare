@@ -17,7 +17,7 @@ interface RouteParams {
 
 /**
  * GET: one published material for the student, and records that they opened it.
- *   { material, skill: { id, label, goal }, file: { direct, embed } | null }
+ *   { material, skill: { id, label, area, goal, steps }, file: { direct, embed } | null }
  * `file.direct` is a 10-minute signed link to the stored PDF or deck;
  * `file.embed` is a viewer page for platforms that can't render it.
  */
@@ -75,7 +75,15 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
       published_at: material.published_at,
       author_name: (author.data?.name as string | undefined) ?? '',
     },
-    skill: skill ? { id: skill.id, label: skillLabel(skill), area: skill.area, goal: skill.goal } : null,
+    skill: skill
+      ? {
+          id: skill.id,
+          label: skillLabel(skill),
+          area: skill.area,
+          goal: skill.goal,
+          steps: skill.steps.map((st) => ({ stepNo: st.stepNo, section: st.section, text: st.text })),
+        }
+      : null,
     file: signed && (material.kind === 'pdf' || material.kind === 'slides') ? fileViewerUrls(material.kind, signed) : null,
   });
 }

@@ -1,5 +1,6 @@
 import React from 'react';
 import { ScrollView, View, Text, StyleSheet, Pressable, RefreshControl } from 'react-native';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
@@ -27,6 +28,7 @@ function typeAccent(
 export default function NotificationsScreen() {
   const { notifications, unread, loading, connected, error, markRead, markAllRead, refresh } =
     useNotifications();
+  const router = useRouter();
   const [refreshing, setRefreshing] = React.useState(false);
   const { Palette, Accent, Shadow } = useTheme();
   const styles = React.useMemo(() => createStyles(Palette, Shadow), [Palette, Shadow]);
@@ -47,6 +49,9 @@ export default function NotificationsScreen() {
 
   const handleOpen = (notification: AppNotification) => {
     void markRead(notification.id);
+    // A newly published Library material opens straight to it.
+    const { kind, materialId } = notification.data ?? {};
+    if (kind === 'library' && typeof materialId === 'string') router.push(`/library/${materialId}`);
   };
 
   return (

@@ -30,6 +30,7 @@ const TAB_ICONS: Record<string, string> = {
   clinic: "hospital",
   quiz: "clipboard-question",
   index: "house",
+  library: "book-open",
 };
 
 /** Quick, no-bounce transition for the active orb. */
@@ -285,6 +286,7 @@ export default function TabLayout() {
       >
         <Tabs.Screen name="clinic" options={{ title: "Clinic" }} />
         <Tabs.Screen name="index" options={{ title: "Home" }} />
+        <Tabs.Screen name="library" options={{ title: "Library" }} />
         <Tabs.Screen name="quiz" options={{ title: "Assessments" }} />
       </Tabs>
     </View>
