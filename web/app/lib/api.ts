@@ -3426,6 +3426,10 @@ export const deleteTeam = (teamId: string) => teamRequest(`/api/faculty/teams/${
 export const moveStudentToTeam = (studentId: string, teamId: string | null) =>
   teamRequest('/api/faculty/teams/members', 'PUT', { student_id: studentId, team_id: teamId });
 
+/** An instructor moving a student between two of their own groups; the reason goes to their dean. */
+export const moveOwnGroupMember = (studentId: string, teamId: string, reason: string) =>
+  teamRequest('/api/faculty/teams/members', 'PUT', { student_id: studentId, team_id: teamId, reason });
+
 export const autoSplitTeams = (sectionId: string, count: number) =>
   teamRequest('/api/faculty/teams/auto', 'POST', { section_id: sectionId, count });
 

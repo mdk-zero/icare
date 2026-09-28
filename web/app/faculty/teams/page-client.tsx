@@ -11,6 +11,7 @@ import {
   faXmark,
   faUserPlus,
   faBrain,
+  faRightLeft,
 } from "@fortawesome/free-solid-svg-icons";
 import {
   runFacultyMlJob,
@@ -23,6 +24,7 @@ import {
 } from "../../lib/api";
 import PageHeader from "../../components/PageHeader";
 import AssignCasesModal from "./AssignCasesModal";
+import MoveMemberModal from "./MoveMemberModal";
 import Avatar from "../../components/Avatar";
 import { EcgLoader } from "../../components/EcgLoader";
 import { SkeletonTeamGrid } from "../../components/skeletons";
@@ -127,13 +129,20 @@ function AvatarStack({ members, max = 5 }: { members: FacultyTeam["members"]; ma
 /**
  * The groups an admin has put this faculty member in charge of: pick a
  * section, then see only their own groups in it, with who is low performing.
- * Admins build and change the groups; this page only shows them.
+ * Admins build the groups; an instructor may move a student between two of
+ * their own groups in a section, giving a reason their dean is sent.
  */
 export default function TeamsClient() {
-  const { data, loading } = usePageData("faculty:teams", fetchFacultyTeams);
+  const { data, loading, refresh: refreshTeams } = usePageData("faculty:teams", fetchFacultyTeams);
   // Risk labels come from the roster, which carries each student's latest prediction.
   const { data: roster, refresh: refreshRoster } = usePageData("faculty:students", () => fetchFacultyStudents());
-  const { data: summaryData } = usePageData("faculty:group-summaries", fetchGroupSummaries);
+  const { data: summaryData, refresh: refreshSummaries } = usePageData(
+    "faculty:group-summaries",
+    fetchGroupSummaries,
+  );
+  const refreshGroups = async () => {
+    await Promise.all([refreshTeams(), refreshSummaries()]);
+  };
   const summaries: SummaryMap = new Map((summaryData?.groups ?? []).map((g) => [g.team_id, g]));
   const [openId, setOpenId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -190,7 +199,7 @@ export default function TeamsClient() {
         title="My Groups"
         subtitle={
           totalGroups > 0
-            ? `You supervise ${plural(totalGroups, "group")} across ${plural(sections.length, "section")}. Your dean sets up the groups.`
+            ? `You supervise ${plural(totalGroups, "group")} across ${plural(sections.length, "section")}. Your dean sets up the groups; you can move students between your own.`
             : "The student groups you supervise, by section. Your dean sets up the groups."
         }
         action={{
@@ -244,7 +253,14 @@ export default function TeamsClient() {
           </div>
 
           {open ? (
-            <SectionDetail section={open} risks={risks} summaries={summaries} query={q} onBack={() => setOpenId(null)} />
+            <SectionDetail
+              section={open}
+              risks={risks}
+              summaries={summaries}
+              query={q}
+              onBack={() => setOpenId(null)}
+              onMoved={refreshGroups}
+            />
           ) : (
             <SectionGrid sections={sections} risks={risks} query={q} onOpen={setOpenId} />
           )}
@@ -334,12 +350,14 @@ function SectionDetail({
   summaries,
   query,
   onBack,
+  onMoved,
 }: {
   section: SectionView;
   risks: RiskMap;
   summaries: SummaryMap;
   query: string;
   onBack: () => void;
+  onMoved: () => Promise<void>;
 }) {
   return (
     <div>
@@ -360,7 +378,15 @@ function SectionDetail({
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {section.groups.map((group) => (
-          <GroupCard key={group.id} group={group} risks={risks} summary={summaries.get(group.id)} query={query} />
+          <GroupCard
+            key={group.id}
+            group={group}
+            others={section.groups.filter((g) => g.id !== group.id)}
+            risks={risks}
+            summary={summaries.get(group.id)}
+            query={query}
+            onMoved={onMoved}
+          />
         ))}
       </div>
     </div>
@@ -369,16 +395,22 @@ function SectionDetail({
 
 function GroupCard({
   group,
+  others,
   risks,
   summary,
   query,
+  onMoved,
 }: {
   group: FacultyTeam;
+  /** This instructor's other groups in the section: where a member can be moved. */
+  others: FacultyTeam[];
   risks: RiskMap;
   summary: GroupSummary | undefined;
   query: string;
+  onMoved: () => Promise<void>;
 }) {
   const [assigning, setAssigning] = useState(false);
+  const [moving, setMoving] = useState<FacultyTeam["members"][number] | null>(null);
   const members = group.members
     .filter((m) => !query || matches(m.name, query))
     .sort((a, b) => RISK_ORDER[riskOf(risks, a.id)] - RISK_ORDER[riskOf(risks, b.id)] || byName(a, b));
@@ -435,6 +467,15 @@ function GroupCard({
         </dl>
       )}
       {assigning && <AssignCasesModal group={group} onClose={() => setAssigning(false)} />}
+      {moving && (
+        <MoveMemberModal
+          member={moving}
+          from={group}
+          groups={others}
+          onClose={() => setMoving(null)}
+          onMoved={onMoved}
+        />
+      )}
       {members.length === 0 ? (
         <p className="px-5 py-6 text-center text-sm text-gray-400">
           {group.members.length === 0 ? "No students in this group yet." : "No students match that search."}
@@ -442,10 +483,10 @@ function GroupCard({
       ) : (
         <ul className="divide-y divide-hairline">
           {members.map((member) => (
-            <li key={member.id}>
+            <li key={member.id} className="flex items-center transition-colors hover:bg-subtle">
               <Link
                 href={`/faculty/students/${member.id}`}
-                className="flex items-center gap-3 px-5 py-3 transition-colors hover:bg-subtle focus:outline-none focus-visible:bg-subtle"
+                className="flex min-w-0 flex-1 items-center gap-3 py-3 pl-5 pr-3 focus:outline-none focus-visible:bg-subtle"
               >
                 <Avatar
                   name={member.name}
@@ -458,6 +499,16 @@ function GroupCard({
                 <span className="min-w-0 flex-1 truncate text-sm font-medium text-gray-800">{member.name}</span>
                 <RiskBadge kind={riskOf(risks, member.id)} />
               </Link>
+              {others.length > 0 && (
+                <button
+                  onClick={() => setMoving(member)}
+                  aria-label={`Move ${member.name} to another group`}
+                  title="Move to another group"
+                  className="mr-3 shrink-0 rounded-lg p-2 text-gray-400 transition-colors hover:bg-gray-200 hover:text-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-600/40"
+                >
+                  <FontAwesomeIcon icon={faRightLeft} className="h-3.5 w-3.5" />
+                </button>
+              )}
             </li>
           ))}
         </ul>
