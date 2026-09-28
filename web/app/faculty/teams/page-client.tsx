@@ -202,7 +202,7 @@ export default function TeamsClient() {
             ? mlRunLabel(mlRun)
             : sections.length === 0
               ? "You need a group before the ML jobs have anyone to assess"
-              : "Run ML Jobs — score your students for risk and refresh their skill assessment recommendations",
+              : "Run ML Jobs — score your students for risk and refresh their quiz recommendations",
           below: mlRun && <MlRunProgress run={mlRun} />,
         }}
       />
@@ -411,7 +411,7 @@ function GroupCard({
       {summary && (
         <dl className="grid grid-cols-2 divide-x divide-hairline border-b border-hairline text-center">
           <div className="px-3 py-2.5">
-            <dt className="text-[11px] text-gray-500">Scenario average</dt>
+            <dt className="text-[11px] text-gray-500">Patient case average</dt>
             <dd className="text-sm font-semibold tabular-nums text-gray-900">
               {summary.scenarios.graded === 0 || summary.scenarios.average === null ? (
                 "—"
@@ -426,7 +426,7 @@ function GroupCard({
             </dd>
           </div>
           <div className="px-3 py-2.5">
-            <dt className="text-[11px] text-gray-500">Skill Assessment average</dt>
+            <dt className="text-[11px] text-gray-500">Quiz average</dt>
             <dd className="text-sm font-semibold tabular-nums text-gray-900">
               {summary.assessments.average === null ? "—" : `${summary.assessments.average}%`}
               <span className="ml-1.5 text-xs font-normal text-gray-500">best per assessment</span>

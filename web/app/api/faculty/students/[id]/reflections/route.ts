@@ -50,13 +50,13 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
   const titleOf = new Map<string, { title: string; score: number | null }>();
   for (const a of assignments ?? []) {
     titleOf.set(a.id as string, {
-      title: (a.scenarios as unknown as { title: string } | null)?.title ?? 'Scenario',
+      title: (a.scenarios as unknown as { title: string } | null)?.title ?? 'Patient Case',
       score: a.score as number | null,
     });
   }
   for (const a of attempts ?? []) {
     titleOf.set(a.id as string, {
-      title: (a.assessments as unknown as { title: string } | null)?.title ?? 'Skill assessment',
+      title: (a.assessments as unknown as { title: string } | null)?.title ?? 'Quiz',
       score: a.score === null ? null : Number(a.score),
     });
   }

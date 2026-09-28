@@ -82,7 +82,7 @@ type Filter = "assigned" | "completed" | "all";
 const FILTERS: { key: Filter; label: string; title: string }[] = [
   { key: "assigned", label: "Assigned", title: "Not graded yet, submitted or not" },
   { key: "completed", label: "Completed", title: "Graded and locked" },
-  { key: "all", label: "All", title: "Every scenario" },
+  { key: "all", label: "All", title: "Every patient case" },
 ];
 
 /** Submitted and waiting for a grade — still Assigned, but the ones to grade first. */
@@ -522,10 +522,10 @@ export default function FacultyScenarioReviewClient() {
       <PageHeader
         badge={{
           icon: <FontAwesomeIcon icon={faClipboardCheck} className="h-3.5 w-3.5" />,
-          label: "Scenario Management",
+          label: "Patient Case Management",
         }}
         title="Review Submissions"
-        subtitle="Rate each criterion of a student's scenario on a verbal scale, add notes where it helps, then save the grade — you can edit it later."
+        subtitle="Rate each criterion of a student's patient case on a verbal scale, add notes where it helps, then save the grade — you can edit it later."
       />
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
@@ -534,7 +534,7 @@ export default function FacultyScenarioReviewClient() {
           className="flex items-center gap-2 rounded-lg border border-gray-200 bg-surface px-3 py-2 text-sm font-medium text-gray-700 transition-all hover:bg-gray-50"
         >
           <FontAwesomeIcon icon={faChevronLeft} className="h-3.5 w-3.5" />
-          Back to scenarios
+          Back to patient cases
         </button>
         {submittedCount > 0 && (
           <span className="ml-auto flex items-center gap-2 rounded-full border border-brand-200 bg-brand-50 px-3 py-1.5 text-sm font-semibold tabular-nums text-brand-700">
@@ -629,11 +629,11 @@ export default function FacultyScenarioReviewClient() {
                 {!loading && filteredStudentGroups.length === 0 && (
                   <EmptyPanel
                     icon={faUserGraduate}
-                    title={studentQuery || groupFilter !== ALL_GROUPS ? "No students found" : "No scenarios yet"}
+                    title={studentQuery || groupFilter !== ALL_GROUPS ? "No students found" : "No patient cases yet"}
                     body={
                       studentQuery || groupFilter !== ALL_GROUPS
                         ? "Try a different name or group."
-                        : "Assigned scenarios show up here."
+                        : "Assigned patient cases show up here."
                     }
                   />
                 )}
@@ -796,8 +796,8 @@ export default function FacultyScenarioReviewClient() {
               </p>
               <p className="mt-1 max-w-xs text-sm text-gray-500">
                 {selectedStudentId
-                  ? "Choose a scenario from the list to rate each criterion and lock in a grade."
-                  : "Search or select a student to see the scenarios they've submitted for review."}
+                  ? "Choose a patient case from the list to rate each criterion and lock in a grade."
+                  : "Search or select a student to see the patient cases they've submitted for review."}
               </p>
             </div>
           ) : (

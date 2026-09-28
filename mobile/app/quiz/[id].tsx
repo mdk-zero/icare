@@ -61,10 +61,10 @@ export default function QuizInterfaceScreen() {
         // attempts left; showing it verbatim beats a generic failure.
         setLoadError(
           isNetworkError(err)
-            ? 'Skill Assessments need a connection to start — try again when you are back online.'
+            ? 'Quizzes need a connection to start — try again when you are back online.'
             : err instanceof Error
               ? err.message
-              : 'Unable to start the skill assessment',
+              : 'Unable to start the quiz',
         );
         setLoadBlocked(err instanceof ApiError && err.status === 409);
       });
@@ -144,7 +144,7 @@ export default function QuizInterfaceScreen() {
     if (isLastQuestion) {
       const unanswered = questions.length - answeredCount;
       Alert.alert(
-        'Submit Skill Assessment',
+        'Submit Quiz',
         unanswered > 0
           ? `${unanswered} ${unanswered === 1 ? 'question is' : 'questions are'} unanswered. Submit anyway?`
           : `Submit all ${questions.length} answers?`,
@@ -167,7 +167,7 @@ export default function QuizInterfaceScreen() {
         />
         {loadBlocked && (
           <View style={styles.blockedActions}>
-            <PrimaryButton title="Back to skill assessments" onPress={() => router.back()} variant="outline" />
+            <PrimaryButton title="Back to quizzes" onPress={() => router.back()} variant="outline" />
           </View>
         )}
       </View>
@@ -250,7 +250,7 @@ export default function QuizInterfaceScreen() {
   if (!currentQuestion) {
     return (
       <View style={styles.errorContainer}>
-        <EmptyState icon="document-text-outline" message="This skill assessment has no questions yet." />
+        <EmptyState icon="document-text-outline" message="This quiz has no questions yet." />
       </View>
     );
   }
@@ -311,7 +311,7 @@ export default function QuizInterfaceScreen() {
 
       <View style={styles.actions}>
         <PrimaryButton
-          title={submitting ? 'Submitting…' : isLastQuestion ? 'Submit Skill Assessment' : 'Next Question'}
+          title={submitting ? 'Submitting…' : isLastQuestion ? 'Submit Quiz' : 'Next Question'}
           onPress={handleNext}
           disabled={submitting || (selectedIndex === null && !isLastQuestion)}
         />

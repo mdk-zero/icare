@@ -51,13 +51,13 @@ function buildPrompt(input: {
     ? quizAttempts
         .map((a) => `- ${a.quiz_title}: ${a.score ?? 'ungraded'}%${a.submitted_at ? ` (${a.submitted_at.slice(0, 10)})` : ''}`)
         .join('\n')
-    : '(no skill assessment attempts yet)';
+    : '(no quiz attempts yet)';
 
   const scenarioBlock = scenarios.length > 0
     ? scenarios
         .map((s) => `- ${s.scenario_title} [${s.status}]${s.score != null ? `: ${s.score}%` : ''}${s.completed_at ? ` (${s.completed_at.slice(0, 10)})` : ''}`)
         .join('\n')
-    : '(no scenario assignments yet)';
+    : '(no patient case assignments yet)';
 
   const competencyBlock = competencies.length > 0
     ? competencies
@@ -74,7 +74,7 @@ function buildPrompt(input: {
 Quiz attempts (newest first):
 ${quizBlock}
 
-Simulation scenarios (newest first):
+Patient cases (newest first):
 ${scenarioBlock}
 
 Faculty-validated competency scores (newest first, most recent per area listed first):
@@ -199,7 +199,7 @@ export async function POST(_request: Request, { params }: RouteParams) {
     }
 
     const scenarios: ScenarioRecord[] = (assignmentsRes.data ?? []).map((a) => ({
-      scenario_title: scenarioTitles.get(a.scenario_id) ?? 'Scenario',
+      scenario_title: scenarioTitles.get(a.scenario_id) ?? 'Patient Case',
       status: a.status,
       score: a.score !== null && a.score !== undefined ? Math.round(Number(a.score)) : null,
       completed_at: a.completed_at,

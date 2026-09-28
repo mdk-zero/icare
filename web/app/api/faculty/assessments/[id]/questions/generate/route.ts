@@ -33,7 +33,7 @@ function buildSkillPrompt(skill: SkillDetail, topic: string, count: number): str
   const steps = skill.steps
     .map((st) => `${st.section ? `[${st.section}] ` : ''}Step ${st.stepNo}: ${st.text}`)
     .join('\n');
-  return `You are a clinical nursing educator writing a skill assessment for nursing students. Every question must be answerable from this Taylor's skill checklist alone:
+  return `You are a clinical nursing educator writing a quiz for nursing students. Every question must be answerable from this Taylor's skill checklist alone:
 
 Skill ${skill.id}: ${skill.title}
 Goal: ${skill.goal}

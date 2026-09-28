@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
     // Students may only chart on patients from their assigned scenarios.
     if (!(await isPatientAssigned(supabase, session.uid, patient_id))) {
       return NextResponse.json(
-        { error: 'This patient is not part of any scenario assigned to you' },
+        { error: 'This patient is not part of any patient case assigned to you' },
         { status: 403 },
       );
     }

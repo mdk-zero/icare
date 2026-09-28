@@ -246,7 +246,7 @@ export default function AssessmentResultsClient({ assessmentId }: { assessmentId
       <PageHeader
         badge={{
           icon: <FontAwesomeIcon icon={faClipboardCheck} className="w-3.5 h-3.5" />,
-          label: "Assessment Results",
+          label: "Quiz Results",
         }}
         title={assessment?.title ?? "Results"}
         subtitle="How each of your students performed on this assessment"

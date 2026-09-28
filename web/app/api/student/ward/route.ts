@@ -184,7 +184,7 @@ export async function GET() {
       return {
         id: assignment.id,
         scenario_id: assignment.scenario_id,
-        scenario_title: scenario?.title ?? 'Unknown Scenario',
+        scenario_title: scenario?.title ?? 'Unknown Patient Case',
         description: scenario?.description ?? null,
         difficulty: scenario?.difficulty ?? null,
         category: scenario?.category ?? null,

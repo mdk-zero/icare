@@ -31,7 +31,7 @@ function buildTopicsPrompt(lessonText: string, categories: string[]): string {
 
 Existing categories: ${offered.map((c) => `"${c}"`).join(', ')}
 
-Read the lesson below and list the clinical topics it teaches — at most ${MAX_TOPICS}, most central first. Each topic becomes a category that several different simulation scenarios could sit under, so name it at the level of a textbook chapter or body system (for example "Thermoregulation", "Wound Care", "Medication Administration"), never a single procedure or skill (not "Applying a Cooling Blanket").
+Read the lesson below and list the clinical topics it teaches — at most ${MAX_TOPICS}, most central first. Each topic becomes a category that several different patient cases could sit under, so name it at the level of a textbook chapter or body system (for example "Thermoregulation", "Wound Care", "Medication Administration"), never a single procedure or skill (not "Applying a Cooling Blanket").
 
 Only list a topic the lesson substantially teaches. Routine steps every procedure includes — identifying the patient, hand hygiene, consent, safety checks, documentation, taking vital signs while monitoring — are not topics of their own. A lesson on one skill usually has one topic, two at most; list more only when the lesson really covers several distinct areas.
 

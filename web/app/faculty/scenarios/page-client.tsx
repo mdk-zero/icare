@@ -374,7 +374,7 @@ export default function FacultyScenariosClient() {
     if (collected.length === 0) {
       // A cancel with nothing in hand just returns to the form, no error.
       if (!cancelled) {
-        setBatchError("The AI service didn't return any scenarios. Please try again.");
+        setBatchError("The AI service didn't return any patient cases. Please try again.");
       }
       setBatchGenerating(false);
       return;
@@ -525,7 +525,7 @@ export default function FacultyScenariosClient() {
           faculty_name: faculty.name,
           tab: "scenarios",
           action: "assign_scenario",
-          details: `Assigned scenario "${selectedScenario.title}" to ${assignments.length} student(s)`,
+          details: `Assigned patient case "${selectedScenario.title}" to ${assignments.length} student(s)`,
           target_type: "scenario",
           target_id: selectedScenario.id,
           metadata: {
@@ -537,7 +537,7 @@ export default function FacultyScenariosClient() {
       }
       toast(`Assigned to ${assignments.length} student${assignments.length === 1 ? "" : "s"}`);
     } else {
-      toast("Nobody new to assign — everyone chosen already has this scenario");
+      toast("Nobody new to assign — everyone chosen already has this patient case");
     }
 
     setAssigning(false);
@@ -581,7 +581,7 @@ export default function FacultyScenariosClient() {
           faculty_name: faculty.name,
           tab: "scenarios",
           action: "link_scenario_patient",
-          details: `Linked scenario "${linkPatientTarget.title}" to a patient`,
+          details: `Linked patient case "${linkPatientTarget.title}" to a patient`,
           target_type: "scenario",
           target_id: linkPatientTarget.id,
           metadata: { scenario_title: linkPatientTarget.title, patient_id: linkPatientId },
@@ -615,7 +615,7 @@ export default function FacultyScenariosClient() {
     const ok = await deleteScenario(deleteTarget.id);
 
     if (!ok) {
-      setDeleteError("Could not delete the scenario. Please try again.");
+      setDeleteError("Could not delete the patient case. Please try again.");
       setDeleting(false);
       return;
     }
@@ -631,12 +631,12 @@ export default function FacultyScenariosClient() {
         faculty_name: faculty.name,
         tab: "scenarios",
         action: "delete_scenario",
-        details: `Deleted scenario: ${deleteTarget.title}`,
+        details: `Deleted patient case: ${deleteTarget.title}`,
         target_type: "scenario",
         target_id: deleteTarget.id,
         metadata: { scenario_title: deleteTarget.title },
       });
-      toast("Scenario deleted");
+      toast("Patient case deleted");
     }
 
     setDeleting(false);
@@ -660,10 +660,10 @@ export default function FacultyScenariosClient() {
       <PageHeader
         badge={{
           icon: <FontAwesomeIcon icon={faNotesMedical} className="w-3.5 h-3.5" />,
-          label: "Scenario Management",
+          label: "Patient Case Management",
         }}
-        title="Simulation Scenarios"
-        subtitle="Manage clinical simulation scenarios for student training"
+        title="Patient Cases"
+        subtitle="Manage patient cases for student training"
       />
 
       {/* Stats */}
@@ -678,7 +678,7 @@ export default function FacultyScenariosClient() {
           <StatTile
             icon={faNotesMedical}
             value={scenarios.length}
-            label="Total Scenarios"
+            label="Total Patient Cases"
             iconBg="bg-brand-600/10"
             iconColor="text-brand-600"
           />
@@ -715,7 +715,7 @@ export default function FacultyScenariosClient() {
             />
             <input
               type="text"
-              placeholder="Search scenarios..."
+              placeholder="Search patient cases..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className={inputClassName + " pl-10"}
@@ -790,12 +790,12 @@ export default function FacultyScenariosClient() {
             className="flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_2px_8px_-1px_rgb(27_107_123_/_0.35)] transition-all hover:bg-brand-700 hover:shadow-[0_4px_14px_-2px_rgb(27_107_123_/_0.45)]"
           >
             <FontAwesomeIcon icon={faPlus} className="w-4 h-4" />
-            Create Scenario
+            Create Patient Case
           </button>
         </div>
       </div>
 
-      {/* Scenarios Grid */}
+      {/* Patient Cases Grid */}
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {Array.from({ length: 6 }).map((_, i) => (
@@ -805,11 +805,11 @@ export default function FacultyScenariosClient() {
       ) : filteredScenarios.length === 0 ? (
         <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] p-12 text-center">
           <FontAwesomeIcon icon={faNotesMedical} className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-gray-700">No scenarios found</h3>
+          <h3 className="text-lg font-semibold text-gray-700">No patient cases found</h3>
           <p className="text-gray-500 text-sm mt-1">
             {searchQuery || difficultyFilter !== "all" || categoryFilter !== "all"
               ? "Try adjusting your filters."
-              : "Generate a starter library, or create your first scenario by hand."}
+              : "Generate a starter library, or create your first patient case by hand."}
           </p>
           {!searchQuery && difficultyFilter === "all" && categoryFilter === "all" && (
             <button
@@ -912,7 +912,7 @@ export default function FacultyScenariosClient() {
         </div>
       )}
 
-      {/* Delete Scenario Modal */}
+      {/* Delete Patient Case Modal */}
       {showDeleteModal && deleteTarget && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-surface rounded-xl w-full max-w-md overflow-hidden shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-hairline">
@@ -922,7 +922,7 @@ export default function FacultyScenariosClient() {
                   <FontAwesomeIcon icon={faTrash} className="w-5 h-5 text-rose-600" />
                 </div>
                 <div className="min-w-0">
-                  <h3 className="text-lg font-bold text-gray-900">Delete scenario?</h3>
+                  <h3 className="text-lg font-bold text-gray-900">Delete patient case?</h3>
                   <p className="text-sm text-gray-500 mt-1">
                     <span className="font-medium text-gray-700">{deleteTarget.title}</span> will be
                     permanently removed. This can&apos;t be undone.
@@ -985,7 +985,7 @@ export default function FacultyScenariosClient() {
                   <FontAwesomeIcon icon={faLayerGroup} className="text-brand-600 w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-gray-900">Generate Scenario Library</h3>
+                  <h3 className="text-lg font-bold text-gray-900">Generate Patient Case Library</h3>
                   <p className="text-sm text-gray-500">
                     Build a spread of cases in one pass, then pick what to keep
                   </p>
@@ -1033,7 +1033,7 @@ export default function FacultyScenariosClient() {
                   </div>
 
                   <div>
-                    <label className={labelClassName}>How many scenarios?</label>
+                    <label className={labelClassName}>How many patient cases?</label>
                     <input
                       type="number"
                       min={1}
@@ -1123,7 +1123,7 @@ export default function FacultyScenariosClient() {
                     />
                     <span>
                       <span className="block text-sm font-semibold text-gray-800">
-                        Every scenario is based on a real MIMIC patient
+                        Every patient case is based on a real MIMIC patient
                       </span>
                       <span className="block text-xs text-gray-500 mt-0.5">
                         Each one links to a patient record so students can chart vitals and EHR
@@ -1180,13 +1180,13 @@ export default function FacultyScenariosClient() {
                       <div className="bg-surface rounded-xl w-full max-w-md p-8 text-center shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-hairline">
                         <EcgLoader size="xl" className="text-brand-600 mb-4" />
                         <p className="text-base font-semibold text-gray-900 mb-2">
-                          {batchCancelling ? "Stopping…" : "Generating Scenarios"}
+                          {batchCancelling ? "Stopping…" : "Generating Patient Cases"}
                         </p>
                         <p className="text-sm text-gray-600 mb-6">
                           {batchCancelling
                             ? `Keeping the ${batchProgress} generated so far.`
                             : batchCount > MAX_PER_REQUEST
-                              ? `Writing scenarios in batches of ${MAX_PER_REQUEST} — ${batchProgress} of ${batchCount} so far. This can take a few minutes.`
+                              ? `Writing patient cases in batches of ${MAX_PER_REQUEST} — ${batchProgress} of ${batchCount} so far. This can take a few minutes.`
                               : `Writing ${batchCount} scenarios — this takes up to a minute.`}
                         </p>
                         <button
@@ -1336,7 +1336,7 @@ export default function FacultyScenariosClient() {
                     className="px-5 py-2.5 bg-gradient-to-r from-brand-600 to-brand-800 text-white rounded-lg font-medium hover:from-brand-700 hover:to-brand-900 transition-all flex items-center gap-2 shadow-lg shadow-[0_4px_14px_-2px_rgb(27_107_123_/_0.45)] disabled:opacity-50"
                   >
                     <FontAwesomeIcon icon={faLayerGroup} className="w-4 h-4" />
-                    Generate {batchCount} Scenarios
+                    Generate {batchCount} Patient Cases
                   </button>
                 )
               ) : (
@@ -1361,7 +1361,7 @@ export default function FacultyScenariosClient() {
                         Saving {batchSavedCount}/{batchSelected.length}…
                       </>
                     ) : (
-                      `Save ${batchSelected.length} Scenario${batchSelected.length === 1 ? "" : "s"}`
+                      `Save ${batchSelected.length} Patient Case${batchSelected.length === 1 ? "" : "s"}`
                     )}
                   </button>
                 </>
@@ -1565,7 +1565,7 @@ export default function FacultyScenariosClient() {
                     <FontAwesomeIcon icon={faUserPlus} className="text-brand-600 w-5 h-5" />
                   </div>
                   <div>
-                    <h2 className="text-lg font-bold text-gray-900">Assign Scenario</h2>
+                    <h2 className="text-lg font-bold text-gray-900">Assign Patient Case</h2>
                     <p className="text-sm text-gray-500">{selectedScenario.title}</p>
                   </div>
                 </div>
@@ -1789,7 +1789,7 @@ export default function FacultyScenariosClient() {
 
             <div className="p-4 space-y-3 overflow-y-auto flex-1">
               <p className="text-sm text-gray-500">
-                Every scenario needs a patient so students can chart vitals and EHR data for the
+                Every patient case needs a patient so students can chart vitals and EHR data for the
                 case — pick one below.
               </p>
 

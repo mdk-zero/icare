@@ -90,8 +90,8 @@ Period: ${period}
 Cohort totals for the period:
 - Students in scope: ${cohort.total_students ?? 0}
 - Students active (submitted at least one attempt in the period): ${cohort.active_students_30d ?? 0}
-- Submitted skill assessment attempts: ${cohort.submitted_attempts ?? 0}
-- Average skill assessment score: ${cohort.average_score ?? 'no submitted attempts'}
+- Submitted quiz attempts: ${cohort.submitted_attempts ?? 0}
+- Average quiz score: ${cohort.average_score ?? 'no submitted attempts'}
 
 Score trend, one point per ${bucket}:
 ${trendBlock}

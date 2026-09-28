@@ -178,7 +178,7 @@ export async function buildAdminFacultyReport(
           emptyText="No instructor accounts yet."
         />
         <Text style={{ fontSize: 8, color: '#6b7280', marginTop: 6 }}>
-          Students are the members of the groups each instructor supervises. Graded counts scenarios
+          Students are the members of the groups each instructor supervises. Graded counts patient cases
           and case presentations they graded. Awaiting counts work their students handed in that is not
           graded yet.
         </Text>
@@ -232,7 +232,7 @@ export async function buildAdminFacultyReport(
         items={[
           { label: 'Groups', value: l.groups.length },
           { label: 'Students', value: l.studentIds.length },
-          { label: 'Scenarios graded', value: l.scenariosGraded },
+          { label: 'Patient cases graded', value: l.scenariosGraded },
           { label: 'Cases graded', value: l.casesGraded },
           { label: 'Awaiting grade', value: l.awaiting },
         ]}
@@ -240,7 +240,7 @@ export async function buildAdminFacultyReport(
 
       <Text style={styles.sectionTitle}>Groups supervised</Text>
       <Table
-        head={['Group', 'Members', 'Graded', 'Scenario average']}
+        head={['Group', 'Members', 'Graded', 'Patient case average']}
         widths={[3, 1, 1, 2]}
         rows={groupRows}
         emptyText="Not supervising any group yet."
@@ -496,10 +496,10 @@ export async function buildAdminUserReport(
           <Text style={styles.sectionTitle}>Graded work</Text>
           <StatGrid
             items={[
-              { label: 'Scenarios graded', value: `${w.scenariosGraded}/${w.scenariosAssigned}` },
-              gradeTile('Scenario grade', w.scenarioAverage),
+              { label: 'Patient cases graded', value: `${w.scenariosGraded}/${w.scenariosAssigned}` },
+              gradeTile('Patient case grade', w.scenarioAverage),
               { label: 'Case presentations', value: pct(w.caseAverage) },
-              { label: 'Skill Assessments', value: pct(w.quizAverage) },
+              { label: 'Quizzes', value: pct(w.quizAverage) },
             ]}
           />
         </>

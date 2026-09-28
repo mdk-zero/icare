@@ -305,7 +305,7 @@ function buildWelcomeHtml(name: string, email: string, password: string): string
               </p>
               <p style="margin:0 0 24px;font-size:15px;color:#475569;line-height:1.6;">
                 Open the <strong>iCARE++ mobile app</strong> and sign in with <strong>${safeEmail}</strong> and the
-                temporary password below to access your skill assessments and scenarios, and track your performance.
+                temporary password below to access your quizzes and patient cases, and track your performance.
               </p>
               <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f0f9fa;border:1px solid #d0ebea;border-radius:10px;padding:16px 20px;margin-bottom:24px;">
                 <tr>
@@ -331,7 +331,7 @@ function buildWelcomeHtml(name: string, email: string, password: string): string
                 <tr>
                   <td style="font-size:13px;color:#64748b;line-height:1.5;">
                     <strong style="color:#0f172a;">Getting started:</strong><br/>
-                    &bull; Complete assigned quizzes and scenarios<br/>
+                    &bull; Complete assigned quizzes and patient cases<br/>
                     &bull; Track your progress and competency scores<br/>
                     &bull; Review personalized insights and recommendations
                   </td>

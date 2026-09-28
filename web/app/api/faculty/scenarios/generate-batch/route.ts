@@ -85,25 +85,25 @@ function buildBatchPrompt(
     .join('\n\n');
 
   const topicBlock = topic
-    ? `\nEvery scenario must relate to this teaching focus: "${topic.replace(/"/g, '\\"')}".\n`
+    ? `\nEvery patient case must relate to this teaching focus: "${topic.replace(/"/g, '\\"')}".\n`
     : '';
 
   // With a lesson, the briefs' categories are the lesson topics the faculty
   // member picked — one scenario per topic, each applying the lesson.
   const lesson = lessonText
-    ? `${lessonBlock(lessonText)}Each brief's category is the lesson topic its scenario centres on. Where a brief includes a patient record, keep that patient's diagnosis and vitals and apply the lesson to their care.\n`
+    ? `${lessonBlock(lessonText)}Each brief's category is the lesson topic its patient case centres on. Where a brief includes a patient record, keep that patient's diagnosis and vitals and apply the lesson to their care.\n`
     : '';
 
   const avoidBlock =
     existingTitles.length > 0
-      ? `\nThese scenarios already exist in the library — do not repeat their clinical situations or titles:\n${existingTitles.map((t) => `- ${t}`).join('\n')}\n`
+      ? `\nThese patient cases already exist in the library — do not repeat their clinical situations or titles:\n${existingTitles.map((t) => `- ${t}`).join('\n')}\n`
       : '';
 
-  return `You are a clinical nursing education expert building a library of simulation scenarios for nursing students.
+  return `You are a clinical nursing education expert building a library of patient cases for nursing students.
 
-Write ${slots.length} DISTINCT scenarios. Each must cover a different clinical situation — no two may share a diagnosis or chief complaint.
+Write ${slots.length} DISTINCT patient cases. Each must cover a different clinical situation — no two may share a diagnosis or chief complaint.
 ${topicBlock}${lesson}${avoidBlock}
-Write one scenario for each numbered brief below, in the same order:
+Write one patient case for each numbered brief below, in the same order:
 
 ${briefs}
 
@@ -132,7 +132,7 @@ async function generateChunk(
   const list = Array.isArray(raw.scenarios) ? raw.scenarios : [];
 
   if (list.length === 0) {
-    throw new Error('AI returned no scenarios');
+    throw new Error('AI returned no patient cases');
   }
 
   return list.slice(0, slots.length).map((item, i) => {
@@ -206,7 +206,7 @@ export async function POST(request: NextRequest) {
     const patients = shuffle((patientRows ?? []) as unknown as PatientContext[]).slice(0, count);
     if (patients.length === 0) {
       return NextResponse.json(
-        { error: 'No patients available. Add patients to the roster before generating scenarios.' },
+        { error: 'No patients available. Add patients to the roster before generating patient cases.' },
         { status: 400 },
       );
     }
@@ -252,7 +252,7 @@ export async function POST(request: NextRequest) {
 
     if (scenarios.length === 0) {
       const { error, status } = aiErrorResponse(
-        new Error(failures.join('; ') || 'No scenarios generated'),
+        new Error(failures.join('; ') || 'No patient cases generated'),
         'scenarios',
       );
       return NextResponse.json({ error }, { status });
@@ -267,7 +267,7 @@ export async function POST(request: NextRequest) {
         : {}),
     });
   } catch (err) {
-    console.error('Batch scenario generation failed', err);
+    console.error('Batch patient case generation failed', err);
     const { error, status } = aiErrorResponse(err, 'scenarios');
     return NextResponse.json({ error }, { status });
   }

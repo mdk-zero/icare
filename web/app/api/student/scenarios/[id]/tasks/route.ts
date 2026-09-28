@@ -44,7 +44,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
     ]);
 
     if (tasksRes.error || completions.error) {
-      console.error('Failed to fetch scenario tasks', tasksRes.error, completions.error);
+      console.error('Failed to fetch patient case tasks', tasksRes.error, completions.error);
       return NextResponse.json({ error: 'Unable to fetch tasks' }, { status: 500 });
     }
 
@@ -75,7 +75,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
       },
     });
   } catch (err) {
-    console.error('Fetch scenario tasks failed', err);
+    console.error('Fetch patient case tasks failed', err);
     return NextResponse.json({ error: 'Unable to fetch tasks' }, { status: 500 });
   }
 }

@@ -59,7 +59,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const graded = await scoreAssignment(supabase, assignmentId, assignment.scenario_id);
     if (graded.error) {
       console.error('Failed to score assignment', graded.error);
-      return NextResponse.json({ error: 'Unable to finalize scenario' }, { status: 500 });
+      return NextResponse.json({ error: 'Unable to finalize patient case' }, { status: 500 });
     }
     const { score } = graded;
     // Students read each task's overall level from here on; settle it first.
@@ -81,7 +81,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     if (error || !updated) {
       console.error('Failed to finalize assignment', error);
-      return NextResponse.json({ error: 'Unable to finalize scenario' }, { status: 500 });
+      return NextResponse.json({ error: 'Unable to finalize patient case' }, { status: 500 });
     }
 
     if (approval) {
@@ -101,6 +101,6 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ assignment: updated, score });
   } catch (err) {
     console.error('Finalize assignment failed', err);
-    return NextResponse.json({ error: 'Unable to finalize scenario' }, { status: 500 });
+    return NextResponse.json({ error: 'Unable to finalize patient case' }, { status: 500 });
   }
 }

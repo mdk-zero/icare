@@ -56,7 +56,7 @@ export default function ScenarioTasksPanel({
       message:
         task.graded > 0
           ? `“${task.title}” has grades for ${task.graded} student${task.graded === 1 ? "" : "s"}. Removing it deletes those grades and its checklist.`
-          : `“${task.title}” and its checklist will be removed from the scenario.`,
+          : `“${task.title}” and its checklist will be removed from the patient case.`,
       confirmLabel: "Remove task",
       onConfirm: () => void remove(task),
     });
@@ -64,7 +64,7 @@ export default function ScenarioTasksPanel({
   return (
     <div className="rounded-xl border border-hairline bg-surface p-4 shadow-[0_1px_3px_0_rgba(0,0,0,0.04)]">
       <p className="text-sm font-bold text-gray-800">Tasks</p>
-      <p className="mt-0.5 text-xs text-gray-500">What students are graded on in this scenario, in order.</p>
+      <p className="mt-0.5 text-xs text-gray-500">What students are graded on in this patient case, in order.</p>
       {tasks === null ? (
         <p className="mt-3 text-xs text-gray-500">Loading tasks…</p>
       ) : tasks.length === 0 ? (

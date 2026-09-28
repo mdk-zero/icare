@@ -198,7 +198,7 @@ export default function NewScenarioClient() {
       return;
     }
     if (!form.patientId) {
-      setError("Select a patient for this scenario before saving.");
+      setError("Select a patient for this patient case before saving.");
       return;
     }
     setSaving(true);
@@ -219,7 +219,7 @@ export default function NewScenarioClient() {
     });
 
     if (!newScenario) {
-      setError("Unable to create scenario. Please try again.");
+      setError("Unable to create patient case. Please try again.");
       setSaving(false);
       return;
     }
@@ -231,7 +231,7 @@ export default function NewScenarioClient() {
         faculty_name: faculty.name,
         tab: "scenarios",
         action: aiGenerated ? "ai_generate_scenario" : "create_scenario",
-        details: `${aiGenerated ? "AI generated and saved" : "Created"} scenario: ${newScenario.title}`,
+        details: `${aiGenerated ? "AI generated and saved" : "Created"} patient case: ${newScenario.title}`,
         target_type: "scenario",
         target_id: newScenario.id,
         metadata: { scenario_title: newScenario.title },
@@ -266,9 +266,9 @@ export default function NewScenarioClient() {
       <PageHeader
         badge={{
           icon: <FontAwesomeIcon icon={faRobot} className="w-3.5 h-3.5" />,
-          label: "New Scenario",
+          label: "New Patient Case",
         }}
-        title="Create Scenario"
+        title="Create Patient Case"
         subtitle="Build a clinical case by hand, or generate one with AI and edit it"
       />
 
@@ -277,7 +277,7 @@ export default function NewScenarioClient() {
         className="mb-4 inline-flex items-center gap-2 px-3 py-2 bg-surface border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-all"
       >
         <FontAwesomeIcon icon={faArrowLeft} className="w-3.5 h-3.5" />
-        Back to scenarios
+        Back to patient cases
       </button>
 
       {error && (
@@ -318,7 +318,7 @@ export default function NewScenarioClient() {
             />
             <LessonPanel lessonImport={lessonImport} disabled={generating || savingTopics}>
               <p className="text-xs text-gray-500">
-                Ticked topics are kept as scenario categories, and this scenario is filed under the
+                Ticked topics are kept as patient case categories, and this patient case is filed under the
                 first one.
               </p>
               {selectedTopics.length > 0 &&
@@ -332,7 +332,7 @@ export default function NewScenarioClient() {
                     {savingTopics && <EcgLoader className="text-brand-600" />}
                     {newTopics.length > 0
                       ? `Save ${newTopics.length} new categor${newTopics.length === 1 ? "y" : "ies"}`
-                      : `Use “${selectedTopics[0].category}” for this scenario`}
+                      : `Use “${selectedTopics[0].category}” for this patient case`}
                   </button>
                 )}
             </LessonPanel>
@@ -395,7 +395,7 @@ export default function NewScenarioClient() {
                 value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
                 rows={3}
-                placeholder="Brief overview of the scenario..."
+                placeholder="Brief overview of the patient case..."
                 className={inputClassName + " resize-none"}
               />
             </div>
@@ -457,7 +457,7 @@ export default function NewScenarioClient() {
           />
           {skills.length === 0 && (
             <p className="-mt-2 text-xs text-gray-500">
-              Without skills, the scenario gets the general starter task list.
+              Without skills, the patient case gets the general starter task list.
             </p>
           )}
         </div>
@@ -504,7 +504,7 @@ export default function NewScenarioClient() {
               ) : filteredPatients.length === 0 ? (
                 <div className="p-6 text-center text-sm text-gray-500">
                   {patients.length === 0
-                    ? "No patients in the roster yet — add one before creating a scenario."
+                    ? "No patients in the roster yet — add one before creating a patient case."
                     : "No patients match."}
                 </div>
               ) : (
@@ -652,7 +652,7 @@ export default function NewScenarioClient() {
           ) : (
             <FontAwesomeIcon icon={faSave} className="w-4 h-4" />
           )}
-          {saving ? "Saving…" : "Save Scenario"}
+          {saving ? "Saving…" : "Save Patient Case"}
         </button>
       </div>
 

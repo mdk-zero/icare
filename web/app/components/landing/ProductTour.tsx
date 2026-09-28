@@ -6,7 +6,7 @@ import { Icon, ICONS } from "./Icon";
 const TOUR = [
   {
     number: "01",
-    title: "Realistic Clinical Scenarios",
+    title: "Realistic Patient Cases",
     description:
       "Students step into immersive, branching patient encounters that span medical-surgical, pediatrics, maternity, and critical care nursing. Every decision alters the patient’s trajectory, building clinical judgment in a safe environment.",
     capabilities: [
@@ -21,11 +21,11 @@ const TOUR = [
     number: "02",
     title: "ML-Powered Adaptive Assessments",
     description:
-      "Machine learning algorithms analyze every student response in real time, adjusting question difficulty and scenario complexity to target individual knowledge gaps. Each assessment delivers a precise competency profile.",
+      "Machine learning algorithms analyze every student response in real time, adjusting question difficulty and patient case complexity to target individual knowledge gaps. Each assessment delivers a precise competency profile.",
     capabilities: [
       "Dynamic difficulty adjustment based on performance",
       "Instant competency scoring with detailed breakdowns",
-      "Multiple formats: skill assessments, OSCEs, case studies",
+      "Multiple formats: quizzes, OSCEs, case studies",
       "Identifies strengths and knowledge gaps automatically",
     ],
     icon: ICONS.presentation,
@@ -76,7 +76,7 @@ const TOUR = [
       "An intelligent recommendation engine suggests personalised learning paths based on each student’s performance history. Instructors receive actionable insights to target remediation where it matters most.",
     capabilities: [
       "Personalized learning paths based on performance data",
-      "Suggested scenarios and skill assessments to address weak areas",
+      "Suggested patient cases and quizzes to address weak areas",
       "Spaced repetition scheduling for knowledge retention",
       "Instructor insights for targeted remediation",
     ],

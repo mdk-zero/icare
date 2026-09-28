@@ -22,7 +22,7 @@ export default function ReflectionsTab({
   if (reflections.length === 0) {
     return (
       <p className="py-8 text-center text-gray-500">
-        No reflections yet. Students reflect and set goals after a scenario is finalized or a skill assessment is scored.
+        No reflections yet. Students reflect and set goals after a patient case is finalized or a quiz is scored.
       </p>
     );
   }
@@ -33,7 +33,7 @@ export default function ReflectionsTab({
         <li key={r.id} className="rounded-xl border border-hairline p-4">
           <div className="mb-2 flex flex-wrap items-baseline gap-x-2">
             <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
-              {r.source_type === "scenario" ? "Scenario" : "Skill assessment"}
+              {r.source_type === "scenario" ? "Patient Case" : "Quiz"}
             </span>
             <span className="font-semibold text-gray-900">{r.title}</span>
             {r.score !== null && <span className="text-sm tabular-nums text-gray-500">{r.score}%</span>}

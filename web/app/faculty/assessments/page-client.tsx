@@ -260,7 +260,7 @@ export default function FacultyAssessmentsClient() {
       toast(j.error ?? "Failed to update");
       return;
     }
-    toast(a.is_published ? "Assessment unpublished" : "Assessment published");
+    toast(a.is_published ? "Quiz unpublished" : "Quiz published");
     loadAssessments();
   };
 
@@ -276,7 +276,7 @@ export default function FacultyAssessmentsClient() {
       setDeleteError("Failed to delete assessment. Please try again.");
       return;
     }
-    toast("Assessment deleted");
+    toast("Quiz deleted");
     setConfirmDelete(null);
     loadAssessments();
   };
@@ -341,10 +341,10 @@ export default function FacultyAssessmentsClient() {
       <PageHeader
         badge={{
           icon: <FontAwesomeIcon icon={faListCheck} className="h-4 w-4" />,
-          label: "Skill Assessments",
+          label: "Quizzes",
         }}
-        title="Skill Assessments"
-        subtitle="Create skill assessments, manage questions, and assign them to your students"
+        title="Quizzes"
+        subtitle="Create quizzes, manage questions, and assign them to your students"
       />
 
       {/* Stats */}
@@ -359,7 +359,7 @@ export default function FacultyAssessmentsClient() {
           <StatTile
             icon={faListCheck}
             value={assessments.length}
-            label="Total Assessments"
+            label="Total Quizzes"
             caption={`${bankSize} question${bankSize === 1 ? "" : "s"} in the bank`}
             iconBg="bg-brand-600/10"
             iconColor="text-brand-600"
@@ -482,7 +482,7 @@ export default function FacultyAssessmentsClient() {
         <div className="bg-surface p-12 rounded-xl border border-hairline shadow-tile text-center text-gray-500">
           {filtersActive
             ? "No assessments match these filters."
-            : "No assessments yet. Create your first skill assessment to start building the question bank."}
+            : "No quizzes yet. Create your first quiz to start building the question bank."}
         </div>
       ) : (
         <div className="space-y-6">
@@ -637,11 +637,11 @@ export default function FacultyAssessmentsClient() {
                   min={1}
                   value={assignMaxAttempts}
                   onChange={(e) => setAssignMaxAttempts(e.target.value)}
-                  placeholder="Use the skill assessment default"
+                  placeholder="Use the quiz default"
                   className={inputClassName}
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  Overrides the skill assessment&apos;s own limit for the students in the sections below. Leave
+                  Overrides the quiz&apos;s own limit for the students in the sections below. Leave
                   blank to use it. Re-assigning without a value clears any override.
                 </p>
               </div>
@@ -697,13 +697,13 @@ export default function FacultyAssessmentsClient() {
               <p className="text-xs text-gray-500 mt-1.5 flex items-start gap-1.5">
                 <FontAwesomeIcon icon={faUsers} className="w-3 h-3 mt-0.5 shrink-0" />
                 <span>
-                  Every student in the sections you pick gets this skill assessment, including ones who
+                  Every student in the sections you pick gets this quiz, including ones who
                   transfer in later than this roster.
                 </span>
               </p>
               {sectionsToPublish.length > 0 && (
                 <p className="text-xs text-amber-700 mt-1.5">
-                  Assigning also publishes this skill assessment to{" "}
+                  Assigning also publishes this quiz to{" "}
                   {sectionsToPublish.map((s) => `Section ${s.name}`).join(", ")} — otherwise those
                   students would never see it.
                 </p>
@@ -738,7 +738,7 @@ export default function FacultyAssessmentsClient() {
       {confirmDelete && (
         <ConfirmModal
           config={{
-            title: "Delete Assessment",
+            title: "Delete Quiz",
             message: (
               <>
                 <span className="font-medium text-gray-700">{confirmDelete.title}</span> will be

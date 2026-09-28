@@ -108,7 +108,7 @@ export async function buildStudentReport(
   if (cases.error) console.error('Report: failed to read case submissions', cases.error);
 
   const scenarioRows = (scenarios ?? []).map((a) => {
-    const title = (a as unknown as { scenarios: { title: string } | null }).scenarios?.title ?? 'Unknown scenario';
+    const title = (a as unknown as { scenarios: { title: string } | null }).scenarios?.title ?? 'Unknown patient case';
     const late = isLate(a.submitted_at, a.deadline);
     return {
       title,
@@ -177,19 +177,19 @@ export async function buildStudentReport(
       <Text style={styles.sectionTitle}>Summary</Text>
       <StatGrid
         items={[
-          gradeTile('Scenario average', avg(scenarioScores)),
+          gradeTile('Patient case average', avg(scenarioScores)),
           gradeTile('Case presentation average', avg(caseScores)),
-          { label: 'Skill Assessment average', value: pct(avg(quizScores)) },
+          { label: 'Quiz average', value: pct(avg(quizScores)) },
           { label: 'Attendance', value: pct(attendance.rate) },
         ]}
       />
 
-      <Text style={styles.sectionTitle}>Scenarios</Text>
+      <Text style={styles.sectionTitle}>Patient Cases</Text>
       <Table
-        head={['Scenario', 'Status', 'Handed in', 'Grade']}
+        head={['Patient Case', 'Status', 'Handed in', 'Grade']}
         widths={[3, 1.3, 1.3, 1.9]}
         rows={scenarioRows.map((r) => [r.title, r.status, r.handedIn, grade(r.score)])}
-        emptyText="No scenarios assigned yet."
+        emptyText="No patient cases assigned yet."
       />
 
       <Text style={styles.sectionTitle}>Case presentations</Text>
@@ -200,11 +200,11 @@ export async function buildStudentReport(
         emptyText="No case presentations assigned yet."
       />
 
-      <Text style={styles.sectionTitle}>Skill Assessments</Text>
+      <Text style={styles.sectionTitle}>Quizzes</Text>
       <Table
         head={['Assessment', 'Submitted', 'Score']}
         rows={quizRows.map((r) => [r.title, r.submitted, pct(r.score)])}
-        emptyText="No Skill Assessments submitted yet."
+        emptyText="No quizzes submitted yet."
       />
 
       <Text style={styles.sectionTitle}>Skill areas</Text>
@@ -306,15 +306,15 @@ export async function buildSectionReport(
       <StatGrid
         items={[
           { label: 'Students', value: roster.length },
-          gradeTile('Scenario average', avg(scenarioAverages)),
-          { label: 'Skill Assessment average', value: pct(avg(quizAverages)) },
+          gradeTile('Patient case average', avg(scenarioAverages)),
+          { label: 'Quiz average', value: pct(avg(quizAverages)) },
           { label: 'Needs Practice', value: needsPractice },
         ]}
       />
 
       <Text style={styles.sectionTitle}>Groups</Text>
       <Table
-        head={['Group', 'Members', 'Graded', 'Scenario average']}
+        head={['Group', 'Members', 'Graded', 'Patient case average']}
         widths={[3, 1, 1, 2]}
         rows={groupRows}
         emptyText="No students in this section yet."
@@ -322,7 +322,7 @@ export async function buildSectionReport(
 
       <Text style={styles.sectionTitle}>Students</Text>
       <Table
-        head={['Student', 'Group', 'Scenarios', 'Scenario grade', 'Case grade', 'Quiz average']}
+        head={['Student', 'Group', 'Patient Cases', 'Patient case grade', 'Case grade', 'Quiz average']}
         widths={[2.3, 1.1, 1, 2, 1, 1.3]}
         rows={roster.map((r) => [
           r.name,
@@ -342,7 +342,7 @@ export async function buildSectionReport(
         emptyText="No skill area ratings recorded for this section yet."
       />
       <Text style={note}>
-        Scenarios counts graded out of assigned. Needs Practice counts students whose scenario average is
+        Patient cases counts graded out of assigned. Needs Practice counts students whose patient case average is
         below {NEEDS_PRACTICE_BELOW}%.
       </Text>
     </ReportShell>
@@ -366,7 +366,7 @@ export async function buildScenarioReport(
     .select('id, title, difficulty, category')
     .eq('id', scenarioId)
     .maybeSingle();
-  if (!scenario) return { error: 'Scenario not found', status: 404 };
+  if (!scenario) return { error: 'Patient case not found', status: 404 };
 
   const { data: allAssignments } = await supabase
     .from('scenario_assignments')
@@ -396,11 +396,11 @@ export async function buildScenarioReport(
 
   const pdf = (
     <ReportShell
-      title={`Scenario Report - ${scenario.title}`}
-      heading="Scenario Report"
+      title={`Patient Case Report - ${scenario.title}`}
+      heading="Patient Case Report"
       meta={meta}
       metaRows={[
-        { label: 'Scenario', value: scenario.title },
+        { label: 'Patient Case', value: scenario.title },
         { label: 'Difficulty', value: String(scenario.difficulty) },
         { label: 'Category', value: String(scenario.category) },
       ]}
@@ -429,7 +429,7 @@ export async function buildScenarioReport(
           r.handedIn ? `${date(r.handedIn)}${r.late ? ' (late)' : ''}` : '—',
           grade(r.score),
         ])}
-        emptyText="This scenario has not been assigned yet."
+        emptyText="This patient case has not been assigned yet."
       />
     </ReportShell>
   );
@@ -512,7 +512,7 @@ export async function buildAssessmentReport(
   const pdf = (
     <ReportShell
       title={`Assessment Report - ${assessment.title}`}
-      heading="Skill Assessment Report"
+      heading="Quiz Report"
       meta={meta}
       metaRows={[
         { label: 'Assessment', value: assessment.title },
@@ -616,15 +616,15 @@ export async function buildRosterReport(
       <StatGrid
         items={[
           { label: 'Students', value: rows.length },
-          gradeTile('Scenario average', avg(scenarioAverages)),
-          { label: 'Skill Assessment average', value: pct(avg(quizAverages)) },
+          gradeTile('Patient case average', avg(scenarioAverages)),
+          { label: 'Quiz average', value: pct(avg(quizAverages)) },
           { label: 'Nothing graded yet', value: noWork },
         ]}
       />
 
       <Text style={styles.sectionTitle}>Students</Text>
       <Table
-        head={['Student', 'Section', 'Group', 'Scenario grade', 'Case grade', 'Quiz average']}
+        head={['Student', 'Section', 'Group', 'Patient case grade', 'Case grade', 'Quiz average']}
         widths={[2.3, 1, 1, 2, 1, 1.3]}
         rows={rows.map((r) => [
           r.name,

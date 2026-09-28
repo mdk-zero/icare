@@ -127,7 +127,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     const facultyName = me?.name ?? session.email;
     const studentName = student?.name ?? 'a student';
-    const scenarioTitle = scenario?.title ?? 'a scenario';
+    const scenarioTitle = scenario?.title ?? 'a patient case';
     const data: GradeEditRequestData = {
       kind: GRADE_EDIT_REQUEST,
       request_id: randomUUID(),

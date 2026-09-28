@@ -98,7 +98,7 @@ function generateSuggestionPrompt(
   const difficultyText = difficulty ? `${difficulty}-level` : 'appropriate-difficulty';
   const categoryText = category ? `${category}` : 'nursing education';
 
-  return `Create a ${difficultyText} ${categoryText} simulation scenario for ${patient.name}, a ${patient.age}-year-old ${patient.gender} admitted with ${patient.diagnosis}. The scenario should focus on ${focus}.`;
+  return `Create a ${difficultyText} ${categoryText} patient case for ${patient.name}, a ${patient.age}-year-old ${patient.gender} admitted with ${patient.diagnosis}. The patient case should focus on ${focus}.`;
 }
 
 export async function POST(request: NextRequest) {
@@ -143,7 +143,7 @@ export async function POST(request: NextRequest) {
       prompt,
     });
   } catch (err) {
-    console.error('Suggest scenario failed', err);
+    console.error('Suggest patient case failed', err);
     const { error, status } = aiErrorResponse(err, 'scenario');
     return NextResponse.json({ error }, { status });
   }

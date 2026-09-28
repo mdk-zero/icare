@@ -41,7 +41,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
     if (assignment.status === 'completed') {
-      return NextResponse.json({ error: 'This scenario has already been finalized' }, { status: 409 });
+      return NextResponse.json({ error: 'This patient case has already been finalized' }, { status: 409 });
     }
 
     const update: Record<string, unknown> = {
@@ -59,12 +59,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     if (error || !updated) {
       console.error('Failed to submit assignment', error);
-      return NextResponse.json({ error: 'Unable to submit scenario' }, { status: 500 });
+      return NextResponse.json({ error: 'Unable to submit patient case' }, { status: 500 });
     }
 
     return NextResponse.json({ assignment: updated });
   } catch (err) {
     console.error('Submit assignment failed', err);
-    return NextResponse.json({ error: 'Unable to submit scenario' }, { status: 500 });
+    return NextResponse.json({ error: 'Unable to submit patient case' }, { status: 500 });
   }
 }

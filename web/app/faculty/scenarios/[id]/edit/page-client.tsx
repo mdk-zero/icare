@@ -148,7 +148,7 @@ export default function EditScenarioClient({ scenarioId }: { scenarioId: string 
       return;
     }
     if (!form.patientId) {
-      setError("Select a patient for this scenario before saving.");
+      setError("Select a patient for this patient case before saving.");
       return;
     }
     setSaving(true);
@@ -172,7 +172,7 @@ export default function EditScenarioClient({ scenarioId }: { scenarioId: string 
     if (!updated) {
       // The API lets only the scenario's creator (or an admin) through, so a
       // refusal is worth naming rather than closing over.
-      setError("Unable to save the scenario. You can only edit scenarios you created.");
+      setError("Unable to save the patient case. You can only edit patient cases you created.");
       setSaving(false);
       return;
     }
@@ -180,7 +180,7 @@ export default function EditScenarioClient({ scenarioId }: { scenarioId: string 
     if (newSkills.length > 0) {
       const added = await addScenarioSkills(scenarioId, newSkills);
       if ("error" in added) {
-        setError(`The scenario was saved, but its new skills were not: ${added.error}`);
+        setError(`The patient case was saved, but its new skills were not: ${added.error}`);
         setSaving(false);
         return;
       }
@@ -193,7 +193,7 @@ export default function EditScenarioClient({ scenarioId }: { scenarioId: string 
         faculty_name: faculty.name,
         tab: "scenarios",
         action: "update_scenario",
-        details: `Updated scenario: ${updated.title}`,
+        details: `Updated patient case: ${updated.title}`,
         target_type: "scenario",
         target_id: scenarioId,
         metadata: { scenario_title: updated.title },
@@ -220,7 +220,7 @@ export default function EditScenarioClient({ scenarioId }: { scenarioId: string 
       if (res.error) console.error("Room assignment failed:", res.error);
     }
 
-    toast("Scenario updated");
+    toast("Patient case updated");
     router.push("/faculty/scenarios");
   };
 
@@ -230,10 +230,10 @@ export default function EditScenarioClient({ scenarioId }: { scenarioId: string 
         <PageHeader
           badge={{
             icon: <FontAwesomeIcon icon={faPenToSquare} className="w-3.5 h-3.5" />,
-            label: "Edit Scenario",
+            label: "Edit Patient Case",
           }}
-          title="Edit Scenario"
-          subtitle="Loading the scenario…"
+          title="Edit Patient Case"
+          subtitle="Loading the patient case…"
         />
         <div className="p-12 text-center">
           <EcgLoader size="md" className="text-brand-600" />
@@ -248,9 +248,9 @@ export default function EditScenarioClient({ scenarioId }: { scenarioId: string 
         <PageHeader
           badge={{
             icon: <FontAwesomeIcon icon={faPenToSquare} className="w-3.5 h-3.5" />,
-            label: "Edit Scenario",
+            label: "Edit Patient Case",
           }}
-          title="Scenario not found"
+          title="Patient case not found"
           subtitle="It may have been deleted by someone else."
         />
         <button
@@ -258,7 +258,7 @@ export default function EditScenarioClient({ scenarioId }: { scenarioId: string 
           className="inline-flex items-center gap-2 px-3 py-2 bg-surface border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-all"
         >
           <FontAwesomeIcon icon={faArrowLeft} className="w-3.5 h-3.5" />
-          Back to scenarios
+          Back to patient cases
         </button>
       </div>
     );
@@ -269,7 +269,7 @@ export default function EditScenarioClient({ scenarioId }: { scenarioId: string 
       <PageHeader
         badge={{
           icon: <FontAwesomeIcon icon={faPenToSquare} className="w-3.5 h-3.5" />,
-          label: "Edit Scenario",
+          label: "Edit Patient Case",
         }}
         title={scenario.title}
         subtitle="Change the case details, the patient it runs on, and where that patient sits"
@@ -280,7 +280,7 @@ export default function EditScenarioClient({ scenarioId }: { scenarioId: string 
         className="mb-4 inline-flex items-center gap-2 px-3 py-2 bg-surface border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-all"
       >
         <FontAwesomeIcon icon={faArrowLeft} className="w-3.5 h-3.5" />
-        Back to scenarios
+        Back to patient cases
       </button>
 
       {error && (
@@ -309,7 +309,7 @@ export default function EditScenarioClient({ scenarioId }: { scenarioId: string 
                 value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
                 rows={3}
-                placeholder="Brief overview of the scenario..."
+                placeholder="Brief overview of the patient case..."
                 className={inputClassName + " resize-none"}
               />
             </div>

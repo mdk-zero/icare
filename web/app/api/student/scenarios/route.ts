@@ -36,7 +36,7 @@ export async function GET() {
       .in('id', scenarioIds);
 
     if (scenariosError) {
-      console.error('Failed to fetch scenarios', scenariosError);
+      console.error('Failed to fetch patient cases', scenariosError);
       return NextResponse.json({ error: 'Unable to fetch assignments' }, { status: 500 });
     }
 
@@ -54,7 +54,7 @@ export async function GET() {
       return {
         id: a.id,
         scenario_id: a.scenario_id,
-        scenario_title: scenario?.title ?? 'Unknown Scenario',
+        scenario_title: scenario?.title ?? 'Unknown Patient Case',
         patient_id: scenario?.patient_id ?? null,
         student_id: a.student_id,
         student_name: session.email,

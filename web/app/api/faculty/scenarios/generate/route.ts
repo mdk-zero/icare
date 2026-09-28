@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ scenario });
   } catch (err) {
-    console.error('Generate AI scenario failed', err);
+    console.error('Generate AI patient case failed', err);
     const { error, status } = aiErrorResponse(err, 'scenario');
     return NextResponse.json({ error }, { status });
   }

@@ -123,7 +123,7 @@ export async function GET(request: NextRequest) {
     const formatted = assignments.map((a) => ({
       id: a.id,
       scenario_id: a.scenario_id,
-      scenario_title: scenariosById.get(a.scenario_id) ?? 'Unknown Scenario',
+      scenario_title: scenariosById.get(a.scenario_id) ?? 'Unknown Patient Case',
       student_id: a.student_id,
       student_name: studentsById.get(a.student_id)?.name ?? 'Unknown Student',
       student_picture_url: studentsById.get(a.student_id)?.picture_url ?? null,

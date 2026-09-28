@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "New Scenario | iCARE++",
+  title: "New Patient Case | iCARE++",
 };
 
 import NewScenarioClient from "./page-client";

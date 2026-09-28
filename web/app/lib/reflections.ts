@@ -119,7 +119,7 @@ export async function loadGradedWork(
     return {
       source_type: 'scenario',
       source_id: sourceId,
-      title: (assignment.scenarios as unknown as { title: string } | null)?.title ?? 'Scenario',
+      title: (assignment.scenarios as unknown as { title: string } | null)?.title ?? 'Patient Case',
       score: assignment.score as number | null,
       graded_at: assignment.completed_at as string | null,
       items,
@@ -150,7 +150,7 @@ export async function loadGradedWork(
   return {
     source_type: 'assessment',
     source_id: sourceId,
-    title: (attempt.assessments as unknown as { title: string } | null)?.title ?? 'Skill assessment',
+    title: (attempt.assessments as unknown as { title: string } | null)?.title ?? 'Quiz',
     score: attempt.score === null ? null : Number(attempt.score),
     graded_at: attempt.submitted_at as string | null,
     items,
@@ -171,7 +171,7 @@ export function ruleFeedback(work: GradedWork): Feedback {
   return {
     summary:
       work.score === null
-        ? `Your ${work.source_type === 'scenario' ? 'scenario' : 'skill assessment'} has been graded.`
+        ? `Your ${work.source_type === 'scenario' ? 'patient case' : 'quiz'} has been graded.`
         : `You scored ${work.score}% on ${work.title}.${weak.length > 0 ? ` Focus next on ${weak.map((w) => w.title).join(', ')}.` : ' Every skill was at or above Satisfactory.'}`,
     strengths: strong.map((i) => ({ skill_id: i.skill_id, note: `${i.title}: ${i.level} (${i.score}%).` })),
     improvements: weak.map((i) => ({
@@ -189,7 +189,7 @@ function feedbackPrompt(work: GradedWork): string {
     .join('\n');
   return `You are a clinical nursing instructor giving a nursing student feedback on graded work, based on Taylor's clinical nursing skill checklists.
 
-${work.source_type === 'scenario' ? 'Simulation scenario' : 'Skill assessment'}: ${work.title}
+${work.source_type === 'scenario' ? 'Patient case' : 'Quiz'}: ${work.title}
 Overall score: ${work.score ?? 'not scored'}%
 Per skill (levels are Excellent, Satisfactory, Needs Practice):
 ${lines}

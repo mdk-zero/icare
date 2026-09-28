@@ -19,11 +19,11 @@ import { Icon, ICONS } from "./components/landing/Icon";
 const pillars = [
   {
     title: "For Student Nurses",
-    text: "Practice clinical judgment safely, with scenarios that prepare you before stepping into the real ward.",
+    text: "Practice clinical judgment safely, with patient cases that prepare you before stepping into the real ward.",
   },
   {
     title: "For Instructors",
-    text: "Objective scoring and AI-assisted scenario creation, without the grading backlog.",
+    text: "Objective scoring and AI-assisted patient case creation, without the grading backlog.",
   },
   {
     title: "For Deans",
@@ -36,7 +36,7 @@ const steps = [
     step: "01",
     title: "Get Your Case",
     description:
-      "Log in and open your assigned scenario. No handouts, no waiting for a room — it's already there.",
+      "Log in and open your assigned patient case. No handouts, no waiting for a room — it's already there.",
     icon: ICONS.clock,
   },
   {
@@ -61,16 +61,16 @@ const roles = [
   {
     title: "Students",
     description:
-      "Engage with clinical scenarios, practice EHR charting, adaptive quizzes, and track your competency growth through detailed analytics — all at your own pace.",
+      "Engage with patient cases, practice EHR charting, adaptive quizzes, and track your competency growth through detailed analytics — all at your own pace.",
     action: "Sign in to practice",
     href: " ",
-    highlights: ["Clinical Scenarios", "Adaptive Quizzes", "EHR Charting"],
+    highlights: ["Patient Cases", "Adaptive Quizzes", "EHR Charting"],
     icon: ICONS.academicCap,
   },
   {
     title: "Instructors",
     description:
-      "Create scenarios and quiz assessments with AI assistance, monitor student performance in real time, and generate student reports.",
+      "Create patient cases and quizzes with AI assistance, monitor student performance in real time, and generate student reports.",
     action: "Create an instructor account",
     href: "/signup",
     highlights: ["AI-assisted CMS", "Student performance monitoring", "Detailed Analytics"],
@@ -96,7 +96,7 @@ const comparison = [
     dimension: "Learning path",
     traditional: "All students follow the same curriculum regardless of existing skill gaps.",
     icare:
-      "ML dynamically adjusts scenario difficulty and content to target each student’s weak areas.",
+      "ML dynamically adjusts patient case difficulty and content to target each student’s weak areas.",
     icon: ICONS.bolt,
   },
   {
@@ -108,7 +108,7 @@ const comparison = [
   {
     dimension: "Practice",
     traditional: "Learning relies heavily on textbooks, lectures, and passive study.",
-    icare: "Realistic patient scenarios build clinical judgment through active practice.",
+    icare: "Realistic patient cases build clinical judgment through active practice.",
     icon: ICONS.heart,
   },
   {
@@ -123,7 +123,7 @@ const comparison = [
 const testimonials = [
   {
     quote:
-      "iCARE++ transformed how our students prepare for clinical rotations. The adaptive scenarios are remarkably realistic, and the ML-driven feedback helps them identify exactly where they need to improve.",
+      "iCARE++ transformed how our students prepare for clinical rotations. The adaptive patient cases are remarkably realistic, and the ML-driven feedback helps them identify exactly where they need to improve.",
     name: "Dr. Rebecca Chen",
     role: "Dean, College of Nursing",
   },
@@ -135,7 +135,7 @@ const testimonials = [
   },
   {
     quote:
-      "As a student, I love that the platform adapts to my skill level. The vitals monitoring scenarios helped me recognize deterioration signs that I later encountered in my actual hospital rotation.",
+      "As a student, I love that the platform adapts to my skill level. The vitals monitoring patient cases helped me recognize deterioration signs that I later encountered in my actual hospital rotation.",
     name: "Maria Santos",
     role: "Senior Nursing Student",
   },
@@ -150,12 +150,12 @@ const faqs = [
   {
     question: "How does the ML-driven assessment work?",
     answer:
-      "The machine learning model analyzes every student response across scenarios, quizzes, and EHR entries to build a detailed competency profile. It identifies knowledge gaps, adjusts difficulty in real time, and provides objective scoring that eliminates grading bias. Laboratory instructors get a clear picture of each student’s skill strengths and areas needing improvement.",
+      "The machine learning model analyzes every student response across patient cases, quizzes, and EHR entries to build a detailed competency profile. It identifies knowledge gaps, adjusts difficulty in real time, and provides objective scoring that eliminates grading bias. Laboratory instructors get a clear picture of each student’s skill strengths and areas needing improvement.",
   },
   {
-    question: "Can a laboratory instructor create their own scenarios?",
+    question: "Can a laboratory instructor create their own patient cases?",
     answer:
-      "Yes. An instructor can build custom scenarios from scratch using an intuitive editor, or use the AI-assisted scenario generator to create realistic patient cases in minutes. Scenarios can be tailored to specific learning objectives, nursing domains, and difficulty levels.",
+      "Yes. An instructor can build custom patient cases from scratch using an intuitive editor, or use the AI-assisted patient case generator to write one in minutes. Patient cases can be tailored to specific learning objectives, nursing domains, and difficulty levels.",
   },
   {
     question: "What kind of analytics are available?",
@@ -832,7 +832,7 @@ export default function LandingPage() {
                     <ul className="space-y-3">
                       {[
                         "Unlimited student accounts",
-                        "AI scenario generator for instructors",
+                        "AI patient case generator for instructors",
                         "Full competency analytics dashboard",
                       ].map((item) => (
                         <li key={item} className="flex items-start gap-2.5 text-sm text-white/85">
@@ -869,7 +869,7 @@ export default function LandingPage() {
               index="04"
               eyebrow="Product tour"
               title="Explore everything iCARE++ has to offer"
-              intro="Take a guided tour through the platform’s core capabilities — from clinical scenarios to AI-powered recommendations."
+              intro="Take a guided tour through the platform’s core capabilities — from patient cases to AI-powered recommendations."
             />
             <Reveal className="mt-14">
               <ProductTour />
@@ -1241,7 +1241,7 @@ export default function LandingPage() {
           </div>
           <div className="mt-12 flex flex-col gap-2 border-t border-hairline pt-6 text-xs text-gray-400 sm:flex-row sm:items-center sm:justify-between">
             <p>&copy; {new Date().getFullYear()} iCARE++. All rights reserved.</p>
-            <p>Scenario content grounded in Taylor’s Clinical Nursing Skills checklists.</p>
+            <p>Patient case content grounded in Taylor’s Clinical Nursing Skills checklists.</p>
           </div>
         </div>
       </footer>

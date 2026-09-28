@@ -26,7 +26,7 @@ export default function WaitingCard({
       </header>
 
       <div className="px-4 pb-3 pt-3">
-        <CardLabel>Scenario reviews</CardLabel>
+        <CardLabel>Patient case reviews</CardLabel>
         {review.total === 0 ? (
           <p className="mt-2 flex items-center gap-2 text-[13px] text-slate-500">
             <FontAwesomeIcon icon={faCircleCheck} className="h-3.5 w-3.5 text-emerald-500" />

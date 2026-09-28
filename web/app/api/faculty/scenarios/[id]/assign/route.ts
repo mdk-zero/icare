@@ -67,7 +67,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       .maybeSingle();
 
     if (!scenario) {
-      return NextResponse.json({ error: 'Scenario not found' }, { status: 404 });
+      return NextResponse.json({ error: 'Patient case not found' }, { status: 404 });
     }
 
     // Faculty can only assign to students in their sections.
@@ -122,13 +122,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       .select('id, scenario_id, student_id, assigned_at, deadline, status, required, score, completed_at, time_taken');
 
     if (error) {
-      console.error('Failed to assign scenario', error);
-      return NextResponse.json({ error: 'Unable to assign scenario' }, { status: 500 });
+      console.error('Failed to assign patient case', error);
+      return NextResponse.json({ error: 'Unable to assign patient case' }, { status: 500 });
     }
 
     return NextResponse.json({ assignments, skipped: skip.size }, { status: 201 });
   } catch (err) {
-    console.error('Assign scenario failed', err);
-    return NextResponse.json({ error: 'Unable to assign scenario' }, { status: 500 });
+    console.error('Assign patient case failed', err);
+    return NextResponse.json({ error: 'Unable to assign patient case' }, { status: 500 });
   }
 }

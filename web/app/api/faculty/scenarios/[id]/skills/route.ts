@@ -13,9 +13,9 @@ type Supabase = ReturnType<typeof getSupabaseAdmin>;
 /** The caller may change this scenario's tasks: its creator, or an admin. */
 async function authorize(supabase: Supabase, role: string, uid: string, id: string): Promise<NextResponse | null> {
   const { data } = await supabase.from('scenarios').select('created_by').eq('id', id).maybeSingle();
-  if (!data) return NextResponse.json({ error: 'Scenario not found' }, { status: 404 });
+  if (!data) return NextResponse.json({ error: 'Patient case not found' }, { status: 404 });
   if (role !== 'admin' && data.created_by !== uid) {
-    return NextResponse.json({ error: 'You can only change scenarios you created' }, { status: 403 });
+    return NextResponse.json({ error: 'You can only change patient cases you created' }, { status: 403 });
   }
   return null;
 }
@@ -121,7 +121,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
   const { error } = await supabase.from('scenario_tasks').delete().eq('id', taskId).eq('scenario_id', id);
   if (error) {
-    console.error('Failed to remove scenario task', error);
+    console.error('Failed to remove patient case task', error);
     return NextResponse.json({ error: 'Unable to remove the task' }, { status: 500 });
   }
   return NextResponse.json({ ok: true });

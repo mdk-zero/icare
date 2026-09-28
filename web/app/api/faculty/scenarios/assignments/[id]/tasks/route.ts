@@ -237,7 +237,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       .eq('id', task_id)
       .maybeSingle();
     if (!task || task.scenario_id !== loaded.assignment.scenario_id) {
-      return NextResponse.json({ error: 'Task not found for this scenario' }, { status: 404 });
+      return NextResponse.json({ error: 'Task not found for this patient case' }, { status: 404 });
     }
 
     const taskSteps = await fetchTaskSteps(supabase, [task_id]);

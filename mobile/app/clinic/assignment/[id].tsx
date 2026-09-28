@@ -94,7 +94,7 @@ export default function ScenarioBriefScreen() {
         if (!cancelled) setScenario(result.data);
       })
       .catch((err) => {
-        if (!cancelled) setScenarioError(err instanceof Error ? err.message : 'Unable to load scenario');
+        if (!cancelled) setScenarioError(err instanceof Error ? err.message : 'Unable to load patient case');
       });
     return () => {
       cancelled = true;
@@ -252,7 +252,7 @@ export default function ScenarioBriefScreen() {
 
       {scenario && scenario.description.length > 0 && (
         <Card style={styles.blockCard}>
-          <Text style={styles.blockLabel}>Scenario</Text>
+          <Text style={styles.blockLabel}>Patient Case</Text>
           <Text style={styles.description}>{scenario.description}</Text>
         </Card>
       )}
@@ -301,7 +301,7 @@ export default function ScenarioBriefScreen() {
       <Card style={styles.blockCard}>
         <Text style={styles.blockLabel}>Clinical Tasks</Text>
         {totalCount === 0 && (
-          <Text style={styles.emptyTasks}>No tasks have been set for this scenario yet.</Text>
+          <Text style={styles.emptyTasks}>No tasks have been set for this patient case yet.</Text>
         )}
         {tasks.map((task: ScenarioTask) => (
           <View key={task.id} style={styles.checkRow}>

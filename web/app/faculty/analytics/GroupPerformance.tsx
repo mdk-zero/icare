@@ -39,9 +39,9 @@ export default function GroupPerformance({ sectionIds }: { sectionIds: string[] 
               <th className="px-3 py-2 font-semibold">Group</th>
               <th className="px-3 py-2 font-semibold">Supervisor</th>
               <th className="px-3 py-2 text-right font-semibold">Members</th>
-              <th className="px-3 py-2 text-right font-semibold">Scenario avg</th>
+              <th className="px-3 py-2 text-right font-semibold">Patient case avg</th>
               <th className="px-3 py-2 text-right font-semibold">Graded</th>
-              <th className="px-3 py-2 text-right font-semibold">Skill Assessment avg</th>
+              <th className="px-3 py-2 text-right font-semibold">Quiz avg</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-hairline">

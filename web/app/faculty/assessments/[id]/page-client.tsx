@@ -238,7 +238,7 @@ export default function AssessmentQuestionsClient({
       } : prev
     );
     setEditingDetails(false);
-    toast("Assessment details updated");
+    toast("Quiz details updated");
     // The paper size feeds publish validation, so re-read what still blocks it.
     loadData();
   };
@@ -847,12 +847,12 @@ export default function AssessmentQuestionsClient({
   if (!assessment) {
     return (
       <div className="bg-surface p-10 rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] text-center">
-        <p className="text-gray-500 mb-4">Assessment not found.</p>
+        <p className="text-gray-500 mb-4">Quiz not found.</p>
         <button
           onClick={() => router.push("/faculty/assessments")}
           className="px-6 py-2 bg-brand-600 text-white rounded-lg"
         >
-          Back to Skill Assessments
+          Back to Quizzes
         </button>
       </div>
     );
@@ -973,7 +973,7 @@ export default function AssessmentQuestionsClient({
                     </div>
                   )}
                   {/* Deleting a section leaves its name behind here, and a name
-                      with no section left to match hides the skill assessment from a
+                      with no section left to match hides the quiz from a
                       cohort that no longer exists. Surfaced so it can be
                       dropped — it has no checkbox to untick. */}
                   {staleTargetSections.length > 0 && (

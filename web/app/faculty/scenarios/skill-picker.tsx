@@ -92,7 +92,7 @@ export default function SkillPicker({ value, onChange, detectInput, existingIds 
   const detect = async () => {
     const input = detectInput();
     if (!input.title.trim() && !input.description?.trim()) {
-      setNote("Give the scenario a title or description first.");
+      setNote("Give the patient case a title or description first.");
       return;
     }
     setDetecting(true);
@@ -255,7 +255,7 @@ export default function SkillPicker({ value, onChange, detectInput, existingIds 
                     />
                     <span className="w-11 shrink-0 font-mono text-xs text-gray-500">{s.id}</span>
                     <span className="text-gray-800">{s.title}</span>
-                    {already && <span className="ml-auto text-[11px] text-gray-500">In scenario</span>}
+                    {already && <span className="ml-auto text-[11px] text-gray-500">In patient case</span>}
                   </label>
                 );
               })}

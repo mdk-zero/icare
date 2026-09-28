@@ -42,14 +42,14 @@ const navItems: NavItem[] = [
   },
   {
     id: "scenarios",
-    label: "Scenarios",
+    label: "Patient Cases",
     href: "/faculty/scenarios",
     icon: faNotesMedical,
     section: "Teaching",
   },
   {
     id: "assessments",
-    label: "Skill Assessments",
+    label: "Quizzes",
     href: "/faculty/assessments",
     icon: faListCheck,
     section: "Teaching",

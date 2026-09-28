@@ -276,7 +276,7 @@ export default function ProfileScreen() {
         <View style={styles.listCard}>
           {recommendations.length === 0 && (
             <Text style={styles.emptyListText}>
-              Personalized suggestions appear here after your skill assessment results are analyzed.
+              Personalized suggestions appear here after your quiz results are analyzed.
             </Text>
           )}
           {recommendations.slice(0, 2).map((rec, index) => {

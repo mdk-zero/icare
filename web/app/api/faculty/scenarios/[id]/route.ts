@@ -79,7 +79,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   if (patient_id !== undefined) {
     if (typeof patient_id !== 'string' || patient_id.trim().length === 0) {
       return NextResponse.json(
-        { error: 'A scenario always needs a patient — pick a different one instead of removing it' },
+        { error: 'A patient case always needs a patient — pick a different one instead of removing it' },
         { status: 400 },
       );
     }
@@ -123,7 +123,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       .maybeSingle();
 
     if (!existing) {
-      return NextResponse.json({ error: 'Scenario not found' }, { status: 404 });
+      return NextResponse.json({ error: 'Patient case not found' }, { status: 404 });
     }
 
     if (session.role !== 'admin' && existing.created_by !== session.uid) {
@@ -168,14 +168,14 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       );
     }
     if (error || !scenario) {
-      console.error('Failed to update scenario', error);
-      return NextResponse.json({ error: 'Unable to update scenario' }, { status: 500 });
+      console.error('Failed to update patient case', error);
+      return NextResponse.json({ error: 'Unable to update patient case' }, { status: 500 });
     }
 
     return NextResponse.json({ scenario });
   } catch (err) {
-    console.error('Update scenario failed', err);
-    return NextResponse.json({ error: 'Unable to update scenario' }, { status: 500 });
+    console.error('Update patient case failed', err);
+    return NextResponse.json({ error: 'Unable to update patient case' }, { status: 500 });
   }
 }
 
@@ -200,7 +200,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       .maybeSingle();
 
     if (!existing) {
-      return NextResponse.json({ error: 'Scenario not found' }, { status: 404 });
+      return NextResponse.json({ error: 'Patient case not found' }, { status: 404 });
     }
 
     if (session.role !== 'admin' && existing.created_by !== session.uid) {
@@ -210,13 +210,13 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     const { error } = await supabase.from('scenarios').delete().eq('id', id);
 
     if (error) {
-      console.error('Failed to delete scenario', error);
-      return NextResponse.json({ error: 'Unable to delete scenario' }, { status: 500 });
+      console.error('Failed to delete patient case', error);
+      return NextResponse.json({ error: 'Unable to delete patient case' }, { status: 500 });
     }
 
     return NextResponse.json({ success: true });
   } catch (err) {
-    console.error('Delete scenario failed', err);
-    return NextResponse.json({ error: 'Unable to delete scenario' }, { status: 500 });
+    console.error('Delete patient case failed', err);
+    return NextResponse.json({ error: 'Unable to delete patient case' }, { status: 500 });
   }
 }

@@ -36,9 +36,9 @@ export async function GET() {
       .limit(500);
 
     if (error) {
-      console.error('Failed to fetch scenarios', error);
+      console.error('Failed to fetch patient cases', error);
       return NextResponse.json(
-        { error: 'Unable to fetch scenarios', details: error.message },
+        { error: 'Unable to fetch patient cases', details: error.message },
         { status: 500 },
       );
     }
@@ -92,9 +92,9 @@ export async function GET() {
     return NextResponse.json({ scenarios: formatted });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
-    console.error('Fetch scenarios failed', err);
+    console.error('Fetch patient cases failed', err);
     return NextResponse.json(
-      { error: 'Unable to fetch scenarios', details: message },
+      { error: 'Unable to fetch patient cases', details: message },
       { status: 500 },
     );
   }
@@ -151,7 +151,7 @@ export async function POST(request: NextRequest) {
   // by hand or generated (with or without AI) — that's what lets students
   // chart vitals and EHR data against it.
   if (typeof patient_id !== 'string' || patient_id.trim().length === 0) {
-    return NextResponse.json({ error: 'Select a patient for this scenario' }, { status: 400 });
+    return NextResponse.json({ error: 'Select a patient for this patient case' }, { status: 400 });
   }
 
   try {
@@ -197,8 +197,8 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error || !scenario) {
-      console.error('Failed to create scenario', error);
-      return NextResponse.json({ error: 'Unable to create scenario' }, { status: 500 });
+      console.error('Failed to create patient case', error);
+      return NextResponse.json({ error: 'Unable to create patient case' }, { status: 500 });
     }
 
     // Its tasks are the Taylor's skills faculty confirmed, each with the
@@ -211,7 +211,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ scenario }, { status: 201 });
   } catch (err) {
-    console.error('Create scenario failed', err);
-    return NextResponse.json({ error: 'Unable to create scenario' }, { status: 500 });
+    console.error('Create patient case failed', err);
+    return NextResponse.json({ error: 'Unable to create patient case' }, { status: 500 });
   }
 }

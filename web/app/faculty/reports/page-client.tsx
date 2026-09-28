@@ -105,7 +105,7 @@ function suggestFor(
       icon: faTriangleExclamation,
       tone: "rose",
       title: `${atRisk[0].label} is at risk`,
-      detail: "Skill area profile, skill assessment history and clinical activity in one report.",
+      detail: "Skill area profile, quiz history and clinical activity in one report.",
       cta: "Preview their report",
       action: { kind: "preview", type: "student", targetId: atRisk[0].id, subject: atRisk[0].label },
     });
@@ -271,8 +271,8 @@ export default function FacultyReportsClient() {
       type: "student",
       label: "Student",
       icon: faUser,
-      blurb: "Everything one student has been graded on: scenarios, case presentations, skill assessments and attendance.",
-      contents: ["Averages and attendance", "Scenario grades", "Case presentations", "Skill assessments", "Skill areas"],
+      blurb: "Everything one student has been graded on: scenarios, case presentations, quizzes and attendance.",
+      contents: ["Averages and attendance", "Patient case grades", "Case presentations", "Quizzes", "Skill areas"],
       noun: "students",
       list: {
         items: studentTargets,
@@ -323,9 +323,9 @@ export default function FacultyReportsClient() {
     }),
     defineReportType<DatedTarget>({
       type: "scenario",
-      label: "Scenario",
+      label: "Patient Case",
       icon: faNotesMedical,
-      blurb: "Who a scenario went to, what is awaiting a grade, and how it was graded.",
+      blurb: "Who a patient case went to, what is awaiting a grade, and how it was graded.",
       contents: ["Graded and awaiting", "Grades by level", "Every student with group"],
       noun: "scenarios",
       list: {
@@ -344,9 +344,9 @@ export default function FacultyReportsClient() {
     }),
     defineReportType<DatedTarget>({
       type: "assessment",
-      label: "Assessment",
+      label: "Quiz",
       icon: faListCheck,
-      blurb: "How a skill assessment went for everyone given it: best scores, bands and pass rate.",
+      blurb: "How a quiz went for everyone given it: best scores, bands and pass rate.",
       contents: ["Pass rate", "Score distribution", "Every student, late ones flagged"],
       noun: "assessments",
       list: {
@@ -368,7 +368,7 @@ export default function FacultyReportsClient() {
       label: "Roster summary",
       icon: faUsers,
       blurb: "Every student you supervise, one row each — nothing to pick.",
-      contents: ["Scenario and quiz averages", "Students with nothing graded", "Every student with section and group"],
+      contents: ["Patient case and quiz averages", "Students with nothing graded", "Every student with section and group"],
       noun: "students",
       scope:
         studentTargets && sections.data

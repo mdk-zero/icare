@@ -60,8 +60,8 @@ import SkillAreaTrend from "./skill-area-trend";
 /** Shown in turn while the summary is written, following what it draws on. */
 const STUDENT_SUMMARY_PHRASES = [
   "Thinking…",
-  "Reviewing skill assessment scores…",
-  "Going through scenarios…",
+  "Reviewing quiz scores…",
+  "Going through patient cases…",
   "Analyzing skill areas…",
   "Checking the risk prediction…",
   "Drafting recommendations…",
@@ -582,7 +582,7 @@ export default function StudentDetailClient() {
                 iconBg="bg-purple-50"
                 iconColor="text-purple-600"
                 value={String(student.quiz_count ?? 0)}
-                label="Skill Assessments"
+                label="Quizzes"
               />
               <StatTile
                 icon={faClock}
@@ -693,7 +693,7 @@ export default function StudentDetailClient() {
                 <p className="text-xs text-gray-500">
                   {riskPrediction.features.attempts_count
                     ? `Only ${riskPrediction.features.attempts_count} graded ${riskPrediction.features.attempts_count === 1 ? 'quiz' : 'quizzes'} so far, so this rating leans on missed deadlines until there are 3.`
-                    : 'No graded skill assessments yet, so this rating is based on missed deadlines rather than scores.'}
+                    : 'No graded quizzes yet, so this rating is based on missed deadlines rather than scores.'}
                 </p>
               )}
               <p className="text-xs text-gray-400 border-t border-hairline pt-3">
@@ -710,8 +710,8 @@ export default function StudentDetailClient() {
 
         <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {([
-            { key: 'performance', label: 'Performance', hint: 'Skill Assessment results', count: performanceHistory.length, unit: 'attempts', icon: faChartLine },
-            { key: 'scenarios', label: 'Scenarios', hint: 'Simulation runs', count: scenarioHistory.length, unit: 'runs', icon: faStethoscope },
+            { key: 'performance', label: 'Performance', hint: 'Quiz results', count: performanceHistory.length, unit: 'attempts', icon: faChartLine },
+            { key: 'scenarios', label: 'Patient Cases', hint: 'Simulation runs', count: scenarioHistory.length, unit: 'runs', icon: faStethoscope },
             { key: 'competencies', label: 'Skill Areas', hint: 'Skill mastery', count: competencies.length, unit: 'areas', icon: faListCheck },
             { key: 'reflections', label: 'Reflections', hint: 'Reflections & goals', count: reflections?.length ?? 0, unit: 'entries', icon: faBullseye },
           ] as const).map((tab) => {
@@ -752,7 +752,7 @@ export default function StudentDetailClient() {
           {activeTab === 'performance' && (
             <div className="space-y-2">
               {performanceHistory.length === 0 ? (
-                <p className="text-gray-500 text-center py-8">No skill assessment attempts yet</p>
+                <p className="text-gray-500 text-center py-8">No quiz attempts yet</p>
               ) : (
                 performanceHistory.map((record) => {
                   const duration = formatDuration(record.time_taken_seconds);
@@ -805,7 +805,7 @@ export default function StudentDetailClient() {
           {activeTab === 'scenarios' && (
             <div className="space-y-2">
               {scenarioHistory.length === 0 ? (
-                <p className="text-gray-500 text-center py-8">No scenario performance records yet</p>
+                <p className="text-gray-500 text-center py-8">No patient case performance records yet</p>
               ) : (
                 scenarioHistory.map((record) => {
                   const duration = formatDuration(record.time_taken);
@@ -906,7 +906,7 @@ export default function StudentDetailClient() {
                             {COMPETENCY_LEVEL_LABEL[c.level]}
                           </span>
                           {/* Where the number came from — faculty judgement or
-                              the student's own skill assessment performance. */}
+                              the student's own quiz performance. */}
                           <span className="inline-flex items-center gap-1 text-[11px] text-gray-500">
                             <FontAwesomeIcon
                               icon={

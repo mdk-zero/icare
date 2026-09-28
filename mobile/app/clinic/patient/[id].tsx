@@ -115,7 +115,7 @@ export default function PatientHubScreen() {
       setTaskResult(tasks.data);
       setChartError(null);
     } catch (err) {
-      setChartError(err instanceof Error ? err.message : 'Unable to load this scenario’s tasks');
+      setChartError(err instanceof Error ? err.message : 'Unable to load this patient case’s tasks');
     }
   }, [assignmentId]);
 
@@ -222,7 +222,7 @@ export default function PatientHubScreen() {
             <Text style={styles.viewOnlyTitle}>View only</Text>
           </View>
           <Text style={styles.viewOnlyBody}>
-            This patient is not part of a scenario assigned to you. Your instructor assigns the
+            This patient is not part of a patient case assigned to you. Your instructor assigns the
             patient you are responsible for.
           </Text>
         </Card>
@@ -328,7 +328,7 @@ export default function PatientHubScreen() {
           <Card style={styles.blockCard}>
             {chartError ? <Text style={styles.emptyText}>{chartError}</Text> : null}
             {!chartError && tasks.length === 0 ? (
-              <Text style={styles.emptyText}>No tasks have been set for this scenario yet.</Text>
+              <Text style={styles.emptyText}>No tasks have been set for this patient case yet.</Text>
             ) : null}
             {tasks.map((task: ScenarioTask) => (
               <View key={task.id} style={styles.checkRow}>

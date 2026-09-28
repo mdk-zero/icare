@@ -159,7 +159,7 @@ export default function FacultyAuditClient() {
                   a.action.toLowerCase().includes("scenario"),
                 ).length
               }
-              label="Scenario Activities"
+              label="Patient Case Activities"
               iconBg="bg-purple-50"
               iconColor="text-purple-600"
             />
@@ -189,7 +189,7 @@ export default function FacultyAuditClient() {
           >
             <option value="all">All Actions</option>
             <option value="alert">Alerts</option>
-            <option value="scenario">Scenarios</option>
+            <option value="scenario">Patient Cases</option>
             <option value="report">Reports</option>
             <option value="review">Reviews</option>
             <option value="login">Logins</option>

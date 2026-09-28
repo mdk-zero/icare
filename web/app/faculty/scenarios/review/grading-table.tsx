@@ -95,7 +95,7 @@ export default function GradingTable({
     );
   }
   if (tasks.length === 0) {
-    return <p className="px-5 py-10 text-center text-sm text-gray-500 sm:px-6">This scenario has no criteria.</p>;
+    return <p className="px-5 py-10 text-center text-sm text-gray-500 sm:px-6">This patient case has no criteria.</p>;
   }
 
   return (
@@ -160,7 +160,7 @@ export default function GradingTable({
         </table>
       </div>
 
-      {/* The rubric: what each column means for this scenario. */}
+      {/* The rubric: what each column means for this patient case. */}
       <dl className="mt-3 grid gap-2 rounded-xl border border-hairline bg-subtle p-3 sm:grid-cols-3">
         {TASK_RATINGS.map((level) => (
           <div key={level.key} className="min-w-0">

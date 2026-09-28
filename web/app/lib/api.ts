@@ -1878,7 +1878,7 @@ export async function generateAIScenario(
 
     return {
       skills: json.scenario.skills ?? [],
-      title: json.scenario.title || 'AI Generated Scenario',
+      title: json.scenario.title || 'AI Generated Patient Case',
       description: json.scenario.description || prompt,
       difficulty: json.scenario.difficulty || 'intermediate',
       // Must stay on the scenario_category enum or the save is rejected.
@@ -1888,7 +1888,7 @@ export async function generateAIScenario(
       is_ai_generated: true,
     };
   } catch (err) {
-    return { error: err instanceof Error ? err.message : 'Unable to generate scenario' };
+    return { error: err instanceof Error ? err.message : 'Unable to generate patient case' };
   }
 }
 
@@ -1951,7 +1951,7 @@ export async function generateScenarioBatch(
 
     return { scenarios: json.scenarios, warning: json.warning };
   } catch (err) {
-    return { error: err instanceof Error ? err.message : 'Unable to generate scenarios' };
+    return { error: err instanceof Error ? err.message : 'Unable to generate patient cases' };
   }
 }
 
@@ -1988,7 +1988,7 @@ export async function suggestAIScenario(
       prompt: json.prompt,
     };
   } catch (err) {
-    return { error: err instanceof Error ? err.message : 'Unable to suggest scenario' };
+    return { error: err instanceof Error ? err.message : 'Unable to suggest patient case' };
   }
 }
 

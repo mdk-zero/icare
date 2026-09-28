@@ -73,7 +73,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       .eq('id', scenario_id)
       .maybeSingle();
     if (scenarioError) {
-      console.error('Failed to read scenario', scenarioError);
+      console.error('Failed to read patient case', scenarioError);
       return NextResponse.json({ error: 'Unable to assign the case' }, { status: 500 });
     }
     if (!scenario) return NextResponse.json({ error: 'That case no longer exists' }, { status: 404 });

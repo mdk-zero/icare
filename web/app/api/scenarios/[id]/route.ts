@@ -25,12 +25,12 @@ export async function GET(request: Request, { params }: RouteParams) {
       .maybeSingle();
 
     if (error) {
-      console.error('Failed to fetch scenario', error);
-      return NextResponse.json({ error: 'Unable to fetch scenario' }, { status: 500 });
+      console.error('Failed to fetch patient case', error);
+      return NextResponse.json({ error: 'Unable to fetch patient case' }, { status: 500 });
     }
 
     if (!scenario) {
-      return NextResponse.json({ error: 'Scenario not found' }, { status: 404 });
+      return NextResponse.json({ error: 'Patient case not found' }, { status: 404 });
     }
 
     // An admin oversees every section and reads anything.
@@ -59,7 +59,7 @@ export async function GET(request: Request, { params }: RouteParams) {
 
       if (assignmentError) {
         console.error('Failed to verify assignment', assignmentError);
-        return NextResponse.json({ error: 'Unable to fetch scenario' }, { status: 500 });
+        return NextResponse.json({ error: 'Unable to fetch patient case' }, { status: 500 });
       }
 
       if (!assignment) {
@@ -69,7 +69,7 @@ export async function GET(request: Request, { params }: RouteParams) {
 
     return NextResponse.json({ scenario });
   } catch (err) {
-    console.error('Fetch scenario failed', err);
-    return NextResponse.json({ error: 'Unable to fetch scenario' }, { status: 500 });
+    console.error('Fetch patient case failed', err);
+    return NextResponse.json({ error: 'Unable to fetch patient case' }, { status: 500 });
   }
 }

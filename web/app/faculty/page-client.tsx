@@ -179,7 +179,7 @@ export default function FacultyDashboard() {
             iconColor="text-brand-600"
             value={review}
             label="To review"
-            caption={review > 0 ? "Scenario submissions" : "Queue is clear"}
+            caption={review > 0 ? "Patient case submissions" : "Queue is clear"}
           />
           <StatTile
             href="/faculty/teams"

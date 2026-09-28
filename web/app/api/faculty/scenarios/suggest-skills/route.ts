@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
   }
   const caseText = parts.filter(Boolean).join('\n').slice(0, MAX_CASE_CHARS);
   if (!caseText) {
-    return NextResponse.json({ error: 'Describe the scenario first' }, { status: 400 });
+    return NextResponse.json({ error: 'Describe the patient case first' }, { status: 400 });
   }
   const lesson = text(body.lesson_text).slice(0, MAX_LESSON_CHARS) || null;
 

@@ -1119,8 +1119,8 @@ export default function FacultyAnalyticsClient() {
                     <h3 className="font-semibold text-gray-900">Classroom Performance Overview</h3>
                     <p className="text-xs text-gray-400">
                       {trendSolo
-                        ? `Average skill assessment score over time — ${trendSolo.name}`
-                        : "Average skill assessment score over time, one line per section"}
+                        ? `Average quiz score over time — ${trendSolo.name}`
+                        : "Average quiz score over time, one line per section"}
                     </p>
                   </div>
                 </div>

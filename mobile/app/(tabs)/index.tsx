@@ -226,7 +226,7 @@ export default function DashboardScreen() {
       href: "/progress",
     },
     {
-      label: "Skill Assessments Available",
+      label: "Quizzes Available",
       value: String(quizzesAvailable),
       icon: "file-lines",
       accent: Accent.violet,
@@ -362,10 +362,10 @@ export default function DashboardScreen() {
         ))}
       </Animated.View>
 
-      {/* Scenarios */}
+      {/* Patient Cases */}
       <Animated.View entering={FadeInDown.duration(220).delay(160)} style={styles.section}>
         <SectionHeader
-          title={nextTask ? "Up Later" : "Assigned Scenarios"}
+          title={nextTask ? "Up Later" : "Assigned Patient Cases"}
           subtitle={`${openTasks.length} pending`}
           actionLabel="See all"
           onAction={() => router.push("/clinic")}
@@ -377,7 +377,7 @@ export default function DashboardScreen() {
                 <FontAwesome6 name="clipboard-list" size={18} color={Teal.primary} />
               </View>
               <Text style={styles.emptyTasks}>
-                No scenarios assigned yet — your instructor will assign them here.
+                No patient cases assigned yet — your instructor will assign them here.
               </Text>
             </View>
           ) : nextTask && laterTasks.length === 0 ? (

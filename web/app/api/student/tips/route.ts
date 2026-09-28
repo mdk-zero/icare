@@ -127,7 +127,7 @@ function buildPrompt(
 
 
       const lines = [
-        `- Scenario: "${scenario?.title ?? 'Unknown scenario'}"`,
+        `- Patient Case: "${scenario?.title ?? 'Unknown patient case'}"`,
         `  Category: ${scenario?.category ?? 'unknown'}, difficulty: ${scenario?.difficulty ?? 'unknown'}`,
         `  Status: ${a.status}, ${a.required ? 'required' : 'optional'}, ${deadlineLabel(a.deadline)}`,
         `  Task progress: ${done} of ${tasks.length} checked off`,
@@ -152,11 +152,11 @@ function buildPrompt(
   const historyBlock =
     scoredHistory.length > 0
       ? scoredHistory
-          .map((a) => `- "${scenariosById.get(a.scenario_id)?.title ?? 'Unknown scenario'}": scored ${a.score}%`)
+          .map((a) => `- "${scenariosById.get(a.scenario_id)?.title ?? 'Unknown patient case'}": scored ${a.score}%`)
           .join('\n')
-      : '(no scenarios finished and scored yet)';
+      : '(no patient cases finished and scored yet)';
 
-  return `You are a clinical instructor coaching one nursing student through the simulation scenarios currently assigned to them. Base every tip on the assignments below. Never invent a scenario, a task, a patient, or a score that is not listed.
+  return `You are a clinical instructor coaching one nursing student through the patient cases currently assigned to them. Base every tip on the assignments below. Never invent a patient case, a task, a patient, or a score that is not listed.
 
 Scenarios this student has open right now:
 
@@ -176,11 +176,11 @@ Return ONLY a valid JSON object with this exact structure (no markdown, no expla
 Guidelines:
 - Return ${Math.min(MAX_TIPS, Math.max(2, open.length + 1))} tips, ordered most useful first.
 - "title" is an imperative phrase of at most 5 words, e.g. "Rehearse your hand hygiene".
-- "tip" is ONE sentence, at most 25 words, giving concrete clinical or workflow advice the student can act on today. Be specific to the scenario's category, objectives, and task list — never generic study advice like "review your notes".
-- "scenario_title" must be copied exactly from one of the open scenarios above when the tip is about that scenario, or null when the tip spans several of them.
-- Prioritise required scenarios and near or passed deadlines. Say plainly when something is overdue.
+- "tip" is ONE sentence, at most 25 words, giving concrete clinical or workflow advice the student can act on today. Be specific to the patient case's category, objectives, and task list — never generic study advice like "review your notes".
+- "scenario_title" must be copied exactly from one of the open patient cases above when the tip is about that patient case, or null when the tip spans several of them.
+- Prioritise required patient cases and near or passed deadlines. Say plainly when something is overdue.
 - At most one tip may be about workflow (deadlines, ordering what to practise); the rest must be clinical.
-- If a past score is low, one tip may address that weakness, but only in terms of the scenarios listed above.
+- If a past score is low, one tip may address that weakness, but only in terms of the patient cases listed above.
 - Plain, encouraging, professional language for a student nurse. This is simulation training, so give no medical advice about real patients.`;
 }
 

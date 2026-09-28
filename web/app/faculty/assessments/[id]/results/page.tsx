@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import AssessmentResultsClient from "./page-client";
 
 export const metadata: Metadata = {
-  title: "Assessment Results | iCARE++ Instructor",
+  title: "Quiz Results | iCARE++ Instructor",
 };
 
 export default async function AssessmentResultsPage({

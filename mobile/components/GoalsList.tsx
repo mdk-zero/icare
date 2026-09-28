@@ -37,7 +37,7 @@ export function GoalsList() {
       <SectionHeader title="My Goals" />
       <View style={styles.listCard}>
         {goals !== null && goals.length === 0 && (
-          <Text style={styles.empty}>Set goals when you reflect on a graded scenario or skill assessment.</Text>
+          <Text style={styles.empty}>Set goals when you reflect on a graded patient case or quiz.</Text>
         )}
         {(goals ?? []).slice(0, 8).map((g, i) => (
           <Pressable

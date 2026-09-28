@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import EditScenarioClient from "./page-client";
 
 export const metadata: Metadata = {
-  title: "Edit Scenario | iCARE++",
+  title: "Edit Patient Case | iCARE++",
 };
 
 export default async function EditScenarioPage({

@@ -261,7 +261,7 @@ export default function ClinicScreen() {
 
       {showTips ? (
         <View style={styles.section}>
-          <SectionHeader title="AI Study Tips" subtitle="Generated from your assigned scenarios" />
+          <SectionHeader title="AI Study Tips" subtitle="Generated from your assigned patient cases" />
           {tips.loading && tipList.length === 0 ? (
             <View style={styles.tipCard}>
               <View style={styles.tipBody}>

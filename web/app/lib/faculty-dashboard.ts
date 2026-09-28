@@ -539,13 +539,13 @@ export async function buildFacultyOverview(
     // The review page's rule: handed in but not yet finalized.
     const done = row.status === 'completed' || Boolean(row.submitted_at);
     tally(row.student_id, row.deadline, done);
-    noteDueSoon('scenario', row.scenario_id, row.scenarios?.title ?? 'Scenario', row.deadline, done);
+    noteDueSoon('scenario', row.scenario_id, row.scenarios?.title ?? 'Patient Case', row.deadline, done);
     if (row.submitted_at && row.status !== 'completed') {
       reviewItems.push({
         assignment_id: row.id,
         student_id: row.student_id,
         student_name: studentById.get(row.student_id)?.name ?? 'Unknown student',
-        scenario_title: row.scenarios?.title ?? 'Scenario',
+        scenario_title: row.scenarios?.title ?? 'Patient Case',
         submitted_at: row.submitted_at,
       });
     }
@@ -553,7 +553,7 @@ export async function buildFacultyOverview(
   for (const row of quizRows) {
     const done = row.status === 'completed';
     tally(row.student_id, row.deadline, done);
-    noteDueSoon('quiz', row.assessment_id, row.assessments?.title ?? 'Skill Assessment', row.deadline, done);
+    noteDueSoon('quiz', row.assessment_id, row.assessments?.title ?? 'Quiz', row.deadline, done);
   }
 
   // ---- Quiz performance ---------------------------------------------
