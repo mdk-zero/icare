@@ -706,9 +706,11 @@ export default function FacultyScenariosClient() {
       )}
 
       {/* Filters */}
-      <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 mb-4">
-        <div className="flex items-center gap-3 w-full lg:w-auto">
-          <div className="relative w-full lg:w-96">
+      {/* Wraps instead of overflowing: the filters shrink and wrap first, then
+          the action buttons drop to their own right-aligned row. */}
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <div className="flex min-w-0 flex-[1_1_36rem] flex-wrap items-center gap-3">
+          <div className="relative min-w-0 max-w-md flex-[1_1_16rem]">
             <FontAwesomeIcon
               icon={faSearch}
               className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500"
@@ -721,7 +723,7 @@ export default function FacultyScenariosClient() {
               className={inputClassName + " pl-10"}
             />
           </div>
-          <div className="relative w-full lg:w-44 shrink-0">
+          <div className="relative min-w-0 flex-[1_1_10rem] sm:w-44 sm:flex-none">
             <FontAwesomeIcon
               icon={faFilter}
               className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500"
@@ -741,7 +743,7 @@ export default function FacultyScenariosClient() {
               className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none"
             />
           </div>
-          <div className="relative w-full lg:w-48 shrink-0">
+          <div className="relative min-w-0 flex-[1_1_10rem] sm:w-48 sm:flex-none">
             <FontAwesomeIcon
               icon={faHospitalUser}
               className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500"
@@ -764,10 +766,10 @@ export default function FacultyScenariosClient() {
             />
           </div>
         </div>
-        <div className="flex justify-end gap-3 w-full lg:w-auto">
+        <div className="ml-auto flex min-w-0 basis-full flex-wrap justify-end gap-2 sm:basis-auto">
           <button
             onClick={openBatchModal}
-            className="group flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl border border-brand-700/25 bg-surface px-4 py-2.5 text-sm font-semibold text-brand-800 transition-all hover:border-brand-700/40 hover:bg-brand-50"
+            className="group flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-xl sm:flex-none border border-brand-700/25 bg-surface px-4 py-2.5 text-sm font-semibold text-brand-800 transition-all hover:border-brand-700/40 hover:bg-brand-50"
           >
             <FontAwesomeIcon
               icon={faLayerGroup}
@@ -777,7 +779,7 @@ export default function FacultyScenariosClient() {
           </button>
           <button
             onClick={() => router.push("/faculty/scenarios/review")}
-            className="group flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl border border-gray-300 bg-surface px-4 py-2.5 text-sm font-semibold text-gray-700 transition-all hover:border-brand-300 hover:bg-brand-50"
+            className="group flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-xl sm:flex-none border border-gray-300 bg-surface px-4 py-2.5 text-sm font-semibold text-gray-700 transition-all hover:border-brand-300 hover:bg-brand-50"
           >
             <FontAwesomeIcon
               icon={faListCheck}
@@ -787,7 +789,7 @@ export default function FacultyScenariosClient() {
           </button>
           <button
             onClick={() => router.push("/faculty/scenarios/new")}
-            className="flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_2px_8px_-1px_rgb(27_107_123_/_0.35)] transition-all hover:bg-brand-700 hover:shadow-[0_4px_14px_-2px_rgb(27_107_123_/_0.45)]"
+            className="flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-brand-600 sm:flex-none px-4 py-2.5 text-sm font-semibold text-white shadow-[0_2px_8px_-1px_rgb(27_107_123_/_0.35)] transition-all hover:bg-brand-700 hover:shadow-[0_4px_14px_-2px_rgb(27_107_123_/_0.45)]"
           >
             <FontAwesomeIcon icon={faPlus} className="w-4 h-4" />
             Create Patient Case
