@@ -67,12 +67,14 @@ const DRIFTERS: {
   rise: number;
   sway: number;
   delay: number;
+  /** The organs keep working while they drift: the heart beats, the lungs breathe. */
+  life?: "beat" | "breathe";
 }[] = [
   { icon: faStethoscope, left: "4%", size: 45, rise: 26, sway: 7, delay: -3 },
   { icon: faPills, left: "13%", size: 21, rise: 21, sway: 5, delay: -14 },
-  { icon: faHeartPulse, left: "22%", size: 33, rise: 29, sway: 8, delay: -20 },
+  { icon: faHeartPulse, left: "22%", size: 33, rise: 29, sway: 8, delay: -20, life: "beat" },
   { icon: faSyringe, left: "31%", size: 18, rise: 19, sway: 4.5, delay: -7 },
-  { icon: faLungs, left: "39%", size: 39, rise: 32, sway: 9, delay: -12 },
+  { icon: faLungs, left: "39%", size: 39, rise: 32, sway: 9, delay: -12, life: "breathe" },
   { icon: faDroplet, left: "47%", size: 16, rise: 18, sway: 4, delay: -1 },
   { icon: faTemperatureHalf, left: "55%", size: 27, rise: 24, sway: 6, delay: -17 },
   { icon: faVial, left: "63%", size: 20, rise: 22, sway: 5.5, delay: -9 },
@@ -99,6 +101,21 @@ const driftStyles = `
   from { transform: translateX(-14px) rotate(-14deg); }
   to { transform: translateX(14px) rotate(14deg); }
 }
+/* About 70 bpm: a strong "lub", a softer "dub", then rest. */
+.auth-beat { animation: authBeat 0.86s ease-out infinite; transform-origin: center; }
+@keyframes authBeat {
+  0%, 100% { transform: scale(1); }
+  12% { transform: scale(1.2); }
+  22% { transform: scale(0.97); }
+  32% { transform: scale(1.11); }
+  46% { transform: scale(1); }
+}
+/* About 14 breaths a minute: a slow swell in, a slightly longer ease out. */
+.auth-breathe { animation: authBreathe 4.2s ease-in-out infinite; transform-origin: center; }
+@keyframes authBreathe {
+  0%, 100% { transform: scale(0.9, 0.92); }
+  42% { transform: scale(1.1, 1.06); }
+}
 `;
 
 export function DriftingKit() {
@@ -123,10 +140,12 @@ export function DriftingKit() {
                 filter: `blur(${((1 - depth) * 1.4).toFixed(2)}px)`,
               }}
             >
-              <FontAwesomeIcon
-                icon={d.icon}
-                style={{ width: d.size, height: d.size, color: "var(--auth-accent)" }}
-              />
+              <div className={d.life ? `auth-${d.life} flex` : undefined}>
+                <FontAwesomeIcon
+                  icon={d.icon}
+                  style={{ width: d.size, height: d.size, color: "var(--auth-accent)" }}
+                />
+              </div>
             </div>
           </div>
         );
