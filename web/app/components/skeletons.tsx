@@ -619,3 +619,71 @@ export function SkeletonShiftRoster({ rows = 6 }: { rows?: number }) {
     </div>
   );
 }
+
+/** Mirrors the Library skill browser: a chapter heading, then skill rows with a mono id. */
+export function SkeletonLibrarySkillList({ chapters = 3, perChapter = 4 }: { chapters?: number; perChapter?: number }) {
+  const titles = ["w-40", "w-52", "w-32", "w-44", "w-36"];
+  return (
+    <div className="animate-pulse" aria-hidden>
+      {Array.from({ length: chapters }).map((_, c) => (
+        <div key={c}>
+          <div className="px-3 pt-3 pb-1.5">
+            <div className="h-2.5 w-36 rounded bg-gray-100" />
+          </div>
+          {Array.from({ length: perChapter }).map((_, i) => (
+            <div key={i} className="flex items-center gap-2 px-3 py-2.5">
+              <div className="h-3 w-8 shrink-0 rounded bg-gray-100" />
+              <div className={`h-3.5 ${titles[(c * perChapter + i) % titles.length]} max-w-full rounded bg-gray-100`} />
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Mirrors the Library's selected skill: its header with the add buttons, then material cards. */
+export function SkeletonLibraryMaterials({ cards = 2 }: { cards?: number }) {
+  return (
+    <div className="space-y-4 animate-pulse" aria-hidden>
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-hairline bg-surface p-4 shadow-tile">
+        <div className="space-y-2">
+          <div className="h-3 w-40 rounded bg-gray-100" />
+          <div className="h-4 w-64 max-w-full rounded bg-gray-100" />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {["w-16", "w-14", "w-20", "w-16"].map((w, i) => (
+            <div key={i} className={`h-7 ${w} rounded-lg bg-gray-100`} />
+          ))}
+        </div>
+      </div>
+      <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2">
+        {Array.from({ length: cards }).map((_, i) => (
+          <div key={i} className="flex flex-col overflow-hidden rounded-xl border border-hairline bg-surface shadow-tile">
+            <div className="flex aspect-video items-center justify-center bg-gray-100">
+              <div className="h-12 w-12 rounded-full bg-gray-200/70" />
+            </div>
+            <div className="space-y-2.5 p-4">
+              <div className="flex items-start justify-between gap-2">
+                <div className="h-4 w-2/3 rounded bg-gray-100" />
+                <div className="h-5 w-16 rounded-full bg-gray-100" />
+              </div>
+              <div className="h-3 w-full rounded bg-gray-100" />
+              <div className="flex gap-1.5">
+                <div className="h-5 w-12 rounded bg-gray-100" />
+                <div className="h-5 w-20 rounded bg-gray-100" />
+              </div>
+            </div>
+            <div className="flex items-center gap-3 border-t border-hairline bg-subtle px-4 py-2.5">
+              <div className="h-3 w-20 rounded bg-gray-100" />
+              <span className="flex-1" />
+              <div className="h-3 w-12 rounded bg-gray-100" />
+              <div className="h-3.5 w-3.5 rounded bg-gray-100" />
+              <div className="h-3.5 w-3.5 rounded bg-gray-100" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}

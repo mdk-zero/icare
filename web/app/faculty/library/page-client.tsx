@@ -21,6 +21,7 @@ import {
   faWandMagicSparkles,
 } from "@fortawesome/free-solid-svg-icons";
 import PageHeader from "../../components/PageHeader";
+import { SkeletonLibraryMaterials, SkeletonLibrarySkillList } from "../../components/skeletons";
 import ConfirmModal, { type ConfirmConfig } from "../../components/ConfirmModal";
 import { toast } from "../../components/Toast";
 import { usePageData } from "../../lib/use-page-data";
@@ -124,6 +125,8 @@ export default function LibraryClient() {
   const skillMaterials = materials.filter((m) => m.skill_id === skillId);
   const skillSuggestions = suggestions.filter((s) => s.skill_id === skillId);
   const published = materials.filter((m) => m.status === "published").length;
+  // Only the first load: a refresh behind data already on screen keeps the rows.
+  const firstLoad = loading && !data;
 
   const act = async (id: string, fn: () => Promise<{ error?: string }>, ok: string) => {
     setBusyId(id);
@@ -176,12 +179,16 @@ export default function LibraryClient() {
                 className="w-full pl-9 pr-3 py-2 bg-surface border border-gray-300 rounded-lg text-sm text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600"
               />
             </div>
-            <p className="mt-2 text-xs text-gray-500 tabular-nums">
-              {materials.length} material{materials.length === 1 ? "" : "s"} · {published} published
-            </p>
+            {firstLoad ? (
+              <div className="mt-2.5 h-3 w-36 animate-pulse rounded bg-gray-100" aria-hidden />
+            ) : (
+              <p className="mt-2 text-xs text-gray-500 tabular-nums">
+                {materials.length} material{materials.length === 1 ? "" : "s"} · {published} published
+              </p>
+            )}
           </div>
           <div className="max-h-[70vh] overflow-y-auto">
-            {loading && <p className="p-4 text-sm text-gray-500">Loading skills…</p>}
+            {firstLoad && <SkeletonLibrarySkillList />}
             {chapters.map((c) => (
               <div key={c.chapter}>
                 <p className="px-3 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
@@ -212,7 +219,8 @@ export default function LibraryClient() {
         </aside>
 
         {/* The skill's materials */}
-        <section className="space-y-4 min-w-0">
+        <section className="space-y-4 min-w-0" aria-busy={firstLoad}>
+          {firstLoad && <SkeletonLibraryMaterials />}
           {skill && (
             <div className="bg-surface rounded-xl border border-hairline shadow-tile p-4 flex flex-wrap items-center justify-between gap-3">
               <div className="min-w-0">
