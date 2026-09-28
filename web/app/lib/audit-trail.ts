@@ -1,17 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from './supabase/server';
+import type { AdminScope } from './admin-scope';
 
 const MAX_LIMIT = 200;
 
 /**
  * One page of the audit trail, filterable by action text, actor role, entity
- * type and date range, with offset pagination. `actorId` narrows it to one
- * person's own activity (an admin's Activity Log); null reads the whole
- * system's trail, which only the super admin gets.
+ * type and date range, with offset pagination. `actorFilter` is a PostgREST
+ * `or` filter naming whose activity to show (a dean's own plus their
+ * instructors'; see deanActorFilter); null reads the whole system's trail,
+ * which only the super admin gets.
  */
 export async function readAuditTrail(
   request: NextRequest,
-  actorId: string | null,
+  actorFilter: string | null,
 ): Promise<NextResponse> {
   const params = request.nextUrl.searchParams;
   const q = params.get('q')?.trim() ?? '';
@@ -37,7 +39,7 @@ export async function readAuditTrail(
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
 
-    if (actorId) query = query.eq('actor_id', actorId);
+    if (actorFilter) query = query.or(actorFilter);
     if (q) query = query.ilike('action', `%${q}%`);
     if (['student', 'faculty', 'admin', 'super_admin'].includes(role)) query = query.eq('actor_role', role);
     if (entity) query = query.eq('entity_type', entity);
@@ -51,7 +53,7 @@ export async function readAuditTrail(
       .not('entity_type', 'is', null)
       .order('created_at', { ascending: false })
       .limit(1000);
-    if (actorId) entityTypesQuery = entityTypesQuery.eq('actor_id', actorId);
+    if (actorFilter) entityTypesQuery = entityTypesQuery.or(actorFilter);
 
     const [{ data: logs, error, count }, entityTypesRes] = await Promise.all([
       query,
@@ -103,4 +105,14 @@ export async function readAuditTrail(
     console.error('Fetch audit logs failed', err);
     return NextResponse.json({ error: 'Unable to fetch audit logs' }, { status: 500 });
   }
+}
+
+/**
+ * The actors on a dean's Activity Log: the dean and the instructors they own
+ * (users.admin_id, migration 053). With no scope (053 not applied) every
+ * instructor counts, the way every dean sees every instructor elsewhere.
+ */
+export function deanActorFilter(deanId: string, scope: AdminScope | null): string {
+  if (!scope) return `actor_id.eq.${deanId},actor_role.eq.faculty`;
+  return `actor_id.in.(${[deanId, ...scope.facultyIds].join(',')})`;
 }

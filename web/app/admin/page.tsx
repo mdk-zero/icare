@@ -17,6 +17,7 @@ import { adminVisibleUserIds, getAdminScope } from "@/app/lib/admin-scope";
 import { getStudentsWithWork } from "@/app/lib/faculty-dashboard";
 import PageHeader from "@/app/components/PageHeader";
 import StatTile from "@/app/components/StatTile";
+import { deanActorFilter } from "@/app/lib/audit-trail";
 
 export const metadata: Metadata = {
   title: "Overview | iCARE++",
@@ -162,11 +163,11 @@ async function loadDashboard(viewerId: string) {
     // Only admitted patients hold a bed; check-out clears room_id anyway, the
     // status filter keeps a hand-edited discharged row from counting.
     supabase.from("patients").select("room_id").eq("status", "admitted").not("room_id", "is", null),
-    // The admin's own activity only; the whole trail is the super admin's.
+    // The dean's own activity and their instructors'; the whole trail is the admin's.
     supabase
       .from("audit_logs")
-      .select("action, created_at, actor:users(name)")
-      .eq("actor_id", viewerId)
+      .select("action, created_at, actor_id")
+      .or(deanActorFilter(viewerId, scope))
       .order("created_at", { ascending: false })
       .limit(5),
   ]);
@@ -175,6 +176,7 @@ async function loadDashboard(viewerId: string) {
     .select("student_id");
 
   const users = (usersRes.data ?? []).filter((u) => !visible || visible.has(u.id));
+  const usersById = new Map((usersRes.data ?? []).map((u) => [u.id as string, { name: u.name as string }]));
   const sections = (sectionsRes.data ?? []).filter(
     (sec) => !scope || scope.sectionIds.includes(sec.id),
   );
@@ -333,7 +335,14 @@ async function loadDashboard(viewerId: string) {
     admittedPatients,
     bedCapacity,
     attention,
-    activity: (activityRes.data ?? []) as unknown as ActivityRow[],
+    // actor_id has no foreign key (031), so names come from the users read above.
+    activity: (activityRes.data ?? []).map(
+      (row): ActivityRow => ({
+        action: row.action,
+        created_at: row.created_at,
+        actor: usersById.get(row.actor_id) ?? null,
+      }),
+    ),
   };
 }
 
@@ -428,7 +437,7 @@ export default async function AdminDashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Panel>
-          <PanelHeader title="Recent Activity" subtitle="Your latest actions">
+          <PanelHeader title="Recent Activity" subtitle="You and your instructors">
             <Link
               href="/admin/audit"
               className="text-sm text-brand-600 font-medium hover:text-brand-700 transition-colors"

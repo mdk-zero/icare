@@ -58,9 +58,8 @@ function csvEscape(value: string): string {
 }
 
 /**
- * The audit trail table. "own" is an admin's Activity Log — only what they
- * did, so the role filter has nothing to choose between; "system" is the
- * super admin's view of every actor and role.
+ * The audit trail table. "own" is a dean's Activity Log — what they and
+ * their instructors did; "system" is the admin's view of every actor and role.
  */
 export default function AuditTrail({ scope }: { scope: "own" | "system" }) {
   const endpoint = scope === "system" ? "/api/super-admin/audit" : "/api/admin/audit";
@@ -155,7 +154,7 @@ export default function AuditTrail({ scope }: { scope: "own" | "system" }) {
         subtitle={
           scope === "system"
             ? "Append-only audit trail of every action across all roles"
-            : "Your activity history — every action you've taken, logged and unremovable"
+            : "What you and your instructors have done — logged and unremovable"
         }
       />
 
@@ -163,7 +162,7 @@ export default function AuditTrail({ scope }: { scope: "own" | "system" }) {
       <div className="bg-surface rounded-xl p-4 border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] mb-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
           <form
-            className={`${scope === "system" ? "lg:col-span-2" : "lg:col-span-3"} relative`}
+            className="lg:col-span-2 relative"
             onSubmit={(e) => {
               e.preventDefault();
               setAppliedSearch(search.trim());
@@ -182,18 +181,16 @@ export default function AuditTrail({ scope }: { scope: "own" | "system" }) {
               className="w-full pl-11 pr-4 py-2.5 bg-surface border border-gray-200 rounded-xl text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-600/50 focus:border-brand-600 transition-all"
             />
           </form>
-          {scope === "system" && (
-            <FilterSelect
-              value={roleFilter}
-              onChange={(e) => withPageReset(setRoleFilter)(e.target.value)}
-            >
-              <option value="all">All Roles</option>
-              <option value="super_admin">Admin</option>
-              <option value="admin">Dean</option>
-              <option value="faculty">Instructor</option>
-              <option value="student">Student</option>
-            </FilterSelect>
-          )}
+          <FilterSelect
+            value={roleFilter}
+            onChange={(e) => withPageReset(setRoleFilter)(e.target.value)}
+          >
+            <option value="all">All Roles</option>
+            {scope === "system" && <option value="super_admin">Admin</option>}
+            <option value="admin">Dean</option>
+            <option value="faculty">Instructor</option>
+            {scope === "system" && <option value="student">Student</option>}
+          </FilterSelect>
           <FilterSelect
             value={entityFilter}
             onChange={(e) => withPageReset(setEntityFilter)(e.target.value)}
