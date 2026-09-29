@@ -39,7 +39,7 @@ import AiThinking from "../../components/AiThinking";
 import { Leaderboard, LeaderboardSkeleton } from "./Leaderboard";
 import GroupPerformance from "./GroupPerformance";
 import { parseDay, formatRange } from "./dates";
-import { buildTrendSeries, TrendLegend, TrendLineChart, TrendTable } from "./SectionTrendChart";
+import { buildTrendSeries, TrendLegend, TrendBarChart, TrendTable } from "./SectionTrendChart";
 import { isActiveSkillArea } from "../../../scripts/taylors-chapters";
 
 /** Stable empty fallback, so nothing downstream sees a new array each render. */
@@ -1180,7 +1180,7 @@ export default function FacultyAnalyticsClient() {
                     <p className="text-xs text-gray-400">
                       {trendSolo
                         ? `Average quiz score over time — ${trendSolo.name}`
-                        : "Average quiz score over time, one line per section"}
+                        : "Average quiz score over time, one bar per section"}
                     </p>
                   </div>
                 </div>
@@ -1231,7 +1231,7 @@ export default function FacultyAnalyticsClient() {
                       focused={trendFocused}
                       onFocus={setTrendFocus}
                     />
-                    <TrendLineChart series={trendSeries} focused={trendFocused} bucket={bucket} />
+                    <TrendBarChart series={trendSeries} focused={trendFocused} bucket={bucket} />
                   </>
                 )}
               </div>

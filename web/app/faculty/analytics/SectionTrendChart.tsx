@@ -6,11 +6,11 @@ import { TARGET_SCORE } from "../../lib/performance-target";
 import { formatBucket } from "./dates";
 
 /*
- * "Classroom Performance Overview": average quiz score over time, one line per
- * section. Each section keeps one colour for good — its position among the
+ * "Classroom Performance Overview": average quiz score per period, one bar per
+ * section in each period's cluster. Each section keeps one colour for good — its position among the
  * sections this faculty member manages picks a slot in the fixed series
  * palette (globals.css) — so narrowing the section filter never repaints the
- * lines that remain.
+ * bars that remain.
  */
 
 type Point = { week_start: string; average_score: number };
@@ -31,8 +31,8 @@ const byName = (a: string, b: string) => a.localeCompare(b, undefined, { numeric
 
 /**
  * One series per section in the summary's `section_trend` — never a merged
- * all-sections line. Past eight sections, the ninth onward fold into one
- * attempt-weighted "Other sections" line rather than cycling a hue.
+ * all-sections series. Past eight sections, the ninth onward fold into one
+ * attempt-weighted "Other sections" series rather than cycling a hue.
  */
 export function buildTrendSeries(
   summary: AnalyticsSummary | null,
@@ -96,28 +96,9 @@ function bucketsOf(series: TrendSeries[]): string[] {
   return [...all].sort();
 }
 
-/** Catmull-Rom → cubic bezier: a smooth curve that passes through every point. */
-function smoothPath(points: { x: number; y: number }[]): string {
-  if (points.length < 2) return "";
-  if (points.length === 2) return `M ${points[0].x},${points[0].y} L ${points[1].x},${points[1].y}`;
-  let d = `M ${points[0].x},${points[0].y}`;
-  for (let i = 0; i < points.length - 1; i++) {
-    const p0 = points[Math.max(i - 1, 0)];
-    const p1 = points[i];
-    const p2 = points[i + 1];
-    const p3 = points[Math.min(i + 2, points.length - 1)];
-    const cp1x = p1.x + (p2.x - p0.x) / 6;
-    const cp1y = p1.y + (p2.y - p0.y) / 6;
-    const cp2x = p2.x - (p3.x - p1.x) / 6;
-    const cp2y = p2.y - (p3.y - p1.y) / 6;
-    d += ` C ${cp1x},${cp1y} ${cp2x},${cp2y} ${p2.x},${p2.y}`;
-  }
-  return d;
-}
-
 /**
- * Legend for two or more series; a lone line is named by the card's title.
- * Clicking a section isolates its line — the chart is handed that series
+ * Legend for two or more series; a lone series is named by the card's title.
+ * Clicking a section isolates its bars — the chart is handed that series
  * alone — and clicking it again, or "Show all", brings the rest back. The
  * legend lists every section either way, so the way back stays in view and
  * the dimmed entries still say which colour belongs to whom.
@@ -182,22 +163,30 @@ const MIN_H = 240;
 /** Tick labels ("Aug 24") need about this much room each. */
 const TICK_SPACING = 72;
 const PAD_L = 32;
+const PAD_R = 16;
 const PAD_T = 16;
 const PAD_B = 36;
-/** Room at the right edge for direct end-labels, when they are drawn. */
-const LABEL_ROOM = 64;
-const LABEL_MIN_GAP = 12;
-/** Past this many buckets, only each line's end gets a marker. */
-const MAX_MARKED_BUCKETS = 16;
+/** Share of each period's band the bar cluster fills; the rest separates periods. */
+const CLUSTER_FILL = 0.72;
+/** A wider bar reads as a block rather than a value. */
+const MAX_BAR_W = 28;
+/** Bars this wide or more get a hairline gap from their neighbour. */
+const GAP_FROM_W = 6;
 
-export function TrendLineChart({
+/** A bar rising from the baseline with its top corners rounded. */
+function barPath(x: number, w: number, top: number, base: number): string {
+  const r = Math.min(3, w / 2, base - top);
+  return `M ${x},${base} V ${top + r} Q ${x},${top} ${x + r},${top} H ${x + w - r} Q ${x + w},${top} ${x + w},${top + r} V ${base} Z`;
+}
+
+export function TrendBarChart({
   series,
   focused = null,
   bucket,
 }: {
   series: TrendSeries[];
-  /** Isolate one section's line. The x-axis still spans every series, so an
-   *  isolated line sits exactly where it sat among the others. */
+  /** Isolate one section's bars. The x-axis still spans every series, so
+   *  isolating a section never shifts the periods under it. */
   focused?: string | null;
   bucket: AnalyticsBucket;
 }) {
@@ -225,48 +214,35 @@ export function TrendLineChart({
   const buckets = bucketsOf(series);
   const shown = focused === null ? series : series.filter((s) => s.id === focused);
   const n = buckets.length;
-  const indexOf = new Map(buckets.map((b, i) => [b, i]));
   const last = n - 1;
 
-  // Direct end-labels supplement the legend for a few lines, and only when
-  // every line runs to the last bucket and their ends sit apart. Converging
-  // ends are left to the legend and tooltip rather than nudged off their lines.
-  const yRaw = (v: number) => 1 - Math.min(Math.max(v, 0), 100) / 100;
-  const ends = series.map((s) => s.points[s.points.length - 1]);
-  const endSlots = ends.map((p) => yRaw(p.average_score)).sort((a, b) => a - b);
   const plotH = H - PAD_T - PAD_B;
-  // The room is judged on every series, so isolating a line doesn't re-stretch
-  // the plot under it; the labels themselves want two or more lines to tell
-  // apart — an isolated line is named by the card's title instead.
-  const labelRoom =
-    series.length >= 2 &&
-    series.length <= 4 &&
-    ends.every((p) => indexOf.get(p.week_start) === last) &&
-    endSlots.every((v, i) => i === 0 || (v - endSlots[i - 1]) * plotH >= LABEL_MIN_GAP);
-  const labelEnds = labelRoom && shown.length >= 2;
-
-  const padR = labelRoom ? LABEL_ROOM : 16;
-  const plotW = W - PAD_L - padR;
-  const x = (i: number) => PAD_L + (n === 1 ? plotW / 2 : (i / (n - 1)) * plotW);
-  const y = (v: number) => PAD_T + yRaw(v) * plotH;
+  const plotW = W - PAD_L - PAD_R;
+  const band = n === 0 ? plotW : plotW / n;
+  const center = (i: number) => PAD_L + (i + 0.5) * band;
+  const y = (v: number) => PAD_T + (1 - Math.min(Math.max(v, 0), 100) / 100) * plotH;
+  const base = PAD_T + plotH;
   const grid = [0, 25, 50, 75, 100];
   const tickStep = Math.max(1, Math.ceil(n / Math.max(2, Math.floor(plotW / TICK_SPACING))));
   // The last bucket is always labelled, so a regular tick too close to it gives way.
   const isTick = (i: number) => i === last || (i % tickStep === 0 && last - i >= tickStep);
-  const marked = n <= MAX_MARKED_BUCKETS;
 
-  const drawn = shown.map((s) => ({
-    ...s,
-    pts: s.points.map((p) => ({ x: x(indexOf.get(p.week_start)!), y: y(p.average_score), p })),
-  }));
+  // Each section holds the same place in every cluster, so its bars line up
+  // period to period the way a line would.
+  const k = Math.max(shown.length, 1);
+  const slotW = Math.min((band * CLUSTER_FILL) / k, MAX_BAR_W);
+  const gap = slotW >= GAP_FROM_W ? 1.5 : 0;
+  const barW = Math.max(slotW - gap, 1);
+  const clusterW = slotW * k;
+  const at = shown.map((s) => new Map(s.points.map((p) => [p.week_start, p])));
 
-  // The crosshair snaps to the nearest bucket, so the reader aims at a date,
-  // never at a 2px line.
+  // Hovering anywhere in a period's band picks the whole cluster, so the
+  // reader aims at a date, never at a thin bar.
   const onPointerMove = (e: PointerEvent<SVGSVGElement>) => {
     const box = svgRef.current?.getBoundingClientRect();
     if (!box || n === 0) return;
     const vx = ((e.clientX - box.left) / box.width) * W;
-    const i = n === 1 ? 0 : Math.round(((vx - PAD_L) / plotW) * (n - 1));
+    const i = Math.floor((vx - PAD_L) / band);
     setHover(Math.min(Math.max(i, 0), last));
   };
   const onKeyDown = (e: KeyboardEvent<SVGSVGElement>) => {
@@ -278,7 +254,7 @@ export function TrendLineChart({
     });
   };
 
-  const hoverX = hover === null ? 0 : x(hover);
+  const hoverX = hover === null ? 0 : center(hover);
   const hoverBucket = hover === null ? null : buckets[hover];
   const flip = hoverX > W * 0.6;
 
@@ -294,7 +270,7 @@ export function TrendLineChart({
           viewBox={`0 0 ${W} ${H}`}
           className="absolute inset-0 block overflow-visible"
           role="img"
-          aria-label={`Average quiz score over time for ${shown.map((s) => s.name).join(", ")}. Dashed line marks the ${TARGET_SCORE}% target. Use the table view for exact values.`}
+          aria-label={`Average quiz score per period for ${shown.map((s) => s.name).join(", ")}, one bar per section. Dashed line marks the ${TARGET_SCORE}% target. Use the table view for exact values.`}
           tabIndex={0}
           onPointerMove={onPointerMove}
           onPointerLeave={() => setHover(null)}
@@ -302,12 +278,23 @@ export function TrendLineChart({
           onBlur={() => setHover(null)}
           onKeyDown={onKeyDown}
         >
+          {hover !== null && (
+            <rect
+              x={PAD_L + hover * band}
+              y={PAD_T}
+              width={band}
+              height={plotH}
+              fill="var(--color-gray-400)"
+              fillOpacity="0.1"
+            />
+          )}
+
           {grid.map((g) => (
             <g key={g}>
               <line
                 x1={PAD_L}
                 y1={y(g)}
-                x2={W - padR}
+                x2={W - PAD_R}
                 y2={y(g)}
                 stroke="var(--color-hairline)"
                 strokeWidth="1"
@@ -325,43 +312,35 @@ export function TrendLineChart({
             </g>
           ))}
 
-          {/* The target sits under the data in a neutral dash — every hue belongs to a section. */}
+          {buckets.map((b, i) => {
+            const left = center(i) - clusterW / 2;
+            return shown.map((s, si) => {
+              const p = at[si].get(b);
+              if (!p) return null;
+              const top = y(p.average_score);
+              return (
+                <path
+                  key={`bar-${s.id}-${b}`}
+                  d={barPath(left + si * slotW + gap / 2, barW, Math.min(top, base - 1), base)}
+                  fill={s.color}
+                  fillOpacity={hover === null || hover === i ? 1 : 0.55}
+                />
+              );
+            });
+          })}
+
+          {/* Drawn over the bars in a neutral dash — every hue belongs to a section. */}
           <line
             x1={PAD_L}
             y1={y(TARGET_SCORE)}
-            x2={W - padR}
+            x2={W - PAD_R}
             y2={y(TARGET_SCORE)}
             stroke="var(--color-gray-500)"
             strokeWidth="1.5"
             strokeDasharray="6 4"
           />
-
-          {/* A lone line keeps a faint wash under it; overlapping washes would muddy. */}
-          {drawn.length === 1 && drawn[0].pts.length > 1 && (
-            <path
-              d={`${smoothPath(drawn[0].pts)} L ${drawn[0].pts[drawn[0].pts.length - 1].x},${PAD_T + plotH} L ${drawn[0].pts[0].x},${PAD_T + plotH} Z`}
-              fill={drawn[0].color}
-              fillOpacity="0.1"
-            />
-          )}
-
-          {drawn.map((s) =>
-            s.pts.length > 1 ? (
-              <path
-                key={`line-${s.id}`}
-                d={smoothPath(s.pts)}
-                fill="none"
-                stroke={s.color}
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            ) : null,
-          )}
-
-          {/* Named over the lines, with a surface halo so a crossing line can't swallow it. */}
           <text
-            x={W - padR - 4}
+            x={W - PAD_R - 4}
             y={y(TARGET_SCORE) - 5}
             textAnchor="end"
             fontSize="10"
@@ -374,61 +353,13 @@ export function TrendLineChart({
             Target {TARGET_SCORE}%
           </text>
 
-          {hover !== null && (
-            <line
-              x1={hoverX}
-              y1={PAD_T}
-              x2={hoverX}
-              y2={PAD_T + plotH}
-              stroke="var(--color-gray-400)"
-              strokeWidth="1"
-            />
-          )}
-
-          {/* Markers carry a 2px surface ring so they stay legible where lines cross. */}
-          {drawn.map((s) =>
-            s.pts.map((pt, i) => {
-              const isEnd = i === s.pts.length - 1;
-              const isHovered = hoverBucket === pt.p.week_start;
-              if (!marked && !isEnd && !isHovered) return null;
-              return (
-                <circle
-                  key={`dot-${s.id}-${pt.p.week_start}`}
-                  cx={pt.x}
-                  cy={pt.y}
-                  r={isHovered ? 5 : 4}
-                  fill={s.color}
-                  stroke="var(--color-surface)"
-                  strokeWidth="2"
-                />
-              );
-            }),
-          )}
-
-          {labelEnds &&
-            drawn.map((s) => {
-              const end = s.pts[s.pts.length - 1];
-              return (
-                <text
-                  key={`label-${s.id}`}
-                  x={end.x + 9}
-                  y={end.y + 3.5}
-                  fontSize="10"
-                  fontWeight="600"
-                  fill="var(--color-gray-600)"
-                >
-                  {s.name}
-                </text>
-              );
-            })}
-
           {buckets.map((b, i) =>
             isTick(i) ? (
               <text
                 key={`t-${b}`}
-                x={x(i)}
+                x={center(i)}
                 y={H - 8}
-                textAnchor={i === 0 && n > 1 ? "start" : i === last && n > 1 ? "end" : "middle"}
+                textAnchor="middle"
                 fontSize="10"
                 fill="var(--color-gray-400)"
               >
@@ -444,18 +375,20 @@ export function TrendLineChart({
           className="pointer-events-none absolute top-2 z-10 min-w-36 rounded-lg border border-hairline bg-surface px-3 py-2 shadow-overlay"
           style={{
             left: hoverX,
-            transform: flip ? "translateX(calc(-100% - 10px))" : "translateX(10px)",
+            transform: flip
+              ? `translateX(calc(-100% - ${band / 2 + 6}px))`
+              : `translateX(${band / 2 + 6}px)`,
           }}
         >
           <p className="mb-1.5 text-[11px] font-medium text-gray-500">
             {formatBucket(hoverBucket, bucket)}
           </p>
           <ul className="space-y-1">
-            {shown.map((s) => {
-              const p = s.points.find((q) => q.week_start === hoverBucket);
+            {shown.map((s, si) => {
+              const p = at[si].get(hoverBucket);
               return (
                 <li key={s.id} className="flex items-center gap-2 text-xs">
-                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: s.color }} />
+                  <span className="h-2 w-2 shrink-0 rounded-sm" style={{ backgroundColor: s.color }} />
                   <span className="font-semibold tabular-nums text-gray-900">
                     {p ? `${p.average_score}%` : "—"}
                   </span>
