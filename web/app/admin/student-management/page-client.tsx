@@ -35,6 +35,7 @@ import {
 import { usePageData } from "../../lib/use-page-data";
 import Avatar from "../../components/Avatar";
 import { EcgLoader } from "../../components/EcgLoader";
+import { SkeletonSectionGrid } from "../../components/skeletons";
 import MlRunProgress, {
   type MlRun,
   mlRunFraction,
@@ -835,9 +836,7 @@ export default function StudentManagementClient() {
       </div>
 
       {loading ? (
-        <div className="rounded-xl border border-hairline bg-surface p-12 text-center text-gray-400 shadow-tile">
-          Loading students…
-        </div>
+        <SkeletonSectionGrid />
       ) : !openGroup ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {groups.map((group) => {

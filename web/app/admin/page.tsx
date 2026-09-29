@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import Link from "next/link";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -19,6 +19,7 @@ import PageHeader from "@/app/components/PageHeader";
 import StatTile from "@/app/components/StatTile";
 import { deanActorFilter } from "@/app/lib/audit-trail";
 import { lastName } from "@/app/faculty/_overview/format";
+import { SkeletonActivityItem, SkeletonStatTile } from "@/app/components/skeletons";
 
 export const metadata: Metadata = {
   title: "Overview | iCARE++",
@@ -364,6 +365,15 @@ export default async function AdminDashboard() {
     );
   }
 
+  return (
+    <Suspense fallback={<DashboardSkeleton />}>
+      <DashboardContent viewerId={session.uid} />
+    </Suspense>
+  );
+}
+
+/** Streams in once loadDashboard settles; DashboardSkeleton holds its place until then. */
+async function DashboardContent({ viewerId }: { viewerId: string }) {
   const {
     viewerName,
     totalStudents,
@@ -379,7 +389,7 @@ export default async function AdminDashboard() {
     bedCapacity,
     attention,
     activity,
-  } = await loadDashboard(session.uid);
+  } = await loadDashboard(viewerId);
 
   const surname = viewerName ? lastName(viewerName) : null;
   const today = new Date().toLocaleDateString("en-US", {
@@ -526,6 +536,61 @@ export default async function AdminDashboard() {
           )}
         </Panel>
       </div>
+    </div>
+  );
+}
+
+/** Mirrors the dashboard: masthead, three KPI tiles, Recent Activity beside Needs Your Attention. */
+function DashboardSkeleton() {
+  return (
+    <div className="space-y-4" role="status" aria-busy="true">
+      <span className="sr-only">Loading dashboard…</span>
+      <div className="mb-5 border-b border-hairline pb-5 animate-pulse">
+        <div className="mb-2.5 h-2.5 w-28 rounded bg-gray-100" />
+        <div className="h-8 w-80 max-w-full rounded bg-gray-100 sm:h-10" />
+        <div className="mt-2.5 h-4 w-[28rem] max-w-full rounded bg-gray-100" />
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <SkeletonStatTile />
+        <SkeletonStatTile />
+        <SkeletonStatTile />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <Panel>
+          <SkeletonPanelHeader />
+          <div className="p-4 space-y-5">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <SkeletonActivityItem key={i} />
+            ))}
+          </div>
+        </Panel>
+        <Panel className="lg:col-span-2">
+          <SkeletonPanelHeader />
+          <div className="divide-y divide-hairline animate-pulse">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-3 p-4">
+                <div className="h-9 w-9 shrink-0 rounded-full bg-gray-100" />
+                <div className="min-w-0 flex-1 space-y-1.5">
+                  <div className="h-4 w-64 max-w-full rounded bg-gray-100" />
+                  <div className="h-3.5 w-80 max-w-full rounded bg-gray-100" />
+                </div>
+                <div className="h-4 w-20 shrink-0 rounded bg-gray-100" />
+              </div>
+            ))}
+          </div>
+        </Panel>
+      </div>
+    </div>
+  );
+}
+
+function SkeletonPanelHeader() {
+  return (
+    <div className="p-4 border-b border-gray-100 space-y-2 animate-pulse">
+      <div className="h-5 w-36 rounded bg-gray-100" />
+      <div className="h-3.5 w-48 rounded bg-gray-100" />
     </div>
   );
 }

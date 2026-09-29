@@ -494,8 +494,9 @@ export default function PatientChart({
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center p-16">
-        <EcgLoader size="lg" className="text-brand-600" />
+      <div>
+        <BackLink href={backHref} label={backLabel} />
+        <PatientChartSkeleton />
       </div>
     );
   }
@@ -977,6 +978,54 @@ export default function PatientChart({
           onClose={() => setHistoryOpen(false)}
         />
       )}
+    </div>
+  );
+}
+
+/** Mirrors the chart: masthead, identity strip, vitals beside the side panels, the notes table. */
+function PatientChartSkeleton() {
+  const card = "rounded-xl border border-hairline bg-surface p-4 shadow-tile";
+  return (
+    <div className="animate-pulse" role="status" aria-busy="true">
+      <span className="sr-only">Loading patient chart…</span>
+      <div className="mb-5 border-b border-hairline pb-5">
+        <div className="mb-2.5 h-2.5 w-28 rounded bg-gray-100" />
+        <div className="h-8 w-64 max-w-full rounded bg-gray-100 sm:h-10" />
+        <div className="mt-2.5 h-4 w-80 max-w-full rounded bg-gray-100" />
+      </div>
+      <div className="mb-5 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border border-hairline bg-surface px-4 py-3 shadow-tile">
+        <div className="h-6 w-24 rounded-full bg-gray-100" />
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="h-4 w-28 rounded bg-gray-100" />
+        ))}
+      </div>
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+        <div className="space-y-5 lg:col-span-2">
+          <div className={card}>
+            <div className="mb-3 h-5 w-32 rounded bg-gray-100" />
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="rounded-xl border border-hairline p-3.5">
+                  <div className="h-3 w-20 rounded bg-gray-100" />
+                  <div className="mt-2 h-6 w-16 rounded bg-gray-100" />
+                  <div className="mt-3 h-8 rounded bg-gray-100" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="space-y-5">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className={card}>
+              <div className="mb-3 h-5 w-28 rounded bg-gray-100" />
+              <div className="space-y-2">
+                <div className="h-3.5 w-full rounded bg-gray-100" />
+                <div className="h-3.5 w-3/4 rounded bg-gray-100" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

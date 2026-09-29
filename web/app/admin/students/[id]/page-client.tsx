@@ -27,7 +27,12 @@ import Card from "../../../components/Card";
 import StatTile from "../../../components/StatTile";
 import PageHeader from "../../../components/PageHeader";
 import { usePageData } from "../../../lib/use-page-data";
-import { EcgLoader } from "../../../components/EcgLoader";
+import {
+  SkeletonProfileHeader,
+  SkeletonRiskPredictionCard,
+  SkeletonTabContent,
+  SkeletonTabTiles,
+} from "../../../components/skeletons";
 
 interface AttemptRow {
   id: string;
@@ -141,10 +146,20 @@ export default function StudentDetailClient() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-96">
-        <div className="flex flex-col items-center gap-4">
-          <EcgLoader size="xl" className="text-brand-600" />
-          <p className="text-gray-500 font-medium">Loading student data...</p>
+      <div role="status" aria-busy="true">
+        <span className="sr-only">Loading student…</span>
+        <div className="mb-4 h-9 w-40 rounded-lg bg-gray-100 animate-pulse" />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+          <div className="lg:col-span-2">
+            <SkeletonProfileHeader />
+          </div>
+          <SkeletonRiskPredictionCard />
+        </div>
+        <SkeletonTabTiles count={3} />
+        <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden">
+          <div className="p-6">
+            <SkeletonTabContent />
+          </div>
         </div>
       </div>
     );

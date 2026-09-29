@@ -249,9 +249,34 @@ export default function FacultyClient() {
             </thead>
             <tbody className="divide-y divide-hairline">
               {loading ? (
-                <tr>
-                  <td colSpan={5} className="py-12 text-center text-gray-400">Loading instructors…</td>
-                </tr>
+                Array.from({ length: 5 }).map((_, i) => (
+                  <tr key={i} className="animate-pulse" aria-hidden>
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 shrink-0 rounded-full bg-gray-100" />
+                        <div className="space-y-1.5">
+                          <div className="h-4 w-32 rounded bg-gray-100" />
+                          <div className="h-3.5 w-44 rounded bg-gray-100" />
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="flex gap-1.5">
+                        <div className="h-5 w-20 rounded-full bg-gray-100" />
+                        <div className="h-5 w-16 rounded-full bg-gray-100" />
+                      </div>
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="h-4 w-8 rounded bg-gray-100" />
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="h-4 w-20 rounded bg-gray-100" />
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="h-4 w-24 rounded bg-gray-100" />
+                    </td>
+                  </tr>
+                ))
               ) : filteredFaculty.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="py-12 text-center text-gray-400">

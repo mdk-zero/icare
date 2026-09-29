@@ -6,7 +6,6 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faArrowLeft, faTrash, faUsers } from "@fortawesome/free-solid-svg-icons";
-import { EcgLoader } from "../../../components/EcgLoader";
 import PageHeader from "../../../components/PageHeader";
 import Avatar from "../../../components/Avatar";
 
@@ -203,9 +202,7 @@ export default function AssignSectionsClient() {
       )}
 
       {loading ? (
-        <div className="flex items-center justify-center h-64">
-          <EcgLoader size="xl" className="text-brand-600" />
-        </div>
+        <AssignmentSkeleton />
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-1 space-y-6">
@@ -375,6 +372,69 @@ export default function AssignSectionsClient() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+const PANEL =
+  "bg-surface rounded-xl p-4 border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)]";
+
+/** Mirrors the loaded layout: Sections and Instructors on the left, the section picker on the right. */
+function AssignmentSkeleton() {
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-pulse" role="status" aria-busy="true">
+      <span className="sr-only">Loading sections and instructors…</span>
+      <div className="lg:col-span-1 space-y-6">
+        <div className={PANEL}>
+          <div className="mb-4 h-5 w-24 rounded bg-gray-100" />
+          <div className="mb-4 flex gap-2">
+            <div className="h-11 flex-1 rounded-xl bg-gray-100" />
+            <div className="h-11 w-16 rounded-xl bg-gray-100" />
+          </div>
+          <div className="space-y-2">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-3 rounded-xl border border-gray-200 p-3">
+                <div className="h-5 w-10 rounded-full bg-gray-100" />
+                <div className="h-3.5 flex-1 rounded bg-gray-100" />
+                <div className="h-7 w-7 rounded-lg bg-gray-100" />
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className={PANEL}>
+          <div className="mb-4 h-5 w-28 rounded bg-gray-100" />
+          <div className="space-y-2">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-3 p-3">
+                <div className="h-10 w-10 shrink-0 rounded-full bg-gray-100" />
+                <div className="flex-1 space-y-1.5">
+                  <div className="h-4 w-32 rounded bg-gray-100" />
+                  <div className="h-3.5 w-20 rounded bg-gray-100" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+      <div className="lg:col-span-2">
+        <div className={PANEL}>
+          <div className="mb-4 flex items-center justify-between">
+            <div className="space-y-2">
+              <div className="h-5 w-48 rounded bg-gray-100" />
+              <div className="h-3.5 w-36 rounded bg-gray-100" />
+            </div>
+            <div className="h-10 w-32 rounded-lg bg-gray-100" />
+          </div>
+          <div className="space-y-2">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-3 rounded-xl border border-gray-200 p-3">
+                <div className="h-4 w-4 rounded bg-gray-100" />
+                <div className="h-4 w-28 rounded bg-gray-100" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
