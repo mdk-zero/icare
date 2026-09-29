@@ -1,11 +1,11 @@
 "use client";
 
-import { useRef, useState, type SelectHTMLAttributes } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { DEFAULT_ATTEMPTS, MIN_ATTEMPTS } from "@/app/lib/quiz-attempts";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faListCheck,
-  faChevronDown,
   faXmark,
   faCloudArrowUp,
   faFilePdf,
@@ -28,36 +28,6 @@ import PageHeader from "../../../components/PageHeader";
 const inputClassName =
   "w-full px-4 py-3 bg-surface border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 focus:bg-surface transition-all text-sm shadow-sm";
 const labelClassName = "block text-sm font-bold text-gray-800 mb-2";
-
-/** A native `<select>` with its own chevron pulled in from the edge, rather
- * than the browser's default arrow flush against the border. */
-function SelectField({
-  className = "",
-  ...props
-}: SelectHTMLAttributes<HTMLSelectElement>) {
-  return (
-    <div className="relative">
-      <select {...props} className={`${inputClassName} appearance-none pr-9 ${className}`} />
-      <FontAwesomeIcon
-        icon={faChevronDown}
-        className="pointer-events-none absolute right-3.5 top-1/2 h-3 w-3 -translate-y-1/2 text-gray-500"
-      />
-    </div>
-  );
-}
-
-const CATEGORIES = [
-  "Cardiac Emergency",
-  "Respiratory Emergency",
-  "Neurological Emergency",
-  "Trauma",
-  "Medical-Surgical",
-  "Patient Education",
-  "Infection Management",
-  "Critical Care",
-  "Medication Safety",
-  "General",
-] as const;
 
 export default function AssessmentNewClient() {
   const router = useRouter();
@@ -93,15 +63,19 @@ export default function AssessmentNewClient() {
   const [form, setForm] = useState({
     title: "",
     description: "",
-    category: "General" as (typeof CATEGORIES)[number],
     time_limit_minutes: "",
-    max_attempts: "",
+    max_attempts: String(DEFAULT_ATTEMPTS),
   });
 
   const handleCreate = async () => {
     if (busy) return;
     if (!form.title.trim()) {
       setError("Title is required");
+      return;
+    }
+    const attempts = Number(form.max_attempts);
+    if (!Number.isInteger(attempts) || attempts < MIN_ATTEMPTS) {
+      setError(`Attempts allowed must be at least ${MIN_ATTEMPTS}`);
       return;
     }
     if (lessonFile) {
@@ -130,11 +104,10 @@ export default function AssessmentNewClient() {
           body: JSON.stringify({
             title: form.title.trim(),
             description: form.description,
-            category: form.category,
             time_limit_seconds: form.time_limit_minutes
               ? Number(form.time_limit_minutes) * 60
               : null,
-            max_attempts: form.max_attempts ? Number(form.max_attempts) : null,
+            max_attempts: Number(form.max_attempts),
           }),
         });
 
@@ -271,25 +244,6 @@ export default function AssessmentNewClient() {
               className={inputClassName}
             />
           </div>
-          <div>
-            <label className={labelClassName}>Category</label>
-            <SelectField
-              value={form.category}
-              disabled={busy}
-              onChange={(e) =>
-                setForm((f) => ({
-                  ...f,
-                  category: e.target.value as (typeof CATEGORIES)[number],
-                }))
-              }
-            >
-              {CATEGORIES.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </SelectField>
-          </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label className={labelClassName}>
@@ -307,14 +261,15 @@ export default function AssessmentNewClient() {
             </div>
             <div>
               <label className={labelClassName}>
-                Attempts allowed <span className="font-normal text-gray-500">(optional)</span>
+                Attempts allowed <span className="font-normal text-gray-500">(at least {MIN_ATTEMPTS})</span>
               </label>
               <input
                 type="number"
-                min={1}
+                min={MIN_ATTEMPTS}
+                step={1}
                 value={form.max_attempts}
                 onChange={(e) => setForm((f) => ({ ...f, max_attempts: e.target.value }))}
-                placeholder="Unlimited"
+                placeholder={String(DEFAULT_ATTEMPTS)}
                 disabled={busy}
                 className={inputClassName}
               />

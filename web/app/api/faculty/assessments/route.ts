@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { DEFAULT_ATTEMPTS, isValidAttempts, MIN_ATTEMPTS } from '@/app/lib/quiz-attempts';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { getScopedStudentIds } from '@/app/lib/admin-scope';
@@ -120,7 +121,9 @@ export async function POST(request: NextRequest) {
   if (typeof title !== 'string' || title.trim().length === 0) {
     return NextResponse.json({ error: 'Title is required' }, { status: 400 });
   }
-  if (!validCategories.includes(category as (typeof validCategories)[number])) {
+  // The form no longer asks for a category; one sent anyway must be valid.
+  const quizCategory = category === undefined || category === null || category === '' ? 'General' : category;
+  if (!validCategories.includes(quizCategory as (typeof validCategories)[number])) {
     return NextResponse.json({ error: 'Invalid category' }, { status: 400 });
   }
   const timeLimit =
@@ -131,9 +134,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid time limit' }, { status: 400 });
   }
   const maxAttempts =
-    max_attempts === null || max_attempts === undefined ? null : Number(max_attempts);
-  if (maxAttempts !== null && (!Number.isInteger(maxAttempts) || maxAttempts <= 0)) {
-    return NextResponse.json({ error: 'Attempts allowed must be a positive whole number' }, { status: 400 });
+    max_attempts === null || max_attempts === undefined || max_attempts === '' ? DEFAULT_ATTEMPTS : Number(max_attempts);
+  if (!isValidAttempts(maxAttempts)) {
+    return NextResponse.json({ error: `Attempts allowed must be a whole number, at least ${MIN_ATTEMPTS}` }, { status: 400 });
   }
   // Section names, not ids. Empty means every section sees it.
   if (target_sections !== undefined && target_sections !== null) {
@@ -170,7 +173,7 @@ export async function POST(request: NextRequest) {
         created_by: session.uid,
         title: title.trim(),
         description: typeof description === 'string' ? description.trim() : '',
-        category: category as (typeof validCategories)[number],
+        category: quizCategory as (typeof validCategories)[number],
         time_limit_seconds: timeLimit,
         max_attempts: maxAttempts,
         target_sections: targetSectionNames.length > 0 ? targetSectionNames : null,
