@@ -9,7 +9,8 @@ import { TASK_RATING_LABEL, type TaskRating } from '@/lib/task-ratings';
  * A scenario's clinical tasks as a numbered list. It is not a checklist the
  * student works through: the instructor watches the demonstration and grades
  * each task, so the only thing on the right is that grade — a dash until the
- * instructor's saved grade is released.
+ * instructor's saved grade is released, when the task's title is struck
+ * through.
  */
 export function ClinicalTaskList({ tasks }: { tasks: ScenarioTask[] }) {
   const { Palette, Accent, Type } = useTheme();
@@ -30,7 +31,8 @@ export function ClinicalTaskList({ tasks }: { tasks: ScenarioTask[] }) {
           <View key={task.id} style={[styles.row, idx === tasks.length - 1 && styles.rowLast]}>
             <Text style={styles.number}>{String(idx + 1).padStart(2, '0')}</Text>
             <View style={styles.body}>
-              <Text style={styles.title}>{task.title}</Text>
+              {/* Struck through once graded, so what is left to demonstrate stands out. */}
+              <Text style={[styles.title, rating && styles.titleGraded]}>{task.title}</Text>
               {task.description ? <Text style={styles.description}>{task.description}</Text> : null}
               {task.remarks ? <Text style={styles.remarks}>{task.remarks}</Text> : null}
             </View>
@@ -77,6 +79,7 @@ function createStyles(
     },
     body: { flex: 1 },
     title: { ...Type.itemTitle },
+    titleGraded: { textDecorationLine: 'line-through', color: Palette.textMuted },
     description: { fontSize: 12, color: Palette.textSecondary, marginTop: 2, lineHeight: 17 },
     remarks: {
       fontSize: 12,
