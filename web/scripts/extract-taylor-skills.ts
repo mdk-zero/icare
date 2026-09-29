@@ -1,5 +1,5 @@
 /**
- * Extracts the skill checklists of the included chapters from Lynn & LeBon, "Skill Checklists for
+ * Extracts the skill checklists of all 18 chapters from Lynn & LeBon, "Skill Checklists for
  * Taylor's Clinical Nursing Skills" (3rd ed.), shipped in docs/, into
  * scripts/data/taylor-skills.json: each skill's number, title, goal, and its
  * numbered steps word for word.
@@ -19,13 +19,16 @@
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { ACTIVE_CHAPTERS, TAYLORS_CHAPTERS } from './taylors-chapters';
+import { TAYLORS_CHAPTERS } from './taylors-chapters';
 
 const PDF = join(__dirname, '..', '..', 'docs', 'Skill Checklists for Taylor_s Clinical Nursing Skills - Pamela Lynn , 3E.pdf');
 const OUT = join(__dirname, 'data', 'taylor-skills.json');
 
-/** The chapters the catalog holds; the rest of the book is left out. */
-export const INCLUDED_CHAPTERS = ACTIVE_CHAPTERS;
+/**
+ * The chapters the catalog holds: the whole book, so a patient case can be
+ * built on any chapter, not only the ones the app teaches (ACTIVE_CHAPTERS).
+ */
+export const INCLUDED_CHAPTERS: readonly number[] = TAYLORS_CHAPTERS.map((c) => c.chapter);
 
 export interface ExtractedStep {
   /** The number the book prints; repeats across a skill's variants. */
