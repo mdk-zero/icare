@@ -3,123 +3,78 @@ import { ScrollView, View, Text, StyleSheet, Pressable, RefreshControl } from 'r
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { ScreenHeader, SectionHeader, SkeletonScreen, EmptyState } from '@/components/ui';
+import { ScreenHeader, SkeletonScreen, EmptyState } from '@/components/ui';
 import { useApiData } from '@/hooks/useApiData';
 import { fetchAssessments, StudentAssessment } from '@/lib/api';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
+import { ScoreRing } from '@/components/ScoreRing';
+import { accuracyAccent, quizAccent } from '@/lib/quiz-style';
+
+type Tab = 'ongoing' | 'completed';
 
 function formatTimeLimit(seconds: number | null): string {
-  if (!seconds) return 'No time limit';
+  if (!seconds) return 'Untimed';
   return `${Math.round(seconds / 60)} min`;
 }
 
-function QuizCard({
+/** One quiz in the list: its icon, what it is and who set it, and how it went. */
+function QuizRow({
   quiz,
   onPress,
-  Palette,
-  Accent,
   styles,
 }: {
   quiz: StudentAssessment;
   onPress: () => void;
-  Palette: ReturnType<typeof useTheme>['Palette'];
-  Accent: ReturnType<typeof useTheme>['Accent'];
   styles: ReturnType<typeof createStyles>;
 }) {
-  const attempted = quiz.attempt_count > 0;
-  const exhausted = quiz.attempts_remaining === 0;
-  const dueSoon = quiz.assignment?.deadline
+  const { Palette, Accent } = useTheme();
+  const done = quiz.attempt_count > 0;
+  const tone = quizAccent(Accent, quiz.id);
+  const due = quiz.assignment?.deadline
     ? new Date(quiz.assignment.deadline).toLocaleDateString([], { month: 'short', day: 'numeric' })
     : null;
 
   return (
     <Pressable
-      style={({ pressed }) => [
-        styles.quizCard,
-        exhausted && styles.quizCardExhausted,
-        pressed && !exhausted && styles.pressed,
-      ]}
+      style={({ pressed }) => [styles.row, pressed && styles.pressed]}
       onPress={onPress}
-      // Tapping through would only reach a 409; say so here instead.
-      disabled={exhausted}
+      accessibilityRole="button"
+      accessibilityLabel={quiz.title}
     >
-      <View style={styles.quizHeader}>
-        <View style={[styles.quizIcon, { backgroundColor: attempted ? Accent.green.bg : Accent.teal.bg }]}>
-          <Ionicons
-            name={attempted ? 'checkmark' : 'document-text'}
-            size={19}
-            color={attempted ? Accent.green.fg : Accent.teal.fg}
-          />
-        </View>
-        <View style={styles.quizInfo}>
-          <Text style={styles.quizTitle}>{quiz.title}</Text>
-          <Text style={styles.quizDesc} numberOfLines={1}>
-            {quiz.description || quiz.category}
-          </Text>
-        </View>
-        {attempted && quiz.best_score !== null ? (
-          <View style={styles.scoreBadge}>
-            <Ionicons name="trophy" size={13} color={Accent.green.fg} />
-            <Text style={styles.scoreText}>{quiz.best_score}%</Text>
-          </View>
-        ) : (
-          <Ionicons name="chevron-forward" size={17} color={Palette.textFaint} />
-        )}
-      </View>
-      <View style={styles.quizMeta}>
-        <View style={styles.categoryBadge}>
-          <Text style={styles.categoryText}>{quiz.category}</Text>
-        </View>
-        {quiz.assignment?.required && !attempted && (
-          <View style={[styles.badge, { backgroundColor: Accent.red.bg }]}>
-            <Text style={[styles.badgeText, { color: Accent.red.fg }]}>Required</Text>
-          </View>
-        )}
-      </View>
-      <View style={styles.quizFooter}>
-        <View style={styles.footerItem}>
-          <Ionicons name="help-circle-outline" size={13} color={Palette.textMuted} />
-          <Text style={styles.footerText}>{quiz.question_count} questions</Text>
-        </View>
-        <View style={styles.footerItem}>
-          <Ionicons name="time-outline" size={13} color={Palette.textMuted} />
-          <Text style={styles.footerText}>{formatTimeLimit(quiz.time_limit_seconds)}</Text>
-        </View>
-        {dueSoon && (
-          <View style={styles.footerItem}>
-            <Ionicons name="calendar-outline" size={13} color={Palette.textMuted} />
-            <Text style={styles.footerText}>Due {dueSoon}</Text>
-          </View>
-        )}
-        {quiz.max_attempts !== null ? (
-          <View style={styles.footerItem}>
-            <Ionicons
-              name={exhausted ? 'lock-closed-outline' : 'repeat-outline'}
-              size={13}
-              color={exhausted ? Accent.red.fg : Palette.textMuted}
-            />
-            <Text style={[styles.footerText, exhausted && { color: Accent.red.fg }]}>
-              {quiz.attempts_used} of {quiz.max_attempts} {quiz.max_attempts === 1 ? 'try' : 'tries'} used
-            </Text>
-          </View>
-        ) : attempted ? (
-          <View style={styles.footerItem}>
-            <Ionicons name="repeat-outline" size={13} color={Palette.textMuted} />
-            <Text style={styles.footerText}>
-              {quiz.attempt_count} {quiz.attempt_count === 1 ? 'attempt' : 'attempts'}
-            </Text>
-          </View>
-        ) : null}
+      <View style={[styles.rowIcon, { backgroundColor: tone.bg }]}>
+        <Ionicons name={done ? 'ribbon' : 'medkit'} size={20} color={tone.fg} />
       </View>
 
-      {exhausted && (
-        <View style={[styles.exhaustedNote, { backgroundColor: Accent.red.bg }]}>
-          <Ionicons name="information-circle-outline" size={13} color={Accent.red.fg} />
-          <Text style={[styles.exhaustedText, { color: Accent.red.fg }]}>
-            No attempts left — ask your instructor if you need another.
+      <View style={styles.rowBody}>
+        <Text style={styles.rowTitle} numberOfLines={2}>
+          {quiz.title}
+        </Text>
+        <Text style={styles.rowMeta} numberOfLines={1}>
+          {quiz.question_count} questions · {formatTimeLimit(quiz.time_limit_seconds)}
+          {quiz.author_name ? ` · ${quiz.author_name}` : ''}
+        </Text>
+        <View style={styles.chips}>
+          {quiz.assignment?.required && !done ? (
+            <Text style={[styles.chip, { color: Accent.red.fg, backgroundColor: Accent.red.bg }]}>Required</Text>
+          ) : null}
+          {done ? (
+            <Text style={styles.chip}>
+              {quiz.attempt_count} {quiz.attempt_count === 1 ? 'attempt' : 'attempts'}
+            </Text>
+          ) : (
+            <Text style={styles.chip}>{due ? `Due ${due}` : 'Not started'}</Text>
+          )}
+          <Text style={styles.chip} numberOfLines={1}>
+            {quiz.category}
           </Text>
         </View>
+      </View>
+
+      {done && quiz.best_score !== null ? (
+        <ScoreRing score={quiz.best_score} size={50} stroke={5} color={accuracyAccent(Accent, quiz.best_score).fg} />
+      ) : (
+        <Ionicons name="chevron-forward" size={18} color={Palette.textFaint} />
       )}
     </Pressable>
   );
@@ -132,6 +87,7 @@ export default function QuizScreen() {
   const { Palette, Accent, Shadow, Type } = useTheme();
   const styles = React.useMemo(() => createStyles(Palette, Accent, Shadow, Type), [Palette, Accent, Shadow, Type]);
   const { data, loading, refreshing, error, refresh, reload } = useApiData(fetchAssessments);
+  const [tab, setTab] = React.useState<Tab>('ongoing');
 
   // Refresh scores/attempt counts when returning from a quiz.
   useFocusEffect(
@@ -146,13 +102,14 @@ export default function QuizScreen() {
   }
 
   const assessments = data ?? [];
-  const assigned = assessments.filter(
-    (q) => q.assignment && q.assignment.status !== 'completed' && q.attempt_count === 0,
-  );
-  const available = assessments.filter(
-    (q) => q.attempt_count === 0 && !assigned.includes(q),
-  );
+  const ongoing = assessments.filter((q) => q.attempt_count === 0);
   const completed = assessments.filter((q) => q.attempt_count > 0);
+  const shown = tab === 'ongoing' ? ongoing : completed;
+
+  const tabs: { key: Tab; label: string; count: number }[] = [
+    { key: 'ongoing', label: 'On going', count: ongoing.length },
+    { key: 'completed', label: 'Completed', count: completed.length },
+  ];
 
   return (
     <ScrollView
@@ -163,54 +120,43 @@ export default function QuizScreen() {
         <RefreshControl refreshing={refreshing} onRefresh={refresh} colors={[Palette.primary]} tintColor={Palette.primary} />
       }
     >
-      <ScreenHeader
-        eyebrow="Knowledge Check"
-        title="Quizzes"
-        subtitle={`${assigned.length + available.length} available`}
-        icon="school-outline"
-        accent="violet"
-      />
+      <ScreenHeader title="Quizzes" icon="school-outline" accent="teal" />
 
-      <View style={styles.intro}>
-        <Ionicons name="school-outline" size={16} color={Accent.violet.fg} />
-        <Text style={styles.introText}>Quizzes from your faculty&apos;s question banks</Text>
+      <View style={styles.segment} accessibilityRole="tablist">
+        {tabs.map((t) => {
+          const active = tab === t.key;
+          return (
+            <Pressable
+              key={t.key}
+              onPress={() => setTab(t.key)}
+              style={[styles.segmentItem, active && styles.segmentItemActive]}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: active }}
+            >
+              <Text style={[styles.segmentText, active && styles.segmentTextActive]}>{t.label}</Text>
+              <Text style={[styles.segmentCount, active && styles.segmentCountActive]}>{t.count}</Text>
+            </Pressable>
+          );
+        })}
       </View>
 
       {error && !data ? <EmptyState icon="cloud-offline-outline" message={error} /> : null}
 
-      {assigned.length > 0 && (
-        <View style={styles.section}>
-          <SectionHeader title="Assigned to You" count={assigned.length} />
-          {assigned.map((quiz) => (
-            <QuizCard key={quiz.id} quiz={quiz} onPress={() => router.push(`/quiz/${quiz.id}`)} Palette={Palette} Accent={Accent} styles={styles} />
-          ))}
-        </View>
-      )}
-
-      {available.length > 0 ? (
-        <View style={styles.section}>
-          <SectionHeader title="Available Quizzes" count={available.length} />
-          {available.map((quiz) => (
-            <QuizCard key={quiz.id} quiz={quiz} onPress={() => router.push(`/quiz/${quiz.id}`)} Palette={Palette} Accent={Accent} styles={styles} />
-          ))}
-        </View>
-      ) : assigned.length === 0 && completed.length > 0 ? (
-        <View style={styles.emptySection}>
-          <View style={styles.emptyIconContainer}>
-            <Ionicons name="checkmark-circle" size={44} color={Accent.green.fg} />
-          </View>
-          <Text style={styles.emptyTitle}>All Quizzes Completed!</Text>
-          <Text style={styles.emptyText}>Check back later for new quizzes.</Text>
-        </View>
-      ) : assigned.length === 0 && completed.length === 0 && !error ? (
-        <EmptyState icon="document-text-outline" message="No quizzes published yet — check back once your instructor publishes one." />
-      ) : null}
-
-      {completed.length > 0 && (
-        <View style={styles.section}>
-          <SectionHeader title="Completed" count={completed.length} />
-          {completed.map((quiz) => (
-            <QuizCard key={quiz.id} quiz={quiz} onPress={() => router.push(`/quiz/${quiz.id}`)} Palette={Palette} Accent={Accent} styles={styles} />
+      {shown.length === 0 && !error ? (
+        <EmptyState
+          icon={tab === 'ongoing' ? 'checkmark-done-circle-outline' : 'document-text-outline'}
+          message={
+            tab === 'ongoing'
+              ? completed.length > 0
+                ? 'All caught up — check back when your instructor publishes a new quiz.'
+                : 'No quizzes yet — check back once your instructor publishes one.'
+              : 'Quizzes you finish land here, with your best score and flashcards to study.'
+          }
+        />
+      ) : (
+        <View style={styles.list}>
+          {shown.map((quiz) => (
+            <QuizRow key={quiz.id} quiz={quiz} onPress={() => router.push(`/quiz-info/${quiz.id}`)} styles={styles} />
           ))}
         </View>
       )}
@@ -225,167 +171,67 @@ function createStyles(
   Type: ReturnType<typeof useTheme>['Type'],
 ) {
   return StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Palette.background,
-  },
-  content: {
-    padding: Spacing.lg,
-    // clears the floating tab bar so the last items can scroll above it
-    paddingBottom: 128,
-  },
-  pressed: {
-    opacity: 0.85,
-    transform: [{ scale: 0.99 }],
-  },
-  intro: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    backgroundColor: Accent.violet.bg,
-    borderRadius: Radius.md,
-    paddingVertical: 10,
-    paddingHorizontal: Spacing.lg,
-    marginBottom: Spacing.xl,
-  },
-  introText: {
-    flex: 1,
-    fontSize: 13,
-    fontWeight: '500',
-    color: Accent.violet.fg,
-  },
-  section: {
-    marginBottom: Spacing.xxl,
-  },
-  quizCard: {
-    backgroundColor: Palette.surface,
-    borderRadius: Radius.lg,
-    padding: Spacing.lg,
-    marginBottom: Spacing.sm + 2,
-    borderWidth: 1,
-    borderColor: Palette.border,
-    ...Shadow.card,
-  },
-  quizCardExhausted: {
-    opacity: 0.7,
-  },
-  exhaustedNote: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    marginTop: Spacing.md,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: Radius.sm,
-  },
-  exhaustedText: {
-    fontSize: 11,
-    fontWeight: '600',
-    flex: 1,
-  },
-  quizHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  quizIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: Radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  quizInfo: {
-    flex: 1,
-    marginLeft: Spacing.md,
-    marginRight: Spacing.sm,
-  },
-  quizTitle: {
-    ...Type.itemTitle,
-    fontWeight: '700',
-  },
-  quizDesc: {
-    fontSize: 12,
-    color: Palette.textSecondary,
-    marginTop: 2,
-  },
-  quizMeta: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-    marginTop: Spacing.md,
-    marginBottom: Spacing.md,
-  },
-  categoryBadge: {
-    backgroundColor: Palette.borderLight,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: Radius.pill,
-  },
-  categoryText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: Palette.textSecondary,
-  },
-  badge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: Radius.pill,
-  },
-  badgeText: {
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  quizFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.lg,
-    flexWrap: 'wrap',
-  },
-  footerItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  footerText: {
-    fontSize: 12,
-    color: Palette.textMuted,
-  },
-  scoreBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: Accent.green.bg,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: Radius.pill,
-  },
-  scoreText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: Accent.green.fg,
-  },
-  emptySection: {
-    alignItems: 'center',
-    padding: 40,
-  },
-  emptyIconContainer: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: Accent.green.bg,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Spacing.lg,
-  },
-  emptyTitle: {
-    ...Type.title,
-    marginBottom: 4,
-  },
-  emptyText: {
-    fontSize: 13,
-    color: Palette.textSecondary,
-    textAlign: 'center',
-  },
+    container: { flex: 1, backgroundColor: Palette.background },
+    content: {
+      padding: Spacing.lg,
+      // clears the floating tab bar so the last items can scroll above it
+      paddingBottom: 128,
+    },
+    pressed: { opacity: 0.85, transform: [{ scale: 0.99 }] },
+    segment: {
+      flexDirection: 'row',
+      backgroundColor: Palette.borderLight,
+      borderRadius: Radius.pill,
+      padding: 4,
+      marginBottom: Spacing.lg,
+    },
+    segmentItem: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+      paddingVertical: 9,
+      borderRadius: Radius.pill,
+    },
+    segmentItemActive: { backgroundColor: Palette.surface, ...Shadow.card },
+    segmentText: { fontSize: 13, fontWeight: '600', color: Palette.textMuted },
+    segmentTextActive: { color: Palette.primary, fontWeight: '800' },
+    segmentCount: { fontSize: 12, fontWeight: '700', color: Palette.textFaint },
+    segmentCountActive: { color: Palette.primary },
+    list: { gap: Spacing.sm + 2 },
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Spacing.md,
+      backgroundColor: Palette.surface,
+      borderRadius: Radius.lg,
+      borderWidth: 1,
+      borderColor: Palette.border,
+      padding: Spacing.md,
+      ...Shadow.card,
+    },
+    rowIcon: {
+      width: 46,
+      height: 46,
+      borderRadius: 23,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    rowBody: { flex: 1 },
+    rowTitle: { ...Type.itemTitle, fontSize: 14.5, fontWeight: '700', lineHeight: 19 },
+    rowMeta: { fontSize: 12, color: Palette.textMuted, marginTop: 3 },
+    chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: Spacing.sm },
+    chip: {
+      fontSize: 10.5,
+      fontWeight: '700',
+      color: Palette.textSecondary,
+      backgroundColor: Palette.borderLight,
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      borderRadius: Radius.pill,
+      overflow: 'hidden',
+      maxWidth: 160,
+    },
   });
 }

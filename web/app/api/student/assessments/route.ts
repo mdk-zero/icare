@@ -26,7 +26,7 @@ export async function GET() {
       await Promise.all([
         supabase
           .from('assessments')
-          .select('id, title, description, category, time_limit_seconds, target_sections, total_questions, max_attempts, questions(count)')
+          .select('id, title, description, category, time_limit_seconds, target_sections, total_questions, max_attempts, created_by, questions(count)')
           .eq('is_published', true)
           .order('created_at', { ascending: false })
           .limit(200),
@@ -58,6 +58,13 @@ export async function GET() {
       if (!studentSection) return false;
       return target.includes(studentSection);
     });
+
+    // Who made each quiz, for the "By" line on the student's card.
+    const authorIds = [...new Set(filteredPublished.map((a) => a.created_by).filter((id): id is string => Boolean(id)))];
+    const { data: authors } = authorIds.length
+      ? await supabase.from('users').select('id, name').in('id', authorIds)
+      : { data: [] as { id: string; name: string }[] };
+    const authorName = new Map((authors ?? []).map((u) => [u.id, u.name]));
 
     const assignmentByAssessment = new Map(
       (assignments ?? []).map((a) => [a.assessment_id, a]),
@@ -99,6 +106,7 @@ export async function GET() {
         title: a.title,
         description: a.description,
         category: a.category,
+        author_name: a.created_by ? (authorName.get(a.created_by) ?? null) : null,
         time_limit_seconds: a.time_limit_seconds,
         // What this student will actually be asked, not how big the bank is —
         // the surplus is held back for later attempts.
