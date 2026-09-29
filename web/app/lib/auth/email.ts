@@ -271,11 +271,18 @@ function mobileAppUrl(): string | null {
   return url && url.startsWith("https://") ? url : null;
 }
 
-function buildWelcomeHtml(name: string, email: string, password: string): string {
+/**
+ * A staff account (Instructor, Dean, Admin) signs in on the web rather than
+ * the mobile app, so its welcome email names the role and links the site.
+ */
+export type StaffWelcome = { roleLabel: string; signInUrl: string };
+
+function buildWelcomeHtml(name: string, email: string, password: string, staff?: StaffWelcome): string {
   const safeName = htmlEscape(name);
   const safeEmail = htmlEscape(email);
-  const appUrl = mobileAppUrl();
+  const appUrl = staff ? staff.signInUrl : mobileAppUrl();
   const safeAppUrl = appUrl ? htmlEscape(appUrl) : null;
+  const buttonLabel = staff ? "Sign in to iCARE++" : "Get the iCARE++ app";
   const safePassword = htmlEscape(password);
   const year = new Date().getFullYear();
 
@@ -299,14 +306,21 @@ function buildWelcomeHtml(name: string, email: string, password: string): string
           <tr>
             <td style="padding:32px 40px;">
               <h2 style="margin:0 0 8px;font-size:20px;color:#0f172a;font-weight:600;">Welcome, ${safeName}!</h2>
-              <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">
+              ${staff ? `<p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">
+                Your request was accepted and an <strong>${htmlEscape(staff.roleLabel)}</strong> account has been created
+                for you on <strong>iCARE++</strong> — a clinical competency assessment and adaptive learning system
+                for nursing students.
+              </p>
+              <p style="margin:0 0 24px;font-size:15px;color:#475569;line-height:1.6;">
+                Sign in on the web with <strong>${safeEmail}</strong> and the temporary password below.
+              </p>` : `<p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">
                 An instructor has created an account for you on <strong>iCARE++</strong> — a scalable,
                 ML-driven clinical competency assessment and adaptive learning system for nursing students.
               </p>
               <p style="margin:0 0 24px;font-size:15px;color:#475569;line-height:1.6;">
                 Open the <strong>iCARE++ mobile app</strong> and sign in with <strong>${safeEmail}</strong> and the
                 temporary password below to access your quizzes and patient cases, and track your performance.
-              </p>
+              </p>`}
               <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f0f9fa;border:1px solid #d0ebea;border-radius:10px;padding:16px 20px;margin-bottom:24px;">
                 <tr>
                   <td style="font-size:13px;color:#64748b;line-height:1.5;">
@@ -322,12 +336,12 @@ function buildWelcomeHtml(name: string, email: string, password: string): string
                 <tr>
                   <td align="center" style="border-radius:12px;background:linear-gradient(135deg,#0D7377,#0A5C5F);">
                     <a href="${safeAppUrl}" style="display:inline-block;padding:14px 40px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:12px;">
-                      Get the iCARE++ app
+                      ${buttonLabel}
                     </a>
                   </td>
                 </tr>
               </table>` : ""}
-              <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f8fafc;border-radius:10px;padding:16px 20px;margin-bottom:24px;">
+              ${staff ? "" : `<table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f8fafc;border-radius:10px;padding:16px 20px;margin-bottom:24px;">
                 <tr>
                   <td style="font-size:13px;color:#64748b;line-height:1.5;">
                     <strong style="color:#0f172a;">Getting started:</strong><br/>
@@ -336,9 +350,9 @@ function buildWelcomeHtml(name: string, email: string, password: string): string
                     &bull; Review personalized insights and recommendations
                   </td>
                 </tr>
-              </table>
+              </table>`}
               <p style="margin:0;font-size:13px;color:#94a3b8;">
-                If you believe this account was created in error, please contact your instructor.
+                If you believe this account was created in error, please contact ${staff ? "the iCARE++ team" : "your instructor"}.
               </p>
             </td>
           </tr>
@@ -486,6 +500,7 @@ export async function sendStudentInvitationEmail(
   email: string,
   name: string,
   password: string,
+  staff?: StaffWelcome,
 ): Promise<EmailResult> {
   try {
     if (!password) {
@@ -495,7 +510,7 @@ export async function sendStudentInvitationEmail(
     await sendEmail({
       to: email,
       subject: "Welcome to iCARE++ – Your Account Has Been Created",
-      html: buildWelcomeHtml(name, email, password),
+      html: buildWelcomeHtml(name, email, password, staff),
     });
 
     return { success: true };

@@ -5,6 +5,7 @@ import { sendStudentInvitationEmail } from '@/app/lib/auth/email';
 import { generateRandomPassword, hashPassword } from '@/app/lib/auth/password';
 import { parseSex } from '@/app/lib/auth/user';
 import { logAudit } from '@/app/lib/audit';
+import { roleLabel } from '@/app/lib/role-labels';
 import { isAccountRole, selectAccounts, toAccount } from '@/app/lib/super-admin-users';
 
 /** Every account in the system, whichever admin owns it. */
@@ -125,20 +126,25 @@ export async function POST(request: NextRequest) {
       request,
     );
 
-    // The invitation is student-worded; other roles get the password handed over.
+    // The temporary password goes only to the new account's inbox. It comes
+    // back to the super admin solely when that email fails, so it can still be
+    // handed over.
     let warning: string | undefined = googleWarning;
-    if (role === 'student') {
-      const sent = await sendStudentInvitationEmail(email, name, tempPassword);
-      if (!sent.success) {
-        warning = [warning, 'The invitation email could not be sent. Share the temporary password manually.']
-          .filter(Boolean)
-          .join(' ');
-      }
+    const sent = await sendStudentInvitationEmail(
+      email,
+      name,
+      tempPassword,
+      role === 'student' ? undefined : { roleLabel: roleLabel(role), signInUrl: `${request.nextUrl.origin}/login` },
+    );
+    if (!sent.success) {
+      warning = [warning, 'The welcome email could not be sent. Share the temporary password manually.']
+        .filter(Boolean)
+        .join(' ');
     }
 
     const { users } = await selectAccounts(supabase, { id: created.id });
     return NextResponse.json(
-      { user: users[0] ? toAccount(users[0]) : null, password: tempPassword, warning },
+      { user: users[0] ? toAccount(users[0]) : null, ...(sent.success ? {} : { password: tempPassword }), warning },
       { status: 201 },
     );
   } catch (err) {

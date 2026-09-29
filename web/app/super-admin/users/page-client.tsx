@@ -232,13 +232,14 @@ export default function SuperAdminUsersClient() {
       setRevealed({
         email: saved.email,
         password: json.password,
-        note:
-          requestWarning ??
-          json.warning ??
-          (saved.role === "student"
-            ? "An invitation with this password was emailed to the student."
-            : "Hand this temporary password over; it must be changed at first sign-in."),
+        note: [json.warning, requestWarning].filter(Boolean).join(" "),
       });
+    } else if (creating) {
+      const extra = [json.warning, requestWarning].filter(Boolean).join(" ");
+      flash(
+        `Account created. The temporary password was emailed to ${saved.email}.${extra ? ` ${extra}` : ""}`,
+        extra ? "error" : undefined,
+      );
     } else {
       flash(
         !creating && editing.role !== saved.role
@@ -608,7 +609,7 @@ export default function SuperAdminUsersClient() {
             )}
             {editing === "new" && (
               <p className="text-xs text-gray-500">
-                A temporary password is generated and must be changed at first sign-in. Students also get it by email.
+                A temporary password is generated and emailed to them; it must be changed at first sign-in.
               </p>
             )}
           </div>
