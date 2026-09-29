@@ -8,9 +8,9 @@ import { TASK_RATING_LABEL, type TaskRating } from '@/lib/task-ratings';
 /**
  * A scenario's clinical tasks as a numbered list. It is not a checklist the
  * student works through: the instructor watches the demonstration and grades
- * each task, so the only thing on the right is that grade — a dash until the
- * instructor's saved grade is released, when the task's title is struck
- * through.
+ * each task, so the only thing on the right is that grade, as the share of the
+ * task's points earned — a dash until the instructor's saved grade is
+ * released, when the task's title is struck through.
  */
 export function ClinicalTaskList({ tasks }: { tasks: ScenarioTask[] }) {
   const { Palette, Accent, Type } = useTheme();
@@ -39,9 +39,9 @@ export function ClinicalTaskList({ tasks }: { tasks: ScenarioTask[] }) {
             {accent && rating ? (
               <Text
                 style={[styles.grade, { color: accent.fg, backgroundColor: accent.bg }]}
-                accessibilityLabel={`Graded ${TASK_RATING_LABEL[rating]}`}
+                accessibilityLabel={`Graded ${task.percent != null ? `${task.percent}%` : TASK_RATING_LABEL[rating]}`}
               >
-                {TASK_RATING_LABEL[rating]}
+                {task.percent != null ? `${task.percent}%` : TASK_RATING_LABEL[rating]}
               </Text>
             ) : (
               <Text style={styles.ungraded} accessibilityLabel="Not graded yet">
@@ -98,6 +98,7 @@ function createStyles(
       borderRadius: Radius.pill,
       overflow: 'hidden',
       marginTop: 1,
+      fontVariant: ['tabular-nums'],
     },
     ungraded: {
       minWidth: 24,
