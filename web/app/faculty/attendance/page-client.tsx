@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faCalendarCheck,
@@ -41,8 +41,6 @@ import {
   SHIFT_PHASE_LABEL,
   SHIFT_PHASE_TONE,
   SHIFT_TYPE_LABEL,
-  SHIFT_EARLY_CHECKIN_MINUTES,
-  SHIFT_LATE_AFTER_MINUTES,
   formatShiftTimeRange,
   shiftPhase,
   shiftTitle,
@@ -53,6 +51,16 @@ import {
 } from "../../lib/shifts";
 import { EcgLoader } from "../../components/EcgLoader";
 import {
+  AttendanceTimeline,
+  DutyBoard,
+  PulseDot,
+  SECTION_WIDE_COLOR,
+  SegmentBar,
+  groupColorMap,
+  groupTint,
+  useNow,
+} from "./shift-visuals";
+import {
   SkeletonShiftCalendar,
   SkeletonShiftRoster,
   SkeletonStatTile,
@@ -62,7 +70,8 @@ const NO_SHIFTS: FacultyShift[] = [];
 const NO_GROUPS: GroupOption[] = [];
 const NO_ROOMS: Room[] = [];
 
-const TIME: Intl.DateTimeFormatOptions = { hour: "numeric", minute: "2-digit" };
+/** Legend key for older shifts that roster a whole section. */
+const SECTION_KEY = "section";
 
 const inputClass =
   "w-full px-3 py-2 bg-surface border border-gray-300 rounded-xl text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600";
@@ -118,21 +127,45 @@ export default function AttendanceClient() {
     return { shifts, groups, rooms };
   });
 
-  const shifts = data?.shifts ?? NO_SHIFTS;
+  const allShifts = data?.shifts ?? NO_SHIFTS;
   const groups = data?.groups ?? NO_GROUPS;
   const rooms = data?.rooms ?? NO_ROOMS;
+  const now = useNow();
+  const colorFor = useMemo(() => groupColorMap(groups.map((g) => g.id)), [groups]);
+
+  // Groups shown in the legend: the ones that actually have shifts, plus a
+  // "Section-wide" entry for older shifts that roster a whole section.
+  const legendGroups = useMemo(() => {
+    const withShifts = new Set(allShifts.map((s) => s.team_id ?? SECTION_KEY));
+    const list = groups.filter((g) => withShifts.has(g.id)).map((g) => ({ key: g.id, label: g.label }));
+    if (withShifts.has(SECTION_KEY)) list.push({ key: SECTION_KEY, label: "Section-wide" });
+    return list;
+  }, [allShifts, groups]);
+  const [hidden, setHidden] = useState<Set<string>>(() => new Set());
+  const toggleGroup = (key: string) =>
+    setHidden((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  const shifts = useMemo(
+    () => allShifts.filter((s) => !hidden.has(s.team_id ?? SECTION_KEY)),
+    [allShifts, hidden],
+  );
 
   // Headline numbers read across every shift on screen, so a single shift's
   // roster cannot disagree with the tiles above it.
   const overall = useMemo(() => tallyAttendance(shifts.flatMap((s) => s.statuses)), [shifts]);
-  const onNow = useMemo(
-    () =>
-      shifts.filter((s) => {
-        const phase = shiftPhase(s);
-        return phase === "active" || phase === "grace";
-      }).length,
-    [shifts],
-  );
+  const thisWeek = useMemo(() => {
+    const from = startOfWeek(new Date(now)).getTime();
+    const to = from + 7 * 86_400_000;
+    return shifts.filter((s) => {
+      const t = Date.parse(s.starts_at);
+      return t >= from && t < to && s.status !== "cancelled";
+    }).length;
+  }, [shifts, now]);
+  const decided = overall.present + overall.late + overall.absent;
 
   const handleDelete = async (shift: FacultyShift) => {
     setConfirm((prev) => (prev ? { ...prev, loading: true, error: null } : null));
@@ -152,6 +185,7 @@ export default function AttendanceClient() {
       <>
         <ShiftRoster
           shiftId={openShiftId}
+          colorFor={colorFor}
           groups={groups}
           rooms={rooms}
           onBack={() => setOpenShiftId(null)}
@@ -190,42 +224,60 @@ export default function AttendanceClient() {
         }}
       />
 
+      {!loading && (
+        <DutyBoard
+          shifts={shifts}
+          now={now}
+          colorFor={colorFor}
+          labelFor={(shift) => shiftGroupLabel(shift) ?? shiftTitle(shift)}
+          onOpen={setOpenShiftId}
+        />
+      )}
+
       <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {loading ? (
           Array.from({ length: 4 }).map((_, i) => <SkeletonStatTile key={i} />)
         ) : (
           <>
             <StatTile
-              icon={faClipboardList}
-              value={shifts.length}
-              label="Shifts scheduled"
-              caption={
-                onNow > 0 ? `${onNow} on now` : undefined
-              }
-            />
-            <StatTile
               icon={faPercent}
               value={overall.rate === null ? "—" : `${overall.rate}%`}
               label="Attendance rate"
-              caption="Present or late, of those marked"
+              caption="Present or late, of shifts that have run"
               iconBg="bg-emerald-50"
               iconColor="text-emerald-600"
             />
             <StatTile
               icon={faUserCheck}
               value={overall.present + overall.late}
-              label="Attended"
-              caption={overall.late > 0 ? `${overall.late} late` : undefined}
+              label="Check-ins"
+              caption={
+                overall.late > 0
+                  ? `${overall.late} late (${Math.round((overall.late / Math.max(overall.present + overall.late, 1)) * 100)}%)`
+                  : "All on time"
+              }
               iconBg="bg-brand-600/10"
               iconColor="text-brand-600"
             />
             <StatTile
               icon={faUsers}
               value={overall.absent}
-              label="Absent"
-              caption={overall.excused > 0 ? `${overall.excused} excused separately` : undefined}
+              label="Absences"
+              caption={
+                overall.excused > 0
+                  ? `${overall.excused} more excused`
+                  : decided > 0
+                    ? "None excused"
+                    : undefined
+              }
               iconBg="bg-rose-50"
               iconColor="text-rose-600"
+            />
+            <StatTile
+              icon={faClipboardList}
+              value={thisWeek}
+              label="Shifts this week"
+              caption={`${shifts.length} on the calendar`}
             />
           </>
         )}
@@ -233,7 +285,7 @@ export default function AttendanceClient() {
 
       {loading ? (
         <SkeletonShiftCalendar />
-      ) : shifts.length === 0 ? (
+      ) : allShifts.length === 0 ? (
         <div className="rounded-xl border border-hairline bg-surface p-12 text-center shadow-tile">
           <FontAwesomeIcon
             icon={faCalendarCheck}
@@ -246,7 +298,49 @@ export default function AttendanceClient() {
           </p>
         </div>
       ) : (
-        <ShiftCalendar shifts={shifts} onOpen={setOpenShiftId} />
+        <ShiftCalendar
+          shifts={shifts}
+          onOpen={setOpenShiftId}
+          colorFor={colorFor}
+          now={now}
+          legend={
+            legendGroups.length > 1 ? (
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="mr-1 text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+                  Groups
+                </span>
+                {legendGroups.map((g) => {
+                  const off = hidden.has(g.key);
+                  const color = g.key === SECTION_KEY ? SECTION_WIDE_COLOR : colorFor(g.key);
+                  return (
+                    <button
+                      key={g.key}
+                      onClick={() => toggleGroup(g.key)}
+                      aria-pressed={!off}
+                      style={off ? undefined : { background: `color-mix(in srgb, ${color} 14%, transparent)` }}
+                      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
+                        off
+                          ? "border-dashed border-gray-300 text-gray-400 hover:text-gray-600"
+                          : "border-transparent text-gray-800"
+                      }`}
+                    >
+                      <span className="h-2 w-2 rounded-full" style={{ background: off ? "transparent" : color, boxShadow: off ? `inset 0 0 0 1.5px ${color}` : undefined }} />
+                      {g.label}
+                    </button>
+                  );
+                })}
+                {hidden.size > 0 && (
+                  <button
+                    onClick={() => setHidden(new Set())}
+                    className="ml-1 text-xs font-medium text-brand-600 hover:underline"
+                  >
+                    Show all
+                  </button>
+                )}
+              </div>
+            ) : undefined
+          }
+        />
       )}
 
       {formOpen && (
@@ -312,33 +406,76 @@ function sameDay(a: Date, b: Date): boolean {
 }
 
 /**
- * Colour for one shift block.
- *
- * Phase decides the base — an upcoming rotation is brand, a finished one
- * recedes to grey — and a past shift still carrying unmarked students turns
- * amber, because that is the one state the faculty has to act on.
+ * How one shift block is painted: in its group's colour, so a week reads as
+ * which group is on when, with phase as emphasis. A running shift is the
+ * strongest tint and carries a live dot; a finished one recedes; a cancelled
+ * one is struck through.
  */
-function shiftTone(shift: FacultyShift): string {
-  if (shift.status === "cancelled") {
-    return "bg-rose-50 text-rose-700 border-rose-200 line-through";
+function chipPaint(
+  shift: FacultyShift,
+  color: string,
+  now: number,
+): { style: CSSProperties; className: string; live: boolean } {
+  const phase = shiftPhase(shift, new Date(now));
+  if (phase === "cancelled") {
+    return { style: groupTint(color, 6), className: "text-gray-500 line-through opacity-60", live: false };
   }
-  const phase = shiftPhase(shift);
-  if (phase === "past") {
-    const unmarked = shift.statuses.some((v) => v === "scheduled");
-    return unmarked
-      ? "bg-amber-50 text-amber-800 border-amber-200"
-      : "bg-gray-100 text-gray-600 border-gray-200";
-  }
+  if (phase === "past") return { style: groupTint(color, 7), className: "text-gray-600", live: false };
   if (phase === "active" || phase === "grace") {
-    return "bg-emerald-50 text-emerald-800 border-emerald-300";
+    return { style: groupTint(color, 22), className: "text-gray-900 font-semibold", live: true };
   }
-  return "bg-brand-600/10 text-brand-800 border-brand-600/25";
+  return { style: groupTint(color, 14), className: "text-gray-800", live: false };
 }
 
+/** "5/6" for a finished shift: who the system saw, of who was rostered. */
+function attendedLabel(shift: FacultyShift): string | null {
+  if (shift.status === "cancelled" || shift.statuses.length === 0) return null;
+  if (shiftPhase(shift) !== "past") return null;
+  const attended = shift.statuses.filter((s) => s === "present" || s === "late").length;
+  return `${attended}/${shift.statuses.length}`;
+}
+
+/**
+ * "6 AM · 1101 A": the hour, then section and group compactly, because group
+ * names repeat across sections and a month cell has no room for both in full.
+ */
 function shiftChipLabel(shift: FacultyShift): string {
   const start = new Date(shift.starts_at);
-  const time = start.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
-  return `${time} ${shiftGroupLabel(shift) ?? SHIFT_TYPE_LABEL[shift.shift_type]}`;
+  const time = start.toLocaleTimeString(undefined, { hour: "numeric" });
+  const section = shift.section?.name.split(/\s+/).pop() ?? "";
+  const group = shift.team?.name.replace(/^group\s+/i, "") ?? "";
+  const who = [section, group].filter(Boolean).join(" ") || SHIFT_TYPE_LABEL[shift.shift_type];
+  return `${time} · ${who}`;
+}
+
+/**
+ * Side-by-side lanes for shifts that overlap on one day, so four groups on the
+ * same rotation sit next to each other instead of on top of each other.
+ */
+function laneLayout(dayShifts: FacultyShift[]): Map<string, { lane: number; lanes: number }> {
+  const out = new Map<string, { lane: number; lanes: number }>();
+  const sorted = [...dayShifts].sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+  let cluster: FacultyShift[] = [];
+  let clusterEnd = 0;
+  let laneEnds: number[] = [];
+  const flush = () => {
+    for (const shift of cluster) out.set(shift.id, { lane: out.get(shift.id)!.lane, lanes: laneEnds.length });
+    cluster = [];
+    laneEnds = [];
+  };
+  for (const shift of sorted) {
+    const start = Date.parse(shift.starts_at);
+    const end = Date.parse(shift.ends_at);
+    if (cluster.length && start >= clusterEnd) flush();
+    let lane = laneEnds.findIndex((e) => e <= start);
+    if (lane === -1) lane = laneEnds.length;
+    laneEnds[lane] = end;
+    out.set(shift.id, { lane, lanes: 0 });
+    cluster.push(shift);
+    clusterEnd = Math.max(clusterEnd, end);
+  }
+  flush();
+  return out;
 }
 
 /**
@@ -352,9 +489,16 @@ function shiftChipLabel(shift: FacultyShift): string {
 function ShiftCalendar({
   shifts,
   onOpen,
+  colorFor,
+  now,
+  legend,
 }: {
   shifts: FacultyShift[];
   onOpen: (id: string) => void;
+  colorFor: (teamId: string | null | undefined) => string;
+  now: number;
+  /** Group filter chips, drawn under the toolbar. */
+  legend?: React.ReactNode;
 }) {
   const [view, setView] = useState<CalendarView>("month");
   const [cursor, setCursor] = useState<Date>(() => startOfDay(new Date()));
@@ -441,10 +585,12 @@ function ShiftCalendar({
         </div>
       </div>
 
+      {legend && <div className="border-b border-hairline px-4 py-2.5">{legend}</div>}
+
       {view === "month" ? (
-        <MonthGrid cursor={cursor} today={today} byDay={byDay} onOpen={onOpen} />
+        <MonthGrid cursor={cursor} today={today} byDay={byDay} onOpen={onOpen} colorFor={colorFor} now={now} />
       ) : (
-        <WeekGrid cursor={cursor} today={today} byDay={byDay} onOpen={onOpen} />
+        <WeekGrid cursor={cursor} today={today} byDay={byDay} onOpen={onOpen} colorFor={colorFor} now={now} />
       )}
     </div>
   );
@@ -455,11 +601,15 @@ function MonthGrid({
   today,
   byDay,
   onOpen,
+  colorFor,
+  now,
 }: {
   cursor: Date;
   today: Date;
   byDay: Map<string, FacultyShift[]>;
   onOpen: (id: string) => void;
+  colorFor: (teamId: string | null | undefined) => string;
+  now: number;
 }) {
   const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
   const gridStart = startOfWeek(first);
@@ -488,7 +638,7 @@ function MonthGrid({
             <div
               key={day.toISOString()}
               className={`min-h-[104px] border-b border-r border-hairline p-1.5 [&:nth-child(7n)]:border-r-0 ${
-                inMonth ? "bg-surface" : "bg-subtle/40"
+                isToday ? "bg-brand-50/60" : inMonth ? "bg-surface" : "bg-subtle/40"
               }`}
             >
               <div className="mb-1 flex justify-end">
@@ -505,19 +655,26 @@ function MonthGrid({
                 </span>
               </div>
               <div className="space-y-1">
-                {dayShifts.slice(0, 3).map((shift) => (
-                  <button
-                    key={shift.id}
-                    onClick={() => onOpen(shift.id)}
-                    title={`${shiftTitle(shift)} · ${formatShiftTimeRange(shift)}`}
-                    className={`block w-full truncate rounded border px-1.5 py-0.5 text-left text-[11px] font-medium transition-opacity hover:opacity-80 ${shiftTone(shift)}`}
-                  >
-                    {shiftChipLabel(shift)}
-                  </button>
-                ))}
-                {dayShifts.length > 3 && (
+                {dayShifts.slice(0, 4).map((shift) => {
+                  const paint = chipPaint(shift, colorFor(shift.team_id), now);
+                  const attended = attendedLabel(shift);
+                  return (
+                    <button
+                      key={shift.id}
+                      onClick={() => onOpen(shift.id)}
+                      title={`${shiftGroupLabel(shift) ?? shiftTitle(shift)} · ${formatShiftTimeRange(shift)}`}
+                      style={paint.style}
+                      className={`flex w-full items-center gap-1 rounded-md border-l-[3px] px-1.5 py-0.5 text-left text-[11px] font-medium transition-[filter] hover:brightness-95 ${paint.className}`}
+                    >
+                      {paint.live && <PulseDot className="shrink-0" />}
+                      <span className="min-w-0 flex-1 truncate">{shiftChipLabel(shift)}</span>
+                      {attended && <span className="shrink-0 tabular-nums opacity-70">{attended}</span>}
+                    </button>
+                  );
+                })}
+                {dayShifts.length > 4 && (
                   <p className="px-1.5 text-[10px] font-medium text-gray-400">
-                    +{dayShifts.length - 3} more
+                    +{dayShifts.length - 4} more
                   </p>
                 )}
               </div>
@@ -534,11 +691,15 @@ function WeekGrid({
   today,
   byDay,
   onOpen,
+  colorFor,
+  now,
 }: {
   cursor: Date;
   today: Date;
   byDay: Map<string, FacultyShift[]>;
   onOpen: (id: string) => void;
+  colorFor: (teamId: string | null | undefined) => string;
+  now: number;
 }) {
   const from = startOfWeek(cursor);
   const days = Array.from({ length: 7 }, (_, i) => addDays(from, i));
@@ -570,7 +731,7 @@ function WeekGrid({
           {days.map((day) => {
             const isToday = sameDay(day, today);
             return (
-              <div key={day.toISOString()} className="px-2 py-2 text-center">
+              <div key={day.toISOString()} className={`px-2 py-2 text-center ${isToday ? "bg-brand-50/60" : ""}`}>
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
                   {WEEKDAYS[day.getDay()]}
                 </p>
@@ -618,25 +779,57 @@ function WeekGrid({
                   style={{ top: i * HOUR_ROW_PX }}
                 />
               ))}
-              {(byDay.get(day.toDateString()) ?? []).map((shift) => {
+              {sameDay(day, today) &&
+                (() => {
+                  const hour = (now - startOfDay(day).getTime()) / 3_600_000;
+                  if (hour < GRID_START_HOUR || hour > GRID_END_HOUR) return null;
+                  return (
+                    <div
+                      className="pointer-events-none absolute inset-x-0 z-20 flex items-center"
+                      style={{ top: (hour - GRID_START_HOUR) * HOUR_ROW_PX }}
+                      aria-hidden
+                    >
+                      <span className="-ml-1 h-2 w-2 rounded-full bg-rose-500" />
+                      <span className="h-0.5 flex-1 bg-rose-500" />
+                    </div>
+                  );
+                })()}
+              {(() => {
+                const dayShifts = byDay.get(day.toDateString()) ?? [];
+                const lanes = laneLayout(dayShifts);
+                return dayShifts.map((shift) => {
                 const { top, height } = place(shift, day);
+                const { lane, lanes: laneCount } = lanes.get(shift.id) ?? { lane: 0, lanes: 1 };
+                const width = 100 / Math.max(laneCount, 1);
+                const paint = chipPaint(shift, colorFor(shift.team_id), now);
+                const attended = attendedLabel(shift);
                 return (
                   <button
                     key={shift.id}
                     onClick={() => onOpen(shift.id)}
                     title={`${shiftTitle(shift)} · ${formatShiftTimeRange(shift)}`}
-                    style={{ top, height }}
-                    className={`absolute inset-x-1 overflow-hidden rounded border px-1.5 py-1 text-left text-[11px] font-medium transition-opacity hover:opacity-80 ${shiftTone(shift)}`}
+                    style={{
+                      top,
+                      height,
+                      left: `calc(${lane * width}% + 2px)`,
+                      width: `calc(${width}% - 4px)`,
+                      ...paint.style,
+                    }}
+                    className={`absolute flex flex-col items-start justify-start overflow-hidden rounded-md border-l-[3px] px-1 py-1 text-left text-[10px] font-medium leading-tight transition-[filter] hover:z-10 hover:brightness-95 ${paint.className}`}
                   >
-                    <span className="block truncate">
-                      {shiftGroupLabel(shift) ?? SHIFT_TYPE_LABEL[shift.shift_type]}
+                    {/* Narrow lanes: section over group, the colour already says which. */}
+                    {paint.live && <PulseDot className="mb-0.5" />}
+                    <span className="max-w-full truncate">{shift.section?.name.split(/\s+/).pop()}</span>
+                    <span className="max-w-full truncate font-semibold">
+                      {shift.team?.name.replace(/^group\s+/i, "") ?? "All"}
                     </span>
-                    <span className="block truncate text-[10px] opacity-75">
-                      {formatShiftTimeRange(shift)}
-                    </span>
+                    {attended && (
+                      <span className="mt-1 rounded bg-surface/70 px-0.5 tabular-nums">{attended}</span>
+                    )}
                   </button>
                 );
-              })}
+                });
+              })()}
             </div>
           ))}
         </div>
@@ -882,6 +1075,7 @@ function ShiftFormModal({
 
 function ShiftRoster({
   shiftId,
+  colorFor,
   groups,
   rooms,
   onBack,
@@ -889,6 +1083,7 @@ function ShiftRoster({
   onDelete,
 }: {
   shiftId: string;
+  colorFor: (teamId: string | null | undefined) => string;
   groups: GroupOption[];
   rooms: Room[];
   onBack: () => void;
@@ -898,6 +1093,7 @@ function ShiftRoster({
 }) {
   const [savingId, setSavingId] = useState<string | null>(null);
   const [editOpen, setEditOpen] = useState(false);
+  const now = useNow();
 
   const { data, loading, refresh } = usePageData(`faculty:shift:${shiftId}`, () =>
     fetchShiftRoster(shiftId),
@@ -954,69 +1150,94 @@ function ShiftRoster({
     );
   }
 
-  const phase = shiftPhase(shift);
+  const phase = shiftPhase(shift, new Date(now));
+  const live = phase === "active" || phase === "grace";
+  const color = colorFor(shift.team_id);
+  const checkedIn = tally.present + tally.late;
+  const statuses = roster.map((r) => r.attendance_status);
+
+  const quietButton =
+    "inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-subtle hover:text-gray-900";
 
   return (
     <div>
       <BackButton onBack={onBack} />
 
-      <PageHeader
-        badge={{
-          icon: <FontAwesomeIcon icon={faCalendarCheck} className="w-3.5 h-3.5" />,
-          label: "Attendance",
-        }}
-        title={shiftTitle(shift)}
-        subtitle={`${shiftGroupLabel(shift) ?? "No group"} · ${formatShiftTimeRange(shift)}${
-          shift.room ? ` · ${shift.room.name}` : ""
-        }`}
-      />
-
-      <div className="mb-4 flex flex-wrap items-center gap-2">
+      <section className="relative mb-5 animate-rise overflow-hidden rounded-xl border border-hairline bg-surface shadow-tile">
+        <span className="absolute inset-y-0 left-0 w-1.5" style={{ background: color }} />
+        {/* A wash of the group colour behind the heading, fading out. */}
         <span
-          className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${SHIFT_PHASE_TONE[phase]}`}
-        >
-          {SHIFT_PHASE_LABEL[phase]}
-        </span>
-        <span className="text-sm text-gray-600">
-          {tally.rate === null ? "No attendance yet" : `${tally.rate}% attendance`}
-          {tally.scheduled > 0 &&
-            ` · ${tally.scheduled} ${phase === "upcoming" ? "scheduled" : "not checked in yet"}`}
-        </span>
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-0 h-28"
+          style={{ background: `linear-gradient(to bottom, color-mix(in srgb, ${color} 10%, transparent), transparent)` }}
+        />
 
-        <div className="ml-auto flex items-center gap-2">
-          <button
-            onClick={() => setEditOpen(true)}
-            className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
-          >
-            <FontAwesomeIcon icon={faPen} className="h-3.5 w-3.5" />
-            Edit
-          </button>
-          <button
-            onClick={toggleCancelled}
-            className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
-          >
-            <FontAwesomeIcon
-              icon={shift.status === "cancelled" ? faRotateLeft : faBan}
-              className="h-3.5 w-3.5"
+        <div className="relative px-5 pb-5 pt-4 sm:px-6">
+          <div className="flex flex-wrap items-center gap-2">
+            <span
+              className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold ${SHIFT_PHASE_TONE[phase]}`}
+            >
+              {live && <PulseDot />}
+              {SHIFT_PHASE_LABEL[phase]}
+            </span>
+            <span className="text-xs font-medium text-gray-500">
+              {new Date(shift.starts_at).toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" })}
+            </span>
+            <div className="ml-auto flex items-center gap-0.5">
+              <button onClick={() => setEditOpen(true)} className={quietButton}>
+                <FontAwesomeIcon icon={faPen} className="h-3 w-3" />
+                Edit
+              </button>
+              <button onClick={toggleCancelled} className={quietButton}>
+                <FontAwesomeIcon icon={shift.status === "cancelled" ? faRotateLeft : faBan} className="h-3 w-3" />
+                {shift.status === "cancelled" ? "Reinstate" : "Cancel"}
+              </button>
+              <button
+                onClick={() => onDelete(shift)}
+                className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-rose-600 transition-colors hover:bg-rose-50"
+              >
+                <FontAwesomeIcon icon={faTrash} className="h-3 w-3" />
+                Delete
+              </button>
+            </div>
+          </div>
+
+          <h1 className="mt-3 font-display text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">
+            {shiftGroupLabel(shift) ?? shiftTitle(shift)}
+          </h1>
+          <p className="mt-1 text-sm text-gray-600">
+            {[
+              shift.label,
+              `${SHIFT_TYPE_LABEL[shift.shift_type]} · ${formatShiftTimeRange(shift)}`,
+              shift.room ? `${shift.room.name} ${shift.room.room_number}` : "Ward-wide",
+            ]
+              .filter(Boolean)
+              .join("  ·  ")}
+          </p>
+
+          <div className="mt-5 grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4">
+            <Figure
+              value={tally.rate === null ? "—" : `${tally.rate}%`}
+              label="Attendance"
+              hint={tally.rate === null ? "Nothing decided yet" : "Present or late"}
             />
-            {shift.status === "cancelled" ? "Reinstate" : "Cancel shift"}
-          </button>
-          <button
-            onClick={() => onDelete(shift)}
-            className="inline-flex items-center gap-2 rounded-xl border border-rose-200 px-3 py-2 text-sm font-medium text-rose-700 transition-colors hover:bg-rose-50"
-          >
-            <FontAwesomeIcon icon={faTrash} className="h-3.5 w-3.5" />
-            Delete
-          </button>
-        </div>
-      </div>
+            <Figure value={`${checkedIn}/${roster.length}`} label="Checked in" />
+            <Figure value={String(tally.late)} label="Late" tone={tally.late > 0 ? "text-amber-600" : undefined} />
+            <Figure
+              value={String(tally.absent)}
+              label="Absent"
+              tone={tally.absent > 0 ? "text-rose-600" : undefined}
+              hint={tally.excused > 0 ? `+${tally.excused} excused` : undefined}
+            />
+          </div>
 
-      <p className="mb-3 text-xs text-gray-500">
-        Students are checked in when they sign in or use the app from{" "}
-        {SHIFT_EARLY_CHECKIN_MINUTES} minutes before the shift until it ends, and marked late
-        after the first {SHIFT_LATE_AFTER_MINUTES} minutes. Anyone not seen by the end is marked
-        absent; you can excuse an absence.
-      </p>
+          {roster.length > 0 && (
+            <div className="mt-5">
+              <SegmentBar statuses={statuses} />
+            </div>
+          )}
+        </div>
+      </section>
 
       {roster.length === 0 ? (
         <div className="rounded-xl border border-hairline bg-surface p-12 text-center shadow-tile">
@@ -1029,53 +1250,36 @@ function ShiftRoster({
           </p>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-hairline bg-surface shadow-tile">
-          <ul className="divide-y divide-hairline">
-            {roster.map((entry) => (
-              <li key={entry.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
-                <div className="min-w-0 flex-1">
-                  <p className="font-medium text-gray-900">
-                    {entry.users?.name ?? "Unknown student"}
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    {entry.users?.email ?? ""}
-                    {entry.checked_in_at &&
-                      ` · in at ${new Date(entry.checked_in_at).toLocaleTimeString([], TIME)}`}
-                    {entry.checked_out_at &&
-                      entry.checked_out_at !== entry.checked_in_at &&
-                      ` · last seen ${new Date(entry.checked_out_at).toLocaleTimeString([], TIME)}`}
-                  </p>
-                </div>
-
-                <span
-                  className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${SHIFT_ATTENDANCE_TONE[entry.attendance_status]}`}
-                >
-                  {SHIFT_ATTENDANCE_LABEL[entry.attendance_status]}
-                </span>
-
-                <div className="flex items-center gap-1">
-                  {savingId === entry.id ? (
-                    <EcgLoader className="text-brand-600" />
-                  ) : entry.attendance_status === "absent" ? (
-                    <button
-                      onClick={() => mark(entry, "excused")}
-                      className="rounded-lg border border-gray-200 px-2 py-1 text-[11px] font-medium text-gray-600 transition-colors hover:bg-gray-50"
-                    >
-                      Excuse
-                    </button>
-                  ) : entry.attendance_status === "excused" ? (
-                    <button
-                      onClick={() => mark(entry, "absent")}
-                      className="rounded-lg border border-gray-200 px-2 py-1 text-[11px] font-medium text-gray-600 transition-colors hover:bg-gray-50"
-                    >
-                      Undo excuse
-                    </button>
-                  ) : null}
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
+        <AttendanceTimeline
+          shift={shift}
+          roster={roster}
+          now={now}
+          renderAction={(entry) =>
+            savingId === entry.id ? (
+              <EcgLoader className="text-brand-600" />
+            ) : entry.attendance_status === "absent" ? (
+              <button
+                onClick={() => mark(entry, "excused")}
+                className="rounded-lg border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-700 transition-colors hover:border-sky-300 hover:bg-sky-50 hover:text-sky-800"
+              >
+                Excuse
+              </button>
+            ) : entry.attendance_status === "excused" ? (
+              <button
+                onClick={() => mark(entry, "absent")}
+                className="rounded-lg px-2.5 py-1 text-xs font-medium text-gray-500 transition-colors hover:bg-subtle hover:text-gray-800"
+              >
+                Undo excuse
+              </button>
+            ) : (
+              <span
+                className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${SHIFT_ATTENDANCE_TONE[entry.attendance_status]}`}
+              >
+                {SHIFT_ATTENDANCE_LABEL[entry.attendance_status]}
+              </span>
+            )
+          }
+        />
       )}
 
       {editOpen && (
@@ -1092,6 +1296,27 @@ function ShiftRoster({
           }}
         />
       )}
+    </div>
+  );
+}
+
+/** One headline number on the shift card. */
+function Figure({
+  value,
+  label,
+  hint,
+  tone = "text-gray-900",
+}: {
+  value: string;
+  label: string;
+  hint?: string;
+  tone?: string;
+}) {
+  return (
+    <div>
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">{label}</p>
+      <p className={`mt-0.5 font-display text-3xl font-bold leading-tight tabular-nums ${tone}`}>{value}</p>
+      {hint && <p className="text-xs text-gray-500">{hint}</p>}
     </div>
   );
 }
