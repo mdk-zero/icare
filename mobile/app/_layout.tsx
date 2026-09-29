@@ -37,7 +37,6 @@ function AuthStack() {
       <Stack.Screen name="library/[id]" options={{ title: 'Library' }} />
       <Stack.Screen name="recommendations" options={{ title: 'AI Recommendations' }} />
       <Stack.Screen name="progress" options={{ title: 'Performance' }} />
-      <Stack.Screen name="profile" options={{ title: 'Profile' }} />
       <Stack.Screen name="account" options={{ title: 'Account' }} />
       <Stack.Screen name="account/password" options={{ title: 'Change Password' }} />
       <Stack.Screen name="assistance" options={{ title: 'Request Assistance' }} />
