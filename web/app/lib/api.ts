@@ -4,6 +4,7 @@ import { cachedFetch, clearRequestCache } from './request-cache';
 import { recordRequest } from './telemetry';
 import type { AttendanceTally, ShiftAttendanceStatus } from './shifts';
 import { resolveRubric, type Rubric, type TaskRating } from './task-ratings';
+import { reportNetworkFailure, reportNetworkSuccess } from './connectivity';
 
 export interface User {
   id: string;
@@ -74,10 +75,12 @@ async function sendRequest(input: string, init?: RequestInit): Promise<Response>
     // Status 0: the request never got a response, which counts against reliability.
     if (!(err instanceof DOMException && err.name === 'AbortError')) {
       recordRequest(method, input, 0, performance.now() - started);
+      reportNetworkFailure();
     }
     throw err;
   }
   recordRequest(method, input, res.status, performance.now() - started);
+  reportNetworkSuccess();
   if (res.status === 401 && !input.startsWith('/api/auth/')) handleSessionExpired();
   if (method !== 'GET' && res.ok) clearRequestCache();
   return res;
