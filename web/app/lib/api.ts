@@ -14,6 +14,8 @@ export interface User {
   /** Null when unrecorded; the dashboard greeting drops the honorific then. */
   sex?: 'male' | 'female' | null;
   has_password?: boolean;
+  /** A Google account is connected, so "Continue with Google" signs in too. */
+  google_linked?: boolean;
   force_password_change?: boolean;
 }
 

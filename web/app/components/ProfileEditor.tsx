@@ -13,6 +13,7 @@ import {
   faShieldHalved,
 } from "@fortawesome/free-solid-svg-icons";
 import {
+  apiFetch,
   fetchFacultySections,
   getCurrentUser,
   getDisplayAvatarUrl,
@@ -29,6 +30,7 @@ import ThemeSetting from "./ThemeSetting";
 import LocalCacheSetting from "./LocalCacheSetting";
 import { toast } from "./Toast";
 import ChangeEmailDialog from "./ChangeEmailDialog";
+import GoogleSignInButton, { GoogleGlyph } from "./GoogleSignInButton";
 import { ROLE_LABEL } from "../lib/role-labels";
 
 interface ProfileEditorProps {
@@ -136,6 +138,7 @@ export default function ProfileEditor({
   const [avatarFailed, setAvatarFailed] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [googleBusy, setGoogleBusy] = useState(false);
 
   useEffect(() => {
     const current = getCurrentUser();
@@ -204,9 +207,42 @@ export default function ProfileEditor({
     }
   };
 
+  /** Connect (with the credential Google returned) or disconnect (null). */
+  const setGoogleLink = async (credential: string | null) => {
+    setGoogleBusy(true);
+    try {
+      const res = await apiFetch("/api/users/google", {
+        method: credential ? "POST" : "DELETE",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        ...(credential ? { body: JSON.stringify({ id_token: credential }) } : {}),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string; google_email?: string };
+      if (!res.ok) throw new Error(data.error ?? "Unable to update Google sign-in.");
+      const fresh = await refreshCurrentUser();
+      if (fresh) {
+        setUser(fresh);
+        onUserUpdate?.(fresh);
+      }
+      toast(
+        credential
+          ? `Google connected${data.google_email ? ` (${data.google_email})` : ""}. You can now continue with Google.`
+          : "Google disconnected.",
+      );
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Unable to update Google sign-in.", "error");
+    } finally {
+      setGoogleBusy(false);
+    }
+  };
+
   if (!user) return null;
 
   const hasPassword = user.has_password ?? false;
+  const googleLinked = user.google_linked ?? false;
+  const signInMethods =
+    [hasPassword && "Email & password", googleLinked && "Google"].filter(Boolean).join(" + ") ||
+    "Email & password";
   const dirty = name.trim() !== user.name;
   const showPhoto = Boolean(avatarUrl) && !avatarFailed;
   const pickPhoto = () => fileInputRef.current?.click();
@@ -297,7 +333,7 @@ export default function ProfileEditor({
                 ) : (
                   <GoogleMark className="h-3 w-3" />
                 )}
-                {hasPassword ? "Email & password" : "Google account"}
+                {signInMethods}
               </span>
               {user.role === "faculty" &&
                 (sections === undefined ? null : sections.length === 0 ? (
@@ -470,7 +506,23 @@ export default function ProfileEditor({
                 ) : (
                   <GoogleMark className="h-3 w-3 text-gray-400" />
                 )}
-                {hasPassword ? "Email & password" : "Google"}
+                {signInMethods}
+              </dd>
+            </div>
+            <div className="flex items-center justify-between gap-3 py-3.5">
+              <dt className="text-sm text-gray-500">Google</dt>
+              <dd>
+                {googleLinked ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                    Connected
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-500">
+                    <span className="h-1.5 w-1.5 rounded-full bg-gray-400" />
+                    Not connected
+                  </span>
+                )}
               </dd>
             </div>
             <div className="flex items-center justify-between gap-3 py-3.5">
@@ -502,6 +554,37 @@ export default function ProfileEditor({
             <FontAwesomeIcon icon={faKey} className="h-3.5 w-3.5" />
             {hasPassword ? "Change password" : "Set a password"}
           </Link>
+          {!googleLinked ? (
+            <div className="mt-2">
+              <GoogleSignInButton
+                onSuccess={(response) => void setGoogleLink(response.credential)}
+                onError={() => toast("Couldn't reach Google. Try again in a moment.", "error")}
+                className="flex w-full items-center justify-center gap-2 rounded-lg border border-hairline px-3 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50"
+              >
+                {googleBusy ? (
+                  "Connecting…"
+                ) : (
+                  <>
+                    <GoogleGlyph className="h-3.5 w-3.5" />
+                    Connect to Google
+                  </>
+                )}
+              </GoogleSignInButton>
+            </div>
+          ) : hasPassword ? (
+            <button
+              type="button"
+              onClick={() => {
+                if (window.confirm("Disconnect Google? You'll sign in with your email and password only.")) {
+                  void setGoogleLink(null);
+                }
+              }}
+              disabled={googleBusy}
+              className="mt-2 w-full rounded-lg px-3 py-2 text-sm font-medium text-gray-500 transition-colors hover:bg-gray-50 hover:text-red-600 disabled:opacity-50"
+            >
+              {googleBusy ? "Disconnecting…" : "Disconnect Google"}
+            </button>
+          ) : null}
         </SectionCard>
       </div>
 
