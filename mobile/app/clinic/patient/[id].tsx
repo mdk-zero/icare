@@ -4,31 +4,32 @@ import {
   View,
   Text,
   StyleSheet,
-  Pressable,
   RefreshControl,
-  Alert,
 } from 'react-native';
-import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
+import { useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Card, Badge, PrimaryButton, SkeletonScreen, EmptyState } from '@/components/ui';
+import { Card, Badge, SkeletonScreen, EmptyState } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { useApiData } from '@/hooks/useApiData';
 import {
   fetchWard,
   fetchScenarioTasks,
-  submitScenarioAssignment,
-  ScenarioTask,
   ScenarioTasksResult,
   WardVitals,
 } from '@/lib/api';
-import { isNetworkError } from '@/lib/client';
+import { ClinicalTaskList } from '@/components/ClinicalTaskList';
+import { AssistanceButton } from '@/components/AssistanceButton';
+
+/** How often an open scenario re-checks for the instructor's grades. */
+const GRADE_POLL_MS = 8000;
 
 /**
  * The patient hub — the end of the ward walk-through. It carries the scenario
- * brief, the latest vitals, the task checklist and the hand-in. Students no
+ * brief, the latest vitals and the task list. Students no
  * longer chart here: RetDem is a skills demonstration, rated by the instructor
- * task by task, and what students write up is a real hospital case (Clinic →
+ * task by task (there is nothing to hand in: the instructor grades as they
+ * watch), and what students write up is a real hospital case (Clinic →
  * Hospital Cases), not this simulated patient.
  *
  * A patient outside the student's scenarios stops at a read-only summary.
@@ -87,7 +88,6 @@ function VitalsGrid({
 export default function PatientHubScreen() {
   const { id } = useLocalSearchParams();
   const patientId = id as string;
-  const router = useRouter();
   const { Palette, Accent, Shadow, Type } = useTheme();
   const styles = React.useMemo(() => createStyles(Palette, Accent, Shadow, Type), [Palette, Accent, Shadow, Type]);
 
@@ -119,16 +119,13 @@ export default function PatientHubScreen() {
     }
   }, [assignmentId]);
 
-  // Faculty check tasks off while the student is elsewhere; refresh on return.
+  // Faculty grade tasks while the student is elsewhere; refresh on return.
   useFocusEffect(
     React.useCallback(() => {
       reload();
       loadChart();
     }, [reload, loadChart]),
   );
-
-  const [submitting, setSubmitting] = React.useState(false);
-  const [elapsed, setElapsed] = React.useState(0);
 
   const tasks = taskResult?.tasks ?? [];
   const status = taskResult?.assignment.status ?? assignment?.status ?? 'pending';
@@ -137,43 +134,18 @@ export default function PatientHubScreen() {
   const isSubmitted = !isFinalized && Boolean(submittedAt);
   const isActive = isAssigned && !isFinalized && !isSubmitted;
 
-  React.useEffect(() => {
-    if (!isActive) return;
-    const timer = setInterval(() => setElapsed((s) => s + 1), 1000);
-    return () => clearInterval(timer);
-  }, [isActive]);
+  // Grades land the moment the instructor saves them: while the screen is open
+  // and the scenario isn't final, keep checking.
+  useFocusEffect(
+    React.useCallback(() => {
+      if (!isAssigned || isFinalized) return;
+      const timer = setInterval(() => {
+        loadChart();
+      }, GRADE_POLL_MS);
+      return () => clearInterval(timer);
+    }, [isAssigned, isFinalized, loadChart]),
+  );
 
-  const handleSubmit = () => {
-    if (!assignmentId) return;
-    Alert.alert(
-      'Submit for Review',
-      'Submit your work for instructor review? Your instructor rates each task and finalizes your score.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Submit',
-          onPress: async () => {
-            setSubmitting(true);
-            try {
-              await submitScenarioAssignment(assignmentId, elapsed);
-              await Promise.all([reload(), loadChart()]);
-            } catch (err) {
-              Alert.alert(
-                'Submission failed',
-                isNetworkError(err)
-                  ? 'No connection — try again when you are back online.'
-                  : err instanceof Error
-                    ? err.message
-                    : 'Unable to submit',
-              );
-            } finally {
-              setSubmitting(false);
-            }
-          },
-        },
-      ],
-    );
-  };
 
   if (loading && !data) {
     return <SkeletonScreen />;
@@ -188,9 +160,6 @@ export default function PatientHubScreen() {
   }
 
   const vitals = patient.latest_vitals ?? null;
-  const completedCount = tasks.filter((t) => t.is_completed).length;
-  const totalPoints = tasks.reduce((sum, t) => sum + t.points, 0);
-  const earnedPoints = tasks.filter((t) => t.is_completed).reduce((sum, t) => sum + t.points, 0);
 
 
   return (
@@ -255,18 +224,10 @@ export default function PatientHubScreen() {
                 </View>
               </View>
             ) : (
-              <View style={styles.progressWrap}>
-                <View style={styles.progressTrack}>
-                  <View
-                    style={[
-                      styles.progressFill,
-                      { width: `${tasks.length ? (completedCount / tasks.length) * 100 : 0}%` },
-                    ]}
-                  />
-                </View>
-                <Text style={styles.progressLabel}>
-                  {completedCount}/{tasks.length} tasks · {earnedPoints}/{totalPoints} pts
-                  {isActive ? ` · ${formatDuration(elapsed)}` : ''}
+              <View style={styles.gradingNote}>
+                <Ionicons name="eye-outline" size={14} color={Palette.textSecondary} />
+                <Text style={styles.gradingNoteText}>
+                  Your instructor grades each task as you demonstrate it. Grades appear here once saved.
                 </Text>
               </View>
             )}
@@ -330,50 +291,16 @@ export default function PatientHubScreen() {
             {!chartError && tasks.length === 0 ? (
               <Text style={styles.emptyText}>No tasks have been set for this scenario yet.</Text>
             ) : null}
-            {tasks.map((task: ScenarioTask) => (
-              <View key={task.id} style={styles.checkRow}>
-                <Ionicons
-                  name={task.is_completed ? 'checkmark-circle' : 'ellipse-outline'}
-                  size={22}
-                  color={task.is_completed ? Accent.green.fg : Palette.textMuted}
-                />
-                <View style={styles.checkText}>
-                  <Text style={[styles.checkTitle, task.is_completed && styles.checkTitleDone]}>
-                    {task.title}
-                  </Text>
-                  <Text style={styles.checkDescription}>{task.description}</Text>
-                  {task.is_completed ? (
-                    <Text style={[styles.checkHint, { color: Accent.green.fg }]}>
-                      {/* Charting used to tick some tasks by itself; those stay as done. */}
-                      {task.completed_via === 'system' ? 'Completed' : 'Verified by instructor'}
-                    </Text>
-                  ) : (
-                    <Text style={styles.checkHint}>Your instructor verifies this</Text>
-                  )}
-                </View>
-                <Text style={styles.checkPoints}>{task.points} pts</Text>
-              </View>
-            ))}
+            <ClinicalTaskList tasks={tasks} />
           </Card>
 
           {/* The help flag belongs where the student is working, not buried in
               settings — this is the ERD's assistance request. */}
-          {isActive ? (
-            <Pressable
-              style={({ pressed }) => [styles.assistButton, pressed && styles.pressed]}
-              onPress={() => router.push('/assistance')}
-            >
-              <Ionicons name="hand-left-outline" size={16} color={Accent.amber.fg} />
-              <Text style={styles.assistText}>Request instructor assistance</Text>
-            </Pressable>
-          ) : null}
-
-          {isActive ? (
-            <PrimaryButton
-              title={submitting ? 'Submitting…' : 'Submit for Review'}
-              onPress={handleSubmit}
-              size="lg"
-              disabled={submitting}
+          {isActive && assignment ? (
+            <AssistanceButton
+              scenarioTitle={assignment.scenario_title}
+              patientId={patient.id}
+              patientName={patient.name}
             />
           ) : null}
         </>
@@ -392,7 +319,6 @@ function createStyles(
     container: { flex: 1, backgroundColor: Palette.background },
     content: { padding: Spacing.lg, paddingBottom: 40 },
     errorContainer: { flex: 1, justifyContent: 'center', backgroundColor: Palette.background },
-    pressed: { opacity: 0.85, transform: [{ scale: 0.99 }] },
     patientHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.xl },
     patientAvatar: {
       width: 56,
@@ -417,10 +343,8 @@ function createStyles(
     objectives: { marginTop: Spacing.md, gap: Spacing.sm },
     objectiveRow: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm },
     objectiveText: { flex: 1, fontSize: 13, color: Palette.textSecondary, lineHeight: 19 },
-    progressWrap: { marginTop: Spacing.md },
-    progressTrack: { height: 6, borderRadius: 3, backgroundColor: Palette.borderLight, overflow: 'hidden' },
-    progressFill: { height: 6, borderRadius: 3, backgroundColor: Palette.primary },
-    progressLabel: { fontSize: 12, color: Palette.textSecondary, fontWeight: '600', marginTop: 6 },
+    gradingNote: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, marginTop: Spacing.md },
+    gradingNoteText: { flex: 1, fontSize: 12, color: Palette.textSecondary, lineHeight: 17 },
     resultRow: { flexDirection: 'row', justifyContent: 'space-around', marginTop: Spacing.md },
     resultStat: { alignItems: 'center' },
     resultValue: { fontSize: 22, fontWeight: '800', color: Palette.primary },
@@ -449,24 +373,6 @@ function createStyles(
     anomalyBody: { flex: 1 },
     anomalyText: { fontSize: 12, color: Accent.red.fg, fontWeight: '600' },
     anomalyAdvice: { fontSize: 12, color: Accent.red.fg, marginTop: 4, lineHeight: 18 },
-    checkRow: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.md, paddingVertical: Spacing.sm },
-    checkText: { flex: 1 },
-    checkTitle: { fontSize: 14, fontWeight: '700', color: Palette.ink, flexShrink: 1 },
-    checkTitleDone: { textDecorationLine: 'line-through', color: Palette.textMuted },
-    checkDescription: { fontSize: 12, color: Palette.textSecondary, marginTop: 2, lineHeight: 18 },
-    checkHint: { fontSize: 11, color: Palette.textMuted, marginTop: 4 },
-    checkPoints: { fontSize: 12, fontWeight: '700', color: Palette.textSecondary },
-    assistButton: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: Spacing.sm,
-      backgroundColor: Accent.amber.bg,
-      borderRadius: Radius.md,
-      paddingVertical: Spacing.md,
-      marginBottom: Spacing.lg,
-    },
-    assistText: { fontSize: 13, fontWeight: '700', color: Accent.amber.fg },
     emptyText: { fontSize: 13, color: Palette.textMuted },
   });
 }

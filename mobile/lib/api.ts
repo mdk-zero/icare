@@ -384,6 +384,8 @@ export interface ScenarioTask {
   /** Instructor's verbal rating and note — sent only once the scenario is finalized. */
   rating?: TaskRating | null;
   remarks?: string | null;
+  /** The share of this task's points earned (0–100), sent with the rating. */
+  percent?: number | null;
 }
 
 export interface ScenarioTasksResult {

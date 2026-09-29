@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ScrollView, View, Text, StyleSheet, Alert, Pressable, RefreshControl } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ScrollView, View, Text, StyleSheet, Pressable, RefreshControl } from 'react-native';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Card, Badge, PrimaryButton, SkeletonScreen, EmptyState } from '@/components/ui';
@@ -10,13 +10,15 @@ import {
   fetchScenarioAssignments,
   fetchScenario,
   fetchScenarioTasks,
-  submitScenarioAssignment,
   Scenario,
-  ScenarioTask,
 } from '@/lib/api';
-import { isNetworkError } from '@/lib/client';
+import { ClinicalTaskList } from '@/components/ClinicalTaskList';
+import { AssistanceButton } from '@/components/AssistanceButton';
 import { ReflectionCard } from '@/components/ReflectionCard';
-import { scoreDescriptor, TASK_RATING_BADGE, TASK_RATING_LABEL } from '@/lib/task-ratings';
+import { scoreDescriptor } from '@/lib/task-ratings';
+
+/** How often an open scenario re-checks for the instructor's grades. */
+const GRADE_POLL_MS = 8000;
 
 const DIFFICULTY_VARIANT: Record<Scenario['difficulty'], 'success' | 'warning' | 'danger'> = {
   beginner: 'success',
@@ -59,7 +61,7 @@ function PatientCase({
  * worked on the patient hub (app/clinic/patient/[id].tsx), where the checklist
  * and the hand-in sit together. This screen is where an assignment lands when
  * faculty never set scenarios.patient_id — the student can still read the
- * brief and submit.
+ * brief, follow the tasks and see their grades as the instructor saves them.
  */
 export default function ScenarioBriefScreen() {
   const { id } = useLocalSearchParams();
@@ -76,7 +78,7 @@ export default function ScenarioBriefScreen() {
   const tasks = useMemo(() => taskResult?.tasks ?? [], [taskResult]);
   const taskAssignment = taskResult?.assignment ?? null;
 
-  // Faculty check tasks off while the student is elsewhere; refresh on return.
+  // Faculty grade tasks while the student is elsewhere; refresh on return.
   useFocusEffect(
     React.useCallback(() => {
       reload();
@@ -101,9 +103,6 @@ export default function ScenarioBriefScreen() {
     };
   }, [assignment?.scenario_id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const [elapsed, setElapsed] = useState(0);
-  const [submitting, setSubmitting] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const status = taskAssignment?.status ?? assignment?.status ?? 'pending';
   const submittedAt = taskAssignment?.submitted_at ?? null;
@@ -111,50 +110,20 @@ export default function ScenarioBriefScreen() {
   const isSubmitted = !isCompleted && Boolean(submittedAt);
   const isActive = !isCompleted && !isSubmitted;
 
-  useEffect(() => {
-    if (!isActive) return;
-    timerRef.current = setInterval(() => setElapsed((s) => s + 1), 1000);
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [isActive]);
+  // Grades land the moment the instructor saves them: while the screen is open
+  // and the scenario isn't final, keep checking.
+  useFocusEffect(
+    React.useCallback(() => {
+      if (isCompleted) return;
+      const timer = setInterval(() => {
+        reload();
+      }, GRADE_POLL_MS);
+      return () => clearInterval(timer);
+    }, [isCompleted, reload]),
+  );
 
-  const completedCount = tasks.filter((t) => t.is_completed).length;
   const totalCount = tasks.length;
-  const totalPoints = tasks.reduce((sum, t) => sum + t.points, 0);
-  const earnedPoints = tasks.filter((t) => t.is_completed).reduce((sum, t) => sum + t.points, 0);
 
-  const handleSubmit = () => {
-    if (!assignment) return;
-    Alert.alert(
-      'Submit for Review',
-      'Submit your work for instructor review? Your instructor rates each task and finalizes your score.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Submit',
-          onPress: async () => {
-            setSubmitting(true);
-            try {
-              await submitScenarioAssignment(assignment.id, elapsed);
-              await reload();
-            } catch (err) {
-              Alert.alert(
-                'Submission failed',
-                isNetworkError(err)
-                  ? 'No connection — try again when you are back online.'
-                  : err instanceof Error
-                    ? err.message
-                    : 'Unable to submit',
-              );
-            } finally {
-              setSubmitting(false);
-            }
-          },
-        },
-      ],
-    );
-  };
 
   if (loading && !data) {
     return <SkeletonScreen />;
@@ -232,18 +201,13 @@ export default function ScenarioBriefScreen() {
           </View>
         </Card>
       ) : (
-        <Card style={styles.timerCard}>
-          <View style={styles.timerRow}>
-            <View style={styles.timerLeft}>
-              <Ionicons name="stopwatch-outline" size={18} color={Palette.primary} />
-              <Text style={styles.timerText}>{formatTime(elapsed)}</Text>
-            </View>
-            <Text style={styles.timerProgress}>
-              {completedCount}/{totalCount} tasks · {earnedPoints}/{totalPoints} pts
+        <Card style={styles.reviewCard}>
+          <Ionicons name="eye-outline" size={20} color={Palette.primary} />
+          <View style={styles.reviewText}>
+            <Text style={styles.reviewTitle}>Graded by your instructor</Text>
+            <Text style={styles.reviewBody}>
+              Your instructor grades each task as you demonstrate it. Grades appear below once saved.
             </Text>
-          </View>
-          <View style={styles.progressTrack}>
-            <View style={[styles.progressFill, { width: `${totalCount ? (completedCount / totalCount) * 100 : 0}%` }]} />
           </View>
         </Card>
       )}
@@ -277,13 +241,7 @@ export default function ScenarioBriefScreen() {
       {/* The help flag belongs where the student is working, not buried in
           settings — this is the ERD's assistance request. */}
       {isActive && (
-        <Pressable
-          style={({ pressed }) => [styles.assistButton, pressed && styles.patientLinkPressed]}
-          onPress={() => router.push('/assistance')}
-        >
-          <Ionicons name="hand-left-outline" size={16} color={Accent.amber.fg} />
-          <Text style={styles.assistText}>Request instructor assistance</Text>
-        </Pressable>
+        <AssistanceButton scenarioTitle={assignment.scenario_title} patientId={scenario?.patient_id ?? null} />
       )}
 
       {scenario && scenario.learning_objectives.length > 0 && (
@@ -303,47 +261,10 @@ export default function ScenarioBriefScreen() {
         {totalCount === 0 && (
           <Text style={styles.emptyTasks}>No tasks have been set for this scenario yet.</Text>
         )}
-        {tasks.map((task: ScenarioTask) => (
-          <View key={task.id} style={styles.checkRow}>
-            <Ionicons
-              name={task.is_completed ? 'checkmark-circle' : 'ellipse-outline'}
-              size={22}
-              color={task.is_completed ? Accent.green.fg : Palette.textMuted}
-            />
-            <View style={styles.checkText}>
-              <Text style={[styles.checkTitle, task.is_completed && styles.checkTitleDone]}>
-                {task.title}
-              </Text>
-              <Text style={styles.checkDescription}>{task.description}</Text>
-              {task.rating && TASK_RATING_LABEL[task.rating] && (
-                <View style={styles.ratingRow}>
-                  <Badge label={TASK_RATING_LABEL[task.rating]} variant={TASK_RATING_BADGE[task.rating]} size="sm" />
-                </View>
-              )}
-              {task.remarks ? <Text style={styles.remarks}>{task.remarks}</Text> : null}
-              {task.is_completed ? (
-                <Text style={styles.doneHint}>
-                  {/* Charting used to tick some tasks by itself; those stay as done. */}
-                  {task.completed_via === 'system' ? 'Completed' : 'Verified by instructor'}
-                </Text>
-              ) : (
-                <Text style={styles.facultyHint}>Your instructor verifies this</Text>
-              )}
-            </View>
-            <Text style={styles.checkPoints}>{task.points} pts</Text>
-          </View>
-        ))}
+        <ClinicalTaskList tasks={tasks} />
       </Card>
 
-      {isActive && (
-        <PrimaryButton
-          title={submitting ? 'Submitting…' : 'Submit for Review'}
-          onPress={handleSubmit}
-          size="lg"
-          disabled={submitting}
-        />
-      )}
-      {!isActive && <PrimaryButton title="Back to Clinic" onPress={() => router.back()} size="lg" />}
+      <PrimaryButton title="Back to Clinic" onPress={() => router.back()} size="lg" variant="outline" />
     </ScrollView>
   );
 }
@@ -360,23 +281,6 @@ function createStyles(
   header: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.lg },
   title: { ...Type.screenTitle, marginBottom: Spacing.xs },
   subtitle: { fontSize: 14, color: Palette.textSecondary, marginBottom: Spacing.lg },
-  timerCard: { marginBottom: Spacing.lg },
-  timerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Spacing.md,
-  },
-  timerLeft: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  timerText: { fontSize: 20, fontWeight: '800', color: Palette.ink, fontVariant: ['tabular-nums'] },
-  timerProgress: { fontSize: 12, color: Palette.textSecondary, fontWeight: '600' },
-  progressTrack: {
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: Palette.borderLight,
-    overflow: 'hidden',
-  },
-  progressFill: { height: 6, borderRadius: 3, backgroundColor: Palette.primary },
   reviewCard: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -419,54 +323,9 @@ function createStyles(
   },
   patientLinkPressed: { opacity: 0.7 },
   patientLinkText: { fontSize: 13, fontWeight: '600', color: Palette.primary },
-  assistButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: Accent.amber.bg,
-    borderRadius: Radius.md,
-    paddingVertical: Spacing.md,
-    marginBottom: Spacing.md,
-  },
-  assistText: { fontSize: 13, fontWeight: '700', color: Accent.amber.fg },
   objectiveRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: Spacing.sm },
   objectiveIcon: { marginTop: 2, marginRight: Spacing.sm },
   objectiveText: { flex: 1, fontSize: 13, color: Palette.text, lineHeight: 19 },
   emptyTasks: { fontSize: 13, color: Palette.textMuted, paddingVertical: Spacing.sm },
-  checkRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    paddingVertical: Spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: Palette.borderLight,
-    gap: Spacing.md,
-  },
-  checkText: { flex: 1 },
-  checkTitle: { ...Type.itemTitle },
-  checkTitleDone: { color: Accent.green.fg },
-  checkDescription: { fontSize: 12, color: Palette.textSecondary, marginTop: 2, lineHeight: 17 },
-  facultyHint: { fontSize: 11, color: Palette.textMuted, marginTop: 4 },
-  doneHint: { fontSize: 11, color: Accent.green.fg, marginTop: 4, fontWeight: '600' },
-  ratingRow: { flexDirection: 'row', marginTop: 6 },
-  remarks: {
-    fontSize: 12,
-    color: Palette.text,
-    lineHeight: 17,
-    marginTop: 6,
-    padding: Spacing.sm,
-    borderRadius: Radius.sm,
-    backgroundColor: Palette.borderLight,
-  },
-  checkPoints: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: Palette.textMuted,
-    backgroundColor: Palette.borderLight,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: Radius.pill,
-    overflow: 'hidden',
-  },
   });
 }
