@@ -3,24 +3,26 @@
  *
  * Attendance is tied to the rest of the data twice over.
  *
- * Where a student charted inside a shift window — vitals, TPR and notes all
- * carry timestamps from the earlier seeds — that charting *is* the record of
- * their shift: check-in is their first entry, check-out their last, and they
- * are late if the first lands more than SHIFT_LATE_AFTER_MINUTES after the
- * bell. Those rows agree with the chart exactly.
+ * Where a student was active in the app inside a shift window — a quiz
+ * attempt, a patient case started or submitted, a case presentation, or any
+ * charting, all timestamped by the earlier seeds — they are present, exactly
+ * as lib/shift-presence marks them live: check-in is their first activity,
+ * check-out their last.
  *
  * Everywhere else attendance is drawn against the student's own reliability,
- * because charting is evidence of attendance but silence is not evidence of
- * absence — a student can work a shift without writing anything, and the
- * seeded charting clusters on the days their scenarios ran. Reliability comes
+ * standing in for what the instructor marked by hand, because activity is
+ * evidence of attendance but silence is not evidence of absence — a student
+ * can work a shift without opening the app. Reliability comes
  * from the work they have outstanding: a student carrying overdue scenarios
  * misses more shifts than one who finished everything, so the roster and the
  * quiz record describe the same person.
  *
  * Shifts are built from SHIFT_TYPE_PRESETS in lib/shifts, the same rotation
  * times the faculty UI offers, and rostered the way the create route rosters
- * them: every student in the section, assigned by the faculty who teaches it.
- * Rooms come from where that section's patients actually are.
+ * them: one shift per group (shifts.team_id, migration 064), holding every
+ * member of the group, assigned by the instructor who supervises it. The
+ * groups of a section run the same rotation side by side, each in its own
+ * room, so their shifts never share a ward.
  *
  * The window runs three weeks back and one forward, so the attendance page
  * has past shifts to review and upcoming ones to plan against — an upcoming
@@ -66,10 +68,13 @@ const MINUTE_MS = 60_000;
 const DAYS_BACK = 21;
 const DAYS_FORWARD = 7;
 
-/** Which section rotates through which room, and on what pattern. */
-const ROTATIONS: { section: string; room_number: string; label: string }[] = [
-  { section: 'BSN 1101', room_number: '201', label: 'Med-Surg Ward Rotation' },
-  { section: 'BSN 1102', room_number: '101', label: 'Skills Laboratory Rotation' },
+/**
+ * Which section rotates through which rooms. The section's groups, in name
+ * order, take the rooms in turn: Group A the first, Group B the second.
+ */
+const ROTATIONS: { section: string; room_numbers: string[]; label: string }[] = [
+  { section: 'BSN 1101', room_numbers: ['201', '204'], label: 'Med-Surg Ward Rotation' },
+  { section: 'BSN 1102', room_numbers: ['101', '102'], label: 'Skills Laboratory Rotation' },
 ];
 
 /** Monday/Wednesday/Friday run AM; Tuesday/Thursday run PM. */
@@ -104,10 +109,24 @@ async function main() {
   });
 
   const { data: campus } = await supabase.from('campuses').select('id').limit(1).maybeSingle();
+  // Group shifts need migration 064; without it every shift would silently
+  // fall back to section-wide, which is what this seed replaces.
+  const probe = await supabase.from('shifts').select('team_id').limit(1);
+  if (probe.error) {
+    console.error('shifts.team_id is missing — apply migration 064_shift_groups.sql first.');
+    process.exit(1);
+  }
+
   const { data: sections } = await supabase.from('sections').select('id, name');
   const sectionByName = new Map((sections ?? []).map((s) => [s.name, s.id]));
-  const { data: links } = await supabase.from('faculty_sections').select('faculty_id, section_id');
-  const facultyBySection = new Map((links ?? []).map((l) => [l.section_id, l.faculty_id]));
+  const { data: teams, error: teamError } = await supabase
+    .from('teams')
+    .select('id, name, section_id, faculty_id, team_members(student_id)')
+    .order('name');
+  if (teamError) {
+    console.error('Unable to read the groups:', teamError.message);
+    process.exit(1);
+  }
   const { data: rooms } = await supabase.from('rooms').select('id, room_number');
   const roomByNumber = new Map((rooms ?? []).map((r) => [r.room_number, r.id]));
   const { data: students } = await supabase
@@ -115,8 +134,8 @@ async function main() {
     .select('id, email, section_id')
     .eq('role', 'student');
 
-  // Every timestamped thing a student charted, so attendance can be read off
-  // the record rather than guessed. Three tables, one list per student.
+  // Every timestamped thing a student did in the app, so attendance can be
+  // read off the record rather than guessed. One list per student.
   const activity = new Map<string, number[]>();
   const push = (studentId: string | null, at: string | null) => {
     if (!studentId || !at) return;
@@ -124,14 +143,29 @@ async function main() {
     list.push(new Date(at).getTime());
     activity.set(studentId, list);
   };
-  const [vitals, tpr, notes] = await Promise.all([
+  const [vitals, tpr, notes, attempts, cases, presentations] = await Promise.all([
     supabase.from('vital_sign_readings').select('recorded_by, recorded_at'),
     supabase.from('tpr_records').select('recorded_by, recorded_at'),
     supabase.from('progress_notes').select('author_id, created_at'),
+    supabase.from('assessment_attempts').select('student_id, started_at, submitted_at'),
+    supabase.from('scenario_assignments').select('student_id, started_at, submitted_at'),
+    supabase.from('case_submissions').select('student_id, created_at, submitted_at'),
   ]);
   for (const r of vitals.data ?? []) push(r.recorded_by, r.recorded_at);
   for (const r of tpr.data ?? []) push(r.recorded_by, r.recorded_at);
   for (const r of notes.data ?? []) push(r.author_id, r.created_at);
+  for (const r of attempts.data ?? []) {
+    push(r.student_id, r.started_at);
+    push(r.student_id, r.submitted_at);
+  }
+  for (const r of cases.data ?? []) {
+    push(r.student_id, r.started_at);
+    push(r.student_id, r.submitted_at);
+  }
+  for (const r of presentations.data ?? []) {
+    push(r.student_id, r.created_at);
+    push(r.student_id, r.submitted_at);
+  }
   for (const list of activity.values()) list.sort((a, b) => a - b);
 
   // How reliable each student has been, read off the work they were set.
@@ -169,142 +203,156 @@ async function main() {
       console.warn(`  skipped ${rotation.section} — no such section`);
       continue;
     }
-    const facultyId = facultyBySection.get(sectionId) ?? null;
-    const roomId = roomByNumber.get(rotation.room_number) ?? null;
-    const roster = (students ?? []).filter((s) => s.section_id === sectionId);
-    if (roster.length === 0) {
-      console.warn(`  skipped ${rotation.section} — no students`);
+    const groups = (teams ?? []).filter((t) => t.section_id === sectionId);
+    if (groups.length === 0) {
+      console.warn(`  skipped ${rotation.section} — no groups`);
       continue;
     }
 
-    // One series per (section, shift type), the way a recurring rotation
-    // created through the UI would group its occurrences.
-    const seriesFor = new Map<string, string>();
-
-    // This section's shifts are ours to rebuild. Assignments cascade.
+    // This section's shifts are ours to rebuild, the old section-wide ones
+    // included. Assignments cascade.
     const { data: old } = await supabase.from('shifts').select('id').eq('section_id', sectionId);
     for (const row of old ?? []) await supabase.from('shifts').delete().eq('id', row.id);
 
-    for (let offset = -DAYS_BACK; offset <= DAYS_FORWARD; offset++) {
-      const date = new Date(now + offset * DAY_MS);
-      const type = shiftTypeForDay(date.getDay());
-      if (!type) continue;
-
-      const { start, end } = windowFor(date, type);
-      if (!seriesFor.has(type)) seriesFor.set(type, crypto.randomUUID());
-
-      const { data: shift, error } = await supabase
-        .from('shifts')
-        .insert({
-          campus_id: campus?.id ?? null,
-          section_id: sectionId,
-          room_id: roomId,
-          created_by: facultyId,
-          label: rotation.label,
-          shift_type: type,
-          starts_at: start.toISOString(),
-          ends_at: end.toISOString(),
-          capacity: roster.length,
-          status: 'scheduled' as const,
-          series_id: seriesFor.get(type),
-          notes: null,
-        })
-        .select('id')
-        .single();
-      if (error || !shift) {
-        console.error(`  ✗ shift ${rotation.section} ${date.toDateString()}:`, error?.message);
-        process.exit(1);
+    for (const [groupIndex, group] of groups.entries()) {
+      const facultyId = (group.faculty_id as string | null) ?? null;
+      const roomNumber = rotation.room_numbers[groupIndex % rotation.room_numbers.length];
+      const roomId = roomByNumber.get(roomNumber) ?? null;
+      const memberIds = new Set(((group.team_members ?? []) as { student_id: string }[]).map((m) => m.student_id));
+      const roster = (students ?? []).filter((s) => memberIds.has(s.id));
+      if (roster.length === 0) {
+        console.warn(`  skipped ${rotation.section} ${group.name} — no members`);
+        continue;
       }
-      shiftCount += 1;
 
-      const graceEnd = end.getTime() + SHIFT_END_GRACE_MINUTES * MINUTE_MS;
-      const lateAfter = start.getTime() + SHIFT_LATE_AFTER_MINUTES * MINUTE_MS;
-      const upcoming = start.getTime() > now;
+      // One series per (group, shift type), the way a recurring rotation
+      // created through the UI would group its occurrences.
+      const seriesFor = new Map<string, string>();
 
-      const rows = roster.map((student) => {
-        // Seeded on the shift's slot rather than its row id: the id is a
-        // fresh uuid every run, which made the whole roster re-roll each
-        // time and the counts drift between otherwise identical runs.
-        const rng = seeded(hash(`${student.email}|${rotation.section}|${type}|${start.toISOString()}`));
-        // Nothing has happened yet on a shift that has not started.
-        if (upcoming) {
-          return {
-            shift_id: shift.id,
-            student_id: student.id,
-            assigned_by: facultyId,
-            attendance_status: 'scheduled' as ShiftAttendanceStatus,
-            checked_in_at: null,
-            checked_out_at: null,
+      for (let offset = -DAYS_BACK; offset <= DAYS_FORWARD; offset++) {
+        const date = new Date(now + offset * DAY_MS);
+        const type = shiftTypeForDay(date.getDay());
+        if (!type) continue;
+
+        const { start, end } = windowFor(date, type);
+        if (!seriesFor.has(type)) seriesFor.set(type, crypto.randomUUID());
+
+        const { data: shift, error } = await supabase
+          .from('shifts')
+          .insert({
+            campus_id: campus?.id ?? null,
+            section_id: sectionId,
+            team_id: group.id,
+            room_id: roomId,
+            created_by: facultyId,
+            label: rotation.label,
+            shift_type: type,
+            starts_at: start.toISOString(),
+            ends_at: end.toISOString(),
+            capacity: roster.length,
+            status: 'scheduled' as const,
+            series_id: seriesFor.get(type),
             notes: null,
-          };
+          })
+          .select('id')
+          .single();
+        if (error || !shift) {
+          console.error(`  ✗ shift ${rotation.section} ${group.name} ${date.toDateString()}:`, error?.message);
+          process.exit(1);
         }
+        shiftCount += 1;
 
-        const inWindow = (activity.get(student.id) ?? []).filter(
-          (t) => t >= start.getTime() && t <= graceEnd,
-        );
+        const graceEnd = end.getTime() + SHIFT_END_GRACE_MINUTES * MINUTE_MS;
+        const lateAfter = start.getTime() + SHIFT_LATE_AFTER_MINUTES * MINUTE_MS;
+        const upcoming = start.getTime() > now;
 
-        if (inWindow.length === 0) {
-          // Nothing charted, which is not the same as nobody there. Draw
-          // against how reliable this student has been elsewhere.
-          const rate = reliability.get(student.id) ?? 0.9;
-          const roll = rng();
-          if (roll < rate) {
-            // Turned up and worked without charting. Most arrive inside the
-            // first few minutes; scattering uniformly across the half hour
-            // put half the ward past the 15-minute line and made 'late' the
-            // commonest outcome on the roster.
-            const minutesLate = rng() < 0.85
-              ? Math.round(rng() * 12)
-              : SHIFT_LATE_AFTER_MINUTES + 1 + Math.round(rng() * 25);
-            const arrived = start.getTime() + minutesLate * MINUTE_MS;
-            const status: ShiftAttendanceStatus =
-              arrived > lateAfter ? 'late' : 'present';
+        const rows = roster.map((student) => {
+          // Seeded on the shift's slot rather than its row id: the id is a
+          // fresh uuid every run, which made the whole roster re-roll each
+          // time and the counts drift between otherwise identical runs.
+          const rng = seeded(hash(`${student.email}|${rotation.section}|${type}|${start.toISOString()}`));
+          // Nothing has happened yet on a shift that has not started.
+          if (upcoming) {
+            return {
+              shift_id: shift.id,
+              student_id: student.id,
+              assigned_by: facultyId,
+              attendance_status: 'scheduled' as ShiftAttendanceStatus,
+              checked_in_at: null,
+              checked_out_at: null,
+              notes: null,
+            };
+          }
+
+          const inWindow = (activity.get(student.id) ?? []).filter(
+            (t) => t >= start.getTime() && t <= graceEnd,
+          );
+
+          if (inWindow.length === 0) {
+            // Nothing charted, which is not the same as nobody there. Draw
+            // against how reliable this student has been elsewhere.
+            const rate = reliability.get(student.id) ?? 0.9;
+            const roll = rng();
+            if (roll < rate) {
+              // Turned up and worked without charting. Most arrive inside the
+              // first few minutes; scattering uniformly across the half hour
+              // put half the ward past the 15-minute line and made 'late' the
+              // commonest outcome on the roster.
+              const minutesLate = rng() < 0.85
+                ? Math.round(rng() * 12)
+                : SHIFT_LATE_AFTER_MINUTES + 1 + Math.round(rng() * 25);
+              const arrived = start.getTime() + minutesLate * MINUTE_MS;
+              const status: ShiftAttendanceStatus =
+                arrived > lateAfter ? 'late' : 'present';
+              return {
+                shift_id: shift.id,
+                student_id: student.id,
+                assigned_by: facultyId,
+                attendance_status: status,
+                checked_in_at: new Date(arrived).toISOString(),
+                checked_out_at: new Date(end.getTime() - Math.round(rng() * 10) * MINUTE_MS).toISOString(),
+                notes: status === 'late' ? 'Arrived after the start of the shift.' : null,
+              };
+            }
+            const status: ShiftAttendanceStatus = roll < rate + (1 - rate) * 0.4 ? 'excused' : 'absent';
             return {
               shift_id: shift.id,
               student_id: student.id,
               assigned_by: facultyId,
               attendance_status: status,
-              checked_in_at: new Date(arrived).toISOString(),
-              checked_out_at: new Date(end.getTime() - Math.round(rng() * 10) * MINUTE_MS).toISOString(),
-              notes: status === 'late' ? 'Arrived after the start of the shift.' : null,
+              checked_in_at: null,
+              checked_out_at: null,
+              notes: status === 'excused' ? 'Excused — cleared with the clinical instructor.' : null,
             };
           }
-          const status: ShiftAttendanceStatus = roll < rate + (1 - rate) * 0.4 ? 'excused' : 'absent';
+
+          // Active in the app during the shift: present, as the live rule marks it.
+          const first = inWindow[0];
+          const last = inWindow[inWindow.length - 1];
           return {
             shift_id: shift.id,
             student_id: student.id,
             assigned_by: facultyId,
-            attendance_status: status,
-            checked_in_at: null,
-            checked_out_at: null,
-            notes: status === 'excused' ? 'Excused — cleared with the clinical instructor.' : null,
+            attendance_status: 'present' as ShiftAttendanceStatus,
+            checked_in_at: new Date(first).toISOString(),
+            checked_out_at: new Date(Math.min(last, graceEnd)).toISOString(),
+            notes: null,
           };
+        });
+
+        const { error: assignError } = await supabase.from('shift_assignments').insert(rows);
+        if (assignError) {
+          console.error(`  ✗ roster for ${rotation.section} ${group.name}:`, assignError.message);
+          process.exit(1);
         }
-
-        const first = inWindow[0];
-        const last = inWindow[inWindow.length - 1];
-        const status: ShiftAttendanceStatus = first > lateAfter ? 'late' : 'present';
-        return {
-          shift_id: shift.id,
-          student_id: student.id,
-          assigned_by: facultyId,
-          attendance_status: status,
-          checked_in_at: new Date(first).toISOString(),
-          checked_out_at: new Date(Math.min(last, graceEnd)).toISOString(),
-          notes: status === 'late' ? 'First entry charted after the start of the shift.' : null,
-        };
-      });
-
-      const { error: assignError } = await supabase.from('shift_assignments').insert(rows);
-      if (assignError) {
-        console.error(`  ✗ roster for ${rotation.section}:`, assignError.message);
-        process.exit(1);
+        assignmentCount += rows.length;
+        for (const r of rows) tally[r.attendance_status] = (tally[r.attendance_status] ?? 0) + 1;
       }
-      assignmentCount += rows.length;
-      for (const r of rows) tally[r.attendance_status] = (tally[r.attendance_status] ?? 0) + 1;
-    }
 
-    console.log(`  ✓ ${rotation.section.padEnd(10)} ${rotation.label} in room ${rotation.room_number}`);
+      console.log(
+        `  ✓ ${rotation.section.padEnd(10)} ${group.name.padEnd(8)} ${rotation.label} in room ${roomNumber} (${roster.length} members)`,
+      );
+    }
   }
 
   console.log(`\nShifts: ${shiftCount}   Roster entries: ${assignmentCount}`);
