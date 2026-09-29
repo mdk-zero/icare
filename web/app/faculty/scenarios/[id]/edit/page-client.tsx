@@ -32,8 +32,6 @@ import { roomStatus, ROOM_STATUS_LABEL, ROOM_STATUS_TONE } from "../../../../lib
 import { toast } from "../../../../components/Toast";
 import PageHeader from "../../../../components/PageHeader";
 import { EcgLoader } from "../../../../components/EcgLoader";
-import CategoryPicker from "../../../../components/CategoryPicker";
-import { useScenarioCategories } from "../../../../lib/use-scenario-categories";
 import { DEFAULT_RUBRIC, resolveRubric, type Rubric } from "../../../../lib/task-ratings";
 import RubricEditor, { rubricToStore } from "../../rubric-editor";
 
@@ -45,7 +43,6 @@ const labelClassName = "block text-sm font-bold text-gray-800 mb-2";
 const emptyForm = {
   title: "",
   description: "",
-  category: "",
   learningObjectives: "",
   patientId: "",
   roomId: "",
@@ -60,7 +57,6 @@ export default function EditScenarioClient({ scenarioId }: { scenarioId: string 
   const [loadingData, setLoadingData] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [patientSearch, setPatientSearch] = useState("");
-  const { categories, loading: loadingCategories } = useScenarioCategories();
 
   const [rubric, setRubric] = useState<Rubric>(DEFAULT_RUBRIC);
   const [savedRubric, setSavedRubric] = useState<Rubric>(DEFAULT_RUBRIC);
@@ -92,7 +88,6 @@ export default function EditScenarioClient({ scenarioId }: { scenarioId: string 
     setForm({
       title: scenarioData.title,
       description: scenarioData.description ?? "",
-      category: scenarioData.category ?? "",
       learningObjectives: (scenarioData.learning_objectives ?? []).join("\n"),
       patientId: scenarioData.patient_id ?? "",
       // Where the linked patient already is, so leaving the room table alone
@@ -154,7 +149,6 @@ export default function EditScenarioClient({ scenarioId }: { scenarioId: string 
       ...(rubricChanged ? { rubric: rubricToStore(rubric) } : {}),
       title: form.title,
       description: form.description,
-      category: form.category || "General",
       patient_id: form.patientId || null,
       learning_objectives: form.learningObjectives
         .split("\n")
@@ -305,15 +299,6 @@ export default function EditScenarioClient({ scenarioId }: { scenarioId: string 
                 placeholder="Brief overview of the patient case..."
                 className={inputClassName + " resize-none"}
               />
-            </div>
-            <div>
-              <label className={labelClassName}>Category</label>
-            <CategoryPicker
-              value={form.category}
-              onChange={(category) => setForm((prev) => ({ ...prev, category }))}
-              categories={categories}
-              loading={loadingCategories}
-            />
             </div>
             <div>
               <label className={labelClassName}>Learning Objectives</label>

@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
-import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { callAI } from '@/app/lib/ai/generate';
 import { readLessonUpload } from '@/app/lib/ai/lesson';
-import { listCategories, matchCategory } from '@/app/lib/scenario-categories';
 import { ACTIVE_CHAPTERS, TAYLORS_CHAPTERS, type TaylorsChapter } from '@/scripts/taylors-chapters';
 
 // Parsing the file and a topic pass over up to 15k characters of it can
@@ -19,10 +17,8 @@ interface LessonTopic {
   topic: string;
   /** The Taylor's chapter this topic is. */
   chapter: number;
-  /** The chapter's name; the new patient case page still files cases under it. */
+  /** The chapter's name. */
   category: string;
-  /** Whether no category of that name exists yet (for the new patient case page). */
-  is_new: boolean;
 }
 
 /** "body temperature, … and brachial blood pressure." from a chapter's description. */
@@ -74,17 +70,16 @@ function describeChapters(numbers: number[]): string[] {
   return [`Chapters ${ranges.join(', ')}`];
 }
 
-function toTopic(chapter: TaylorsChapter, topic: string, categories: string[]): LessonTopic {
+function toTopic(chapter: TaylorsChapter, topic: string): LessonTopic {
   return {
     topic: topic || chapterSummary(chapter),
     chapter: chapter.chapter,
     category: chapter.name,
-    is_new: matchCategory(categories, chapter.name) === null,
   };
 }
 
 /** Taught chapters from the model's answer; anything else it named is ignored. */
-function sanitizeChapters(input: Record<string, unknown>, categories: string[]): LessonTopic[] {
+function sanitizeChapters(input: Record<string, unknown>): LessonTopic[] {
   const raw = Array.isArray(input.chapters) ? input.chapters : [];
   const topics: LessonTopic[] = [];
   for (const item of raw) {
@@ -92,7 +87,7 @@ function sanitizeChapters(input: Record<string, unknown>, categories: string[]):
     const t = item as Record<string, unknown>;
     const chapter = TAUGHT.find((c) => c.chapter === Number(t.chapter));
     if (!chapter || topics.some((x) => x.chapter === chapter.chapter)) continue;
-    topics.push(toTopic(chapter, typeof t.topic === 'string' ? t.topic.trim() : '', categories));
+    topics.push(toTopic(chapter, typeof t.topic === 'string' ? t.topic.trim() : ''));
   }
   return topics;
 }
@@ -143,12 +138,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: lesson.error }, { status: lesson.status });
   }
 
-  const categories = await listCategories(getSupabaseAdmin());
   const taughtNames = TAUGHT.map((c) => c.name).join(', ');
 
   if (lesson.taylors) {
     const topics = lesson.taylors.chapters.map((n) =>
-      toTopic(TAUGHT.find((c) => c.chapter === n)!, '', categories),
+      toTopic(TAUGHT.find((c) => c.chapter === n)!, ''),
     );
     const notTaught = describeChapters(lesson.taylors.others);
     return NextResponse.json({
@@ -163,7 +157,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const generated = await callAI(buildChaptersPrompt(lesson.text));
-    const topics = sanitizeChapters(generated, categories);
+    const topics = sanitizeChapters(generated);
     return NextResponse.json({
       lesson_text: lesson.text,
       topics,

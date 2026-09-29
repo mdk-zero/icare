@@ -1820,49 +1820,12 @@ export async function createScenario(
   }
 }
 
-/** Scenario categories, alphabetical with General last. */
-export async function fetchScenarioCategories(): Promise<string[]> {
-  try {
-    const res = await apiFetch('/api/faculty/scenarios/categories', { credentials: 'include' });
-    const json = (await res.json()) as { categories?: string[] };
-    return res.ok ? (json.categories ?? []) : [];
-  } catch (err) {
-    console.error('fetchScenarioCategories() failed', err);
-    return [];
-  }
-}
-
-/**
- * Creates categories, reusing any that already exist in another case.
- * `created` is each requested name's stored spelling, in order.
- */
-export async function createScenarioCategories(
-  names: string[],
-  source: 'lesson' | 'faculty',
-): Promise<{ created: string[]; categories: string[] } | { error: string }> {
-  try {
-    const res = await apiFetch('/api/faculty/scenarios/categories', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ names, source }),
-    });
-    const json = (await res.json()) as { created?: string[]; categories?: string[]; error?: string };
-    if (!res.ok || !json.created) return { error: json.error || `Request failed (${res.status})` };
-    return { created: json.created, categories: json.categories ?? [] };
-  } catch (err) {
-    return { error: err instanceof Error ? err.message : 'Unable to create categories' };
-  }
-}
-
 /** A taught Taylor's chapter detected in a lesson. */
 export interface LessonTopic {
   topic: string;
   chapter: number;
-  /** The chapter's name; the new patient case page files the case under it. */
+  /** The chapter's name. */
   category: string;
-  /** Whether no category of that name exists yet. */
-  is_new: boolean;
 }
 
 export interface AnalyzedLesson {
@@ -1908,12 +1871,13 @@ export async function analyzeLesson(file: File): Promise<AnalyzedLesson | { erro
 
 /**
  * A lesson, when given, grounds the scenario in its text (the prompt may then
- * be empty); its category, when set, is the topic the case must centre on.
+ * be empty). Chapters are the taught Taylor's chapters the case centres on;
+ * none lets the AI pick one.
  */
 export async function generateAIScenario(
   prompt: string,
   patientId?: string,
-  lesson?: { text: string; category?: string | null } | null,
+  options: { lessonText?: string | null; chapters?: number[] } = {},
 ): Promise<(Partial<SimulationScenario> & { skills?: string[] }) | { error: string }> {
   try {
     const res = await apiFetch('/api/faculty/scenarios/generate', {
@@ -1923,8 +1887,8 @@ export async function generateAIScenario(
       body: JSON.stringify({
         prompt,
         patient_id: patientId,
-        lesson_text: lesson?.text,
-        category: lesson?.category ?? undefined,
+        lesson_text: options.lessonText ?? undefined,
+        chapters: options.chapters,
       }),
     });
 
@@ -1940,8 +1904,6 @@ export async function generateAIScenario(
       skills: json.scenario.skills ?? [],
       title: json.scenario.title || 'AI Generated Patient Case',
       description: json.scenario.description || prompt,
-      // Must stay on the scenario_category enum or the save is rejected.
-      category: json.scenario.category || 'General',
       patient_case: json.scenario.patient_case || { generated_by_ai: true },
       learning_objectives: json.scenario.learning_objectives || ['Demonstrate clinical assessment skills'],
       is_ai_generated: true,

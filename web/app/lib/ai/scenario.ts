@@ -1,5 +1,9 @@
 import { catalogPromptLines, isSkillId } from '@/app/lib/taylor-skills';
 import type { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { ACTIVE_CHAPTERS, TAYLORS_CHAPTERS, type TaylorsChapter } from '@/scripts/taylors-chapters';
+
+/** The Taylor's chapters the app teaches, which every patient case centres on. */
+export const TAUGHT_CHAPTERS = TAYLORS_CHAPTERS.filter((c) => ACTIVE_CHAPTERS.includes(c.chapter));
 
 export const VALID_CATEGORIES = [
   'Cardiac Emergency',
@@ -194,26 +198,34 @@ Ground each scenario you write in this lesson. Choose a clinical situation in wh
 `;
 }
 
-/** Tells the model which category to file the case under, or which to pick from. */
-function categoryInstruction(category: string | null, categories: readonly string[]): string {
-  return category
-    ? `Set "category" to exactly "${category}" and centre the case on that topic.`
-    : `Set "category" to exactly one of: ${categories.map((c) => `"${c}"`).join(', ')}.`;
+/** Patient cases aren't filed under categories any more; the column still needs one. */
+export const UNCATEGORIZED = 'General';
+
+/**
+ * Tells the model which taught Taylor's chapters the case centres on — the
+ * ones the faculty picked, or any of the taught ones — and where its skills
+ * come from.
+ */
+function chapterInstruction(chapters: readonly TaylorsChapter[]): string {
+  if (chapters.length === 0) {
+    return `Centre the case on one of these Taylor's chapters: ${TAUGHT_CHAPTERS.map((c) => `Chapter ${c.chapter}, ${c.name}`).join('; ')}.`;
+  }
+  const names = chapters.map((c) => `Chapter ${c.chapter}, ${c.name}`).join('; ');
+  const prefixes = chapters.map((c) => `"${c.chapter}-"`).join(' or ');
+  return `Centre the case on Taylor's ${names}, and take its "skills" mainly from ids starting ${prefixes}.`;
 }
 
 export interface ScenarioPromptOptions {
   lessonText?: string | null;
-  /** The category the case must be filed under; otherwise the model picks from `categories`. */
-  category?: string | null;
-  /** Categories the model may pick from. Defaults to the ten presets. */
-  categories?: readonly string[];
+  /** The taught chapters the case must centre on; empty lets the model pick one. */
+  chapters?: readonly TaylorsChapter[];
 }
 
 /** Prompt for a single scenario, optionally grounded in a patient record and/or a lesson. */
 export function buildScenarioPrompt(
   userPrompt: string,
   patient?: PatientContext | null,
-  { lessonText = null, category = null, categories = VALID_CATEGORIES }: ScenarioPromptOptions = {},
+  { lessonText = null, chapters = [] }: ScenarioPromptOptions = {},
 ): string {
   const patientBlock = patient ? `\nUse ${patientRecordBlock(patient, 'patient record as the basis for the scenario')}\n` : '';
   const request = userPrompt
@@ -230,7 +242,7 @@ export function buildScenarioPrompt(
 
 ${request}
 ${patientBlock}${lessonText ? `${lessonBlock(lessonText)}${lessonFocus ? `${lessonFocus}\n` : ''}` : ''}
-${categoryInstruction(category, categories)}
+${chapterInstruction(chapters)} Set "category" to "${UNCATEGORIZED}".
 
 Return ONLY a valid JSON object with this exact structure (no markdown, no explanations):
 

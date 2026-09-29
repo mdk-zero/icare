@@ -3,8 +3,9 @@ import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { callAI, aiErrorResponse } from '@/app/lib/ai/generate';
 import { MAX_LESSON_CHARS } from '@/app/lib/ai/lesson';
-import { listCategories, matchCategory } from '@/app/lib/scenario-categories';
 import {
+  TAUGHT_CHAPTERS,
+  UNCATEGORIZED,
   buildScenarioPrompt,
   fetchPatientContext,
   sanitizeScenario,
@@ -32,8 +33,8 @@ export async function POST(request: NextRequest) {
   if (!isFacultyOrAdmin(session.role)) return forbiddenResponse();
 
   // lesson_text is what POST analyze-lesson extracted from the uploaded file;
-  // category, when set, is the lesson topic the case must centre on.
-  let body: { prompt?: unknown; patient_id?: unknown; lesson_text?: unknown; category?: unknown };
+  // chapters, when set, are the taught Taylor's chapters the case centres on.
+  let body: { prompt?: unknown; patient_id?: unknown; lesson_text?: unknown; chapters?: unknown };
   try {
     body = (await request.json()) as typeof body;
   } catch {
@@ -44,7 +45,9 @@ export async function POST(request: NextRequest) {
   const patientId = typeof body.patient_id === 'string' ? body.patient_id.trim() : '';
   const lessonText =
     typeof body.lesson_text === 'string' ? body.lesson_text.trim().slice(0, MAX_LESSON_CHARS) : '';
-  const requestedCategory = typeof body.category === 'string' ? body.category.trim() : '';
+  // Chapters the app doesn't teach are dropped, like unknown numbers.
+  const chapterNumbers = Array.isArray(body.chapters) ? body.chapters.map(Number) : [];
+  const chapters = TAUGHT_CHAPTERS.filter((c) => chapterNumbers.includes(c.chapter));
 
   if (!prompt && !lessonText) {
     return NextResponse.json({ error: 'Describe the case or attach a lesson' }, { status: 400 });
@@ -57,15 +60,10 @@ export async function POST(request: NextRequest) {
       patient = await fetchPatientContext(supabase, patientId);
     }
 
-    const categories = await listCategories(supabase);
-    const category = requestedCategory ? matchCategory(categories, requestedCategory) : null;
-
     const generated = await callAI(
-      buildScenarioPrompt(prompt, patient, { lessonText: lessonText || null, category, categories }),
+      buildScenarioPrompt(prompt, patient, { lessonText: lessonText || null, chapters }),
     );
-    const scenario = sanitizeScenario(generated, categories);
-    // The category the faculty chose wins over whatever the model labelled it.
-    if (category) scenario.category = category;
+    const scenario = { ...sanitizeScenario(generated), category: UNCATEGORIZED };
 
     return NextResponse.json({ scenario });
   } catch (err) {

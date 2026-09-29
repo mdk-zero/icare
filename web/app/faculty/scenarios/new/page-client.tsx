@@ -15,7 +15,6 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import {
   createScenario,
-  createScenarioCategories,
   generateAIScenario,
   fetchFacultyPatients,
   fetchRooms,
@@ -31,9 +30,11 @@ import { roomStatus, ROOM_STATUS_LABEL, ROOM_STATUS_TONE } from "../../../lib/ro
 import PageHeader from "../../../components/PageHeader";
 import { usePageData } from "../../../lib/use-page-data";
 import { EcgLoader } from "../../../components/EcgLoader";
-import CategoryPicker from "../../../components/CategoryPicker";
 import { LessonPanel, useLessonImport } from "../../../components/LessonImport";
-import { useScenarioCategories } from "../../../lib/use-scenario-categories";
+import { ACTIVE_CHAPTERS, TAYLORS_CHAPTERS } from "../../../../scripts/taylors-chapters";
+
+/** The Taylor's chapters the app teaches, which a patient case centres on. */
+const TAUGHT_CHAPTERS = TAYLORS_CHAPTERS.filter((c) => ACTIVE_CHAPTERS.includes(c.chapter));
 
 // Stable empty fallbacks, so the occupancy memo is not invalidated every render.
 const NO_PATIENTS: FacultyPatient[] = [];
@@ -47,7 +48,6 @@ const labelClassName = "block text-sm font-bold text-gray-800 mb-2";
 const emptyForm = {
   title: "",
   description: "",
-  category: "",
   learningObjectives: "",
   patientId: "",
   roomId: "",
@@ -63,22 +63,12 @@ export default function NewScenarioClient() {
   const [aiError, setAiError] = useState<string | null>(null);
   const [aiPatientCase, setAiPatientCase] = useState<Record<string, unknown> | null>(null);
   const [aiGenerated, setAiGenerated] = useState(false);
-  const { categories, loading: loadingCategories, setCategories } = useScenarioCategories();
+  // The taught chapters the AI centres the case on; none lets it pick one.
+  const [chapters, setChapters] = useState<number[]>([]);
   // An imported lesson grounds the AI draft (the prompt then just steers it),
-  // and its topics are offered as categories.
-  const lessonImport = useLessonImport({
-    // The lesson's main topic is preselected when it is already a category
-    // and nothing has been picked; a new one waits for the faculty to save it.
-    onAnalyzed: (imported) => {
-      const main = imported.topics[0];
-      if (main && !main.is_new) {
-        setForm((prev) => (prev.category ? prev : { ...prev, category: main.category }));
-      }
-    },
-  });
+  // and its ticked chapters replace the chapter picker.
+  const lessonImport = useLessonImport();
   const { lesson, analyzing, selectedTopics } = lessonImport;
-  const newTopics = selectedTopics.filter((t) => t.is_new);
-  const [savingTopics, setSavingTopics] = useState(false);
 
   const [skills, setSkills] = useState<SkillSelection[]>([]);
   const [saving, setSaving] = useState(false);
@@ -110,7 +100,6 @@ export default function NewScenarioClient() {
       (p) =>
         p.name.toLowerCase().includes(q) ||
         (p.diagnosis ?? "").toLowerCase().includes(q) ||
-        (p.mimic_id ?? "").toLowerCase().includes(q) ||
         (p.room_number ?? "").toLowerCase().includes(q),
     );
   }, [patients, patientSearch]);
@@ -121,34 +110,10 @@ export default function NewScenarioClient() {
     setForm((prev) => ({ ...prev, patientId, roomId: picked?.room_id ?? "" }));
   };
 
-  /**
-   * Creates the ticked topics that aren't categories yet, then files this
-   * scenario under the first ticked topic — the lesson's most central one.
-   */
-  const saveTopicCategories = async () => {
-    const first = selectedTopics[0];
-    if (!first) return;
-    setSavingTopics(true);
-    setAiError(null);
-    let category = first.category;
-    if (newTopics.length > 0) {
-      const result = await createScenarioCategories(
-        newTopics.map((t) => t.category),
-        "lesson",
-      );
-      if ("error" in result) {
-        setAiError(result.error);
-        setSavingTopics(false);
-        return;
-      }
-      lessonImport.markCreated(result.created);
-      setCategories(result.categories);
-      category =
-        result.created.find((c) => c.toLowerCase() === first.category.toLowerCase()) ?? category;
-    }
-    setForm((prev) => ({ ...prev, category }));
-    setSavingTopics(false);
-  };
+  const toggleChapter = (chapter: number) =>
+    setChapters((prev) =>
+      prev.includes(chapter) ? prev.filter((c) => c !== chapter) : [...prev, chapter],
+    );
 
   const handleGenerate = async () => {
     if (!aiPrompt.trim() && !lesson) return;
@@ -158,16 +123,10 @@ export default function NewScenarioClient() {
     }
     setGenerating(true);
     setAiError(null);
-    // When the chosen category is one of the lesson's topics, the case is
-    // centred on it; otherwise the model picks the category.
-    const topicCategory = lesson?.topics.some((t) => !t.is_new && t.category === form.category)
-      ? form.category
-      : null;
-    const preview = await generateAIScenario(
-      aiPrompt,
-      form.patientId || undefined,
-      lesson ? { text: lesson.lessonText, category: topicCategory } : null,
-    );
+    const preview = await generateAIScenario(aiPrompt, form.patientId || undefined, {
+      lessonText: lesson?.lessonText,
+      chapters: lesson ? selectedTopics.map((t) => t.chapter) : chapters,
+    });
     if ("error" in preview) {
       setAiError(preview.error);
     } else {
@@ -175,12 +134,12 @@ export default function NewScenarioClient() {
         ...prev,
         title: preview.title ?? prev.title,
         description: preview.description ?? prev.description,
-        category: preview.category ?? prev.category,
         learningObjectives: (preview.learning_objectives ?? []).join("\n"),
       }));
       setAiPatientCase((preview.patient_case as Record<string, unknown>) ?? null);
       // The skills the AI built the case around; faculty confirm them below.
-      if (preview.skills && preview.skills.length > 0) setSkills(preview.skills.map((id) => ({ id })));
+      if (preview.skills && preview.skills.length > 0)
+        setSkills(preview.skills.map((id) => ({ id })));
       setAiGenerated(true);
     }
     setGenerating(false);
@@ -201,7 +160,6 @@ export default function NewScenarioClient() {
     const newScenario = await createScenario({
       title: form.title,
       description: form.description,
-      category: form.category || "General",
       patient_id: form.patientId || null,
       learning_objectives: form.learningObjectives
         .split("\n")
@@ -294,40 +252,56 @@ export default function NewScenarioClient() {
               )}
             </div>
             <p className="text-xs text-gray-500">
-              Pick a patient on the right first — every case is grounded on a real record. Then
-              describe the case, import a lesson to build it from, or both; AI fills the fields.
-              You can edit everything before saving.
+              Pick a patient on the right first — every case is built around their diagnosis and
+              vital signs. Then describe the case, import a lesson to build it from, or both; AI
+              fills the fields and picks the Taylor&apos;s skills. You can edit everything before
+              saving.
             </p>
             <textarea
               value={aiPrompt}
               onChange={(e) => setAiPrompt(e.target.value)}
               placeholder={
                 lesson || analyzing
-                  ? "Optional — e.g. focus on the post-operative wound assessment"
-                  : "e.g. Acute MI in a 68-year-old with chest pain and diaphoresis"
+                  ? "Optional — e.g. focus on starting oxygen by nasal cannula"
+                  : "e.g. Post-operative patient with falling SpO₂ and a rising respiratory rate"
               }
               rows={2}
               className={inputClassName + " resize-none"}
             />
-            <LessonPanel lessonImport={lessonImport} disabled={generating || savingTopics}>
+            {!lesson && !analyzing && (
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.06em] text-gray-600 mb-1.5">
+                  Chapters
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {TAUGHT_CHAPTERS.map((c) => (
+                    <button
+                      key={c.chapter}
+                      type="button"
+                      onClick={() => toggleChapter(c.chapter)}
+                      disabled={generating}
+                      aria-pressed={chapters.includes(c.chapter)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all disabled:opacity-50 ${
+                        chapters.includes(c.chapter)
+                          ? "bg-brand-100 text-brand-700 border-brand-300"
+                          : "bg-surface text-gray-600 border-gray-300 hover:border-brand-300"
+                      }`}
+                    >
+                      Chapter {c.chapter} · {c.name}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-500 mt-1.5">
+                  {chapters.length === 0
+                    ? "None selected — AI centres the case on whichever taught chapter fits the patient."
+                    : `The case centres on the ${chapters.length} selected chapter${chapters.length === 1 ? "" : "s"}.`}
+                </p>
+              </div>
+            )}
+            <LessonPanel lessonImport={lessonImport} disabled={generating}>
               <p className="text-xs text-gray-500">
-                Ticked topics are kept as patient case categories, and this patient case is filed under the
-                first one.
+                The case centres on the ticked chapters and applies the lesson.
               </p>
-              {selectedTopics.length > 0 &&
-                (newTopics.length > 0 || form.category !== selectedTopics[0].category) && (
-                  <button
-                    type="button"
-                    onClick={saveTopicCategories}
-                    disabled={generating || savingTopics}
-                    className="inline-flex items-center gap-2 px-3 py-1.5 bg-surface border border-brand-600/40 text-brand-700 text-xs font-semibold rounded-lg hover:bg-brand-600/5 transition-all disabled:opacity-50"
-                  >
-                    {savingTopics && <EcgLoader className="text-brand-600" />}
-                    {newTopics.length > 0
-                      ? `Save ${newTopics.length} new categor${newTopics.length === 1 ? "y" : "ies"}`
-                      : `Use “${selectedTopics[0].category}” for this patient case`}
-                  </button>
-                )}
             </LessonPanel>
             {aiError && <p className="text-xs text-red-600">{aiError}</p>}
             <div className="flex items-center gap-2 flex-wrap">
@@ -336,7 +310,6 @@ export default function NewScenarioClient() {
                 onClick={handleGenerate}
                 disabled={
                   generating ||
-                  savingTopics ||
                   !!analyzing ||
                   !form.patientId ||
                   (!aiPrompt.trim() && !lesson)
@@ -354,7 +327,7 @@ export default function NewScenarioClient() {
               <button
                 type="button"
                 onClick={lessonImport.pick}
-                disabled={generating || savingTopics}
+                disabled={generating}
                 className="inline-flex items-center gap-2 px-4 py-2 bg-surface border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-all disabled:opacity-50"
               >
                 <FontAwesomeIcon icon={faFileImport} className="w-4 h-4" />
@@ -378,7 +351,7 @@ export default function NewScenarioClient() {
                 type="text"
                 value={form.title}
                 onChange={(e) => setForm({ ...form, title: e.target.value })}
-                placeholder="e.g. Acute MI Response"
+                placeholder="e.g. Hypoxia After Abdominal Surgery"
                 className={inputClassName}
               />
             </div>
@@ -393,21 +366,12 @@ export default function NewScenarioClient() {
               />
             </div>
             <div>
-              <label className={labelClassName}>Category</label>
-            <CategoryPicker
-              value={form.category}
-              onChange={(category) => setForm((prev) => ({ ...prev, category }))}
-              categories={categories}
-              loading={loadingCategories}
-            />
-            </div>
-            <div>
               <label className={labelClassName}>Learning Objectives</label>
               <textarea
                 value={form.learningObjectives}
                 onChange={(e) => setForm({ ...form, learningObjectives: e.target.value })}
                 rows={4}
-                placeholder="One objective per line&#10;e.g. Recognize signs of acute MI"
+                placeholder="One objective per line&#10;e.g. Measure SpO₂ with a pulse oximeter"
                 className={inputClassName + " resize-none"}
               />
               <p className="text-xs text-gray-500 mt-1.5">Enter one objective per line.</p>
@@ -421,7 +385,10 @@ export default function NewScenarioClient() {
             detectInput={() => ({
               title: form.title,
               description: form.description,
-              learning_objectives: form.learningObjectives.split("\n").map((o) => o.trim()).filter(Boolean),
+              learning_objectives: form.learningObjectives
+                .split("\n")
+                .map((o) => o.trim())
+                .filter(Boolean),
               patient_id: form.patientId || null,
               lesson_text: lesson?.lessonText ?? null,
             })}
@@ -462,7 +429,7 @@ export default function NewScenarioClient() {
                   type="text"
                   value={patientSearch}
                   onChange={(e) => setPatientSearch(e.target.value)}
-                  placeholder="Search name, diagnosis, MIMIC ID, or room..."
+                  placeholder="Search name, diagnosis, or room..."
                   className={inputClassName + " pl-10"}
                 />
               </div>
@@ -507,7 +474,7 @@ export default function NewScenarioClient() {
                               {patient.name}
                             </p>
                             <p className="text-xs text-gray-500 truncate">
-                              {patient.diagnosis} · <span className="font-mono">{patient.mimic_id}</span>
+                              {patient.diagnosis}
                             </p>
                           </td>
                           <td className="py-2.5 px-3 text-right">

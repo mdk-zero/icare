@@ -65,23 +65,6 @@ export function useLessonImport({ onAnalyzed }: { onAnalyzed?: (lesson: Imported
       prev.includes(category) ? prev.filter((c) => c !== category) : [...prev, category],
     );
 
-  /** Marks topics as existing once their categories are created, in the stored spelling. */
-  const markCreated = (stored: string[]) => {
-    const byKey = new Map(stored.map((name) => [name.toLowerCase(), name]));
-    const rename = (category: string) => byKey.get(category.toLowerCase()) ?? category;
-    setLesson((prev) =>
-      prev && {
-        ...prev,
-        topics: prev.topics.map((t) =>
-          byKey.has(t.category.toLowerCase())
-            ? { ...t, category: rename(t.category), is_new: false }
-            : t,
-        ),
-      },
-    );
-    setSelected((prev) => prev.map(rename));
-  };
-
   // Topic order, not tick order: the first topic is the lesson's main one.
   const selectedTopics: LessonTopic[] = lesson
     ? lesson.topics.filter((t) => selected.includes(t.category))
@@ -111,7 +94,6 @@ export function useLessonImport({ onAnalyzed }: { onAnalyzed?: (lesson: Imported
     pick: () => inputRef.current?.click(),
     remove,
     toggle,
-    markCreated,
     fileInput,
   };
 }
