@@ -35,7 +35,8 @@ import PageHeader from "../../../components/PageHeader";
 import { usePageData } from "../../../lib/use-page-data";
 import { EcgLoader } from "../../../components/EcgLoader";
 import { LessonPanel, useLessonImport } from "../../../components/LessonImport";
-import { ChapterCard, TAUGHT_CHAPTERS, hueStyle } from "../library-plan";
+import { ChapterTile, hueStyle } from "../library-plan";
+import { TAYLORS_CHAPTERS } from "../../../../scripts/taylors-chapters";
 
 // Stable empty fallbacks, so the occupancy memo is not invalidated every render.
 const NO_PATIENTS: FacultyPatient[] = [];
@@ -149,12 +150,15 @@ export default function NewScenarioClient() {
   const [aiError, setAiError] = useState<string | null>(null);
   const [aiPatientCase, setAiPatientCase] = useState<Record<string, unknown> | null>(null);
   const [aiGenerated, setAiGenerated] = useState(false);
-  // The taught chapters the AI centres the case on; none lets it pick one.
+  // The skill chapters the AI centres the case on; none lets it pick a core one.
   const [chapters, setChapters] = useState<number[]>([]);
   // An imported lesson grounds the AI draft (the prompt then just steers it),
   // and its ticked chapters replace the chapter picker.
   const lessonImport = useLessonImport();
-  const { lesson, analyzing, selectedTopics } = lessonImport;
+  const { lesson, analyzing, selectedTopics, lessonText } = lessonImport;
+  // A lesson's ticked taught chapters, and its ticked topics outside them.
+  const lessonChapters = selectedTopics.flatMap((t) => (t.chapter === null ? [] : [t.chapter]));
+  const lessonNewTopics = selectedTopics.filter((t) => t.chapter === null).map((t) => t.category);
 
   const [skills, setSkills] = useState<SkillSelection[]>([]);
   const [saving, setSaving] = useState(false);
@@ -210,8 +214,9 @@ export default function NewScenarioClient() {
     setGenerating(true);
     setAiError(null);
     const preview = await generateAIScenario(aiPrompt, form.patientId || undefined, {
-      lessonText: lesson?.lessonText,
-      chapters: lesson ? selectedTopics.map((t) => t.chapter) : chapters,
+      lessonText,
+      chapters: lesson ? lessonChapters : chapters,
+      topics: lesson ? lessonNewTopics : [],
     });
     if ("error" in preview) {
       setAiError(preview.error);
@@ -313,7 +318,8 @@ export default function NewScenarioClient() {
     .split("\n")
     .map((o) => o.trim())
     .filter(Boolean);
-  const chapterFocus = lesson ? selectedTopics.map((t) => t.chapter) : chapters;
+  const chapterFocus = lesson ? lessonChapters : chapters;
+  const topicFocus = lesson ? lessonNewTopics : [];
   const canGenerate =
     !generating && !analyzing && !!form.patientId && (!!aiPrompt.trim() || !!lesson);
   const ready = !!form.title.trim() && !!form.patientId;
@@ -546,7 +552,7 @@ export default function NewScenarioClient() {
                 <OptionalTag />
               )
             }
-            hint="Describe the case, import a lesson to build it from, or both. AI fills the details and picks the Taylor's skills — everything stays editable."
+            hint="Describe the case, import a lesson to build it from, or both. AI fills the details and picks the skills — everything stays editable."
           >
             <div
               className={`space-y-4 rounded-xl border border-brand-200 bg-[linear-gradient(160deg,var(--color-brand-50),transparent_70%)] p-4 transition-opacity ${
@@ -561,10 +567,22 @@ export default function NewScenarioClient() {
               )}
               {!lesson && !analyzing && (
                 <div>
-                  <p className={labelClassName}>Chapter focus</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                    {TAUGHT_CHAPTERS.map((c) => (
-                      <ChapterCard
+                  <div className="flex items-baseline justify-between gap-2">
+                    <p className={labelClassName}>Skill chapters</p>
+                    {chapters.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setChapters([])}
+                        disabled={generating}
+                        className="text-[11px] font-medium text-brand-700 hover:text-brand-900"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 2xl:grid-cols-4 gap-1.5 max-h-[248px] overflow-y-auto custom-scrollbar p-px">
+                    {TAYLORS_CHAPTERS.map((c) => (
+                      <ChapterTile
                         key={c.chapter}
                         chapter={c}
                         selected={chapters.includes(c.chapter)}
@@ -575,8 +593,11 @@ export default function NewScenarioClient() {
                   </div>
                   <p className="text-xs text-gray-500 mt-2">
                     {chapters.length === 0
-                      ? "None selected — AI centres the case on whichever taught chapter fits the patient."
-                      : `The case centres on the ${chapters.length} selected chapter${chapters.length === 1 ? "" : "s"}.`}
+                      ? "None selected — AI centres the case on whichever core chapter fits the patient."
+                      : `The case centres on ${chapters.length === 1 ? "Chapter" : "Chapters"} ${chapters
+                          .slice()
+                          .sort((a, b) => a - b)
+                          .join(", ")}.`}
                   </p>
                 </div>
               )}
@@ -599,7 +620,7 @@ export default function NewScenarioClient() {
               </div>
               <LessonPanel lessonImport={lessonImport} disabled={generating}>
                 <p className="text-xs text-gray-500">
-                  The case centres on the ticked chapters and applies the lesson.
+                  The case centres on the ticked chapters and topics and applies the lesson.
                 </p>
               </LessonPanel>
               {aiError && <p className="text-xs text-red-600">{aiError}</p>}
@@ -703,7 +724,7 @@ export default function NewScenarioClient() {
           {/* 05 — Skills */}
           <SheetStep
             n={5}
-            title="Taylor's skills"
+            title="Skills"
             done={skills.length > 0}
             last
             hint={
@@ -713,6 +734,7 @@ export default function NewScenarioClient() {
             }
           >
             <SkillPicker
+              focusChapters={chapterFocus}
               value={skills}
               onChange={setSkills}
               disabled={saving}
@@ -721,7 +743,7 @@ export default function NewScenarioClient() {
                 description: form.description,
                 learning_objectives: objectives,
                 patient_id: form.patientId || null,
-                lesson_text: lesson?.lessonText ?? null,
+                lesson_text: lessonText ?? null,
               })}
             />
           </SheetStep>
@@ -774,7 +796,7 @@ export default function NewScenarioClient() {
               </div>
               <div className="grid grid-cols-3 divide-x divide-hairline">
                 {[
-                  { label: "Chapters", value: chapterFocus.length || "Any" },
+                  { label: "Chapters", value: chapterFocus.length || (topicFocus.length ? 0 : "Any") },
                   { label: "Objectives", value: objectives.length },
                   { label: "Skills", value: skills.length },
                 ].map((m) => (
@@ -788,8 +810,17 @@ export default function NewScenarioClient() {
                   </div>
                 ))}
               </div>
-              {chapterFocus.length > 0 && (
+              {chapterFocus.length + topicFocus.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 px-4 py-2.5">
+                  {topicFocus.map((t) => (
+                    <span
+                      key={t}
+                      title="New topic, outside the taught chapters"
+                      className="order-last inline-flex items-center gap-1.5 rounded-full border border-dashed border-brand-400 px-2 py-0.5 text-[11px] font-medium text-gray-700"
+                    >
+                      {t}
+                    </span>
+                  ))}
                   {chapterFocus.map((c) => (
                     <span
                       key={c}

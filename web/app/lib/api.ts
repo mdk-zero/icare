@@ -1823,8 +1823,9 @@ export async function createScenario(
 /** A taught Taylor's chapter detected in a lesson. */
 export interface LessonTopic {
   topic: string;
-  chapter: number;
-  /** The chapter's name. */
+  /** The taught Taylor's chapter, or null for a new topic outside them. */
+  chapter: number | null;
+  /** The chapter's name, or the new topic's. */
   category: string;
 }
 
@@ -1832,41 +1833,134 @@ export interface AnalyzedLesson {
   /** The lesson's extracted text, sent back when generating from it. */
   lessonText: string;
   topics: LessonTopic[];
-  /** What else the lesson covers that isn't a taught chapter. */
-  notTaught: string[];
+  /**
+   * Each topic's own text, by topic name, when the lesson is a long Taylor's
+   * file: generating then uses only the ticked topics' sections.
+   */
+  sections?: Record<string, string>;
   /** Set when topic detection came back empty or failed; the text is still usable. */
   warning?: string;
 }
 
-/** Uploads a lesson, returning its text and the taught Taylor's chapters it covers. */
-export async function analyzeLesson(file: File): Promise<AnalyzedLesson | { error: string }> {
-  try {
+export type LessonImportStage = 'uploading' | 'reading' | 'topics';
+
+/**
+ * Where an import is, as one percentage across its stages: sending the file
+ * (0–35%, real bytes), the server reading it (35–90%, a PDF page step at a
+ * time) and finding its topics (90%+).
+ */
+export interface LessonImportProgress {
+  stage: LessonImportStage;
+  percent: number;
+}
+
+const STAGE_SPAN: Record<LessonImportStage, [number, number]> = {
+  uploading: [0, 35],
+  reading: [35, 90],
+  topics: [90, 100],
+};
+
+function stagePercent(stage: LessonImportStage, fraction: number): number {
+  const [from, to] = STAGE_SPAN[stage];
+  return Math.round(from + (to - from) * Math.min(1, Math.max(0, fraction)));
+}
+
+type AnalyzeEvent =
+  | { type: 'progress'; stage: 'reading' | 'topics'; fraction: number }
+  | {
+      type: 'result';
+      lesson_text: string;
+      topics: LessonTopic[];
+      sections?: Record<string, string>;
+      warning?: string;
+    }
+  | { type: 'error'; error: string };
+
+/**
+ * Uploads a lesson and returns its text and topics: the taught Taylor's
+ * chapters it covers, then any new topics outside them. XMLHttpRequest rather
+ * than apiFetch, since only it reports upload progress; the answer streams as
+ * NDJSON progress events and ends in one result or error.
+ */
+export function analyzeLesson(
+  file: File,
+  onProgress?: (progress: LessonImportProgress) => void,
+): Promise<AnalyzedLesson | { error: string }> {
+  const url = '/api/faculty/scenarios/analyze-lesson';
+  const started = performance.now();
+  return new Promise((resolve) => {
+    const xhr = new XMLHttpRequest();
+    let read = 0;
+    let buffer = '';
+    let outcome: AnalyzedLesson | { error: string } | null = null;
+
+    // Consumes whole NDJSON lines as they arrive; a partial line waits for the rest.
+    const drain = () => {
+      buffer += xhr.responseText.slice(read);
+      read = xhr.responseText.length;
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        let event: AnalyzeEvent;
+        try {
+          event = JSON.parse(line) as AnalyzeEvent;
+        } catch {
+          continue;
+        }
+        if (event.type === 'progress') {
+          onProgress?.({ stage: event.stage, percent: stagePercent(event.stage, event.fraction) });
+        } else if (event.type === 'result') {
+          outcome = {
+            lessonText: event.lesson_text,
+            topics: event.topics ?? [],
+            sections: event.sections,
+            warning: event.warning,
+          };
+        } else if (event.type === 'error') {
+          outcome = { error: event.error };
+        }
+      }
+    };
+
+    xhr.open('POST', url);
+    xhr.withCredentials = true;
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onProgress?.({ stage: 'uploading', percent: stagePercent('uploading', e.loaded / e.total) });
+    };
+    xhr.onprogress = () => {
+      if (xhr.status === 200) drain();
+    };
+    xhr.onload = () => {
+      recordRequest('POST', url, xhr.status, performance.now() - started);
+      if (xhr.status === 401) handleSessionExpired();
+      if (xhr.status !== 200) {
+        // Failures before the stream starts (sign-in, a missing file) are plain JSON.
+        let message = `Request failed (${xhr.status})`;
+        try {
+          message = (JSON.parse(xhr.responseText) as { error?: string }).error || message;
+        } catch {
+          // keep the status message
+        }
+        return resolve({ error: message });
+      }
+      drain();
+      if (buffer.trim()) {
+        buffer += '\n';
+        drain();
+      }
+      resolve(outcome ?? { error: 'The lesson could not be read' });
+    };
+    xhr.onerror = () => {
+      recordRequest('POST', url, 0, performance.now() - started);
+      resolve({ error: 'Unable to read the lesson' });
+    };
+
     const formData = new FormData();
     formData.append('file', file);
-    const res = await apiFetch('/api/faculty/scenarios/analyze-lesson', {
-      method: 'POST',
-      credentials: 'include',
-      body: formData,
-    });
-    const json = (await res.json()) as {
-      lesson_text?: string;
-      topics?: LessonTopic[];
-      not_taught?: string[];
-      warning?: string;
-      error?: string;
-    };
-    if (!res.ok || typeof json.lesson_text !== 'string') {
-      return { error: json.error || `Request failed (${res.status})` };
-    }
-    return {
-      lessonText: json.lesson_text,
-      topics: json.topics ?? [],
-      notTaught: json.not_taught ?? [],
-      warning: json.warning,
-    };
-  } catch (err) {
-    return { error: err instanceof Error ? err.message : 'Unable to read the lesson' };
-  }
+    onProgress?.({ stage: 'uploading', percent: 0 });
+    xhr.send(formData);
+  });
 }
 
 /**
@@ -1877,7 +1971,7 @@ export async function analyzeLesson(file: File): Promise<AnalyzedLesson | { erro
 export async function generateAIScenario(
   prompt: string,
   patientId?: string,
-  options: { lessonText?: string | null; chapters?: number[] } = {},
+  options: { lessonText?: string | null; chapters?: number[]; topics?: string[] } = {},
 ): Promise<(Partial<SimulationScenario> & { skills?: string[] }) | { error: string }> {
   try {
     const res = await apiFetch('/api/faculty/scenarios/generate', {
@@ -1889,6 +1983,7 @@ export async function generateAIScenario(
         patient_id: patientId,
         lesson_text: options.lessonText ?? undefined,
         chapters: options.chapters,
+        topics: options.topics,
       }),
     });
 
@@ -1917,6 +2012,8 @@ export interface ScenarioBatchOptions {
   count: number;
   /** Taylor's chapter numbers; empty spreads the batch across every taught chapter. */
   chapters?: number[];
+  /** Lesson topics outside the taught chapters, cycled with them. */
+  topics?: string[];
   topic?: string;
   /** Titles to steer away from — used to chain sub-batches without repeats. */
   avoidTitles?: string[];
@@ -1932,8 +2029,10 @@ export interface ScenarioDraft {
   patient_case: Record<string, unknown>;
   learning_objectives: string[];
   patient_id: string | null;
-  /** The Taylor's chapter the case was built around. */
-  chapter?: number;
+  /** The Taylor's chapter the case was built around, or null for a new topic. */
+  chapter?: number | null;
+  /** The lesson topic outside the taught chapters it was built on. */
+  topic?: string | null;
   /** Taylor's skills the AI detected in the case. */
   skills?: string[];
 }
@@ -1952,6 +2051,7 @@ export async function generateScenarioBatch(
       body: JSON.stringify({
         count: options.count,
         chapters: options.chapters,
+        topics: options.topics,
         topic: options.topic,
         avoid_titles: options.avoidTitles,
         lesson_text: options.lessonText,

@@ -58,7 +58,7 @@ import ActionsMenu from "../../components/ActionsMenu";
 import { EcgLoader } from "../../components/EcgLoader";
 import { LessonPanel, useLessonImport } from "../../components/LessonImport";
 import {
-  ChapterCard,
+  ChapterTile,
   PlanLegend,
   PlanStrip,
   RoomModeCard,
@@ -66,7 +66,9 @@ import {
   TAUGHT_CHAPTERS,
   chapterName,
   hueStyle,
+  type PlanFocus,
 } from "./library-plan";
+import { TAYLORS_CHAPTERS } from "../../../scripts/taylors-chapters";
 
 const inputClassName =
   "w-full px-4 py-3 bg-surface border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 focus:bg-surface transition-all text-sm shadow-sm";
@@ -114,21 +116,26 @@ export default function FacultyScenariosClient() {
   const [batchSavedCount, setBatchSavedCount] = useState(0);
   const [batchError, setBatchError] = useState<string | null>(null);
   const [batchWarning, setBatchWarning] = useState<string | null>(null);
-  // A lesson grounds every scenario in the library, and its ticked topics
-  // replace the category picker — one scenario per topic to start with.
+  // A lesson grounds every scenario in the library, and its ticked chapters
+  // and topics replace the chapter picker.
   const batchLesson = useLessonImport({
-    onAnalyzed: (imported) => {
-      if (imported.topics.length > 0) {
-        setBatchCount(imported.topics.length);
-        setBatchCountInput(String(imported.topics.length));
+    // One case per topic that starts ticked, to begin with.
+    onAnalyzed: (_imported, ticked) => {
+      if (ticked.length > 0) {
+        setBatchCount(ticked.length);
+        setBatchCountInput(String(ticked.length));
       }
     },
   });
   const batchUsesTopics = (batchLesson.lesson?.topics.length ?? 0) > 0;
-  // The chapter each planned case will be built around, in the order the
-  // batch cycles through them (the server shuffles when none is picked).
-  const planPool = batchUsesTopics
-    ? batchLesson.selectedTopics.map((t) => t.chapter)
+  // A lesson's ticked taught chapters, and its ticked topics outside them.
+  const lessonChapters = batchLesson.selectedTopics.flatMap((t) => (t.chapter === null ? [] : [t.chapter]));
+  const lessonNewTopics = batchLesson.selectedTopics.filter((t) => t.chapter === null).map((t) => t.category);
+  // What each planned case will be built around, in the order the batch
+  // cycles through them: chapters, then new topics, as the server plans them
+  // (it shuffles the chapters when nothing is picked).
+  const planPool: PlanFocus[] = batchUsesTopics
+    ? [...lessonChapters, ...lessonNewTopics]
     : batchChapters.length > 0
       ? batchChapters
       : TAUGHT_CHAPTERS.map((c) => c.chapter);
@@ -259,10 +266,9 @@ export default function FacultyScenariosClient() {
     setBatchDrafts(null);
     setBatchProgress(0);
 
-    // With a lesson, its ticked chapters replace the chapter picker.
-    const chapters = batchUsesTopics
-      ? batchLesson.selectedTopics.map((t) => t.chapter)
-      : batchChapters;
+    // With a lesson, its ticked chapters and new topics replace the chapter picker.
+    const chapters = batchUsesTopics ? lessonChapters : batchChapters;
+    const topics = batchUsesTopics ? lessonNewTopics : [];
 
     const total = Math.max(1, batchCount);
     const collected: ScenarioDraft[] = [];
@@ -280,8 +286,9 @@ export default function FacultyScenariosClient() {
         {
           count: chunkCount,
           chapters,
+          topics,
           topic: batchTopic.trim() || undefined,
-          lessonText: batchLesson.lesson?.lessonText,
+          lessonText: batchLesson.lessonText,
           avoidTitles: collected.map((s) => s.title),
         },
         controller.signal,
@@ -943,7 +950,7 @@ export default function FacultyScenariosClient() {
                   <Step
                     n={1}
                     title="Lesson"
-                    hint="Optional. The Taylor's chapters a lesson covers are picked for you, and every case applies it."
+                    hint="Optional. Its skill chapters are picked for you, and new topics it teaches can be added. Every case applies it."
                   >
                     <div className="space-y-2">
                       {!batchLesson.lesson && !batchLesson.analyzing ? (
@@ -975,7 +982,7 @@ export default function FacultyScenariosClient() {
                       {batchLesson.fileInput}
                       <LessonPanel lessonImport={batchLesson} disabled={batchGenerating}>
                         <p className="text-xs text-gray-500">
-                          The library cycles through the ticked chapters.
+                          The library cycles through the ticked chapters and topics.
                         </p>
                       </LessonPanel>
                     </div>
@@ -983,19 +990,19 @@ export default function FacultyScenariosClient() {
 
                   <Step
                     n={2}
-                    title="Chapters"
+                    title="Skill chapters"
                     hint={
                       batchUsesTopics
-                        ? "Set by the lesson above: tick or untick its chapters there."
+                        ? "Set by the lesson above: tick or untick its chapters and topics there."
                         : batchChapters.length === 0
-                          ? "None picked, so the library spreads across all three."
+                          ? "None picked, so the library spreads across the three core chapters."
                           : `The library cycles through the ${batchChapters.length} picked.`
                     }
                   >
                     {!batchUsesTopics && (
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                        {TAUGHT_CHAPTERS.map((c) => (
-                          <ChapterCard
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-[252px] overflow-y-auto custom-scrollbar p-px">
+                        {TAYLORS_CHAPTERS.map((c) => (
+                          <ChapterTile
                             key={c.chapter}
                             chapter={c}
                             selected={batchChapters.includes(c.chapter)}
@@ -1225,7 +1232,7 @@ export default function FacultyScenariosClient() {
                     return (
                       <label
                         key={i}
-                        style={{ ...hueStyle(draft.chapter), animationDelay: `${Math.min(i, 12) * 40}ms` }}
+                        style={{ ...hueStyle(draft.chapter ?? draft.topic), animationDelay: `${Math.min(i, 12) * 40}ms` }}
                         className={`relative flex flex-col gap-2 pl-5 pr-4 py-4 rounded-xl border cursor-pointer overflow-hidden transition-all animate-rise ${
                           checked
                             ? "border-[color-mix(in_srgb,var(--hue)_55%,transparent)] bg-[color-mix(in_srgb,var(--hue)_5%,transparent)]"
@@ -1235,7 +1242,11 @@ export default function FacultyScenariosClient() {
                         <span aria-hidden className="absolute left-0 inset-y-0 w-1 bg-[var(--hue)]" />
                         <span className="flex items-start justify-between gap-3">
                           <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-brand-700">
-                            {draft.chapter ? `Chapter ${draft.chapter} · ${chapterName(draft.chapter)}` : "Patient case"}
+                            {draft.chapter
+                              ? `Chapter ${draft.chapter} · ${chapterName(draft.chapter)}`
+                              : draft.topic
+                                ? `New topic · ${draft.topic}`
+                                : "Patient case"}
                           </span>
                           <input
                             type="checkbox"

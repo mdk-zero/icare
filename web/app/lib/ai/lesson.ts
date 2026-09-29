@@ -5,10 +5,16 @@ export const MAX_LESSON_CHARS = 15_000;
 const MAX_FILE_BYTES = 15 * 1024 * 1024; // 15MB
 const ALLOWED_EXTENSIONS = ['.pdf', '.docx', '.txt', '.md'];
 
+/** Pages read per step of a PDF, so a long book can report progress as it goes. */
+const PDF_PAGES_PER_STEP = 25;
+
+/** Share of the file read so far, 0 to 1. */
+export type ReadProgress = (fraction: number) => void;
+
 /** Pulls plain text out of a lesson upload — PDF and DOCX go through their
  * respective parsers, everything else (.txt, .md) is read as-is. The parsers
  * load on first use, so importing MAX_LESSON_CHARS doesn't pull in pdf.js. */
-async function extractLessonText(file: File): Promise<string> {
+async function extractLessonText(file: File, onProgress?: ReadProgress): Promise<string> {
   const name = file.name.toLowerCase();
   const buffer = Buffer.from(await file.arrayBuffer());
 
@@ -16,8 +22,19 @@ async function extractLessonText(file: File): Promise<string> {
     const { PDFParse } = await import('pdf-parse');
     const parser = new PDFParse({ data: buffer });
     try {
-      const result = await parser.getText();
-      return result.text;
+      const { total } = await parser.getInfo();
+      const parts: string[] = [];
+      for (let first = 1; first <= total; first += PDF_PAGES_PER_STEP) {
+        const last = Math.min(total, first + PDF_PAGES_PER_STEP - 1);
+        parts.push((await parser.getText({ first, last })).text);
+        if (onProgress) {
+          onProgress(last / total);
+          // pdf.js parses without yielding to I/O; without this pause a
+          // streamed response holds every progress event until the end.
+          await new Promise((resolve) => setImmediate(resolve));
+        }
+      }
+      return parts.join('\n');
     } finally {
       await parser.destroy();
     }
@@ -37,8 +54,9 @@ async function extractLessonText(file: File): Promise<string> {
  */
 export async function readLessonUpload(
   file: File,
+  onProgress?: ReadProgress,
 ): Promise<
-  | { text: string; taylors: { chapters: number[]; others: number[] } | null }
+  | { text: string; taylors: TaylorsLesson | null }
   | { error: string; status: number }
 > {
   if (file.size > MAX_FILE_BYTES) {
@@ -61,7 +79,7 @@ export async function readLessonUpload(
 
   let text: string;
   try {
-    text = (await extractLessonText(file)).trim();
+    text = (await extractLessonText(file, onProgress)).trim();
   } catch (err) {
     console.error('Failed to extract lesson text', err);
     return {
@@ -76,12 +94,21 @@ export async function readLessonUpload(
   const taylors = taylorsSections(text);
   return {
     text: taylors?.text ?? text.slice(0, MAX_LESSON_CHARS),
-    taylors: taylors && { chapters: taylors.chapters, others: taylors.others },
+    taylors: taylors && { chapters: taylors.chapters, others: taylors.others, sections: taylors.sections },
   };
 }
 
 /** A skill's heading line in Taylor's checklists, e.g. "SKILL 14-1". */
 const SKILL_HEADING = /^[ \t]*SKILL[ \t]+(\d{1,2})-(\d{1,2})[ \t]*$/gm;
+
+export interface TaylorsLesson {
+  /** Taught chapters (ACTIVE_CHAPTERS) the file has skills from. */
+  chapters: number[];
+  /** Its other chapters. */
+  others: number[];
+  /** Each chapter's own skills, up to MAX_LESSON_CHARS, for generating from just that chapter. */
+  sections: Record<number, string>;
+}
 
 /**
  * The Taylor's chapters a lesson holds skills from, read off its "SKILL x-y"
@@ -95,7 +122,7 @@ const SKILL_HEADING = /^[ \t]*SKILL[ \t]+(\d{1,2})-(\d{1,2})[ \t]*$/gm;
  */
 function taylorsSections(
   full: string,
-): { chapters: number[]; others: number[]; text: string | null } | null {
+): (TaylorsLesson & { text: string | null }) | null {
   const headings = [...full.matchAll(SKILL_HEADING)];
   if (headings.length === 0) return null;
 
@@ -117,5 +144,8 @@ function taylorsSections(
     const share = Math.floor(MAX_LESSON_CHARS / chapters.length);
     text = chapters.map((c) => byChapter.get(c)!.join('').slice(0, share).trim()).join('\n\n');
   }
-  return { chapters, others, text };
+  const sections = Object.fromEntries(
+    present.map((c) => [c, byChapter.get(c)!.join('').slice(0, MAX_LESSON_CHARS).trim()]),
+  );
+  return { chapters, others, sections, text };
 }

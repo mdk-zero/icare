@@ -102,6 +102,8 @@
   --color-chapter-1: #2b899f;
   --color-chapter-14: #1b6b7b;
   --color-chapter-15: #103e46;
+  /* A lesson topic Taylor's doesn't cover: the lightest teal step. */
+  --color-topic-new: #86c7d3;
 }
 
 @keyframes fadeInUp {
@@ -278,6 +280,7 @@
   --color-chapter-1: #26788a;
   --color-chapter-14: #46a5b4;
   --color-chapter-15: #a3dbe4;
+  --color-topic-new: #1f5f6d;
 
   /*
    * Brand lifts in dark, but only to mid-teal. 600 has to serve two masters:

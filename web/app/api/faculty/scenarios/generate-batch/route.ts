@@ -9,6 +9,8 @@ import {
   SCENARIO_GUIDELINES,
   SCENARIO_JSON_SHAPE,
   lessonBlock,
+  lessonTopics,
+  newTopicInstruction,
   patientRecordBlock,
   sanitizeScenario,
   type PatientContext,
@@ -27,9 +29,12 @@ const UNCATEGORIZED = 'General';
 
 const TAUGHT = TAYLORS_CHAPTERS.filter((c) => ACTIVE_CHAPTERS.includes(c.chapter));
 
+/** What a case centres on: a taught chapter, or a lesson topic outside them. */
+type Focus = { chapter: TaylorsChapter } | { topic: string };
+
 /** One scenario the AI has been asked to write, with the slot it must fill. */
 interface PlannedSlot {
-  chapter: TaylorsChapter;
+  focus: Focus;
   patient: PatientContext | null;
 }
 
@@ -51,15 +56,15 @@ function shuffle<T>(items: T[]): T[] {
 }
 
 /**
- * Spreads the requested count across the chosen chapters (every taught one
- * when none is chosen) so the library comes out varied instead of ten takes
- * on the same case.
+ * Spreads the requested count across the chosen chapters and lesson topics
+ * (every taught chapter when none is chosen) so the library comes out varied
+ * instead of ten takes on the same case.
  */
-function planSlots(count: number, chapters: TaylorsChapter[], patients: PatientContext[]): PlannedSlot[] {
-  const pool = chapters.length > 0 ? chapters : shuffle(TAUGHT);
+function planSlots(count: number, focuses: Focus[], patients: PatientContext[]): PlannedSlot[] {
+  const pool = focuses.length > 0 ? focuses : shuffle(TAUGHT).map((chapter) => ({ chapter }));
 
   return Array.from({ length: count }, (_, i) => ({
-    chapter: pool[i % pool.length],
+    focus: pool[i % pool.length],
     patient: patients.length > 0 ? patients[i % patients.length] : null,
   }));
 }
@@ -75,7 +80,10 @@ function buildBatchPrompt(
       const patientBlock = slot.patient
         ? `\n   Base it on ${patientRecordBlock(slot.patient, 'patient record')}`
         : '';
-      const c = slot.chapter;
+      if ('topic' in slot.focus) {
+        return `${i + 1}. ${newTopicInstruction([slot.focus.topic])}${patientBlock}`;
+      }
+      const c = slot.focus.chapter;
       return `${i + 1}. Taylor's Chapter ${c.chapter}, ${c.name}: centre the case on this chapter's skills and take its "skills" mainly from ids starting "${c.chapter}-".${patientBlock}`;
     })
     .join('\n\n');
@@ -84,10 +92,10 @@ function buildBatchPrompt(
     ? `\nEvery patient case must relate to this teaching focus: "${topic.replace(/"/g, '\\"')}".\n`
     : '';
 
-  // With a lesson, the briefs' chapters are the ones the faculty member
-  // picked from it — one scenario per chapter, each applying the lesson.
+  // With a lesson, the briefs' chapters and topics are the ones the faculty
+  // member picked from it — one scenario per brief, each applying the lesson.
   const lesson = lessonText
-    ? `${lessonBlock(lessonText)}Each brief's chapter is the part of the lesson its patient case centres on. Where a brief includes a patient record, keep that patient's diagnosis and vitals and apply the lesson to their care.\n`
+    ? `${lessonBlock(lessonText)}Each brief's chapter or topic is the part of the lesson its patient case centres on. Where a brief includes a patient record, keep that patient's diagnosis and vitals and apply the lesson to their care.\n`
     : '';
 
   const avoidBlock =
@@ -117,7 +125,12 @@ Guidelines:
 ${SCENARIO_GUIDELINES}`;
 }
 
-type GeneratedScenario = SanitizedScenario & { patient_id: string | null; chapter: number };
+type GeneratedScenario = SanitizedScenario & {
+  patient_id: string | null;
+  chapter: number | null;
+  /** The lesson topic a case outside the taught chapters was built on. */
+  topic: string | null;
+};
 
 /** One AI call covering up to CHUNK_SIZE slots. Throws if the model returns nothing usable. */
 async function generateChunk(
@@ -142,7 +155,8 @@ async function generateChunk(
       ...scenario,
       category: UNCATEGORIZED,
       // The plan is what the faculty asked for, so it wins over whatever the model labelled it.
-      chapter: slot.chapter.chapter,
+      chapter: 'chapter' in slot.focus ? slot.focus.chapter.chapter : null,
+      topic: 'topic' in slot.focus ? slot.focus.topic : null,
       patient_id: slot.patient?.id ?? null,
     };
   });
@@ -156,6 +170,7 @@ export async function POST(request: NextRequest) {
   let body: {
     count?: unknown;
     chapters?: unknown;
+    topics?: unknown;
     topic?: unknown;
     avoid_titles?: unknown;
     lesson_text?: unknown;
@@ -179,9 +194,12 @@ export async function POST(request: NextRequest) {
   try {
     const supabase = getSupabaseAdmin();
 
-    // Chapters the app doesn't teach are dropped, like unknown numbers.
+    // Any of the book's chapters, then lesson topics outside it; unknown numbers are dropped.
     const chapterNumbers = Array.isArray(body.chapters) ? body.chapters.map(Number) : [];
-    const chapters = TAUGHT.filter((c) => chapterNumbers.includes(c.chapter));
+    const focuses: Focus[] = [
+      ...TAYLORS_CHAPTERS.filter((c) => chapterNumbers.includes(c.chapter)).map((chapter) => ({ chapter })),
+      ...lessonTopics(body.topics).map((topic) => ({ topic })),
+    ];
 
     // Every scenario in the library is grounded on a roster patient's record — a
     // slot reuses one (planSlots cycles i % patients.length) rather than going
@@ -215,7 +233,7 @@ export async function POST(request: NextRequest) {
       ...avoidTitles,
     ];
 
-    const slots = planSlots(count, chapters, patients);
+    const slots = planSlots(count, focuses, patients);
 
     const scenarios: GeneratedScenario[] = [];
     const failures: string[] = [];

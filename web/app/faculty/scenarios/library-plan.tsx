@@ -22,17 +22,38 @@ const CHAPTER_HUE: Record<number, string> = {
   15: "var(--color-chapter-15)",
 };
 
-export function chapterHue(chapter: number | undefined): string {
-  return (chapter && CHAPTER_HUE[chapter]) || "var(--color-brand-500)";
+/**
+ * The other chapters cycle through the steps of the brand ramp the core three
+ * don't use, so neighbours in a plan still read apart.
+ */
+const OTHER_HUES = [
+  "var(--color-brand-400)",
+  "var(--color-brand-700)",
+  "var(--color-brand-800)",
+];
+for (const [i, c] of TAYLORS_CHAPTERS.filter((c) => !(c.chapter in CHAPTER_HUE)).entries()) {
+  CHAPTER_HUE[c.chapter] = OTHER_HUES[i % OTHER_HUES.length];
+}
+
+/**
+ * What a planned case centres on: a taught chapter's number, or the name of a
+ * lesson topic outside the taught chapters.
+ */
+export type PlanFocus = number | string;
+
+export function chapterHue(focus: PlanFocus | null | undefined): string {
+  if (typeof focus === "string") return "var(--color-topic-new)";
+  return (focus && CHAPTER_HUE[focus]) || "var(--color-brand-500)";
 }
 
 /** `--hue` for the arbitrary-value classes below (tints via color-mix). */
-export function hueStyle(chapter: number | undefined): CSSProperties {
-  return { "--hue": chapterHue(chapter) } as CSSProperties;
+export function hueStyle(focus: PlanFocus | null | undefined): CSSProperties {
+  return { "--hue": chapterHue(focus) } as CSSProperties;
 }
 
-export function chapterName(chapter: number | undefined): string {
-  return TAUGHT_CHAPTERS.find((c) => c.chapter === chapter)?.name ?? "";
+export function chapterName(focus: PlanFocus | null | undefined): string {
+  if (typeof focus === "string") return focus;
+  return TAYLORS_CHAPTERS.find((c) => c.chapter === focus)?.name ?? "";
 }
 
 /** "Body temperature, …" from "Taylor's Chapter 1 (Skills …): body temperature, …". */
@@ -119,6 +140,56 @@ export function ChapterCard({
   );
 }
 
+/** Any chapter of the skills checklists as a compact toggle tile; the core ones are tagged. */
+export function ChapterTile({
+  chapter,
+  selected,
+  disabled,
+  onToggle,
+}: {
+  chapter: TaylorsChapter;
+  selected: boolean;
+  disabled?: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      disabled={disabled}
+      aria-pressed={selected}
+      title={chapterSummary(chapter)}
+      style={hueStyle(chapter.chapter)}
+      className={`group flex items-center gap-2.5 rounded-lg border px-2.5 py-2 text-left transition-all disabled:opacity-50 ${
+        selected
+          ? "border-[var(--hue)] bg-[color-mix(in_srgb,var(--hue)_8%,transparent)] shadow-[0_0_0_1px_var(--hue)]"
+          : "border-hairline bg-surface hover:border-[color-mix(in_srgb,var(--hue)_55%,transparent)]"
+      }`}
+    >
+      <span
+        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md font-display text-sm font-semibold tabular-nums transition-colors ${
+          selected
+            ? "bg-[var(--hue)] text-surface"
+            : "bg-[color-mix(in_srgb,var(--hue)_10%,transparent)] text-[var(--hue)]"
+        }`}
+      >
+        {selected ? <FontAwesomeIcon icon={faCheck} className="h-3 w-3" /> : chapter.chapter}
+      </span>
+      <span className="min-w-0">
+        <span className="block text-xs font-semibold leading-snug text-gray-900 line-clamp-2">
+          {chapter.name}
+        </span>
+        <span className="block text-[10px] text-gray-500">
+          {chapter.skills} skills
+          {ACTIVE_CHAPTERS.includes(chapter.chapter) && (
+            <span className="ml-1 font-semibold text-brand-700">· Core</span>
+          )}
+        </span>
+      </span>
+    </button>
+  );
+}
+
 const TILE_CAP = 24;
 
 /**
@@ -131,7 +202,7 @@ export function PlanStrip({
   filled,
   size = "md",
 }: {
-  sequence: (number | undefined)[];
+  sequence: (PlanFocus | undefined)[];
   filled?: number;
   size?: "md" | "lg";
 }) {
@@ -166,15 +237,18 @@ export function PlanStrip({
 }
 
 /** Legend under the strip: each chapter with how many cases it gets. */
-export function PlanLegend({ sequence }: { sequence: (number | undefined)[] }) {
-  const counts = new Map<number, number>();
+export function PlanLegend({ sequence }: { sequence: (PlanFocus | undefined)[] }) {
+  const counts = new Map<PlanFocus, number>();
   for (const c of sequence) if (c) counts.set(c, (counts.get(c) ?? 0) + 1);
   return (
     <ul className="space-y-1.5">
       {[...counts].map(([chapter, n]) => (
         <li key={chapter} className="flex items-center gap-2 text-xs" style={hueStyle(chapter)}>
           <span className="w-2.5 h-2.5 rounded-sm bg-[var(--hue)] shrink-0" />
-          <span className="text-gray-700 truncate flex-1">{chapterName(chapter)}</span>
+          <span className="text-gray-700 truncate flex-1">
+            {chapterName(chapter)}
+            {typeof chapter === "string" && <span className="text-gray-400"> · new topic</span>}
+          </span>
           <span className="tabular-nums font-semibold text-gray-900">{n}</span>
         </li>
       ))}
