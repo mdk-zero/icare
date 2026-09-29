@@ -239,10 +239,13 @@ export function stopConnectivityMonitor(): void {
 
 export class ApiError extends Error {
   status: number;
+  /** The parsed JSON error body, for routes that answer with more than a message. */
+  body: unknown;
   /** status 0 = network unreachable (candidate for the offline outbox) */
-  constructor(message: string, status: number) {
+  constructor(message: string, status: number, body: unknown = null) {
     super(message);
     this.status = status;
+    this.body = body;
   }
 }
 
@@ -339,7 +342,7 @@ async function parseResponse<T>(response: Response): Promise<T> {
       json && typeof json === "object" && typeof (json as { error?: unknown }).error === "string"
         ? (json as { error: string }).error
         : `Request failed (${response.status})`;
-    throw new ApiError(message, response.status);
+    throw new ApiError(message, response.status, json);
   }
   return json as T;
 }

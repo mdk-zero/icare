@@ -37,7 +37,7 @@ interface AuthContextType {
   loginWithGoogle: (
     idToken: string,
     rememberMe?: boolean,
-  ) => Promise<{ ok: boolean; needsRoleSelection?: boolean; error?: string }>;
+  ) => Promise<{ ok: boolean; onboardingToken?: string; error?: string }>;
   logout: () => Promise<void>;
   /** Re-reads the session, e.g. after a password change or profile edit. */
   refreshUser: () => Promise<void>;
@@ -153,12 +153,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loginWithGoogle = async (
     idToken: string,
     rememberMe: boolean = true,
-  ): Promise<{ ok: boolean; needsRoleSelection?: boolean; error?: string }> => {
+  ): Promise<{ ok: boolean; onboardingToken?: string; error?: string }> => {
     setIsLoading(true);
     try {
       const result = await apiClient.loginWithGoogle(idToken, rememberMe);
-      if ("needsRoleSelection" in result) {
-        return { ok: false, needsRoleSelection: true };
+      if ("needsAccount" in result) {
+        return { ok: false, onboardingToken: result.onboardingToken };
       }
       setUser(result.user);
       AsyncStorage.setItem(USER_KEY, JSON.stringify(result.user)).catch(() => {});

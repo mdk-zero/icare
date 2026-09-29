@@ -11,6 +11,7 @@ import {
   TextInput,
   ActivityIndicator,
   Keyboard,
+  Linking,
   useWindowDimensions,
   type LayoutChangeEvent,
 } from "react-native";
@@ -26,35 +27,18 @@ import Svg, {
   Path,
 } from "react-native-svg";
 import { LinearGradient } from "expo-linear-gradient";
-import * as Google from "expo-auth-session/providers/google";
 import * as WebBrowser from "expo-web-browser";
 import { Radius, Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/hooks/useAuth";
 import { API_URL } from "@/lib/client";
+import { GOOGLE_SIGN_IN_CONFIGURED, idTokenFrom, useGoogleIdToken } from "@/lib/google";
 import logoImg from "@/assets/images/logo-pill.png";
 
 // Required once per app so the browser sheet closes itself after the
 // provider redirects back into the app.
 WebBrowser.maybeCompleteAuthSession();
 
-// Google Cloud Console client IDs — see mobile/.env.example.
-//
-// Android/iOS client types don't take a manually-registered redirect URI at
-// all: Google derives the allowed redirect from the app's real package name
-// + the SHA-1 of the build's signing certificate, which only matches when
-// running inside an actual build signed with that keystore — NOT inside
-// Expo Go (a shared container app with its own package name). So this
-// screen only works for Google sign-in from a real dev-client/standalone
-// build on Android/iOS; the web client id is what makes it work when
-// running on the web platform (`expo start --web`), which uses ordinary
-// https redirects.
-const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
-const GOOGLE_IOS_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
-const GOOGLE_ANDROID_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID;
-const GOOGLE_SIGN_IN_CONFIGURED = Boolean(
-  GOOGLE_WEB_CLIENT_ID || GOOGLE_IOS_CLIENT_ID || GOOGLE_ANDROID_CLIENT_ID,
-);
 
 /** Gradient stops sampled from the pill logo's teal cap. */
 const Teal = {
@@ -177,18 +161,7 @@ export default function LoginScreen() {
   const { Palette, Accent } = useTheme();
   const styles = React.useMemo(() => createStyles(Palette, Accent), [Palette, Accent]);
 
-  const [googleRequest, googleResponse, promptGoogleSignIn] = Google.useIdTokenAuthRequest({
-    // The hook picks androidClientId/iosClientId/webClientId based on the
-    // current platform and only falls back to the generic `clientId` prop
-    // when that platform-specific one is undefined — so `clientId` needs
-    // its own "nothing configured" placeholder, distinct from webClientId,
-    // or Android/iOS throw when only the web client id is set.
-    clientId:
-      GOOGLE_ANDROID_CLIENT_ID || GOOGLE_IOS_CLIENT_ID || GOOGLE_WEB_CLIENT_ID || "not-configured",
-    webClientId: GOOGLE_WEB_CLIENT_ID,
-    iosClientId: GOOGLE_IOS_CLIENT_ID,
-    androidClientId: GOOGLE_ANDROID_CLIENT_ID,
-  });
+  const [googleRequest, googleResponse, promptGoogleSignIn] = useGoogleIdToken();
 
   const handleLogin = async () => {
     setError("");
@@ -217,10 +190,15 @@ export default function LoginScreen() {
         const result = await loginWithGoogle(idToken, rememberMe);
         if (result.ok) {
           router.replace("/(tabs)");
-        } else if (result.needsRoleSelection) {
+        } else if (result.onboardingToken) {
+          // No account yet: request one on the web contact form, which opens
+          // with this Google email filled in and links it to the request.
           setError(
-            "This Google account isn't linked to an iCARE++ profile yet. Ask your instructor to set up your account, or finish setup on the web app.",
+            "This Google account doesn't have an iCARE++ account yet. We've opened the request form in your browser.",
           );
+          Linking.openURL(`${API_URL}/signup?google=${encodeURIComponent(result.onboardingToken)}`).catch(() => {
+            setError(`Open ${API_URL}/signup in your browser to request an account.`);
+          });
         } else {
           const message = result.error ?? "Google sign-in failed.";
           setError(message);
@@ -284,7 +262,7 @@ export default function LoginScreen() {
   React.useEffect(() => {
     if (!googleResponse) return;
     if (googleResponse.type === "success") {
-      const idToken = googleResponse.params?.id_token ?? googleResponse.authentication?.idToken;
+      const idToken = idTokenFrom(googleResponse);
       if (idToken) {
         // handleGoogleIdToken clears the form and raises its spinner before it
         // awaits, so this one write is synchronous. That is the intended
