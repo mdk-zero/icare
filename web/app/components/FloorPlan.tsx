@@ -12,7 +12,15 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import { WARD_FIXTURE_KINDS } from "../lib/api";
 import type { DoorSide, Room, WardFixture, WardFixtureKind } from "../lib/api";
-import { FIXTURE_LABEL, FIXTURE_SIZE, FixtureDrawing, RoomDrawing } from "./FloorPlanDrawing";
+import {
+  FIXTURE_LABEL,
+  FIXTURE_SIZE,
+  FixtureDrawing,
+  planWalls,
+  RoomDrawing,
+  wallBlockForFixture,
+  type WallBlock,
+} from "./FloorPlanDrawing";
 
 /**
  * Ward floor plan. Rooms are rectangles on a fixed grid; placement lives on
@@ -182,6 +190,19 @@ function rectStyle(rect: Rect, index = 0): React.CSSProperties {
   };
 }
 
+/** Rooms and walled fixtures, keyed like solidRects, for shared walls. */
+function wallsFor(
+  rooms: { id: string; rect: Rect; door: DoorSide }[],
+  fixtures: { id: string; kind: WardFixtureKind; rect: Rect }[],
+) {
+  const blocks: WallBlock[] = rooms.map(({ id, rect, door }) => ({ key: `r:${id}`, ...rect, door }));
+  for (const f of fixtures) {
+    const block = wallBlockForFixture(`f:${f.id}`, f.kind, f.rect);
+    if (block) blocks.push(block);
+  }
+  return planWalls(blocks);
+}
+
 interface BlockVisual {
   room: Room;
   rect: Rect;
@@ -257,6 +278,10 @@ export function FloorPlanCanvas({
     if (rect) blocks.push({ room, rect, occupied: occupancy.get(room.id) ?? 0 });
   }
   if (blocks.length === 0) return null;
+  const walls = wallsFor(
+    blocks.map(({ room, rect }) => ({ id: room.id, rect, door: doorOf(room) })),
+    fixtures.map((f) => ({ id: f.id, kind: f.kind, rect: fixtureRect(f) })),
+  );
 
   return (
     <Surface>
@@ -266,7 +291,13 @@ export function FloorPlanCanvas({
           className={`plan-block-in pointer-events-none absolute ${f.kind === "label" ? "z-[5]" : ""}`}
           style={rectStyle(fixtureRect(f), i)}
         >
-          <FixtureDrawing kind={f.kind} label={f.label} w={f.plan_w} h={f.plan_h} />
+          <FixtureDrawing
+            kind={f.kind}
+            label={f.label}
+            w={f.plan_w}
+            h={f.plan_h}
+            walls={walls.get(`f:${f.id}`)}
+          />
         </div>
       ))}
       {blocks.map(({ room, rect, occupied }, i) => (
@@ -279,7 +310,14 @@ export function FloorPlanCanvas({
           }`}
           style={rectStyle(rect, fixtures.length + i)}
         >
-          <RoomDrawing room={room} w={rect.w} h={rect.h} occupied={occupied} door={doorOf(room)} />
+          <RoomDrawing
+            room={room}
+            w={rect.w}
+            h={rect.h}
+            occupied={occupied}
+            door={doorOf(room)}
+            walls={walls.get(`r:${room.id}`)}
+          />
         </button>
       ))}
     </Surface>
@@ -553,6 +591,18 @@ export function FloorPlanEditor({
     />
   );
 
+  // Walls follow what is on the sheet right now, the block being dragged
+  // included, so they merge the moment a room is dropped against another.
+  const liveRect = (key: string, rect: Rect) => (drag?.key === key && drag.preview) || rect;
+  const walls = wallsFor(
+    placed.map((room) => ({
+      id: room.id,
+      rect: liveRect(`r:${room.id}`, plan.rooms[room.id]!),
+      door: plan.doors[room.id] ?? doorOf(room),
+    })),
+    plan.fixtures.map((f) => ({ id: f.id, kind: f.kind, rect: liveRect(`f:${f.id}`, fixtureRect(f)) })),
+  );
+
   const barButton =
     "inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors";
 
@@ -682,7 +732,13 @@ export function FloorPlanEditor({
                 } ${blockState(key, isDragging)}`}
                 style={{ ...rectStyle(rect), transition: isDragging ? "none" : "left 80ms, top 80ms, width 80ms, height 80ms" }}
               >
-                <FixtureDrawing kind={f.kind} label={f.label} w={rect.w} h={rect.h} />
+                <FixtureDrawing
+                  kind={f.kind}
+                  label={f.label}
+                  w={rect.w}
+                  h={rect.h}
+                  walls={walls.get(key)}
+                />
                 {resizeGrip(key)}
               </div>
             );
@@ -704,6 +760,7 @@ export function FloorPlanEditor({
                   h={rect.h}
                   occupied={occupancy.get(room.id) ?? 0}
                   door={plan.doors[room.id] ?? doorOf(room)}
+                  walls={walls.get(key)}
                 />
                 {resizeGrip(key)}
               </div>

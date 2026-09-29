@@ -43,93 +43,165 @@ export const FIXTURE_SIZE: Record<WardFixtureKind, { w: number; h: number }> = {
   label: { w: 4, h: 1 },
 };
 
-interface Side {
-  /** Where the wall starts, the direction it runs, and which way is inside. */
-  start: [number, number];
-  along: [number, number];
-  inward: [number, number];
-  length: number;
+const SIDES: DoorSide[] = ["n", "e", "s", "w"];
+const OPPOSITE: Record<DoorSide, DoorSide> = { n: "s", s: "n", e: "w", w: "e" };
+const horizontalSide = (side: DoorSide) => side === "n" || side === "s";
+
+/** Fixtures drawn with walls of their own, which rooms can share. */
+const WALLED_FIXTURES: ReadonlySet<WardFixtureKind> = new Set(["stairs", "elevator", "restroom", "storage"]);
+/** Walled fixtures with a door; the rest (stairs, elevator) are closed boxes. */
+const FIXTURE_DOOR: Partial<Record<WardFixtureKind, DoorSide>> = { restroom: "s", storage: "s" };
+
+/** A walled block on the plan, in grid cells, for working out shared walls. */
+export interface WallBlock {
+  key: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  door: DoorSide | null;
 }
 
-function sideOf(door: DoorSide, W: number, H: number): Side {
-  const i = INSET;
-  switch (door) {
-    case "n":
-      return { start: [i, i], along: [1, 0], inward: [0, 1], length: W - 2 * i };
-    case "s":
-      return { start: [i, H - i], along: [1, 0], inward: [0, -1], length: W - 2 * i };
-    case "w":
-      return { start: [i, i], along: [0, 1], inward: [1, 0], length: H - 2 * i };
-    case "e":
-      return { start: [W - i, i], along: [0, 1], inward: [-1, 0], length: H - 2 * i };
+/**
+ * How one block draws its walls. A side it shares with a neighbour sits on
+ * the shared edge instead of just inside it, so the two blocks draw the same
+ * line and it reads as one wall, not two side by side. Gaps (plan units from
+ * the side's top or left end) are its own door and any neighbour's door in
+ * that shared wall.
+ */
+export interface WallSpec {
+  flush: Record<DoorSide, boolean>;
+  gaps: Record<DoorSide, [number, number][]>;
+}
+
+export function wallBlockForFixture(key: string, kind: WardFixtureKind, rect: { x: number; y: number; w: number; h: number }): WallBlock | null {
+  return WALLED_FIXTURES.has(kind) ? { key, ...rect, door: FIXTURE_DOOR[kind] ?? null } : null;
+}
+
+/** The door's opening along its wall, in plan units from the wall's top/left end. */
+function doorInterval(door: DoorSide, W: number, H: number): [number, number] {
+  const L = horizontalSide(door) ? W : H;
+  const gap = Math.min(8, L * 0.42);
+  const near = Math.min(Math.max(3.4, L * 0.16 + INSET), L - gap - INSET - 0.5);
+  // The label sits top-left, so doors in the top or left wall go to their far end.
+  const start = door === "n" || door === "w" ? L - gap - near : near;
+  return [start, start + gap];
+}
+
+/** The side of `b` that touches `o` edge to edge, if any. */
+function touchingSide(b: WallBlock, o: WallBlock): DoorSide | null {
+  const spanY = b.y < o.y + o.h && o.y < b.y + b.h;
+  const spanX = b.x < o.x + o.w && o.x < b.x + b.w;
+  if (spanY && b.x + b.w === o.x) return "e";
+  if (spanY && o.x + o.w === b.x) return "w";
+  if (spanX && b.y + b.h === o.y) return "s";
+  if (spanX && o.y + o.h === b.y) return "n";
+  return null;
+}
+
+function emptySpec(): WallSpec {
+  return { flush: { n: false, e: false, s: false, w: false }, gaps: { n: [], e: [], s: [], w: [] } };
+}
+
+/** Every block's walls, given everything walled on the plan. */
+export function planWalls(blocks: WallBlock[]): Map<string, WallSpec> {
+  const out = new Map<string, WallSpec>();
+  for (const b of blocks) {
+    const spec = emptySpec();
+    if (b.door) spec.gaps[b.door].push(doorInterval(b.door, b.w * U, b.h * U));
+    for (const o of blocks) {
+      if (o === b) continue;
+      const side = touchingSide(b, o);
+      if (!side) continue;
+      spec.flush[side] = true;
+      // A door in the neighbour's side of this wall opens through ours too.
+      if (o.door === OPPOSITE[side]) {
+        const [g0, g1] = doorInterval(o.door, o.w * U, o.h * U);
+        const shift = horizontalSide(side) ? (o.x - b.x) * U : (o.y - b.y) * U;
+        spec.gaps[side].push([g0 + shift, g1 + shift]);
+      }
+    }
+    out.set(b.key, spec);
   }
+  return out;
 }
 
-const add = (p: [number, number], v: [number, number], k: number): [number, number] => [
-  p[0] + v[0] * k,
-  p[1] + v[1] * k,
-];
+/** A block alone on the plan: every wall inset, only its own door. */
+function soloSpec(w: number, h: number, door: DoorSide | null): WallSpec {
+  return planWalls([{ key: "", x: 0, y: 0, w, h, door }]).get("")!;
+}
+
 const pt = ([x, y]: [number, number]) => `${x.toFixed(2)} ${y.toFixed(2)}`;
 
 /**
- * The four walls with a gap for the door, the door leaf standing open and its
- * swing. Returns the gap so beds can keep clear of it.
+ * The four walls, cut where doors open, and this block's own door leaf
+ * standing open with the arc it sweeps.
  */
-function WallsWithDoor({ W, H, door }: { W: number; H: number; door: DoorSide }) {
-  const i = INSET;
-  const side = sideOf(door, W, H);
-  const gap = Math.min(8, side.length * 0.42);
-  const near = Math.min(Math.max(2.5, side.length * 0.16), side.length - gap - 1);
-  // The label sits top-left, so doors in the top or left wall go to its far end.
-  const offset = door === "n" || door === "w" ? side.length - gap - near : near;
-  const hinge = add(side.start, side.along, offset);
-  const gapEnd = add(hinge, side.along, gap);
-  const tip = add(hinge, side.inward, gap);
-  const sideEnd = add(side.start, side.along, side.length);
-  // Clockwise (SVG sweep 1) when turning from "inward" to "along" is.
-  const sweep = side.inward[0] * side.along[1] - side.inward[1] * side.along[0] > 0 ? 1 : 0;
-
-  // Walls as one path: from the far side of the gap, on round the room, back
-  // to the hinge. These are the two corners that are neither end of the
-  // door's wall, in the order the path meets them.
-  const TL: [number, number] = [i, i];
-  const TR: [number, number] = [W - i, i];
-  const BR: [number, number] = [W - i, H - i];
-  const BL: [number, number] = [i, H - i];
-  const between: Record<DoorSide, [number, number][]> = {
-    n: [BR, BL],
-    e: [BL, TL],
-    s: [TR, TL],
-    w: [BR, TR],
+function Walls({ W, H, door, spec }: { W: number; H: number; door: DoorSide | null; spec: WallSpec }) {
+  // Where each wall's centreline runs: on the edge when shared, else just inside.
+  const line: Record<DoorSide, number> = {
+    n: spec.flush.n ? 0 : INSET,
+    s: spec.flush.s ? H : H - INSET,
+    w: spec.flush.w ? 0 : INSET,
+    e: spec.flush.e ? W : W - INSET,
   };
-  const outline = [gapEnd, sideEnd, ...between[door], side.start, hinge];
+  const at = (side: DoorSide, t: number): [number, number] =>
+    horizontalSide(side) ? [t, line[side]] : [line[side], t];
+  const half = WALL / 2;
+
+  const runs: { side: DoorSide; from: number; to: number }[] = [];
+  for (const side of SIDES) {
+    // Each wall runs past the corners by half its thickness, so they meet square.
+    let segs: [number, number][] = horizontalSide(side)
+      ? [[line.w - half, line.e + half]]
+      : [[line.n - half, line.s + half]];
+    for (const [g0, g1] of spec.gaps[side]) {
+      segs = segs.flatMap(([a, b]): [number, number][] =>
+        g1 <= a || g0 >= b
+          ? [[a, b]]
+          : ([[a, Math.min(g0, b)], [Math.max(g1, a), b]] as [number, number][]).filter(([x, y]) => y - x > 0.05),
+      );
+    }
+    for (const [from, to] of segs) runs.push({ side, from, to });
+  }
+
+  let doorLeaf: React.ReactNode = null;
+  if (door) {
+    const [g0, g1] = doorInterval(door, W, H);
+    const gap = g1 - g0;
+    const inward: [number, number] = { n: [0, 1], s: [0, -1], w: [1, 0], e: [-1, 0] }[door] as [number, number];
+    const along: [number, number] = horizontalSide(door) ? [1, 0] : [0, 1];
+    const hinge = at(door, g0);
+    const gapEnd = at(door, g1);
+    const tip: [number, number] = [hinge[0] + inward[0] * gap, hinge[1] + inward[1] * gap];
+    // Clockwise (SVG sweep 1) when turning from "inward" to "along" is.
+    const sweep = inward[0] * along[1] - inward[1] * along[0] > 0 ? 1 : 0;
+    doorLeaf = (
+      <>
+        <line x1={hinge[0]} y1={hinge[1]} x2={tip[0]} y2={tip[1]} stroke="var(--plan-wall)" strokeWidth={0.7} />
+        <path
+          d={`M ${pt(tip)} A ${gap} ${gap} 0 0 ${sweep} ${pt(gapEnd)}`}
+          fill="none"
+          stroke="var(--plan-line)"
+          strokeWidth={0.45}
+          strokeDasharray="1.2 0.9"
+        />
+      </>
+    );
+  }
 
   return (
     <>
       <path
-        d={`M ${outline.map(pt).join(" L ")}`}
+        d={runs
+          .map(({ side, from, to }) => `M ${pt(at(side, from))} L ${pt(at(side, to))}`)
+          .join(" ")}
         fill="none"
         stroke="var(--plan-wall)"
         strokeWidth={WALL}
-        strokeLinejoin="miter"
-        strokeLinecap="square"
+        strokeLinecap="butt"
       />
-      {/* Door leaf, open at 90°, and the arc it sweeps. */}
-      <line
-        x1={hinge[0]}
-        y1={hinge[1]}
-        x2={tip[0]}
-        y2={tip[1]}
-        stroke="var(--plan-wall)"
-        strokeWidth={0.7}
-      />
-      <path
-        d={`M ${pt(tip)} A ${gap} ${gap} 0 0 ${sweep} ${pt(gapEnd)}`}
-        fill="none"
-        stroke="var(--plan-line)"
-        strokeWidth={0.45}
-        strokeDasharray="1.2 0.9"
-      />
+      {doorLeaf}
     </>
   );
 }
@@ -228,6 +300,7 @@ export function RoomDrawing({
   h,
   occupied,
   door,
+  walls,
 }: {
   room: Room;
   /** Size in grid cells. */
@@ -235,6 +308,8 @@ export function RoomDrawing({
   h: number;
   occupied: number;
   door: DoorSide;
+  /** Shared walls with its neighbours, from planWalls; alone on the plan if omitted. */
+  walls?: WallSpec;
 }) {
   const hatchId = useId();
   const W = w * U;
@@ -243,8 +318,8 @@ export function RoomDrawing({
   const offline = tone === "offline";
 
   // Beds keep clear of the label band at the top and the door's swing.
-  const side = sideOf(door, W, H);
-  const swing = Math.min(8, side.length * 0.42) + 1;
+  const [g0, g1] = doorInterval(door, W, H);
+  const swing = g1 - g0 + 1;
   const label = Math.min(8.5, H * 0.42);
   const pad = 2.6;
   const area = {
@@ -276,7 +351,7 @@ export function RoomDrawing({
         {beds?.map((b, n) => (
           <Bed key={n} {...b} filled={n < occupied} tone={tone} />
         ))}
-        <WallsWithDoor W={W} H={H} door={door} />
+        <Walls W={W} H={H} door={door} spec={walls ?? soloSpec(w, h, door)} />
       </svg>
       {/* Inside the walls, which are about a fifth of a cell thick. */}
       <div className="pointer-events-none absolute inset-0 flex items-start justify-between gap-1 overflow-hidden px-[7px] py-[6px] text-left sm:px-2.5 sm:py-2">
@@ -316,18 +391,22 @@ export function FixtureDrawing({
   label,
   w,
   h,
+  walls,
 }: {
   kind: WardFixtureKind;
   label: string;
   w: number;
   h: number;
+  /** Shared walls, for the walled kinds; alone on the plan if omitted. */
+  walls?: WallSpec;
 }) {
   const W = w * U;
   const H = h * U;
+  const fixtureDoor = FIXTURE_DOOR[kind] ?? null;
+  const fixtureWalls = <Walls W={W} H={H} door={fixtureDoor} spec={walls ?? soloSpec(w, h, fixtureDoor)} />;
   const text = label || (kind === "label" ? "" : FIXTURE_LABEL[kind]);
   const horizontal = W >= H;
   const line = { stroke: "var(--plan-line)", strokeWidth: 0.5, fill: "none" } as const;
-  const wall = { stroke: "var(--plan-wall)", strokeWidth: WALL * 0.8, fill: "none" } as const;
 
   let body: React.ReactNode = null;
   switch (kind) {
@@ -364,7 +443,7 @@ export function FixtureDrawing({
       const treads = Math.max(3, Math.round((horizontal ? W : H) / 2.2));
       body = (
         <>
-          <rect x={INSET} y={INSET} width={W - 2 * INSET} height={H - 2 * INSET} {...wall} fill="var(--plan-paper)" />
+          <rect x={INSET} y={INSET} width={W - 2 * INSET} height={H - 2 * INSET} fill="var(--plan-paper)" />
           {Array.from({ length: treads - 1 }, (_, n) => {
             const k = ((n + 1) / treads) * (horizontal ? W : H);
             return horizontal ? (
@@ -378,6 +457,7 @@ export function FixtureDrawing({
           ) : (
             <path d={`M ${W / 2} ${H * 0.88} L ${W / 2} ${H * 0.15} M ${W * 0.36} ${H * 0.22} L ${W / 2} ${H * 0.14} L ${W * 0.64} ${H * 0.22}`} {...line} strokeWidth={0.7} />
           )}
+          {fixtureWalls}
         </>
       );
       break;
@@ -385,8 +465,9 @@ export function FixtureDrawing({
     case "elevator":
       body = (
         <>
-          <rect x={INSET} y={INSET} width={W - 2 * INSET} height={H - 2 * INSET} {...wall} fill="var(--plan-paper)" />
+          <rect x={INSET} y={INSET} width={W - 2 * INSET} height={H - 2 * INSET} fill="var(--plan-paper)" />
           <path d={`M ${W * 0.2} ${H * 0.2} L ${W * 0.8} ${H * 0.8} M ${W * 0.8} ${H * 0.2} L ${W * 0.2} ${H * 0.8}`} {...line} />
+          {fixtureWalls}
         </>
       );
       break;
@@ -407,7 +488,7 @@ export function FixtureDrawing({
               <path d={`M ${W * 0.56} ${H * 0.82} L ${W * 0.64} ${H * 0.62} L ${W * 0.72} ${H * 0.82} Z`} />
             </g>
           )}
-          <WallsWithDoor W={W} H={H} door="s" />
+          {fixtureWalls}
         </>
       );
       break;
