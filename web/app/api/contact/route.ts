@@ -4,6 +4,7 @@ import { sendAccessRequestEmail, sendAccessRequestReceipt } from '@/app/lib/auth
 import { clientIp, consumeRateLimit } from '@/app/lib/auth/rate-limit';
 import { findPendingAccessRequest } from '@/app/lib/access-requests';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { clearGoogleOnboardingCookie, readGoogleOnboarding } from '@/app/lib/auth/session';
 
 // Where access requests land: the project's own inbox on i-care.dev, which
 // the registrar forwards on to the dev team. Overridable per deployment with a
@@ -26,7 +27,15 @@ function field(body: Record<string, unknown>, key: keyof typeof LIMITS): string 
 }
 
 type Sex = 'female' | 'male';
-type AccessRequest = { name: string; email: string; sex: Sex; subject: string; message: string };
+type AccessRequest = {
+  name: string;
+  email: string;
+  sex: Sex;
+  subject: string;
+  message: string;
+  /** The Google account picked on "Continue with Google", verified by Google. */
+  google?: { sub: string; email: string };
+};
 
 /**
  * Drops the request into every super admin's notification feed, since they
@@ -59,6 +68,7 @@ async function notifySuperAdmins(req: AccessRequest): Promise<boolean> {
           email: req.email,
           sex: req.sex,
           subject: req.subject,
+          ...(req.google ? { google_sub: req.google.sub, google_email: req.google.email } : {}),
         },
       })),
     );
@@ -113,7 +123,15 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const accessRequest = { name, email, sex, subject, message };
+  // Only a Google account whose verified email is the one being requested
+  // rides along; "Use a different email" clears it before this point anyway.
+  const onboarding = await readGoogleOnboarding();
+  const google =
+    onboarding && onboarding.email.toLowerCase() === email.toLowerCase()
+      ? { sub: onboarding.sub, email: onboarding.email }
+      : undefined;
+
+  const accessRequest: AccessRequest = { name, email, sex, subject, message, google };
   const [mailed, notified] = await Promise.all([
     sendAccessRequestEmail(DEV_TEAM_EMAILS, accessRequest).then(
       () => true,
@@ -132,6 +150,8 @@ export async function POST(request: NextRequest) {
       { status: 500 },
     );
   }
+
+  if (onboarding) await clearGoogleOnboardingCookie();
 
   // The team's copy is what matters; a receipt that bounces (a typo'd address,
   // say) must not turn a delivered request into an error the person retries.

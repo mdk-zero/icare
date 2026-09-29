@@ -21,6 +21,7 @@ import logo_white from "../../public/logo-white-no-bg.png";
 import logo_colour from "../../public/logo-no-bg.png";
 import { EcgLoader } from "../components/EcgLoader";
 import { DriftingKit, RotatingWords } from "../components/AuthShowcase";
+import { GoogleGlyph } from "../components/GoogleSignInButton";
 
 const inputClass =
   "auth-input w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-(--auth-accent)/30 focus:border-(--auth-accent)/50 transition-all";
@@ -68,6 +69,51 @@ export default function ContactUsPage() {
   const [followUp, setFollowUp] = useState("");
   const [followUpState, setFollowUpState] = useState<"idle" | "sending" | "sent">("idle");
   const [followUpError, setFollowUpError] = useState("");
+  // Set when the person came here from "Continue with Google": the email is
+  // then the verified Google address, locked, and the request carries the
+  // Google account so it can sign in once the account exists.
+  const [googleEmail, setGoogleEmail] = useState<string | null>(null);
+  const [googleNote, setGoogleNote] = useState("");
+
+  useEffect(() => {
+    const token = new URLSearchParams(window.location.search).get("google");
+    if (!token) return;
+    // The token is single-purpose; keep it out of history and reloads.
+    window.history.replaceState(null, "", window.location.pathname);
+    let cancelled = false;
+    fetch("/api/auth/google/pending", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token }),
+    })
+      .then(async (res) => {
+        const data = (await res.json().catch(() => ({}))) as {
+          email?: string;
+          name?: string;
+          error?: string;
+        };
+        if (cancelled) return;
+        if (!res.ok || !data.email) {
+          setGoogleNote(data.error ?? "That Google sign-in has expired. Type your email instead.");
+          return;
+        }
+        setGoogleEmail(data.email);
+        setEmail(data.email);
+        setName((current) => current || data.name || "");
+      })
+      .catch(() => {
+        if (!cancelled) setGoogleNote("Couldn't load your Google account. Type your email instead.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const dropGoogleEmail = () => {
+    setGoogleEmail(null);
+    setEmail("");
+    void fetch("/api/auth/google/pending", { method: "DELETE" });
+  };
 
   useEffect(() => {
     document.body.style.overflow = "hidden";
@@ -131,6 +177,7 @@ export default function ContactUsPage() {
   };
 
   const tryAnotherEmail = () => {
+    if (googleEmail) dropGoogleEmail();
     setNotice("");
     setFollowUp("");
     setFollowUpState("idle");
@@ -373,6 +420,13 @@ export default function ContactUsPage() {
                   </div>
                 )}
 
+                {googleNote && !error && (
+                  <div className="flex items-start gap-3 p-3.5 mb-5 bg-white/5 border border-white/10 rounded-xl text-white/70 text-sm">
+                    <GoogleGlyph className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                    <span>{googleNote}</span>
+                  </div>
+                )}
+
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-5">
                     <div className="sm:col-span-2">
@@ -414,12 +468,28 @@ export default function ContactUsPage() {
                           id="email"
                           value={email}
                           onChange={(e) => setEmail(e.target.value)}
+                          readOnly={googleEmail !== null}
                           required
                           maxLength={254}
-                          className={iconInputClass}
+                          className={`${iconInputClass} ${googleEmail ? "cursor-default text-white/80" : ""}`}
                           placeholder="you@email.com"
                         />
                       </div>
+                      {googleEmail && (
+                        <p className="mt-1.5 flex items-center justify-between gap-2 text-xs text-white/50">
+                          <span className="inline-flex items-center gap-1.5">
+                            <GoogleGlyph className="h-3 w-3" />
+                            Verified with Google
+                          </span>
+                          <button
+                            type="button"
+                            onClick={dropGoogleEmail}
+                            className="font-medium text-(--auth-accent) hover:underline cursor-pointer"
+                          >
+                            Use a different email
+                          </button>
+                        </p>
+                      )}
                     </div>
                   </div>
 

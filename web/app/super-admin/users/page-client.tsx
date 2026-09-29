@@ -150,6 +150,7 @@ export default function SuperAdminUsersClient() {
   // The sign-up request an Accept from the notifications brought us here for;
   // it is marked accepted only once its account is saved.
   const [fromRequest, setFromRequest] = useState<string | null>(null);
+  const [requestHasGoogle, setRequestHasGoogle] = useState(false);
 
   // Watched rather than read once: Accept from the bell can land here while
   // this page is already open.
@@ -165,6 +166,7 @@ export default function SuperAdminUsersClient() {
       sex: sex === "female" || sex === "male" ? sex : "",
     });
     setFromRequest(requestId);
+    setRequestHasGoogle(params.get("google") === "1");
     setEditing("new");
     // A refresh shouldn't reopen the form for a request already handled.
     window.history.replaceState(null, "", window.location.pathname);
@@ -204,6 +206,8 @@ export default function SuperAdminUsersClient() {
       section_id: form.role === "student" ? form.section_id || null : null,
       ...(payload.owner_enabled ? { admin_id: form.role === "faculty" ? form.admin_id || null : null } : {}),
       ...(creating ? { email: form.email } : {}),
+      // Lets the server carry over a Google account picked on the request.
+      ...(creating && fromRequest ? { request_id: fromRequest } : {}),
     };
     const res = await apiFetch(creating ? "/api/super-admin/users" : `/api/super-admin/users/${editing.id}`, {
       method: creating ? "POST" : "PATCH",
@@ -494,6 +498,7 @@ export default function SuperAdminUsersClient() {
             <p className="mb-4 rounded-xl bg-brand-600/10 px-3 py-2 text-sm text-brand-700">
               From an account request. Check the details and pick a role; the request is marked accepted
               once the account is created.
+              {requestHasGoogle && " It was sent with Google, so the account will sign in with that Google account too."}
             </p>
           )}
           <div className="space-y-3">

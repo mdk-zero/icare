@@ -146,6 +146,11 @@ export default function LoginPage() {
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
+        // No account yet: carry the chosen Google account to the contact form.
+        if (data.code === "no_account" && typeof data.onboarding_token === "string") {
+          router.push(`/signup?google=${encodeURIComponent(data.onboarding_token)}`);
+          return;
+        }
         setError(data.error ?? "Google sign-in failed");
         setIsGoogleLoading(false);
         return;

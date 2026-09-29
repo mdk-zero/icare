@@ -6,6 +6,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCheck, faUserPlus, faXmark } from "@fortawesome/free-solid-svg-icons";
 import { AccessRequestInfo, resolveAccessRequest } from "../lib/api";
 import { markRead, refreshNotifications } from "../lib/notifications-live";
+import { GoogleGlyph } from "./GoogleSignInButton";
 
 /**
  * Opens the Users page with the create form filled in from a request, as
@@ -17,6 +18,7 @@ export function useOpenAccessRequest() {
     void markRead(notificationId);
     const query = new URLSearchParams({ request: request.id, name: request.name, email: request.email });
     if (request.sex) query.set("sex", request.sex);
+    if (request.google_linked) query.set("google", "1");
     router.push(`/super-admin/users?${query}`);
   };
 }
@@ -77,6 +79,15 @@ export default function AccessRequestActions({
 
   return (
     <span className="inline-flex flex-wrap items-center gap-1.5">
+      {request.google_linked && (
+        <span
+          title="Sent with Continue with Google; the new account will sign in with that Google account"
+          className="inline-flex items-center gap-1 rounded-full border border-hairline bg-subtle px-2.5 py-1 text-xs font-medium text-foreground/65"
+        >
+          <GoogleGlyph className="h-3 w-3" />
+          Google
+        </span>
+      )}
       <button
         type="button"
         onClick={accept}

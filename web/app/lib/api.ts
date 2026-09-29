@@ -1262,6 +1262,8 @@ export interface AccessRequestInfo {
   email: string;
   /** Absent on requests sent before the form asked for it. */
   sex?: 'female' | 'male';
+  /** Sent through "Continue with Google"; the account is linked to it on creation. */
+  google_linked?: boolean;
   status: AccessRequestStatus;
   resolved_by_name?: string;
 }
@@ -2613,6 +2615,7 @@ function toAccessRequest(data: Record<string, unknown> | undefined): AccessReque
     name: typeof data.name === 'string' ? data.name : '',
     email: typeof data.email === 'string' ? data.email : '',
     sex: data.sex === 'female' || data.sex === 'male' ? data.sex : undefined,
+    google_linked: typeof data.google_sub === 'string' && data.google_sub.length > 0,
     status,
     resolved_by_name: typeof data.resolved_by_name === 'string' ? data.resolved_by_name : undefined,
   };

@@ -9,6 +9,9 @@ export type AccessRequestData = {
   email: string;
   sex?: 'female' | 'male';
   subject: string;
+  /** Set when the request came through "Continue with Google". */
+  google_sub?: string;
+  google_email?: string;
   [key: string]: unknown;
 };
 

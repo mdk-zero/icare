@@ -11,6 +11,8 @@ export interface PublicUser {
   /** Null when unrecorded; the mobile greeting drops the honorific then. */
   sex: UserSex | null;
   has_password: boolean;
+  /** Whether a Google account is connected; the Google id itself stays server-side. */
+  google_linked: boolean;
   force_password_change: boolean;
 }
 
@@ -20,7 +22,7 @@ export interface PublicUser {
  * arriving in 032 would otherwise have had to be remembered in four places.
  */
 export const USER_SELECT =
-  'id, email, name, role, picture_url, sex, password_hash, force_password_change';
+  'id, email, name, role, picture_url, sex, password_hash, google_sub, force_password_change';
 
 /**
  * Normalizes a `sex` value arriving from a form field or a CSV cell.
@@ -43,7 +45,7 @@ export function parseSex(value: unknown): { sex?: UserSex | null; error?: string
 export function toPublicUser(
   row: Pick<
     DbUser,
-    'id' | 'email' | 'name' | 'role' | 'picture_url' | 'sex' | 'password_hash' | 'force_password_change'
+    'id' | 'email' | 'name' | 'role' | 'picture_url' | 'sex' | 'password_hash' | 'google_sub' | 'force_password_change'
   >,
 ): PublicUser {
   return {
@@ -54,6 +56,7 @@ export function toPublicUser(
     picture_url: row.picture_url,
     sex: row.sex ?? null,
     has_password: Boolean(row.password_hash),
+    google_linked: Boolean(row.google_sub),
     force_password_change: row.force_password_change,
   };
 }

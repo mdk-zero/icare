@@ -12,7 +12,8 @@ export type { SessionPayload } from './jwt';
 
 export const GOOGLE_ONBOARDING_COOKIE = 'icare_google_onboarding';
 const SEVEN_DAYS_SECONDS = 60 * 60 * 24 * 7;
-const TEN_MINUTES_SECONDS = 60 * 10;
+// Long enough to fill in the contact form after picking a Google account.
+const ONBOARDING_TTL_SECONDS = 60 * 30;
 
 export async function setSessionCookie(token: string): Promise<void> {
   const store = await cookies();
@@ -115,7 +116,7 @@ export async function signGoogleOnboarding(
   return await new SignJWT({ ...payload })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
-    .setExpirationTime('10m')
+    .setExpirationTime('30m')
     .sign(getSecret());
 }
 
@@ -157,7 +158,7 @@ export async function setGoogleOnboardingCookie(
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
     path: '/',
-    maxAge: TEN_MINUTES_SECONDS,
+    maxAge: ONBOARDING_TTL_SECONDS,
   });
 }
 

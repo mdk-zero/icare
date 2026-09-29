@@ -7,7 +7,7 @@ import {
   touchLastLogin,
   USER_SELECT,
 } from '@/app/lib/auth/user';
-import { setSessionCookie, signSession } from '@/app/lib/auth/session';
+import { setSessionCookie, signGoogleOnboarding, signSession } from '@/app/lib/auth/session';
 
 /**
  * An account the team created with this email but that has never signed in
@@ -66,6 +66,15 @@ export async function POST(request: Request) {
 
     if (existing) {
       await touchLastLogin(existing.id);
+      // Google has already proven who this is, so the temporary password the
+      // account was created with never needs replacing to get in.
+      if (existing.force_password_change) {
+        await getSupabaseAdmin()
+          .from('users')
+          .update({ force_password_change: false })
+          .eq('id', existing.id);
+        existing.force_password_change = false;
+      }
       const publicUser = toPublicUser(existing);
       const token = await signSession({
         uid: publicUser.id,
@@ -76,9 +85,21 @@ export async function POST(request: Request) {
       return NextResponse.json({ user: publicUser, sessionToken: token });
     }
 
-    // Accounts are created by the team, never on first sign-in.
+    // Accounts are created by the team, never on first sign-in. The signed
+    // token carries the verified Google identity to the contact form, so the
+    // request (and later the account) can be tied to this Google account.
+    const onboardingToken = await signGoogleOnboarding({
+      sub: profile.sub,
+      email: profile.email.trim().toLowerCase(),
+      name: profile.name,
+      picture: profile.picture,
+    });
     return NextResponse.json(
-      { error: 'No iCARE++ account uses this Google email. Use Contact us to request account activation.' },
+      {
+        code: 'no_account',
+        onboarding_token: onboardingToken,
+        error: 'No iCARE++ account uses this Google account yet. Request one through the contact form.',
+      },
       { status: 403 },
     );
   } catch (err) {

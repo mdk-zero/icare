@@ -69,6 +69,27 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'A user with this email already exists' }, { status: 409 });
     }
 
+    // An account created from a "Continue with Google" request is tied to that
+    // Google account up front, so the person can sign in with it at once.
+    let googleSub: string | null = null;
+    let googleWarning: string | undefined;
+    const requestId = typeof body.request_id === 'string' && body.request_id ? body.request_id : null;
+    if (requestId) {
+      const { data: requestRow } = await supabase
+        .from('notifications')
+        .select('data')
+        .eq('data->>kind', 'access_request')
+        .eq('data->>request_id', requestId)
+        .limit(1)
+        .maybeSingle();
+      const sub = (requestRow?.data as { google_sub?: unknown } | undefined)?.google_sub;
+      if (typeof sub === 'string' && sub) {
+        const { data: holder } = await supabase.from('users').select('id').eq('google_sub', sub).maybeSingle();
+        if (holder) googleWarning = 'The Google account on this request is already connected to another user, so it was not linked.';
+        else googleSub = sub;
+      }
+    }
+
     const tempPassword = generateRandomPassword();
     const { data: created, error } = await supabase
       .from('users')
@@ -81,6 +102,7 @@ export async function POST(request: NextRequest) {
         force_password_change: true,
         section_id: sectionId,
         ...(adminId ? { admin_id: adminId } : {}),
+        ...(googleSub ? { google_sub: googleSub } : {}),
       })
       .select('id')
       .single();
@@ -94,15 +116,24 @@ export async function POST(request: NextRequest) {
 
     await logAudit(
       session,
-      { action: 'user.create', entityType: 'users', entityId: created.id, details: { role, by: 'super_admin' } },
+      {
+        action: 'user.create',
+        entityType: 'users',
+        entityId: created.id,
+        details: { role, by: 'super_admin', google_linked: Boolean(googleSub) },
+      },
       request,
     );
 
     // The invitation is student-worded; other roles get the password handed over.
-    let warning: string | undefined;
+    let warning: string | undefined = googleWarning;
     if (role === 'student') {
       const sent = await sendStudentInvitationEmail(email, name, tempPassword);
-      if (!sent.success) warning = 'The invitation email could not be sent. Share the temporary password manually.';
+      if (!sent.success) {
+        warning = [warning, 'The invitation email could not be sent. Share the temporary password manually.']
+          .filter(Boolean)
+          .join(' ');
+      }
     }
 
     const { users } = await selectAccounts(supabase, { id: created.id });
