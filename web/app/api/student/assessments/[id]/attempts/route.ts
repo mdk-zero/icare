@@ -16,6 +16,12 @@ interface RouteParams {
 const SPENT_STATUSES = ['submitted', 'expired'];
 
 /**
+ * Slack past the time limit before an open attempt counts as abandoned: the
+ * app auto-submits at zero, and that submit may still be on its way.
+ */
+const EXPIRY_GRACE_MS = 2 * 60 * 1000;
+
+/**
  * Start — or resume — an attempt.
  *
  * Resuming matters more than it looks. The mobile quiz screen starts an attempt
@@ -66,16 +72,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       .eq('assessment_id', assessmentId)
       .eq('student_id', session.uid)
       .in('status', SPENT_STATUSES);
-    const spent = spentCount ?? 0;
-
-    const meta = {
-      max_attempts: maxAttempts,
-      attempts_used: spent,
-      attempts_remaining: maxAttempts === null ? null : Math.max(0, maxAttempts - spent),
-    };
+    let spent = spentCount ?? 0;
 
     // ---------- resume ----------
-    const { data: open } = await supabase
+    let { data: open } = await supabase
       .from('assessment_attempts')
       .select('id, started_at')
       .eq('assessment_id', assessmentId)
@@ -84,6 +84,36 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       .order('started_at', { ascending: false })
       .limit(1)
       .maybeSingle();
+
+    // An attempt left open past its time limit (the app was closed, the phone
+    // died) has run out: handing it back would only put the student straight
+    // into "time's up". Close it as expired — it counts as a try, like any
+    // attempt that ran its course — and deal a fresh one below.
+    let previousExpired = false;
+    if (open && assessment.time_limit_seconds) {
+      const elapsedMs = Date.now() - new Date(open.started_at).getTime();
+      if (elapsedMs > assessment.time_limit_seconds * 1000 + EXPIRY_GRACE_MS) {
+        const { error: expireError } = await supabase
+          .from('assessment_attempts')
+          .update({ status: 'expired' })
+          .eq('id', open.id)
+          .eq('status', 'in_progress');
+        if (expireError) {
+          console.error('Failed to expire a timed-out attempt', expireError);
+          return NextResponse.json({ error: 'Unable to start attempt' }, { status: 500 });
+        }
+        open = null;
+        spent += 1;
+        previousExpired = true;
+      }
+    }
+
+    const meta = {
+      max_attempts: maxAttempts,
+      attempts_used: spent,
+      attempts_remaining: maxAttempts === null ? null : Math.max(0, maxAttempts - spent),
+      previous_expired: previousExpired,
+    };
 
     if (open) {
       const served = await loadServedQuestions(supabase, open.id);
