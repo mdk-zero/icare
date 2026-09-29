@@ -22,11 +22,76 @@ import { RATING_STYLE, checklistRows, hasCompletion, taskPoints, type ChecklistR
 
 const COLUMN_COUNT = TASK_RATINGS.length + 2;
 
-/** Points can be halves (Satisfactory is 7.5): "7.5", "22.5", "30". */
+/** Whole points today (3 / 2 / 1), but a total could still come out fractional: "7", "7.5". */
 export const formatPoints = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
 
 const formatWhen = (iso: string) =>
   new Date(iso).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+
+/**
+ * The checklist's shape while it loads: the column header, then a task row
+ * over a few sub-task rows, each with its three empty checkmarks.
+ */
+function GradingTableSkeleton() {
+  const circles = (
+    <>
+      {TASK_RATINGS.map((level) => (
+        <div key={level.key} className="flex w-[92px] shrink-0 justify-center">
+          <div className="h-6 w-6 rounded-full border-2 border-gray-200" />
+        </div>
+      ))}
+      <div className="flex w-[64px] shrink-0 justify-end pr-4">
+        <div className="h-2.5 w-6 rounded bg-gray-100" />
+      </div>
+    </>
+  );
+  return (
+    <div className="p-5 sm:p-6" aria-busy="true" aria-label="Loading the checklist">
+      <div className="animate-pulse overflow-hidden rounded-xl border border-hairline">
+        <div className="flex items-end border-b border-hairline bg-subtle py-3">
+          <div className="flex-1 px-4">
+            <div className="h-2.5 w-24 rounded bg-gray-200" />
+          </div>
+          {TASK_RATINGS.map((level) => (
+            <div key={level.key} className="flex w-[92px] shrink-0 flex-col items-center gap-1.5">
+              <div className="h-2 w-2 rounded-full bg-gray-300" />
+              <div className="h-2 w-14 rounded bg-gray-200" />
+              <div className="h-2 w-8 rounded bg-gray-100" />
+            </div>
+          ))}
+          <div className="flex w-[64px] shrink-0 justify-end pr-4">
+            <div className="h-2.5 w-10 rounded bg-gray-200" />
+          </div>
+        </div>
+        {[0, 1].map((task) => (
+          <div key={task}>
+            <div className="flex items-start border-b border-hairline bg-subtle/60 py-4">
+              <div className="flex-1 space-y-2 px-4">
+                <div className="h-3.5 w-2/5 rounded bg-gray-200" />
+                <div className="flex gap-1.5">
+                  <div className="h-4 w-16 rounded bg-gray-100" />
+                  <div className="h-4 w-16 rounded bg-gray-100" />
+                  <div className="h-4 w-16 rounded bg-gray-100" />
+                </div>
+                <div className="h-2.5 w-3/4 rounded bg-gray-100" />
+              </div>
+              {circles}
+            </div>
+            {[0, 1, 2].map((step) => (
+              <div key={step} className="flex items-center border-b border-hairline py-3 last:border-b-0">
+                <div className="flex-1 space-y-1.5 pl-10 pr-4">
+                  <div className={`h-3 rounded bg-gray-200 ${step === 1 ? "w-3/5" : "w-4/5"}`} />
+                  <div className="h-2 w-24 rounded bg-gray-100" />
+                </div>
+                {circles}
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 /** a, b, c … z, aa, ab … for sub-task rows. */
 const rowLetter = (i: number): string =>
@@ -85,15 +150,7 @@ export default function GradingTable({
   onOpenNote,
   onNoteChange,
 }: GradingTableProps) {
-  if (loading) {
-    return (
-      <div className="space-y-2 p-5 sm:p-6">
-        {[0, 1, 2, 3].map((i) => (
-          <div key={i} className="h-[92px] animate-pulse rounded-xl border border-hairline bg-subtle" />
-        ))}
-      </div>
-    );
-  }
+  if (loading) return <GradingTableSkeleton />;
   if (tasks.length === 0) {
     return <p className="px-5 py-10 text-center text-sm text-gray-500 sm:px-6">This scenario has no criteria.</p>;
   }

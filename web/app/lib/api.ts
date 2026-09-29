@@ -3168,19 +3168,29 @@ export async function deleteStudentUser(
   }
 }
 
-export async function fetchStudentScenarioHistory(studentId: string): Promise<ScenarioPerformance[]> {
+/** Every scenario assigned to one student, graded or not (the faculty view). */
+export async function fetchAssignmentsForStudent(studentId: string): Promise<ScenarioAssignment[]> {
   try {
     const res = await apiFetch(`/api/faculty/scenarios/assignments?student_id=${encodeURIComponent(studentId)}`, {
       credentials: 'include',
     });
     const json = (await res.json()) as { assignments?: ScenarioAssignment[]; error?: string };
     if (!res.ok) {
-      console.error('fetchStudentScenarioHistory() failed', json.error);
+      console.error('fetchAssignmentsForStudent() failed', json.error);
       return [];
     }
+    return json.assignments ?? [];
+  } catch (err) {
+    console.error('fetchAssignmentsForStudent() failed', err);
+    return [];
+  }
+}
 
-    const completed = (json.assignments ?? []).filter((a) => a.status === 'completed');
-    return completed.map((a) => ({
+/** The graded ones among a student's assignments, as scenario results. */
+export function scenarioHistoryFrom(assignments: readonly ScenarioAssignment[]): ScenarioPerformance[] {
+  return assignments
+    .filter((a) => a.status === 'completed')
+    .map((a) => ({
       id: a.id,
       student_id: a.student_id,
       student_name: a.student_name,
@@ -3193,6 +3203,20 @@ export async function fetchStudentScenarioHistory(studentId: string): Promise<Sc
       total_tasks: a.total_tasks ?? null,
       completed_at: a.completed_at ?? a.assigned_at,
     }));
+}
+
+export async function fetchStudentScenarioHistory(studentId: string): Promise<ScenarioPerformance[]> {
+  try {
+    const res = await apiFetch(`/api/faculty/scenarios/assignments?student_id=${encodeURIComponent(studentId)}`, {
+      credentials: 'include',
+    });
+    const json = (await res.json()) as { assignments?: ScenarioAssignment[]; error?: string };
+    if (!res.ok) {
+      console.error('fetchStudentScenarioHistory() failed', json.error);
+      return [];
+    }
+
+    return scenarioHistoryFrom(json.assignments ?? []);
   } catch (err) {
     console.error('fetchStudentScenarioHistory() failed', err);
     return [];

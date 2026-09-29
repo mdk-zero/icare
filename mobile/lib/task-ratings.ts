@@ -19,7 +19,7 @@ export const TASK_RATING_BADGE: Record<TaskRating, 'success' | 'info' | 'warning
 
 /** The verbal reading of a 0–100 scenario score, on the web's bands. */
 export function scoreDescriptor(score: number): string {
-  if (score >= 88) return 'Excellent';
-  if (score >= 63) return 'Satisfactory';
+  if (score >= 83) return 'Excellent';
+  if (score >= 50) return 'Satisfactory';
   return 'Needs Practice';
 }

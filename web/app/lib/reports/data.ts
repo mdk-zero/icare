@@ -13,7 +13,7 @@ type Supabase = ReturnType<typeof getSupabaseAdmin>;
 export const PASSING_SCORE = 75;
 
 /** Scenario grades below this read "Needs Practice" (task-ratings bands). */
-export const NEEDS_PRACTICE_BELOW = 63;
+export const NEEDS_PRACTICE_BELOW = 50;
 
 export function avg(values: number[]): number | null {
   if (values.length === 0) return null;

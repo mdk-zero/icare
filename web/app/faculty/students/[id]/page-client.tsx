@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -33,11 +33,12 @@ import {
   fetchLatestPrediction,
   logAuditAction,
   getCurrentFacultyUser,
-  fetchStudentScenarioHistory,
+  fetchAssignmentsForStudent,
+  scenarioHistoryFrom,
+  type ScenarioAssignment,
   fetchCompetencyScores,
   generateStudentSummary,
   CompetencyScore,
-  type ScenarioPerformance,
   type StudentQuizAttempt,
 } from "../../../lib/api";
 import { scoreDescriptor } from "../../../lib/task-ratings";
@@ -56,6 +57,14 @@ import AiThinking from "../../../components/AiThinking";
 import ReflectionsTab from "./reflections-tab";
 import { fetchStudentReflections, type FacultyReflection } from "../../../lib/api";
 import SkillAreaTrend from "./skill-area-trend";
+import AssignmentGrader, { ScenarioSummaryCard } from "../../scenarios/review/assignment-grader";
+import {
+  AssignmentFilterTabs,
+  EmptyPanel,
+  initialFilter,
+  matchesFilter,
+  type Filter,
+} from "../../scenarios/review/assignment-list";
 
 /** Shown in turn while the summary is written, following what it draws on. */
 const STUDENT_SUMMARY_PHRASES = [
@@ -117,7 +126,7 @@ function writeStoredSummary(studentId: string, entry: StoredSummary) {
 
 // Stable empty fallbacks, so nothing downstream sees a new array each render.
 const NO_PERFORMANCE_HISTORY: StudentQuizAttempt[] = [];
-const NO_SCENARIO_HISTORY: ScenarioPerformance[] = [];
+const NO_ASSIGNMENTS: ScenarioAssignment[] = [];
 const NO_COMPETENCIES: ResolvedCompetency[] = [];
 const NO_SCORE_HISTORY: CompetencyScore[] = [];
 
@@ -355,13 +364,13 @@ export default function StudentDetailClient() {
 
   // Keyed by student, so stepping back to the roster and into the same student
   // again reads the whole profile from memory.
-  const { data, loading } = usePageData(
+  const { data, loading, setData } = usePageData(
     studentId ? `faculty:student:${studentId}` : null,
     async () => {
-      const [detail, riskPrediction, scenarioHistory, scoreHistory] = await Promise.all([
+      const [detail, riskPrediction, assignments, scoreHistory] = await Promise.all([
         fetchFacultyStudentDetail(studentId),
         fetchLatestPrediction(studentId),
-        fetchStudentScenarioHistory(studentId),
+        fetchAssignmentsForStudent(studentId),
         fetchCompetencyScores(studentId),
       ]);
 
@@ -369,7 +378,7 @@ export default function StudentDetailClient() {
         student: detail?.student ?? null,
         performanceHistory: detail?.performance_history ?? NO_PERFORMANCE_HISTORY,
         riskPrediction,
-        scenarioHistory,
+        assignments,
         scoreHistory,
         // A faculty validation outranks a quiz result; assessment-derived scores
         // fill every competency nobody has reviewed by hand.
@@ -380,7 +389,39 @@ export default function StudentDetailClient() {
 
   const student = data?.student ?? null;
   const performanceHistory = data?.performanceHistory ?? NO_PERFORMANCE_HISTORY;
-  const scenarioHistory = data?.scenarioHistory ?? NO_SCENARIO_HISTORY;
+  // Every scenario assigned to the student; the graded ones are their scenario history.
+  const assignments = data?.assignments ?? NO_ASSIGNMENTS;
+  const scenarioHistory = useMemo(() => scenarioHistoryFrom(assignments), [assignments]);
+  // Null until the faculty member picks a filter; until then it opens on what needs grading.
+  const [scenarioFilter, setScenarioFilter] = useState<Filter | null>(null);
+  const activeFilter = scenarioFilter ?? initialFilter(assignments);
+  const visibleAssignments = assignments.filter((a) => matchesFilter(a, activeFilter));
+  // The scenario opened to its checklist. Undefined until one is opened or
+  // closed: until then the first one still to grade opens by itself.
+  const [openedId, setOpenedId] = useState<string | null | undefined>(undefined);
+  const selectedAssignment =
+    visibleAssignments.find((a) => (openedId === undefined ? a.status !== "completed" : a.id === openedId)) ??
+    null;
+  // Whether the open sheet has ratings or notes not saved yet (the grader reports it).
+  const [gradingDirty, setGradingDirty] = useState(false);
+  const confirmDiscard = () => !gradingDirty || window.confirm("Discard your unsaved ratings and notes?");
+  // Opening one card closes the other, so unsaved ratings are asked about first.
+  const openAssignment = (id: string | null) => {
+    if (id === (selectedAssignment?.id ?? null) || !confirmDiscard()) return;
+    setOpenedId(id);
+  };
+  const changeScenarioFilter = (next: Filter) => {
+    if (next === activeFilter) return;
+    const stays = selectedAssignment !== null && matchesFilter(selectedAssignment, next);
+    if (!stays && !confirmDiscard()) return;
+    setScenarioFilter(next);
+  };
+  const updateAssignment = (id: string, patch: Partial<ScenarioAssignment>) =>
+    // Only reachable from a loaded profile, so there is always data to patch.
+    setData((previous) => ({
+      ...previous!,
+      assignments: previous!.assignments.map((a) => (a.id === id ? { ...a, ...patch } : a)),
+    }));
   const competencies = data?.competencies ?? NO_COMPETENCIES;
   const scoreHistory = data?.scoreHistory ?? NO_SCORE_HISTORY;
   const riskPrediction = data?.riskPrediction ?? null;
@@ -504,7 +545,7 @@ export default function StudentDetailClient() {
           <SkeletonRiskPredictionCard />
         </div>
         <SkeletonTabTiles />
-        <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden">
+        <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-clip">
           <div className="p-6">
             <SkeletonTabContent />
           </div>
@@ -711,7 +752,7 @@ export default function StudentDetailClient() {
         <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {([
             { key: 'performance', label: 'Performance', hint: 'Skill Assessment results', count: performanceHistory.length, unit: 'attempts', icon: faChartLine },
-            { key: 'scenarios', label: 'Scenarios', hint: 'Simulation runs', count: scenarioHistory.length, unit: 'runs', icon: faStethoscope },
+            { key: 'scenarios', label: 'Scenarios', hint: 'Assigned scenarios', count: assignments.length, unit: 'assigned', icon: faStethoscope },
             { key: 'competencies', label: 'Skill Areas', hint: 'Skill mastery', count: competencies.length, unit: 'areas', icon: faListCheck },
             { key: 'reflections', label: 'Reflections', hint: 'Reflections & goals', count: reflections?.length ?? 0, unit: 'entries', icon: faBullseye },
           ] as const).map((tab) => {
@@ -747,7 +788,7 @@ export default function StudentDetailClient() {
           })}
         </div>
 
-        <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-hidden">
+        <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-clip">
         <div className="p-6">
           {activeTab === 'performance' && (
             <div className="space-y-2">
@@ -803,62 +844,40 @@ export default function StudentDetailClient() {
           )}
 
           {activeTab === 'scenarios' && (
-            <div className="space-y-2">
-              {scenarioHistory.length === 0 ? (
-                <p className="text-gray-500 text-center py-8">No scenario performance records yet</p>
-              ) : (
-                scenarioHistory.map((record) => {
-                  const duration = formatDuration(record.time_taken);
-                  // A scenario with no authored checklist, and a run whose
-                  // progress couldn't be read, are different things — neither
-                  // should read as "0 / 8".
-                  const total = record.total_tasks;
-                  const done = record.completed_tasks;
-                  const hasProgress = total !== null && done !== null && total > 0;
-                  return (
-                    <div key={record.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-purple-100 text-purple-600">
-                        <FontAwesomeIcon icon={faStethoscope} className="h-4 w-4" />
-                      </span>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-gray-900 truncate">{record.scenario_title}</p>
-                        <p className="text-sm text-gray-500">{formatDateTime(record.completed_at)}</p>
-                        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-400">
-                          <span className="flex items-center gap-1">
-                            <FontAwesomeIcon icon={faListCheck} className="h-3 w-3" />
-                            {hasProgress
-                              ? `${done} / ${total} tasks performed`
-                              : total === 0
-                                ? 'No checklist tasks'
-                                : 'Task progress unavailable'}
-                          </span>
-                          {duration && (
-                            <span className="flex items-center gap-1">
-                              <FontAwesomeIcon icon={faClock} className="h-3 w-3" />
-                              {duration}
-                            </span>
-                          )}
-                        </div>
-                        {hasProgress && (
-                          <div className="mt-1.5 h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-gray-200">
-                            <div
-                              className="h-full rounded-full bg-purple-500 transition-all"
-                              style={{ width: `${Math.min(100, Math.round((done / total) * 100))}%` }}
-                            />
-                          </div>
-                        )}
-                      </div>
-                      <div className="shrink-0 text-right">
-                        <p className={`text-xl font-bold leading-none ${getScoreColor(record.score)}`}>
-                          {record.score}%
-                        </p>
-                        <p className="mt-1 text-[11px] text-gray-400">{scoreDescriptor(record.score)}</p>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
+            assignments.length === 0 ? (
+              <p className="text-gray-500 text-center py-8">No scenarios assigned to this student yet</p>
+            ) : (
+              // The same checklist as Review Submissions, for this student's scenarios only.
+              <div>
+                <AssignmentFilterTabs
+                  assignments={assignments}
+                  filter={activeFilter}
+                  onFilterChange={changeScenarioFilter}
+                />
+                {visibleAssignments.length === 0 ? (
+                  <EmptyPanel icon={faClipboardList} title="All clear" body="Nothing in this view right now." />
+                ) : (
+                  // Each scenario folds to a card that opens to its checklist, one
+                  // open at a time.
+                  <div className="space-y-3">
+                    {visibleAssignments.map((a) =>
+                      a.id === selectedAssignment?.id ? (
+                        <AssignmentGrader
+                          key={a.id}
+                          assignment={a}
+                          header="scenario"
+                          onCollapse={() => openAssignment(null)}
+                          onAssignmentChange={(patch) => updateAssignment(a.id, patch)}
+                          onDirtyChange={setGradingDirty}
+                        />
+                      ) : (
+                        <ScenarioSummaryCard key={a.id} assignment={a} onExpand={() => openAssignment(a.id)} />
+                      ),
+                    )}
+                  </div>
+                )}
+              </div>
+            )
           )}
 
           {activeTab === 'reflections' && <ReflectionsTab reflections={reflections} enabled={reflectionsEnabled} />}
