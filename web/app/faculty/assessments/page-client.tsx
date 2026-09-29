@@ -84,25 +84,26 @@ export default function FacultyAssessmentsClient() {
   // Mirrors the server's guardAssessmentEdit (the server also checks that an
   // admin owns the creator). Others can open, assign and read results.
   const canChange = (a: Assessment) => me?.role === "admin" || a.created_by === me?.id;
-  const { data, loading, refresh: loadAssessments } = usePageData(
-    "faculty:assessments",
-    async () => {
-      const [assessmentsRes, studentsRes, sections] = await Promise.all([
-        apiFetch("/api/faculty/assessments", { credentials: "include" }),
-        apiFetch("/api/faculty/students", { credentials: "include" }),
-        // Own sections only: a faculty member can assign to the sections they
-        // handle (admin gets all of them).
-        fetchFacultySections(),
-      ]);
-      const assessments = assessmentsRes.ok
-        ? ((await assessmentsRes.json()) as { assessments?: Assessment[] }).assessments ?? []
-        : [];
-      const students = studentsRes.ok
-        ? ((await studentsRes.json()) as { students?: Student[] }).students ?? []
-        : [];
-      return { assessments, students, sections };
-    },
-  );
+  const {
+    data,
+    loading,
+    refresh: loadAssessments,
+  } = usePageData("faculty:assessments", async () => {
+    const [assessmentsRes, studentsRes, sections] = await Promise.all([
+      apiFetch("/api/faculty/assessments", { credentials: "include" }),
+      apiFetch("/api/faculty/students", { credentials: "include" }),
+      // Own sections only: a faculty member can assign to the sections they
+      // handle (admin gets all of them).
+      fetchFacultySections(),
+    ]);
+    const assessments = assessmentsRes.ok
+      ? (((await assessmentsRes.json()) as { assessments?: Assessment[] }).assessments ?? [])
+      : [];
+    const students = studentsRes.ok
+      ? (((await studentsRes.json()) as { students?: Student[] }).students ?? [])
+      : [];
+    return { assessments, students, sections };
+  });
 
   const assessments = data?.assessments ?? NO_ASSESSMENTS;
   const students = data?.students ?? NO_STUDENTS;
@@ -183,8 +184,7 @@ export default function FacultyAssessmentsClient() {
   const sectionsToPublish =
     assignTarget && assignTarget.target_sections && assignTarget.target_sections.length > 0
       ? sections.filter(
-          (s) =>
-            selectedSections.has(s.id) && !assignTarget.target_sections!.includes(s.name),
+          (s) => selectedSections.has(s.id) && !assignTarget.target_sections!.includes(s.name),
         )
       : [];
 
@@ -346,7 +346,7 @@ export default function FacultyAssessmentsClient() {
           className="flex items-center gap-2 px-5 py-2.5 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors text-sm font-medium shadow-[0_2px_6px_rgba(27,107,123,0.2)] shrink-0"
         >
           <FontAwesomeIcon icon={faPlus} className="w-3.5 h-3.5" />
-          New Assessment
+          New Quiz
         </button>
       </div>
 
@@ -392,7 +392,8 @@ export default function FacultyAssessmentsClient() {
         {filtersActive && (
           <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600 sm:ml-auto">
             <span>
-              Showing <strong className="font-semibold text-gray-900">{filteredAssessments.length}</strong>{" "}
+              Showing{" "}
+              <strong className="font-semibold text-gray-900">{filteredAssessments.length}</strong>{" "}
               of {assessments.length}
             </span>
             <button
@@ -420,104 +421,110 @@ export default function FacultyAssessmentsClient() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredAssessments.map((a) => (
-              <div key={a.id} className="bg-surface rounded-xl border border-hairline shadow-tile overflow-hidden flex flex-col">
-                <div className="p-4 flex-1">
-                  <div className="flex items-center gap-2 flex-wrap mb-1">
-                    <h3 className="font-semibold text-gray-800 truncate">{a.title}</h3>
-                    <span className={`px-2 py-0.5 text-xs rounded-full shrink-0 ${
-                      a.is_published
-                        ? "bg-green-100 text-green-700"
-                        : "bg-gray-100 text-gray-500"
-                    }`}>
-                      {a.is_published ? "Published" : "Draft"}
-                    </span>
-                  </div>
-                  {a.description && (
-                    <p className="text-sm text-gray-500 mb-3 line-clamp-2">{a.description}</p>
-                  )}
-                  <div className="flex items-center gap-2 text-sm text-gray-400 flex-wrap">
-                    <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">
-                      {a.category}
-                    </span>
-                    {/* Bank size, and the paper drawn from it when they differ —
-                        the surplus is held back for later attempts. */}
-                    <span className="text-xs">
-                      {a.question_count} question{a.question_count === 1 ? "" : "s"}
-                      {a.total_questions !== null && a.total_questions < a.question_count && (
-                        <span className="text-gray-500"> · serves {a.total_questions}</span>
-                      )}
-                    </span>
-                    <span className="text-xs">{a.student_count} assigned</span>
-                    {a.time_limit_seconds && (
-                      <span className="text-xs">{Math.round(a.time_limit_seconds / 60)} min</span>
-                    )}
-                    <span className="text-xs">
-                      {a.max_attempts === null
-                        ? "Unlimited tries"
-                        : `${a.max_attempts} ${a.max_attempts === 1 ? "try" : "tries"}`}
-                    </span>
-                  </div>
+            <div
+              key={a.id}
+              className="bg-surface rounded-xl border border-hairline shadow-tile overflow-hidden flex flex-col"
+            >
+              <div className="p-4 flex-1">
+                <div className="flex items-center gap-2 flex-wrap mb-1">
+                  <h3 className="font-semibold text-gray-800 truncate">{a.title}</h3>
+                  <span
+                    className={`px-2 py-0.5 text-xs rounded-full shrink-0 ${
+                      a.is_published ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"
+                    }`}
+                  >
+                    {a.is_published ? "Published" : "Draft"}
+                  </span>
                 </div>
-                <div className="px-4 py-3 bg-subtle border-t border-hairline">
-                  <div className="text-xs text-gray-500 mb-2 truncate">
-                    {a.target_sections && a.target_sections.length > 0
-                      ? `Published to ${a.target_sections.map((s) => `Section ${s}`).join(", ")}`
-                      : "Published to all sections"}
-                  </div>
-                  <div className="flex items-center justify-end gap-1.5">
-                    <button
-                      onClick={() => openAssignModal(a)}
-                      disabled={!a.is_published}
-                      title={a.is_published ? "Assign to students" : "Publish first to assign"}
-                      className="p-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40"
-                    >
-                      <FontAwesomeIcon icon={faUserPlus} className="w-3.5 h-3.5" />
-                    </button>
-                    {canChange(a) && (
+                {a.description && (
+                  <p className="text-sm text-gray-500 mb-3 line-clamp-2">{a.description}</p>
+                )}
+                <div className="flex items-center gap-2 text-sm text-gray-400 flex-wrap">
+                  <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">
+                    {a.category}
+                  </span>
+                  {/* Bank size, and the paper drawn from it when they differ —
+                        the surplus is held back for later attempts. */}
+                  <span className="text-xs">
+                    {a.question_count} question{a.question_count === 1 ? "" : "s"}
+                    {a.total_questions !== null && a.total_questions < a.question_count && (
+                      <span className="text-gray-500"> · serves {a.total_questions}</span>
+                    )}
+                  </span>
+                  <span className="text-xs">{a.student_count} assigned</span>
+                  {a.time_limit_seconds && (
+                    <span className="text-xs">{Math.round(a.time_limit_seconds / 60)} min</span>
+                  )}
+                  <span className="text-xs">
+                    {a.max_attempts === null
+                      ? "Unlimited tries"
+                      : `${a.max_attempts} ${a.max_attempts === 1 ? "try" : "tries"}`}
+                  </span>
+                </div>
+              </div>
+              <div className="px-4 py-3 bg-subtle border-t border-hairline">
+                <div className="text-xs text-gray-500 mb-2 truncate">
+                  {a.target_sections && a.target_sections.length > 0
+                    ? `Published to ${a.target_sections.map((s) => `Section ${s}`).join(", ")}`
+                    : "Published to all sections"}
+                </div>
+                <div className="flex items-center justify-end gap-1.5">
+                  <button
+                    onClick={() => openAssignModal(a)}
+                    disabled={!a.is_published}
+                    title={a.is_published ? "Assign to students" : "Publish first to assign"}
+                    className="p-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+                  >
+                    <FontAwesomeIcon icon={faUserPlus} className="w-3.5 h-3.5" />
+                  </button>
+                  {canChange(a) && (
                     <button
                       onClick={() => togglePublish(a)}
                       disabled={busy}
                       title={a.is_published ? "Unpublish" : "Publish"}
                       className="p-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"
                     >
-                      <FontAwesomeIcon icon={a.is_published ? faEyeSlash : faGlobe} className="w-3.5 h-3.5" />
+                      <FontAwesomeIcon
+                        icon={a.is_published ? faEyeSlash : faGlobe}
+                        className="w-3.5 h-3.5"
+                      />
                     </button>
-                    )}
+                  )}
+                  <button
+                    onClick={() => router.push(`/faculty/assessments/${a.id}`)}
+                    title={canChange(a) ? "Edit details" : "View"}
+                    className="p-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"
+                  >
+                    <FontAwesomeIcon icon={faPen} className="w-3.5 h-3.5" />
+                  </button>
+                  {canChange(a) && (
                     <button
-                      onClick={() => router.push(`/faculty/assessments/${a.id}`)}
-                      title={canChange(a) ? "Edit details" : "View"}
-                      className="p-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"
+                      onClick={() => setConfirmDelete(a)}
+                      title="Delete"
+                      className="p-2 rounded-lg border border-red-200 text-red-600 hover:bg-red-50"
                     >
-                      <FontAwesomeIcon icon={faPen} className="w-3.5 h-3.5" />
+                      <FontAwesomeIcon icon={faTrash} className="w-3.5 h-3.5" />
                     </button>
-                    {canChange(a) && (
-                      <button
-                        onClick={() => setConfirmDelete(a)}
-                        title="Delete"
-                        className="p-2 rounded-lg border border-red-200 text-red-600 hover:bg-red-50"
-                      >
-                        <FontAwesomeIcon icon={faTrash} className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                    <button
-                      onClick={() => router.push(`/faculty/assessments/${a.id}/results`)}
-                      title="View student results"
-                      className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 text-sm font-medium"
-                    >
-                      <FontAwesomeIcon icon={faChartSimple} className="w-3.5 h-3.5" />
-                      Results
-                    </button>
-                    <button
-                      onClick={() => router.push(`/faculty/assessments/${a.id}`)}
-                      title="Manage questions"
-                      className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-brand-600/10 dark:bg-brand-600/25 text-brand-700 dark:text-white hover:bg-brand-600/20 dark:hover:bg-brand-600/35 text-sm font-medium"
-                    >
-                      <FontAwesomeIcon icon={faListCheck} className="w-3.5 h-3.5" />
-                      Questions
-                    </button>
-                  </div>
+                  )}
+                  <button
+                    onClick={() => router.push(`/faculty/assessments/${a.id}/results`)}
+                    title="View student results"
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 text-sm font-medium"
+                  >
+                    <FontAwesomeIcon icon={faChartSimple} className="w-3.5 h-3.5" />
+                    Results
+                  </button>
+                  <button
+                    onClick={() => router.push(`/faculty/assessments/${a.id}`)}
+                    title="Manage questions"
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-brand-600/10 dark:bg-brand-600/25 text-brand-700 dark:text-white hover:bg-brand-600/20 dark:hover:bg-brand-600/35 text-sm font-medium"
+                  >
+                    <FontAwesomeIcon icon={faListCheck} className="w-3.5 h-3.5" />
+                    Questions
+                  </button>
                 </div>
               </div>
+            </div>
           ))}
         </div>
       )}
@@ -564,9 +571,7 @@ export default function FacultyAssessmentsClient() {
               </div>
             </div>
             <div>
-              <label className={labelClassName}>
-                Sections ({selectedSections.size} selected)
-              </label>
+              <label className={labelClassName}>Sections ({selectedSections.size} selected)</label>
               <div className="border border-hairline rounded-xl divide-y divide-hairline max-h-64 overflow-y-auto">
                 {sections.length === 0 && (
                   <p className="p-4 text-sm text-gray-500">
@@ -614,8 +619,8 @@ export default function FacultyAssessmentsClient() {
               <p className="text-xs text-gray-500 mt-1.5 flex items-start gap-1.5">
                 <FontAwesomeIcon icon={faUsers} className="w-3 h-3 mt-0.5 shrink-0" />
                 <span>
-                  Every student in the sections you pick gets this quiz, including ones who
-                  transfer in later than this roster.
+                  Every student in the sections you pick gets this quiz, including ones who transfer
+                  in later than this roster.
                 </span>
               </p>
               {sectionsToPublish.length > 0 && (
@@ -666,7 +671,9 @@ export default function FacultyAssessmentsClient() {
             error: deleteError,
             onConfirm: () => confirmAndDelete(confirmDelete),
           }}
-          onClose={() => { if (!busy) setConfirmDelete(null); }}
+          onClose={() => {
+            if (!busy) setConfirmDelete(null);
+          }}
         />
       )}
     </div>
