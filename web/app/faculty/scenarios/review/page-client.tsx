@@ -446,7 +446,11 @@ export default function FacultyScenarioReviewClient() {
     return true;
   };
 
-  /** Save the grade: the scenario becomes Completed and the student sees it. Saving an edit re-scores it. */
+  /**
+   * Save the grade. The student sees each graded task at once; the scenario
+   * becomes Completed when every row is graded, and until then this saves
+   * progress and stays open. Saving an edit re-scores it.
+   */
   const handleSave = async () => {
     if (!selectedId) return;
     const assignmentId = selectedId;
@@ -458,7 +462,16 @@ export default function FacultyScenarioReviewClient() {
       return;
     }
     const result = await finalizeScenarioAssignment(assignmentId);
-    if (result) {
+    if (result && !result.completed) {
+      setAssignments((prev) =>
+        prev.map((a) => (a.id === assignmentId ? { ...a, status: result.assignment.status } : a)),
+      );
+      await reloadTasks();
+      resetDraft();
+      toast(
+        `Progress saved — ${result.remaining} ${result.remaining === 1 ? "row" : "rows"} left. It completes once every row is graded.`,
+      );
+    } else if (result) {
       setAssignments((prev) =>
         prev.map((a) =>
           a.id === assignmentId
@@ -1013,7 +1026,13 @@ export default function FacultyScenarioReviewClient() {
                       className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white shadow-tile transition-all hover:bg-brand-700 hover:shadow-tile-hover disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-brand-600"
                     >
                       {finalizing ? <EcgLoader /> : <FontAwesomeIcon icon={faFloppyDisk} className="h-3.5 w-3.5" />}
-                      {finalizing ? "Saving…" : "Save"}
+                      {finalizing
+                        ? "Saving…"
+                        : finalized
+                          ? "Save"
+                          : unratedMissing > 0
+                            ? "Save progress"
+                            : "Save & finish"}
                     </button>
                     </>
                   )}
