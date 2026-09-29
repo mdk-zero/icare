@@ -196,10 +196,34 @@ export interface WardRoom {
   plan_y: number | null;
   plan_w: number | null;
   plan_h: number | null;
+  /** The wall the Dean put the door in; null reads as the bottom wall (and before migration 062). */
+  plan_door?: DoorSide | null;
   /** Admitted patients in the room — what `capacity` gates. */
   occupied: number;
   /** True when one of this student's scenario patients is in this room. */
   has_assignment: boolean;
+}
+
+export type DoorSide = 'n' | 'e' | 's' | 'w';
+
+export type WardFixtureKind =
+  | 'corridor'
+  | 'nurse_station'
+  | 'stairs'
+  | 'elevator'
+  | 'restroom'
+  | 'storage'
+  | 'label';
+
+/** Anything on the floor plan that is not a room: corridors, the nurse station… */
+export interface WardFixture {
+  id: string;
+  kind: WardFixtureKind;
+  label: string;
+  plan_x: number;
+  plan_y: number;
+  plan_w: number;
+  plan_h: number;
 }
 
 export interface WardVitals {
@@ -249,6 +273,7 @@ export interface WardAssignment {
 
 export interface WardResult {
   rooms: WardRoom[];
+  fixtures: WardFixture[];
   patients: WardPatient[];
   assignments: WardAssignment[];
 }
@@ -260,6 +285,8 @@ export async function fetchWard(): Promise<CachedResult<WardResult>> {
     ...result,
     data: {
       rooms: result.data.rooms ?? [],
+      // Absent from an older server or a cached read from before it.
+      fixtures: result.data.fixtures ?? [],
       patients: result.data.patients ?? [],
       assignments: result.data.assignments ?? [],
     },

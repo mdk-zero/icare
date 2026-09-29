@@ -15,11 +15,13 @@ import {
   Badge,
 } from '@/components/ui';
 import { useApiData } from '@/hooks/useApiData';
+import { FloorPlan } from '@/components/FloorPlan';
 import { fetchWard, fetchAiTips, fetchMyCases, AiTip, WardRoom, WardPatient, WardAssignment, CaseListItem } from '@/lib/api';
 
 /**
  * The Clinic tab: the student's hospital case write-ups, then the ward's
- * rooms, four to a page. Students find the room with their patient and walk
+ * floor plan as the Dean laid it out (rooms not on the plan follow as cards,
+ * four to a page, as does the whole ward before any room is placed). Students find the room with their patient and walk
  * into it to read the scenario brief and task checklist. The ward arrives in
  * one cached read (/api/student/ward), so the rooms still show offline.
  */
@@ -181,6 +183,9 @@ export default function ClinicScreen() {
   const rooms = data?.rooms ?? [];
   const patients = data?.patients ?? [];
   const assignments = data?.assignments ?? [];
+  const fixtures = data?.fixtures ?? [];
+  const onPlan = rooms.filter((r) => r.plan_x != null && r.plan_y != null && r.plan_w != null && r.plan_h != null);
+  const offPlan = onPlan.length > 0 ? rooms.filter((r) => !onPlan.includes(r)) : rooms;
 
   const patientsById = new Map(patients.map((p) => [p.id, p]));
   const roomsById = new Map(rooms.map((r) => [r.id, r]));
@@ -280,15 +285,25 @@ export default function ClinicScreen() {
 
       <View style={styles.section}>
         <SectionHeader title="Room Layout" subtitle="Tap a room to see who is in it" />
-        {rooms.length > 0 ? (
-          <RoomPages
-            rooms={rooms}
+        {onPlan.length > 0 ? (
+          <FloorPlan
+            rooms={onPlan}
+            fixtures={fixtures}
             highlightRoomId={myRoomId}
             onPressRoom={(room) => router.push(`/clinic/room/${room.id}`)}
           />
-        ) : (
-          <EmptyState icon="bed-outline" message="No rooms have been set up yet." />
-        )}
+        ) : null}
+        {offPlan.length > 0 ? (
+          <View style={onPlan.length > 0 ? styles.offPlan : undefined}>
+            {onPlan.length > 0 ? <Text style={styles.offPlanTitle}>Not on the plan yet</Text> : null}
+            <RoomPages
+              rooms={offPlan}
+              highlightRoomId={myRoomId}
+              onPressRoom={(room) => router.push(`/clinic/room/${room.id}`)}
+            />
+          </View>
+        ) : null}
+        {rooms.length === 0 ? <EmptyState icon="bed-outline" message="No rooms have been set up yet." /> : null}
       </View>
 
     </ScrollView>
@@ -374,6 +389,15 @@ function createStyles(
     },
     section: {
       marginBottom: Spacing.xxl,
+    },
+    offPlan: { marginTop: Spacing.lg },
+    offPlanTitle: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: Palette.textSecondary,
+      textTransform: 'uppercase',
+      letterSpacing: 0.6,
+      marginBottom: Spacing.sm,
     },
     banner: {
       backgroundColor: Palette.surface,

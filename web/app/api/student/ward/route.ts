@@ -20,6 +20,11 @@ import { isPerformed } from '@/app/lib/task-ratings';
  * patient who is not part of a scenario assigned to this student carries name
  * and bed only — no diagnosis, no vitals. Charting stays gated server-side by
  * isPatientAssigned in /api/student/vitals and /api/student/ehr.
+ *
+ * The plan also carries each room's door wall and the fixtures between rooms
+ * (corridors, the nurse station…), so the phone draws the same floor plan as
+ * the Dean's Wards tab. Before migration 062 there are neither: doors read as
+ * null and fixtures as an empty list.
  */
 
 interface ScenarioRow {
@@ -76,7 +81,7 @@ export async function GET() {
 
     // 2. The ward itself plus the per-assignment task state and the assigned
     //    patients' latest vitals.
-    const [roomsRes, patientsRes, tasksRes, completionsRes, vitalsRes] = await Promise.all([
+    const [roomsRes, patientsRes, tasksRes, completionsRes, vitalsRes, fixturesRes] = await Promise.all([
       supabase.from('rooms').select('*').order('room_number'),
       supabase
         .from('patients')
@@ -103,7 +108,15 @@ export async function GET() {
             .order('recorded_at', { ascending: false })
             .limit(200)
         : Promise.resolve({ data: [], error: null }),
+      supabase
+        .from('ward_fixtures')
+        .select('id, kind, label, plan_x, plan_y, plan_w, plan_h')
+        .order('created_at'),
     ]);
+    // Missing before 062; any other failure only costs the plan its fixtures.
+    if (fixturesRes.error && !['42P01', 'PGRST205'].includes(fixturesRes.error.code ?? '')) {
+      console.error('Failed to fetch ward fixtures', fixturesRes.error);
+    }
 
     if (roomsRes.error) {
       console.error('Failed to fetch ward rooms', roomsRes.error);
@@ -161,6 +174,7 @@ export async function GET() {
       plan_y: room.plan_y,
       plan_w: room.plan_w,
       plan_h: room.plan_h,
+      plan_door: room.plan_door ?? null,
       occupied: occupancy.get(room.id) ?? 0,
       has_assignment: roomsWithAssignment.has(room.id),
     }));
@@ -200,7 +214,12 @@ export async function GET() {
       };
     });
 
-    return NextResponse.json({ rooms, patients, assignments: formattedAssignments });
+    return NextResponse.json({
+      rooms,
+      fixtures: fixturesRes.error ? [] : (fixturesRes.data ?? []),
+      patients,
+      assignments: formattedAssignments,
+    });
   } catch (err) {
     console.error('Fetch ward failed', err);
     return NextResponse.json({ error: 'Unable to load the ward' }, { status: 500 });
