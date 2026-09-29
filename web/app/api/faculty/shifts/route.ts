@@ -1,28 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
-import { getScopedSectionIds, getScopedStudentIds } from '@/app/lib/admin-scope';
+import { getScopedStudentIds } from '@/app/lib/admin-scope';
 import { logAudit } from '@/app/lib/audit';
 import { SHIFT_TYPES, type ShiftAttendanceStatus, type ShiftType } from '@/app/lib/shifts';
-
-const SHIFT_COLUMNS =
-  'id, section_id, room_id, label, shift_type, starts_at, ends_at, notes, status, created_at, section:sections(id, name), room:rooms(id, name, room_number)';
+import {
+  LEGACY_SHIFT_COLUMNS,
+  SHIFT_COLUMNS,
+  getShiftScope,
+  isMissingTeamColumn,
+  loadSchedulableTeam,
+  shiftInScope,
+  teamStudentIds,
+} from '@/app/lib/shift-scope';
 
 function isFacultyOrAdmin(role: string | undefined): boolean {
   return role === 'faculty' || role === 'admin';
-}
-
-/**
- * Sections the caller may schedule into. Admins get every section; faculty get
- * theirs. Returning null means "no restriction" so callers can skip the filter
- * rather than building an `in` clause over every id in the system.
- */
-async function scopeSectionIds(
-  supabase: ReturnType<typeof getSupabaseAdmin>,
-  session: { uid: string; role: string },
-): Promise<string[] | null> {
-  // An admin's own sections (migration 053), or every section before it.
-  return await getScopedSectionIds(supabase, session);
 }
 
 /** GET /api/faculty/shifts — scheduled shifts with their attendance tallies. */
@@ -35,25 +28,32 @@ export async function GET() {
 
   try {
     const supabase = getSupabaseAdmin();
-    const sectionIds = await scopeSectionIds(supabase, session);
-    if (sectionIds !== null && sectionIds.length === 0) {
+    const scope = await getShiftScope(supabase, session);
+    if (scope.sectionIds !== null && scope.sectionIds.length === 0) {
       return NextResponse.json({ shifts: [] });
     }
 
-    let query = supabase
-      .from('shifts')
-      .select(SHIFT_COLUMNS)
-      .order('starts_at', { ascending: false })
-      .limit(200);
-    if (sectionIds !== null) query = query.in('section_id', sectionIds);
-
-    const { data: shifts, error } = await query;
-    if (error) {
-      console.error('Failed to fetch shifts', error);
+    const list = (columns: string) => {
+      let query = supabase
+        .from('shifts')
+        .select(columns)
+        .order('starts_at', { ascending: false })
+        .limit(500);
+      if (scope.sectionIds !== null) query = query.in('section_id', scope.sectionIds);
+      return query;
+    };
+    let result = await list(SHIFT_COLUMNS);
+    if (result.error && isMissingTeamColumn(result.error)) result = await list(LEGACY_SHIFT_COLUMNS);
+    if (result.error) {
+      console.error('Failed to fetch shifts', result.error);
       return NextResponse.json({ error: 'Unable to load shifts' }, { status: 500 });
     }
+    // An instructor sees their own groups' shifts, not a colleague's group in the same section.
+    const shifts = ((result.data ?? []) as unknown as { id: string; section_id: string | null; team_id?: string | null }[])
+      .filter((s) => shiftInScope(scope, s))
+      .slice(0, 200);
 
-    const ids = (shifts ?? []).map((s) => s.id);
+    const ids = shifts.map((s) => s.id);
     const byShift = new Map<string, ShiftAttendanceStatus[]>();
     if (ids.length > 0) {
       let tallyQuery = supabase
@@ -74,7 +74,7 @@ export async function GET() {
     }
 
     return NextResponse.json({
-      shifts: (shifts ?? []).map((shift) => ({
+      shifts: shifts.map((shift) => ({
         ...shift,
         statuses: byShift.get(shift.id) ?? [],
       })),
@@ -86,11 +86,10 @@ export async function GET() {
 }
 
 /**
- * POST /api/faculty/shifts — schedules one shift and rosters its section onto it.
+ * POST /api/faculty/shifts — schedules one shift and rosters a group onto it.
  *
- * A clinical rotation is a section-wide event, so every student in the section
- * is assigned at creation rather than picked one by one; individuals can be
- * excused afterwards from the attendance screen.
+ * Every member of the group is assigned at creation rather than picked one by
+ * one; individuals can be excused afterwards from the attendance screen.
  */
 export async function POST(request: NextRequest) {
   const session = await readSession();
@@ -106,7 +105,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const sectionId = typeof body.section_id === 'string' ? body.section_id.trim() : '';
+  const teamId = typeof body.team_id === 'string' ? body.team_id.trim() : '';
   const shiftType = typeof body.shift_type === 'string' ? body.shift_type : 'custom';
   const startsAt = typeof body.starts_at === 'string' ? body.starts_at : '';
   const endsAt = typeof body.ends_at === 'string' ? body.ends_at : '';
@@ -114,7 +113,7 @@ export async function POST(request: NextRequest) {
   const label = typeof body.label === 'string' && body.label.trim() ? body.label.trim() : null;
   const notes = typeof body.notes === 'string' && body.notes.trim() ? body.notes.trim() : null;
 
-  if (!sectionId) return NextResponse.json({ error: 'A section is required' }, { status: 400 });
+  if (!teamId) return NextResponse.json({ error: 'A group is required' }, { status: 400 });
   if (!SHIFT_TYPES.includes(shiftType as ShiftType)) {
     return NextResponse.json({ error: 'Invalid shift type' }, { status: 400 });
   }
@@ -130,46 +129,46 @@ export async function POST(request: NextRequest) {
   try {
     const supabase = getSupabaseAdmin();
 
-    const sectionIds = await scopeSectionIds(supabase, session);
-    if (sectionIds !== null && !sectionIds.includes(sectionId)) {
-      return NextResponse.json({ error: 'That section is not one of yours' }, { status: 403 });
+    const scope = await getShiftScope(supabase, session);
+    const team = await loadSchedulableTeam(supabase, scope, teamId);
+    if (!team) {
+      return NextResponse.json({ error: 'That group is not one of yours' }, { status: 403 });
     }
 
     const { data: campus } = await supabase.from('campuses').select('id').limit(1).maybeSingle();
 
-    const { data: shift, error } = await supabase
-      .from('shifts')
-      .insert({
-        campus_id: campus?.id ?? null,
-        section_id: sectionId,
-        room_id: roomId,
-        created_by: session.uid,
-        label,
-        shift_type: shiftType,
-        starts_at: start.toISOString(),
-        ends_at: end.toISOString(),
-        notes,
-      })
-      .select(SHIFT_COLUMNS)
-      .single();
-
-    if (error || !shift) {
-      console.error('Failed to create shift', error);
+    const row = {
+      campus_id: campus?.id ?? null,
+      section_id: team.section_id,
+      team_id: team.id,
+      room_id: roomId,
+      created_by: session.uid,
+      label,
+      shift_type: shiftType,
+      starts_at: start.toISOString(),
+      ends_at: end.toISOString(),
+      notes,
+    };
+    let inserted = await supabase.from('shifts').insert(row).select(SHIFT_COLUMNS).single();
+    if (inserted.error && isMissingTeamColumn(inserted.error)) {
+      // Before 064 the shift can't name its group; it still rosters only the group.
+      const { team_id: _omit, ...legacy } = row;
+      void _omit;
+      inserted = await supabase.from('shifts').insert(legacy).select(LEGACY_SHIFT_COLUMNS).single();
+    }
+    const shift = inserted.data as unknown as { id: string } | null;
+    if (inserted.error || !shift) {
+      console.error('Failed to create shift', inserted.error);
       return NextResponse.json({ error: 'Unable to create shift' }, { status: 500 });
     }
 
-    const { data: students } = await supabase
-      .from('users')
-      .select('id')
-      .eq('role', 'student')
-      .eq('section_id', sectionId);
-
+    const students = await teamStudentIds(supabase, team.id);
     let assigned = 0;
-    if (students && students.length > 0) {
+    if (students.length > 0) {
       const { error: assignError } = await supabase.from('shift_assignments').insert(
-        students.map((s) => ({
+        students.map((studentId) => ({
           shift_id: shift.id,
-          student_id: s.id,
+          student_id: studentId,
           assigned_by: session.uid,
         })),
       );
@@ -183,7 +182,7 @@ export async function POST(request: NextRequest) {
         action: 'shift.create',
         entityType: 'shifts',
         entityId: shift.id,
-        details: { section_id: sectionId, shift_type: shiftType, assigned },
+        details: { team_id: team.id, section_id: team.section_id, shift_type: shiftType, assigned },
       },
       request,
     );

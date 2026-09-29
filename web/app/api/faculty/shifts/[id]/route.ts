@@ -1,9 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
-import { getScopedSectionIds, getScopedStudentIds } from '@/app/lib/admin-scope';
+import { getScopedStudentIds } from '@/app/lib/admin-scope';
 import { logAudit } from '@/app/lib/audit';
-import { SHIFT_ATTENDANCE_LABEL, type ShiftAttendanceStatus } from '@/app/lib/shifts';
+import { SHIFT_ATTENDANCE_LABEL, SHIFT_TYPES, type ShiftAttendanceStatus, type ShiftType } from '@/app/lib/shifts';
+import {
+  LEGACY_SHIFT_COLUMNS,
+  SHIFT_COLUMNS,
+  getShiftScope,
+  isMissingTeamColumn,
+  loadSchedulableTeam,
+  shiftInScope,
+  teamStudentIds,
+  type ShiftScope,
+} from '@/app/lib/shift-scope';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -15,24 +25,31 @@ function isFacultyOrAdmin(role: string | undefined): boolean {
   return role === 'faculty' || role === 'admin';
 }
 
-/** Loads the shift and refuses one outside the caller's sections. */
+interface ScopedShift {
+  id: string;
+  section_id: string | null;
+  team_id?: string | null;
+  starts_at: string;
+  ends_at: string;
+}
+
+/** Loads the shift and refuses one outside the caller's groups and sections. */
 async function loadScopedShift(
   supabase: ReturnType<typeof getSupabaseAdmin>,
   session: { uid: string; role: string },
   id: string,
 ) {
-  const { data: shift } = await supabase
-    .from('shifts')
-    .select('id, section_id, label, shift_type, starts_at, ends_at, status, notes, room_id, section:sections(id, name), room:rooms(id, name, room_number)')
-    .eq('id', id)
-    .maybeSingle();
+  const load = (columns: string) => supabase.from('shifts').select(columns).eq('id', id).maybeSingle();
+  let result = await load(SHIFT_COLUMNS);
+  if (result.error && isMissingTeamColumn(result.error)) result = await load(LEGACY_SHIFT_COLUMNS);
+  const shift = result.data as unknown as ScopedShift | null;
 
   if (!shift) return { error: 'Shift not found', status: 404 as const };
-  const mine = await getScopedSectionIds(supabase, session);
-  if (mine && (!shift.section_id || !mine.includes(shift.section_id))) {
+  const scope = await getShiftScope(supabase, session);
+  if (!shiftInScope(scope, shift)) {
     return { error: 'That shift is not one of yours', status: 403 as const };
   }
-  return { shift };
+  return { shift, scope };
 }
 
 /** GET — the shift plus its roster, for the attendance screen. */
@@ -84,10 +101,12 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
 }
 
 /**
- * PATCH — marks attendance, and/or cancels or reinstates the shift.
+ * PATCH — marks attendance, cancels or reinstates the shift, and/or edits it.
  *
  *   { marks: [{ assignment_id, status, notes? }] }   attendance
  *   { status: 'cancelled' | 'scheduled' }            the shift itself
+ *   { details: { team_id?, shift_type?, starts_at?, ends_at?,
+ *                room_id?, label?, notes? } }          its schedule
  */
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   const session = await readSession();
@@ -97,7 +116,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   }
 
   const { id } = await params;
-  let body: { marks?: unknown; status?: unknown };
+  let body: { marks?: unknown; status?: unknown; details?: unknown };
   try {
     body = (await request.json()) as typeof body;
   } catch {
@@ -109,6 +128,16 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const scoped = await loadScopedShift(supabase, session, id);
     if ('error' in scoped) {
       return NextResponse.json({ error: scoped.error }, { status: scoped.status });
+    }
+
+    if (body.details && typeof body.details === 'object') {
+      const edited = await editShift(supabase, session, scoped.shift, scoped.scope, body.details as Record<string, unknown>);
+      if ('error' in edited) return NextResponse.json({ error: edited.error }, { status: edited.status });
+      await logAudit(
+        session,
+        { action: 'shift.update', entityType: 'shifts', entityId: id, details: edited.changes },
+        request,
+      );
     }
 
     if (body.status === 'cancelled' || body.status === 'scheduled') {
@@ -180,6 +209,93 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     console.error('Update shift failed', err);
     return NextResponse.json({ error: 'Unable to update the shift' }, { status: 500 });
   }
+}
+
+/**
+ * Applies a schedule edit. Moving the shift to another group swaps its roster
+ * for the new group's members, which is refused once anyone has been marked:
+ * that attendance belongs to the old group and would be lost.
+ */
+async function editShift(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  session: { uid: string; role: string },
+  shift: ScopedShift,
+  scope: ShiftScope,
+  details: Record<string, unknown>,
+): Promise<{ changes: Record<string, unknown> } | { error: string; status: number }> {
+  const patch: Record<string, unknown> = {};
+
+  if ('label' in details) {
+    patch.label = typeof details.label === 'string' && details.label.trim() ? details.label.trim() : null;
+  }
+  if ('notes' in details) {
+    patch.notes = typeof details.notes === 'string' && details.notes.trim() ? details.notes.trim() : null;
+  }
+  if ('room_id' in details) {
+    patch.room_id = typeof details.room_id === 'string' && details.room_id.trim() ? details.room_id.trim() : null;
+  }
+  if ('shift_type' in details) {
+    if (!SHIFT_TYPES.includes(details.shift_type as ShiftType)) return { error: 'Invalid shift type', status: 400 };
+    patch.shift_type = details.shift_type;
+  }
+
+  const start = new Date(typeof details.starts_at === 'string' ? details.starts_at : shift.starts_at);
+  const end = new Date(typeof details.ends_at === 'string' ? details.ends_at : shift.ends_at);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return { error: 'A valid start and end time are required', status: 400 };
+  }
+  if (end <= start) return { error: 'The shift must end after it starts', status: 400 };
+  if ('starts_at' in details) patch.starts_at = start.toISOString();
+  if ('ends_at' in details) patch.ends_at = end.toISOString();
+
+  let newTeamId: string | null = null;
+  if (typeof details.team_id === 'string' && details.team_id && details.team_id !== shift.team_id) {
+    const team = await loadSchedulableTeam(supabase, scope, details.team_id);
+    if (!team) return { error: 'That group is not one of yours', status: 403 };
+
+    const { count } = await supabase
+      .from('shift_assignments')
+      .select('id', { count: 'exact', head: true })
+      .eq('shift_id', shift.id)
+      .neq('attendance_status', 'scheduled');
+    if ((count ?? 0) > 0) {
+      return { error: 'Attendance has already been marked, so the group can no longer change', status: 409 };
+    }
+    patch.team_id = team.id;
+    patch.section_id = team.section_id;
+    newTeamId = team.id;
+  }
+
+  if (Object.keys(patch).length > 0) {
+    const { error } = await supabase.from('shifts').update(patch).eq('id', shift.id);
+    if (error) {
+      if (isMissingTeamColumn(error)) {
+        return { error: 'Moving a shift to another group needs migration 064', status: 409 };
+      }
+      console.error('Failed to edit shift', error);
+      return { error: 'Unable to update the shift', status: 500 };
+    }
+  }
+
+  if (newTeamId) {
+    const students = await teamStudentIds(supabase, newTeamId);
+    const { error: clearError } = await supabase.from('shift_assignments').delete().eq('shift_id', shift.id);
+    if (clearError) {
+      console.error('Failed to clear the old roster', clearError);
+      return { error: 'Unable to swap the roster', status: 500 };
+    }
+    if (students.length > 0) {
+      const { error: assignError } = await supabase.from('shift_assignments').insert(
+        students.map((studentId) => ({ shift_id: shift.id, student_id: studentId, assigned_by: session.uid })),
+      );
+      if (assignError) {
+        console.error('Failed to roster the new group', assignError);
+        return { error: 'Unable to roster the new group', status: 500 };
+      }
+    }
+  }
+
+  return { changes: patch };
 }
 
 /** DELETE — removes the shift; its assignments cascade. */

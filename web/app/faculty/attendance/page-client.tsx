@@ -16,6 +16,7 @@ import {
   faUsers,
   faPercent,
   faClipboardList,
+  faPen,
 } from "@fortawesome/free-solid-svg-icons";
 import PageHeader from "../../components/PageHeader";
 import StatTile from "../../components/StatTile";
@@ -28,11 +29,10 @@ import {
   createShift,
   updateShift,
   deleteShift,
-  fetchSections,
+  fetchFacultyTeams,
   fetchRooms,
   type FacultyShift,
   type ShiftRosterEntry,
-  type Section,
   type Room,
 } from "../../lib/api";
 import {
@@ -57,7 +57,7 @@ import {
 } from "../../components/skeletons";
 
 const NO_SHIFTS: FacultyShift[] = [];
-const NO_SECTIONS: Section[] = [];
+const NO_GROUPS: GroupOption[] = [];
 const NO_ROOMS: Room[] = [];
 
 /** The statuses a roster row can be set to, in the order faculty use them. */
@@ -67,9 +67,35 @@ const inputClass =
   "w-full px-3 py-2 bg-surface border border-gray-300 rounded-xl text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600";
 const labelClass = "block text-xs font-medium text-gray-600 mb-1";
 
+/** A group a shift can roster, labelled "Section · Group" since group names repeat. */
+interface GroupOption {
+  id: string;
+  label: string;
+}
+
+function pad(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+/** `YYYY-MM-DD` for a date input, on the local clock. */
+function dateInputValue(d: Date): string {
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+/** `YYYY-MM-DDTHH:mm` for a datetime-local input, on the local clock. */
+function dateTimeInputValue(iso: string): string {
+  const d = new Date(iso);
+  return `${dateInputValue(d)}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 function todayISO(): string {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  return dateInputValue(new Date());
+}
+
+/** Who a shift rosters: its group, or its whole section for older shifts. */
+function shiftGroupLabel(shift: FacultyShift): string | null {
+  if (shift.team) return [shift.section?.name, shift.team.name].filter(Boolean).join(" · ");
+  return shift.section?.name ?? null;
 }
 
 export default function AttendanceClient() {
@@ -78,16 +104,21 @@ export default function AttendanceClient() {
   const [confirm, setConfirm] = useState<ConfirmConfig | null>(null);
 
   const { data, loading, refresh } = usePageData("faculty:attendance", async () => {
-    const [shifts, sections, rooms] = await Promise.all([
+    const [shifts, teams, rooms] = await Promise.all([
       fetchShifts(),
-      fetchSections(),
+      fetchFacultyTeams(),
       fetchRooms(),
     ]);
-    return { shifts, sections, rooms };
+    // The teams route already narrows an instructor to the groups they supervise.
+    const sectionName = new Map((teams?.sections ?? []).map((s) => [s.id, s.name]));
+    const groups: GroupOption[] = (teams?.teams ?? [])
+      .map((t) => ({ id: t.id, label: [sectionName.get(t.section_id), t.name].filter(Boolean).join(" · ") }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+    return { shifts, groups, rooms };
   });
 
   const shifts = data?.shifts ?? NO_SHIFTS;
-  const sections = data?.sections ?? NO_SECTIONS;
+  const groups = data?.groups ?? NO_GROUPS;
   const rooms = data?.rooms ?? NO_ROOMS;
 
   // Headline numbers read across every shift on screen, so a single shift's
@@ -119,20 +150,27 @@ export default function AttendanceClient() {
 
   if (openShiftId) {
     return (
-      <ShiftRoster
-        shiftId={openShiftId}
-        onBack={() => setOpenShiftId(null)}
-        onChanged={refresh}
-        onDelete={(shift) =>
-          setConfirm({
-            title: "Delete this shift?",
-            message: `${shiftTitle(shift)} on ${formatShiftTimeRange(shift)} and its roster will be removed. Cancelling the shift instead keeps the record.`,
-            confirmLabel: "Delete shift",
-            danger: true,
-            onConfirm: () => handleDelete(shift),
-          })
-        }
-      />
+      <>
+        <ShiftRoster
+          shiftId={openShiftId}
+          groups={groups}
+          rooms={rooms}
+          onBack={() => setOpenShiftId(null)}
+          onChanged={refresh}
+          onDelete={(shift) =>
+            setConfirm({
+              title: "Delete this shift?",
+              message: `${shiftTitle(shift)} on ${formatShiftTimeRange(shift)} and its roster will be removed. Cancelling the shift instead keeps the record.`,
+              confirmLabel: "Delete shift",
+              danger: true,
+              onConfirm: () => handleDelete(shift),
+            })
+          }
+        />
+        {confirm && (
+          <ConfirmModal config={confirm} onClose={() => !confirm.loading && setConfirm(null)} />
+        )}
+      </>
     );
   }
 
@@ -148,7 +186,7 @@ export default function AttendanceClient() {
         action={{
           icon: <FontAwesomeIcon icon={faPlus} className="w-4 h-4" />,
           onClick: () => setFormOpen(true),
-          label: "Schedule a new shift for one of your sections",
+          label: "Schedule a new shift for one of your groups",
           text: "Schedule shift",
         }}
       />
@@ -204,7 +242,7 @@ export default function AttendanceClient() {
           />
           <h3 className="text-lg font-semibold text-gray-700">No shifts scheduled yet</h3>
           <p className="mt-1 text-sm text-gray-500">
-            Schedule a shift for one of your sections — every student in it is rostered
+            Schedule a shift for one of your groups — every member is rostered
             automatically, ready to be marked.
           </p>
         </div>
@@ -213,17 +251,17 @@ export default function AttendanceClient() {
       )}
 
       {formOpen && (
-        <ScheduleShiftModal
-          sections={sections}
+        <ShiftFormModal
+          groups={groups}
           rooms={rooms}
           onClose={() => setFormOpen(false)}
-          onCreated={async (assigned) => {
+          onSaved={async (assigned) => {
             setFormOpen(false);
             await refresh();
             toast(
               assigned > 0
                 ? `Shift scheduled — ${assigned} student${assigned === 1 ? "" : "s"} rostered`
-                : "Shift scheduled — no students in that section yet",
+                : "Shift scheduled — no students in that group yet",
             );
           }}
         />
@@ -301,7 +339,7 @@ function shiftTone(shift: FacultyShift): string {
 function shiftChipLabel(shift: FacultyShift): string {
   const start = new Date(shift.starts_at);
   const time = start.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
-  return `${time} ${shift.section?.name ?? SHIFT_TYPE_LABEL[shift.shift_type]}`;
+  return `${time} ${shiftGroupLabel(shift) ?? SHIFT_TYPE_LABEL[shift.shift_type]}`;
 }
 
 /**
@@ -592,7 +630,7 @@ function WeekGrid({
                     className={`absolute inset-x-1 overflow-hidden rounded border px-1.5 py-1 text-left text-[11px] font-medium transition-opacity hover:opacity-80 ${shiftTone(shift)}`}
                   >
                     <span className="block truncate">
-                      {shift.section?.name ?? SHIFT_TYPE_LABEL[shift.shift_type]}
+                      {shiftGroupLabel(shift) ?? SHIFT_TYPE_LABEL[shift.shift_type]}
                     </span>
                     <span className="block truncate text-[10px] opacity-75">
                       {formatShiftTimeRange(shift)}
@@ -608,24 +646,29 @@ function WeekGrid({
   );
 }
 
-function ScheduleShiftModal({
-  sections,
+/** Schedules a new shift, or edits `shift` when one is given. */
+function ShiftFormModal({
+  groups,
   rooms,
+  shift,
   onClose,
-  onCreated,
+  onSaved,
 }: {
-  sections: Section[];
+  groups: GroupOption[];
   rooms: Room[];
+  shift?: FacultyShift;
   onClose: () => void;
-  onCreated: (assigned: number) => void;
+  /** Students rostered, for a new shift. */
+  onSaved: (assigned: number) => void;
 }) {
-  const [sectionId, setSectionId] = useState(sections[0]?.id ?? "");
-  const [shiftType, setShiftType] = useState<ShiftType>("am");
-  const [date, setDate] = useState(todayISO());
-  const [customStart, setCustomStart] = useState("");
-  const [customEnd, setCustomEnd] = useState("");
-  const [roomId, setRoomId] = useState("");
-  const [label, setLabel] = useState("");
+  const editing = !!shift;
+  const [teamId, setTeamId] = useState(shift ? shift.team_id ?? "" : groups[0]?.id ?? "");
+  const [shiftType, setShiftType] = useState<ShiftType>(shift?.shift_type ?? "am");
+  const [date, setDate] = useState(shift ? dateInputValue(new Date(shift.starts_at)) : todayISO());
+  const [customStart, setCustomStart] = useState(shift ? dateTimeInputValue(shift.starts_at) : "");
+  const [customEnd, setCustomEnd] = useState(shift ? dateTimeInputValue(shift.ends_at) : "");
+  const [roomId, setRoomId] = useState(shift?.room_id ?? "");
+  const [label, setLabel] = useState(shift?.label ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -654,33 +697,48 @@ function ScheduleShiftModal({
       setError("The shift must end after it starts.");
       return;
     }
-    if (!sectionId) {
-      setError("Pick a section to roster.");
+    // An older section-wide shift may stay section-wide when edited.
+    if (!teamId && !editing) {
+      setError("Pick a group to roster.");
       return;
     }
 
-    setSaving(true);
-    const result = await createShift({
-      section_id: sectionId,
+    const fields = {
       shift_type: shiftType,
       starts_at: window.starts_at,
       ends_at: window.ends_at,
       room_id: roomId || null,
       label: label.trim() || null,
-    });
+    };
+
+    setSaving(true);
+    if (shift) {
+      const result = await updateShift(shift.id, {
+        details: { ...fields, ...(teamId ? { team_id: teamId } : {}) },
+      });
+      setSaving(false);
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      onSaved(0);
+      return;
+    }
+
+    const result = await createShift({ team_id: teamId, ...fields });
     setSaving(false);
     if (result.error) {
       setError(result.error);
       return;
     }
-    onCreated(result.assigned ?? 0);
+    onSaved(result.assigned ?? 0);
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
       <div className="w-full max-w-md overflow-hidden rounded-xl border border-hairline bg-surface shadow-[0_8px_30px_rgba(0,0,0,0.12)]">
         <div className="flex items-center justify-between border-b border-hairline bg-subtle p-4">
-          <h2 className="text-lg font-bold text-gray-900">Schedule Shift</h2>
+          <h2 className="text-lg font-bold text-gray-900">{editing ? "Edit Shift" : "Schedule Shift"}</h2>
           <button onClick={onClose} className="rounded-lg p-2 transition-colors hover:bg-gray-200">
             <FontAwesomeIcon icon={faTimes} className="h-5 w-5 text-gray-500" />
           </button>
@@ -690,21 +748,26 @@ function ScheduleShiftModal({
           {error && <div className="rounded-lg bg-rose-50 p-3 text-sm text-rose-700">{error}</div>}
 
           <div>
-            <label className={labelClass}>Section</label>
+            <label className={labelClass}>Group</label>
             <select
-              value={sectionId}
-              onChange={(e) => setSectionId(e.target.value)}
+              value={teamId}
+              onChange={(e) => setTeamId(e.target.value)}
               className={inputClass}
             >
-              {sections.length === 0 && <option value="">No sections available</option>}
-              {sections.map((section) => (
-                <option key={section.id} value={section.id}>
-                  {section.name}
+              {groups.length === 0 && !editing && <option value="">No groups available</option>}
+              {editing && !shift?.team_id && (
+                <option value="">{shift?.section?.name ?? "Section"} (whole section)</option>
+              )}
+              {groups.map((group) => (
+                <option key={group.id} value={group.id}>
+                  {group.label}
                 </option>
               ))}
             </select>
             <p className="mt-1 text-xs text-gray-500">
-              Every student in the section is rostered onto the shift.
+              {editing
+                ? "Changing the group swaps the roster for its members, until attendance is marked."
+                : "Every member of the group is rostered onto the shift."}
             </p>
           </div>
 
@@ -805,11 +868,11 @@ function ScheduleShiftModal({
             </button>
             <button
               type="submit"
-              disabled={saving || sections.length === 0}
+              disabled={saving || (!editing && groups.length === 0)}
               className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-700 disabled:opacity-60"
             >
               {saving && <EcgLoader />}
-              Schedule
+              {editing ? "Save changes" : "Schedule"}
             </button>
           </div>
         </form>
@@ -820,11 +883,15 @@ function ScheduleShiftModal({
 
 function ShiftRoster({
   shiftId,
+  groups,
+  rooms,
   onBack,
   onChanged,
   onDelete,
 }: {
   shiftId: string;
+  groups: GroupOption[];
+  rooms: Room[];
   onBack: () => void;
   onChanged: () => void;
   /** Raised to the page, which owns the confirm dialog and the refresh. */
@@ -832,6 +899,7 @@ function ShiftRoster({
 }) {
   const [savingId, setSavingId] = useState<string | null>(null);
   const [bulkSaving, setBulkSaving] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
 
   const { data, loading, refresh } = usePageData(`faculty:shift:${shiftId}`, () =>
     fetchShiftRoster(shiftId),
@@ -917,7 +985,7 @@ function ShiftRoster({
           label: "Attendance",
         }}
         title={shiftTitle(shift)}
-        subtitle={`${shift.section?.name ?? "No section"} · ${formatShiftTimeRange(shift)}${
+        subtitle={`${shiftGroupLabel(shift) ?? "No group"} · ${formatShiftTimeRange(shift)}${
           shift.room ? ` · ${shift.room.name}` : ""
         }`}
       />
@@ -947,6 +1015,13 @@ function ShiftRoster({
             Mark all present
           </button>
           <button
+            onClick={() => setEditOpen(true)}
+            className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+          >
+            <FontAwesomeIcon icon={faPen} className="h-3.5 w-3.5" />
+            Edit
+          </button>
+          <button
             onClick={toggleCancelled}
             className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
           >
@@ -971,7 +1046,9 @@ function ShiftRoster({
           <FontAwesomeIcon icon={faUsers} className="mx-auto mb-4 h-12 w-12 text-gray-300" />
           <h3 className="text-lg font-semibold text-gray-700">No students rostered</h3>
           <p className="mt-1 text-sm text-gray-500">
-            This section had no students when the shift was created.
+            {shift.team_id
+              ? "This group had no members when the shift was created."
+              : "This section had no students when the shift was created."}
           </p>
         </div>
       ) : (
@@ -1020,6 +1097,21 @@ function ShiftRoster({
             ))}
           </ul>
         </div>
+      )}
+
+      {editOpen && (
+        <ShiftFormModal
+          groups={groups}
+          rooms={rooms}
+          shift={shift}
+          onClose={() => setEditOpen(false)}
+          onSaved={async () => {
+            setEditOpen(false);
+            await refresh();
+            onChanged();
+            toast("Shift updated");
+          }}
+        />
       )}
     </div>
   );

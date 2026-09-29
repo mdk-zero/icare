@@ -416,6 +416,8 @@ interface ShiftRow {
   starts_at: string;
   ends_at: string;
   section_id: string | null;
+  /** Migration 064; absent before it. */
+  team_id?: string | null;
   rooms: { name: string; room_number: string } | null;
   shift_assignments: { attendance_status: string }[];
 }
@@ -449,7 +451,7 @@ export async function buildFacultyOverview(
   const traceFrom = weekStart(now) - (TRACE_WEEKS - 1) * 7 * DAY_MS;
   const attemptsFrom = Math.min(traceFrom, now - 2 * RECENT_DAYS * DAY_MS);
 
-  const [sectionRows, scenarioRows, quizRows, attempts, lastActivity, shiftRows] = await Promise.all([
+  const [sectionRows, scenarioRows, quizRows, attempts, lastActivity, shiftRows, teamRows] = await Promise.all([
     sectionIds.length > 0
       ? supabase.from('sections').select('id, name').in('id', sectionIds).order('name')
       : Promise.resolve({ data: [] as { id: string; name: string }[] }),
@@ -489,16 +491,21 @@ export async function buildFacultyOverview(
     sectionIds.length > 0
       ? supabase
           .from('shifts')
-          .select(
-            'id, label, shift_type, starts_at, ends_at, section_id, rooms(name, room_number), shift_assignments(attendance_status)',
-          )
+          // `*` so team_id comes back once 064 is applied and nothing breaks before it.
+          .select('*, rooms(name, room_number), shift_assignments(attendance_status)')
           .in('section_id', sectionIds)
           .eq('status', 'scheduled')
           .gt('ends_at', new Date(now).toISOString())
           .order('starts_at')
-          .limit(4)
+          .limit(20)
       : Promise.resolve({ data: [] as ShiftRow[] }),
+    sectionIds.length > 0
+      ? supabase.from('teams').select('id, name, faculty_id').in('section_id', sectionIds)
+      : Promise.resolve({ data: [] as { id: string; name: string; faculty_id: string | null }[] }),
   ]);
+  const teamById = new Map(
+    ((teamRows.data ?? []) as { id: string; name: string; faculty_id: string | null }[]).map((t) => [t.id, t]),
+  );
 
   const sections = (sectionRows.data ?? []) as { id: string; name: string }[];
   const sectionName = new Map(sections.map((s) => [s.id, s.name]));
@@ -655,21 +662,30 @@ export async function buildFacultyOverview(
     .sort((a, b) => b.urgency - a.urgency || a.student.name.localeCompare(b.student.name));
 
   // ---- Duty -----------------------------------------------------------
-  const upcoming: DutyShift[] = ((shiftRows.data ?? []) as unknown as ShiftRow[]).map((shift) => {
-    const roster = shift.shift_assignments ?? [];
-    return {
-      id: shift.id,
-      label: shift.label,
-      shift_type: shift.shift_type,
-      starts_at: shift.starts_at,
-      ends_at: shift.ends_at,
-      section: shift.section_id ? sectionName.get(shift.section_id) ?? null : null,
-      room: shift.rooms ? `${shift.rooms.name} · ${shift.rooms.room_number}` : null,
-      rostered: roster.length,
-      checked_in: roster.filter((r) => r.attendance_status === 'present' || r.attendance_status === 'late').length,
-      absent: roster.filter((r) => r.attendance_status === 'absent').length,
-    };
-  });
+  // An instructor's duty is their own groups' shifts plus older section-wide ones.
+  const upcoming: DutyShift[] = ((shiftRows.data ?? []) as unknown as ShiftRow[])
+    .filter(
+      (shift) =>
+        session.role !== 'faculty' || !shift.team_id || teamById.get(shift.team_id)?.faculty_id === session.uid,
+    )
+    .slice(0, 4)
+    .map((shift) => {
+      const roster = shift.shift_assignments ?? [];
+      const team = shift.team_id ? teamById.get(shift.team_id) : undefined;
+      const section = shift.section_id ? sectionName.get(shift.section_id) ?? null : null;
+      return {
+        id: shift.id,
+        label: shift.label,
+        shift_type: shift.shift_type,
+        starts_at: shift.starts_at,
+        ends_at: shift.ends_at,
+        section: team ? [section, team.name].filter(Boolean).join(' · ') : section,
+        room: shift.rooms ? `${shift.rooms.name} · ${shift.rooms.room_number}` : null,
+        rostered: roster.length,
+        checked_in: roster.filter((r) => r.attendance_status === 'present' || r.attendance_status === 'late').length,
+        absent: roster.filter((r) => r.attendance_status === 'absent').length,
+      };
+    });
 
   let scoredAt: string | null = null;
   for (const r of risks.values()) {

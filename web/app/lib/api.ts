@@ -2345,6 +2345,8 @@ export async function fetchMyAttendance(): Promise<{
 export interface FacultyShift {
   id: string;
   section_id: string | null;
+  /** The rostered group (migration 064); null on older section-wide shifts. */
+  team_id?: string | null;
   room_id: string | null;
   label: string | null;
   shift_type: 'am' | 'pm' | 'night' | 'custom';
@@ -2354,6 +2356,7 @@ export interface FacultyShift {
   status: 'scheduled' | 'cancelled';
   created_at: string;
   section?: { id: string; name: string } | null;
+  team?: { id: string; name: string } | null;
   room?: { id: string; name: string; room_number: string } | null;
   /** One entry per rostered student, for the list's tallies. */
   statuses: ShiftAttendanceStatus[];
@@ -2384,7 +2387,7 @@ export async function fetchShifts(): Promise<FacultyShift[]> {
 }
 
 export async function createShift(input: {
-  section_id: string;
+  team_id: string;
   shift_type: string;
   starts_at: string;
   ends_at: string;
@@ -2421,12 +2424,21 @@ export async function fetchShiftRoster(
   }
 }
 
-/** Marks attendance for one or many students, and/or cancels the shift. */
+/** Marks attendance for one or many students, cancels the shift, and/or edits its schedule. */
 export async function updateShift(
   shiftId: string,
   payload: {
     marks?: { assignment_id: string; status: ShiftAttendanceStatus; notes?: string }[];
     status?: 'cancelled' | 'scheduled';
+    details?: {
+      team_id?: string;
+      shift_type?: string;
+      starts_at?: string;
+      ends_at?: string;
+      room_id?: string | null;
+      label?: string | null;
+      notes?: string | null;
+    };
   },
 ): Promise<{ updated?: number; error?: string }> {
   try {
