@@ -676,3 +676,59 @@ html {
 .dark .cursor-grab-outlined:active {
   cursor: url("data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2220%22%20height%3D%2220%22%20viewBox%3D%22-48%20-48%20480%20608%22%3E%3Cpath%20d%3D%22M7.4%20253.6C2.6%20245.9%200%20237.1%200%20228l0-36c0-26.5%2021.5-48%2048-48l16%200%200-80c0-26.5%2021.5-48%2048-48%2017.3%200%2032.4%209.1%2040.9%2022.8%204.3-22.1%2023.8-38.8%2047.1-38.8%2023.4%200%2042.9%2016.8%2047.1%2038.9%207.3-4.4%2015.8-6.9%2024.9-6.9%2022.1%200%2040.8%2015%2046.3%2035.4%205.5-2.2%2011.4-3.4%2017.7-3.4%2026.5%200%2048%2021.5%2048%2048l0%2096.9c0%209.9-2.3%2019.7-6.8%2028.6l-39.6%2079.1c-10.8%2021.7-33%2035.4-57.2%2035.4L96%20352c-16.5%200-31.8-8.4-40.6-22.4l-48-76zM32%20480l0-48c0-17.7%2014.3-32%2032-32l256%200c17.7%200%2032%2014.3%2032%2032l0%2048c0%2017.7-14.3%2032-32%2032L64%20512c-17.7%200-32-14.3-32-32z%22%20fill%3D%22%23111827%22%20stroke%3D%22%23ffffff%22%20stroke-width%3D%2244%22%20stroke-linejoin%3D%22round%22%20paint-order%3D%22stroke%22%2F%3E%3C%2Fsvg%3E") 10 10, grabbing;
 }
+
+/* Ward floor plan (FloorPlanDrawing.tsx): a drafting sheet in light mode, a
+   blueprint in dark. Floors and beds keep the occupancy hues the rest of the
+   app uses for rooms (emerald, amber, rose); walls are ink on paper. */
+:root {
+  --plan-paper: #fbfaf5;
+  --plan-grid: rgba(64, 76, 84, 0.07);
+  --plan-grid-major: rgba(64, 76, 84, 0.15);
+  --plan-wall: #26313a;
+  --plan-line: #6b7780;
+  --plan-ink: #1c252c;
+  --plan-muted: #5d6970;
+  --plan-corridor: #efeee6;
+  --plan-floor-available: #e3f4ea;
+  --plan-floor-crowded: #fbf0d9;
+  --plan-floor-full: #fbe3e6;
+  --plan-floor-offline: #eceeef;
+  --plan-bed-available: #059669;
+  --plan-bed-crowded: #d97706;
+  --plan-bed-full: #e11d48;
+  --plan-bed-offline: #6b7280;
+}
+.dark {
+  --plan-paper: #0c2533;
+  --plan-grid: rgba(125, 211, 236, 0.07);
+  --plan-grid-major: rgba(125, 211, 236, 0.16);
+  --plan-wall: #cdeff7;
+  --plan-line: #7fb3c4;
+  --plan-ink: #e6f6fa;
+  --plan-muted: #93bccb;
+  --plan-corridor: #0f2f40;
+  --plan-floor-available: rgba(16, 185, 129, 0.16);
+  --plan-floor-crowded: rgba(245, 158, 11, 0.17);
+  --plan-floor-full: rgba(244, 63, 94, 0.18);
+  --plan-floor-offline: rgba(148, 163, 184, 0.1);
+  --plan-bed-available: #10b981;
+  --plan-bed-crowded: #f59e0b;
+  --plan-bed-full: #f43f5e;
+  --plan-bed-offline: #64748b;
+}
+
+/* Blocks settle onto the sheet one after another on first draw. */
+@keyframes plan-block-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.98);
+  }
+}
+.plan-block-in {
+  animation: plan-block-in 420ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .plan-block-in {
+    animation: none;
+  }
+}

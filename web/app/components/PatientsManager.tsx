@@ -38,14 +38,16 @@ import {
   deleteFacultyPatient,
   setPatientAdmission,
   fetchRooms,
+  fetchWardFixtures,
   saveRoomLayout,
   deleteRoom,
   FacultyPatient,
   Room,
+  WardFixture,
   RoomPlacement,
 } from "../lib/api";
 import { SkeletonUnitGrid, SkeletonStatTile } from "./skeletons";
-import { FloorPlanCanvas, FloorPlanEditor, layoutFromRooms, Layout, Rect } from "./FloorPlan";
+import { FloorPlanCanvas, FloorPlanEditor, planChanges, planFromServer, type PlanDraft } from "./FloorPlan";
 import { RoomFormModal, RoomStudentsModal } from "./RoomModals";
 import { roomStatus, ROOM_STATUS_LABEL, ROOM_STATUS_TONE } from "../lib/rooms";
 import PageHeader from "./PageHeader";
@@ -170,6 +172,7 @@ const NO_FILTERS: Filters = {
 // Stable empty fallbacks, so the filter memos are not invalidated every render.
 const NO_PATIENTS: FacultyPatient[] = [];
 const NO_ROOMS: Room[] = [];
+const NO_FIXTURES: WardFixture[] = [];
 
 /**
  * One bucket function per filter, used for both the matching and the option
@@ -429,11 +432,6 @@ interface PatientsManagerProps {
 }
 
 /** Placement equality; two absent placements are the same placement. */
-function sameRect(a: Rect | null | undefined, b: Rect | null | undefined): boolean {
-  if (!a || !b) return !a === !b;
-  return a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h;
-}
-
 export default function PatientsManager({
   badgeLabel = "Patient Management",
   title = "Patient Records",
@@ -461,9 +459,9 @@ export default function PatientsManager({
   const [checkInBusy, setCheckInBusy] = useState(false);
   const [checkInError, setCheckInError] = useState<string | null>(null);
   // Layout editing (manageRooms). null draft = mirror the server; an object =
-  // unsaved moves in progress.
+  // unsaved moves, doors and fixtures in progress.
   const [editingLayout, setEditingLayout] = useState(false);
-  const [draftLayout, setDraftLayout] = useState<Layout | null>(null);
+  const [draftPlan, setDraftPlan] = useState<PlanDraft | null>(null);
   const [savingLayout, setSavingLayout] = useState(false);
   // undefined = room form closed, null = adding a room, a Room = editing it.
   const [roomForm, setRoomForm] = useState<Room | null | undefined>(undefined);
@@ -476,13 +474,19 @@ export default function PatientsManager({
     data,
     loading,
     refresh: loadPatients,
-  } = usePageData("patients-manager", async () => {
-    const [patients, rooms] = await Promise.all([fetchFacultyPatients(), fetchRooms()]);
-    return { patients, rooms };
+  } = usePageData(showFloorPlan ? "patients-manager:plan" : "patients-manager", async () => {
+    // The plan's corridors and stations only matter where the plan is drawn.
+    const [patients, rooms, plan] = await Promise.all([
+      fetchFacultyPatients(),
+      fetchRooms(),
+      showFloorPlan ? fetchWardFixtures() : Promise.resolve({ fixtures: NO_FIXTURES, enabled: false }),
+    ]);
+    return { patients, rooms, fixtures: plan.fixtures, fixturesEnabled: plan.enabled };
   });
 
   const patients = data?.patients ?? NO_PATIENTS;
   const rooms = data?.rooms ?? NO_ROOMS;
+  const fixtures = data?.fixtures ?? NO_FIXTURES;
 
   const query = search.trim().toLowerCase();
   const roomQuery = roomSearch.trim().toLowerCase();
@@ -610,42 +614,39 @@ export default function PatientsManager({
     [filteredPatients],
   );
 
-  const serverLayout = useMemo(() => layoutFromRooms(rooms), [rooms]);
-  const workingLayout = draftLayout ?? serverLayout;
+  const fixturesEnabled = data?.fixturesEnabled ?? false;
+  const serverPlan = useMemo(() => planFromServer(rooms, fixtures), [rooms, fixtures]);
+  const workingPlan = draftPlan ?? serverPlan;
+  const pendingChanges = useMemo(
+    () => (draftPlan ? planChanges(draftPlan, serverPlan, rooms) : null),
+    [draftPlan, serverPlan, rooms],
+  );
   const layoutDirty =
-    draftLayout !== null && rooms.some((r) => !sameRect(draftLayout[r.id], serverLayout[r.id]));
-
-  const handleLayoutChange = (roomId: string, rect: Rect | null) => {
-    setDraftLayout({ ...workingLayout, [roomId]: rect });
-  };
+    !!pendingChanges && (pendingChanges.positions.length > 0 || pendingChanges.fixturesChanged);
 
   const handleLayoutSave = async () => {
-    if (!draftLayout) return;
-    // Only the placements that actually moved; the audit row stays honest.
-    const positions: RoomPlacement[] = rooms
-      .filter((r) => !sameRect(draftLayout[r.id], serverLayout[r.id]))
-      .map((r) => {
-        const rect = draftLayout[r.id] ?? null;
-        return rect
-          ? { id: r.id, x: rect.x, y: rect.y, w: rect.w, h: rect.h }
-          : { id: r.id, x: null, y: null, w: null, h: null };
-      });
-    if (positions.length === 0) return;
+    if (!draftPlan || !pendingChanges || !layoutDirty) return;
+    // Only the rooms that actually moved; the audit row stays honest. The
+    // fixture set goes whole, and only when it changed.
+    const positions: RoomPlacement[] = pendingChanges.positions;
     setSavingLayout(true);
-    const result = await saveRoomLayout(positions);
+    const result = await saveRoomLayout(
+      positions,
+      pendingChanges.fixturesChanged ? draftPlan.fixtures : undefined,
+    );
     setSavingLayout(false);
     if (result.error) {
       toast(result.error, "error");
       return;
     }
-    setDraftLayout(null);
+    setDraftPlan(null);
     await loadPatients();
     toast("Room layout saved");
   };
 
   const finishLayoutEdit = () => {
     if (layoutDirty && !window.confirm("Discard your unsaved layout changes?")) return;
-    setDraftLayout(null);
+    setDraftPlan(null);
     setEditingLayout(false);
   };
 
@@ -1047,7 +1048,7 @@ export default function PatientsManager({
                   Add Room
                 </button>
                 <button
-                  onClick={() => setDraftLayout(null)}
+                  onClick={() => setDraftPlan(null)}
                   disabled={!layoutDirty || savingLayout}
                   className="inline-flex items-center gap-2 px-3 py-2 border border-gray-200 bg-surface text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-40"
                 >
@@ -1095,16 +1096,18 @@ export default function PatientsManager({
           {editingLayout ? (
             <>
               <p className="mb-3 text-sm text-gray-500">
-                Drag a room to move it, use the corner grip to resize, and place new rooms from the
-                tray. Click a room for its students, details, or to delete it. Moves apply after{" "}
+                Drag rooms, corridors and stations onto the sheet from below, move them around, and
+                use the corner grip to resize. Click a room to turn its door, see its students, or
+                edit it. Changes to the plan apply after{" "}
                 <span className="font-medium text-gray-700">Save Layout</span>; room edits and
                 deletions apply immediately.
               </p>
               <FloorPlanEditor
                 rooms={rooms}
-                layout={workingLayout}
+                plan={workingPlan}
                 occupancy={occupancyByRoom}
-                onChange={handleLayoutChange}
+                fixturesEnabled={fixturesEnabled}
+                onPlanChange={setDraftPlan}
                 onEditRoom={(room) => setRoomForm(room)}
                 onDeleteRoom={openDeleteRoomConfirm}
                 onRosterRoom={setRosterRoom}
@@ -1114,6 +1117,7 @@ export default function PatientsManager({
             <>
               <FloorPlanCanvas
                 rooms={rooms}
+                fixtures={fixtures}
                 occupancy={occupancyByRoom}
                 dimmedUnless={filtersActive ? matchingRoomIds : undefined}
                 onRoomClick={(room) => {
