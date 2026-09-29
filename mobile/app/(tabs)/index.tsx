@@ -210,10 +210,12 @@ export default function DashboardScreen() {
     },
   ];
 
+  // A zero count reads as a dash, like an average with nothing to average.
+  const countValue = (n: number) => (n === 0 ? "—" : String(n));
   const stats = [
     {
       label: "Pending Tasks",
-      value: String(openTasks.length),
+      value: countValue(openTasks.length),
       icon: "clipboard-list",
       accent: Accent.teal,
       href: "/clinic",
@@ -227,14 +229,14 @@ export default function DashboardScreen() {
     },
     {
       label: "Quizzes Available",
-      value: String(quizzesAvailable),
+      value: countValue(quizzesAvailable),
       icon: "file-lines",
       accent: Accent.violet,
       href: "/quiz",
     },
     {
       label: "My Patients",
-      value: String(patients.length),
+      value: countValue(patients.length),
       icon: "hospital-user",
       accent: Accent.cyan,
       href: "/clinic",
