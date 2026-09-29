@@ -3,8 +3,7 @@ import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { requireSuperAdmin } from '@/app/lib/auth/super-admin';
 import { sendAccessRequestDeclined } from '@/app/lib/auth/email';
 import { logAudit } from '@/app/lib/audit';
-
-const DEV_TEAM_EMAIL = (process.env.DEV_TEAM_EMAILS || 'contact@i-care.dev').split(',')[0].trim();
+import { CONTACT_EMAIL } from '@/app/lib/dev-team';
 
 /**
  * Accept or decline a sign-up page account request. The request lives only in
@@ -80,7 +79,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     if (status === 'declined' && typeof requester.email === 'string') {
       try {
-        await sendAccessRequestDeclined(requester.email, DEV_TEAM_EMAIL);
+        await sendAccessRequestDeclined(requester.email, CONTACT_EMAIL);
       } catch (err) {
         // The decision stands even if the courtesy email bounces.
         console.error('Access request decline email failed', err);

@@ -3,11 +3,7 @@ import { findPendingAccessRequest } from '@/app/lib/access-requests';
 import { sendAccessRequestEmail } from '@/app/lib/auth/email';
 import { clientIp, consumeRateLimit } from '@/app/lib/auth/rate-limit';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
-
-const DEV_TEAM_EMAILS = (process.env.DEV_TEAM_EMAILS || 'contact@i-care.dev')
-  .split(',')
-  .map((e) => e.trim())
-  .filter(Boolean);
+import { DEV_TEAM_EMAILS } from '@/app/lib/dev-team';
 
 const MAX_MESSAGE = 2000;
 const DAY_MS = 24 * 60 * 60 * 1000;

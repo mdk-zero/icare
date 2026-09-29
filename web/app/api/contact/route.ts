@@ -5,14 +5,7 @@ import { clientIp, consumeRateLimit } from '@/app/lib/auth/rate-limit';
 import { findPendingAccessRequest } from '@/app/lib/access-requests';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { clearGoogleOnboardingCookie, readGoogleOnboarding } from '@/app/lib/auth/session';
-
-// Where access requests land: the project's own inbox on i-care.dev, which
-// the registrar forwards on to the dev team. Overridable per deployment with a
-// comma-separated DEV_TEAM_EMAILS.
-const DEV_TEAM_EMAILS = (process.env.DEV_TEAM_EMAILS || 'contact@i-care.dev')
-  .split(',')
-  .map((e) => e.trim())
-  .filter(Boolean);
+import { CONTACT_EMAIL, DEV_TEAM_EMAILS } from '@/app/lib/dev-team';
 
 const MAX_REQUESTS = 3;
 const WINDOW_MS = 60 * 60 * 1000; // an hour
@@ -156,7 +149,7 @@ export async function POST(request: NextRequest) {
   // The team's copy is what matters; a receipt that bounces (a typo'd address,
   // say) must not turn a delivered request into an error the person retries.
   try {
-    await sendAccessRequestReceipt(email, DEV_TEAM_EMAILS[0]);
+    await sendAccessRequestReceipt(email, CONTACT_EMAIL);
   } catch (err) {
     console.error('Contact receipt failed', err);
   }
