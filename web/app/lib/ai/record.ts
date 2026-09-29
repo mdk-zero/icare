@@ -1,6 +1,6 @@
 import { getSupabaseAdmin } from '../supabase/server';
 
-export type AiProvider = 'gemini' | 'openrouter';
+export type AiProvider = 'anthropic' | 'gemini' | 'openrouter';
 
 /**
  * fetch() to an AI provider that also logs the call to request_metrics as

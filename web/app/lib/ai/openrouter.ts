@@ -4,7 +4,7 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function extractJson(text: string): string | null {
+export function extractJson(text: string): string | null {
   // Some models wrap JSON in markdown code fences.
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
   if (fenced && fenced[1]) {

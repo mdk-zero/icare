@@ -86,7 +86,11 @@ async function checkMl(): Promise<Check> {
 
 function checkConfig(): Check[] {
   const mail = getProvider();
-  const ai = [process.env.GEMINI_API_KEY && 'Gemini', process.env.OPENROUTER_API_KEY && 'OpenRouter'].filter(Boolean);
+  const ai = [
+    process.env.ANTHROPIC_API_KEY && 'Claude',
+    process.env.GEMINI_API_KEY && 'Gemini',
+    process.env.OPENROUTER_API_KEY && 'OpenRouter',
+  ].filter(Boolean);
   const secret = process.env.SESSION_SECRET ?? '';
   return [
     {
@@ -98,7 +102,7 @@ function checkConfig(): Check[] {
     {
       id: 'ai',
       label: 'AI providers',
-      status: ai.length === 2 ? 'pass' : ai.length === 1 ? 'warn' : 'fail',
+      status: ai.length >= 2 ? 'pass' : ai.length === 1 ? 'warn' : 'fail',
       detail: ai.length ? `Keys present: ${ai.join(', ')}${ai.length === 1 ? ' (no fallback)' : ''}` : 'No AI key set',
     },
     {

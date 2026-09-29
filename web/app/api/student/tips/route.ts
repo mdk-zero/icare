@@ -19,7 +19,7 @@ import { callAI, aiErrorResponse } from '@/app/lib/ai/generate';
  * from the caller.
  */
 
-// A single generation plus the OpenRouter fallback chain can outrun the
+// A single generation plus the Gemini/OpenRouter fallback chain can outrun the
 // default 10s budget; the students hitting this are on mobile networks.
 export const maxDuration = 30;
 

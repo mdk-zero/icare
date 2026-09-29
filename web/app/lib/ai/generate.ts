@@ -1,3 +1,4 @@
+import { callAnthropic } from './anthropic';
 import { callOpenRouter } from './openrouter';
 import { providerFetch } from './record';
 import { headers } from 'next/headers';
@@ -104,23 +105,31 @@ async function enforceAiBudget(): Promise<void> {
   if (!allowed) throw new AiRateLimitedError('AI is busy right now. Please try again later.');
 }
 
-/** Gemini first (JSON mode), falling back to the OpenRouter free-model chain. */
+const PROVIDERS: { name: string; call: (prompt: string) => Promise<Record<string, unknown>> }[] = [
+  { name: 'Claude', call: callAnthropic },
+  { name: 'Gemini', call: callGemini },
+  { name: 'OpenRouter', call: callOpenRouter },
+];
+
+/**
+ * Claude Haiku first, falling back to Gemini (JSON mode) and then the
+ * OpenRouter free-model chain. A provider without a key fails instantly, so
+ * an unset ANTHROPIC_API_KEY just skips straight to Gemini.
+ */
 export async function callAI(prompt: string): Promise<Record<string, unknown>> {
   await enforceAiBudget();
-  try {
-    return await callGemini(prompt);
-  } catch (geminiErr) {
-    console.warn('Gemini failed, falling back to OpenRouter', geminiErr instanceof Error ? geminiErr.message : geminiErr);
+  const errors: string[] = [];
+  for (const [i, provider] of PROVIDERS.entries()) {
     try {
-      return await callOpenRouter(prompt);
-    } catch (openrouterErr) {
-      const messages = [
-        geminiErr instanceof Error ? geminiErr.message : 'Gemini failed',
-        openrouterErr instanceof Error ? openrouterErr.message : 'OpenRouter failed',
-      ];
-      throw new Error(messages.join('; '));
+      return await provider.call(prompt);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : `${provider.name} failed`;
+      errors.push(message);
+      const next = PROVIDERS[i + 1];
+      if (next) console.warn(`${provider.name} failed, falling back to ${next.name}`, message);
     }
   }
+  throw new Error(errors.join('; '));
 }
 
 /** Maps a raw AI-failure message to the HTTP response the faculty UI expects. */
