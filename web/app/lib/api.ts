@@ -617,7 +617,11 @@ export interface Room {
   plan_y: number | null;
   plan_w: number | null;
   plan_h: number | null;
+  /** Wall the door is drawn in; null (or absent before migration 062) = south. */
+  plan_door?: DoorSide | null;
 }
+
+export type DoorSide = 'n' | 'e' | 's' | 'w';
 
 /** One room's floor-plan rectangle, or all-null to remove it from the plan. */
 export interface RoomPlacement {
@@ -626,17 +630,62 @@ export interface RoomPlacement {
   y: number | null;
   w: number | null;
   h: number | null;
+  /** Only sent when the door moved; needs migration 062. */
+  door?: DoorSide;
 }
 
+export const WARD_FIXTURE_KINDS = [
+  'corridor',
+  'nurse_station',
+  'stairs',
+  'elevator',
+  'restroom',
+  'storage',
+  'label',
+] as const;
+export type WardFixtureKind = (typeof WARD_FIXTURE_KINDS)[number];
+
+/** Anything on the floor plan that is not a room (migration 062). */
+export interface WardFixture {
+  id: string;
+  kind: WardFixtureKind;
+  label: string;
+  plan_x: number;
+  plan_y: number;
+  plan_w: number;
+  plan_h: number;
+}
+
+/** The plan's fixtures; `enabled` is false until migration 062 is applied. */
+export async function fetchWardFixtures(): Promise<{ fixtures: WardFixture[]; enabled: boolean }> {
+  try {
+    const res = await apiFetch('/api/admin/rooms/fixtures', { credentials: 'include' });
+    if (!res.ok) {
+      console.error('fetchWardFixtures() failed', res.status);
+      return { fixtures: [], enabled: false };
+    }
+    const json = (await res.json()) as { fixtures?: WardFixture[]; enabled?: boolean };
+    return { fixtures: json.fixtures ?? [], enabled: json.enabled ?? false };
+  } catch (err) {
+    console.error('fetchWardFixtures() failed', err);
+    return { fixtures: [], enabled: false };
+  }
+}
+
+/**
+ * Saves changed room placements and, when `fixtures` is given, replaces the
+ * plan's whole fixture set with it (new ones may carry a client-made uuid).
+ */
 export async function saveRoomLayout(
   positions: RoomPlacement[],
+  fixtures?: WardFixture[],
 ): Promise<{ saved?: number; error?: string }> {
   try {
     const res = await apiFetch('/api/admin/rooms/layout', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({ positions }),
+      body: JSON.stringify(fixtures ? { positions, fixtures } : { positions }),
     });
     const json = (await res.json()) as { saved?: number; error?: string };
     if (!res.ok) return { error: json.error || 'Unable to save the floor plan' };
