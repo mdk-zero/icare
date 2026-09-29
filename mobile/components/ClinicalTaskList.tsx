@@ -1,0 +1,107 @@
+import React from 'react';
+import { View, Text, StyleSheet } from 'react-native';
+import { Radius, Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
+import type { ScenarioTask } from '@/lib/api';
+import { TASK_RATING_LABEL, type TaskRating } from '@/lib/task-ratings';
+
+/**
+ * A scenario's clinical tasks as a numbered list. It is not a checklist the
+ * student works through: the instructor watches the demonstration and grades
+ * each task, so the only thing on the right is that grade — a dash until the
+ * instructor's saved grade is released.
+ */
+export function ClinicalTaskList({ tasks }: { tasks: ScenarioTask[] }) {
+  const { Palette, Accent, Type } = useTheme();
+  const styles = React.useMemo(() => createStyles(Palette, Type), [Palette, Type]);
+
+  const gradeAccent: Record<TaskRating, { fg: string; bg: string }> = {
+    excellent: Accent.green,
+    satisfactory: Accent.blue,
+    needs_practice: Accent.amber,
+  };
+
+  return (
+    <View>
+      {tasks.map((task, idx) => {
+        const rating = task.rating && TASK_RATING_LABEL[task.rating] ? task.rating : null;
+        const accent = rating ? gradeAccent[rating] : null;
+        return (
+          <View key={task.id} style={[styles.row, idx === tasks.length - 1 && styles.rowLast]}>
+            <Text style={styles.number}>{String(idx + 1).padStart(2, '0')}</Text>
+            <View style={styles.body}>
+              <Text style={styles.title}>{task.title}</Text>
+              {task.description ? <Text style={styles.description}>{task.description}</Text> : null}
+              {task.remarks ? <Text style={styles.remarks}>{task.remarks}</Text> : null}
+            </View>
+            {accent && rating ? (
+              <Text
+                style={[styles.grade, { color: accent.fg, backgroundColor: accent.bg }]}
+                accessibilityLabel={`Graded ${TASK_RATING_LABEL[rating]}`}
+              >
+                {TASK_RATING_LABEL[rating]}
+              </Text>
+            ) : (
+              <Text style={styles.ungraded} accessibilityLabel="Not graded yet">
+                —
+              </Text>
+            )}
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+function createStyles(
+  Palette: ReturnType<typeof useTheme>['Palette'],
+  Type: ReturnType<typeof useTheme>['Type'],
+) {
+  return StyleSheet.create({
+    row: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: Spacing.md,
+      paddingVertical: Spacing.md,
+      borderBottomWidth: 1,
+      borderBottomColor: Palette.borderLight,
+    },
+    rowLast: { borderBottomWidth: 0 },
+    number: {
+      width: 22,
+      fontSize: 12,
+      fontWeight: '800',
+      color: Palette.textMuted,
+      marginTop: 2,
+      fontVariant: ['tabular-nums'],
+    },
+    body: { flex: 1 },
+    title: { ...Type.itemTitle },
+    description: { fontSize: 12, color: Palette.textSecondary, marginTop: 2, lineHeight: 17 },
+    remarks: {
+      fontSize: 12,
+      color: Palette.text,
+      lineHeight: 17,
+      marginTop: 6,
+      padding: Spacing.sm,
+      borderRadius: Radius.sm,
+      backgroundColor: Palette.borderLight,
+    },
+    grade: {
+      fontSize: 11,
+      fontWeight: '700',
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: Radius.pill,
+      overflow: 'hidden',
+      marginTop: 1,
+    },
+    ungraded: {
+      minWidth: 24,
+      textAlign: 'center',
+      fontSize: 15,
+      fontWeight: '700',
+      color: Palette.textMuted,
+    },
+  });
+}

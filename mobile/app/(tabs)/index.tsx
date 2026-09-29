@@ -274,10 +274,10 @@ export default function DashboardScreen() {
             <Text style={styles.dateText}>{dateStr}</Text>
           </View>
         </View>
-        {/* The only way into the profile now that it has no tab of its own. */}
+        {/* A shortcut to the Profile tab. */}
         <Pressable
           style={({ pressed }) => [pressed && styles.pressedDim]}
-          onPress={() => router.push("/profile")}
+          onPress={() => router.navigate("/profile")}
           hitSlop={6}
           accessibilityRole="button"
           accessibilityLabel="Open profile"
