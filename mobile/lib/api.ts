@@ -302,6 +302,8 @@ export interface StudentAssessment {
   title: string;
   description: string;
   category: string;
+  /** The instructor who made the quiz. */
+  author_name?: string | null;
   time_limit_seconds: number | null;
   question_count: number;
   assignment: {
@@ -326,6 +328,24 @@ export async function fetchAssessments(): Promise<CachedResult<StudentAssessment
   return { ...result, data: result.data.assessments ?? [] };
 }
 
+export interface Flashcard {
+  id: string;
+  question: string;
+  answer: string;
+  explanation: string | null;
+}
+
+/**
+ * A finished quiz's questions as study cards (question → right answer). The
+ * server only opens them after a submitted attempt. Cached, so a student can
+ * keep studying offline.
+ */
+export async function fetchFlashcards(
+  assessmentId: string,
+): Promise<CachedResult<{ title: string; cards: Flashcard[] }>> {
+  return cachedGet<{ title: string; cards: Flashcard[] }>(`/api/student/assessments/${assessmentId}/flashcards`);
+}
+
 export interface AttemptQuestion {
   id: string;
   position: number;
@@ -342,6 +362,8 @@ export interface StartedAttempt {
   attempt_number?: number;
   max_attempts?: number | null;
   attempts_remaining?: number | null;
+  /** The last attempt was left open past its time limit and was closed; this one is new. */
+  previous_expired?: boolean;
 }
 
 export async function startAttempt(assessmentId: string): Promise<StartedAttempt> {

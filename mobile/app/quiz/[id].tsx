@@ -161,6 +161,12 @@ export default function QuizInterfaceScreen() {
       .then((attempt) => {
         if (cancelled) return;
         setStarted(attempt);
+        if (attempt.previous_expired) {
+          Alert.alert(
+            'New attempt',
+            'Your last attempt was left open past its time limit, so it was closed. This is a fresh one.',
+          );
+        }
         const limit = attempt.assessment.time_limit_seconds;
         if (limit) {
           // A resumed attempt keeps its original clock. A fresh one starts
