@@ -1,12 +1,5 @@
 import React from "react";
-import {
-  ScrollView,
-  View,
-  Text,
-  StyleSheet,
-  Pressable,
-  RefreshControl,
-} from "react-native";
+import { ScrollView, View, Text, StyleSheet, Pressable, RefreshControl } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { FontAwesome6 } from "@expo/vector-icons";
@@ -77,8 +70,26 @@ function getHonorific(sex?: "male" | "female" | null): string | null {
  * that greets "Juan Santos Dela Cruz" as "Mr. Cruz".
  */
 const SURNAME_PARTICLES = new Set([
-  "de", "del", "dela", "delas", "delos", "della", "di", "da", "das", "dos",
-  "la", "las", "los", "san", "santa", "sta", "sto", "van", "von", "bin",
+  "de",
+  "del",
+  "dela",
+  "delas",
+  "delos",
+  "della",
+  "di",
+  "da",
+  "das",
+  "dos",
+  "la",
+  "las",
+  "los",
+  "san",
+  "santa",
+  "sta",
+  "sto",
+  "van",
+  "von",
+  "bin",
 ]);
 
 /** Generational and credential suffixes; never part of the surname. */
@@ -125,7 +136,10 @@ function getAddressedName(user: { name?: string; sex?: "male" | "female" | null 
  * profile screen shows, which this avatar opens.
  */
 function getInitials(name?: string) {
-  const words = (name ?? "").trim().split(/\s+/).filter((w) => /[\p{L}\p{N}]/u.test(w));
+  const words = (name ?? "")
+    .trim()
+    .split(/\s+/)
+    .filter((w) => /[\p{L}\p{N}]/u.test(w));
   if (words.length === 0) return "S";
   const letterOf = (w: string) => w.match(/[\p{L}\p{N}]/u)?.[0] ?? "";
   const last = words.length > 1 ? letterOf(words[words.length - 1]) : "";
@@ -188,27 +202,6 @@ export default function DashboardScreen() {
         )
       : null;
   const quizzesAvailable = assessments.filter((a) => a.attempt_count === 0).length;
-
-  // Shift handover, in the ward's own terms. Both lines come from data this
-  // screen already loads, so they move with the day rather than being decor.
-  const handover = [
-    {
-      icon: "hospital-user",
-      color: Accent.cyan.fg,
-      text:
-        patients.length === 0
-          ? "No patients assigned to you yet"
-          : `${patients.length} patient${patients.length === 1 ? "" : "s"} under your care`,
-    },
-    {
-      icon: "clipboard-list",
-      color: openTasks.length === 0 ? Accent.green.fg : Accent.amber.fg,
-      text:
-        openTasks.length === 0
-          ? "Nothing pending — your list is clear"
-          : `${openTasks.length} task${openTasks.length === 1 ? "" : "s"} pending this shift`,
-    },
-  ];
 
   // A zero count reads as a dash, like an average with nothing to average.
   const countValue = (n: number) => (n === 0 ? "—" : String(n));
@@ -297,16 +290,6 @@ export default function DashboardScreen() {
             </LinearGradient>
           )}
         </Pressable>
-      </Animated.View>
-
-      {/* Shift handover */}
-      <Animated.View entering={FadeInDown.duration(220).delay(20)} style={styles.handover}>
-        {handover.map((line) => (
-          <View key={line.text} style={styles.handoverRow}>
-            <FontAwesome6 name={line.icon} size={12} solid color={line.color} />
-            <Text style={styles.handoverText}>{line.text}</Text>
-          </View>
-        ))}
       </Animated.View>
 
       {/* Next Up hero */}
@@ -471,23 +454,6 @@ function createStyles(
       fontWeight: "800",
       letterSpacing: 0.8,
       color: Accent.green.fg,
-    },
-    handover: {
-      borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: Palette.border,
-      paddingTop: Spacing.md,
-      marginBottom: Spacing.lg,
-      gap: Spacing.xs + 2,
-    },
-    handoverRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: Spacing.sm,
-    },
-    handoverText: {
-      fontSize: 13,
-      fontWeight: "500",
-      color: Palette.text,
     },
     greetingText: {
       flex: 1,
