@@ -1234,7 +1234,7 @@ export default function FacultyScenariosClient() {
                       >
                         <span aria-hidden className="absolute left-0 inset-y-0 w-1 bg-[var(--hue)]" />
                         <span className="flex items-start justify-between gap-3">
-                          <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--hue)]">
+                          <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-brand-700">
                             {draft.chapter ? `Chapter ${draft.chapter} · ${chapterName(draft.chapter)}` : "Patient case"}
                           </span>
                           <input

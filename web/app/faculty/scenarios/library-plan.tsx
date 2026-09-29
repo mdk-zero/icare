@@ -13,13 +13,13 @@ import {
 export const TAUGHT_CHAPTERS = TAYLORS_CHAPTERS.filter((c) => ACTIVE_CHAPTERS.includes(c.chapter));
 
 /**
- * One chart-series hue per taught chapter (already stepped for dark mode in
- * globals.css): red for vital signs, blue for oxygen, green for fluids.
+ * Each taught chapter's step of the brand teal (--color-chapter-N in
+ * globals.css, restated for dark mode), so the modal stays in the app's palette.
  */
 const CHAPTER_HUE: Record<number, string> = {
-  1: "var(--color-series-8)",
-  14: "var(--color-series-1)",
-  15: "var(--color-series-3)",
+  1: "var(--color-chapter-1)",
+  14: "var(--color-chapter-14)",
+  15: "var(--color-chapter-15)",
 };
 
 export function chapterHue(chapter: number | undefined): string {
@@ -103,7 +103,7 @@ export function ChapterCard({
           aria-hidden
           className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all ${
             selected
-              ? "bg-[var(--hue)] border-[var(--hue)] text-white"
+              ? "bg-[var(--hue)] border-[var(--hue)] text-surface"
               : "border-gray-300 text-transparent group-hover:border-[var(--hue)]"
           }`}
         >

@@ -94,6 +94,14 @@
   --color-group-4: #3f9a5c;
   --color-group-5: #c4527c;
   --color-group-6: #3f6fc0;
+
+  /*
+   * The taught Taylor's chapters (1, 14, 15), as three steps of the brand
+   * teal rather than new hues, far enough apart to tell apart in a tile strip.
+   */
+  --color-chapter-1: #2b899f;
+  --color-chapter-14: #1b6b7b;
+  --color-chapter-15: #103e46;
 }
 
 @keyframes fadeInUp {
@@ -267,6 +275,9 @@
   --color-group-4: #4fb877;
   --color-group-5: #e0729a;
   --color-group-6: #6b98e6;
+  --color-chapter-1: #26788a;
+  --color-chapter-14: #46a5b4;
+  --color-chapter-15: #a3dbe4;
 
   /*
    * Brand lifts in dark, but only to mid-teal. 600 has to serve two masters:
