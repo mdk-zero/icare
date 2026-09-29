@@ -63,11 +63,12 @@ export interface WallBlock {
 }
 
 /**
- * How one block draws its walls. A side it shares with a neighbour sits on
- * the shared edge instead of just inside it, so the two blocks draw the same
- * line and it reads as one wall, not two side by side. Gaps (plan units from
- * the side's top or left end) are its own door and any neighbour's door in
- * that shared wall.
+ * How one block draws its walls. On the plan every wall is centred on its
+ * grid line ("flush"), so walls that continue one another line up and two
+ * blocks that touch draw one wall, not two side by side. Only walls on the
+ * sheet's outer edge sit just inside it, all of them alike. Gaps (plan units
+ * from the side's top or left end) are its own door and any neighbour's door
+ * in a shared wall.
  */
 export interface WallSpec {
   flush: Record<DoorSide, boolean>;
@@ -103,17 +104,22 @@ function emptySpec(): WallSpec {
   return { flush: { n: false, e: false, s: false, w: false }, gaps: { n: [], e: [], s: [], w: [] } };
 }
 
-/** Every block's walls, given everything walled on the plan. */
-export function planWalls(blocks: WallBlock[]): Map<string, WallSpec> {
+/** Every block's walls, given everything walled on a sheet of cols × rows cells. */
+export function planWalls(blocks: WallBlock[], sheet: { cols: number; rows: number }): Map<string, WallSpec> {
   const out = new Map<string, WallSpec>();
   for (const b of blocks) {
     const spec = emptySpec();
+    spec.flush = {
+      n: b.y > 0,
+      w: b.x > 0,
+      s: b.y + b.h < sheet.rows,
+      e: b.x + b.w < sheet.cols,
+    };
     if (b.door) spec.gaps[b.door].push(doorInterval(b.door, b.w * U, b.h * U));
     for (const o of blocks) {
       if (o === b) continue;
       const side = touchingSide(b, o);
       if (!side) continue;
-      spec.flush[side] = true;
       // A door in the neighbour's side of this wall opens through ours too.
       if (o.door === OPPOSITE[side]) {
         const [g0, g1] = doorInterval(o.door, o.w * U, o.h * U);
@@ -126,9 +132,11 @@ export function planWalls(blocks: WallBlock[]): Map<string, WallSpec> {
   return out;
 }
 
-/** A block alone on the plan: every wall inset, only its own door. */
+/** A block drawn on its own (palette chips, drop previews): every wall inset. */
 function soloSpec(w: number, h: number, door: DoorSide | null): WallSpec {
-  return planWalls([{ key: "", x: 0, y: 0, w, h, door }]).get("")!;
+  const spec = emptySpec();
+  if (door) spec.gaps[door].push(doorInterval(door, w * U, h * U));
+  return spec;
 }
 
 const pt = ([x, y]: [number, number]) => `${x.toFixed(2)} ${y.toFixed(2)}`;
@@ -400,6 +408,7 @@ export function FixtureDrawing({
   /** Shared walls, for the walled kinds; alone on the plan if omitted. */
   walls?: WallSpec;
 }) {
+  const clipId = useId();
   const W = w * U;
   const H = h * U;
   const fixtureDoor = FIXTURE_DOOR[kind] ?? null;
@@ -476,10 +485,18 @@ export function FixtureDrawing({
       body = (
         <>
           <rect x={INSET} y={INSET} width={W - 2 * INSET} height={H - 2 * INSET} fill="var(--plan-corridor)" />
-          {kind === "storage" &&
-            Array.from({ length: Math.ceil((W + H) / 3) }, (_, n) => (
-              <line key={n} x1={n * 3} y1={0} x2={n * 3 - H} y2={H} {...line} strokeOpacity={0.35} />
-            ))}
+          {kind === "storage" && (
+            <>
+              <clipPath id={clipId}>
+                <rect x={0} y={0} width={W} height={H} />
+              </clipPath>
+              <g clipPath={`url(#${clipId})`}>
+                {Array.from({ length: Math.ceil((W + H) / 3) }, (_, n) => (
+                  <line key={n} x1={n * 3} y1={0} x2={n * 3 - H} y2={H} {...line} strokeOpacity={0.35} />
+                ))}
+              </g>
+            </>
+          )}
           {kind === "restroom" && (
             <g {...line} strokeWidth={0.55}>
               <circle cx={W * 0.36} cy={H * 0.55} r={Math.min(W, H) * 0.07} />
@@ -499,7 +516,7 @@ export function FixtureDrawing({
 
   return (
     <>
-      <svg viewBox={`0 0 ${W} ${H}`} className="absolute inset-0 h-full w-full overflow-hidden" aria-hidden>
+      <svg viewBox={`0 0 ${W} ${H}`} className="absolute inset-0 h-full w-full overflow-visible" aria-hidden>
         {body}
       </svg>
       {text && (

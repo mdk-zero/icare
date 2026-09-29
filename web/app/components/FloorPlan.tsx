@@ -200,7 +200,7 @@ function wallsFor(
     const block = wallBlockForFixture(`f:${f.id}`, f.kind, f.rect);
     if (block) blocks.push(block);
   }
-  return planWalls(blocks);
+  return planWalls(blocks, { cols: GRID_COLS, rows: GRID_ROWS });
 }
 
 interface BlockVisual {
