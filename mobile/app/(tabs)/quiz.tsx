@@ -168,11 +168,11 @@ export default function QuizScreen() {
         title="Quizzes"
         subtitle={`${assigned.length + available.length} available`}
         icon="school-outline"
-        accent="violet"
+        accent="teal"
       />
 
       <View style={styles.intro}>
-        <Ionicons name="school-outline" size={16} color={Accent.violet.fg} />
+        <Ionicons name="school-outline" size={16} color={Accent.teal.fg} />
         <Text style={styles.introText}>Quizzes from your faculty&apos;s question banks</Text>
       </View>
 
@@ -242,7 +242,7 @@ function createStyles(
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.sm,
-    backgroundColor: Accent.violet.bg,
+    backgroundColor: Accent.teal.bg,
     borderRadius: Radius.md,
     paddingVertical: 10,
     paddingHorizontal: Spacing.lg,
@@ -252,7 +252,7 @@ function createStyles(
     flex: 1,
     fontSize: 13,
     fontWeight: '500',
-    color: Accent.violet.fg,
+    color: Accent.teal.fg,
   },
   section: {
     marginBottom: Spacing.xxl,
