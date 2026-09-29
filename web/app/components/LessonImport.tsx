@@ -20,7 +20,7 @@ export interface ImportedLesson extends AnalyzedLesson {
 /**
  * An imported lesson and the topics picked from it. Picking a file uploads it
  * straight away: the server extracts the text (kept here, so generating later
- * doesn't upload it again) and proposes the categories it covers, all ticked
+ * doesn't upload it again) and finds the taught Taylor's chapters it covers, all ticked
  * to start with. Nothing is created until the page acts on `selectedTopics`.
  */
 export function useLessonImport({ onAnalyzed }: { onAnalyzed?: (lesson: ImportedLesson) => void } = {}) {
@@ -170,7 +170,7 @@ export function LessonPanel({
       {lesson && lesson.topics.length > 0 && (
         <div className="rounded-lg border border-hairline bg-surface p-3 space-y-2">
           <p className="text-xs font-semibold uppercase tracking-[0.06em] text-gray-600">
-            Topics in this lesson
+            Chapters in this lesson
           </p>
           <div className="space-y-1.5">
             {lesson.topics.map((t) => (
@@ -188,12 +188,8 @@ export function LessonPanel({
                 <span className="min-w-0">
                   <span className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm font-medium text-gray-800">{t.category}</span>
-                    <span
-                      className={`px-1.5 py-0.5 rounded text-[11px] font-medium ${
-                        t.is_new ? "bg-brand-600/10 text-brand-700" : "bg-gray-100 text-gray-600"
-                      }`}
-                    >
-                      {t.is_new ? "New category" : "Existing category"}
+                    <span className="px-1.5 py-0.5 rounded text-[11px] font-medium bg-brand-600/10 text-brand-700">
+                      Chapter {t.chapter}
                     </span>
                   </span>
                   {t.topic && <span className="block text-xs text-gray-500 mt-0.5">{t.topic}</span>}
@@ -203,6 +199,12 @@ export function LessonPanel({
           </div>
           {children}
         </div>
+      )}
+
+      {lesson && lesson.notTaught.length > 0 && (
+        <p className="text-xs text-gray-500">
+          Also in this lesson, but not a chapter the app teaches: {lesson.notTaught.join(", ")}.
+        </p>
       )}
     </div>
   );

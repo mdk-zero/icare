@@ -1857,11 +1857,13 @@ export async function createScenarioCategories(
   }
 }
 
-/** A topic detected in a lesson, with the category it maps to. */
+/** A taught Taylor's chapter detected in a lesson. */
 export interface LessonTopic {
   topic: string;
-  /** An existing category's stored spelling, or a proposed new one. */
+  chapter: number;
+  /** The chapter's name; the new patient case page files the case under it. */
   category: string;
+  /** Whether no category of that name exists yet. */
   is_new: boolean;
 }
 
@@ -1869,11 +1871,13 @@ export interface AnalyzedLesson {
   /** The lesson's extracted text, sent back when generating from it. */
   lessonText: string;
   topics: LessonTopic[];
+  /** What else the lesson covers that isn't a taught chapter. */
+  notTaught: string[];
   /** Set when topic detection came back empty or failed; the text is still usable. */
   warning?: string;
 }
 
-/** Uploads a lesson, returning its text and the topics (candidate categories) it covers. */
+/** Uploads a lesson, returning its text and the taught Taylor's chapters it covers. */
 export async function analyzeLesson(file: File): Promise<AnalyzedLesson | { error: string }> {
   try {
     const formData = new FormData();
@@ -1886,13 +1890,19 @@ export async function analyzeLesson(file: File): Promise<AnalyzedLesson | { erro
     const json = (await res.json()) as {
       lesson_text?: string;
       topics?: LessonTopic[];
+      not_taught?: string[];
       warning?: string;
       error?: string;
     };
     if (!res.ok || typeof json.lesson_text !== 'string') {
       return { error: json.error || `Request failed (${res.status})` };
     }
-    return { lessonText: json.lesson_text, topics: json.topics ?? [], warning: json.warning };
+    return {
+      lessonText: json.lesson_text,
+      topics: json.topics ?? [],
+      notTaught: json.not_taught ?? [],
+      warning: json.warning,
+    };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'Unable to read the lesson' };
   }
@@ -1945,8 +1955,8 @@ export async function generateAIScenario(
 
 export interface ScenarioBatchOptions {
   count: number;
-  /** Empty spreads the batch across every category. */
-  categories?: string[];
+  /** Taylor's chapter numbers; empty spreads the batch across every taught chapter. */
+  chapters?: number[];
   topic?: string;
   /** Titles to steer away from — used to chain sub-batches without repeats. */
   avoidTitles?: string[];
@@ -1962,6 +1972,8 @@ export interface ScenarioDraft {
   patient_case: Record<string, unknown>;
   learning_objectives: string[];
   patient_id: string | null;
+  /** The Taylor's chapter the case was built around. */
+  chapter?: number;
   /** Taylor's skills the AI detected in the case. */
   skills?: string[];
 }
@@ -1979,7 +1991,7 @@ export async function generateScenarioBatch(
       signal,
       body: JSON.stringify({
         count: options.count,
-        categories: options.categories,
+        chapters: options.chapters,
         topic: options.topic,
         avoid_titles: options.avoidTitles,
         lesson_text: options.lessonText,

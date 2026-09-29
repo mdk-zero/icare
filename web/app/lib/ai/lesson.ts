@@ -1,3 +1,5 @@
+import { ACTIVE_CHAPTERS } from '@/scripts/taylors-chapters';
+
 /** Lesson text past this is dropped, keeping the prompt inside the models' input budget. */
 export const MAX_LESSON_CHARS = 15_000;
 const MAX_FILE_BYTES = 15 * 1024 * 1024; // 15MB
@@ -35,7 +37,10 @@ async function extractLessonText(file: File): Promise<string> {
  */
 export async function readLessonUpload(
   file: File,
-): Promise<{ text: string } | { error: string; status: number }> {
+): Promise<
+  | { text: string; taylors: { chapters: number[]; others: number[] } | null }
+  | { error: string; status: number }
+> {
   if (file.size > MAX_FILE_BYTES) {
     return { error: 'Lesson file is too large (max 15MB)', status: 400 };
   }
@@ -68,5 +73,49 @@ export async function readLessonUpload(
   if (text.length < 50) {
     return { error: 'Could not find enough readable text in that file', status: 400 };
   }
-  return { text: text.slice(0, MAX_LESSON_CHARS) };
+  const taylors = taylorsSections(text);
+  return {
+    text: taylors?.text ?? text.slice(0, MAX_LESSON_CHARS),
+    taylors: taylors && { chapters: taylors.chapters, others: taylors.others },
+  };
+}
+
+/** A skill's heading line in Taylor's checklists, e.g. "SKILL 14-1". */
+const SKILL_HEADING = /^[ \t]*SKILL[ \t]+(\d{1,2})-(\d{1,2})[ \t]*$/gm;
+
+/**
+ * The Taylor's chapters a lesson holds skills from, read off its "SKILL x-y"
+ * headings across the whole file, not just the part that fits a prompt. Null
+ * when the file has no such headings (not a Taylor's lesson).
+ *
+ * `chapters` are the ones the app teaches (ACTIVE_CHAPTERS), `others` the
+ * rest. A file too long for the prompt, such as the whole book, keeps the
+ * taught chapters' skills, shared evenly, instead of its first pages (the
+ * table of contents).
+ */
+function taylorsSections(
+  full: string,
+): { chapters: number[]; others: number[]; text: string | null } | null {
+  const headings = [...full.matchAll(SKILL_HEADING)];
+  if (headings.length === 0) return null;
+
+  const byChapter = new Map<number, string[]>();
+  headings.forEach((h, i) => {
+    const chapter = Number(h[1]);
+    const end = headings[i + 1]?.index ?? full.length;
+    const parts = byChapter.get(chapter) ?? [];
+    parts.push(full.slice(h.index, end));
+    byChapter.set(chapter, parts);
+  });
+
+  const present = [...byChapter.keys()].sort((a, b) => a - b);
+  const chapters = present.filter((c) => ACTIVE_CHAPTERS.includes(c));
+  const others = present.filter((c) => !ACTIVE_CHAPTERS.includes(c));
+
+  let text: string | null = null;
+  if (full.length > MAX_LESSON_CHARS && chapters.length > 0) {
+    const share = Math.floor(MAX_LESSON_CHARS / chapters.length);
+    text = chapters.map((c) => byChapter.get(c)!.join('').slice(0, share).trim()).join('\n\n');
+  }
+  return { chapters, others, text };
 }

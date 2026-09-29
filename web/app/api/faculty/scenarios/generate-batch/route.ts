@@ -3,7 +3,7 @@ import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { callAI, aiErrorResponse } from '@/app/lib/ai/generate';
 import { MAX_LESSON_CHARS } from '@/app/lib/ai/lesson';
-import { listCategories, matchCategory } from '@/app/lib/scenario-categories';
+import { ACTIVE_CHAPTERS, TAYLORS_CHAPTERS, type TaylorsChapter } from '@/scripts/taylors-chapters';
 import {
   PATIENT_CONTEXT_COLUMNS,
   SCENARIO_GUIDELINES,
@@ -22,9 +22,14 @@ const MAX_BATCH = 12;
 /** Both providers cap output at 4096 tokens, which fits roughly four full scenarios. */
 const CHUNK_SIZE = 4;
 
+/** Patient cases aren't filed under categories any more; the column still needs one. */
+const UNCATEGORIZED = 'General';
+
+const TAUGHT = TAYLORS_CHAPTERS.filter((c) => ACTIVE_CHAPTERS.includes(c.chapter));
+
 /** One scenario the AI has been asked to write, with the slot it must fill. */
 interface PlannedSlot {
-  category: string;
+  chapter: TaylorsChapter;
   patient: PatientContext | null;
 }
 
@@ -46,19 +51,15 @@ function shuffle<T>(items: T[]): T[] {
 }
 
 /**
- * Spreads the requested count across categories so the library
- * comes out varied instead of ten takes on the same case.
+ * Spreads the requested count across the chosen chapters (every taught one
+ * when none is chosen) so the library comes out varied instead of ten takes
+ * on the same case.
  */
-function planSlots(
-  count: number,
-  categories: string[],
-  allCategories: string[],
-  patients: PatientContext[],
-): PlannedSlot[] {
-  const categoryPool = categories.length > 0 ? categories : shuffle(allCategories);
+function planSlots(count: number, chapters: TaylorsChapter[], patients: PatientContext[]): PlannedSlot[] {
+  const pool = chapters.length > 0 ? chapters : shuffle(TAUGHT);
 
   return Array.from({ length: count }, (_, i) => ({
-    category: categoryPool[i % categoryPool.length],
+    chapter: pool[i % pool.length],
     patient: patients.length > 0 ? patients[i % patients.length] : null,
   }));
 }
@@ -74,7 +75,8 @@ function buildBatchPrompt(
       const patientBlock = slot.patient
         ? `\n   Base it on ${patientRecordBlock(slot.patient, 'patient record')}`
         : '';
-      return `${i + 1}. Category: "${slot.category}"${patientBlock}`;
+      const c = slot.chapter;
+      return `${i + 1}. Taylor's Chapter ${c.chapter}, ${c.name}: centre the case on this chapter's skills and take its "skills" mainly from ids starting "${c.chapter}-".${patientBlock}`;
     })
     .join('\n\n');
 
@@ -82,10 +84,10 @@ function buildBatchPrompt(
     ? `\nEvery patient case must relate to this teaching focus: "${topic.replace(/"/g, '\\"')}".\n`
     : '';
 
-  // With a lesson, the briefs' categories are the lesson topics the faculty
-  // member picked — one scenario per topic, each applying the lesson.
+  // With a lesson, the briefs' chapters are the ones the faculty member
+  // picked from it — one scenario per chapter, each applying the lesson.
   const lesson = lessonText
-    ? `${lessonBlock(lessonText)}Each brief's category is the lesson topic its patient case centres on. Where a brief includes a patient record, keep that patient's diagnosis and vitals and apply the lesson to their care.\n`
+    ? `${lessonBlock(lessonText)}Each brief's chapter is the part of the lesson its patient case centres on. Where a brief includes a patient record, keep that patient's diagnosis and vitals and apply the lesson to their care.\n`
     : '';
 
   const avoidBlock =
@@ -109,11 +111,13 @@ ${SCENARIO_JSON_SHAPE.split('\n').map((line) => `    ${line}`).join('\n')}
   ]
 }
 
-The "scenarios" array must contain exactly ${slots.length} objects, in the same order as the briefs, and each object's "category" must match its brief.
+The "scenarios" array must contain exactly ${slots.length} objects, in the same order as the briefs. Set every "category" to "${UNCATEGORIZED}".
 
 Guidelines:
 ${SCENARIO_GUIDELINES}`;
 }
+
+type GeneratedScenario = SanitizedScenario & { patient_id: string | null; chapter: number };
 
 /** One AI call covering up to CHUNK_SIZE slots. Throws if the model returns nothing usable. */
 async function generateChunk(
@@ -121,7 +125,7 @@ async function generateChunk(
   topic: string,
   existingTitles: string[],
   lessonText: string,
-): Promise<(SanitizedScenario & { patient_id: string | null })[]> {
+): Promise<GeneratedScenario[]> {
   const raw = await callAI(buildBatchPrompt(slots, topic, existingTitles, lessonText));
   const list = Array.isArray(raw.scenarios) ? raw.scenarios : [];
 
@@ -136,8 +140,9 @@ async function generateChunk(
     );
     return {
       ...scenario,
+      category: UNCATEGORIZED,
       // The plan is what the faculty asked for, so it wins over whatever the model labelled it.
-      category: slot.category,
+      chapter: slot.chapter.chapter,
       patient_id: slot.patient?.id ?? null,
     };
   });
@@ -150,7 +155,7 @@ export async function POST(request: NextRequest) {
 
   let body: {
     count?: unknown;
-    categories?: unknown;
+    chapters?: unknown;
     topic?: unknown;
     avoid_titles?: unknown;
     lesson_text?: unknown;
@@ -174,20 +179,11 @@ export async function POST(request: NextRequest) {
   try {
     const supabase = getSupabaseAdmin();
 
-    const allCategories = await listCategories(supabase);
-    // Unknown names are dropped; known ones take their stored spelling.
-    const categories = Array.isArray(body.categories)
-      ? Array.from(
-          new Set(
-            body.categories
-              .filter((c): c is string => typeof c === 'string')
-              .map((c) => matchCategory(allCategories, c.trim()))
-              .filter((c): c is string => c !== null),
-          ),
-        )
-      : [];
+    // Chapters the app doesn't teach are dropped, like unknown numbers.
+    const chapterNumbers = Array.isArray(body.chapters) ? body.chapters.map(Number) : [];
+    const chapters = TAUGHT.filter((c) => chapterNumbers.includes(c.chapter));
 
-    // Every scenario in the library is grounded on a real patient record — a
+    // Every scenario in the library is grounded on a roster patient's record — a
     // slot reuses one (planSlots cycles i % patients.length) rather than going
     // ungrounded when the roster is smaller than the batch.
     const { data: patientRows } = await supabase
@@ -219,9 +215,9 @@ export async function POST(request: NextRequest) {
       ...avoidTitles,
     ];
 
-    const slots = planSlots(count, categories, allCategories, patients);
+    const slots = planSlots(count, chapters, patients);
 
-    const scenarios: (SanitizedScenario & { patient_id: string | null })[] = [];
+    const scenarios: GeneratedScenario[] = [];
     const failures: string[] = [];
 
     // Sequential rather than parallel: the free AI tiers rate-limit bursts hard.

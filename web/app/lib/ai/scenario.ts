@@ -134,9 +134,9 @@ export function sanitizeScenario(
   };
 }
 
-/** The MIMIC-IV record block shared by every scenario prompt. */
+/** The roster patient's record block shared by every scenario prompt. */
 export function patientRecordBlock(patient: PatientContext, label = 'patient record'): string {
-  return `The following MIMIC-IV ${label}:
+  return `The following ${label}:
 
 - Name: ${patient.name}
 - Age: ${patient.age}
@@ -145,8 +145,7 @@ export function patientRecordBlock(patient: PatientContext, label = 'patient rec
 - Diagnosis: ${patient.diagnosis}
 - Admission Date: ${patient.admission_date}
 - Vital Signs: ${JSON.stringify(patient.vital_signs, null, 2)}
-- Labs: ${JSON.stringify(patient.labs, null, 2)}
-- MIMIC ID: ${patient.mimic_id}${patient.medical_history ? `\n- Medical History: ${patient.medical_history}` : ''}`;
+- Labs: ${JSON.stringify(patient.labs, null, 2)}${patient.medical_history ? `\n- Medical History: ${patient.medical_history}` : ''}`;
 }
 
 /** JSON shape every scenario prompt asks the model to return. */
