@@ -1,10 +1,10 @@
-import React from 'react';
-import { ScrollView, View, Text, StyleSheet, Pressable, RefreshControl } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter, useFocusEffect } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { Radius, Spacing } from '@/constants/theme';
-import { useTheme } from '@/hooks/useTheme';
+import React from "react";
+import { ScrollView, View, Text, StyleSheet, Pressable, RefreshControl } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useRouter, useFocusEffect } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import { Radius, Spacing } from "@/constants/theme";
+import { useTheme } from "@/hooks/useTheme";
 import {
   ScreenHeader,
   SectionHeader,
@@ -13,10 +13,19 @@ import {
   SkeletonBlock,
   RoomPages,
   Badge,
-} from '@/components/ui';
-import { useApiData } from '@/hooks/useApiData';
-import { FloorPlan } from '@/components/FloorPlan';
-import { fetchWard, fetchAiTips, fetchMyCases, AiTip, WardRoom, WardPatient, WardAssignment, CaseListItem } from '@/lib/api';
+} from "@/components/ui";
+import { useApiData } from "@/hooks/useApiData";
+import { FloorPlan } from "@/components/FloorPlan";
+import {
+  fetchWard,
+  fetchAiTips,
+  fetchMyCases,
+  AiTip,
+  WardRoom,
+  WardPatient,
+  WardAssignment,
+  CaseListItem,
+} from "@/lib/api";
 
 /**
  * The Clinic tab: the ward's floor plan as the Dean laid it out first (rooms
@@ -40,9 +49,12 @@ function AssignmentBanner({
   onPress: () => void;
 }) {
   const { Palette, Accent, Shadow, Type } = useTheme();
-  const styles = React.useMemo(() => createStyles(Palette, Accent, Shadow, Type), [Palette, Accent, Shadow, Type]);
+  const styles = React.useMemo(
+    () => createStyles(Palette, Accent, Shadow, Type),
+    [Palette, Accent, Shadow, Type],
+  );
   const progress = assignment.tasks_total > 0 ? assignment.tasks_done / assignment.tasks_total : 0;
-  const overdue = assignment.status === 'overdue';
+  const overdue = assignment.status === "overdue";
 
   return (
     <Pressable
@@ -68,7 +80,7 @@ function AssignmentBanner({
           <Ionicons name="bed-outline" size={13} color={Palette.textSecondary} />
           <Text style={styles.bannerRowText} numberOfLines={1}>
             {patient.name}
-            {room ? ` · ${room.name} · Room ${room.room_number}` : ''}
+            {room ? ` · ${room.name} · Room ${room.room_number}` : ""}
           </Text>
         </View>
       ) : (
@@ -97,21 +109,31 @@ function AssignmentBanner({
       ) : null}
 
       <View style={styles.bannerFooter}>
-        <View style={[styles.pill, { backgroundColor: assignment.required ? Accent.red.bg : Accent.slate.bg }]}>
-          <Text style={[styles.pillText, { color: assignment.required ? Accent.red.fg : Accent.slate.fg }]}>
-            {assignment.required ? 'Required' : 'Optional'}
+        <View
+          style={[
+            styles.pill,
+            { backgroundColor: assignment.required ? Accent.red.bg : Accent.slate.bg },
+          ]}
+        >
+          <Text
+            style={[
+              styles.pillText,
+              { color: assignment.required ? Accent.red.fg : Accent.slate.fg },
+            ]}
+          >
+            {assignment.required ? "Required" : "Optional"}
           </Text>
         </View>
         <View style={styles.dueRow}>
           <Ionicons
-            name={overdue ? 'alert-outline' : 'time-outline'}
+            name={overdue ? "alert-outline" : "time-outline"}
             size={12}
             color={overdue ? Accent.red.fg : Palette.textMuted}
           />
           <Text style={[styles.dueText, overdue && { color: Accent.red.fg }]}>
             {assignment.deadline
-              ? `Due ${new Date(assignment.deadline).toLocaleDateString([], { month: 'short', day: 'numeric' })}`
-              : 'No deadline'}
+              ? `Due ${new Date(assignment.deadline).toLocaleDateString([], { month: "short", day: "numeric" })}`
+              : "No deadline"}
           </Text>
         </View>
       </View>
@@ -121,7 +143,10 @@ function AssignmentBanner({
 
 function TipCard({ tip }: { tip: AiTip }) {
   const { Palette, Accent, Shadow, Type } = useTheme();
-  const styles = React.useMemo(() => createStyles(Palette, Accent, Shadow, Type), [Palette, Accent, Shadow, Type]);
+  const styles = React.useMemo(
+    () => createStyles(Palette, Accent, Shadow, Type),
+    [Palette, Accent, Shadow, Type],
+  );
 
   return (
     <View style={styles.tipCard}>
@@ -145,7 +170,10 @@ export default function ClinicScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { Palette, Accent, Shadow, Type } = useTheme();
-  const styles = React.useMemo(() => createStyles(Palette, Accent, Shadow, Type), [Palette, Accent, Shadow, Type]);
+  const styles = React.useMemo(
+    () => createStyles(Palette, Accent, Shadow, Type),
+    [Palette, Accent, Shadow, Type],
+  );
 
   const { data, loading, refreshing, error, fromCache, refresh, reload } = useApiData(fetchWard);
   // Separate call: a slow LLM generation must never hold up the ward.
@@ -186,16 +214,18 @@ export default function ClinicScreen() {
   const patients = data?.patients ?? [];
   const assignments = data?.assignments ?? [];
   const fixtures = data?.fixtures ?? [];
-  const onPlan = rooms.filter((r) => r.plan_x != null && r.plan_y != null && r.plan_w != null && r.plan_h != null);
+  const onPlan = rooms.filter(
+    (r) => r.plan_x != null && r.plan_y != null && r.plan_w != null && r.plan_h != null,
+  );
   const offPlan = onPlan.length > 0 ? rooms.filter((r) => !onPlan.includes(r)) : rooms;
 
   const patientsById = new Map(patients.map((p) => [p.id, p]));
   const roomsById = new Map(rooms.map((r) => [r.id, r]));
-  const openAssignments = assignments.filter((a) => a.status !== 'completed');
+  const openAssignments = assignments.filter((a) => a.status !== "completed");
   // Newest graded first; the list comes newest-assigned first.
   const completedAssignments = assignments
-    .filter((a) => a.status === 'completed')
-    .sort((a, b) => (b.completed_at ?? '').localeCompare(a.completed_at ?? ''));
+    .filter((a) => a.status === "completed")
+    .sort((a, b) => (b.completed_at ?? "").localeCompare(a.completed_at ?? ""));
   // The room to ring on the plan: the first open assignment's patient.
   const myRoomId =
     openAssignments
@@ -220,17 +250,19 @@ export default function ClinicScreen() {
         />
       }
     >
-      <ScreenHeader
-        eyebrow="Ward"
-        title="Clinic"
-        subtitle={`${rooms.length} ${rooms.length === 1 ? 'room' : 'rooms'} · ${patients.length} admitted`}
-        icon="medkit-outline"
-      />
+      <ScreenHeader eyebrow="Ward" title="Clinic" icon="medkit-outline" />
 
       {fromCache ? (
-        <View style={[styles.notice, { backgroundColor: Accent.amber.bg, borderColor: Accent.amber.border }]}>
+        <View
+          style={[
+            styles.notice,
+            { backgroundColor: Accent.amber.bg, borderColor: Accent.amber.border },
+          ]}
+        >
           <Ionicons name="cloud-offline-outline" size={14} color={Accent.amber.fg} />
-          <Text style={[styles.noticeText, { color: Accent.amber.fg }]}>Offline — showing the last synced ward</Text>
+          <Text style={[styles.noticeText, { color: Accent.amber.fg }]}>
+            Offline — showing the last synced ward
+          </Text>
         </View>
       ) : null}
 
@@ -248,7 +280,9 @@ export default function ClinicScreen() {
         ) : null}
         {offPlan.length > 0 ? (
           <View style={onPlan.length > 0 ? styles.offPlan : undefined}>
-            {onPlan.length > 0 ? <Text style={styles.offPlanTitle}>Not on the plan yet</Text> : null}
+            {onPlan.length > 0 ? (
+              <Text style={styles.offPlanTitle}>Not on the plan yet</Text>
+            ) : null}
             <RoomPages
               rooms={offPlan}
               highlightRoomId={myRoomId}
@@ -256,7 +290,9 @@ export default function ClinicScreen() {
             />
           </View>
         ) : null}
-        {rooms.length === 0 ? <EmptyState icon="bed-outline" message="No rooms have been set up yet." /> : null}
+        {rooms.length === 0 ? (
+          <EmptyState icon="bed-outline" message="No rooms have been set up yet." />
+        ) : null}
       </View>
 
       {openAssignments.length > 0
@@ -264,10 +300,12 @@ export default function ClinicScreen() {
             <AssignmentBanner
               key={assignment.id}
               assignment={assignment}
-              patient={assignment.patient_id ? (patientsById.get(assignment.patient_id) ?? null) : null}
+              patient={
+                assignment.patient_id ? (patientsById.get(assignment.patient_id) ?? null) : null
+              }
               room={
                 assignment.patient_id
-                  ? (roomsById.get(patientsById.get(assignment.patient_id)?.room_id ?? '') ?? null)
+                  ? (roomsById.get(patientsById.get(assignment.patient_id)?.room_id ?? "") ?? null)
                   : null
               }
               onPress={() => openAssignment(assignment)}
@@ -282,7 +320,9 @@ export default function ClinicScreen() {
             <CompletedCaseCard
               key={assignment.id}
               assignment={assignment}
-              patient={assignment.patient_id ? (patientsById.get(assignment.patient_id) ?? null) : null}
+              patient={
+                assignment.patient_id ? (patientsById.get(assignment.patient_id) ?? null) : null
+              }
               // The brief, not the patient: a patient's page follows their open case.
               onPress={() => router.push(`/clinic/assignment/${assignment.id}`)}
             />
@@ -292,7 +332,10 @@ export default function ClinicScreen() {
 
       {caseList.length > 0 || cases.loading ? (
         <View style={styles.section}>
-          <SectionHeader title="Hospital Cases" subtitle="Write up a patient from your duty — initials only" />
+          <SectionHeader
+            title="Hospital Cases"
+            subtitle="Write up a patient from your duty — initials only"
+          />
           {cases.loading && caseList.length === 0 ? (
             <View style={styles.tipCard}>
               <View style={styles.tipBody}>
@@ -302,7 +345,11 @@ export default function ClinicScreen() {
             </View>
           ) : (
             caseList.map((item) => (
-              <CaseCard key={item.id} item={item} onPress={() => router.push(`/cases/${item.id}`)} />
+              <CaseCard
+                key={item.id}
+                item={item}
+                onPress={() => router.push(`/cases/${item.id}`)}
+              />
             ))
           )}
         </View>
@@ -310,7 +357,10 @@ export default function ClinicScreen() {
 
       {showTips ? (
         <View style={styles.section}>
-          <SectionHeader title="AI Study Tips" subtitle="Generated from your assigned patient cases" />
+          <SectionHeader
+            title="AI Study Tips"
+            subtitle="Generated from your assigned patient cases"
+          />
           {tips.loading && tipList.length === 0 ? (
             <View style={styles.tipCard}>
               <View style={styles.tipBody}>
@@ -322,21 +372,25 @@ export default function ClinicScreen() {
           ) : tipList.length > 0 ? (
             tipList.map((tip, index) => <TipCard key={`${tip.title}-${index}`} tip={tip} />)
           ) : (
-            <EmptyState icon="cloud-offline-outline" message={tips.error ?? 'No tips available right now.'} />
+            <EmptyState
+              icon="cloud-offline-outline"
+              message={tips.error ?? "No tips available right now."}
+            />
           )}
         </View>
       ) : null}
-
-
     </ScrollView>
   );
 }
 
-const CASE_STATUS: Record<CaseListItem['status'], { label: string; variant: 'default' | 'warning' | 'info' | 'success' }> = {
-  not_started: { label: 'Not started', variant: 'default' },
-  draft: { label: 'Draft', variant: 'warning' },
-  submitted: { label: 'Handed in', variant: 'info' },
-  graded: { label: 'Graded', variant: 'success' },
+const CASE_STATUS: Record<
+  CaseListItem["status"],
+  { label: string; variant: "default" | "warning" | "info" | "success" }
+> = {
+  not_started: { label: "Not started", variant: "default" },
+  draft: { label: "Draft", variant: "warning" },
+  submitted: { label: "Handed in", variant: "info" },
+  graded: { label: "Graded", variant: "success" },
 };
 
 /** A graded patient case: its score and when it was graded. Opens the brief with every task's grade. */
@@ -350,16 +404,22 @@ function CompletedCaseCard({
   onPress: () => void;
 }) {
   const { Palette, Accent, Shadow, Type } = useTheme();
-  const styles = React.useMemo(() => createStyles(Palette, Accent, Shadow, Type), [Palette, Accent, Shadow, Type]);
+  const styles = React.useMemo(
+    () => createStyles(Palette, Accent, Shadow, Type),
+    [Palette, Accent, Shadow, Type],
+  );
   const graded = assignment.completed_at
-    ? new Date(assignment.completed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    ? new Date(assignment.completed_at).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+      })
     : null;
   return (
     <Pressable
       style={({ pressed }) => [styles.tipCard, styles.caseCard, pressed && styles.pressedCard]}
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`${assignment.scenario_title}, completed${assignment.score !== null ? `, ${assignment.score}%` : ''}`}
+      accessibilityLabel={`${assignment.scenario_title}, completed${assignment.score !== null ? `, ${assignment.score}%` : ""}`}
     >
       <View style={[styles.bannerIcon, { backgroundColor: Accent.green.bg }]}>
         <Ionicons name="checkmark-done" size={17} color={Accent.green.fg} />
@@ -386,10 +446,16 @@ function CompletedCaseCard({
 
 function CaseCard({ item, onPress }: { item: CaseListItem; onPress: () => void }) {
   const { Palette, Accent, Shadow, Type } = useTheme();
-  const styles = React.useMemo(() => createStyles(Palette, Accent, Shadow, Type), [Palette, Accent, Shadow, Type]);
+  const styles = React.useMemo(
+    () => createStyles(Palette, Accent, Shadow, Type),
+    [Palette, Accent, Shadow, Type],
+  );
   const status = CASE_STATUS[item.status];
   const due = item.presentation.deadline
-    ? new Date(item.presentation.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    ? new Date(item.presentation.deadline).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+      })
     : null;
   return (
     <Pressable
@@ -408,7 +474,7 @@ function CaseCard({ item, onPress }: { item: CaseListItem; onPress: () => void }
         <View style={styles.caseMeta}>
           <Badge label={status.label} variant={status.variant} size="sm" />
           {item.late ? <Badge label="Late" variant="danger" size="sm" /> : null}
-          {item.status === 'graded' && item.score !== null ? (
+          {item.status === "graded" && item.score !== null ? (
             <Text style={Type.caption}>{item.score}%</Text>
           ) : due ? (
             <Text style={Type.caption}>Due {due}</Text>
@@ -421,10 +487,10 @@ function CaseCard({ item, onPress }: { item: CaseListItem; onPress: () => void }
 }
 
 function createStyles(
-  Palette: ReturnType<typeof useTheme>['Palette'],
-  Accent: ReturnType<typeof useTheme>['Accent'],
-  Shadow: ReturnType<typeof useTheme>['Shadow'],
-  Type: ReturnType<typeof useTheme>['Type'],
+  Palette: ReturnType<typeof useTheme>["Palette"],
+  Accent: ReturnType<typeof useTheme>["Accent"],
+  Shadow: ReturnType<typeof useTheme>["Shadow"],
+  Type: ReturnType<typeof useTheme>["Type"],
 ) {
   return StyleSheet.create({
     container: {
@@ -440,8 +506,8 @@ function createStyles(
       transform: [{ scale: 0.99 }],
     },
     notice: {
-      flexDirection: 'row',
-      alignItems: 'center',
+      flexDirection: "row",
+      alignItems: "center",
       gap: Spacing.sm,
       borderRadius: Radius.md,
       borderWidth: 1,
@@ -451,7 +517,7 @@ function createStyles(
     },
     noticeText: {
       fontSize: 12,
-      fontWeight: '600',
+      fontWeight: "600",
       flex: 1,
     },
     section: {
@@ -460,9 +526,9 @@ function createStyles(
     offPlan: { marginTop: Spacing.lg },
     offPlanTitle: {
       fontSize: 12,
-      fontWeight: '700',
+      fontWeight: "700",
       color: Palette.textSecondary,
-      textTransform: 'uppercase',
+      textTransform: "uppercase",
       letterSpacing: 0.6,
       marginBottom: Spacing.sm,
     },
@@ -476,15 +542,15 @@ function createStyles(
       ...Shadow.card,
     },
     bannerHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
+      flexDirection: "row",
+      alignItems: "center",
     },
     bannerIcon: {
       width: 36,
       height: 36,
       borderRadius: Radius.md,
-      alignItems: 'center',
-      justifyContent: 'center',
+      alignItems: "center",
+      justifyContent: "center",
       marginRight: Spacing.md,
     },
     bannerHeaderText: {
@@ -496,8 +562,8 @@ function createStyles(
     },
     bannerTitle: Type.itemTitle,
     bannerRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
+      flexDirection: "row",
+      alignItems: "center",
       gap: 5,
       marginTop: Spacing.sm,
     },
@@ -507,8 +573,8 @@ function createStyles(
       flex: 1,
     },
     progressWrap: {
-      flexDirection: 'row',
-      alignItems: 'center',
+      flexDirection: "row",
+      alignItems: "center",
       gap: Spacing.sm,
       marginTop: Spacing.md,
     },
@@ -516,39 +582,39 @@ function createStyles(
       flex: 1,
       height: 6,
       borderRadius: 3,
-      overflow: 'hidden',
+      overflow: "hidden",
     },
     progressFill: {
-      height: '100%',
+      height: "100%",
       borderRadius: 3,
     },
     progressLabel: {
       fontSize: 11,
-      fontWeight: '700',
+      fontWeight: "700",
       color: Palette.textSecondary,
-      fontVariant: ['tabular-nums'],
+      fontVariant: ["tabular-nums"],
     },
     bannerFooter: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
       marginTop: Spacing.md,
     },
     pill: {
-      flexDirection: 'row',
-      alignItems: 'center',
+      flexDirection: "row",
+      alignItems: "center",
       paddingHorizontal: 10,
       paddingVertical: 4,
       borderRadius: Radius.pill,
     },
     pillText: {
       fontSize: 11,
-      fontWeight: '600',
-      textTransform: 'capitalize',
+      fontWeight: "600",
+      textTransform: "capitalize",
     },
     dueRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
+      flexDirection: "row",
+      alignItems: "center",
       gap: 4,
     },
     dueText: {
@@ -556,7 +622,7 @@ function createStyles(
       color: Palette.textMuted,
     },
     tipCard: {
-      flexDirection: 'row',
+      flexDirection: "row",
       backgroundColor: Palette.surface,
       borderRadius: Radius.lg,
       padding: Spacing.lg,
@@ -569,28 +635,28 @@ function createStyles(
       width: 28,
       height: 28,
       borderRadius: Radius.sm,
-      alignItems: 'center',
-      justifyContent: 'center',
+      alignItems: "center",
+      justifyContent: "center",
       marginRight: Spacing.md,
     },
     tipBody: {
       flex: 1,
     },
     caseCard: {
-      alignItems: 'center',
+      alignItems: "center",
     },
     completedPatient: { marginTop: 4 },
     caseMeta: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      flexWrap: 'wrap',
+      flexDirection: "row",
+      alignItems: "center",
+      flexWrap: "wrap",
       gap: Spacing.sm,
       marginTop: 6,
     },
     tipTitle: Type.itemTitle,
     tipScenario: {
       fontSize: 11,
-      fontWeight: '600',
+      fontWeight: "600",
       color: Palette.textMuted,
       marginTop: 2,
     },
