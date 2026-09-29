@@ -78,9 +78,11 @@ export default function ContactUsPage() {
   useEffect(() => {
     const token = new URLSearchParams(window.location.search).get("google");
     if (!token) return;
-    // The token is single-purpose; keep it out of history and reloads.
+    // The token is single-purpose; keep it out of history and reloads. That
+    // also means only the first run of this effect sees it (Strict Mode runs
+    // effects twice in development), so its request is never cancelled —
+    // cancelling it on cleanup would leave the email blank.
     window.history.replaceState(null, "", window.location.pathname);
-    let cancelled = false;
     fetch("/api/auth/google/pending", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -92,7 +94,6 @@ export default function ContactUsPage() {
           name?: string;
           error?: string;
         };
-        if (cancelled) return;
         if (!res.ok || !data.email) {
           setGoogleNote(data.error ?? "That Google sign-in has expired. Type your email instead.");
           return;
@@ -101,12 +102,7 @@ export default function ContactUsPage() {
         setEmail(data.email);
         setName((current) => current || data.name || "");
       })
-      .catch(() => {
-        if (!cancelled) setGoogleNote("Couldn't load your Google account. Type your email instead.");
-      });
-    return () => {
-      cancelled = true;
-    };
+      .catch(() => setGoogleNote("Couldn't load your Google account. Type your email instead."));
   }, []);
 
   const dropGoogleEmail = () => {
