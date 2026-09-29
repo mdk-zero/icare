@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { DEFAULT_ATTEMPTS, MIN_ATTEMPTS } from "@/app/lib/quiz-attempts";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -19,8 +19,11 @@ import {
   faTriangleExclamation,
   faWandMagicSparkles,
   faCircleInfo,
+  faBookOpen,
+  faBan,
 } from "@fortawesome/free-solid-svg-icons";
-import { apiFetch } from "../../../lib/api";
+import { apiFetch, fetchSkillCatalog, type SkillSummary } from "../../../lib/api";
+import { stashDrafts, type DraftQuestion } from "../draft-handoff";
 import { toast } from "../../../components/Toast";
 import { EcgLoader } from "../../../components/EcgLoader";
 import PageHeader from "../../../components/PageHeader";
@@ -28,6 +31,12 @@ import PageHeader from "../../../components/PageHeader";
 const inputClassName =
   "w-full px-4 py-3 bg-surface border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 focus:bg-surface transition-all text-sm shadow-sm";
 const labelClassName = "block text-sm font-bold text-gray-800 mb-2";
+
+/** Where the first questions come from, if anywhere. */
+type Source = "none" | "lesson" | "ai";
+
+/** The skill-based generator writes at most this many per request. */
+const MAX_AI_QUESTIONS = 10;
 
 export default function AssessmentNewClient() {
   const router = useRouter();
@@ -42,6 +51,36 @@ export default function AssessmentNewClient() {
   );
   const [lessonCount, setLessonCount] = useState(5);
   const [dragOver, setDragOver] = useState(false);
+  const [source, setSource] = useState<Source>("none");
+  // The Taylor's skill checklist the AI writes from; "" for general questions
+  // from the quiz's title and description.
+  const [aiSkill, setAiSkill] = useState("");
+  const [aiTopic, setAiTopic] = useState("");
+  const [skillCatalog, setSkillCatalog] = useState<SkillSummary[]>([]);
+
+  useEffect(() => {
+    if (source !== "ai" || skillCatalog.length > 0) return;
+    let live = true;
+    void fetchSkillCatalog().then((skills) => live && setSkillCatalog(skills));
+    return () => {
+      live = false;
+    };
+  }, [source, skillCatalog.length]);
+
+  // The catalog grouped by chapter, for the skill picker.
+  const skillChapters = useMemo(() => {
+    const groups: { chapter: number; area: string; skills: SkillSummary[] }[] = [];
+    for (const sk of skillCatalog) {
+      let g = groups.find((x) => x.chapter === sk.chapter);
+      if (!g) groups.push((g = { chapter: sk.chapter, area: sk.area, skills: [] }));
+      g.skills.push(sk);
+    }
+    return groups.sort((a, b) => a.chapter - b.chapter);
+  }, [skillCatalog]);
+
+  const useLesson = source === "lesson" && !!lessonFile;
+  const useAi = source === "ai";
+  const maxCount = useAi ? MAX_AI_QUESTIONS : 20;
 
   const pickFile = (file: File | null) => {
     setLessonFile(file);
@@ -78,7 +117,7 @@ export default function AssessmentNewClient() {
       setError(`Attempts allowed must be at least ${MIN_ATTEMPTS}`);
       return;
     }
-    if (lessonFile) {
+    if (useLesson) {
       if (!form.description.trim()) {
         setError("Add a description first — the lesson import needs every field filled in");
         return;
@@ -87,6 +126,10 @@ export default function AssessmentNewClient() {
         setError("Enter how many questions to generate");
         return;
       }
+    }
+    if (useAi && (!Number.isInteger(lessonCount) || lessonCount < 1)) {
+      setError("Enter how many questions to generate");
+      return;
     }
     setBusy(true);
     setError(null);
@@ -124,7 +167,36 @@ export default function AssessmentNewClient() {
         createdIdRef.current = assessmentId;
       }
 
-      if (lessonFile) {
+      if (useAi) {
+        setStage("generating");
+        const genRes = await fetch(`/api/faculty/assessments/${assessmentId}/questions/generate`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            topic: aiTopic.trim(),
+            count: Math.min(lessonCount, MAX_AI_QUESTIONS),
+            skill_id: aiSkill || undefined,
+          }),
+        });
+        const genJson = (await genRes.json()) as { questions?: DraftQuestion[]; error?: string };
+        if (!genRes.ok || !genJson.questions?.length) {
+          setError(
+            `${genJson.error ?? "Failed to generate questions"} — your quiz was created; press the button again to retry.`,
+          );
+          setBusy(false);
+          setStage(null);
+          return;
+        }
+        // Drafts, not saved questions: the editor opens with them for review.
+        if (!stashDrafts(assessmentId, genJson.questions)) {
+          setError("The questions were written, but this browser blocked passing them to the quiz editor. Try again with site storage allowed.");
+          setBusy(false);
+          setStage(null);
+          return;
+        }
+        toast(`Quiz created — review the ${genJson.questions.length} AI draft questions`);
+      } else if (useLesson) {
         setStage("generating");
         const formData = new FormData();
         formData.append("file", lessonFile);
@@ -174,11 +246,17 @@ export default function AssessmentNewClient() {
     .join(" + ");
   const rateLimited = error?.toLowerCase().includes("rate-limited") ?? false;
 
-  const steps = [
-    { key: "creating", label: "Creating your quiz" },
-    { key: "generating", label: "Reading the lesson and writing questions" },
-    { key: "done", label: "Connecting criteria and opening the quiz" },
-  ] as const;
+  const steps = useAi
+    ? ([
+        { key: "creating", label: "Creating your quiz" },
+        { key: "generating", label: aiSkill ? `Writing questions from Skill ${aiSkill}` : "Writing questions" },
+        { key: "done", label: "Opening the quiz for your review" },
+      ] as const)
+    : ([
+        { key: "creating", label: "Creating your quiz" },
+        { key: "generating", label: "Reading the lesson and writing questions" },
+        { key: "done", label: "Connecting criteria and opening the quiz" },
+      ] as const);
   const stepIndex = stage === "generating" ? 1 : stage === "creating" ? 0 : -1;
 
   return (
@@ -189,7 +267,7 @@ export default function AssessmentNewClient() {
           label: "Quizzes",
         }}
         title="New Quiz"
-        subtitle="Create a new quiz — or drop in a lesson and let it write the questions"
+        subtitle="Create a new quiz — and let AI write the first questions from a lesson or a Taylor's skill"
       />
 
       {error && (
@@ -277,19 +355,102 @@ export default function AssessmentNewClient() {
           </div>
         </div>
 
-        {/* Lesson import */}
+        {/* First questions: none, from a lesson, or AI from a Taylor's skill */}
         <div className="relative overflow-hidden rounded-2xl border border-hairline bg-surface shadow-tile lg:col-span-2">
           <div className="flex items-center gap-3 border-b border-hairline bg-gradient-to-r from-brand-600/[0.07] to-transparent p-6 pb-4">
             <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-600 text-white">
               <FontAwesomeIcon icon={faWandMagicSparkles} className="h-4 w-4" />
             </span>
             <div>
-              <h2 className="text-base font-bold text-gray-900">Generate from a lesson</h2>
-              <p className="text-xs text-gray-500">Optional — questions + criteria, connected</p>
+              <h2 className="text-base font-bold text-gray-900">Generate questions</h2>
+              <p className="text-xs text-gray-500">Optional — let AI write the first questions</p>
             </div>
           </div>
 
           <div className="space-y-5 p-6">
+            <div role="radiogroup" aria-label="Question source" className="grid grid-cols-3 gap-1 rounded-xl bg-gray-100 p-1">
+              {([
+                { key: "none", label: "None", icon: faBan },
+                { key: "lesson", label: "Lesson", icon: faCloudArrowUp },
+                { key: "ai", label: "With AI", icon: faWandMagicSparkles },
+              ] as const).map((opt) => {
+                const on = source === opt.key;
+                return (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    role="radio"
+                    aria-checked={on}
+                    onClick={() => {
+                      setSource(opt.key);
+                      setError(null);
+                      if (opt.key === "ai") setLessonCount((c) => Math.min(Number.isFinite(c) ? c : 5, MAX_AI_QUESTIONS));
+                    }}
+                    disabled={busy}
+                    className={`flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-semibold transition-all ${
+                      on ? "bg-surface text-brand-700 shadow-sm" : "text-gray-500 hover:text-gray-800"
+                    }`}
+                  >
+                    <FontAwesomeIcon icon={opt.icon} className="h-3 w-3" />
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {source === "none" && (
+              <p className="rounded-xl bg-gray-50 p-3 text-xs text-gray-600">
+                The quiz starts empty. You&apos;ll add questions and scoring criteria after creating it.
+              </p>
+            )}
+
+            {source === "ai" && (
+              <>
+                <div>
+                  <label className={labelClassName} htmlFor="ai-skill">Write from</label>
+                  <select
+                    id="ai-skill"
+                    value={aiSkill}
+                    onChange={(e) => setAiSkill(e.target.value)}
+                    disabled={busy}
+                    className={inputClassName}
+                  >
+                    <option value="">General — from the quiz title and description</option>
+                    {skillChapters.map((g) => (
+                      <optgroup key={g.chapter} label={`Chapter ${g.chapter} · ${g.area}`}>
+                        {g.skills.map((sk) => (
+                          <option key={sk.id} value={sk.id}>
+                            Skill {sk.id} · {sk.title}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                  <p className="mt-1.5 flex items-start gap-1.5 text-xs text-gray-500">
+                    <FontAwesomeIcon icon={faBookOpen} className="mt-0.5 h-3 w-3 text-brand-600" />
+                    {aiSkill
+                      ? `Every question tests one step of the checklist and cites it, e.g. “Skill ${aiSkill}, step 9”.`
+                      : "Pick a Taylor's skill to ground every question in its checklist."}
+                  </p>
+                </div>
+                <div>
+                  <label className={labelClassName} htmlFor="ai-focus">
+                    Focus <span className="font-normal text-gray-500">(optional)</span>
+                  </label>
+                  <input
+                    id="ai-focus"
+                    value={aiTopic}
+                    onChange={(e) => setAiTopic(e.target.value)}
+                    placeholder='e.g. "priority nursing interventions"'
+                    disabled={busy}
+                    className={inputClassName}
+                  />
+                </div>
+              </>
+            )}
+
+            {source === "lesson" && (
+            <>
             <input
               ref={lessonInputRef}
               type="file"
@@ -363,7 +524,6 @@ export default function AssessmentNewClient() {
             )}
 
             {lessonFile && (
-              <>
                 <div>
                   <p className={labelClassName}>Question types</p>
                   <div className="grid grid-cols-2 gap-2">
@@ -403,6 +563,12 @@ export default function AssessmentNewClient() {
                   </div>
                 </div>
 
+            )}
+            </>
+            )}
+
+            {(useLesson || useAi) && (
+              <>
                 <div>
                   <p className={labelClassName}>Number of questions</p>
                   <div className="flex items-center gap-2">
@@ -418,7 +584,7 @@ export default function AssessmentNewClient() {
                     <input
                       type="number"
                       min={1}
-                      max={20}
+                      max={maxCount}
                       value={Number.isFinite(lessonCount) ? lessonCount : ""}
                       onChange={(e) => setLessonCount(Math.floor(Number(e.target.value)))}
                       disabled={busy}
@@ -426,7 +592,7 @@ export default function AssessmentNewClient() {
                     />
                     <button
                       type="button"
-                      onClick={() => setLessonCount((c) => Math.min(20, (Number.isFinite(c) ? c : 5) + 1))}
+                      onClick={() => setLessonCount((c) => Math.min(maxCount, (Number.isFinite(c) ? c : 5) + 1))}
                       disabled={busy}
                       aria-label="More questions"
                       className="flex h-11 w-11 items-center justify-center rounded-xl border border-gray-300 text-gray-600 hover:bg-gray-50"
@@ -435,7 +601,7 @@ export default function AssessmentNewClient() {
                     </button>
                   </div>
                   <div className="mt-2 flex gap-1.5">
-                    {[5, 10, 15, 20].map((n) => (
+                    {[5, 10, 15, 20].filter((n) => n <= maxCount).map((n) => (
                       <button
                         key={n}
                         type="button"
@@ -455,11 +621,19 @@ export default function AssessmentNewClient() {
 
                 <div className="flex items-start gap-2 rounded-xl bg-gray-50 p-3 text-xs text-gray-600">
                   <FontAwesomeIcon icon={faCircleInfo} className="mt-0.5 h-3.5 w-3.5 text-brand-600" />
-                  <p>
-                    Creates <b>{Number.isFinite(lessonCount) ? lessonCount : "?"}</b> {typeSummary}{" "}
-                    questions from your lesson, plus scoring criteria — each question is already
-                    connected to its criterion.
-                  </p>
+                  {useAi ? (
+                    <p>
+                      Writes <b>{Number.isFinite(lessonCount) ? lessonCount : "?"}</b> multiple-choice
+                      questions{aiSkill ? <> from Skill <b>{aiSkill}</b></> : null}. They open in the quiz as
+                      drafts — review, edit and save each one before students see it.
+                    </p>
+                  ) : (
+                    <p>
+                      Creates <b>{Number.isFinite(lessonCount) ? lessonCount : "?"}</b> {typeSummary}{" "}
+                      questions from your lesson, plus scoring criteria — each question is already
+                      connected to its criterion.
+                    </p>
+                  )}
                 </div>
               </>
             )}
@@ -470,7 +644,7 @@ export default function AssessmentNewClient() {
               <EcgLoader />
               <ol className="w-full max-w-xs space-y-3">
                 {steps
-                  .slice(0, lessonFile ? 3 : 1)
+                  .slice(0, useLesson || useAi ? 3 : 1)
                   .map((step, i) => {
                     const done = i < stepIndex;
                     const active = i === stepIndex;
@@ -504,9 +678,11 @@ export default function AssessmentNewClient() {
 
       <div className="flex flex-col-reverse items-stretch justify-between gap-3 rounded-2xl border border-hairline bg-surface p-4 shadow-tile sm:flex-row sm:items-center">
         <p className="text-xs text-gray-500">
-          {lessonFile
+          {useLesson
             ? "Your quiz opens with questions and criteria already in place."
-            : "Without a lesson, you'll add questions and scoring criteria after creating."}
+            : useAi
+              ? "Your quiz opens with the AI's questions as drafts for you to review."
+              : "You'll add questions and scoring criteria after creating."}
         </p>
         <div className="flex justify-end gap-2">
           <button
@@ -526,7 +702,7 @@ export default function AssessmentNewClient() {
                 <EcgLoader />{" "}
                 {stage === "generating" ? "Generating…" : "Creating…"}
               </>
-            ) : lessonFile ? (
+            ) : useLesson || useAi ? (
               <>
                 <FontAwesomeIcon icon={faWandMagicSparkles} className="h-4 w-4" /> Create & Generate Quiz
               </>

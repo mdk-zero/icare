@@ -1,7 +1,7 @@
 "use client";
 
 import { DEFAULT_ATTEMPTS, MIN_ATTEMPTS } from "@/app/lib/quiz-attempts";
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -14,7 +14,6 @@ import {
   faPen,
   faLayerGroup,
   faChevronDown,
-  faWandMagicSparkles,
   faTriangleExclamation,
   faListCheck,
   faClock,
@@ -24,7 +23,8 @@ import {
 import { SkeletonQuestionCard } from "../../../components/skeletons";
 import { toast } from "../../../components/Toast";
 import ConfirmModal from "../../../components/ConfirmModal";
-import { fetchSections, fetchSkillCatalog, getCurrentUser, type Section, type SkillSummary, apiFetch } from "../../../lib/api";
+import { fetchSections, getCurrentUser, type Section, apiFetch } from "../../../lib/api";
+import { takeDrafts } from "../draft-handoff";
 import { EcgLoader } from "../../../components/EcgLoader";
 import LiveClock from "../../../components/LiveClock";
 
@@ -166,14 +166,8 @@ export default function AssessmentQuestionsClient({
   const markClean = (qId: string) => setDirtyQuestions((prev) => { const next = new Set(prev); next.delete(qId); return next; });
   const [editingQuestions, setEditingQuestions] = useState<Set<string>>(new Set());
   const toggleEdit = (qId: string) => setEditingQuestions((prev) => { const next = new Set(prev); if (next.has(qId)) next.delete(qId); else next.add(qId); return next; });
-  // AI generation
-  const [showAIPanel, setShowAIPanel] = useState(false);
-  const [aiTopic, setAiTopic] = useState("");
-  const [aiCount, setAiCount] = useState(5);
-  // The Taylor's skill checklist the AI writes from; "" for a general question set.
-  const [aiSkill, setAiSkill] = useState<string | null>(null);
-  const [skillCatalog, setSkillCatalog] = useState<SkillSummary[]>([]);
-  const [aiGenerating, setAiGenerating] = useState(false);
+  // AI drafts handed over by the New Quiz page are picked up once.
+  const draftsTakenRef = useRef(false);
 
   // criteria editor
   const [criteria, setCriteria] = useState<AssessmentCriteria[]>([]);
@@ -592,23 +586,6 @@ export default function AssessmentQuestionsClient({
     [criteria],
   );
 
-  // Skills this assessment's criteria cover ("Skill 1-7 · …"); the first is
-  // the default source for AI questions.
-  const criteriaSkillIds = useMemo(
-    () => [...new Set(criteria.flatMap((c) => [...c.name.matchAll(/\b(\d{1,2}-\d{1,2})\b/g)].map((m) => m[1])))],
-    [criteria],
-  );
-  const chosenSkill = aiSkill ?? (criteriaSkillIds.find((id) => skillCatalog.some((s) => s.id === id)) ?? "");
-
-  useEffect(() => {
-    if (!showAIPanel || skillCatalog.length > 0) return;
-    let live = true;
-    void fetchSkillCatalog().then((skills) => live && setSkillCatalog(skills));
-    return () => {
-      live = false;
-    };
-  }, [showAIPanel, skillCatalog.length]);
-
   /** Appends draft questions to the builder as unsaved `new_` entries. */
   const appendDraftQuestions = (forms: QuestionFormData[]) => {
     if (forms.length === 0) return;
@@ -637,46 +614,25 @@ export default function AssessmentQuestionsClient({
     });
   };
 
-  // ---------- AI generation ----------
+  // ---------- AI drafts from the New Quiz page ----------
 
-  const handleGenerateAI = async () => {
-    setAiGenerating(true);
-    try {
-      const res = await fetch(
-        `/api/faculty/assessments/${assessmentId}/questions/generate`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ topic: aiTopic.trim(), count: aiCount, skill_id: chosenSkill || undefined }),
-        },
-      );
-      const json = (await res.json()) as {
-        questions?: QuestionFormData[];
-        error?: string;
-      };
-      if (!res.ok || !json.questions) {
-        toast(json.error ?? "Failed to generate questions");
-        return;
-      }
-      // The generator tags questions by competency; place the ones whose
-      // competency points at exactly one criterion.
-      appendDraftQuestions(
-        json.questions.map((q) => ({
-          ...q,
-          criteria_id: q.criteria_id ?? criterionForCompetency(q.competency_ids?.[0]),
-        })),
-      );
-      setShowAIPanel(false);
-      toast(
-        `Generated ${json.questions.length} draft question${json.questions.length !== 1 ? "s" : ""} — review and save each one`,
-      );
-    } catch {
-      toast("Failed to generate questions");
-    } finally {
-      setAiGenerating(false);
-    }
-  };
+  // Questions generated while creating the quiz open here as unsaved drafts,
+  // placed on a criterion where their competency points at exactly one.
+  useEffect(() => {
+    if (loading || draftsTakenRef.current) return;
+    draftsTakenRef.current = true;
+    const drafts = takeDrafts(assessmentId);
+    if (drafts.length === 0) return;
+    appendDraftQuestions(
+      drafts.map((q) => ({
+        ...q,
+        criteria_id: q.criteria_id ?? criterionForCompetency(q.competency_ids?.[0]),
+      })),
+    );
+    toast(`${drafts.length} AI draft question${drafts.length === 1 ? "" : "s"} — review and save each one`);
+    // appendDraftQuestions is recreated every render; the ref makes this run once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, assessmentId, criterionForCompetency]);
 
   // ---------- save all ----------
 
@@ -1590,80 +1546,6 @@ export default function AssessmentQuestionsClient({
           </div>
         )}
 
-        {showAIPanel && (
-          <div className="bg-surface rounded-xl border border-brand-600/30 shadow-sm p-4 space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <FontAwesomeIcon icon={faWandMagicSparkles} className="w-4 h-4 text-brand-600" />
-                <span className="font-semibold text-gray-800">Generate questions with AI</span>
-              </div>
-              <button
-                onClick={() => setShowAIPanel(false)}
-                className="p-1 text-gray-400 hover:text-gray-600"
-              >
-                <FontAwesomeIcon icon={faTimes} className="w-4 h-4" />
-              </button>
-            </div>
-            <label className="block">
-              <span className="mb-1 block text-xs font-semibold text-gray-600">Write from</span>
-              <select
-                value={chosenSkill}
-                onChange={(e) => setAiSkill(e.target.value)}
-                className={inputClassName}
-                disabled={aiGenerating}
-              >
-                <option value="">General questions for this assessment</option>
-                {skillCatalog.map((sk) => (
-                  <option key={sk.id} value={sk.id}>
-                    Skill {sk.id} · {sk.title}
-                    {criteriaSkillIds.includes(sk.id) ? " (in this assessment)" : ""}
-                  </option>
-                ))}
-              </select>
-              {chosenSkill && (
-                <span className="mt-1 block text-xs text-gray-500">
-                  Every question tests one step of the checklist and cites it, e.g. “Skill {chosenSkill}, step 9”.
-                </span>
-              )}
-            </label>
-            <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] gap-3">
-              <input
-                value={aiTopic}
-                onChange={(e) => setAiTopic(e.target.value)}
-                placeholder={`Optional focus, e.g. "priority nursing interventions" (defaults to ${assessment.category})`}
-                className={inputClassName}
-                disabled={aiGenerating}
-              />
-              <select
-                value={aiCount}
-                onChange={(e) => setAiCount(Number(e.target.value))}
-                className={inputClassName}
-                disabled={aiGenerating}
-              >
-                {[3, 5, 8, 10].map((n) => (
-                  <option key={n} value={n}>
-                    {n} questions
-                  </option>
-                ))}
-              </select>
-              <button
-                onClick={handleGenerateAI}
-                disabled={aiGenerating}
-                className="flex items-center justify-center gap-2 px-6 py-3 bg-brand-600 text-white rounded-xl text-sm font-medium hover:bg-brand-700 disabled:opacity-60 transition-colors"
-              >
-                {aiGenerating ? (
-                  <><EcgLoader /> Generating…</>
-                ) : (
-                  <><FontAwesomeIcon icon={faWandMagicSparkles} className="w-4 h-4" /> Generate</>
-                )}
-              </button>
-            </div>
-            <p className="text-xs text-gray-500">
-              Generated questions are added as unsaved drafts — review, edit, and save each one before it reaches students.
-            </p>
-          </div>
-        )}
-
         <div className={`flex items-center justify-center gap-3 pt-2 flex-wrap ${canEdit ? "" : "hidden"}`}>
           <button
             onClick={handleAddQuestion}
@@ -1685,13 +1567,6 @@ export default function AssessmentQuestionsClient({
               )}
             </button>
           )}
-          <button
-            onClick={() => setShowAIPanel((v) => !v)}
-            className="flex items-center gap-2 px-6 py-3 bg-surface border border-brand-600 text-brand-600 rounded-xl text-sm font-medium hover:bg-brand-600/5 transition-colors"
-          >
-            <FontAwesomeIcon icon={faWandMagicSparkles} className="w-4 h-4" />
-            Generate with AI
-          </button>
         </div>
       </div>
 
