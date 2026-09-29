@@ -33,6 +33,19 @@ export function toast(text: string, type: Exclude<ToastType, "loading"> = "succe
 }
 
 /**
+ * A toast that stays up until replaced, for a state that lasts (such as being
+ * offline). `replace` turns it into an ordinary toast that fades on its timer.
+ */
+export function stickyToast(text: string, type: Exclude<ToastType, "loading"> = "info") {
+  const id = nextId++;
+  addToastFn?.(id, text, type, 0);
+  return {
+    replace: (next: string, nextType: Exclude<ToastType, "loading"> = "success", durationMs = 4000) =>
+      addToastFn?.(id, next, nextType, durationMs),
+  };
+}
+
+/**
  * A toast that stays up while something runs. `update` changes its text and,
  * given a 0–1 `progress`, fills a bar (for "Enrolling 3 of 10…");
  * `success` / `error` turn it into the ordinary toast for how it ended, which

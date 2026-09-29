@@ -28,6 +28,7 @@ import {
   useNotifications,
 } from "../lib/notifications-live";
 import ToastContainer, { toast } from "./Toast";
+import ConnectionStatus from "./ConnectionStatus";
 import BackgroundTasks from "./BackgroundTasks";
 import NotificationsPopover from "./NotificationsPopover";
 import CacheConsentBanner from "./CacheConsentBanner";
@@ -831,6 +832,7 @@ export default function Shell({ role, navItems, isActive, children }: ShellProps
       </div>
       {/* Mounted here so every role gets arrival toasts from one container. */}
       <ToastContainer />
+      <ConnectionStatus />
       <BackgroundTasks />
       <CacheConsentBanner />
     </>
