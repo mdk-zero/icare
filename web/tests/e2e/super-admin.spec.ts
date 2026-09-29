@@ -78,6 +78,19 @@ test.describe('Admin portal', () => {
     }
   });
 
+  // Saves one health-check run. The AI checks only look models up, so no quota is spent.
+  test('health checks cover each AI provider in fallback order', async ({ page }) => {
+    await page.goto('/super-admin/tests');
+    const section = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Health checks' }) });
+    await section.getByRole('button', { name: 'Run checks' }).click();
+    await expect(section.getByRole('button', { name: 'Run checks' })).toBeEnabled({ timeout: 30_000 });
+    const labels = ['AI: Claude (primary)', 'AI: Gemini (fallback)', 'AI: OpenRouter (last fallback)'];
+    for (const label of labels) await expect(section.getByText(label).first()).toBeVisible();
+    const order = await section.locator('li p.font-medium').allInnerTexts();
+    const positions = labels.map((label) => order.findIndex((text) => text.startsWith(label)));
+    expect(positions).toEqual([...positions].sort((a, b) => a - b));
+  });
+
   test('teaching portals send the admin back', async ({ page }) => {
     for (const path of ['/admin', '/faculty']) {
       await page.goto(path);

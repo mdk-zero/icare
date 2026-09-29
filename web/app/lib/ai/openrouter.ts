@@ -34,7 +34,7 @@ function parseRetryAfterSeconds(errorText: string): number | undefined {
   return undefined;
 }
 
-const DEFAULT_FREE_MODELS = [
+export const DEFAULT_FREE_MODELS = [
   'meta-llama/llama-3.3-70b-instruct:free',
   'google/gemma-4-26b-a4b-it:free',
   'qwen/qwen3-next-80b-a3b-instruct:free',

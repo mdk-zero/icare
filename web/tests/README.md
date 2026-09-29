@@ -1,8 +1,10 @@
 # Automated tests
 
 Two suites, both run against a **running** iCARE++ web app (local `npm run dev`, or a
-deployment). Neither creates, edits nor deletes data, so they are safe to point at the live
-site. Signing in does update each test account's "last sign-in" time.
+deployment). Neither creates, edits nor deletes app data, so they are safe to point at the live
+site. Signing in does update each test account's "last sign-in" time, and the Playwright
+health-check test saves one health-check run to Test Results (its AI checks only look models
+up, so they spend no AI quota).
 
 | Suite | Tool | What it checks | Files |
 |---|---|---|---|

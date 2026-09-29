@@ -3,6 +3,9 @@ import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { requireSuperAdmin } from '@/app/lib/auth/super-admin';
 import { getProvider } from '@/app/lib/auth/email';
 import { saveTestRun } from '@/app/lib/system-tests';
+import { anthropicModel } from '@/app/lib/ai/anthropic';
+import { geminiModel } from '@/app/lib/ai/generate';
+import { DEFAULT_FREE_MODELS } from '@/app/lib/ai/openrouter';
 
 type Status = 'pass' | 'warn' | 'fail';
 
@@ -84,13 +87,84 @@ async function checkMl(): Promise<Check> {
   }
 }
 
+/**
+ * One check per AI provider, in the order callAI tries them. Each asks the
+ * provider's model-lookup endpoint, which proves the key and model are good
+ * without generating anything, so a run spends no quota and is not logged as
+ * AI traffic. A missing key is a warning: callAI skips that provider.
+ */
+async function checkAiProvider(
+  id: string,
+  label: string,
+  key: string | undefined,
+  keyName: string,
+  lookup: (key: string) => Promise<{ res: Response; ok: (res: Response) => Promise<Omit<Check, 'id' | 'label'>> }>,
+): Promise<Check> {
+  if (!key) return { id, label, status: 'warn', detail: `${keyName} is not set; this provider is skipped` };
+  const started = performance.now();
+  try {
+    const { res, ok } = await lookup(key);
+    const duration_ms = Math.round(performance.now() - started);
+    if (res.ok) return { id, label, ...(await ok(res)), duration_ms };
+    const detail =
+      res.status === 401 || res.status === 403
+        ? `Key rejected (HTTP ${res.status})`
+        : res.status === 404
+          ? `Model not found (HTTP 404)`
+          : `HTTP ${res.status}`;
+    return { id, label, status: 'fail', detail, duration_ms };
+  } catch {
+    return { id, label, status: 'warn', detail: 'No answer within 10 s', duration_ms: Math.round(performance.now() - started) };
+  }
+}
+
+function checkAi(): Promise<Check[]> {
+  const opts = { signal: AbortSignal.timeout(10_000), cache: 'no-store' as const };
+  return Promise.all([
+    checkAiProvider('ai_claude', 'AI: Claude (primary)', process.env.ANTHROPIC_API_KEY, 'ANTHROPIC_API_KEY', async (key) => {
+      const model = anthropicModel();
+      const res = await fetch(`https://api.anthropic.com/v1/models/${encodeURIComponent(model)}`, {
+        ...opts,
+        headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01' },
+      });
+      return { res, ok: async () => ({ status: 'pass', detail: `Key valid; ${model} available` }) };
+    }),
+    checkAiProvider('ai_gemini', 'AI: Gemini (fallback)', process.env.GEMINI_API_KEY, 'GEMINI_API_KEY', async (key) => {
+      const model = geminiModel();
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}?key=${key}`,
+        opts,
+      );
+      return {
+        res,
+        ok: async () => ({ status: 'pass', detail: `Key valid; ${model} available (free tier ~20 requests/day)` }),
+      };
+    }),
+    checkAiProvider('ai_openrouter', 'AI: OpenRouter (last fallback)', process.env.OPENROUTER_API_KEY, 'OPENROUTER_API_KEY', async (key) => {
+      // /key validates the key; the public model list shows which free models are still offered.
+      const res = await fetch('https://openrouter.ai/api/v1/key', { ...opts, headers: { Authorization: `Bearer ${key}` } });
+      return {
+        res,
+        ok: async () => {
+          const list = await fetch('https://openrouter.ai/api/v1/models', opts)
+            .then((r) => (r.ok ? (r.json() as Promise<{ data?: { id: string }[] }>) : null))
+            .catch(() => null);
+          if (!list?.data) return { status: 'warn', detail: 'Key valid; could not load the model list' };
+          const offered = new Set(list.data.map((m) => m.id));
+          const live = DEFAULT_FREE_MODELS.filter((m) => offered.has(m));
+          const gone = DEFAULT_FREE_MODELS.filter((m) => !offered.has(m));
+          return {
+            status: live.length === 0 ? 'fail' : gone.length ? 'warn' : 'pass',
+            detail: `Key valid; ${live.length} of ${DEFAULT_FREE_MODELS.length} free models still offered${gone.length ? ` (gone: ${gone.join(', ')})` : ''}`,
+          };
+        },
+      };
+    }),
+  ]);
+}
+
 function checkConfig(): Check[] {
   const mail = getProvider();
-  const ai = [
-    process.env.ANTHROPIC_API_KEY && 'Claude',
-    process.env.GEMINI_API_KEY && 'Gemini',
-    process.env.OPENROUTER_API_KEY && 'OpenRouter',
-  ].filter(Boolean);
   const secret = process.env.SESSION_SECRET ?? '';
   return [
     {
@@ -98,12 +172,6 @@ function checkConfig(): Check[] {
       label: 'Email delivery',
       status: mail ? 'pass' : 'fail',
       detail: mail ? `Configured (${mail === 'resend' ? 'Resend' : 'SMTP'})` : 'No mail provider configured',
-    },
-    {
-      id: 'ai',
-      label: 'AI providers',
-      status: ai.length >= 2 ? 'pass' : ai.length === 1 ? 'warn' : 'fail',
-      detail: ai.length ? `Keys present: ${ai.join(', ')}${ai.length === 1 ? ' (no fallback)' : ''}` : 'No AI key set',
     },
     {
       id: 'session',
@@ -122,6 +190,7 @@ export async function POST() {
   const supabase = getSupabaseAdmin();
   const checks = [
     ...(await Promise.all([checkDatabase(supabase), checkWarehouse(supabase), checkMl()])),
+    ...(await checkAi()),
     ...checkConfig(),
   ];
   const summary = {

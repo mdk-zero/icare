@@ -8,13 +8,15 @@ function sleep(ms: number): Promise<void> {
 const SYSTEM_PROMPT =
   'Respond with a single valid JSON object and nothing else: no prose, no markdown code fences.';
 
+export const anthropicModel = () => process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5';
+
 export async function callAnthropic(prompt: string, attempt = 1): Promise<Record<string, unknown>> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     throw new Error('ANTHROPIC_API_KEY is not configured');
   }
 
-  const model = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5';
+  const model = anthropicModel();
 
   const res = await providerFetch('anthropic', model, 'https://api.anthropic.com/v1/messages', {
     method: 'POST',
