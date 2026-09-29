@@ -31,9 +31,10 @@ export async function GET(_request: Request, { params }: RouteParams) {
   try {
     const supabase = getSupabaseAdmin();
 
+    // select('*') so a database without started_at (migration 063) still answers.
     const { data: assignment } = await supabase
       .from('scenario_assignments')
-      .select('id, student_id, scenario_id, status, submitted_at, completed_at, score, time_taken')
+      .select('*')
       .eq('id', assignmentId)
       .maybeSingle();
     if (!assignment) return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
@@ -95,6 +96,8 @@ export async function GET(_request: Request, { params }: RouteParams) {
         completed_at: assignment.completed_at,
         score: assignment.score,
         time_taken: assignment.time_taken,
+        // Undefined (omitted) before 063: the app then skips the start prompt.
+        started_at: assignment.started_at,
       },
     });
   } catch (err) {

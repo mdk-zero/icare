@@ -6,6 +6,7 @@ import { Card, Badge, PrimaryButton, SkeletonScreen, EmptyState } from '@/compon
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { useApiData, allCached } from '@/hooks/useApiData';
+import { useCaseClock } from '@/hooks/useCaseClock';
 import {
   fetchScenarioAssignments,
   fetchScenario,
@@ -15,7 +16,6 @@ import {
 import { ClinicalTaskList } from '@/components/ClinicalTaskList';
 import { AssistanceButton } from '@/components/AssistanceButton';
 import { ReflectionCard } from '@/components/ReflectionCard';
-import { scoreDescriptor } from '@/lib/task-ratings';
 
 /** How often an open scenario re-checks for the instructor's grades. */
 const GRADE_POLL_MS = 8000;
@@ -103,6 +103,8 @@ export default function ScenarioBriefScreen() {
   const isCompleted = status === 'completed';
   const isSubmitted = !isCompleted && Boolean(submittedAt);
   const isActive = !isCompleted && !isSubmitted;
+  // Asks whether the student is ready, then times the demonstration.
+  const elapsed = useCaseClock(taskAssignment, isActive);
 
   // Grades land the moment the instructor saves them: while the screen is open
   // and the scenario isn't final, keep checking.
@@ -161,12 +163,10 @@ export default function ScenarioBriefScreen() {
           <View style={styles.resultRow}>
             <View style={styles.resultStat}>
               <Text style={styles.resultValue}>{taskAssignment?.score ?? '—'}%</Text>
-              <Text style={styles.resultLabel}>
-                {taskAssignment?.score != null ? scoreDescriptor(taskAssignment.score) : 'Score'}
-              </Text>
+              <Text style={styles.resultLabel}>Score</Text>
             </View>
             <View style={styles.resultStat}>
-              <Text style={styles.resultValue}>{formatTime(taskAssignment?.time_taken ?? 0)}</Text>
+              <Text style={styles.resultValue}>{taskAssignment?.time_taken != null ? formatTime(taskAssignment.time_taken) : '—'}</Text>
               <Text style={styles.resultLabel}>Time</Text>
             </View>
             <View style={styles.resultStat}>
@@ -201,6 +201,16 @@ export default function ScenarioBriefScreen() {
             <Text style={styles.reviewBody}>
               Your instructor grades each task as you demonstrate it. Grades appear below once saved.
             </Text>
+          </View>
+        </Card>
+      )}
+
+      {elapsed !== null && (
+        <Card style={styles.reviewCard}>
+          <Ionicons name="timer-outline" size={20} color={Palette.primary} />
+          <View style={styles.reviewText}>
+            <Text style={[styles.reviewTitle, styles.clock]}>{formatTime(elapsed)}</Text>
+            <Text style={styles.reviewBody}>Running until your instructor grades the last task.</Text>
           </View>
         </Card>
       )}
@@ -283,6 +293,7 @@ function createStyles(
   reviewText: { flex: 1 },
   reviewTitle: { fontSize: 15, fontWeight: '700', color: Palette.ink, marginBottom: 2 },
   reviewBody: { fontSize: 13, color: Palette.textSecondary, lineHeight: 19 },
+  clock: { fontSize: 20, fontVariant: ['tabular-nums'] },
   resultCard: { marginBottom: Spacing.lg },
   resultRow: { flexDirection: 'row', justifyContent: 'space-around' },
   resultStat: { alignItems: 'center' },

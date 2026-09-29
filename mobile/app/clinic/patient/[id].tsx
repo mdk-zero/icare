@@ -12,6 +12,7 @@ import { Card, Badge, SkeletonScreen, EmptyState } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { useApiData } from '@/hooks/useApiData';
+import { useCaseClock } from '@/hooks/useCaseClock';
 import {
   fetchWard,
   fetchScenarioTasks,
@@ -133,6 +134,8 @@ export default function PatientHubScreen() {
   const isFinalized = status === 'completed';
   const isSubmitted = !isFinalized && Boolean(submittedAt);
   const isActive = isAssigned && !isFinalized && !isSubmitted;
+  // Asks whether the student is ready, then times the demonstration.
+  const elapsed = useCaseClock(taskResult?.assignment ?? null, isActive);
 
   // Grades land the moment the instructor saves them: while the screen is open
   // and the scenario isn't final, keep checking.
@@ -218,17 +221,27 @@ export default function PatientHubScreen() {
                   <Text style={styles.resultLabel}>Score</Text>
                 </View>
                 <View style={styles.resultStat}>
-                  <Text style={styles.resultValue}>{formatDuration(taskResult?.assignment.time_taken ?? 0)}</Text>
+                  <Text style={styles.resultValue}>{taskResult?.assignment.time_taken != null ? formatDuration(taskResult.assignment.time_taken) : '—'}</Text>
                   <Text style={styles.resultLabel}>Time</Text>
                 </View>
               </View>
             ) : (
-              <View style={styles.gradingNote}>
-                <Ionicons name="eye-outline" size={14} color={Palette.textSecondary} />
-                <Text style={styles.gradingNoteText}>
-                  Your instructor grades each task as you demonstrate it. Grades appear here once saved.
-                </Text>
-              </View>
+              <>
+                {elapsed !== null ? (
+                  <View style={styles.resultRow}>
+                    <View style={styles.resultStat}>
+                      <Text style={[styles.resultValue, styles.clock]}>{formatDuration(elapsed)}</Text>
+                      <Text style={styles.resultLabel}>Time running</Text>
+                    </View>
+                  </View>
+                ) : null}
+                <View style={styles.gradingNote}>
+                  <Ionicons name="eye-outline" size={14} color={Palette.textSecondary} />
+                  <Text style={styles.gradingNoteText}>
+                    Your instructor grades each task as you demonstrate it. Grades appear here once saved.
+                  </Text>
+                </View>
+              </>
             )}
 
             {assignment?.description ? (
@@ -348,6 +361,7 @@ function createStyles(
     resultStat: { alignItems: 'center' },
     resultValue: { fontSize: 22, fontWeight: '800', color: Palette.primary },
     resultLabel: { fontSize: 12, color: Palette.textSecondary, marginTop: 2 },
+    clock: { fontVariant: ['tabular-nums'] },
     reviewCard: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.md, marginBottom: Spacing.lg },
     reviewText: { flex: 1 },
     reviewTitle: { fontSize: 15, fontWeight: '700', color: Palette.ink, marginBottom: 2 },

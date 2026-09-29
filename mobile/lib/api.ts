@@ -418,6 +418,11 @@ export interface ScenarioTasksResult {
     completed_at: string | null;
     score: number | null;
     time_taken: number | null;
+    /**
+     * When the student started the case (null: not yet). Absent while the
+     * server's database has no clock (before migration 063).
+     */
+    started_at?: string | null;
   };
 }
 
@@ -426,6 +431,19 @@ export async function fetchScenarioTasks(
   assignmentId: string,
 ): Promise<CachedResult<ScenarioTasksResult>> {
   return cachedGet<ScenarioTasksResult>(`/api/student/scenarios/${assignmentId}/tasks`);
+}
+
+/**
+ * The student is ready: start the patient case's clock. It runs until the
+ * instructor grades the last task; starting again keeps the first start.
+ */
+export async function startScenarioAssignment(
+  assignmentId: string,
+): Promise<{ started_at: string | null; timing: boolean }> {
+  return api<{ started_at: string | null; timing: boolean }>(
+    `/api/student/scenarios/${assignmentId}/start`,
+    { method: 'POST' },
+  );
 }
 
 /**

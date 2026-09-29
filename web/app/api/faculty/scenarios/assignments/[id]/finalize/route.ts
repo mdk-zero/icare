@@ -34,9 +34,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
     const supabase = getSupabaseAdmin();
 
+    // select('*') so a database without started_at (migration 063) still answers.
     const { data: assignment } = await supabase
       .from('scenario_assignments')
-      .select('id, student_id, scenario_id, status, completed_at')
+      .select('*')
       .eq('id', assignmentId)
       .maybeSingle();
     if (!assignment) return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
@@ -105,16 +106,26 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ assignment: progress, score, completed: false, remaining });
     }
 
+    const completedAt =
+      assignment.status === 'completed' && assignment.completed_at
+        ? assignment.completed_at
+        : new Date().toISOString();
+    const completion: Record<string, unknown> = {
+      status: 'completed',
+      score,
+      completed_at: completedAt,
+      finalized_by: session.uid,
+    };
+    // The clock runs from the student's start to the last graded task. An edit
+    // later keeps the time it was first completed in.
+    if (assignment.status !== 'completed' && assignment.started_at) {
+      const seconds = Math.round((Date.parse(completedAt) - Date.parse(assignment.started_at)) / 1000);
+      if (seconds >= 0) completion.time_taken = seconds;
+    }
+
     const { data: updated, error } = await supabase
       .from('scenario_assignments')
-      .update({
-        status: 'completed',
-        score,
-        completed_at: assignment.status === 'completed' && assignment.completed_at
-          ? assignment.completed_at
-          : new Date().toISOString(),
-        finalized_by: session.uid,
-      })
+      .update(completion)
       .eq('id', assignmentId)
       .select('id, scenario_id, student_id, assigned_at, deadline, status, required, score, completed_at, time_taken, submitted_at, finalized_by')
       .single();
