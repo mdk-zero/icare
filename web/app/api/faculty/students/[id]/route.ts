@@ -52,7 +52,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
       getLastActivityByStudent(supabase, [id]),
       supabase
         .from('assessment_attempts')
-        .select('id, score, submitted_at, started_at, time_taken_seconds, assessments(title)')
+        .select('id, assessment_id, score, submitted_at, started_at, time_taken_seconds, assessments(title)')
         .eq('student_id', id)
         .eq('status', 'submitted')
         .order('submitted_at', { ascending: false })
@@ -95,6 +95,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
       const counts = answerCounts.get(a.id as string) ?? null;
       return {
         id: a.id,
+        assessment_id: a.assessment_id,
         quiz_title: (a.assessments as unknown as { title?: string } | null)?.title ?? 'Assessment',
         score: a.score == null ? null : Math.round(Number(a.score)),
         submitted_at: a.submitted_at,

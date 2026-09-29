@@ -52,7 +52,7 @@ export default function SkillAreaTrend({
   );
 }
 
-function Sparkline({ values, label }: { values: number[]; label: string }) {
+export function Sparkline({ values, label }: { values: number[]; label: string }) {
   const w = 120;
   const h = 28;
   const x = (i: number) => (values.length === 1 ? w / 2 : (i / (values.length - 1)) * (w - 4) + 2);

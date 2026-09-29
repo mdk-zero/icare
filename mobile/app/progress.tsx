@@ -1,10 +1,36 @@
 import React from 'react';
-import { ScrollView, View, Text, StyleSheet, RefreshControl } from 'react-native';
+import { ScrollView, View, Text, StyleSheet, RefreshControl, Pressable } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { Card, StatCard, SectionHeader, SkeletonScreen } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { useApiData } from '@/hooks/useApiData';
-import { fetchProgress } from '@/lib/api';
+import { fetchProgress, type ProgressAttempt } from '@/lib/api';
+
+interface QuizGroup {
+  key: string;
+  title: string;
+  /** Newest first. */
+  attempts: ProgressAttempt[];
+}
+
+/** Retakes of one quiz, together (by its id, else its title); the most recently taken quiz first. */
+function groupAttempts(attempts: ProgressAttempt[]): QuizGroup[] {
+  const groups = new Map<string, QuizGroup>();
+  for (const attempt of attempts) {
+    const title = attempt.assessments?.title ?? 'Quiz';
+    const key = attempt.assessment_id ?? `title:${title}`;
+    const group = groups.get(key) ?? { key, title, attempts: [] };
+    group.attempts.push(attempt);
+    groups.set(key, group);
+  }
+  const time = (a: ProgressAttempt) => new Date(a.submitted_at).getTime();
+  for (const group of groups.values()) group.attempts.sort((a, b) => time(b) - time(a));
+  return [...groups.values()].sort((a, b) => time(b.attempts[0]) - time(a.attempts[0]));
+}
+
+const formatDate = (iso: string) =>
+  new Date(iso).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
 
 function makeScoreColor(Accent: ReturnType<typeof useTheme>['Accent']) {
   return (score: number) => {
@@ -12,6 +38,79 @@ function makeScoreColor(Accent: ReturnType<typeof useTheme>['Accent']) {
     if (score >= 50) return Accent.amber.fg;
     return Accent.red.fg;
   };
+}
+
+/**
+ * One quiz, however many times it was taken: the latest score, and for a
+ * retaken quiz, a tap opens the score of every attempt.
+ */
+function QuizHistoryRow({
+  group,
+  scoreColor,
+  styles,
+  bordered,
+}: {
+  group: QuizGroup;
+  scoreColor: (score: number) => string;
+  styles: ReturnType<typeof createStyles>;
+  bordered: boolean;
+}) {
+  const { Palette } = useTheme();
+  const [open, setOpen] = React.useState(false);
+  const latest = group.attempts[0];
+  const retaken = group.attempts.length > 1;
+  const scores = group.attempts.map((a) => a.score).filter((s): s is number => s !== null);
+  const best = scores.length > 0 ? Math.max(...scores) : null;
+
+  return (
+    <View style={bordered && styles.rowBorder}>
+      <Pressable
+        onPress={() => setOpen((v) => !v)}
+        disabled={!retaken}
+        accessibilityRole={retaken ? 'button' : undefined}
+        accessibilityState={retaken ? { expanded: open } : undefined}
+        style={({ pressed }) => [styles.quizRow, pressed && styles.pressed]}
+      >
+        <View style={styles.quizInfo}>
+          <Text style={styles.activityComp} numberOfLines={1}>
+            {group.title}
+          </Text>
+          <Text style={styles.activityDateText}>
+            {retaken
+              ? `${group.attempts.length} attempts${best !== null ? ` · best ${best}%` : ''}`
+              : formatDate(latest.submitted_at)}
+          </Text>
+        </View>
+        <Text style={[styles.activityScore, latest.score !== null && { color: scoreColor(latest.score) }]}>
+          {latest.score !== null ? `${latest.score}%` : '—'}
+        </Text>
+        {retaken ? (
+          <Ionicons
+            name={open ? 'chevron-up' : 'chevron-down'}
+            size={16}
+            color={Palette.textMuted}
+            style={styles.chevron}
+          />
+        ) : (
+          <View style={styles.chevron} />
+        )}
+      </Pressable>
+
+      {open && (
+        <View style={styles.history}>
+          {group.attempts.map((attempt, i) => (
+            <View key={attempt.id} style={styles.historyRow}>
+              <Text style={styles.historyLabel}>Attempt {group.attempts.length - i}</Text>
+              <Text style={styles.historyDate}>{formatDate(attempt.submitted_at)}</Text>
+              <Text style={[styles.historyScore, attempt.score !== null && { color: scoreColor(attempt.score) }]}>
+                {attempt.score !== null ? `${attempt.score}%` : '—'}
+              </Text>
+            </View>
+          ))}
+        </View>
+      )}
+    </View>
+  );
 }
 
 export default function ProgressScreen() {
@@ -47,7 +146,7 @@ export default function ProgressScreen() {
     avgScore: Math.round(total / count),
   }));
 
-  const recentAttempts = attempts.slice(0, 7);
+  const quizzes = groupAttempts(attempts);
 
   return (
     <ScrollView
@@ -99,27 +198,19 @@ export default function ProgressScreen() {
       </View>
 
       <View style={styles.section}>
-        <SectionHeader title="Recent Activity" />
+        <SectionHeader title="Quiz History" count={quizzes.length || undefined} />
         <Card>
-          {recentAttempts.length === 0 && (
+          {quizzes.length === 0 && (
             <Text style={styles.emptyText}>No quiz attempts yet — take one from the Quizzes tab.</Text>
           )}
-          {recentAttempts.map((attempt, index) => (
-            <View key={attempt.id} style={[styles.activityItem, index > 0 && styles.rowBorder]}>
-              <View style={styles.activityDate}>
-                <Text style={styles.activityDateText}>
-                  {new Date(attempt.submitted_at).toLocaleDateString()}
-                </Text>
-              </View>
-              <View style={styles.activityInfo}>
-                <Text style={styles.activityComp} numberOfLines={1}>
-                  {attempt.assessments?.title ?? 'Quiz'}
-                </Text>
-                <Text style={[styles.activityScore, { color: scoreColor(attempt.score ?? 0) }]}>
-                  {attempt.score !== null ? `${attempt.score}%` : '—'}
-                </Text>
-              </View>
-            </View>
+          {quizzes.map((group, index) => (
+            <QuizHistoryRow
+              key={group.key}
+              group={group}
+              scoreColor={scoreColor}
+              styles={styles}
+              bordered={index > 0}
+            />
           ))}
         </Card>
       </View>
@@ -188,34 +279,66 @@ function createStyles(Palette: ReturnType<typeof useTheme>['Palette']) {
     width: 40,
     textAlign: 'right',
   },
-  activityItem: {
+  quizRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: Spacing.md,
   },
-  activityDate: {
-    width: 90,
+  pressed: {
+    opacity: 0.7,
+  },
+  quizInfo: {
+    flex: 1,
+    marginRight: Spacing.sm,
   },
   activityDateText: {
     fontSize: 12,
     color: Palette.textMuted,
-  },
-  activityInfo: {
-    flex: 1,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    marginTop: 2,
   },
   activityComp: {
     fontSize: 14,
     fontWeight: '500',
     color: Palette.ink,
-    flex: 1,
-    marginRight: Spacing.sm,
   },
   activityScore: {
     fontSize: 14,
     fontWeight: '700',
+    color: Palette.textMuted,
+    fontVariant: ['tabular-nums'],
+  },
+  chevron: {
+    width: 16,
+    marginLeft: Spacing.sm,
+  },
+  history: {
+    marginBottom: Spacing.md,
+    borderRadius: 10,
+    backgroundColor: Palette.borderLight,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+  },
+  historyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  historyLabel: {
+    width: 80,
+    fontSize: 12,
+    fontWeight: '600',
+    color: Palette.textSecondary,
+  },
+  historyDate: {
+    flex: 1,
+    fontSize: 12,
+    color: Palette.textMuted,
+  },
+  historyScore: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Palette.textMuted,
+    fontVariant: ['tabular-nums'],
   },
   emptyText: {
     fontSize: 13,

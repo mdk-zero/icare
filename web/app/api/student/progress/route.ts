@@ -20,7 +20,7 @@ export async function GET() {
       await Promise.all([
         supabase
           .from('assessment_attempts')
-          .select('id, score, submitted_at, time_taken_seconds, assessments(title, category)')
+          .select('id, assessment_id, score, submitted_at, time_taken_seconds, assessments(title, category)')
           .eq('student_id', session.uid)
           .eq('status', 'submitted')
           .order('submitted_at', { ascending: false })

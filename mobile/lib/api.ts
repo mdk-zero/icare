@@ -587,6 +587,8 @@ export async function dismissRecommendation(id: string): Promise<void> {
 
 export interface ProgressAttempt {
   id: string;
+  /** The quiz taken; retakes share it. Absent from a server or cached read from before it was sent. */
+  assessment_id?: string | null;
   score: number | null;
   submitted_at: string;
   time_taken_seconds: number | null;

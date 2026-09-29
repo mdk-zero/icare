@@ -1202,6 +1202,8 @@ export interface ScenarioPerformance {
 /** One submitted quiz attempt, as the faculty Performance tab lists it. */
 export interface StudentQuizAttempt {
   id: string;
+  /** The quiz taken; retakes share it, so the Performance tab groups by it. */
+  assessment_id: string | null;
   quiz_title: string;
   /** Percentage, or null for an attempt that was never scored. */
   score: number | null;

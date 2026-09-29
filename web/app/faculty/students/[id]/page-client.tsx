@@ -17,7 +17,6 @@ import {
   faStethoscope,
   faListCheck,
   faBullseye,
-  faFileLines,
   faXmark,
   faArrowsRotate,
 } from "@fortawesome/free-solid-svg-icons";
@@ -41,7 +40,6 @@ import {
   CompetencyScore,
   type StudentQuizAttempt,
 } from "../../../lib/api";
-import { scoreDescriptor } from "../../../lib/task-ratings";
 import {
   SkeletonProfileHeader,
   SkeletonRiskPredictionCard,
@@ -57,6 +55,7 @@ import AiThinking from "../../../components/AiThinking";
 import ReflectionsTab from "./reflections-tab";
 import { fetchStudentReflections, type FacultyReflection } from "../../../lib/api";
 import SkillAreaTrend from "./skill-area-trend";
+import QuizHistory, { groupAttempts, scoreColor } from "./quiz-history";
 import AssignmentGrader, { ScenarioSummaryCard } from "../../scenarios/review/assignment-grader";
 import {
   AssignmentFilterTabs,
@@ -129,31 +128,6 @@ const NO_PERFORMANCE_HISTORY: StudentQuizAttempt[] = [];
 const NO_ASSIGNMENTS: ScenarioAssignment[] = [];
 const NO_COMPETENCIES: ResolvedCompetency[] = [];
 const NO_SCORE_HISTORY: CompetencyScore[] = [];
-
-function formatDateTime(value: string | null): string {
-  if (!value) return "—";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
-  return date.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
-/** A duration in seconds, read as a person would say it. */
-function formatDuration(seconds: number | null): string | null {
-  if (seconds === null || !Number.isFinite(seconds) || seconds < 0) return null;
-  if (seconds < 60) return `${Math.round(seconds)}s`;
-  const minutes = Math.floor(seconds / 60);
-  const rest = Math.round(seconds % 60);
-  if (minutes < 60) return rest > 0 ? `${minutes}m ${rest}s` : `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  const restMinutes = minutes % 60;
-  return restMinutes > 0 ? `${hours}h ${restMinutes}m` : `${hours}h`;
-}
 
 /**
  * Plain-language reading of this student's record, in a popup opened from
@@ -389,6 +363,8 @@ export default function StudentDetailClient() {
 
   const student = data?.student ?? null;
   const performanceHistory = data?.performanceHistory ?? NO_PERFORMANCE_HISTORY;
+  // Retakes of a quiz count once, as the Performance tab lists them.
+  const quizCount = useMemo(() => groupAttempts(performanceHistory).length, [performanceHistory]);
   // Every scenario assigned to the student; the graded ones are their scenario history.
   const assignments = data?.assignments ?? NO_ASSIGNMENTS;
   const scenarioHistory = useMemo(() => scenarioHistoryFrom(assignments), [assignments]);
@@ -511,11 +487,7 @@ export default function StudentDetailClient() {
   const featureLabel = (feature: string) =>
     feature.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
-  const getScoreColor = (score: number) => {
-    if (score >= 80) return 'text-emerald-600';
-    if (score >= 60) return 'text-amber-600';
-    return 'text-red-600';
-  };
+  const getScoreColor = scoreColor;
 
   const needsImprovement = competencies.filter((c) => c.level === 'needs_improvement');
 
@@ -751,7 +723,7 @@ export default function StudentDetailClient() {
 
         <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {([
-            { key: 'performance', label: 'Performance', hint: 'Quiz results', count: performanceHistory.length, unit: 'attempts', icon: faChartLine },
+            { key: 'performance', label: 'Performance', hint: 'Quiz results', count: quizCount, unit: quizCount === 1 ? 'quiz' : 'quizzes', icon: faChartLine },
             { key: 'scenarios', label: 'Patient Cases', hint: 'Assigned patient cases', count: assignments.length, unit: 'assigned', icon: faStethoscope },
             { key: 'competencies', label: 'Skill Areas', hint: 'Skill mastery', count: competencies.length, unit: 'areas', icon: faListCheck },
             { key: 'reflections', label: 'Reflections', hint: 'Reflections & goals', count: reflections?.length ?? 0, unit: 'entries', icon: faBullseye },
@@ -790,58 +762,7 @@ export default function StudentDetailClient() {
 
         <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-clip">
         <div className="p-6">
-          {activeTab === 'performance' && (
-            <div className="space-y-2">
-              {performanceHistory.length === 0 ? (
-                <p className="text-gray-500 text-center py-8">No quiz attempts yet</p>
-              ) : (
-                performanceHistory.map((record) => {
-                  const duration = formatDuration(record.time_taken_seconds);
-                  const answered =
-                    record.total_questions !== null && record.total_questions > 0
-                      ? record.total_questions
-                      : null;
-                  return (
-                    <div key={record.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-600/10 text-brand-600">
-                        <FontAwesomeIcon icon={faFileLines} className="h-4 w-4" />
-                      </span>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-gray-900 truncate">{record.quiz_title}</p>
-                        <p className="text-sm text-gray-500">{formatDateTime(record.submitted_at)}</p>
-                        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-400">
-                          {answered !== null && (
-                            <span className="flex items-center gap-1">
-                              <FontAwesomeIcon icon={faCircleCheck} className="h-3 w-3" />
-                              {record.correct_answers} / {answered} correct
-                            </span>
-                          )}
-                          {duration && (
-                            <span className="flex items-center gap-1">
-                              <FontAwesomeIcon icon={faClock} className="h-3 w-3" />
-                              {duration}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="shrink-0 text-right">
-                        <p
-                          className={`text-xl font-bold leading-none ${
-                            record.score !== null ? getScoreColor(record.score) : 'text-gray-400'
-                          }`}
-                        >
-                          {record.score !== null ? `${record.score}%` : '—'}
-                        </p>
-                        <p className="mt-1 text-[11px] text-gray-400">
-                          {record.score !== null ? scoreDescriptor(record.score) : 'Not scored'}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          )}
+          {activeTab === 'performance' && <QuizHistory records={performanceHistory} />}
 
           {activeTab === 'scenarios' && (
             assignments.length === 0 ? (
