@@ -190,6 +190,10 @@ export default function ClinicScreen() {
   const patientsById = new Map(patients.map((p) => [p.id, p]));
   const roomsById = new Map(rooms.map((r) => [r.id, r]));
   const openAssignments = assignments.filter((a) => a.status !== 'completed');
+  // Newest graded first; the list comes newest-assigned first.
+  const completedAssignments = assignments
+    .filter((a) => a.status === 'completed')
+    .sort((a, b) => (b.completed_at ?? '').localeCompare(a.completed_at ?? ''));
   // The room to ring on the plan: the first open assignment's patient.
   const myRoomId =
     openAssignments
@@ -245,6 +249,21 @@ export default function ClinicScreen() {
             />
           ))
         : null}
+
+      {completedAssignments.length > 0 ? (
+        <View style={styles.section}>
+          <SectionHeader title="Completed Patient Cases" count={completedAssignments.length} />
+          {completedAssignments.map((assignment) => (
+            <CompletedCaseCard
+              key={assignment.id}
+              assignment={assignment}
+              patient={assignment.patient_id ? (patientsById.get(assignment.patient_id) ?? null) : null}
+              // The brief, not the patient: a patient's page follows their open case.
+              onPress={() => router.push(`/clinic/assignment/${assignment.id}`)}
+            />
+          ))}
+        </View>
+      ) : null}
 
       {caseList.length > 0 || cases.loading ? (
         <View style={styles.section}>
@@ -316,6 +335,51 @@ const CASE_STATUS: Record<CaseListItem['status'], { label: string; variant: 'def
   submitted: { label: 'Handed in', variant: 'info' },
   graded: { label: 'Graded', variant: 'success' },
 };
+
+/** A graded patient case: its score and when it was graded. Opens the brief with every task's grade. */
+function CompletedCaseCard({
+  assignment,
+  patient,
+  onPress,
+}: {
+  assignment: WardAssignment;
+  patient: WardPatient | null;
+  onPress: () => void;
+}) {
+  const { Palette, Accent, Shadow, Type } = useTheme();
+  const styles = React.useMemo(() => createStyles(Palette, Accent, Shadow, Type), [Palette, Accent, Shadow, Type]);
+  const graded = assignment.completed_at
+    ? new Date(assignment.completed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    : null;
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.tipCard, styles.caseCard, pressed && styles.pressedCard]}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${assignment.scenario_title}, completed${assignment.score !== null ? `, ${assignment.score}%` : ''}`}
+    >
+      <View style={[styles.bannerIcon, { backgroundColor: Accent.green.bg }]}>
+        <Ionicons name="checkmark-done" size={17} color={Accent.green.fg} />
+      </View>
+      <View style={styles.tipBody}>
+        <Text style={Type.itemTitle} numberOfLines={1}>
+          {assignment.scenario_title}
+        </Text>
+        <View style={styles.caseMeta}>
+          <Badge label="Completed" variant="success" size="sm" />
+          {assignment.score !== null ? <Text style={Type.caption}>{assignment.score}%</Text> : null}
+          {graded ? <Text style={Type.caption}>Graded {graded}</Text> : null}
+        </View>
+        {patient ? (
+          <Text style={[Type.caption, styles.completedPatient]} numberOfLines={1}>
+            {patient.name}
+          </Text>
+        ) : null}
+      </View>
+      <Ionicons name="chevron-forward" size={17} color={Palette.textFaint} />
+    </Pressable>
+  );
+}
 
 function CaseCard({ item, onPress }: { item: CaseListItem; onPress: () => void }) {
   const { Palette, Accent, Shadow, Type } = useTheme();
@@ -512,6 +576,7 @@ function createStyles(
     caseCard: {
       alignItems: 'center',
     },
+    completedPatient: { marginTop: 4 },
     caseMeta: {
       flexDirection: 'row',
       alignItems: 'center',
