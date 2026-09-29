@@ -82,6 +82,18 @@
   --color-series-6: #008300;
   --color-series-7: #4a3aa7;
   --color-series-8: #e34948;
+
+  /*
+   * Groups in the Classroom Performance Overview: led by the brand teal, then
+   * the amber the two-series charts pair with it, then hues kept muted to sit
+   * beside the teal UI. Slot N is always the viewer's Nth group.
+   */
+  --color-group-1: #2b899f;
+  --color-group-2: #d97706;
+  --color-group-3: #6d5bd0;
+  --color-group-4: #3f9a5c;
+  --color-group-5: #c4527c;
+  --color-group-6: #3f6fc0;
 }
 
 @keyframes fadeInUp {
@@ -249,6 +261,12 @@
   --color-series-6: #008300;
   --color-series-7: #9085e9;
   --color-series-8: #e66767;
+  --color-group-1: #3ea9bf;
+  --color-group-2: #e08a1e;
+  --color-group-3: #9085e9;
+  --color-group-4: #4fb877;
+  --color-group-5: #e0729a;
+  --color-group-6: #6b98e6;
 
   /*
    * Brand lifts in dark, but only to mid-teal. 600 has to serve two masters:

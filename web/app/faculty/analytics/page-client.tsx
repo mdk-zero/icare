@@ -39,7 +39,7 @@ import AiThinking from "../../components/AiThinking";
 import { Leaderboard, LeaderboardSkeleton } from "./Leaderboard";
 import GroupPerformance from "./GroupPerformance";
 import { parseDay, formatRange } from "./dates";
-import { buildTrendSeries, TrendLegend, TrendBarChart, TrendTable } from "./SectionTrendChart";
+import { buildTrendSeries, TrendLegend, TrendBarChart, TrendTable } from "./GroupTrendChart";
 import { isActiveSkillArea } from "../../../scripts/taylors-chapters";
 
 /** Stable empty fallback, so nothing downstream sees a new array each render. */
@@ -731,7 +731,7 @@ export default function FacultyAnalyticsClient() {
     revalidating: refreshing,
   } = usePageData(
     `faculty:analytics:${sectionKey}:${from}:${to}`,
-    () => fetchAnalyticsSummary({ sectionIds, from, to, sectionTrend: true }),
+    () => fetchAnalyticsSummary({ sectionIds, from, to, groupTrend: true }),
     { keepPreviousData: true },
   );
 
@@ -785,10 +785,10 @@ export default function FacultyAnalyticsClient() {
   }, [summary]);
 
   // The table carries the same numbers as the performance chart, for readers
-  // who can't hover or can't tell the lighter section colours apart.
+  // who can't hover or can't tell the group colours apart.
   const [trendView, setTrendView] = useState<"chart" | "table">("chart");
-  // Clicking a section in the chart's legend isolates its line. The table is
-  // the full read-out, so it always lists every section.
+  // Clicking a group in the chart's legend isolates its bars. The table is
+  // the full read-out, so it always lists every group.
   const [trendFocus, setTrendFocus] = useState<string | null>(null);
 
   /* --- AI narrative -------------------------------------------------- */
@@ -866,20 +866,20 @@ export default function FacultyAnalyticsClient() {
   const closeNarrative = useCallback(() => setNarrativeOpen(false), []);
 
   const atRisk = summary?.risk_distribution?.at_risk ?? 0;
-  const trendSeries = buildTrendSeries(summary, sections);
+  const trendSeries = buildTrendSeries(summary);
   // The split failed to load (the summary itself did) — say so rather than
-  // drawing one merged line in its place.
-  const trendUnavailable = summary != null && summary.section_trend == null;
-  // Read the isolated section off the series in hand, so a filter or range
+  // drawing one merged series in its place.
+  const trendUnavailable = summary != null && summary.group_trend == null;
+  // Read the isolated group off the series in hand, so a filter or range
   // change that drops it — or a switch to the full table — simply shows every
-  // line again, and switching back to the chart restores the isolation.
+  // group again, and switching back to the chart restores the isolation.
   const trendFocused =
     trendView === "chart" && trendFocus !== null && trendSeries.some((s) => s.id === trendFocus)
       ? trendFocus
       : null;
-  // The one line on show, if there is only one — whether isolated by a legend
-  // click or because this faculty member manages a single section. The card's
-  // title names it, which is why the chart draws no end-label for it.
+  // The one group on show, if there is only one — whether isolated by a legend
+  // click or because this instructor supervises a single group. The card's
+  // title names it.
   const trendSolo =
     trendFocused !== null
       ? (trendSeries.find((s) => s.id === trendFocused) ?? null)
@@ -1180,7 +1180,7 @@ export default function FacultyAnalyticsClient() {
                     <p className="text-xs text-gray-400">
                       {trendSolo
                         ? `Average quiz score over time — ${trendSolo.name}`
-                        : "Average quiz score over time, one bar per section"}
+                        : "Average quiz score over time, one bar per group"}
                     </p>
                   </div>
                 </div>
@@ -1216,7 +1216,11 @@ export default function FacultyAnalyticsClient() {
               <div className="flex-1 flex flex-col justify-center">
                 {trendUnavailable ? (
                   <p className="text-gray-400 text-sm py-16 text-center">
-                    The per-section breakdown couldn&apos;t be loaded. Refresh to try again.
+                    The per-group breakdown couldn&apos;t be loaded. Refresh to try again.
+                  </p>
+                ) : summary?.group_trend?.groups.length === 0 ? (
+                  <p className="text-gray-400 text-sm py-16 text-center">
+                    No groups yet — the chart fills in once students are placed in groups.
                   </p>
                 ) : trendSeries.length === 0 ? (
                   <p className="text-gray-400 text-sm py-16 text-center">

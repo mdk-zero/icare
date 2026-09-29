@@ -1,16 +1,16 @@
 "use client";
 
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
-import type { AnalyticsBucket, AnalyticsSummary, Section } from "../../lib/api";
+import type { AnalyticsBucket, AnalyticsSummary } from "../../lib/api";
 import { TARGET_SCORE } from "../../lib/performance-target";
 import { formatBucket } from "./dates";
 
 /*
  * "Classroom Performance Overview": average quiz score per period, one bar per
- * section in each period's cluster. Each section keeps one colour for good — its position among the
- * sections this faculty member manages picks a slot in the fixed series
- * palette (globals.css) — so narrowing the section filter never repaints the
- * bars that remain.
+ * group in each period's cluster. Each group keeps one colour for good — its
+ * position among every group this viewer has picks a slot in the brand-led
+ * group palette (globals.css) — so narrowing the section filter never
+ * repaints the bars that remain.
  */
 
 type Point = { week_start: string; average_score: number };
@@ -22,29 +22,25 @@ export interface TrendSeries {
   points: Point[];
 }
 
-const SLOTS = 8;
-const slotColor = (slot: number) => `var(--color-series-${slot + 1})`;
-/** Folded sections are not an entity of their own, so they get no hue. */
+const SLOTS = 6;
+const slotColor = (slot: number) => `var(--color-group-${slot + 1})`;
+/** Folded groups are not an entity of their own, so they get no hue. */
 const OTHER_COLOR = "var(--color-gray-400)";
 
 const byName = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true });
 
 /**
- * One series per section in the summary's `section_trend` — never a merged
- * all-sections series. Past eight sections, the ninth onward fold into one
- * attempt-weighted "Other sections" series rather than cycling a hue.
+ * One series per group in the summary's `group_trend` — never a merged
+ * all-groups series. Past six groups, the sixth onward fold into one
+ * attempt-weighted "Other groups" series rather than cycling a hue.
  */
-export function buildTrendSeries(
-  summary: AnalyticsSummary | null,
-  managed: Section[],
-): TrendSeries[] {
-  const rows = summary?.section_trend ?? [];
-  const names = new Map<string, string>();
-  for (const s of managed) names.set(s.id, s.name);
-  for (const r of rows) if (!names.has(r.section_id)) names.set(r.section_id, r.section_name);
+export function buildTrendSeries(summary: AnalyticsSummary | null): TrendSeries[] {
+  const groups = summary?.group_trend?.groups ?? [];
+  const rows = summary?.group_trend?.points ?? [];
+  const names = new Map(groups.map((g) => [g.id, g.name]));
 
-  // Slots follow every managed section, not just the ones in view.
-  const order = [...names.entries()].sort((a, b) => byName(a[1], b[1])).map(([id]) => id);
+  // Slots follow every group the viewer has, not just the ones in view.
+  const order = [...groups].sort((a, b) => byName(a.name, b.name)).map((g) => g.id);
   const fold = order.length > SLOTS;
   const ownSlots = fold ? SLOTS - 1 : SLOTS;
   const slotOf = new Map(order.map((id, i) => [id, i]));
@@ -52,11 +48,11 @@ export function buildTrendSeries(
   const own = new Map<string, Point[]>();
   const other = new Map<string, { weighted: number; attempts: number }>();
   for (const r of rows) {
-    const slot = slotOf.get(r.section_id) ?? order.length;
+    const slot = slotOf.get(r.group_id) ?? order.length;
     if (slot < ownSlots) {
-      const points = own.get(r.section_id) ?? [];
+      const points = own.get(r.group_id) ?? [];
       points.push({ week_start: r.week_start, average_score: r.average_score });
-      own.set(r.section_id, points);
+      own.set(r.group_id, points);
     } else {
       const acc = other.get(r.week_start) ?? { weighted: 0, attempts: 0 };
       acc.weighted += r.average_score * r.attempts;
@@ -69,14 +65,14 @@ export function buildTrendSeries(
     .sort((a, b) => slotOf.get(a[0])! - slotOf.get(b[0])!)
     .map(([id, points]) => ({
       id,
-      name: names.get(id) ?? "Section",
+      name: names.get(id) ?? "Group",
       color: slotColor(slotOf.get(id)!),
       points: points.sort((a, b) => a.week_start.localeCompare(b.week_start)),
     }));
   if (other.size > 0) {
     series.push({
       id: "other",
-      name: "Other sections",
+      name: "Other groups",
       color: OTHER_COLOR,
       points: [...other.entries()]
         .sort((a, b) => a[0].localeCompare(b[0]))
@@ -98,9 +94,9 @@ function bucketsOf(series: TrendSeries[]): string[] {
 
 /**
  * Legend for two or more series; a lone series is named by the card's title.
- * Clicking a section isolates its bars — the chart is handed that series
+ * Clicking a group isolates its bars — the chart is handed that series
  * alone — and clicking it again, or "Show all", brings the rest back. The
- * legend lists every section either way, so the way back stays in view and
+ * legend lists every group either way, so the way back stays in view and
  * the dimmed entries still say which colour belongs to whom.
  */
 export function TrendLegend({
@@ -114,7 +110,7 @@ export function TrendLegend({
 }) {
   if (series.length < 2) return null;
   return (
-    <ul className="mb-3 flex flex-wrap items-center gap-x-1 gap-y-0.5" aria-label="Sections">
+    <ul className="mb-3 flex flex-wrap items-center gap-x-1 gap-y-0.5" aria-label="Groups">
       {series.map((s) => {
         const isFocused = focused === s.id;
         const dimmed = focused !== null && !isFocused;
@@ -124,7 +120,7 @@ export function TrendLegend({
               type="button"
               onClick={() => onFocus(isFocused ? null : s.id)}
               aria-pressed={isFocused}
-              title={isFocused ? "Show all sections" : `Show only ${s.name}`}
+              title={isFocused ? "Show all groups" : `Show only ${s.name}`}
               className={`flex items-center gap-1.5 rounded-md px-1.5 py-0.5 text-xs transition-colors hover:bg-subtle ${
                 dimmed ? "text-gray-400" : "text-gray-600"
               } ${isFocused ? "bg-subtle font-medium" : ""}`}
@@ -185,8 +181,8 @@ export function TrendBarChart({
   bucket,
 }: {
   series: TrendSeries[];
-  /** Isolate one section's bars. The x-axis still spans every series, so
-   *  isolating a section never shifts the periods under it. */
+  /** Isolate one group's bars. The x-axis still spans every series, so
+   *  isolating a group never shifts the periods under it. */
   focused?: string | null;
   bucket: AnalyticsBucket;
 }) {
@@ -227,7 +223,7 @@ export function TrendBarChart({
   // The last bucket is always labelled, so a regular tick too close to it gives way.
   const isTick = (i: number) => i === last || (i % tickStep === 0 && last - i >= tickStep);
 
-  // Each section holds the same place in every cluster, so its bars line up
+  // Each group holds the same place in every cluster, so its bars line up
   // period to period the way a line would.
   const k = Math.max(shown.length, 1);
   const slotW = Math.min((band * CLUSTER_FILL) / k, MAX_BAR_W);
@@ -270,7 +266,7 @@ export function TrendBarChart({
           viewBox={`0 0 ${W} ${H}`}
           className="absolute inset-0 block overflow-visible"
           role="img"
-          aria-label={`Average quiz score per period for ${shown.map((s) => s.name).join(", ")}, one bar per section. Dashed line marks the ${TARGET_SCORE}% target. Use the table view for exact values.`}
+          aria-label={`Average quiz score per period for ${shown.map((s) => s.name).join(", ")}, one bar per group. Dashed line marks the ${TARGET_SCORE}% target. Use the table view for exact values.`}
           tabIndex={0}
           onPointerMove={onPointerMove}
           onPointerLeave={() => setHover(null)}
@@ -329,7 +325,7 @@ export function TrendBarChart({
             });
           })}
 
-          {/* Drawn over the bars in a neutral dash — every hue belongs to a section. */}
+          {/* Drawn over the bars in a neutral dash — every hue belongs to a group. */}
           <line
             x1={PAD_L}
             y1={y(TARGET_SCORE)}

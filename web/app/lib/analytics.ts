@@ -32,7 +32,7 @@ export interface SummaryArgs {
  */
 export async function callAnalytics(
   supabase: SupabaseClient,
-  fn: 'dw_analytics_summary' | 'dw_student_leaderboard' | 'dw_section_trend',
+  fn: 'dw_analytics_summary' | 'dw_student_leaderboard',
   args: Record<string, unknown>,
 ): Promise<{ data: unknown; error: { message: string; code?: string } | null }> {
   const first = await supabase.rpc(fn, args);
