@@ -19,11 +19,13 @@ import { FloorPlan } from '@/components/FloorPlan';
 import { fetchWard, fetchAiTips, fetchMyCases, AiTip, WardRoom, WardPatient, WardAssignment, CaseListItem } from '@/lib/api';
 
 /**
- * The Clinic tab: the student's hospital case write-ups, then the ward's
- * floor plan as the Dean laid it out (rooms not on the plan follow as cards,
- * four to a page, as does the whole ward before any room is placed). Students find the room with their patient and walk
- * into it to read the scenario brief and task checklist. The ward arrives in
- * one cached read (/api/student/ward), so the rooms still show offline.
+ * The Clinic tab: the ward's floor plan as the Dean laid it out first (rooms
+ * not on the plan follow as cards, four to a page, as does the whole ward
+ * before any room is placed), then the student's patient cases, open and
+ * completed, and their hospital case write-ups. Students find the room with
+ * their patient and walk into it to read the scenario brief and task
+ * checklist. The ward arrives in one cached read (/api/student/ward), so the
+ * rooms still show offline.
  */
 
 function AssignmentBanner({
@@ -234,6 +236,29 @@ export default function ClinicScreen() {
 
       {error && !data ? <EmptyState icon="cloud-offline-outline" message={error} /> : null}
 
+      <View style={styles.section}>
+        <SectionHeader title="Room Layout" subtitle="Tap a room to see who is in it" />
+        {onPlan.length > 0 ? (
+          <FloorPlan
+            rooms={onPlan}
+            fixtures={fixtures}
+            highlightRoomId={myRoomId}
+            onPressRoom={(room) => router.push(`/clinic/room/${room.id}`)}
+          />
+        ) : null}
+        {offPlan.length > 0 ? (
+          <View style={onPlan.length > 0 ? styles.offPlan : undefined}>
+            {onPlan.length > 0 ? <Text style={styles.offPlanTitle}>Not on the plan yet</Text> : null}
+            <RoomPages
+              rooms={offPlan}
+              highlightRoomId={myRoomId}
+              onPressRoom={(room) => router.push(`/clinic/room/${room.id}`)}
+            />
+          </View>
+        ) : null}
+        {rooms.length === 0 ? <EmptyState icon="bed-outline" message="No rooms have been set up yet." /> : null}
+      </View>
+
       {openAssignments.length > 0
         ? openAssignments.map((assignment) => (
             <AssignmentBanner
@@ -302,28 +327,6 @@ export default function ClinicScreen() {
         </View>
       ) : null}
 
-      <View style={styles.section}>
-        <SectionHeader title="Room Layout" subtitle="Tap a room to see who is in it" />
-        {onPlan.length > 0 ? (
-          <FloorPlan
-            rooms={onPlan}
-            fixtures={fixtures}
-            highlightRoomId={myRoomId}
-            onPressRoom={(room) => router.push(`/clinic/room/${room.id}`)}
-          />
-        ) : null}
-        {offPlan.length > 0 ? (
-          <View style={onPlan.length > 0 ? styles.offPlan : undefined}>
-            {onPlan.length > 0 ? <Text style={styles.offPlanTitle}>Not on the plan yet</Text> : null}
-            <RoomPages
-              rooms={offPlan}
-              highlightRoomId={myRoomId}
-              onPressRoom={(room) => router.push(`/clinic/room/${room.id}`)}
-            />
-          </View>
-        ) : null}
-        {rooms.length === 0 ? <EmptyState icon="bed-outline" message="No rooms have been set up yet." /> : null}
-      </View>
 
     </ScrollView>
   );
