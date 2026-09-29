@@ -7,7 +7,6 @@ import {
   faPen,
   faTrash,
   faUserPlus,
-  faRotateRight,
   faGripVertical,
 } from "@fortawesome/free-solid-svg-icons";
 import { WARD_FIXTURE_KINDS } from "../lib/api";
@@ -360,8 +359,29 @@ function paletteSize(item: PaletteItem): { w: number; h: number } {
   return item.type === "room" ? { w: NEW_W, h: NEW_H } : FIXTURE_SIZE[item.kind];
 }
 
-const NEXT_DOOR: Record<DoorSide, DoorSide> = { n: "e", e: "s", s: "w", w: "n" };
-const DOOR_NAME: Record<DoorSide, string> = { n: "north", e: "east", s: "south", w: "west" };
+const SIDES_ORDER: DoorSide[] = ["n", "e", "s", "w"];
+
+/** The picker's order and words: the plan is drawn with north at the top. */
+const DOOR_CHOICES: { side: DoorSide; label: string }[] = [
+  { side: "n", label: "Top" },
+  { side: "w", label: "Left" },
+  { side: "e", label: "Right" },
+  { side: "s", label: "Bottom" },
+];
+const SIDE_WORD: Record<DoorSide, string> = { n: "top", w: "left", e: "right", s: "bottom" };
+
+/** A room outline with one wall picked out: which wall this choice means. */
+function SideGlyph({ side }: { side: DoorSide }) {
+  const edge = { n: "border-t-[3px]", s: "border-b-[3px]", w: "border-l-[3px]", e: "border-r-[3px]" }[side];
+  return <span aria-hidden className={`block h-3 w-3.5 rounded-[2px] border border-current opacity-80 ${edge}`} />;
+}
+
+/** "Skills Lab B", "Skills Lab B and Stairs", "Skills Lab B, Stairs and 1 more". */
+function listNames(names: string[]): string {
+  if (names.length <= 1) return names[0] ?? "";
+  if (names.length === 2) return `${names[0]} and ${names[1]}`;
+  return `${names[0]}, ${names[1]} and ${names.length - 2} more`;
+}
 
 function newId(): string {
   return crypto.randomUUID();
@@ -603,6 +623,69 @@ export function FloorPlanEditor({
     plan.fixtures.map((f) => ({ id: f.id, kind: f.kind, rect: liveRect(`f:${f.id}`, fixtureRect(f)) })),
   );
 
+  const nameOf = (key: string): string => {
+    if (key.startsWith("r:")) return rooms.find((r) => `r:${r.id}` === key)?.name ?? "another room";
+    const f = plan.fixtures.find((x) => `f:${x.id}` === key);
+    return f ? f.label || FIXTURE_LABEL[f.kind] : "a fixture";
+  };
+
+  /**
+   * Which wall the selected room's door is in. A wall another room covers end
+   * to end can't take one; if the chosen wall later gets covered, the plan
+   * shows the door on the best free wall until it clears.
+   */
+  const doorPicker = (room: Room) => {
+    const spec = walls.get(`r:${room.id}`);
+    if (!spec) return null;
+    const chosen = plan.doors[room.id] ?? doorOf(room);
+    const everyWallBlocked = SIDES_ORDER.every((sd) => spec.sides[sd].blocked);
+    const describe = (side: DoorSide): string => {
+      const info = spec.sides[side];
+      const names = listNames(info.neighbors.map(nameOf));
+      if (info.blocked) return `Against ${names}'s wall`;
+      if (info.edge) return "Outer wall of the plan";
+      return names ? `Opens beside ${names}` : "Opens onto open floor";
+    };
+    return (
+      <div className="flex basis-full flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-brand-600/15 pt-2">
+        <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Door</span>
+        <div role="radiogroup" aria-label="Door wall" className="inline-flex overflow-hidden rounded-lg border border-gray-200 bg-surface">
+          {DOOR_CHOICES.map(({ side, label }) => {
+            const blocked = spec.sides[side].blocked && !everyWallBlocked;
+            const active = chosen === side;
+            return (
+              <button
+                key={side}
+                role="radio"
+                aria-checked={active}
+                disabled={blocked}
+                title={describe(side)}
+                onClick={() => onPlanChange({ ...plan, doors: { ...plan.doors, [room.id]: side } })}
+                className={`inline-flex items-center gap-1.5 border-l border-gray-200 px-2.5 py-1.5 text-xs font-medium transition-colors first:border-l-0 ${
+                  active
+                    ? "bg-brand-600 text-white"
+                    : blocked
+                      ? "cursor-not-allowed text-gray-300 line-through"
+                      : "text-gray-700 hover:bg-brand-600/5 hover:text-brand-700"
+                }`}
+              >
+                <SideGlyph side={side} />
+                {label}
+              </button>
+            );
+          })}
+        </div>
+        <p className="min-w-0 text-xs text-gray-500">
+          {spec.door?.connecting
+            ? `Every wall touches another room, so this door opens into ${listNames(spec.sides[chosen].neighbors.map(nameOf)) || "a neighbour"}.`
+            : spec.door?.moved
+              ? `The ${SIDE_WORD[chosen]} wall is against ${listNames(spec.sides[chosen].neighbors.map(nameOf))}, so the door is on the ${SIDE_WORD[spec.door.side]} for now.`
+              : describe(chosen) + "."}
+        </p>
+      </div>
+    );
+  };
+
   const barButton =
     "inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors";
 
@@ -618,24 +701,6 @@ export function FloorPlanEditor({
             </span>
           </p>
           <div className="ml-auto flex flex-wrap items-center gap-1.5">
-            {fixturesEnabled && (
-              <button
-                onClick={() =>
-                  onPlanChange({
-                    ...plan,
-                    doors: {
-                      ...plan.doors,
-                      [selectedRoom.id]: NEXT_DOOR[plan.doors[selectedRoom.id] ?? "s"],
-                    },
-                  })
-                }
-                title={`Door on the ${DOOR_NAME[plan.doors[selectedRoom.id] ?? "s"]} wall`}
-                className={`${barButton} text-brand-700 hover:bg-brand-600/10`}
-              >
-                <FontAwesomeIcon icon={faRotateRight} className="h-3 w-3" />
-                Turn door
-              </button>
-            )}
             {onRosterRoom && (
               <button
                 onClick={() => onRosterRoom(selectedRoom)}
@@ -681,6 +746,7 @@ export function FloorPlanEditor({
               <FontAwesomeIcon icon={faTimes} className="h-3.5 w-3.5" />
             </button>
           </div>
+          {fixturesEnabled && doorPicker(selectedRoom)}
         </div>
       )}
       {selectedFixture && (

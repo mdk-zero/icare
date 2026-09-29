@@ -62,6 +62,28 @@ export interface WallBlock {
   door: DoorSide | null;
 }
 
+/** Where a block's door ended up: its wall, and its opening along it. */
+export interface DoorPlacement {
+  side: DoorSide;
+  /** Plan units from the wall's top or left end. */
+  start: number;
+  end: number;
+  /** The chosen wall was blocked, so the door stands on another one for now. */
+  moved: boolean;
+  /** Every wall is blocked, so the door opens into a neighbour on the chosen wall. */
+  connecting: boolean;
+}
+
+/** What is on the other side of one of a block's walls. */
+export interface SideInfo {
+  /** Neighbours (by block key) that this wall touches. */
+  neighbors: string[];
+  /** The wall is on the sheet's outer edge. */
+  edge: boolean;
+  /** No stretch of it is free of neighbours for a door to fit. */
+  blocked: boolean;
+}
+
 /**
  * How one block draws its walls. On the plan every wall is centred on its
  * grid line ("flush"), so walls that continue one another line up and two
@@ -73,21 +95,20 @@ export interface WallBlock {
 export interface WallSpec {
   flush: Record<DoorSide, boolean>;
   gaps: Record<DoorSide, [number, number][]>;
+  door: DoorPlacement | null;
+  sides: Record<DoorSide, SideInfo>;
 }
 
 export function wallBlockForFixture(key: string, kind: WardFixtureKind, rect: { x: number; y: number; w: number; h: number }): WallBlock | null {
   return WALLED_FIXTURES.has(kind) ? { key, ...rect, door: FIXTURE_DOOR[kind] ?? null } : null;
 }
 
-/** The door's opening along its wall, in plan units from the wall's top/left end. */
-function doorInterval(door: DoorSide, W: number, H: number): [number, number] {
-  const L = horizontalSide(door) ? W : H;
-  const gap = Math.min(8, L * 0.42);
-  const near = Math.min(Math.max(3.4, L * 0.16 + INSET), L - gap - INSET - 0.5);
-  // The label sits top-left, so doors in the top or left wall go to their far end.
-  const start = door === "n" || door === "w" ? L - gap - near : near;
-  return [start, start + gap];
-}
+/** A door is at most this wide, and never narrower than MIN_DOOR. */
+const MAX_DOOR = 8;
+const MIN_DOOR = 5;
+/** Clearance a door keeps from the room's corners, and from where a neighbour's wall meets its own. */
+const CORNER_CLEAR = 2.4;
+const JUNCTION_CLEAR = 1.5;
 
 /** The side of `b` that touches `o` edge to edge, if any. */
 function touchingSide(b: WallBlock, o: WallBlock): DoorSide | null {
@@ -100,43 +121,122 @@ function touchingSide(b: WallBlock, o: WallBlock): DoorSide | null {
   return null;
 }
 
-function emptySpec(): WallSpec {
-  return { flush: { n: false, e: false, s: false, w: false }, gaps: { n: [], e: [], s: [], w: [] } };
+/** The stretch of `b`'s side that `o` covers, in plan units along that side. */
+function coveredSpan(b: WallBlock, o: WallBlock, side: DoorSide): [number, number] {
+  return horizontalSide(side)
+    ? [(Math.max(b.x, o.x) - b.x) * U, (Math.min(b.x + b.w, o.x + o.w) - b.x) * U]
+    : [(Math.max(b.y, o.y) - b.y) * U, (Math.min(b.y + b.h, o.y + o.h) - b.y) * U];
 }
 
-/** Every block's walls, given everything walled on a sheet of cols × rows cells. */
+/** [a, b] with the given spans cut out of it. */
+function subtract(range: [number, number], cuts: [number, number][]): [number, number][] {
+  let out: [number, number][] = [range];
+  for (const [c0, c1] of cuts) {
+    out = out.flatMap(([a, b]): [number, number][] =>
+      c1 <= a || c0 >= b
+        ? [[a, b]]
+        : ([[a, Math.min(c0, b)], [Math.max(c1, a), b]] as [number, number][]).filter(([x, y]) => y - x > 0.05),
+    );
+  }
+  return out;
+}
+
+/**
+ * The door's opening on one wall, or null if no free stretch fits one. It
+ * aims for the usual spot (nearer the start of the bottom and right walls,
+ * the far end of the top and left ones, clear of the label) and slides to the
+ * nearest stretch no neighbour's wall is behind.
+ */
+function doorOnSide(side: DoorSide, L: number, free: [number, number][]): [number, number] | null {
+  const want = Math.min(MAX_DOOR, L * 0.42);
+  const near = Math.max(3.4, L * 0.16 + INSET);
+  let best: [number, number] | null = null;
+  let bestDistance = Infinity;
+  for (const [a, b] of free) {
+    const gap = Math.min(want, b - a);
+    if (gap < MIN_DOOR) continue;
+    const preferred = side === "n" || side === "w" ? L - gap - near : near;
+    const start = Math.min(Math.max(preferred, a), b - gap);
+    const distance = Math.abs(start - preferred);
+    if (distance < bestDistance) {
+      best = [start, start + gap];
+      bestDistance = distance;
+    }
+  }
+  return best;
+}
+
+/** The usual spot on a wall, ignoring neighbours: for a door with nowhere free to go. */
+function defaultDoor(side: DoorSide, L: number): [number, number] {
+  return doorOnSide(side, L, [[CORNER_CLEAR, L - CORNER_CLEAR]]) ?? [L / 2 - 1, L / 2 + 1];
+}
+
+const NEXT_SIDE: Record<DoorSide, DoorSide> = { n: "e", e: "s", s: "w", w: "n" };
+
+/** Every block's walls and door, given everything walled on a sheet of cols × rows cells. */
 export function planWalls(blocks: WallBlock[], sheet: { cols: number; rows: number }): Map<string, WallSpec> {
   const out = new Map<string, WallSpec>();
+
+  // First where each door goes; it depends only on the walls around it.
   for (const b of blocks) {
-    const spec = emptySpec();
-    spec.flush = {
-      n: b.y > 0,
-      w: b.x > 0,
-      s: b.y + b.h < sheet.rows,
-      e: b.x + b.w < sheet.cols,
-    };
-    if (b.door) spec.gaps[b.door].push(doorInterval(b.door, b.w * U, b.h * U));
+    const flush = { n: b.y > 0, w: b.x > 0, s: b.y + b.h < sheet.rows, e: b.x + b.w < sheet.cols };
+    const sides = {} as Record<DoorSide, SideInfo>;
+    const openings = {} as Record<DoorSide, [number, number] | null>;
+    for (const side of SIDES) {
+      const L = (horizontalSide(side) ? b.w : b.h) * U;
+      const touching = blocks.filter((o) => o !== b && touchingSide(b, o) === side);
+      const cuts = touching.map((o): [number, number] => {
+        const [c0, c1] = coveredSpan(b, o, side);
+        return [c0 - JUNCTION_CLEAR, c1 + JUNCTION_CLEAR];
+      });
+      openings[side] = doorOnSide(side, L, subtract([CORNER_CLEAR, L - CORNER_CLEAR], cuts));
+      sides[side] = { neighbors: touching.map((o) => o.key), edge: !flush[side], blocked: !openings[side] };
+    }
+
+    let door: DoorPlacement | null = null;
+    if (b.door) {
+      const chosen = openings[b.door];
+      if (chosen) {
+        door = { side: b.door, start: chosen[0], end: chosen[1], moved: false, connecting: false };
+      } else {
+        // Try the other walls, going round from the chosen one; an inside
+        // wall beats one on the building's outer edge.
+        const order = [NEXT_SIDE[b.door], NEXT_SIDE[NEXT_SIDE[b.door]], NEXT_SIDE[NEXT_SIDE[NEXT_SIDE[b.door]]]];
+        const pick =
+          order.find((sd) => openings[sd] && !sides[sd].edge) ?? order.find((sd) => openings[sd]);
+        if (pick) {
+          const [start, end] = openings[pick]!;
+          door = { side: pick, start, end, moved: true, connecting: false };
+        } else {
+          const L = (horizontalSide(b.door) ? b.w : b.h) * U;
+          const [start, end] = defaultDoor(b.door, L);
+          door = { side: b.door, start, end, moved: false, connecting: true };
+        }
+      }
+    }
+    out.set(b.key, { flush, gaps: { n: [], e: [], s: [], w: [] }, door, sides });
+  }
+
+  // Then the gaps: each block's own door, and any neighbour's door that opens
+  // through a wall they share.
+  for (const b of blocks) {
+    const spec = out.get(b.key)!;
+    if (spec.door) spec.gaps[spec.door.side].push([spec.door.start, spec.door.end]);
     for (const o of blocks) {
       if (o === b) continue;
       const side = touchingSide(b, o);
-      if (!side) continue;
-      // A door in the neighbour's side of this wall opens through ours too.
-      if (o.door === OPPOSITE[side]) {
-        const [g0, g1] = doorInterval(o.door, o.w * U, o.h * U);
-        const shift = horizontalSide(side) ? (o.x - b.x) * U : (o.y - b.y) * U;
-        spec.gaps[side].push([g0 + shift, g1 + shift]);
-      }
+      const theirs = out.get(o.key)!.door;
+      if (!side || theirs?.side !== OPPOSITE[side]) continue;
+      const shift = horizontalSide(side) ? (o.x - b.x) * U : (o.y - b.y) * U;
+      spec.gaps[side].push([theirs.start + shift, theirs.end + shift]);
     }
-    out.set(b.key, spec);
   }
   return out;
 }
 
 /** A block drawn on its own (palette chips, drop previews): every wall inset. */
 function soloSpec(w: number, h: number, door: DoorSide | null): WallSpec {
-  const spec = emptySpec();
-  if (door) spec.gaps[door].push(doorInterval(door, w * U, h * U));
-  return spec;
+  return planWalls([{ key: "", x: 0, y: 0, w, h, door }], { cols: w, rows: h }).get("")!;
 }
 
 const pt = ([x, y]: [number, number]) => `${x.toFixed(2)} ${y.toFixed(2)}`;
@@ -145,7 +245,7 @@ const pt = ([x, y]: [number, number]) => `${x.toFixed(2)} ${y.toFixed(2)}`;
  * The four walls, cut where doors open, and this block's own door leaf
  * standing open with the arc it sweeps.
  */
-function Walls({ W, H, door, spec }: { W: number; H: number; door: DoorSide | null; spec: WallSpec }) {
+function Walls({ W, H, spec }: { W: number; H: number; spec: WallSpec }) {
   // Where each wall's centreline runs: on the edge when shared, else just inside.
   const line: Record<DoorSide, number> = {
     n: spec.flush.n ? 0 : INSET,
@@ -160,22 +260,15 @@ function Walls({ W, H, door, spec }: { W: number; H: number; door: DoorSide | nu
   const runs: { side: DoorSide; from: number; to: number }[] = [];
   for (const side of SIDES) {
     // Each wall runs past the corners by half its thickness, so they meet square.
-    let segs: [number, number][] = horizontalSide(side)
+    const segs: [number, number][] = horizontalSide(side)
       ? [[line.w - half, line.e + half]]
       : [[line.n - half, line.s + half]];
-    for (const [g0, g1] of spec.gaps[side]) {
-      segs = segs.flatMap(([a, b]): [number, number][] =>
-        g1 <= a || g0 >= b
-          ? [[a, b]]
-          : ([[a, Math.min(g0, b)], [Math.max(g1, a), b]] as [number, number][]).filter(([x, y]) => y - x > 0.05),
-      );
-    }
-    for (const [from, to] of segs) runs.push({ side, from, to });
+    for (const [from, to] of subtract(segs[0], spec.gaps[side])) runs.push({ side, from, to });
   }
 
   let doorLeaf: React.ReactNode = null;
-  if (door) {
-    const [g0, g1] = doorInterval(door, W, H);
+  if (spec.door) {
+    const { side: door, start: g0, end: g1 } = spec.door;
     const gap = g1 - g0;
     const inward: [number, number] = { n: [0, 1], s: [0, -1], w: [1, 0], e: [-1, 0] }[door] as [number, number];
     const along: [number, number] = horizontalSide(door) ? [1, 0] : [0, 1];
@@ -325,16 +418,18 @@ export function RoomDrawing({
   const tone = toneOf(room, occupied);
   const offline = tone === "offline";
 
-  // Beds keep clear of the label band at the top and the door's swing.
-  const [g0, g1] = doorInterval(door, W, H);
-  const swing = g1 - g0 + 1;
-  const label = Math.min(8.5, H * 0.42);
+  // Beds keep clear of the label band at the top and the door's swing, on
+  // whichever wall the door actually ended up.
+  const spec = walls ?? soloSpec(w, h, door);
+  const at = spec.door?.side;
+  const swing = spec.door ? spec.door.end - spec.door.start + 1 : 0;
+  const label = Math.min(10, H * 0.45);
   const pad = 2.6;
   const area = {
-    x: pad + (door === "w" ? swing : 0),
-    y: Math.max(label, door === "n" ? swing : 0),
-    w: W - 2 * pad - (door === "w" || door === "e" ? swing : 0),
-    h: H - Math.max(label, door === "n" ? swing : 0) - pad - (door === "s" ? swing : 0),
+    x: pad + (at === "w" ? swing : 0),
+    y: Math.max(label, at === "n" ? swing : 0),
+    w: W - 2 * pad - (at === "w" || at === "e" ? swing : 0),
+    h: H - Math.max(label, at === "n" ? swing : 0) - pad - (at === "s" ? swing : 0),
   };
   const beds = offline ? null : bedGrid(room.capacity, area);
 
@@ -359,15 +454,20 @@ export function RoomDrawing({
         {beds?.map((b, n) => (
           <Bed key={n} {...b} filled={n < occupied} tone={tone} />
         ))}
-        <Walls W={W} H={H} door={door} spec={walls ?? soloSpec(w, h, door)} />
+        <Walls W={W} H={H} spec={spec} />
       </svg>
       {/* Inside the walls, which are about a fifth of a cell thick. */}
       <div className="pointer-events-none absolute inset-0 flex items-start justify-between gap-1 overflow-hidden px-[7px] py-[6px] text-left sm:px-2.5 sm:py-2">
-        <div className="min-w-0">
-          <p className="truncate text-[11px] font-semibold leading-tight text-[var(--plan-ink)]">
+        {/* A tag on the floor: a paper backing so it reads over beds and
+            hatching, and an occupancy-coloured edge tying it to its badge. */}
+        <div
+          className="min-w-0 rounded-[3px] border-l-[3px] bg-[color-mix(in_srgb,var(--plan-paper)_80%,transparent)] py-0.5 pl-1.5 pr-2 shadow-[0_1px_2px_rgba(0,0,0,0.06)]"
+          style={{ borderLeftColor: `var(--plan-bed-${tone})` }}
+        >
+          <p className="truncate text-[12px] font-bold leading-tight tracking-[-0.01em] text-[var(--plan-ink)] sm:text-[13px]">
             {room.name}
           </p>
-          <p className="truncate font-mono text-[9px] uppercase tracking-wider text-[var(--plan-muted)]">
+          <p className="truncate font-mono text-[9.5px] font-medium uppercase tracking-wider text-[var(--plan-muted)] sm:text-[10px]">
             Rm {room.room_number}
           </p>
         </div>
@@ -412,7 +512,7 @@ export function FixtureDrawing({
   const W = w * U;
   const H = h * U;
   const fixtureDoor = FIXTURE_DOOR[kind] ?? null;
-  const fixtureWalls = <Walls W={W} H={H} door={fixtureDoor} spec={walls ?? soloSpec(w, h, fixtureDoor)} />;
+  const fixtureWalls = <Walls W={W} H={H} spec={walls ?? soloSpec(w, h, fixtureDoor)} />;
   const text = label || (kind === "label" ? "" : FIXTURE_LABEL[kind]);
   const horizontal = W >= H;
   const line = { stroke: "var(--plan-line)", strokeWidth: 0.5, fill: "none" } as const;
