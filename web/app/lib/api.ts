@@ -2933,21 +2933,36 @@ export async function saveStepRatings(
   return putTaskGrade(assignmentId, { task_id: taskId, steps }, 'saveStepRatings');
 }
 
-/** Lock the assignment and score it from each task's rated share of its points. */
+/**
+ * Score the assignment from each task's rated share of its points. It locks
+ * (completes) once every checklist row is graded; before that the save is
+ * progress and `completed` is false, with `remaining` rows still to grade.
+ */
 export async function finalizeScenarioAssignment(
   assignmentId: string,
-): Promise<{ assignment: ScenarioAssignment; score: number } | null> {
+): Promise<{ assignment: ScenarioAssignment; score: number; completed: boolean; remaining: number } | null> {
   try {
     const res = await apiFetch(`/api/faculty/scenarios/assignments/${assignmentId}/finalize`, {
       method: 'POST',
       credentials: 'include',
     });
-    const json = (await res.json()) as { assignment?: ScenarioAssignment; score?: number; error?: string };
+    const json = (await res.json()) as {
+      assignment?: ScenarioAssignment;
+      score?: number;
+      completed?: boolean;
+      remaining?: number;
+      error?: string;
+    };
     if (!res.ok || !json.assignment) {
       console.error('finalizeScenarioAssignment() failed', json.error);
       return null;
     }
-    return { assignment: json.assignment, score: json.score ?? json.assignment.score ?? 0 };
+    return {
+      assignment: json.assignment,
+      score: json.score ?? json.assignment.score ?? 0,
+      completed: json.completed ?? json.assignment.status === 'completed',
+      remaining: json.remaining ?? 0,
+    };
   } catch (err) {
     console.error('finalizeScenarioAssignment() failed', err);
     return null;
@@ -3198,19 +3213,29 @@ export async function deleteStudentUser(
   }
 }
 
-export async function fetchStudentScenarioHistory(studentId: string): Promise<ScenarioPerformance[]> {
+/** Every scenario assigned to one student, graded or not (the faculty view). */
+export async function fetchAssignmentsForStudent(studentId: string): Promise<ScenarioAssignment[]> {
   try {
     const res = await apiFetch(`/api/faculty/scenarios/assignments?student_id=${encodeURIComponent(studentId)}`, {
       credentials: 'include',
     });
     const json = (await res.json()) as { assignments?: ScenarioAssignment[]; error?: string };
     if (!res.ok) {
-      console.error('fetchStudentScenarioHistory() failed', json.error);
+      console.error('fetchAssignmentsForStudent() failed', json.error);
       return [];
     }
+    return json.assignments ?? [];
+  } catch (err) {
+    console.error('fetchAssignmentsForStudent() failed', err);
+    return [];
+  }
+}
 
-    const completed = (json.assignments ?? []).filter((a) => a.status === 'completed');
-    return completed.map((a) => ({
+/** The graded ones among a student's assignments, as scenario results. */
+export function scenarioHistoryFrom(assignments: readonly ScenarioAssignment[]): ScenarioPerformance[] {
+  return assignments
+    .filter((a) => a.status === 'completed')
+    .map((a) => ({
       id: a.id,
       student_id: a.student_id,
       student_name: a.student_name,
@@ -3223,6 +3248,20 @@ export async function fetchStudentScenarioHistory(studentId: string): Promise<Sc
       total_tasks: a.total_tasks ?? null,
       completed_at: a.completed_at ?? a.assigned_at,
     }));
+}
+
+export async function fetchStudentScenarioHistory(studentId: string): Promise<ScenarioPerformance[]> {
+  try {
+    const res = await apiFetch(`/api/faculty/scenarios/assignments?student_id=${encodeURIComponent(studentId)}`, {
+      credentials: 'include',
+    });
+    const json = (await res.json()) as { assignments?: ScenarioAssignment[]; error?: string };
+    if (!res.ok) {
+      console.error('fetchStudentScenarioHistory() failed', json.error);
+      return [];
+    }
+
+    return scenarioHistoryFrom(json.assignments ?? []);
   } catch (err) {
     console.error('fetchStudentScenarioHistory() failed', err);
     return [];

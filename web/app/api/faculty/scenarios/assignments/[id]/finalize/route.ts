@@ -18,8 +18,10 @@ interface RouteParams {
 // POST /api/faculty/scenarios/assignments/:id/finalize
 // Saves the grade: score = each task's points scaled by its verbal rating, or
 // by its sub-tasks' ratings once any are rated (an unrated completion keeps
-// full credit), status -> completed. Saving again after an edit re-scores it
-// and keeps the date it was first completed.
+// full credit). The scenario completes only once every checklist row is
+// graded; until then a save is progress — the student sees each graded task
+// straight away and keeps the scenario (and their patient) open. Saving again
+// after an edit re-scores it and keeps the date it was first completed.
 export async function POST(request: NextRequest, { params }: RouteParams) {
   const session = await readSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -65,6 +67,44 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     // Students read each task's overall level from here on; settle it first.
     await syncStepGradedLevels(supabase, assignmentId, graded.completions, graded.stepsByTask, session.uid);
 
+    // Rows still waiting for a grade. A task with sub-tasks is graded once all
+    // are rated, or (none rated) while a completion stands in for them; a task
+    // without is graded once it has a completion.
+    const { data: taskRows, error: tasksError } = await supabase
+      .from('scenario_tasks')
+      .select('id')
+      .eq('scenario_id', assignment.scenario_id);
+    if (tasksError) {
+      console.error('Failed to read scenario tasks', tasksError);
+      return NextResponse.json({ error: 'Unable to finalize scenario' }, { status: 500 });
+    }
+    const hasCompletion = new Set(graded.completions.map((c) => c.task_id));
+    let remaining = 0;
+    for (const { id } of taskRows ?? []) {
+      const steps = graded.stepsByTask.get(id);
+      if (steps && steps.total > 0) {
+        if (steps.ratings.length === 0) remaining += hasCompletion.has(id) ? 0 : steps.total;
+        else remaining += steps.total - steps.ratings.length;
+      } else if (!hasCompletion.has(id)) {
+        remaining += 1;
+      }
+    }
+
+    // Not every row graded yet, and never finished: keep it open as progress.
+    if (remaining > 0 && assignment.status !== 'completed') {
+      const { data: progress, error: progressError } = await supabase
+        .from('scenario_assignments')
+        .update({ status: 'in_progress' })
+        .eq('id', assignmentId)
+        .select('id, scenario_id, student_id, assigned_at, deadline, status, required, score, completed_at, time_taken, submitted_at, finalized_by')
+        .single();
+      if (progressError || !progress) {
+        console.error('Failed to save grading progress', progressError);
+        return NextResponse.json({ error: 'Unable to save grading progress' }, { status: 500 });
+      }
+      return NextResponse.json({ assignment: progress, score, completed: false, remaining });
+    }
+
     const { data: updated, error } = await supabase
       .from('scenario_assignments')
       .update({
@@ -98,7 +138,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    return NextResponse.json({ assignment: updated, score });
+    return NextResponse.json({ assignment: updated, score, completed: true, remaining: 0 });
   } catch (err) {
     console.error('Finalize assignment failed', err);
     return NextResponse.json({ error: 'Unable to finalize patient case' }, { status: 500 });

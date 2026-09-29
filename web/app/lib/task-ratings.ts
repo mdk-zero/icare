@@ -22,7 +22,7 @@ export interface TaskRatingLevel {
   credit: number;
 }
 
-export const MAX_RATING_POINTS = 10;
+export const MAX_RATING_POINTS = 3;
 
 const level = (key: TaskRating, label: string, points: number, rubric: string): TaskRatingLevel => ({
   key,
@@ -38,9 +38,9 @@ const level = (key: TaskRating, label: string, points: number, rubric: string): 
  * rated earns nothing.
  */
 export const TASK_RATINGS: readonly TaskRatingLevel[] = [
-  level('excellent', 'Excellent', 10, 'Mastered the procedure: every step performed correctly, confidently, and without prompting.'),
-  level('satisfactory', 'Satisfactory', 7.5, 'Used the recommended technique for each step, with minor hesitation or prompting.'),
-  level('needs_practice', 'Needs Practice', 5, 'Used some but not all of the recommended technique; the step needs further practice.'),
+  level('excellent', 'Excellent', 3, 'Mastered the procedure: every step performed correctly, confidently, and without prompting.'),
+  level('satisfactory', 'Satisfactory', 2, 'Used the recommended technique for each step, with minor hesitation or prompting.'),
+  level('needs_practice', 'Needs Practice', 1, 'Used some but not all of the recommended technique; the step needs further practice.'),
 ];
 
 /** A rubric: what each level means, for one scenario or the book's defaults. */
@@ -167,9 +167,9 @@ export function gradedScore(
   return total > 0 ? Math.round((earned / total) * 100) : 0;
 }
 
-/** Each band starts halfway between two levels' credits (100 / 75 / 50). */
-const EXCELLENT_MIN = 88;
-const SATISFACTORY_MIN = 63;
+/** Each band starts halfway between two levels' credits (3 / 2 / 1 points: 100 / 67 / 33). */
+const EXCELLENT_MIN = 83;
+const SATISFACTORY_MIN = 50;
 
 /**
  * The single level that sums up a task graded sub-task by sub-task — what the
