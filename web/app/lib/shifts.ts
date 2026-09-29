@@ -52,8 +52,15 @@ export function presetEndsNextDay(type: Exclude<ShiftType, 'custom'>): boolean {
  */
 export const SHIFT_END_GRACE_MINUTES = 15;
 
-/** First write later than this into a shift marks the nurse 'late'. */
+/** First app activity later than this into a shift marks the nurse 'late'. */
 export const SHIFT_LATE_AFTER_MINUTES = 15;
+
+/**
+ * Opening the app this long before a shift starts already checks the nurse in
+ * (on time): someone who signs in at 05:50 for a 06:00 shift and then works
+ * without another request would otherwise never be seen.
+ */
+export const SHIFT_EARLY_CHECKIN_MINUTES = 30;
 
 /** Ceiling on how many occurrences one "repeat" may expand to. */
 export const MAX_SERIES_OCCURRENCES = 90;

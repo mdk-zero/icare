@@ -1,4 +1,5 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
+import { recordShiftActivity } from '@/app/lib/shift-presence';
 import { verifyGoogleIdToken } from '@/app/lib/auth/google';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import {
@@ -82,6 +83,10 @@ export async function POST(request: Request) {
         email: publicUser.email,
       });
       await setSessionCookie(token);
+      if (publicUser.role === 'student') {
+        // Signing in during a shift checks the student in.
+        after(() => recordShiftActivity(publicUser.id, new Date(), { force: true }).catch((err) => console.error('Shift presence failed', err)));
+      }
       return NextResponse.json({ user: publicUser, sessionToken: token });
     }
 

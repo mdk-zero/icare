@@ -2370,6 +2370,8 @@ export interface ShiftRosterEntry {
   student_id: string;
   attendance_status: ShiftAttendanceStatus;
   checked_in_at: string | null;
+  /** Last app activity inside the shift. */
+  checked_out_at?: string | null;
   notes: string | null;
   users?: { name: string; email: string } | null;
 }

@@ -3,6 +3,7 @@ import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { getScopedStudentIds } from '@/app/lib/admin-scope';
 import { logAudit } from '@/app/lib/audit';
+import { closeEndedShifts } from '@/app/lib/shift-presence';
 import { SHIFT_TYPES, type ShiftAttendanceStatus, type ShiftType } from '@/app/lib/shifts';
 import {
   LEGACY_SHIFT_COLUMNS,
@@ -28,6 +29,7 @@ export async function GET() {
 
   try {
     const supabase = getSupabaseAdmin();
+    await closeEndedShifts(supabase);
     const scope = await getShiftScope(supabase, session);
     if (scope.sectionIds !== null && scope.sectionIds.length === 0) {
       return NextResponse.json({ shifts: [] });

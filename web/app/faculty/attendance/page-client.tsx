@@ -41,6 +41,8 @@ import {
   SHIFT_PHASE_LABEL,
   SHIFT_PHASE_TONE,
   SHIFT_TYPE_LABEL,
+  SHIFT_EARLY_CHECKIN_MINUTES,
+  SHIFT_LATE_AFTER_MINUTES,
   formatShiftTimeRange,
   shiftPhase,
   shiftTitle,
@@ -60,8 +62,7 @@ const NO_SHIFTS: FacultyShift[] = [];
 const NO_GROUPS: GroupOption[] = [];
 const NO_ROOMS: Room[] = [];
 
-/** The statuses a roster row can be set to, in the order faculty use them. */
-const MARKABLE: ShiftAttendanceStatus[] = ["present", "late", "absent", "excused"];
+const TIME: Intl.DateTimeFormatOptions = { hour: "numeric", minute: "2-digit" };
 
 const inputClass =
   "w-full px-3 py-2 bg-surface border border-gray-300 rounded-xl text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600";
@@ -124,14 +125,12 @@ export default function AttendanceClient() {
   // Headline numbers read across every shift on screen, so a single shift's
   // roster cannot disagree with the tiles above it.
   const overall = useMemo(() => tallyAttendance(shifts.flatMap((s) => s.statuses)), [shifts]);
-  const unmarked = useMemo(
+  const onNow = useMemo(
     () =>
-      shifts.filter(
-        (s) =>
-          s.status !== "cancelled" &&
-          shiftPhase(s) === "past" &&
-          s.statuses.some((v) => v === "scheduled"),
-      ).length,
+      shifts.filter((s) => {
+        const phase = shiftPhase(s);
+        return phase === "active" || phase === "grace";
+      }).length,
     [shifts],
   );
 
@@ -182,7 +181,7 @@ export default function AttendanceClient() {
           label: "Shifts Management",
         }}
         title="Shifting Schedule"
-        subtitle="Schedule clinical shifts and record who turned up for them"
+        subtitle="Schedule clinical shifts. Attendance is taken automatically from students' sign-ins and app activity."
         action={{
           icon: <FontAwesomeIcon icon={faPlus} className="w-4 h-4" />,
           onClick: () => setFormOpen(true),
@@ -201,7 +200,7 @@ export default function AttendanceClient() {
               value={shifts.length}
               label="Shifts scheduled"
               caption={
-                unmarked > 0 ? `${unmarked} past shift${unmarked === 1 ? "" : "s"} unmarked` : undefined
+                onNow > 0 ? `${onNow} on now` : undefined
               }
             />
             <StatTile
@@ -242,8 +241,8 @@ export default function AttendanceClient() {
           />
           <h3 className="text-lg font-semibold text-gray-700">No shifts scheduled yet</h3>
           <p className="mt-1 text-sm text-gray-500">
-            Schedule a shift for one of your groups — every member is rostered
-            automatically, ready to be marked.
+            Schedule a shift for one of your groups — every member is rostered, and
+            attendance is taken from their sign-ins and app activity.
           </p>
         </div>
       ) : (
@@ -898,7 +897,6 @@ function ShiftRoster({
   onDelete: (shift: FacultyShift) => void;
 }) {
   const [savingId, setSavingId] = useState<string | null>(null);
-  const [bulkSaving, setBulkSaving] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
 
   const { data, loading, refresh } = usePageData(`faculty:shift:${shiftId}`, () =>
@@ -921,23 +919,6 @@ function ShiftRoster({
     }
     await refresh();
     onChanged();
-  };
-
-  const markAllPresent = async () => {
-    const pending = roster.filter((r) => r.attendance_status === "scheduled");
-    if (pending.length === 0) return;
-    setBulkSaving(true);
-    const result = await updateShift(shiftId, {
-      marks: pending.map((r) => ({ assignment_id: r.id, status: "present" as const })),
-    });
-    setBulkSaving(false);
-    if (result.error) {
-      toast(result.error);
-      return;
-    }
-    await refresh();
-    onChanged();
-    toast(`Marked ${result.updated ?? pending.length} present`);
   };
 
   const toggleCancelled = async () => {
@@ -997,23 +978,12 @@ function ShiftRoster({
           {SHIFT_PHASE_LABEL[phase]}
         </span>
         <span className="text-sm text-gray-600">
-          {tally.rate === null ? "Not yet marked" : `${tally.rate}% attendance`}
-          {tally.scheduled > 0 && ` · ${tally.scheduled} unmarked`}
+          {tally.rate === null ? "No attendance yet" : `${tally.rate}% attendance`}
+          {tally.scheduled > 0 &&
+            ` · ${tally.scheduled} ${phase === "upcoming" ? "scheduled" : "not checked in yet"}`}
         </span>
 
         <div className="ml-auto flex items-center gap-2">
-          <button
-            onClick={markAllPresent}
-            disabled={bulkSaving || tally.scheduled === 0}
-            className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-700 disabled:opacity-40"
-          >
-            {bulkSaving ? (
-              <EcgLoader />
-            ) : (
-              <FontAwesomeIcon icon={faUserCheck} className="h-3.5 w-3.5" />
-            )}
-            Mark all present
-          </button>
           <button
             onClick={() => setEditOpen(true)}
             className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
@@ -1041,6 +1011,13 @@ function ShiftRoster({
         </div>
       </div>
 
+      <p className="mb-3 text-xs text-gray-500">
+        Students are checked in when they sign in or use the app from{" "}
+        {SHIFT_EARLY_CHECKIN_MINUTES} minutes before the shift until it ends, and marked late
+        after the first {SHIFT_LATE_AFTER_MINUTES} minutes. Anyone not seen by the end is marked
+        absent; you can excuse an absence.
+      </p>
+
       {roster.length === 0 ? (
         <div className="rounded-xl border border-hairline bg-surface p-12 text-center shadow-tile">
           <FontAwesomeIcon icon={faUsers} className="mx-auto mb-4 h-12 w-12 text-gray-300" />
@@ -1063,7 +1040,10 @@ function ShiftRoster({
                   <p className="text-xs text-gray-500">
                     {entry.users?.email ?? ""}
                     {entry.checked_in_at &&
-                      ` · in at ${new Date(entry.checked_in_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`}
+                      ` · in at ${new Date(entry.checked_in_at).toLocaleTimeString([], TIME)}`}
+                    {entry.checked_out_at &&
+                      entry.checked_out_at !== entry.checked_in_at &&
+                      ` · last seen ${new Date(entry.checked_out_at).toLocaleTimeString([], TIME)}`}
                   </p>
                 </div>
 
@@ -1076,22 +1056,21 @@ function ShiftRoster({
                 <div className="flex items-center gap-1">
                   {savingId === entry.id ? (
                     <EcgLoader className="text-brand-600" />
-                  ) : (
-                    MARKABLE.map((status) => (
-                      <button
-                        key={status}
-                        onClick={() => mark(entry, status)}
-                        aria-pressed={entry.attendance_status === status}
-                        className={`rounded-lg border px-2 py-1 text-[11px] font-medium transition-colors ${
-                          entry.attendance_status === status
-                            ? SHIFT_ATTENDANCE_TONE[status]
-                            : "border-gray-200 text-gray-600 hover:bg-gray-50"
-                        }`}
-                      >
-                        {SHIFT_ATTENDANCE_LABEL[status]}
-                      </button>
-                    ))
-                  )}
+                  ) : entry.attendance_status === "absent" ? (
+                    <button
+                      onClick={() => mark(entry, "excused")}
+                      className="rounded-lg border border-gray-200 px-2 py-1 text-[11px] font-medium text-gray-600 transition-colors hover:bg-gray-50"
+                    >
+                      Excuse
+                    </button>
+                  ) : entry.attendance_status === "excused" ? (
+                    <button
+                      onClick={() => mark(entry, "absent")}
+                      className="rounded-lg border border-gray-200 px-2 py-1 text-[11px] font-medium text-gray-600 transition-colors hover:bg-gray-50"
+                    >
+                      Undo excuse
+                    </button>
+                  ) : null}
                 </div>
               </li>
             ))}

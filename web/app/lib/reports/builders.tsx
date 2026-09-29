@@ -21,6 +21,7 @@ import { isActiveSkillArea } from '@/scripts/taylors-chapters';
 import { CASE_CRITERIA, isLateSubmission, type CaseObservations } from '../case-rubric';
 import { isLateSubmission as isLateAttempt } from '../assessment-timing';
 import { ratingLabel, scoreDescriptor, type TaskRating } from '../task-ratings';
+import { closeEndedShifts } from '../shift-presence';
 
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
 
@@ -72,6 +73,7 @@ export async function buildStudentReport(
   meta: ReportMeta,
   studentId: string,
 ): Promise<BuildResult> {
+  await closeEndedShifts(supabase);
   const { data: student } = await supabase
     .from('users')
     .select('id, name, email, sections(name)')
@@ -804,6 +806,7 @@ export async function buildAttendanceReport(
   sectionId: string,
   scope: StudentScope = null,
 ): Promise<BuildResult> {
+  await closeEndedShifts(supabase);
   const { data: section } = await supabase
     .from('sections')
     .select('id, name')

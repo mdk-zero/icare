@@ -3,7 +3,8 @@ import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { getScopedStudentIds } from '@/app/lib/admin-scope';
 import { logAudit } from '@/app/lib/audit';
-import { SHIFT_ATTENDANCE_LABEL, SHIFT_TYPES, type ShiftAttendanceStatus, type ShiftType } from '@/app/lib/shifts';
+import { closeEndedShifts } from '@/app/lib/shift-presence';
+import { SHIFT_TYPES, type ShiftAttendanceStatus, type ShiftType } from '@/app/lib/shifts';
 import {
   LEGACY_SHIFT_COLUMNS,
   SHIFT_COLUMNS,
@@ -19,7 +20,15 @@ interface RouteParams {
   params: Promise<{ id: string }>;
 }
 
-const ATTENDANCE_VALUES = Object.keys(SHIFT_ATTENDANCE_LABEL) as ShiftAttendanceStatus[];
+/**
+ * Attendance itself is detected (lib/shift-presence). An instructor may only
+ * excuse a detected absence, or take the excuse back: each mark moves a row
+ * from the status on the left to the one on the right, and nothing else.
+ */
+const INSTRUCTOR_MARKS: Partial<Record<ShiftAttendanceStatus, ShiftAttendanceStatus>> = {
+  excused: 'absent',
+  absent: 'excused',
+};
 
 function isFacultyOrAdmin(role: string | undefined): boolean {
   return role === 'faculty' || role === 'admin';
@@ -63,6 +72,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
   const { id } = await params;
   try {
     const supabase = getSupabaseAdmin();
+    await closeEndedShifts(supabase);
     const scoped = await loadScopedShift(supabase, session, id);
     if ('error' in scoped) {
       return NextResponse.json({ error: scoped.error }, { status: scoped.status });
@@ -73,7 +83,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
       // Explicit FK hint: shift_assignments points at users twice (student_id
       // and assigned_by), so a bare users(...) embed is ambiguous and errors.
       .select(
-        'id, student_id, attendance_status, checked_in_at, notes, users!shift_assignments_student_id_fkey(name, email)',
+        'id, student_id, attendance_status, checked_in_at, checked_out_at, notes, users!shift_assignments_student_id_fkey(name, email)',
       )
       .eq('shift_id', id);
 
@@ -103,7 +113,8 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
 /**
  * PATCH — marks attendance, cancels or reinstates the shift, and/or edits it.
  *
- *   { marks: [{ assignment_id, status, notes? }] }   attendance
+ *   { marks: [{ assignment_id, status, notes? }] }   excuse an absence
+ *                                                    ('excused') or undo it ('absent')
  *   { status: 'cancelled' | 'scheduled' }            the shift itself
  *   { details: { team_id?, shift_type?, starts_at?, ends_at?,
  *                room_id?, label?, notes? } }          its schedule
@@ -161,16 +172,10 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       const mark = raw as Record<string, unknown>;
       const assignmentId = typeof mark.assignment_id === 'string' ? mark.assignment_id : '';
       const status = mark.status as ShiftAttendanceStatus;
-      if (!assignmentId || !ATTENDANCE_VALUES.includes(status)) continue;
+      const from = INSTRUCTOR_MARKS[status];
+      if (!assignmentId || !from) continue;
 
-      // Marking someone present or late stamps their arrival if nothing has
-      // yet; clearing back to scheduled drops it, so the two never disagree.
       const patch: Record<string, unknown> = { attendance_status: status };
-      if (status === 'present' || status === 'late') {
-        patch.checked_in_at = new Date().toISOString();
-      } else if (status === 'scheduled') {
-        patch.checked_in_at = null;
-      }
       if (typeof mark.notes === 'string') patch.notes = mark.notes.trim() || null;
 
       // `select` so the count reflects rows actually changed. An update that
@@ -180,7 +185,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         .from('shift_assignments')
         .update(patch)
         .eq('id', assignmentId)
-        .eq('shift_id', id); // scoping guard: an id from another shift matches nothing
+        .eq('shift_id', id) // scoping guard: an id from another shift matches nothing
+        .eq('attendance_status', from); // only a detected absence can be excused
       // Faculty mark only their own group members.
       if (mine) update = update.in('student_id', mine.length > 0 ? mine : ['00000000-0000-0000-0000-000000000000']);
       const { data: changed, error } = await update.select('id');

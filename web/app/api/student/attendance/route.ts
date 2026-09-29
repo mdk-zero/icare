@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { closeEndedShifts } from '@/app/lib/shift-presence';
 import { tallyAttendance, type ShiftAttendanceStatus } from '@/app/lib/shifts';
 
 /**
@@ -18,6 +19,7 @@ export async function GET() {
 
   try {
     const supabase = getSupabaseAdmin();
+    await closeEndedShifts(supabase);
     const { data, error } = await supabase
       .from('shift_assignments')
       .select(

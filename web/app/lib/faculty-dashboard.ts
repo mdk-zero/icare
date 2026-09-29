@@ -3,6 +3,7 @@ import { summarizeAnomalyReasons } from './vitals/rules';
 import type { SessionPayload } from './auth/session';
 import { getFacultySectionIds } from './roster';
 import { getScopedStudentIds } from './admin-scope';
+import { closeEndedShifts } from './shift-presence';
 
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
 
@@ -451,6 +452,8 @@ export async function buildFacultyOverview(
   const traceFrom = weekStart(now) - (TRACE_WEEKS - 1) * 7 * DAY_MS;
   const attemptsFrom = Math.min(traceFrom, now - 2 * RECENT_DAYS * DAY_MS);
 
+  // Duty counts absences, so settle any shift that ended unattended first.
+  await closeEndedShifts(supabase);
   const [sectionRows, scenarioRows, quizRows, attempts, lastActivity, shiftRows, teamRows] = await Promise.all([
     sectionIds.length > 0
       ? supabase.from('sections').select('id, name').in('id', sectionIds).order('name')

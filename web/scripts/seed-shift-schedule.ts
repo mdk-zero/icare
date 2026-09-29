@@ -1,21 +1,20 @@
 /**
  * The duty roster: ward shifts and who turned up for them.
  *
- * Attendance is tied to the rest of the data twice over.
- *
- * Where a student was active in the app inside a shift window — a quiz
+ * Attendance is detected, never marked by hand, and the seed follows the
+ * same rules as lib/shift-presence. Where a student was active in the app
+ * from SHIFT_EARLY_CHECKIN_MINUTES before a shift until it ended — a quiz
  * attempt, a patient case started or submitted, a case presentation, or any
- * charting, all timestamped by the earlier seeds — they are present, exactly
- * as lib/shift-presence marks them live: check-in is their first activity,
- * check-out their last.
+ * charting, all timestamped by the earlier seeds — they are checked in:
+ * present, or late past SHIFT_LATE_AFTER_MINUTES. Check-in is their first
+ * activity, check-out their last.
  *
- * Everywhere else attendance is drawn against the student's own reliability,
- * standing in for what the instructor marked by hand, because activity is
- * evidence of attendance but silence is not evidence of absence — a student
- * can work a shift without opening the app. Reliability comes
- * from the work they have outstanding: a student carrying overdue scenarios
- * misses more shifts than one who finished everything, so the roster and the
- * quiz record describe the same person.
+ * The seeded record is far sparser than real app use, so everywhere else the
+ * sign-ins the app would have seen are drawn against the student's own
+ * reliability, which comes from the work they have outstanding: a student
+ * carrying overdue scenarios misses more shifts than one who finished
+ * everything. Never seen means absent once the shift is over, and some of
+ * those absences are excused, the one mark an instructor still makes.
  *
  * Shifts are built from SHIFT_TYPE_PRESETS in lib/shifts, the same rotation
  * times the faculty UI offers, and rostered the way the create route rosters
@@ -37,6 +36,7 @@ import {
   SHIFT_TYPE_PRESETS,
   SHIFT_END_GRACE_MINUTES,
   SHIFT_LATE_AFTER_MINUTES,
+  SHIFT_EARLY_CHECKIN_MINUTES,
   presetEndsNextDay,
   type ShiftType,
   type ShiftAttendanceStatus,
@@ -284,13 +284,30 @@ async function main() {
             };
           }
 
+          // The same window lib/shift-presence checks students in on: from the
+          // early check-in margin until the shift ends, then last-seen through
+          // the grace. A shift still running only knows what happened so far.
+          const checkInFrom = start.getTime() - SHIFT_EARLY_CHECKIN_MINUTES * MINUTE_MS;
+          const seenUntil = Math.min(graceEnd, now);
           const inWindow = (activity.get(student.id) ?? []).filter(
-            (t) => t >= start.getTime() && t <= graceEnd,
+            (t) => t >= checkInFrom && t <= seenUntil,
           );
+          const checkIns = inWindow.filter((t) => t <= end.getTime());
+          const running = now <= graceEnd;
+          const notYet = {
+            shift_id: shift.id,
+            student_id: student.id,
+            assigned_by: facultyId,
+            attendance_status: 'scheduled' as ShiftAttendanceStatus,
+            checked_in_at: null,
+            checked_out_at: null,
+            notes: null,
+          };
 
-          if (inWindow.length === 0) {
-            // Nothing charted, which is not the same as nobody there. Draw
-            // against how reliable this student has been elsewhere.
+          if (checkIns.length === 0) {
+            // No recorded activity, which is not the same as nobody there: the
+            // seeded record is sparse. Stand in for the sign-ins the app would
+            // have seen, drawn against how reliable this student has been.
             const rate = reliability.get(student.id) ?? 0.9;
             const roll = rng();
             if (roll < rate) {
@@ -302,6 +319,7 @@ async function main() {
                 ? Math.round(rng() * 12)
                 : SHIFT_LATE_AFTER_MINUTES + 1 + Math.round(rng() * 25);
               const arrived = start.getTime() + minutesLate * MINUTE_MS;
+              if (arrived > now) return notYet;
               const status: ShiftAttendanceStatus =
                 arrived > lateAfter ? 'late' : 'present';
               return {
@@ -310,10 +328,14 @@ async function main() {
                 assigned_by: facultyId,
                 attendance_status: status,
                 checked_in_at: new Date(arrived).toISOString(),
-                checked_out_at: new Date(end.getTime() - Math.round(rng() * 10) * MINUTE_MS).toISOString(),
-                notes: status === 'late' ? 'Arrived after the start of the shift.' : null,
+                checked_out_at: new Date(
+                  Math.min(end.getTime() - Math.round(rng() * 10) * MINUTE_MS, now),
+                ).toISOString(),
+                notes: null,
               };
             }
+            // Absence is only decided once the shift is over.
+            if (running) return notYet;
             const status: ShiftAttendanceStatus = roll < rate + (1 - rate) * 0.4 ? 'excused' : 'absent';
             return {
               shift_id: shift.id,
@@ -326,16 +348,17 @@ async function main() {
             };
           }
 
-          // Active in the app during the shift: present, as the live rule marks it.
-          const first = inWindow[0];
+          // Active in the app during the shift: checked in exactly as the live
+          // rule would, late if the first activity came after the late line.
+          const first = checkIns[0];
           const last = inWindow[inWindow.length - 1];
           return {
             shift_id: shift.id,
             student_id: student.id,
             assigned_by: facultyId,
-            attendance_status: 'present' as ShiftAttendanceStatus,
+            attendance_status: (first > lateAfter ? 'late' : 'present') as ShiftAttendanceStatus,
             checked_in_at: new Date(first).toISOString(),
-            checked_out_at: new Date(Math.min(last, graceEnd)).toISOString(),
+            checked_out_at: new Date(last).toISOString(),
             notes: null,
           };
         });
