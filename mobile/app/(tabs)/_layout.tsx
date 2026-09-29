@@ -34,6 +34,37 @@ const TAB_ICONS: Record<string, string> = {
   profile: "user",
 };
 
+/**
+ * Tab bar sizes. On an iPad (a window at least 600pt wide, so iPad split view
+ * down to a phone-sized column falls back to the phone bar) the bar is
+ * narrower and centred, not stretched across the screen, and its items are
+ * bigger.
+ */
+const PHONE_TAB_BAR = {
+  barHeight: 62,
+  barMaxWidth: undefined as number | undefined,
+  itemHeight: 56,
+  orb: 52,
+  lift: 14,
+  icon: 19,
+  label: 9.5,
+};
+const TABLET_TAB_BAR: typeof PHONE_TAB_BAR = {
+  barHeight: 84,
+  barMaxWidth: 560,
+  itemHeight: 80,
+  orb: 80,
+  lift: 22,
+  icon: 28,
+  label: 12,
+};
+type TabBarMetrics = typeof PHONE_TAB_BAR;
+
+function useTabBarMetrics(): TabBarMetrics {
+  const { width } = useWindowDimensions();
+  return width >= 600 ? TABLET_TAB_BAR : PHONE_TAB_BAR;
+}
+
 /** Quick, no-bounce transition for the active orb. */
 const QUICK = { duration: 160, easing: Easing.out(Easing.cubic) };
 
@@ -43,12 +74,15 @@ function TabItem({
   label,
   isFocused,
   onPress,
+  metrics,
 }: {
   icon: string;
   label: string;
   isFocused: boolean;
   onPress: () => void;
+  metrics: TabBarMetrics;
 }) {
+  const { lift } = metrics;
   const { Palette } = useTheme();
   const progress = useSharedValue(isFocused ? 1 : 0);
 
@@ -59,14 +93,14 @@ function TabItem({
   const orbStyle = useAnimatedStyle(() => ({
     opacity: progress.value,
     transform: [
-      { translateY: interpolate(progress.value, [0, 1], [6, -14]) },
+      { translateY: interpolate(progress.value, [0, 1], [6, -lift]) },
       { scale: interpolate(progress.value, [0, 1], [0.4, 1]) },
     ],
   }));
 
   const iconStyle = useAnimatedStyle(() => ({
     transform: [
-      { translateY: interpolate(progress.value, [0, 1], [0, -14]) },
+      { translateY: interpolate(progress.value, [0, 1], [0, -lift]) },
       { scale: interpolate(progress.value, [0, 1], [1, 1.15]) },
     ],
   }));
@@ -77,7 +111,7 @@ function TabItem({
   }));
 
   return (
-    <View style={styles.tabItem}>
+    <View style={[styles.tabItem, { height: metrics.itemHeight }]}>
       <Pressable
         onPress={onPress}
         accessibilityRole="tab"
@@ -85,7 +119,13 @@ function TabItem({
         accessibilityLabel={label}
         style={({ pressed }) => [styles.tabPressable, pressed && !isFocused && { opacity: 0.65 }]}
       >
-        <Animated.View style={[styles.orb, orbStyle]}>
+        <Animated.View
+          style={[
+            styles.orb,
+            { width: metrics.orb, height: metrics.orb, borderRadius: metrics.orb / 2 },
+            orbStyle,
+          ]}
+        >
           <LinearGradient
             colors={[Teal.light, Teal.primary, Teal.deep]}
             start={{ x: 0, y: 0 }}
@@ -96,12 +136,12 @@ function TabItem({
         <Animated.View style={iconStyle}>
           <FontAwesome6
             name={icon}
-            size={19}
+            size={metrics.icon}
             solid
             color={isFocused ? "#FFFFFF" : Palette.textMuted}
           />
         </Animated.View>
-        <Animated.Text numberOfLines={1} style={[styles.tabLabel, labelStyle]}>
+        <Animated.Text numberOfLines={1} style={[styles.tabLabel, { fontSize: metrics.label }, labelStyle]}>
           {label}
         </Animated.Text>
       </Pressable>
@@ -112,6 +152,7 @@ function TabItem({
 function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const { Palette } = useTheme();
+  const metrics = useTabBarMetrics();
 
   return (
     <View
@@ -121,7 +162,13 @@ function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
       <View
         style={[
           styles.tabBarPill,
-          { backgroundColor: Palette.surface, borderColor: Palette.borderLight },
+          {
+            height: metrics.barHeight,
+            borderRadius: metrics.barHeight / 2,
+            maxWidth: metrics.barMaxWidth,
+            backgroundColor: Palette.surface,
+            borderColor: Palette.borderLight,
+          },
         ]}
       >
         {state.routes.map((route, index) => {
@@ -147,6 +194,7 @@ function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
               label={label}
               isFocused={isFocused}
               onPress={onPress}
+              metrics={metrics}
             />
           );
         })}
@@ -423,8 +471,8 @@ const styles = StyleSheet.create({
   tabBarPill: {
     flexDirection: "row",
     alignItems: "center",
-    height: 62,
-    borderRadius: 31,
+    alignSelf: "center",
+    width: "100%",
     borderWidth: 1,
     paddingHorizontal: 6,
     shadowColor: Teal.deepest,
@@ -436,7 +484,6 @@ const styles = StyleSheet.create({
   },
   tabItem: {
     flex: 1,
-    height: 56,
   },
   tabPressable: {
     flex: 1,
@@ -445,9 +492,6 @@ const styles = StyleSheet.create({
   },
   orb: {
     position: "absolute",
-    width: 52,
-    height: 52,
-    borderRadius: 26,
     overflow: "hidden",
     borderWidth: 3,
     borderColor: "#FFFFFF",
@@ -460,7 +504,6 @@ const styles = StyleSheet.create({
   tabLabel: {
     position: "absolute",
     bottom: 3,
-    fontSize: 9.5,
     fontWeight: "700",
     color: Teal.primary,
     letterSpacing: 0.4,
