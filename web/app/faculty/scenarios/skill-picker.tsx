@@ -29,7 +29,11 @@ interface SkillPickerProps {
   /** Skills the scenario already has, which can't be picked again. */
   existingIds?: readonly string[];
   disabled?: boolean;
+  /** Chapters the case centres on; their skills are listed first. */
+  focusChapters?: readonly number[];
 }
+
+const NO_CHAPTERS: readonly number[] = [];
 
 /**
  * Picks the Taylor's skills a scenario is built from. "Detect skills" reads the
@@ -38,7 +42,14 @@ interface SkillPickerProps {
  * word; a skill with alternative routes (oral, rectal, axillary temperature)
  * includes only the route picked here.
  */
-export default function SkillPicker({ value, onChange, detectInput, existingIds = [], disabled }: SkillPickerProps) {
+export default function SkillPicker({
+  value,
+  onChange,
+  detectInput,
+  existingIds = [],
+  disabled,
+  focusChapters = NO_CHAPTERS,
+}: SkillPickerProps) {
   const [catalog, setCatalog] = useState<SkillSummary[]>([]);
   const [details, setDetails] = useState<Record<string, SkillDetail>>({});
   const [reasons, setReasons] = useState<Record<string, string>>({});
@@ -80,8 +91,10 @@ export default function SkillPicker({ value, onChange, detectInput, existingIds 
       if (q && !`${s.id} ${s.title} ${s.area}`.toLowerCase().includes(q)) continue;
       out.set(s.area, [...(out.get(s.area) ?? []), s]);
     }
-    return [...out.entries()];
-  }, [catalog, search]);
+    // Focus chapters first; otherwise book order (a stable sort keeps it).
+    const focused = (list: SkillSummary[]) => (focusChapters.includes(list[0].chapter) ? 0 : 1);
+    return [...out.entries()].sort((a, b) => focused(a[1]) - focused(b[1]));
+  }, [catalog, search, focusChapters]);
 
   const toggle = (id: string) =>
     onChange(picked.has(id) ? value.filter((s) => s.id !== id) : [...value, { id }]);
@@ -122,7 +135,7 @@ export default function SkillPicker({ value, onChange, detectInput, existingIds 
         <div>
           <p className="flex items-center gap-2 text-sm font-bold text-gray-800">
             <FontAwesomeIcon icon={faListCheck} className="h-3.5 w-3.5 text-brand-600" />
-            Taylor&apos;s skills
+            Skills
           </p>
           <p className="mt-0.5 text-xs text-gray-500">
             Each skill becomes a task, and its checklist steps become the sub-tasks you grade.
@@ -235,7 +248,7 @@ export default function SkillPicker({ value, onChange, detectInput, existingIds 
           groups.map(([area, skills]) => (
             <div key={area}>
               <p className="sticky top-0 bg-subtle px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-500">
-                {area}
+                Chapter {skills[0].chapter} · {area}
               </p>
               {skills.map((s) => {
                 const already = existing.has(s.id);
