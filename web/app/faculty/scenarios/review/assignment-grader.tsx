@@ -457,7 +457,11 @@ export default function AssignmentGrader({
     return true;
   };
 
-  /** Save the grade: the scenario becomes Completed and the student sees it. Saving an edit re-scores it. */
+  /**
+   * Save the grade. The student sees each graded task at once; the scenario
+   * becomes Completed when every row is graded, and until then this saves
+   * progress and stays open. Saving an edit re-scores it.
+   */
   const handleSave = async () => {
     if (!selectedId) return;
     const assignmentId = selectedId;
@@ -469,7 +473,14 @@ export default function AssignmentGrader({
       return;
     }
     const result = await finalizeScenarioAssignment(assignmentId);
-    if (result) {
+    if (result && !result.completed) {
+      onAssignmentChange({ status: result.assignment.status });
+      await reloadTasks();
+      resetDraft();
+      toast(
+        `Progress saved — ${result.remaining} ${result.remaining === 1 ? "row" : "rows"} left. It completes once every row is graded.`,
+      );
+    } else if (result) {
       onAssignmentChange({
         status: "completed",
         score: result.score,
@@ -864,7 +875,13 @@ export default function AssignmentGrader({
                       className="h-3.5 w-3.5"
                     />
                   )}
-                  {finalizing ? "Saving…" : "Save"}
+                  {finalizing
+                    ? "Saving…"
+                    : finalized
+                      ? "Save"
+                      : unratedMissing > 0
+                        ? "Save progress"
+                        : "Save & finish"}
                 </button>
               </>
             )}
