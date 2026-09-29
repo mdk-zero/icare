@@ -333,9 +333,9 @@ export default function TabLayout() {
           headerShown: false,
         }}
       >
+        <Tabs.Screen name="library" options={{ title: "Library" }} />
         <Tabs.Screen name="clinic" options={{ title: "Clinic" }} />
         <Tabs.Screen name="index" options={{ title: "Home" }} />
-        <Tabs.Screen name="library" options={{ title: "Library" }} />
         <Tabs.Screen name="quiz" options={{ title: "Quizzes" }} />
         <Tabs.Screen name="profile" options={{ title: "Profile" }} />
       </Tabs>
