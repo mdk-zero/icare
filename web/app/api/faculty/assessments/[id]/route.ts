@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isValidAttempts, MIN_ATTEMPTS } from '@/app/lib/quiz-attempts';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { logAudit } from '@/app/lib/audit';
@@ -139,8 +140,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     targetSectionNames = names.length > 0 ? names : null;
     updates.target_sections = targetSectionNames;
   }
-  // null on either of these is meaningful: total_questions null serves the whole
-  // bank, max_attempts null means unlimited retakes.
+  // total_questions null serves the whole bank. max_attempts is always a
+  // number now, at least MIN_ATTEMPTS (older quizzes may still hold null,
+  // unlimited, until they are next edited).
   if (total_questions !== undefined) {
     const n = total_questions === null ? null : Number(total_questions);
     if (n !== null && (!Number.isInteger(n) || n <= 0)) {
@@ -149,9 +151,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     updates.total_questions = n;
   }
   if (max_attempts !== undefined) {
-    const n = max_attempts === null ? null : Number(max_attempts);
-    if (n !== null && (!Number.isInteger(n) || n <= 0)) {
-      return NextResponse.json({ error: 'Attempts allowed must be a positive whole number' }, { status: 400 });
+    const n = Number(max_attempts);
+    if (max_attempts === null || !isValidAttempts(n)) {
+      return NextResponse.json({ error: `Attempts allowed must be a whole number, at least ${MIN_ATTEMPTS}` }, { status: 400 });
     }
     updates.max_attempts = n;
   }

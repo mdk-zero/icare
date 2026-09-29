@@ -1,5 +1,6 @@
 "use client";
 
+import { DEFAULT_ATTEMPTS, MIN_ATTEMPTS } from "@/app/lib/quiz-attempts";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -15,6 +16,10 @@ import {
   faChevronDown,
   faWandMagicSparkles,
   faTriangleExclamation,
+  faListCheck,
+  faClock,
+  faRotateRight,
+  faUsers,
 } from "@fortawesome/free-solid-svg-icons";
 import { SkeletonQuestionCard } from "../../../components/skeletons";
 import { toast } from "../../../components/Toast";
@@ -28,9 +33,34 @@ const inputClassName =
 /** A plainer, Google-Forms-like field style for the assessment's own detail
  * form — lighter than `inputClassName`, and scoped to just that form so the
  * question builder below keeps its usual weight. */
-const formLabelClassName = "block text-xs font-medium text-gray-500 mb-1";
-const formInputClassName =
-  "w-full px-3 py-2 bg-surface border border-gray-300 rounded-md text-gray-900 placeholder:text-gray-400 text-sm focus:outline-none focus:ring-1 focus:ring-brand-600 focus:border-brand-600 transition-colors";
+/** The centred column the whole page sits in, form-style. */
+const formColumn = "mx-auto w-full max-w-6xl px-0 sm:px-4";
+
+/** Form-style fields for the details editor: no box, a rule underneath that turns brand on focus. */
+const underlineInput =
+  "w-full border-0 border-b-2 border-gray-200 bg-transparent px-0 py-2 text-gray-900 placeholder:text-gray-400 transition-colors focus:border-brand-600 focus:outline-none focus:ring-0";
+const underlineLabel = "block text-xs font-semibold text-gray-600";
+
+/** An icon button with its name shown on hover and focus, like a form editor's toolbar. */
+function IconAction({ label, icon, onClick }: { label: string; icon: typeof faPen; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      className="group relative grid h-10 w-10 place-items-center rounded-full text-gray-500 transition-colors hover:bg-subtle hover:text-gray-900 focus-visible:bg-subtle focus-visible:outline-none"
+    >
+      <FontAwesomeIcon icon={icon} className="h-4 w-4" />
+      <span
+        role="tooltip"
+        className="pointer-events-none absolute top-full right-0 z-20 mt-1.5 whitespace-nowrap rounded-md bg-gray-800 px-2 py-1 text-[11px] font-medium text-white opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
+      >
+        {label}
+      </span>
+    </button>
+  );
+}
+
 
 interface AssessmentDetail {
   id: string;
@@ -106,19 +136,6 @@ const emptyQuestionForm: QuestionFormData = {
   competency_ids: [],
   criteria_id: null,
 };
-
-const CATEGORIES = [
-  "Cardiac Emergency",
-  "Respiratory Emergency",
-  "Neurological Emergency",
-  "Trauma",
-  "Medical-Surgical",
-  "Patient Education",
-  "Infection Management",
-  "Critical Care",
-  "Medication Safety",
-  "General",
-] as const;
 
 export default function AssessmentQuestionsClient({
   assessmentId,
@@ -257,6 +274,7 @@ export default function AssessmentQuestionsClient({
         const json = (await assessRes.json()) as {
           assessment: { questions: AssessmentQuestion[]; created_by: string | null; title: string; description: string; category: string; time_limit_seconds: number | null; question_count: number; total_questions: number | null; max_attempts: number | null; target_sections: string[] | null };
           blockers?: PublishBlocker[];
+
         };
         const a = json.assessment;
         setAssessment({
@@ -276,7 +294,8 @@ export default function AssessmentQuestionsClient({
           description: a.description ?? "",
           category: a.category,
           time_limit_minutes: a.time_limit_seconds ? String(Math.round(a.time_limit_seconds / 60)) : "",
-          max_attempts: a.max_attempts ? String(a.max_attempts) : "",
+          // Older quizzes may still be unlimited (null); editing gives them the standard.
+          max_attempts: String(a.max_attempts ?? DEFAULT_ATTEMPTS),
           target_sections: a.target_sections ?? [],
         });
         setBlockers(json.blockers ?? []);
@@ -786,8 +805,8 @@ export default function AssessmentQuestionsClient({
   /**
    * The question list, grouped under its criteria.
    *
-   * Flattened with header entries rather than nested lists so the existing
-   * two-column grid still lines the cards up; a header just spans both columns.
+   * Flattened with header entries rather than nested lists: a header opens a
+   * skill's section and the questions follow it down the single column.
    * Numbering stays global so a question keeps the same label wherever it sits.
    */
   const questionList = useMemo(() => {
@@ -817,6 +836,25 @@ export default function AssessmentQuestionsClient({
     }
     return entries;
   }, [criteria, questions, questionsByCriterion]);
+
+  // Each skill's questions under its header, as one section to fold or open.
+  type HeaderEntry = Extract<(typeof questionList)[number], { kind: "header" }>;
+  type QuestionEntry = Extract<(typeof questionList)[number], { kind: "question" }>;
+  const sectionGroups: { header: HeaderEntry; items: QuestionEntry[] }[] = [];
+  for (const entry of questionList) {
+    if (entry.kind === "header") sectionGroups.push({ header: entry, items: [] });
+    else sectionGroups[sectionGroups.length - 1]?.items.push(entry);
+  }
+  // The unassigned group isn't a section.
+  const sectionTotal = sectionGroups.filter((g) => g.header.criterion).length;
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(() => new Set());
+  const toggleSection = (id: string) =>
+    setCollapsedSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   if (loading) {
     return (
@@ -853,79 +891,333 @@ export default function AssessmentQuestionsClient({
     );
   }
 
-  return (
-    <div className="space-y-4">
-      {/* Header */}
-      <header className="relative overflow-hidden bg-surface rounded-2xl border border-hairline shadow-tile p-4 sm:p-5">
-        <div className="relative flex items-start gap-4">
-          <button
-            onClick={() => router.push("/faculty/assessments")}
-            className="p-2 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 shrink-0"
-          >
-            <FontAwesomeIcon icon={faArrowLeft} className="w-4 h-4" />
-          </button>
-          <div className="flex-1 min-w-0">
-            {editingDetails ? (
-              <div className="space-y-4">
-                <div>
-                  <label className={formLabelClassName}>Title</label>
+  /** One question card: its text, answers, and the points/criteria bar. */
+  const renderQuestion = (entry: QuestionEntry) => {
+    const q = entry.question;
+    const i = entry.index;
+    const form = questionBuilders[q.id];
+    if (!form) return null;
+    const isEditing = editingQuestions.has(q.id);
+    return (
+      <div
+        key={q.id}
+        className={`bg-surface rounded-xl border shadow-sm flex flex-col overflow-hidden ${
+          isEditing ? "border-brand-600/40 border-l-[6px] border-l-brand-600" : "border-gray-200"
+        }`}
+      >
+        <div className="px-5 py-4 sm:px-6 flex-1 space-y-2.5">
+          {/* Question header */}
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-sm font-bold text-gray-500 bg-gray-100 w-6 h-6 rounded-full flex items-center justify-center shrink-0">
+                {i + 1}
+              </span>
+              <select
+                value={form.question_type}
+                onChange={(e) =>
+                  updateBuilderField(q.id, "question_type", e.target.value)
+                }
+                disabled={!isEditing}
+                className="text-xs border border-gray-300 rounded-lg px-2 py-1 text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-600/30 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <option value="multiple_choice">Multiple choice</option>
+                <option value="true_false">True / False</option>
+                <option value="short_answer">Short answer</option>
+              </select>
+            </div>
+            {isEditing && dirtyQuestions.has(q.id) && (
+              <button
+                onClick={() => {
+                  setSavingQuestions((prev) => ({ ...prev, [q.id]: true }));
+                  handleSaveQuestion(q.id).finally(() =>
+                    setSavingQuestions((prev) => ({ ...prev, [q.id]: false }))
+                  );
+                }}
+                disabled={savingQuestions[q.id]}
+                className="flex items-center gap-1 px-2.5 py-1 bg-brand-600 text-white rounded-lg text-xs font-medium hover:bg-brand-700 disabled:opacity-60 transition-colors shrink-0"
+              >
+                {savingQuestions[q.id] ? (
+                  <EcgLoader size="xs" />
+                ) : (
+                  <FontAwesomeIcon icon={faCheck} className="w-3 h-3" />
+                )}
+                Save
+              </button>
+            )}
+          </div>
+
+          {/* Question text */}
+          <textarea
+            value={form.content}
+            onChange={(e) => updateBuilderField(q.id, "content", e.target.value)}
+            disabled={!isEditing}
+            placeholder="Question text"
+            rows={isEditing ? 2 : 1}
+            className={`${inputClassName} disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-50 text-sm`}
+          />
+
+          {/* Options */}
+          {form.question_type === "multiple_choice" && (
+            <div className="space-y-1.5">
+              {form.options.slice(0, isEditing ? undefined : 4).map((opt, idx) => (
+                <div key={idx} className={`flex items-center gap-2 ${!isEditing ? "opacity-60" : ""}`}>
+                  <button
+                    onClick={() => isEditing && setBuilderCorrect(q.id, idx)}
+                    title={idx === form.correct_index ? "Correct answer" : "Mark as correct"}
+                    className={`shrink-0 ${!isEditing ? "cursor-default" : ""}`}
+                    tabIndex={isEditing ? 0 : -1}
+                  >
+                    {idx === form.correct_index ? (
+                      <FontAwesomeIcon icon={faCheck} className="w-4 h-4 text-green-600" />
+                    ) : (
+                      <div className="w-4 h-4 rounded-full border-2 border-gray-300" />
+                    )}
+                  </button>
                   <input
-                    value={detailForm.title}
-                    onChange={(e) => setDetailForm((f) => ({ ...f, title: e.target.value }))}
-                    className={formInputClassName}
+                    value={opt}
+                    onChange={(e) => isEditing && updateBuilderOption(q.id, idx, e.target.value)}
+                    placeholder={`Option ${idx + 1}`}
+                    disabled={!isEditing}
+                    className="flex-1 px-3 py-1.5 bg-surface border border-gray-400 rounded-lg text-sm text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-50 transition-all"
                   />
-                </div>
-                <div>
-                  <label className={formLabelClassName}>Description</label>
-                  <textarea
-                    value={detailForm.description}
-                    onChange={(e) => setDetailForm((f) => ({ ...f, description: e.target.value }))}
-                    rows={2}
-                    className={formInputClassName}
-                  />
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div>
-                    <label className={formLabelClassName}>Category</label>
-                    <select
-                      value={detailForm.category}
-                      onChange={(e) => setDetailForm((f) => ({ ...f, category: e.target.value }))}
-                      className={formInputClassName}
+                  {isEditing && form.options.length > 2 && (
+                    <button
+                      onClick={() => removeBuilderOption(q.id, idx)}
+                      className="text-gray-400 hover:text-red-600 shrink-0"
                     >
-                      {CATEGORIES.map((c) => (
-                        <option key={c} value={c}>{c}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className={formLabelClassName}>Time limit (minutes)</label>
-                    <input
-                      type="number"
-                      min={1}
-                      value={detailForm.time_limit_minutes}
-                      onChange={(e) => setDetailForm((f) => ({ ...f, time_limit_minutes: e.target.value }))}
-                      placeholder="No limit"
-                      className={formInputClassName}
-                    />
-                  </div>
-                  <div>
-                    <label className={formLabelClassName}>Attempts allowed</label>
-                    <input
-                      type="number"
-                      min={1}
-                      value={detailForm.max_attempts}
-                      onChange={(e) => setDetailForm((f) => ({ ...f, max_attempts: e.target.value }))}
-                      placeholder="Unlimited"
-                      className={formInputClassName}
-                    />
-                  </div>
+                      <FontAwesomeIcon icon={faTimes} className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
-                <p className="text-xs text-gray-500">
-                  Every attempt serves the whole quiz. Leave{" "}
-                  <span className="font-medium">Attempts allowed</span> blank for unlimited retakes.
-                </p>
+              ))}
+              {!isEditing && form.options.length > 4 && (
+                <p className="text-xs text-gray-400">+{form.options.length - 4} more options</p>
+              )}
+              {isEditing && (
+                <button
+                  onClick={() => addBuilderOption(q.id)}
+                  className="text-xs text-brand-600 font-medium hover:underline"
+                >
+                  + Add option
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* True / False */}
+          {form.question_type === "true_false" && (
+            <div className="space-y-1.5">
+              {["True", "False"].map((label, idx) => (
+                <div key={idx} className={`flex items-center gap-2 ${!isEditing ? "opacity-60" : ""}`}>
+                  <button
+                    onClick={() => isEditing && setBuilderCorrect(q.id, idx)}
+                    className={`shrink-0 ${!isEditing ? "cursor-default" : ""}`}
+                    tabIndex={isEditing ? 0 : -1}
+                  >
+                    {idx === form.correct_index ? (
+                      <FontAwesomeIcon icon={faCheck} className="w-4 h-4 text-green-600" />
+                    ) : (
+                      <div className="w-4 h-4 rounded-full border-2 border-gray-300" />
+                    )}
+                  </button>
+                  <span className={`text-sm ${isEditing ? "text-gray-700" : "text-gray-400"}`}>{label}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Short answer */}
+          {form.question_type === "short_answer" && (
+            <p className={`text-xs italic ${isEditing ? "text-gray-400" : "text-gray-300"}`}>
+              Students will type a free-text response.
+            </p>
+          )}
+        </div>
+
+        {/* Bottom bar — points, competency, actions */}
+        <div className="px-5 py-3 sm:px-6 bg-subtle border-t border-hairline flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1.5">
+              <label className={`text-xs font-medium ${isEditing ? "text-gray-600" : "text-gray-400"}`}>Points</label>
+              <input
+                type="number"
+                min={1}
+                value={form.points}
+                onChange={(e) =>
+                  isEditing && updateBuilderField(q.id, "points", Math.max(1, Number(e.target.value)))
+                }
+                disabled={!isEditing}
+                className="w-14 px-2 py-1 border border-gray-300 rounded-lg text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-600/30 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-50"
+              />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <label className={`text-xs font-medium ${isEditing ? "text-gray-600" : "text-gray-400"}`}>Criteria</label>
+              <select
+                value={form.criteria_id ?? ""}
+                onChange={(e) => {
+                  if (!isEditing) return;
+                  const next = e.target.value || null;
+                  updateBuilderField(q.id, "criteria_id", next);
+                  // Keep the competency tag in step with the criteria
+                  // that now owns the question — it is what the ML
+                  // recommender reads.
+                  const owner = criteria.find((c) => c.id === next);
+                  if (owner) updateBuilderField(q.id, "competency_ids", [owner.competency_id]);
+                }}
+                disabled={!isEditing}
+                className={`px-2 py-1 border rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-brand-600/30 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-50 ${
+                  form.criteria_id
+                    ? "border-gray-300 text-gray-700"
+                    : "border-amber-200 text-amber-800 bg-amber-50"
+                }`}
+              >
+                <option value="">Unassigned</option>
+                {criteria.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <label className={`text-xs font-medium ${isEditing ? "text-gray-600" : "text-gray-400"}`}>Comp.</label>
+              <select
+                value={form.competency_ids[0] ?? ""}
+                onChange={(e) =>
+                  isEditing && updateBuilderField(q.id, "competency_ids", e.target.value ? [e.target.value] : [])
+                }
+                disabled={!isEditing}
+                className="px-2 py-1 border border-gray-300 rounded-lg text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-600/30 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-50"
+              >
+                <option value="">None</option>
+                {competencyAreas.map((ca) => (
+                  <option key={ca.id} value={ca.id}>{ca.name}</option>
+                ))}
+              </select>
+            </div>
+            {form.explanation && (
+              <span className="text-xs text-gray-400">Has explanation</span>
+            )}
+          </div>
+          <div className={`flex items-center gap-1.5 ${canEdit ? "" : "hidden"}`}>
+            <button
+              onClick={() => handleDuplicateQuestion(q.id)}
+              title="Duplicate"
+              className="p-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50"
+            >
+              <FontAwesomeIcon icon={faLayerGroup} className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => toggleEdit(q.id)}
+              title={isEditing ? "Done editing" : "Edit question"}
+              className={`p-1.5 rounded-lg border transition-colors ${
+                isEditing
+                  ? "bg-brand-600 text-white border-brand-600 hover:bg-brand-700"
+                  : "border-gray-200 text-gray-500 hover:bg-gray-50"
+              }`}
+            >
+              <FontAwesomeIcon icon={faPen} className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => handleDeleteQuestion(q.id)}
+              title="Delete"
+              className="p-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50"
+            >
+              <FontAwesomeIcon icon={faTrash} className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className={`${formColumn} space-y-4`}>
+      {/* Back to the list, and the clock */}
+      <div className="flex items-center justify-between gap-3">
+        <button
+          onClick={() => router.push("/faculty/assessments")}
+          className="inline-flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-subtle hover:text-gray-900"
+        >
+          <FontAwesomeIcon icon={faArrowLeft} className="h-3.5 w-3.5" />
+          Quizzes
+        </button>
+        <LiveClock variant="full" className="hidden lg:block" />
+      </div>
+
+      {/* Title card, in the manner of a form's title section: a tab with the
+          quiz's state, the title, what it covers, and how it's served. */}
+      <section aria-label="Quiz details">
+        <span
+          className={`inline-flex items-center gap-1.5 rounded-t-lg px-3 py-1 text-xs font-semibold text-white ${
+            blockers.length === 0 ? "bg-brand-600" : "bg-amber-600"
+          }`}
+        >
+          <FontAwesomeIcon icon={blockers.length === 0 ? faCheck : faTriangleExclamation} className="h-3 w-3" />
+          {blockers.length === 0
+            ? "Ready for students"
+            : `${blockers.length} issue${blockers.length === 1 ? "" : "s"} to fix`}
+        </span>
+        <header
+          className={`rounded-xl rounded-tl-none border border-hairline border-l-[6px] bg-surface shadow-tile ${
+            blockers.length === 0 ? "border-l-brand-600" : "border-l-amber-600"
+          }`}
+        >
+          {editingDetails ? (
+            <div className="space-y-6 px-6 py-6 sm:px-8">
+              <div>
+                <label htmlFor="quiz-title" className="sr-only">Title</label>
+                <input
+                  id="quiz-title"
+                  value={detailForm.title}
+                  onChange={(e) => setDetailForm((f) => ({ ...f, title: e.target.value }))}
+                  placeholder="Quiz title"
+                  className={`${underlineInput} font-display text-2xl font-bold sm:text-3xl`}
+                />
+              </div>
+              <div>
+                <label htmlFor="quiz-description" className="sr-only">Description</label>
+                <textarea
+                  id="quiz-description"
+                  value={detailForm.description}
+                  onChange={(e) => setDetailForm((f) => ({ ...f, description: e.target.value }))}
+                  rows={3}
+                  placeholder="What this quiz covers"
+                  className={`${underlineInput} resize-y text-[15px] leading-relaxed`}
+                />
+              </div>
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
                 <div>
-                  <label className={formLabelClassName}>Published to sections</label>
+                  <label htmlFor="quiz-time" className={underlineLabel}>Time limit, in minutes</label>
+                  <input
+                    id="quiz-time"
+                    type="number"
+                    min={1}
+                    value={detailForm.time_limit_minutes}
+                    onChange={(e) => setDetailForm((f) => ({ ...f, time_limit_minutes: e.target.value }))}
+                    placeholder="No limit"
+                    className={`${underlineInput} text-sm`}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="quiz-attempts" className={underlineLabel}>
+                    Attempts allowed, at least {MIN_ATTEMPTS}
+                  </label>
+                  <input
+                    id="quiz-attempts"
+                    type="number"
+                    min={MIN_ATTEMPTS}
+                    step={1}
+                    value={detailForm.max_attempts}
+                    onChange={(e) => setDetailForm((f) => ({ ...f, max_attempts: e.target.value }))}
+                    placeholder={String(DEFAULT_ATTEMPTS)}
+                    className={`${underlineInput} text-sm`}
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-gray-500">
+                Every attempt serves the whole quiz. Students get {DEFAULT_ATTEMPTS} attempts as standard; allow more if the quiz calls for it.
+              </p>
+                <div>
+                  <p className={underlineLabel}>Published to sections</p>
                   {sections.length === 0 ? (
                     <p className="text-sm text-gray-500">
                       No sections exist yet — this assessment reaches every student.
@@ -980,91 +1272,72 @@ export default function AssessmentQuestionsClient({
                     quiz. Leave every box unchecked to publish to all sections.
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleSaveDetails}
-                    disabled={savingDetails}
-                    className="flex items-center gap-2 px-5 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 disabled:opacity-60 transition-colors"
-                  >
-                    {savingDetails ? (
-                      <><EcgLoader /> Saving…</>
-                    ) : (
-                      <><FontAwesomeIcon icon={faCheck} className="w-4 h-4" /> Save</>
-                    )}
-                  </button>
-                  <button
-                    onClick={() => setEditingDetails(false)}
-                    className="px-5 py-2 rounded-lg border border-gray-200 text-gray-600 text-sm hover:bg-gray-50 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="flex items-center gap-3">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <h1 className="font-display text-[26px] sm:text-[31px] font-semibold leading-[1.08] tracking-[-0.015em] text-gray-900 truncate">{assessment.title}</h1>
-                    {blockers.length === 0 ? (
-                      <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full text-xs font-semibold whitespace-nowrap shrink-0">
-                        <FontAwesomeIcon icon={faCheck} className="w-3 h-3 mr-1" />
-                        Ready
-                      </span>
-                    ) : (
-                      <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full text-xs font-semibold whitespace-nowrap shrink-0">
-                        <FontAwesomeIcon icon={faTriangleExclamation} className="w-3 h-3 mr-1" />
-                        {blockers.length} issue{blockers.length === 1 ? "" : "s"}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-sm text-gray-500 mt-1">
-                    <span className="px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">{assessment.category}</span>{" "}
-                    {assessment.question_count} question{assessment.question_count !== 1 ? "s" : ""}
-                    {assessment.time_limit_seconds &&
-                      ` · ${Math.round(assessment.time_limit_seconds / 60)} min limit`}
-                  </p>
-                  {assessment.description && (
-                    <p className="text-sm text-gray-600 mt-1">{assessment.description}</p>
-                  )}
-                  <div className="flex items-center gap-3 mt-1.5 text-xs text-gray-500 flex-wrap">
-                    <span>
-                      {assessment.target_sections && assessment.target_sections.length > 0
-                        ? `Published to ${assessment.target_sections.map((name) => `Section ${name}`).join(", ")}`
-                        : "Published to all sections"}
-                    </span>
-                    {blockers.length === 0 && (
-                      <span>
-                        · Each attempt serves {servedTotal ?? questions.length - questionsByCriterion.unassigned.length} question
-                        {(servedTotal ?? questions.length) === 1 ? "" : "s"} across {criteria.length} criteria
-                        {assessment.max_attempts
-                          ? `, up to ${assessment.max_attempts} attempt${assessment.max_attempts === 1 ? "" : "s"} per student`
-                          : ", unlimited retakes"}
-                      </span>
-                    )}
-                  </div>
-                </div>
+              <div className="flex items-center justify-end gap-2 border-t border-hairline pt-4">
                 <button
-                  onClick={() => router.push(`/faculty/assessments/${assessmentId}/results`)}
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 text-sm font-medium shrink-0"
+                  onClick={() => setEditingDetails(false)}
+                  className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-subtle"
                 >
-                  <FontAwesomeIcon icon={faChartSimple} className="w-3.5 h-3.5" />
-                  Results
+                  Cancel
                 </button>
-                {canEdit && (
-                  <button
-                    onClick={() => setEditingDetails(true)}
-                    title="Edit details"
-                    className="p-2 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 shrink-0"
-                  >
-                    <FontAwesomeIcon icon={faPen} className="w-4 h-4" />
-                  </button>
-                )}
+                <button
+                  onClick={handleSaveDetails}
+                  disabled={savingDetails}
+                  className="flex items-center gap-2 rounded-lg bg-brand-600 px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-700 disabled:opacity-60"
+                >
+                  {savingDetails ? (
+                    <><EcgLoader /> Saving…</>
+                  ) : (
+                    <><FontAwesomeIcon icon={faCheck} className="h-4 w-4" /> Save details</>
+                  )}
+                </button>
               </div>
-            )}
-          </div>
-          <LiveClock variant="full" className="hidden shrink-0 border-l border-hairline pl-4 lg:block" />
-        </div>
-      </header>
+            </div>
+          ) : (
+            <div className="px-6 py-5 sm:px-8 sm:py-6">
+              <div className="flex items-start gap-4">
+                <h1 className="min-w-0 flex-1 font-display text-[28px] font-bold leading-[1.12] tracking-[-0.015em] text-gray-900 sm:text-[34px]">
+                  {assessment.title}
+                </h1>
+                <div className="flex shrink-0 items-center gap-1 pt-1">
+                  <IconAction
+                    label="See results"
+                    icon={faChartSimple}
+                    onClick={() => router.push(`/faculty/assessments/${assessmentId}/results`)}
+                  />
+                  {canEdit && <IconAction label="Edit details" icon={faPen} onClick={() => setEditingDetails(true)} />}
+                </div>
+              </div>
+              {assessment.description && (
+                <p className="mt-3 max-w-[75ch] text-[15px] leading-relaxed text-gray-700">{assessment.description}</p>
+              )}
+              <div className="mt-5 flex flex-wrap gap-x-5 gap-y-2 border-t border-hairline pt-3 text-xs text-gray-500">
+                <span className="inline-flex items-center gap-1.5">
+                  <FontAwesomeIcon icon={faListCheck} className="h-3 w-3 text-gray-400" />
+                  {assessment.question_count} question{assessment.question_count !== 1 ? "s" : ""}
+                  {blockers.length === 0 &&
+                    `, ${servedTotal ?? questions.length - questionsByCriterion.unassigned.length} served per attempt across ${criteria.length} criteria`}
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <FontAwesomeIcon icon={faClock} className="h-3 w-3 text-gray-400" />
+                  {assessment.time_limit_seconds
+                    ? `${Math.round(assessment.time_limit_seconds / 60)} min limit`
+                    : "No time limit"}
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <FontAwesomeIcon icon={faRotateRight} className="h-3 w-3 text-gray-400" />
+                  {assessment.max_attempts ? `Up to ${assessment.max_attempts} attempts per student` : "Unlimited retakes"}
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <FontAwesomeIcon icon={faUsers} className="h-3 w-3 text-gray-400" />
+                  {assessment.target_sections && assessment.target_sections.length > 0
+                    ? `Published to ${assessment.target_sections.map((name) => `Section ${name}`).join(", ")}`
+                    : "Published to all sections"}
+                </span>
+              </div>
+            </div>
+          )}
+        </header>
+      </section>
 
       {!canEdit && (
         <div className="bg-subtle border border-hairline rounded-xl p-4 text-sm text-gray-600">
@@ -1091,7 +1364,8 @@ export default function AssessmentQuestionsClient({
         </div>
       )}
 
-      {/* Criteria section */}
+      {/* Criteria section — in the same centred column as the questions */}
+      <div>
       <div className="bg-surface rounded-xl border border-gray-200 shadow-sm">
         <button
           onClick={() => setShowCriteriaEditor(!showCriteriaEditor)}
@@ -1233,15 +1507,18 @@ export default function AssessmentQuestionsClient({
           </fieldset>
         )}
       </div>
+      </div>
 
-      {/* Question builder */}
-      <div className="space-y-4">
-        <header className="relative overflow-hidden bg-surface rounded-2xl border border-hairline shadow-tile p-4 sm:p-5">
-          <div className="relative">
-            <h2 className="font-display text-lg sm:text-xl font-bold text-gray-900">
-              Questions ({questions.length})
-            </h2>
-          </div>
+      {/* Question builder — one centred column, read top to bottom like a
+          form, with each skill's questions under its own section card. */}
+      <div className="space-y-3">
+        <header className="bg-surface rounded-xl border border-hairline border-t-[6px] border-t-brand-600 shadow-tile px-5 py-4 sm:px-6">
+          <h2 className="font-display text-lg sm:text-xl font-bold text-gray-900">
+            Questions ({questions.length})
+          </h2>
+          <p className="mt-0.5 text-xs text-gray-500">
+            {sectionTotal} {sectionTotal === 1 ? "section" : "sections"}, one per skill. Each attempt draws from every section.
+          </p>
         </header>
 
         {questions.length === 0 ? (
@@ -1249,275 +1526,65 @@ export default function AssessmentQuestionsClient({
             No questions yet. Click &quot;Add Question&quot; to start building.
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {questionList.map((entry) => {
-              if (entry.kind === "header") {
-                const c = entry.criterion;
-                const min = c?.min_questions ?? 0;
-                const short = c ? entry.count < min : false;
-                return (
-                  <div
-                    key={entry.id}
-                    className={`md:col-span-2 flex items-center gap-2 pt-2 pb-1 border-b ${
-                      c ? "border-gray-200" : "border-amber-200"
-                    }`}
-                  >
-                    <FontAwesomeIcon
-                      icon={c ? faLayerGroup : faTriangleExclamation}
-                      className={`w-3.5 h-3.5 ${c ? "text-brand-600" : "text-amber-600"}`}
-                    />
-                    <span className={`text-sm font-semibold ${c ? "text-gray-800" : "text-amber-800"}`}>
-                      {c ? c.name : "Unassigned"}
-                    </span>
-                    <span className="text-xs text-gray-500">
-                      {entry.count} question{entry.count === 1 ? "" : "s"}
-                      {c && ` · min ${min} · weight ${c.weight}%`}
-                    </span>
-                    {short && (
-                      <span className="text-xs font-medium text-red-600">
-                        needs {min - entry.count} more
-                      </span>
-                    )}
-                    {!c && (
-                      <span className="text-xs text-amber-800">
-                        never served — give each one a criteria
-                      </span>
-                    )}
-                  </div>
-                );
-              }
-
-              const q = entry.question;
-              const i = entry.index;
-              const form = questionBuilders[q.id];
-              if (!form) return null;
-              const isEditing = editingQuestions.has(q.id);
+          <div className="flex flex-col gap-4">
+            {sectionGroups.map(({ header: entry, items }) => {
+              const c = entry.criterion;
+              const min = c?.min_questions ?? 0;
+              const short = c ? entry.count < min : false;
+              const collapsed = collapsedSections.has(entry.id);
+              const panelId = `section-${entry.id}`;
               return (
-                <div
-                  key={q.id}
-                  className={`bg-surface rounded-xl border shadow-sm flex flex-col ${isEditing ? "border-brand-600/40 ring-1 ring-brand-600/20" : "border-gray-200"}`}
-                >
-                  <div className="p-4 flex-1 space-y-2">
-                    {/* Question header */}
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="text-sm font-bold text-gray-500 bg-gray-100 w-6 h-6 rounded-full flex items-center justify-center shrink-0">
-                          {i + 1}
+                <section key={entry.id} aria-label={c ? c.name : "Unassigned questions"}>
+                  {/* Stays in view while its questions scroll under it. The
+                      negative inset cancels Shell's padding (p-3 lg:p-5) so it
+                      docks at the window's top edge. */}
+                  <div className="sticky -top-3 z-20 lg:-top-5">
+                    <button
+                      type="button"
+                      onClick={() => toggleSection(entry.id)}
+                      aria-expanded={!collapsed}
+                      aria-controls={panelId}
+                      className={`flex w-full items-start gap-2.5 rounded-xl border border-l-[6px] bg-surface px-5 py-4 text-left shadow-tile transition-colors hover:bg-subtle/60 sm:px-6 ${
+                        c ? "border-hairline border-l-brand-600" : "border-amber-200 border-l-amber-600"
+                      }`}
+                    >
+                      <FontAwesomeIcon
+                        icon={c ? faLayerGroup : faTriangleExclamation}
+                        className={`mt-1 w-4 h-4 shrink-0 ${c ? "text-brand-600" : "text-amber-600"}`}
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className={`block text-base font-semibold ${c ? "text-gray-900" : "text-amber-800"}`}>
+                          {c ? c.name : "Unassigned"}
                         </span>
-                        <select
-                          value={form.question_type}
-                          onChange={(e) =>
-                            updateBuilderField(q.id, "question_type", e.target.value)
-                          }
-                          disabled={!isEditing}
-                          className="text-xs border border-gray-300 rounded-lg px-2 py-1 text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-600/30 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          <option value="multiple_choice">Multiple choice</option>
-                          <option value="true_false">True / False</option>
-                          <option value="short_answer">Short answer</option>
-                        </select>
-                      </div>
-                      {isEditing && dirtyQuestions.has(q.id) && (
-                        <button
-                          onClick={() => {
-                            setSavingQuestions((prev) => ({ ...prev, [q.id]: true }));
-                            handleSaveQuestion(q.id).finally(() =>
-                              setSavingQuestions((prev) => ({ ...prev, [q.id]: false }))
-                            );
-                          }}
-                          disabled={savingQuestions[q.id]}
-                          className="flex items-center gap-1 px-2.5 py-1 bg-brand-600 text-white rounded-lg text-xs font-medium hover:bg-brand-700 disabled:opacity-60 transition-colors shrink-0"
-                        >
-                          {savingQuestions[q.id] ? (
-                            <EcgLoader size="xs" />
-                          ) : (
-                            <FontAwesomeIcon icon={faCheck} className="w-3 h-3" />
-                          )}
-                          Save
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Question text */}
-                    <textarea
-                      value={form.content}
-                      onChange={(e) => updateBuilderField(q.id, "content", e.target.value)}
-                      disabled={!isEditing}
-                      placeholder="Question text"
-                      rows={isEditing ? 2 : 1}
-                      className={`${inputClassName} disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-50 text-sm`}
-                    />
-
-                    {/* Options */}
-                    {form.question_type === "multiple_choice" && (
-                      <div className="space-y-1.5">
-                        {form.options.slice(0, isEditing ? undefined : 4).map((opt, idx) => (
-                          <div key={idx} className={`flex items-center gap-2 ${!isEditing ? "opacity-60" : ""}`}>
-                            <button
-                              onClick={() => isEditing && setBuilderCorrect(q.id, idx)}
-                              title={idx === form.correct_index ? "Correct answer" : "Mark as correct"}
-                              className={`shrink-0 ${!isEditing ? "cursor-default" : ""}`}
-                              tabIndex={isEditing ? 0 : -1}
-                            >
-                              {idx === form.correct_index ? (
-                                <FontAwesomeIcon icon={faCheck} className="w-4 h-4 text-green-600" />
-                              ) : (
-                                <div className="w-4 h-4 rounded-full border-2 border-gray-300" />
-                              )}
-                            </button>
-                            <input
-                              value={opt}
-                              onChange={(e) => isEditing && updateBuilderOption(q.id, idx, e.target.value)}
-                              placeholder={`Option ${idx + 1}`}
-                              disabled={!isEditing}
-                              className="flex-1 px-3 py-1.5 bg-surface border border-gray-400 rounded-lg text-sm text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-50 transition-all"
-                            />
-                            {isEditing && form.options.length > 2 && (
-                              <button
-                                onClick={() => removeBuilderOption(q.id, idx)}
-                                className="text-gray-400 hover:text-red-600 shrink-0"
-                              >
-                                <FontAwesomeIcon icon={faTimes} className="w-3.5 h-3.5" />
-                              </button>
-                            )}
-                          </div>
-                        ))}
-                        {!isEditing && form.options.length > 4 && (
-                          <p className="text-xs text-gray-400">+{form.options.length - 4} more options</p>
+                        <span className="mt-0.5 block text-xs text-gray-500">
+                          {entry.count} question{entry.count === 1 ? "" : "s"}
+                          {c && `, at least ${min} per attempt, ${c.weight}% of the score`}
+                        </span>
+                        {short && (
+                          <span className="mt-1 block text-xs font-medium text-red-600">
+                            Needs {min - entry.count} more question{min - entry.count === 1 ? "" : "s"} to fill the minimum
+                          </span>
                         )}
-                        {isEditing && (
-                          <button
-                            onClick={() => addBuilderOption(q.id)}
-                            className="text-xs text-brand-600 font-medium hover:underline"
-                          >
-                            + Add option
-                          </button>
+                        {!c && (
+                          <span className="mt-1 block text-xs text-amber-800">
+                            These are never served — give each one a criteria.
+                          </span>
                         )}
-                      </div>
-                    )}
-
-                    {/* True / False */}
-                    {form.question_type === "true_false" && (
-                      <div className="space-y-1.5">
-                        {["True", "False"].map((label, idx) => (
-                          <div key={idx} className={`flex items-center gap-2 ${!isEditing ? "opacity-60" : ""}`}>
-                            <button
-                              onClick={() => isEditing && setBuilderCorrect(q.id, idx)}
-                              className={`shrink-0 ${!isEditing ? "cursor-default" : ""}`}
-                              tabIndex={isEditing ? 0 : -1}
-                            >
-                              {idx === form.correct_index ? (
-                                <FontAwesomeIcon icon={faCheck} className="w-4 h-4 text-green-600" />
-                              ) : (
-                                <div className="w-4 h-4 rounded-full border-2 border-gray-300" />
-                              )}
-                            </button>
-                            <span className={`text-sm ${isEditing ? "text-gray-700" : "text-gray-400"}`}>{label}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Short answer */}
-                    {form.question_type === "short_answer" && (
-                      <p className={`text-xs italic ${isEditing ? "text-gray-400" : "text-gray-300"}`}>
-                        Students will type a free-text response.
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Bottom bar — points, competency, actions */}
-                  <div className="px-4 py-3 bg-subtle border-t border-hairline flex items-center justify-between gap-2 flex-wrap">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <div className="flex items-center gap-1.5">
-                        <label className={`text-xs font-medium ${isEditing ? "text-gray-600" : "text-gray-400"}`}>Points</label>
-                        <input
-                          type="number"
-                          min={1}
-                          value={form.points}
-                          onChange={(e) =>
-                            isEditing && updateBuilderField(q.id, "points", Math.max(1, Number(e.target.value)))
-                          }
-                          disabled={!isEditing}
-                          className="w-14 px-2 py-1 border border-gray-300 rounded-lg text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-600/30 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-50"
+                      </span>
+                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-gray-500">
+                        <FontAwesomeIcon
+                          icon={faChevronDown}
+                          className={`h-3.5 w-3.5 transition-transform duration-200 ${collapsed ? "-rotate-90" : ""}`}
                         />
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <label className={`text-xs font-medium ${isEditing ? "text-gray-600" : "text-gray-400"}`}>Criteria</label>
-                        <select
-                          value={form.criteria_id ?? ""}
-                          onChange={(e) => {
-                            if (!isEditing) return;
-                            const next = e.target.value || null;
-                            updateBuilderField(q.id, "criteria_id", next);
-                            // Keep the competency tag in step with the criteria
-                            // that now owns the question — it is what the ML
-                            // recommender reads.
-                            const owner = criteria.find((c) => c.id === next);
-                            if (owner) updateBuilderField(q.id, "competency_ids", [owner.competency_id]);
-                          }}
-                          disabled={!isEditing}
-                          className={`px-2 py-1 border rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-brand-600/30 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-50 ${
-                            form.criteria_id
-                              ? "border-gray-300 text-gray-700"
-                              : "border-amber-200 text-amber-800 bg-amber-50"
-                          }`}
-                        >
-                          <option value="">Unassigned</option>
-                          {criteria.map((c) => (
-                            <option key={c.id} value={c.id}>{c.name}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <label className={`text-xs font-medium ${isEditing ? "text-gray-600" : "text-gray-400"}`}>Comp.</label>
-                        <select
-                          value={form.competency_ids[0] ?? ""}
-                          onChange={(e) =>
-                            isEditing && updateBuilderField(q.id, "competency_ids", e.target.value ? [e.target.value] : [])
-                          }
-                          disabled={!isEditing}
-                          className="px-2 py-1 border border-gray-300 rounded-lg text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-600/30 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-50"
-                        >
-                          <option value="">None</option>
-                          {competencyAreas.map((ca) => (
-                            <option key={ca.id} value={ca.id}>{ca.name}</option>
-                          ))}
-                        </select>
-                      </div>
-                      {form.explanation && (
-                        <span className="text-xs text-gray-400">Has explanation</span>
-                      )}
-                    </div>
-                    <div className={`flex items-center gap-1.5 ${canEdit ? "" : "hidden"}`}>
-                      <button
-                        onClick={() => handleDuplicateQuestion(q.id)}
-                        title="Duplicate"
-                        className="p-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50"
-                      >
-                        <FontAwesomeIcon icon={faLayerGroup} className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => toggleEdit(q.id)}
-                        title={isEditing ? "Done editing" : "Edit question"}
-                        className={`p-1.5 rounded-lg border transition-colors ${
-                          isEditing
-                            ? "bg-brand-600 text-white border-brand-600 hover:bg-brand-700"
-                            : "border-gray-200 text-gray-500 hover:bg-gray-50"
-                        }`}
-                      >
-                        <FontAwesomeIcon icon={faPen} className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteQuestion(q.id)}
-                        title="Delete"
-                        className="p-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50"
-                      >
-                        <FontAwesomeIcon icon={faTrash} className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+                      </span>
+                    </button>
                   </div>
-                </div>
+                  {!collapsed && (
+                    <div id={panelId} className="mt-3 flex flex-col gap-3">
+                      {items.map(renderQuestion)}
+                    </div>
+                  )}
+                </section>
               );
             })}
           </div>
