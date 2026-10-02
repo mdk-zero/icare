@@ -40,19 +40,14 @@ export async function POST(request: Request) {
     verifyOnly?: unknown;
   };
 
-  if (typeof newPassword !== 'string' || newPassword.length === 0) {
-    return NextResponse.json(
-      { error: 'New password is required' },
-      { status: 400 },
-    );
-  }
-
-  if (newPassword.length < MIN_PASSWORD_LENGTH) {
-    return NextResponse.json(
-      { error: `New password must be at least ${MIN_PASSWORD_LENGTH} characters` },
-      { status: 400 },
-    );
-  }
+  // Only the steps that write a password need one: the web form requests its
+  // code and verifies it before the new password is ever entered.
+  const newPasswordError =
+    typeof newPassword !== 'string' || newPassword.length === 0
+      ? 'New password is required'
+      : newPassword.length < MIN_PASSWORD_LENGTH
+        ? `New password must be at least ${MIN_PASSWORD_LENGTH} characters`
+        : null;
 
   try {
     const supabase = getSupabaseAdmin();
@@ -74,7 +69,10 @@ export async function POST(request: Request) {
 
     // Forced first-login password change: skip OTP/current-password verification.
     if (isForcedChange) {
-      const newHash = await hashPassword(newPassword);
+      if (newPasswordError) {
+        return NextResponse.json({ error: newPasswordError }, { status: 400 });
+      }
+      const newHash = await hashPassword(newPassword as string);
       const { error: updateError } = await supabase
         .from('users')
         .update({ password_hash: newHash, force_password_change: false })
@@ -146,10 +144,13 @@ export async function POST(request: Request) {
     }
 
     // Step 3: verify the OTP and update the password.
+    if (newPasswordError) {
+      return NextResponse.json({ error: newPasswordError }, { status: 400 });
+    }
     const check = await verifyPasswordResetOtp(user.id, otp.trim());
     if (check !== 'ok') return otpRejected(check);
 
-    const newHash = await hashPassword(newPassword);
+    const newHash = await hashPassword(newPassword as string);
     // Every other device signs out; this one gets a fresh token.
     const { error: updateError } = await updateUser(
       session.uid,
