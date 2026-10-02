@@ -1,4 +1,4 @@
-import { isDemo } from "./session";
+import { demoEndedHere, isDemo } from "./session";
 
 /**
  * Routes the app's own `/api/*` requests to the demo router while a demo is
@@ -23,6 +23,9 @@ export function installDemoFetch() {
       }
       return handleDemoRequest(url, init);
     }
+    // The page that just left a demo refetches as it unmounts; those calls
+    // must not reach the real API, and the page is navigating away anyway.
+    if (url && demoEndedHere()) return new Promise<Response>(() => {});
     return realFetch(input, init);
   };
 }

@@ -368,7 +368,8 @@ export default function Shell({ role, navItems, isActive, children }: ShellProps
 
   const handleLogout = () => {
     stopNotificationStream();
-    if (user?.role === "faculty") {
+    // A demo's log is wiped at logout; writing to it would only refresh the page on its way out.
+    if (user?.role === "faculty" && !isDemo()) {
       void logAuditAction({
         faculty_id: user.id,
         faculty_name: user.name,

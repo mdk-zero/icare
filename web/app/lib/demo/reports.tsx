@@ -6,7 +6,10 @@ import { CASE_CRITERIA } from "../case-rubric";
 import { ratingLabel } from "../task-ratings";
 import type { DemoContext } from "./router";
 import { caseAverage, lastActivity, mean, quizAverage, submittedAttempts } from "./handlers/derive";
-import { sectionName, teamLabel, userById, visibleSections, visibleStudents } from "./handlers/scope";
+import { sectionName, teamLabel as teamLabelUi, userById, visibleSections, visibleStudents } from "./handlers/scope";
+
+/** The PDF's built-in Helvetica has no middle dot, so labels use an en dash. */
+const teamLabel: typeof teamLabelUi = (db, id) => teamLabelUi(db, id)?.replace(" – ", " – ") ?? null;
 
 /**
  * The demo's PDF reports: the same letterhead, tiles and tables as the real
@@ -59,7 +62,7 @@ function studentReport(ctx: Ctx, id: string): Built {
     doc: (
       <Shell ctx={ctx} title={`Student report — ${s.name}`} heading="Student Performance Report" rows={[
         { label: "Student", value: s.name },
-        { label: "Section · group", value: teamLabel(db, s.team_id) ?? sectionName(db, s.section_id) ?? "—" },
+        { label: "Section / group", value: teamLabel(db, s.team_id) ?? sectionName(db, s.section_id) ?? "—" },
         { label: "Risk check", value: s.risk_level === "at_risk" ? `Low performing (${Math.round((s.risk_probability ?? 0) * 100)}%)` : "On track" },
       ]}>
         <StatGrid items={[
@@ -178,7 +181,7 @@ function rosterReport(ctx: Ctx): Built {
           { label: "Low performing", value: students.filter((s) => s.risk_level === "at_risk").length },
         ]} />
         <H>Every student</H>
-        <Table head={["Student", "Section · group", "Cases", "Quizzes"]} widths={[3, 2.4, 1, 1]} rows={students.map((s) => [s.name, teamLabel(db, s.team_id) ?? "—", pct(caseAverage(db, s.id)), pct(quizAverage(db, s.id))])} />
+        <Table head={["Student", "Section / group", "Cases", "Quizzes"]} widths={[3, 2.4, 1, 1]} rows={students.map((s) => [s.name, teamLabel(db, s.team_id) ?? "—", pct(caseAverage(db, s.id)), pct(quizAverage(db, s.id))])} />
       </Shell>
     ),
   };
@@ -246,7 +249,7 @@ function dischargeReport(ctx: Ctx, id: string): Built {
         { label: "Patient", value: patient?.name ?? "—" },
         { label: "Diagnosis", value: d.diagnosis },
         { label: "Stay", value: `${date(d.admitted_at)} – ${date(d.discharged_at)}` },
-        { label: "Room", value: d.room_label },
+        { label: "Room", value: d.room_label.replace(" · ", " – ") },
       ]}>
         <StatGrid items={[
           { label: "Vital readings", value: d.vitals_digest.readings ?? 0 },
@@ -293,11 +296,11 @@ function roomsReport(ctx: Ctx, id: string): Built {
   const rooms = db.rooms.filter((r) => !id || r.id === id);
   if (rooms.length === 0) return { error: "Not found", status: 404 };
   return {
-    subject: id ? `${rooms[0].room_number} · ${rooms[0].name}` : "All rooms",
+    subject: id ? `${rooms[0].room_number} – ${rooms[0].name}` : "All rooms",
     doc: (
       <Shell ctx={ctx} title="Room report" heading="Ward Room Report" rows={[{ label: "Rooms", value: String(rooms.length) }]}>
         <Table head={["Room", "Status", "Beds", "Patients"]} widths={[3, 1.2, 1, 1]} rows={rooms.map((r) => [
-          `${r.room_number} · ${r.name}`, r.status, r.capacity, db.patients.filter((p) => p.room_id === r.id && p.status === "admitted").length,
+          `${r.room_number} – ${r.name}`, r.status, r.capacity, db.patients.filter((p) => p.room_id === r.id && p.status === "admitted").length,
         ])} />
       </Shell>
     ),
@@ -363,18 +366,21 @@ const BUILDERS: Record<string, (ctx: Ctx, id: string) => Built> = {
   summary: (ctx) => summaryReport(ctx),
 };
 
-export async function buildDemoReport(ctx: Ctx, type: string, id: string): Promise<Response> {
+export async function buildDemoReport(ctx: Ctx, type: string, id: string): Promise<{ response: Response; subject?: string }> {
   const build = BUILDERS[type];
-  if (!build) return Response.json({ error: `Unknown report type "${type}"` }, { status: 404 });
+  if (!build) return { response: Response.json({ error: `Unknown report type "${type}"` }, { status: 404 }) };
   const result = build(ctx, id);
-  if ("error" in result) return Response.json({ error: result.error }, { status: result.status });
+  if ("error" in result) return { response: Response.json({ error: result.error }, { status: result.status }) };
   const blob = await pdf(result.doc).toBlob();
   const slug = result.subject.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-  return new Response(blob, {
-    status: 200,
-    headers: {
-      "content-type": "application/pdf",
-      "Content-Disposition": `attachment; filename="icare-${type}-${slug || "report"}.pdf"`,
-    },
-  });
+  return {
+    subject: result.subject,
+    response: new Response(blob, {
+      status: 200,
+      headers: {
+        "content-type": "application/pdf",
+        "Content-Disposition": `attachment; filename="icare-${type}-${slug || "report"}.pdf"`,
+      },
+    }),
+  };
 }

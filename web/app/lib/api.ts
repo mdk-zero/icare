@@ -221,9 +221,10 @@ export async function logout(): Promise<void> {
   if (isDemo()) {
     // Nothing to tell the server: drop the demo's data so the next demo
     // starts from the original, and reload so no in-memory copy survives.
-    mirrorToStorage(null);
-    clearRequestCache();
+    // The cache isn't cleared here: that would make the page refetch on its
+    // way out, and the reload drops it anyway.
     endDemo();
+    mirrorToStorage(null);
     window.location.replace('/login');
     return;
   }

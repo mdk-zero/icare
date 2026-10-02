@@ -192,7 +192,8 @@ export function seedPeople(): { users: DemoUser[]; sections: DemoSection[]; team
       team_id: team,
       admin_id: null,
       student_number: `2023-${String(10400 + i * 37).padStart(5, "0")}`,
-      created_at: ago(200),
+      // Most of the cohort enrolled at the start of the year; a few transferred in lately.
+      created_at: ago(i >= 16 ? 8 + (i - 16) * 11 : i % 5 === 0 ? 40 + i : 200),
       last_sign_in_at: ago(active),
       last_activity: ago(active),
       status: "active",

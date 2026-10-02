@@ -716,17 +716,16 @@ route("POST", "/api/faculty/scenarios/analyze-lesson", (ctx) => {
 async function report(ctx: Ctx) {
   const id = ctx.query.get("id")?.trim() ?? "";
   const { buildDemoReport } = await import("../reports");
-  const res = await buildDemoReport(ctx, ctx.params.type, id);
-  if (res.ok) {
-    const subject = /filename="icare-[a-z]+-([^"]+)\.pdf"/.exec(res.headers.get("Content-Disposition") ?? "")?.[1] ?? ctx.params.type;
+  const { response, subject } = await buildDemoReport(ctx, ctx.params.type, id);
+  if (response.ok) {
     audit(ctx.db, ctx.viewer, "report.generate", ctx.params.type, {
       report: ctx.params.type,
       format: "pdf",
-      subject: subject.replace(/-/g, " "),
+      subject,
       target_id: id || null,
     });
   }
-  return res;
+  return response;
 }
 
 route("GET", "/api/faculty/reports/:type", (ctx) => (staffOnly(ctx) ? report(ctx) : forbidden()));

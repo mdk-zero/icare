@@ -26,14 +26,28 @@ export function isDemoRole(value: unknown): value is DemoRole {
   return typeof value === "string" && (DEMO_ROLES as readonly string[]).includes(value);
 }
 
+/**
+ * The demo's role, when one is on. Both markers must agree: the cookie dies
+ * with the browser session but the localStorage flag doesn't, and a flag
+ * left behind on its own must not route a later visit into a demo the proxy
+ * no longer recognises.
+ */
 export function demoRole(): DemoRole | null {
   if (typeof window === "undefined") return null;
   try {
     const role = localStorage.getItem(DEMO_FLAG);
-    return isDemoRole(role) ? role : null;
+    const cookie = document.cookie.split("; ").find((c) => c.startsWith(`${DEMO_COOKIE}=`))?.slice(DEMO_COOKIE.length + 1);
+    return isDemoRole(role) && role === cookie ? role : null;
   } catch {
     return null;
   }
+}
+
+/** Set once a demo ends in this document, which is then on its way to /login. */
+let endedHere = false;
+
+export function demoEndedHere(): boolean {
+  return endedHere;
 }
 
 export function isDemo(): boolean {
@@ -57,6 +71,7 @@ export function startDemo(role: DemoRole, user: object) {
 /** Drops every trace of the demo, so the next one starts from the original data. */
 export function endDemo() {
   if (typeof window === "undefined") return;
+  if (isDemo()) endedHere = true;
   try {
     sessionStorage.removeItem(DEMO_STORE_KEY);
     localStorage.removeItem(DEMO_FLAG);
