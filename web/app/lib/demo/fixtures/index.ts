@@ -18,7 +18,7 @@ export function seed() {
     ...school,
     ...seedWard(school.rooms, school.patients, people.users),
     ...seedTeaching(people.users),
-    notifications: seedNotifications() as DemoNotification[],
+    notifications: seedNotifications(people.users, school.assignments, school.scenarios) as DemoNotification[],
     audit: seedAudit() as DemoAudit[],
   };
 }
