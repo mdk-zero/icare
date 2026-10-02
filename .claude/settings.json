@@ -9,6 +9,7 @@
     "claude-md-management@anthropic-plugin-directory": true,
     "security-guidance@anthropic-plugin-directory": true,
     "playwright@anthropic-plugin-directory": true,
-    "skill-creator@anthropic-plugin-directory": true
+    "skill-creator@anthropic-plugin-directory": true,
+    "typescript-lsp@claude-plugins-official": true
   }
 }
