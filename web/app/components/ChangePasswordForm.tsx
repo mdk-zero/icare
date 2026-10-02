@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { toast } from "./Toast";
 import {
   changePassword,
   getCurrentUser,
@@ -22,6 +24,7 @@ export default function ChangePasswordForm({
   backLabel = "Back to profile",
   onPasswordChanged,
 }: ChangePasswordFormProps) {
+  const router = useRouter();
   const [user, setUser] = useState<User | null>(getCurrentUser());
   const [step, setStep] = useState<"request" | "otp" | "reset">("request");
   const [currentPassword, setCurrentPassword] = useState("");
@@ -193,21 +196,17 @@ export default function ChangePasswordForm({
     try {
       const result = await changePassword(currentPassword, newPassword, otp);
       if (result.success) {
-        setStep("request");
-        setCurrentPassword("");
-        setNewPassword("");
-        setConfirmPassword("");
-        setOtp("");
-        setDevOtp(null);
-        const fresh = await refreshCurrentUser();
-        if (fresh) setUser(fresh);
+        await refreshCurrentUser();
         onPasswordChanged?.();
-        setMessage({
-          type: "success",
-          text: hasPassword
+        // The toast host lives in Shell, so the message outlasts the navigation.
+        toast(
+          hasPassword
             ? "Password changed successfully."
             : "Password set successfully. You can now sign in with your email and password.",
-        });
+          "success",
+          hasPassword ? 4000 : 6000,
+        );
+        router.push(backHref);
       } else {
         setMessage({
           type: "error",
