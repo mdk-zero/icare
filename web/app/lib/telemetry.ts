@@ -16,6 +16,8 @@ export interface RequestSample {
   at: number;
 }
 
+import { isDemo } from './demo/session';
+
 const ENDPOINT = '/api/metrics';
 const FLUSH_MS = 15_000;
 /** Beyond this the oldest samples are dropped rather than growing unbounded. */
@@ -31,6 +33,8 @@ export function recordRequest(method: string, input: string, status: number, dur
   if (typeof window === 'undefined') return;
   // Automated browsers (the Playwright suite) would pass for real traffic.
   if (navigator.webdriver) return;
+  // A demo's requests never leave the browser; they aren't real traffic either.
+  if (isDemo()) return;
   const path = input.split('?')[0];
   if (!path.startsWith('/api/') || path === ENDPOINT) return;
   buffer.push({ method, path, status, duration_ms: Math.round(durationMs), at: Date.now() });

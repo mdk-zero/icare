@@ -1,6 +1,7 @@
 "use client";
 
 import { CACHE_CONSENT_CHANGE_EVENT, getCacheConsent } from "./cache-consent";
+import { isDemo } from "./demo/session";
 
 /**
  * One process-wide cache for read requests, so a page the user has already
@@ -128,7 +129,8 @@ const inflight = new Map<string, Promise<CachedResponse>>();
 const PERSIST_PREFIX = "icare_cache:";
 
 function persistenceEnabled(): boolean {
-  return typeof window !== "undefined" && getCacheConsent() === "granted";
+  // Demo data must not outlive the demo, which ends at logout.
+  return typeof window !== "undefined" && getCacheConsent() === "granted" && !isDemo();
 }
 
 function persistResponse(url: string, entry: CachedResponse) {

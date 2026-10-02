@@ -5,6 +5,7 @@ import { recordRequest } from './telemetry';
 import type { AttendanceTally, ShiftAttendanceStatus } from './shifts';
 import { resolveRubric, type Rubric, type TaskRating } from './task-ratings';
 import { reportNetworkFailure, reportNetworkSuccess } from './connectivity';
+import { endDemo, isDemo } from './demo/session';
 
 export interface User {
   id: string;
@@ -50,6 +51,8 @@ function handleSessionExpired() {
   if (typeof window === 'undefined' || sessionExpiryHandled) return;
   sessionExpiryHandled = true;
   mirrorToStorage(null);
+  // A stray demo cookie would have the proxy bounce /login straight back here.
+  endDemo();
   clearRequestCache();
   const next = window.location.pathname + window.location.search;
   window.location.replace(`/login?next=${encodeURIComponent(next)}`);
@@ -186,6 +189,8 @@ export interface AttemptResult {
 export class LoginRateLimitedError extends Error {}
 
 export async function login(email: string, password: string): Promise<{ user: User; sessionToken: string } | null> {
+  // A real sign-in never mixes with a demo left open in this browser.
+  endDemo();
   let res: Response;
   try {
     res = await apiFetch('/api/auth/login', {
@@ -213,6 +218,15 @@ export async function login(email: string, password: string): Promise<{ user: Us
 }
 
 export async function logout(): Promise<void> {
+  if (isDemo()) {
+    // Nothing to tell the server: drop the demo's data so the next demo
+    // starts from the original, and reload so no in-memory copy survives.
+    mirrorToStorage(null);
+    clearRequestCache();
+    endDemo();
+    window.location.replace('/login');
+    return;
+  }
   mirrorToStorage(null);
   // Logout returns to /login through the router, so the document — and with it
   // every cached read of the outgoing user's data — survives. Drop it here
@@ -1879,6 +1893,34 @@ type AnalyzeEvent =
     }
   | { type: 'error'; error: string };
 
+/** analyzeLesson for a demo: the same NDJSON events, read through fetch. */
+async function analyzeLessonInDemo(
+  url: string,
+  file: File,
+  onProgress?: (progress: LessonImportProgress) => void,
+): Promise<AnalyzedLesson | { error: string }> {
+  onProgress?.({ stage: 'uploading', percent: stagePercent('uploading', 1) });
+  const formData = new FormData();
+  formData.append('file', file);
+  const res = await apiFetch(url, { method: 'POST', body: formData });
+  if (!res.ok || !res.body) {
+    const json = (await res.json().catch(() => ({}))) as { error?: string };
+    return { error: json.error || `Request failed (${res.status})` };
+  }
+  let outcome: AnalyzedLesson | { error: string } = { error: 'The lesson could not be read' };
+  for await (const line of readNdjson(res.body)) {
+    const event = line as AnalyzeEvent;
+    if (event.type === 'progress') {
+      onProgress?.({ stage: event.stage, percent: stagePercent(event.stage, event.fraction) });
+    } else if (event.type === 'result') {
+      outcome = { lessonText: event.lesson_text, topics: event.topics ?? [], sections: event.sections, warning: event.warning };
+    } else if (event.type === 'error') {
+      outcome = { error: event.error };
+    }
+  }
+  return outcome;
+}
+
 /**
  * Uploads a lesson and returns its text and topics: the taught Taylor's
  * chapters it covers, then any new topics outside them. XMLHttpRequest rather
@@ -1890,6 +1932,8 @@ export function analyzeLesson(
   onProgress?: (progress: LessonImportProgress) => void,
 ): Promise<AnalyzedLesson | { error: string }> {
   const url = '/api/faculty/scenarios/analyze-lesson';
+  // XMLHttpRequest goes past the demo's fetch routing, so a demo asks by fetch.
+  if (isDemo()) return analyzeLessonInDemo(url, file, onProgress);
   const started = performance.now();
   return new Promise((resolve) => {
     const xhr = new XMLHttpRequest();

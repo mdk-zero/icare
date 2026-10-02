@@ -3,6 +3,7 @@ import { SESSION_COOKIE, verifySession, type SessionPayload } from '@/app/lib/au
 import { liveSession } from '@/app/lib/auth/live-user';
 import { isDeveloperEmail } from '@/app/lib/auth/developer-allowlist';
 import { IMPERSONATION_RETURN_COOKIE } from '@/app/lib/dev/impersonation';
+import { DEMO_COOKIE, isDemoRole } from '@/app/lib/demo/session';
 
 /**
  * Server-side session gate.
@@ -77,7 +78,13 @@ export async function proxy(request: NextRequest) {
   if (!isProtected && !isAuthPage) return NextResponse.next();
 
   const token = request.cookies.get(SESSION_COOKIE)?.value;
-  const session = token ? await pageSession(token) : null;
+  const realSession = token ? await pageSession(token) : null;
+  // A demo has no session, only its role in a cookie. That routes page shells
+  // and nothing more: the API routes never read it, and in a demo the browser
+  // answers every API call itself (lib/demo).
+  const demoRole = request.cookies.get(DEMO_COOKIE)?.value;
+  const session: Pick<SessionPayload, 'role'> | null =
+    realSession ?? (isDemoRole(demoRole) ? { role: demoRole } : null);
 
   if (isProtected && !session) {
     const login = new URL('/login', request.url);
@@ -98,7 +105,7 @@ export async function proxy(request: NextRequest) {
   // password or role change): drop it. Otherwise the page's first API call
   // gets a 401 and sends the user to /login, /login bounces them back here,
   // and the two loop forever.
-  if (isAuthPage && token && !session) {
+  if (isAuthPage && token && !realSession) {
     const response = NextResponse.next();
     response.cookies.delete(SESSION_COOKIE);
     return response;

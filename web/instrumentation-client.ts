@@ -3,6 +3,10 @@
 // https://docs.sentry.io/platforms/javascript/guides/nextjs/
 
 import * as Sentry from "@sentry/nextjs";
+import { installDemoFetch } from "./app/lib/demo/install";
+
+// Before anything renders, so no demo request can reach the real API.
+installDemoFetch();
 
 Sentry.init({
   dsn: "https://32be856f3045adebde099eeead468dc8@o4511773664673792.ingest.us.sentry.io/4511773690691584",

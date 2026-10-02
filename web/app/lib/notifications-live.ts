@@ -10,6 +10,7 @@ import {
   toFacultyNotification,
 } from "./api";
 import { withFreshResponses } from "./request-cache";
+import { isDemo } from "./demo/session";
 
 /**
  * One process-wide notification store fed by /api/notifications/stream.
@@ -142,6 +143,9 @@ export function startNotificationStream() {
   stopped = false;
 
   if (state.loading) void refreshNotifications();
+
+  // The demo has no server to stream from; the one-shot read above is the feed.
+  if (isDemo()) return;
 
   if (source && source.readyState !== EventSource.CLOSED) return;
   source?.close();

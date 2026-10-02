@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faBolt, faXmark } from "@fortawesome/free-solid-svg-icons";
 import { getCacheConsent, setCacheConsent } from "../lib/cache-consent";
+import { isDemo } from "../lib/demo/session";
 
 /**
  * Asked once per browser, the first time `getCacheConsent()` comes back
@@ -15,8 +16,9 @@ export default function CacheConsentBanner() {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
+    // A demo never persists its data, so there is nothing to ask.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setVisible(getCacheConsent() === null);
+    setVisible(getCacheConsent() === null && !isDemo());
   }, []);
 
   if (!visible) return null;

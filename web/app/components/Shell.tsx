@@ -34,6 +34,7 @@ import NotificationsPopover from "./NotificationsPopover";
 import CacheConsentBanner from "./CacheConsentBanner";
 import { onCacheClear } from "../lib/request-cache";
 import { roleLabel } from "../lib/role-labels";
+import { isDemo } from "../lib/demo/session";
 
 export interface NavItem {
   id: string;
@@ -550,6 +551,14 @@ export default function Shell({ role, navItems, isActive, children }: ShellProps
                     </span>
                     <span className="block font-mono text-[10px] uppercase tracking-[0.14em] text-white/55 leading-none mt-1">
                       {roleLabel(user.role)}
+                      {isDemo() && (
+                        <span
+                          title="Sample data — resets when you log out"
+                          className="ml-1.5 rounded bg-amber-300/90 px-1 py-px text-[9px] font-semibold tracking-[0.1em] text-amber-950"
+                        >
+                          Demo
+                        </span>
+                      )}
                     </span>
                   </span>
                 </Link>

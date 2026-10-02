@@ -15,12 +15,15 @@ import {
   faBolt,
   faChartColumn,
   faHeart,
+  faCirclePlay,
 } from "@fortawesome/free-solid-svg-icons";
 import { login, LoginRateLimitedError, logout, isAuthenticated, refreshCurrentUser, User, logAuditAction } from "../lib/api";
 import logo_white from "../../public/logo-white-no-bg.png";
 import logo_colour from "../../public/logo-no-bg.png";
 import { EcgLoader } from "../components/EcgLoader";
 import { DriftingKit, RotatingWords } from "../components/AuthShowcase";
+import DemoPicker from "./DemoPicker";
+import { endDemo } from "../lib/demo/session";
 
 const STUDENT_MESSAGE = "Students sign in on the iCARE++ mobile app. The web portal is for instructors, deans and admins.";
 
@@ -34,6 +37,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const googleButtonRef = useRef<HTMLDivElement>(null);
   const [googleButtonWidth, setGoogleButtonWidth] = useState(0);
+  const [demoOpen, setDemoOpen] = useState(false);
 
   useEffect(() => {
     document.body.style.overflow = "hidden";
@@ -158,6 +162,7 @@ export default function LoginPage() {
       const data = (await res.json()) as { user?: User };
 
       const user = data.user as User;
+      endDemo();
       localStorage.setItem("icare_user", JSON.stringify(user));
       localStorage.setItem("icare_token", "logged_in");
       if (user.role === "faculty") {
@@ -431,6 +436,16 @@ export default function LoginPage() {
               )}
             </div>
 
+            <button
+              type="button"
+              onClick={() => setDemoOpen(true)}
+              disabled={isLoading || isGoogleLoading}
+              className="mt-3 flex w-full cursor-pointer items-center justify-center gap-2.5 rounded-xl border border-dashed border-(--auth-accent)/50 bg-transparent py-3 text-sm font-semibold text-(--auth-accent) transition-all duration-200 hover:border-(--auth-accent) hover:bg-(--auth-accent)/10 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-(--auth-accent)/40 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <FontAwesomeIcon icon={faCirclePlay} className="h-4 w-4" />
+              Try a demo
+            </button>
+
             <div className="mt-6 text-center">
               <p className="text-sm text-white/50">
                 Don&apos;t have an account?{" "}
@@ -443,6 +458,8 @@ export default function LoginPage() {
               </p>
             </div>
           </div>
+
+          {demoOpen && <DemoPicker onClose={() => setDemoOpen(false)} />}
 
           {/* Footer */}
           <p className="text-center text-xs text-white/30 mt-5">
