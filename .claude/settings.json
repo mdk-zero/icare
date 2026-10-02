@@ -1,0 +1,14 @@
+{
+  "enabledPlugins": {
+    "frontend-design@anthropic-plugin-directory": true,
+    "code-review@anthropic-plugin-directory": true,
+    "superpowers@anthropic-plugin-directory": true,
+    "code-simplifier@anthropic-plugin-directory": true,
+    "context7@anthropic-plugin-directory": true,
+    "feature-dev@anthropic-plugin-directory": true,
+    "claude-md-management@anthropic-plugin-directory": true,
+    "security-guidance@anthropic-plugin-directory": true,
+    "playwright@anthropic-plugin-directory": true,
+    "skill-creator@anthropic-plugin-directory": true
+  }
+}
