@@ -37,6 +37,12 @@ test.describe('Instructor portal', () => {
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
   });
 
+  test('courses page loads', async ({ page }) => {
+    const res = await page.goto('/faculty/courses');
+    expect(res?.ok()).toBeTruthy();
+    await expect(page.getByRole('heading', { level: 1, name: 'Courses' })).toBeVisible();
+  });
+
   test('dean and admin portals are off limits', async ({ page }) => {
     await page.goto('/admin');
     await expect(page).toHaveURL(/\/faculty(\?|$)/);

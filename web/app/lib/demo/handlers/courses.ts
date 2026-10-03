@@ -2,7 +2,19 @@
 
 import { json, notFound, route, sleep, type DemoContext } from "../router";
 import { newId, type DemoDb } from "../store";
-import { parseCourse, parseTerm } from "../../course-progress";
+import {
+  isRemovedActivity,
+  parseCourse,
+  parseRequirement,
+  parseTerm,
+  requirementLabel,
+  termBounds,
+  termStatus,
+  type RequirementInput,
+  type RequirementNames,
+  type RequirementRow,
+} from "../../course-progress";
+import { listSkillSummaries } from "../fixtures/skills";
 import { seedCourses, type DemoCourseTables, type DemoOffering } from "../fixtures/courses";
 import { audit } from "./shared";
 import { byName, sectionName } from "./scope";
@@ -384,4 +396,230 @@ route("DELETE", "/api/admin/course-offerings/:id", (ctx) => {
   dropOfferings(db, [offering.id]);
   audit(db, ctx.viewer, "course.unassign", "course_offerings", { message: `Removed ${plural(requirements.length, "checklist item")}` }, offering.id);
   return { success: true, requirement_count: requirements.length, check_count: checks.length };
+});
+
+// ---------------------------------------------------------------------------
+// Instructor: their course assignments and checklists
+// ---------------------------------------------------------------------------
+
+const instructorOnly = (ctx: Ctx) => ctx.role === "faculty";
+
+function ownFacultyOffering(ctx: Ctx, id: string) {
+  return courseDb(ctx.db).offerings.find((o) => o.id === id && o.faculty_id === ctx.viewer.id);
+}
+
+const termOf = (db: DemoDb, o: DemoOffering) => db.terms.find((t) => t.id === o.term_id)!;
+const courseOf = (db: DemoDb, o: DemoOffering) => db.courses.find((c) => c.id === o.course_id)!;
+const termRef = (db: DemoDb, o: DemoOffering) => {
+  const t = termOf(db, o);
+  return { id: t.id, name: t.name, starts_on: t.starts_on, ends_on: t.ends_on };
+};
+
+async function labelled(db: DemoDb, requirements: RequirementRow[]) {
+  const skills = requirements.some((r) => r.skill_id) ? await listSkillSummaries() : [];
+  const names: RequirementNames = {
+    scenarios: Object.fromEntries(db.scenarios.map((s) => [s.id, s.title])),
+    quizzes: Object.fromEntries(db.quizzes.map((q) => [q.id, q.title])),
+    presentations: Object.fromEntries(db.casePresentations.map((p) => [p.id, p.title])),
+    skills: Object.fromEntries(skills.map((s) => [s.id, s.title])),
+  };
+  return requirements.map((r) => ({ ...strip(r), label: requirementLabel(r, names), removed: isRemovedActivity(r) }));
+}
+
+/** A stored item without its demo-only bookkeeping. */
+function strip(r: RequirementRow & { created_at?: string }): RequirementRow {
+  const { created_at: _created, ...row } = r;
+  void _created;
+  return row;
+}
+
+const checklist = (db: DemoDb, offeringId: string) =>
+  db.requirements.filter((r) => r.offering_id === offeringId).sort((a, b) => a.position - b.position);
+
+const locked = (db: DemoDb, o: DemoOffering) => termStatus(termOf(db, o)) === "ended";
+
+route("GET", "/api/faculty/courses", (ctx) => {
+  if (!instructorOnly(ctx)) return forbidden();
+  const db = courseDb(ctx.db);
+  const offerings = db.offerings
+    .filter((o) => o.faculty_id === ctx.viewer.id)
+    .map((o) => {
+      const row = offeringRow(db, o);
+      const course = courseOf(db, o);
+      return {
+        id: o.id,
+        course: { id: course.id, code: course.code, title: course.title },
+        term: termRef(db, o),
+        sections: row.sections,
+        student_count: row.student_count,
+        requirement_count: row.requirement_count,
+      };
+    })
+    .sort((a, b) => b.term.starts_on.localeCompare(a.term.starts_on) || a.course.code.localeCompare(b.course.code));
+  return { offerings };
+});
+
+route("GET", "/api/faculty/courses/:id", async (ctx) => {
+  if (!instructorOnly(ctx)) return forbidden();
+  const db = courseDb(ctx.db);
+  const o = ownFacultyOffering(ctx, ctx.params.id);
+  if (!o) return notFound("Course not found");
+  const course = courseOf(db, o);
+  const row = offeringRow(db, o);
+  const status = termStatus(termOf(db, o));
+  return {
+    offering: {
+      id: o.id,
+      course: { id: course.id, code: course.code, title: course.title, description: course.description },
+      term: termRef(db, o),
+      status,
+      locked: status === "ended",
+      sections: row.sections,
+      student_count: row.student_count,
+    },
+    requirements: await labelled(db, checklist(db, o.id)),
+    skill_ids: db.courseSkills.filter((s) => s.course_id === course.id).map((s) => s.skill_id),
+  };
+});
+
+route("GET", "/api/faculty/courses/:id/activities", (ctx) => {
+  if (!instructorOnly(ctx)) return forbidden();
+  const db = courseDb(ctx.db);
+  const o = ownFacultyOffering(ctx, ctx.params.id);
+  if (!o) return notFound("Course not found");
+  const roster = new Set(offeringRoster(db, o).students.map((s) => s.id));
+  const from = new Date(termBounds(termOf(db, o)).from).getTime();
+  return {
+    scenarios: db.scenarios.map((s) => ({
+      id: s.id,
+      title: s.title,
+      completed_before_term: db.assignments.filter(
+        (a) =>
+          a.scenario_id === s.id &&
+          roster.has(a.student_id) &&
+          a.status === "completed" &&
+          a.completed_at !== null &&
+          new Date(a.completed_at).getTime() < from,
+      ).length,
+    })),
+    quizzes: db.quizzes.filter((q) => q.is_published).map((q) => ({ id: q.id, title: q.title })),
+    presentations: db.casePresentations
+      .filter((p) => p.created_by === ctx.viewer.id || p.section_ids.some((s) => o.section_ids.includes(s)))
+      .map((p) => ({ id: p.id, title: p.title })),
+  };
+});
+
+/** The demo's version of checkRequirementLinks. */
+function linkProblem(db: DemoDb, o: DemoOffering, input: RequirementInput): string | null {
+  if (input.scenario_id && !db.scenarios.some((s) => s.id === input.scenario_id)) return "That Patient Case was not found";
+  if (input.assessment_id && !db.quizzes.some((q) => q.id === input.assessment_id)) return "That Quiz was not found";
+  if (input.presentation_id && !db.casePresentations.some((p) => p.id === input.presentation_id)) {
+    return "That Case Presentation was not found";
+  }
+  if (input.skill_id && !db.courseSkills.some((s) => s.course_id === o.course_id && s.skill_id === input.skill_id)) {
+    return `Add skill ${input.skill_id} to the course's skill list first`;
+  }
+  return null;
+}
+
+const LOCKED = "This term has ended, so its checklist is locked. Ticks can still be changed.";
+
+route("POST", "/api/faculty/courses/:id/requirements", async (ctx) => {
+  if (!instructorOnly(ctx)) return forbidden();
+  const db = courseDb(ctx.db);
+  const o = ownFacultyOffering(ctx, ctx.params.id);
+  if (!o) return notFound("Course not found");
+  if (locked(db, o)) return json({ error: LOCKED }, 409);
+  const parsed = parseRequirement(ctx.body ?? {});
+  if (!parsed.ok) return json({ error: parsed.error }, 400);
+  const problem = linkProblem(db, o, parsed.value);
+  if (problem) return json({ error: problem }, 400);
+  const items = checklist(db, o.id);
+  const row = {
+    ...parsed.value,
+    id: newId(),
+    offering_id: o.id,
+    position: items.reduce((max, r) => Math.max(max, r.position + 1), 0),
+    created_at: new Date().toISOString(),
+  };
+  db.requirements.push(row);
+  const [requirement] = await labelled(db, [row]);
+  audit(db, ctx.viewer, "course.requirement.create", "course_requirements", { label: requirement.label }, row.id);
+  return json({ requirement }, 201);
+});
+
+route("PUT", "/api/faculty/courses/:id/requirements/order", (ctx) => {
+  if (!instructorOnly(ctx)) return forbidden();
+  const db = courseDb(ctx.db);
+  const o = ownFacultyOffering(ctx, ctx.params.id);
+  if (!o) return notFound("Course not found");
+  if (locked(db, o)) return json({ error: LOCKED }, 409);
+  const ids: unknown = ctx.body?.ids;
+  const items = checklist(db, o.id);
+  if (!Array.isArray(ids) || ids.length !== items.length || items.some((r) => !ids.includes(r.id))) {
+    return json({ error: "The checklist changed; reload and try again" }, 400);
+  }
+  for (const r of items) r.position = ids.indexOf(r.id);
+  return { ids };
+});
+
+route("PATCH", "/api/faculty/courses/:id/requirements/:requirementId", async (ctx) => {
+  if (!instructorOnly(ctx)) return forbidden();
+  const db = courseDb(ctx.db);
+  const o = ownFacultyOffering(ctx, ctx.params.id);
+  if (!o) return notFound("Course not found");
+  if (locked(db, o)) return json({ error: LOCKED }, 409);
+  const current = checklist(db, o.id).find((r) => r.id === ctx.params.requirementId);
+  if (!current) return notFound("Requirement not found");
+  const parsed = parseRequirement(ctx.body ?? {});
+  if (!parsed.ok) return json({ error: parsed.error }, 400);
+  const problem = linkProblem(db, o, parsed.value);
+  if (problem) return json({ error: problem }, 400);
+  Object.assign(current, parsed.value);
+  const [requirement] = await labelled(db, [current]);
+  audit(db, ctx.viewer, "course.requirement.update", "course_requirements", { label: requirement.label }, current.id);
+  return { requirement };
+});
+
+route("DELETE", "/api/faculty/courses/:id/requirements/:requirementId", (ctx) => {
+  if (!instructorOnly(ctx)) return forbidden();
+  const db = courseDb(ctx.db);
+  const o = ownFacultyOffering(ctx, ctx.params.id);
+  if (!o) return notFound("Course not found");
+  if (locked(db, o)) return json({ error: LOCKED }, 409);
+  const id = ctx.params.requirementId;
+  if (!checklist(db, o.id).some((r) => r.id === id)) return notFound("Requirement not found");
+  db.requirements = db.requirements.filter((r) => r.id !== id);
+  db.requirementChecks = db.requirementChecks.filter((c) => c.requirement_id !== id);
+  audit(db, ctx.viewer, "course.requirement.delete", "course_requirements", {}, id);
+  return { success: true };
+});
+
+route("PUT", "/api/faculty/courses/:id/skills", (ctx) => {
+  if (!instructorOnly(ctx)) return forbidden();
+  const db = courseDb(ctx.db);
+  const o = ownFacultyOffering(ctx, ctx.params.id);
+  if (!o) return notFound("Course not found");
+  const ids: unknown = ctx.body?.skill_ids;
+  if (!Array.isArray(ids) || ids.some((id) => typeof id !== "string")) {
+    return json({ error: "skill_ids must be a list of skill ids" }, 400);
+  }
+  const ai = new Set<string>(Array.isArray(ctx.body?.ai_skill_ids) ? ctx.body.ai_skill_ids : []);
+  const wanted = [...new Set(ids as string[])];
+  const before = db.courseSkills.filter((s) => s.course_id === o.course_id);
+  const kept = before.filter((s) => wanted.includes(s.skill_id));
+  const added = wanted
+    .filter((id) => !before.some((s) => s.skill_id === id))
+    .map((skill_id) => ({ course_id: o.course_id, skill_id, source: ai.has(skill_id) ? ("ai" as const) : ("manual" as const) }));
+  db.courseSkills = [...db.courseSkills.filter((s) => s.course_id !== o.course_id), ...kept, ...added];
+  audit(db, ctx.viewer, "course.skills.update", "courses", { added: added.map((s) => s.skill_id) }, o.course_id);
+  return { skill_ids: wanted };
+});
+
+route("POST", "/api/faculty/courses/:id/skills/suggest", async (ctx) => {
+  if (!instructorOnly(ctx)) return forbidden();
+  const db = courseDb(ctx.db);
+  const o = ownFacultyOffering(ctx, ctx.params.id);
+  if (!o) return notFound("Course not found");
+  return demoCourseSuggestions(courseOf(db, o));
 });

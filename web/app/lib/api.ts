@@ -6,6 +6,7 @@ import type { AttendanceTally, ShiftAttendanceStatus } from './shifts';
 import { resolveRubric, type Rubric, type TaskRating } from './task-ratings';
 import { reportNetworkFailure, reportNetworkSuccess } from './connectivity';
 import { endDemo, isDemo } from './demo/session';
+import type { RequirementInput, RequirementRow, TermStatus } from './course-progress';
 
 export interface User {
   id: string;
@@ -4244,3 +4245,84 @@ export const fetchOfferingImpact = (id: string) =>
 
 export const deleteCourseOffering = (id: string) =>
   courseRequest<{ success: true }>(`/api/admin/course-offerings/${id}`, { method: 'DELETE' });
+
+// --- Instructor side ---
+
+export interface CourseRequirement extends RequirementRow {
+  /** What the item asks for, in words (requirementLabel). */
+  label: string;
+  /** The linked activity was deleted after the item was made. */
+  removed: boolean;
+}
+
+export interface CourseTermRef {
+  id: string;
+  name: string;
+  starts_on: string;
+  ends_on: string;
+}
+
+export interface FacultyCourseSummary {
+  id: string;
+  course: { id: string; code: string; title: string };
+  term: CourseTermRef;
+  sections: { id: string; name: string; has_group: boolean }[];
+  student_count: number;
+  requirement_count: number;
+}
+
+export interface FacultyCourseDetail {
+  offering: {
+    id: string;
+    course: { id: string; code: string; title: string; description: string };
+    term: CourseTermRef;
+    status: TermStatus;
+    /** The term has ended: items can't change, ticks still can. */
+    locked: boolean;
+    sections: { id: string; name: string; has_group: boolean }[];
+    student_count: number;
+  };
+  requirements: CourseRequirement[];
+  skill_ids: string[];
+}
+
+export interface CourseActivities {
+  scenarios: { id: string; title: string; completed_before_term: number }[];
+  quizzes: { id: string; title: string }[];
+  presentations: { id: string; title: string }[];
+}
+
+export const fetchMyCourses = () => courseRequest<{ offerings: FacultyCourseSummary[] }>('/api/faculty/courses');
+
+export const fetchFacultyCourse = (id: string) => courseRequest<FacultyCourseDetail>(`/api/faculty/courses/${id}`);
+
+export const fetchCourseActivities = (id: string) => courseRequest<CourseActivities>(`/api/faculty/courses/${id}/activities`);
+
+export const addRequirement = (offeringId: string, input: RequirementInput) =>
+  courseRequest<{ requirement: CourseRequirement }>(`/api/faculty/courses/${offeringId}/requirements`, {
+    method: 'POST',
+    body: input,
+  });
+
+export const updateRequirement = (offeringId: string, requirementId: string, input: RequirementInput) =>
+  courseRequest<{ requirement: CourseRequirement }>(`/api/faculty/courses/${offeringId}/requirements/${requirementId}`, {
+    method: 'PATCH',
+    body: input,
+  });
+
+export const deleteRequirement = (offeringId: string, requirementId: string) =>
+  courseRequest<{ success: true }>(`/api/faculty/courses/${offeringId}/requirements/${requirementId}`, { method: 'DELETE' });
+
+export const reorderRequirements = (offeringId: string, ids: string[]) =>
+  courseRequest<{ ids: string[] }>(`/api/faculty/courses/${offeringId}/requirements/order`, { method: 'PUT', body: { ids } });
+
+export const saveCourseSkills = (offeringId: string, skillIds: string[], aiSkillIds: string[]) =>
+  courseRequest<{ skill_ids: string[] }>(`/api/faculty/courses/${offeringId}/skills`, {
+    method: 'PUT',
+    body: { skill_ids: skillIds, ai_skill_ids: aiSkillIds },
+  });
+
+export const suggestCourseSkills = (offeringId: string) =>
+  courseRequest<{ suggestions: SkillSuggestion[]; source: 'ai' | 'keywords' }>(`/api/faculty/courses/${offeringId}/skills/suggest`, {
+    method: 'POST',
+  });

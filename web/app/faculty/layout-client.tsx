@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   faBedPulse,
+  faBookMedical,
   faBookOpen,
   faCalendarCheck,
   faChartBar,
@@ -33,6 +34,13 @@ function getCurrentUser(): User | null {
 
 const navItems: NavItem[] = [
   { id: "overview", label: "Overview", href: "/faculty", icon: faHouse, section: "General" },
+  {
+    id: "courses",
+    label: "Courses",
+    href: "/faculty/courses",
+    icon: faBookMedical,
+    section: "Teaching",
+  },
   {
     id: "teams",
     label: "Students",

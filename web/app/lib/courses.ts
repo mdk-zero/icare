@@ -7,7 +7,15 @@ import { courseSkillSuggestions, keywordSuggestions } from './skill-suggest';
 import { aiErrorResponse } from './ai/generate';
 import { isMissingTeamTables, manageableSectionIds } from './teams';
 import { getAdminScope, ownsFaculty } from './admin-scope';
-import type { Parsed } from './course-progress';
+import {
+  isRemovedActivity,
+  requirementLabel,
+  type Parsed,
+  type RequirementInput,
+  type RequirementNames,
+  type RequirementRow,
+} from './course-progress';
+import { canFacultySeeScenario } from './scenario-visibility';
 
 export { parseCourse, parseTerm, type CourseInput, type TermInput } from './course-progress';
 
@@ -368,4 +376,118 @@ export async function loadDeanOffering(supabase: Supabase, adminId: string, id: 
     course: { code: course.code, title: course.title },
     term: term ?? { name: 'Term', starts_on: '', ends_on: '' },
   };
+}
+
+// ---------------------------------------------------------------------------
+// Course assignments (instructor)
+// ---------------------------------------------------------------------------
+
+export interface OwnOffering {
+  id: string;
+  course: { id: string; code: string; title: string; description: string };
+  term: { id: string; name: string; starts_on: string; ends_on: string };
+  faculty_id: string;
+  section_ids: string[];
+}
+
+/** One of the instructor's own course assignments, or null (the route answers 404). */
+export async function loadOwnOffering(supabase: Supabase, facultyId: string, id: string): Promise<OwnOffering | null> {
+  const row = must(
+    await supabase
+      .from('course_offerings')
+      .select('id, faculty_id, courses(id, code, title, description), academic_terms(id, name, starts_on, ends_on)')
+      .eq('id', id)
+      .eq('faculty_id', facultyId)
+      .maybeSingle(),
+  );
+  if (!row) return null;
+  const sections = (await loadOfferingSections(supabase, [id])).get(id) ?? [];
+  return {
+    id: row.id as string,
+    course: row.courses as unknown as OwnOffering['course'],
+    term: row.academic_terms as unknown as OwnOffering['term'],
+    faculty_id: facultyId,
+    section_ids: sections,
+  };
+}
+
+export const TERM_ENDED_LOCK = 'This term has ended, so its checklist is locked. Ticks can still be changed.';
+
+/** Requirements of the given offerings, in checklist order. */
+export async function loadRequirements(supabase: Supabase, offeringIds: string[]): Promise<RequirementRow[]> {
+  if (offeringIds.length === 0) return [];
+  const rows = must(
+    await supabase
+      .from('course_requirements')
+      .select(
+        'id, offering_id, position, kind, title, activity_type, scenario_id, assessment_id, presentation_id, target_count, skill_id, min_score, skills_only',
+      )
+      .in('offering_id', offeringIds)
+      .order('position')
+      .order('created_at'),
+  ) as RequirementRow[];
+  // numeric(5,2) can come back as a string.
+  return rows.map((r) => ({ ...r, min_score: r.min_score === null ? null : Number(r.min_score) }));
+}
+
+/** The titles checklist items link to, for requirementLabel(). */
+export async function loadRequirementNames(supabase: Supabase, requirements: RequirementRow[]): Promise<RequirementNames> {
+  const ids = (key: 'scenario_id' | 'assessment_id' | 'presentation_id') =>
+    [...new Set(requirements.map((r) => r[key]).filter((id): id is string => !!id))];
+  const titles = async (table: string, list: string[]) => {
+    if (list.length === 0) return {};
+    const rows = (must(await supabase.from(table).select('id, title').in('id', list)) ?? []) as { id: string; title: string }[];
+    return Object.fromEntries(rows.map((r) => [r.id, r.title]));
+  };
+  const needSkills = requirements.some((r) => r.skill_id);
+  const [scenarios, quizzes, presentations, skills] = await Promise.all([
+    titles('scenarios', ids('scenario_id')),
+    titles('assessments', ids('assessment_id')),
+    titles('case_presentations', ids('presentation_id')),
+    needSkills ? listSkills(supabase) : Promise.resolve([]),
+  ]);
+  return { scenarios, quizzes, presentations, skills: Object.fromEntries(skills.map((s) => [s.id, s.title])) };
+}
+
+/** Requirements with the text the checklist shows. */
+export async function labelRequirements(supabase: Supabase, requirements: RequirementRow[]) {
+  const names = await loadRequirementNames(supabase, requirements);
+  return requirements.map((r) => ({ ...r, label: requirementLabel(r, names), removed: isRemovedActivity(r) }));
+}
+
+/**
+ * Check what an item links to: the activity exists and the instructor may
+ * see it, and a skill item's skill is on the course's skill list.
+ */
+export async function checkRequirementLinks(
+  supabase: Supabase,
+  facultyId: string,
+  offering: OwnOffering,
+  input: RequirementInput,
+): Promise<string | null> {
+  if (input.scenario_id) {
+    const exists = must(await supabase.from('scenarios').select('id').eq('id', input.scenario_id).maybeSingle());
+    if (!exists || !(await canFacultySeeScenario(supabase, facultyId, input.scenario_id))) return 'That Patient Case was not found';
+  }
+  if (input.assessment_id) {
+    const exists = must(await supabase.from('assessments').select('id').eq('id', input.assessment_id).maybeSingle());
+    if (!exists) return 'That Quiz was not found';
+  }
+  if (input.presentation_id) {
+    const exists = must(await supabase.from('case_presentations').select('id').eq('id', input.presentation_id).maybeSingle());
+    if (!exists) return 'That Case Presentation was not found';
+  }
+  if (input.skill_id) {
+    if (!isSkillId(input.skill_id)) return 'Unknown skill';
+    const onCourse = must(
+      await supabase
+        .from('course_skills')
+        .select('skill_id')
+        .eq('course_id', offering.course.id)
+        .eq('skill_id', input.skill_id)
+        .maybeSingle(),
+    );
+    if (!onCourse) return `Add skill ${input.skill_id} to the course's skill list first`;
+  }
+  return null;
 }
