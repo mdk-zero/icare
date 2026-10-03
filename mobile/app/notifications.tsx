@@ -49,9 +49,11 @@ export default function NotificationsScreen() {
 
   const handleOpen = (notification: AppNotification) => {
     void markRead(notification.id);
-    // A newly published Library material opens straight to it.
-    const { kind, materialId } = notification.data ?? {};
+    // A newly published Library material opens straight to it, and a new
+    // course assignment (instructors) to its checklist.
+    const { kind, materialId, offeringId } = notification.data ?? {};
     if (kind === 'library' && typeof materialId === 'string') router.push(`/library/${materialId}`);
+    if (kind === 'course' && typeof offeringId === 'string') router.push(`/course/${offeringId}`);
   };
 
   return (

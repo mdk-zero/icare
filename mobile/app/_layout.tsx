@@ -25,6 +25,10 @@ function AuthStack() {
       }}
     >
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="(instructor)" options={{ headerShown: false }} />
+      <Stack.Screen name="web-portal" options={{ headerShown: false }} />
+      <Stack.Screen name="course/[id]" options={{ title: "Course" }} />
+      <Stack.Screen name="student/[id]" options={{ title: "Student" }} />
       <Stack.Screen name="login" options={{ headerShown: false }} />
       <Stack.Screen name="forgot-password" options={{ headerShown: false }} />
       <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />

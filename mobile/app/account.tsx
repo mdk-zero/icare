@@ -18,6 +18,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useAvatarImage, useAvatarPicker } from '@/hooks/useAvatar';
 import { connectGoogle, disconnectGoogle, updateProfile } from '@/lib/api';
 import { GOOGLE_SIGN_IN_CONFIGURED, idTokenFrom, useGoogleIdToken } from '@/lib/google';
+import { roleLabel } from '@/lib/roles';
 
 /** First letter of the first name plus the last — matches the web avatar. */
 function getInitials(value?: string) {
@@ -119,10 +120,10 @@ export default function AccountScreen() {
     ]);
   };
 
-  const roleLabel = user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : '—';
+  const roleName = user?.role ? roleLabel(user.role) : '—';
   const detailValue = (key: 'email' | 'role' | 'section') => {
     if (key === 'email') return user?.email ?? '—';
-    if (key === 'role') return roleLabel;
+    if (key === 'role') return roleName;
     return user?.section ? user.section : 'Not assigned';
   };
 

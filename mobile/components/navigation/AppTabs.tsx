@@ -1,0 +1,489 @@
+import { useRouter } from "expo-router";
+import React, { useEffect, useState } from "react";
+import { View, Text, StyleSheet, Image, Pressable, useWindowDimensions } from "react-native";
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+  interpolate,
+  Easing,
+} from "react-native-reanimated";
+import type { BottomTabBarProps } from "expo-router/tabs";
+import logoImg from "@/assets/images/logo-pill.png";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { FontAwesome6 } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
+import Svg, { Path, Circle } from "react-native-svg";
+import { useTheme } from "@/hooks/useTheme";
+
+/**
+ * The app's chrome: the floating tab bar and the teal header with the clock
+ * and notification bell. Shared by the student tabs and the instructor tabs,
+ * each passing its own icons.
+ */
+
+/** Teal ramp sampled from the pill logo's cap (same as the login screen). */
+const Teal = {
+  deepest: "#082E38",
+  deep: "#0D4550",
+  primary: "#1B6B7B",
+  light: "#35859B",
+  mist: "#E7F0F1",
+};
+
+/** Route name → FontAwesome 6 icon, for each tab group's own tabs. */
+export type TabIcons = Record<string, string>;
+
+/**
+ * Tab bar sizes. On an iPad (a window at least 600pt wide, so iPad split view
+ * down to a phone-sized column falls back to the phone bar) the bar is
+ * narrower and centred, not stretched across the screen, and its items are
+ * bigger.
+ */
+const PHONE_TAB_BAR = {
+  barHeight: 62,
+  barMaxWidth: undefined as number | undefined,
+  itemHeight: 56,
+  orb: 52,
+  lift: 14,
+  icon: 19,
+  label: 9.5,
+};
+const TABLET_TAB_BAR: typeof PHONE_TAB_BAR = {
+  barHeight: 84,
+  barMaxWidth: 560,
+  itemHeight: 80,
+  orb: 80,
+  lift: 22,
+  icon: 28,
+  label: 12,
+};
+type TabBarMetrics = typeof PHONE_TAB_BAR;
+
+function useTabBarMetrics(): TabBarMetrics {
+  const { width } = useWindowDimensions();
+  return width >= 600 ? TABLET_TAB_BAR : PHONE_TAB_BAR;
+}
+
+/** Quick, no-bounce transition for the active orb. */
+const QUICK = { duration: 160, easing: Easing.out(Easing.cubic) };
+
+/** One tab: the focused one gets a larger raised gradient circle around its icon. */
+function TabItem({
+  icon,
+  label,
+  isFocused,
+  onPress,
+  metrics,
+}: {
+  icon: string;
+  label: string;
+  isFocused: boolean;
+  onPress: () => void;
+  metrics: TabBarMetrics;
+}) {
+  const { lift } = metrics;
+  const { Palette } = useTheme();
+  const progress = useSharedValue(isFocused ? 1 : 0);
+
+  useEffect(() => {
+    progress.value = withTiming(isFocused ? 1 : 0, QUICK);
+  }, [isFocused, progress]);
+
+  const orbStyle = useAnimatedStyle(() => ({
+    opacity: progress.value,
+    transform: [
+      { translateY: interpolate(progress.value, [0, 1], [6, -lift]) },
+      { scale: interpolate(progress.value, [0, 1], [0.4, 1]) },
+    ],
+  }));
+
+  const iconStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateY: interpolate(progress.value, [0, 1], [0, -lift]) },
+      { scale: interpolate(progress.value, [0, 1], [1, 1.15]) },
+    ],
+  }));
+
+  const labelStyle = useAnimatedStyle(() => ({
+    opacity: progress.value,
+    transform: [{ translateY: interpolate(progress.value, [0, 1], [4, 0]) }],
+  }));
+
+  return (
+    <View style={[styles.tabItem, { height: metrics.itemHeight }]}>
+      <Pressable
+        onPress={onPress}
+        accessibilityRole="tab"
+        accessibilityState={{ selected: isFocused }}
+        accessibilityLabel={label}
+        style={({ pressed }) => [styles.tabPressable, pressed && !isFocused && { opacity: 0.65 }]}
+      >
+        <Animated.View
+          style={[
+            styles.orb,
+            { width: metrics.orb, height: metrics.orb, borderRadius: metrics.orb / 2 },
+            orbStyle,
+          ]}
+        >
+          <LinearGradient
+            colors={[Teal.light, Teal.primary, Teal.deep]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
+        </Animated.View>
+        <Animated.View style={iconStyle}>
+          <FontAwesome6
+            name={icon}
+            size={metrics.icon}
+            solid
+            color={isFocused ? "#FFFFFF" : Palette.textMuted}
+          />
+        </Animated.View>
+        <Animated.Text numberOfLines={1} style={[styles.tabLabel, { fontSize: metrics.label }, labelStyle]}>
+          {label}
+        </Animated.Text>
+      </Pressable>
+    </View>
+  );
+}
+
+export function FloatingTabBar({ state, descriptors, navigation, icons }: BottomTabBarProps & { icons: TabIcons }) {
+  const insets = useSafeAreaInsets();
+  const { Palette } = useTheme();
+  const metrics = useTabBarMetrics();
+
+  return (
+    <View
+      pointerEvents="box-none"
+      style={[styles.tabBarWrap, { paddingBottom: Math.max(insets.bottom, 12) }]}
+    >
+      <View
+        style={[
+          styles.tabBarPill,
+          {
+            height: metrics.barHeight,
+            borderRadius: metrics.barHeight / 2,
+            maxWidth: metrics.barMaxWidth,
+            backgroundColor: Palette.surface,
+            borderColor: Palette.borderLight,
+          },
+        ]}
+      >
+        {state.routes.map((route, index) => {
+          const { options } = descriptors[route.key];
+          const label = options.title ?? route.name;
+          const isFocused = state.index === index;
+
+          const onPress = () => {
+            const event = navigation.emit({
+              type: "tabPress",
+              target: route.key,
+              canPreventDefault: true,
+            });
+            if (!isFocused && !event.defaultPrevented) {
+              navigation.navigate(route.name);
+            }
+          };
+
+          return (
+            <TabItem
+              key={route.key}
+              icon={icons[route.name] ?? "circle"}
+              label={label}
+              isFocused={isFocused}
+              onPress={onPress}
+              metrics={metrics}
+            />
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+/** Faint ECG trace + light bloom drifting along the header's bottom edge. */
+function HeaderPulse({ width }: { width: number }) {
+  const y = 62;
+  const pulse = [
+    `M0 ${y}`,
+    `L${width * 0.3} ${y}`,
+    `L${width * 0.36} ${y - 16}`,
+    `L${width * 0.42} ${y + 20}`,
+    `L${width * 0.47} ${y - 5}`,
+    `L${width * 0.52} ${y}`,
+    `L${width * 0.78} ${y}`,
+    `L${width * 0.83} ${y - 12}`,
+    `L${width * 0.88} ${y + 14}`,
+    `L${width * 0.92} ${y}`,
+    `L${width} ${y}`,
+  ].join(" ");
+
+  return (
+    <Svg
+      width={width}
+      height={90}
+      style={{ position: "absolute", bottom: 0, left: 0 }}
+      pointerEvents="none"
+    >
+      <Circle cx={width * 0.92} cy={10} r={70} fill="#FFFFFF" fillOpacity={0.05} />
+      <Circle cx={width * 0.05} cy={85} r={50} fill="#FFFFFF" fillOpacity={0.04} />
+      <Path d={pulse} stroke="#FFFFFF" strokeOpacity={0.14} strokeWidth={1.5} fill="none" />
+    </Svg>
+  );
+}
+
+function formatNow(): string {
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const hours = now.getHours();
+  // 0 → 12 AM, 12 → 12 PM. Hours stay padded so the pill keeps a fixed width.
+  const hour12 = hours % 12 || 12;
+  return `${pad(hour12)}:${pad(now.getMinutes())}:${pad(now.getSeconds())} ${hours < 12 ? "AM" : "PM"}`;
+}
+
+/** Live HH:MM:SS wall clock. Each tick re-reads the clock, so a throttled
+ * interval (backgrounded app) never accumulates drift — it just resyncs. */
+function useWallClock(): string {
+  const [time, setTime] = useState(formatNow);
+  useEffect(() => {
+    const id = setInterval(() => setTime(formatNow()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  return time;
+}
+
+export function AppHeader({
+  notificationCount,
+  tagline = "CLINICAL COMPANION",
+}: {
+  notificationCount: number;
+  tagline?: string;
+}) {
+  const router = useRouter();
+  const { width } = useWindowDimensions();
+  const time = useWallClock();
+  return (
+    <View style={styles.headerShadowWrap}>
+      <LinearGradient
+        colors={[Teal.deepest, Teal.deep, Teal.primary]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1.1, y: 1.6 }}
+        style={styles.headerGradient}
+      >
+        <HeaderPulse width={width} />
+        <SafeAreaView edges={["top"]}>
+          <View style={styles.headerContent}>
+            <View style={styles.headerLeftColumn}>
+              {/* the pill logo doubles as the "i" in iCARE++ */}
+              <View style={styles.headerLockup}>
+                <Image source={logoImg} style={styles.logo} />
+                <Text style={styles.headerTitle}>CARE++</Text>
+              </View>
+              <Text style={styles.headerTagline}>{tagline}</Text>
+            </View>
+            <View style={styles.headerRight}>
+              <View style={styles.clockPill}>
+                <FontAwesome6 name="clock" size={12} color="rgba(255, 255, 255, 0.85)" />
+                <Text
+                  style={styles.clockText}
+                  accessibilityLabel={`Current time ${time}`}
+                  allowFontScaling={false}
+                >
+                  {time}
+                </Text>
+              </View>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.notificationButton,
+                  pressed && styles.notificationButtonPressed,
+                ]}
+                onPress={() => router.push("/notifications")}
+                hitSlop={8}
+              >
+                <View style={styles.notificationIconBox}>
+                  <FontAwesome6 name="bell" size={17} color="#FFFFFF" />
+                </View>
+                {notificationCount > 0 && (
+                  <View style={styles.notificationBadge}>
+                    <Text style={styles.notificationBadgeText}>
+                      {notificationCount > 9 ? "9+" : notificationCount}
+                    </Text>
+                  </View>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </SafeAreaView>
+      </LinearGradient>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  headerShadowWrap: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+    backgroundColor: "transparent",
+    shadowColor: Teal.deepest,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  headerGradient: {
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    overflow: "hidden",
+  },
+  headerContent: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 14,
+  },
+  headerLeftColumn: {
+    flexDirection: "column",
+  },
+  headerLockup: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  logo: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    marginBottom: 8,
+  },
+  headerTitle: {
+    fontSize: 19,
+    fontWeight: "800",
+    color: "#FFFFFF",
+    letterSpacing: 0.3,
+    marginLeft: -8,
+    marginTop: 10,
+    textShadowColor: "rgba(8, 46, 56, 0.4)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
+  headerTagline: {
+    fontSize: 8,
+    fontWeight: "700",
+    color: "#9FC8D2",
+    letterSpacing: 2.6,
+    marginTop: 2,
+    marginLeft: 4,
+  },
+  headerRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  clockPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 10,
+    height: 38,
+    justifyContent: "center",
+    borderRadius: 12,
+  },
+  clockText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#FFFFFF",
+    letterSpacing: 0.6,
+    // fixed-width digits, so the pill doesn't jitter as the seconds tick
+    fontVariant: ["tabular-nums"],
+  },
+  notificationButton: {
+    position: "relative",
+  },
+  notificationButtonPressed: {
+    opacity: 0.6,
+  },
+  notificationIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: "rgba(255, 255, 255, 0.14)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.22)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  notificationBadge: {
+    position: "absolute",
+    top: -3,
+    right: -3,
+    backgroundColor: "#EF4444",
+    borderRadius: 9,
+    minWidth: 17,
+    height: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 4,
+    borderWidth: 2,
+    borderColor: Teal.deep,
+  },
+  notificationBadgeText: {
+    color: "#fff",
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  tabBarWrap: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: 14,
+    paddingTop: 6,
+    backgroundColor: "transparent",
+  },
+  tabBarPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "center",
+    width: "100%",
+    borderWidth: 1,
+    paddingHorizontal: 6,
+    shadowColor: Teal.deepest,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.16,
+    shadowRadius: 24,
+    elevation: 14,
+    marginBottom: 10,
+  },
+  tabItem: {
+    flex: 1,
+  },
+  tabPressable: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  orb: {
+    position: "absolute",
+    overflow: "hidden",
+    borderWidth: 3,
+    borderColor: "#FFFFFF",
+    shadowColor: Teal.primary,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  tabLabel: {
+    position: "absolute",
+    bottom: 3,
+    fontWeight: "700",
+    color: Teal.primary,
+    letterSpacing: 0.4,
+  },
+});

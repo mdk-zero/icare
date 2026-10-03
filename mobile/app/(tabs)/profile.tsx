@@ -24,6 +24,7 @@ import { useApiData, allCached } from "@/hooks/useApiData";
 import { fetchProgress, fetchRecommendations } from "@/lib/api";
 import { clearCache } from "@/lib/client";
 import { ThemePreference, useThemePreference } from "@/hooks/useThemePreference";
+import { roleLabel } from "@/lib/roles";
 
 /** Teal ramp sampled from the pill logo's cap (same as login/header/tab bar/dashboard). */
 const Teal = {
@@ -232,7 +233,7 @@ export default function ProfileScreen() {
           <View style={styles.badge}>
             <Ionicons name="person-outline" size={12} color="#FFFFFF" />
             <Text style={styles.badgeText}>
-              {user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : "Student"}
+              {roleLabel(user?.role)}
             </Text>
           </View>
         </View>

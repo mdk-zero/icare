@@ -1003,3 +1003,131 @@ export async function fetchLibrary(): Promise<CachedResult<Library>> {
 export async function fetchLibraryMaterial(id: string): Promise<LibraryMaterialDetail> {
   return api<LibraryMaterialDetail>(`/api/student/library/${encodeURIComponent(id)}`);
 }
+
+// ---------------------------------------------------------------
+// Instructor: courses and semester requirements (web migration 065)
+// ---------------------------------------------------------------
+
+export type TermStatus = 'upcoming' | 'current' | 'ended';
+
+export interface CourseTerm {
+  id: string;
+  name: string;
+  /** "2026-08-10" */
+  starts_on: string;
+  ends_on: string;
+}
+
+export interface InstructorCourse {
+  id: string;
+  course: { id: string; code: string; title: string };
+  term: CourseTerm;
+  sections: { id: string; name: string; has_group: boolean }[];
+  student_count: number;
+  requirement_count: number;
+  /** Running terms only: students who have met every item. */
+  progress: { complete: number; students: number } | null;
+}
+
+export type RequirementKind = 'activity' | 'count' | 'skill' | 'manual';
+
+export interface CourseRequirement {
+  id: string;
+  position: number;
+  kind: RequirementKind;
+  title: string;
+  /** What the item asks for, in words; the same text the web shows. */
+  label: string;
+  /** The linked activity was deleted. */
+  removed: boolean;
+  target_count: number | null;
+  min_score: number | null;
+}
+
+export interface ItemProgress {
+  done: boolean;
+  /** graded: met by graded work. instructor: ticked, or marked done with a note. */
+  source: 'graded' | 'instructor' | null;
+  current: number;
+  target: number;
+  done_at: string | null;
+  best_score: number | null;
+  level: string | null;
+  note: string | null;
+}
+
+export interface CourseStudent {
+  id: string;
+  name: string;
+  picture_url: string | null;
+  sex: 'male' | 'female' | null;
+  /** "BSN 1101 · Group A" */
+  group_label: string;
+  done: number;
+  total: number;
+}
+
+export interface CourseOfferingRef {
+  id: string;
+  course: { id: string; code: string; title: string };
+  term: CourseTerm;
+  status: TermStatus;
+}
+
+export interface CourseProgress {
+  offering: CourseOfferingRef;
+  requirements: CourseRequirement[];
+  students: CourseStudent[];
+  /** student id → requirement id → progress */
+  progress: Record<string, Record<string, ItemProgress>>;
+  /** requirement id → students who met it */
+  totals: Record<string, number>;
+}
+
+export interface StudentRequirements {
+  courses: {
+    offering: CourseOfferingRef;
+    requirements: CourseRequirement[];
+    progress: Record<string, ItemProgress>;
+    done: number;
+    total: number;
+  }[];
+}
+
+export function fetchMyCourses(): Promise<CachedResult<{ offerings: InstructorCourse[] }>> {
+  return cachedGet('/api/faculty/courses');
+}
+
+export function fetchCourseProgress(offeringId: string): Promise<CachedResult<CourseProgress>> {
+  return cachedGet(`/api/faculty/courses/${offeringId}/progress`);
+}
+
+export function fetchStudentRequirements(studentId: string): Promise<CachedResult<StudentRequirements>> {
+  return cachedGet(`/api/faculty/students/${studentId}/requirements`);
+}
+
+/**
+ * Tick or untick one student on one item. Offline, the tick waits in the
+ * outbox (the route is idempotent, so a replay is safe) and the screen keeps
+ * its optimistic state; `progress` is then null.
+ */
+export async function setRequirementCheck(
+  offeringId: string,
+  requirementId: string,
+  input: { student_id: string; checked: boolean; note?: string },
+): Promise<{ queued: boolean; progress: ItemProgress | null }> {
+  const path = `/api/faculty/courses/${offeringId}/requirements/${requirementId}/checks`;
+  try {
+    const result = await api<{ progress: ItemProgress }>(path, { method: 'POST', body: input });
+    return { queued: false, progress: result.progress };
+  } catch (err) {
+    if (!isNetworkError(err)) throw err;
+    await enqueueWrite({
+      label: input.checked ? 'Requirement tick' : 'Requirement untick',
+      path,
+      method: 'POST',
+      body: input,
+    });
+    return { queued: true, progress: null };
+  }
+}
