@@ -2039,6 +2039,127 @@
             },
             "description": ""
           }
+        },
+        {
+          "name": "Another instructor's course progress is not found",
+          "protocolProfileBehavior": {
+            "disableCookies": true
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"returns 404, or 503 before migration 065\", () => pm.expect([404, 503]).to.include(pm.response.code));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/faculty/courses/00000000-0000-4000-8000-000000000000/progress",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "faculty",
+                "courses",
+                "00000000-0000-4000-8000-000000000000",
+                "progress"
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "A tick needs checked true or false",
+          "protocolProfileBehavior": {
+            "disableCookies": true
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"returns 400\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/faculty/courses/00000000-0000-4000-8000-000000000000/requirements/00000000-0000-4000-8000-000000000000/checks",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "faculty",
+                "courses",
+                "00000000-0000-4000-8000-000000000000",
+                "requirements",
+                "00000000-0000-4000-8000-000000000000",
+                "checks"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"student_id\": \"00000000-0000-4000-8000-000000000000\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Requirements of a student outside your groups are not found",
+          "protocolProfileBehavior": {
+            "disableCookies": true
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"returns 404, or 503 before migration 065\", () => pm.expect([404, 503]).to.include(pm.response.code));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/faculty/students/00000000-0000-4000-8000-000000000000/requirements",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "faculty",
+                "students",
+                "00000000-0000-4000-8000-000000000000",
+                "requirements"
+              ]
+            },
+            "description": ""
+          }
         }
       ]
     },

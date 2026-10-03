@@ -8,7 +8,7 @@ import {
   stepGradesByTask,
 } from '@/app/lib/scenario-tasks';
 import { ratingForCredit, ratingLabel, taskCredit } from '@/app/lib/task-ratings';
-import { isSkillId } from '@/app/lib/taylor-skills';
+import { isSkillId, skillIdFromTitle } from '@/app/lib/taylor-skills';
 
 /**
  * Reflection on graded work. After a scenario is finalized or a skill
@@ -67,11 +67,6 @@ export interface Feedback {
   source: 'ai' | 'rules';
 }
 
-/** "Assessing Body Temperature (Skill 1-1)" / "Skill 1-1 · …" → "1-1". */
-function skillFromTitle(title: string): string | null {
-  const id = /\bSkills? (\d{1,2}-\d{1,2})\b/.exec(title)?.[1] ?? null;
-  return id && isSkillId(id) ? id : null;
-}
 
 /**
  * The graded work a reflection is about, if it belongs to the student and has
@@ -110,7 +105,7 @@ export async function loadGradedWork(
       const credit = taskCredit(completion, stepsByTask.get(t.id as string));
       return {
         title: t.title as string,
-        skill_id: skillFromTitle(t.title as string),
+        skill_id: skillIdFromTitle(t.title as string),
         score: Math.round(credit * 100),
         level: credit > 0 ? ratingLabel(ratingForCredit(credit)) : 'Not performed',
         remarks: completion?.remarks ?? null,
@@ -141,7 +136,7 @@ export async function loadGradedWork(
     const score = c.total ? Math.round(((c.correct as number) / (c.total as number)) * 100) : Number(c.score ?? 0);
     return {
       title: c.criteria_name as string,
-      skill_id: skillFromTitle(c.criteria_name as string),
+      skill_id: skillIdFromTitle(c.criteria_name as string),
       score,
       level: ratingLabel(ratingForCredit(score / 100)),
       remarks: null,

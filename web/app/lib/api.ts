@@ -6,7 +6,7 @@ import type { AttendanceTally, ShiftAttendanceStatus } from './shifts';
 import { resolveRubric, type Rubric, type TaskRating } from './task-ratings';
 import { reportNetworkFailure, reportNetworkSuccess } from './connectivity';
 import { endDemo, isDemo } from './demo/session';
-import type { RequirementInput, RequirementRow, TermStatus } from './course-progress';
+import type { ItemProgress, RequirementInput, RequirementRow, TermStatus } from './course-progress';
 
 export interface User {
   id: string;
@@ -4269,6 +4269,8 @@ export interface FacultyCourseSummary {
   sections: { id: string; name: string; has_group: boolean }[];
   student_count: number;
   requirement_count: number;
+  /** Running terms only: students who have met every item. */
+  progress: { complete: number; students: number } | null;
 }
 
 export interface FacultyCourseDetail {
@@ -4326,3 +4328,58 @@ export const suggestCourseSkills = (offeringId: string) =>
   courseRequest<{ suggestions: SkillSuggestion[]; source: 'ai' | 'keywords' }>(`/api/faculty/courses/${offeringId}/skills/suggest`, {
     method: 'POST',
   });
+
+export interface StudentProgressRow {
+  id: string;
+  name: string;
+  picture_url: string | null;
+  sex: 'male' | 'female' | null;
+  section_id: string;
+  team_id: string;
+  /** "BSN 1101 · Group A" */
+  group_label: string;
+  done: number;
+  total: number;
+}
+
+export interface CourseProgress {
+  offering: {
+    id: string;
+    course: { id: string; code: string; title: string };
+    term: CourseTermRef;
+    status: TermStatus;
+  };
+  requirements: CourseRequirement[];
+  students: StudentProgressRow[];
+  /** student id → requirement id → progress */
+  progress: Record<string, Record<string, ItemProgress>>;
+  /** requirement id → students who met it */
+  totals: Record<string, number>;
+}
+
+export interface StudentCourseRequirements {
+  courses: {
+    offering: CourseProgress['offering'];
+    requirements: CourseRequirement[];
+    progress: Record<string, ItemProgress>;
+    done: number;
+    total: number;
+  }[];
+}
+
+export const fetchCourseProgress = (offeringId: string) =>
+  courseRequest<CourseProgress>(`/api/faculty/courses/${offeringId}/progress`);
+
+/** Tick or untick one student on one item; on an automatic item a tick needs a note. */
+export const setRequirementCheck = (
+  offeringId: string,
+  requirementId: string,
+  input: { student_id: string; checked: boolean; note?: string },
+) =>
+  courseRequest<{ progress: ItemProgress }>(`/api/faculty/courses/${offeringId}/requirements/${requirementId}/checks`, {
+    method: 'POST',
+    body: input,
+  });
+
+export const fetchStudentRequirements = (studentId: string) =>
+  courseRequest<StudentCourseRequirements>(`/api/faculty/students/${studentId}/requirements`);

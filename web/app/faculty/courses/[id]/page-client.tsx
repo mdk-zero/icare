@@ -8,6 +8,7 @@ import {
   faArrowLeft,
   faArrowUp,
   faBookMedical,
+  faChartColumn,
   faListCheck,
   faLock,
   faPenToSquare,
@@ -35,13 +36,14 @@ import {
 } from "../../../lib/api";
 import { formatTermDates } from "../../../lib/course-progress";
 import RequirementModal from "./requirement-modal";
+import ProgressTab from "./progress-tab";
 
-type Tab = "requirements" | "skills";
+type Tab = "progress" | "requirements" | "skills";
 
 const NO_SKILLS: SkillSummary[] = [];
 
 export default function FacultyCourseClient({ offeringId }: { offeringId: string }) {
-  const [tab, setTab] = useState<Tab>("requirements");
+  const [tab, setTab] = useState<Tab>("progress");
   const [editing, setEditing] = useState<CourseRequirement | null | "new">(null);
   const [removing, setRemoving] = useState<CourseRequirement | null>(null);
   const [removeBusy, setRemoveBusy] = useState(false);
@@ -121,7 +123,9 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
             : "Loading…"
         }
         action={
-          tab === "requirements"
+          tab === "progress"
+            ? undefined
+            : tab === "requirements"
             ? {
                 icon: <FontAwesomeIcon icon={faPlus} className="h-4 w-4" />,
                 onClick: () => setEditing("new"),
@@ -159,6 +163,7 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
       >
         {(
           [
+            { id: "progress", label: "Progress", icon: faChartColumn, count: offering?.student_count ?? 0 },
             { id: "requirements", label: "Requirements", icon: faListCheck, count: requirements.length },
             { id: "skills", label: "Skills", icon: faBookMedical, count: detail?.skill_ids.length ?? 0 },
           ] as const
@@ -182,6 +187,8 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
           );
         })}
       </div>
+
+      {tab === "progress" && offering && <ProgressTab offeringId={offeringId} signature={checklistSignature(requirements)} />}
 
       {tab === "requirements" && (
         <div className="overflow-hidden rounded-xl border border-hairline bg-surface">
@@ -295,6 +302,18 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
       )}
     </div>
   );
+}
+
+/**
+ * Changes whenever the checklist does, so the Progress tab refetches after an
+ * edit instead of showing the columns it cached a moment ago.
+ */
+function checklistSignature(requirements: CourseRequirement[]): string {
+  let hash = 5381;
+  // The label is derived from the rest, so the item fields are enough.
+  const fields = requirements.map((r) => [r.id, r.position, r.kind, r.activity_type, r.scenario_id, r.assessment_id, r.presentation_id, r.target_count, r.skill_id, r.min_score, r.skills_only]);
+  for (const ch of JSON.stringify(fields)) hash = ((hash << 5) + hash + ch.charCodeAt(0)) | 0;
+  return String(hash >>> 0);
 }
 
 function BackLink() {

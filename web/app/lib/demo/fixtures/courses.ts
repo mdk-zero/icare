@@ -143,7 +143,7 @@ export function seedCourses(input: {
       ? [item(4, OFFERING_MAIN, 3, { kind: "activity", activity_type: "case_presentation", presentation_id: input.casePresentations[0].id })]
       : []),
     item(5, OFFERING_MAIN, 4, { kind: "skill", skill_id: "1-7", min_score: 50 }),
-    item(6, OFFERING_MAIN, 5, { kind: "count", activity_type: "shift", target_count: 6 }),
+    item(6, OFFERING_MAIN, 5, { kind: "count", activity_type: "shift", target_count: 4 }),
     item(7, OFFERING_MAIN, 6, { kind: "manual", title: "Submit the signed return-demonstration sheet" }),
     item(8, demoId(KIND.misc, 523), 0, { kind: "count", activity_type: "scenario", target_count: 2 }),
   ];

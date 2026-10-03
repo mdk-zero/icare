@@ -129,6 +129,22 @@ function CourseCard({ offering: o }: { offering: FacultyCourseSummary }) {
           {o.requirement_count === 0 ? "No checklist yet" : `${o.requirement_count} requirement${o.requirement_count === 1 ? "" : "s"}`}
         </span>
       </div>
+      {o.progress && (
+        <div className="mt-3">
+          <div className="mb-1 flex items-center justify-between text-xs">
+            <span className="text-gray-500">Students who met every requirement</span>
+            <span className="font-semibold text-gray-800">
+              {o.progress.complete} of {o.progress.students}
+            </span>
+          </div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-gray-100">
+            <div
+              className="h-full rounded-full bg-brand-600"
+              style={{ width: `${o.progress.students ? (o.progress.complete / o.progress.students) * 100 : 0}%` }}
+            />
+          </div>
+        </div>
+      )}
       {noGroup.length > 0 && (
         <p className="mt-2 flex items-center gap-1.5 text-xs text-amber-700">
           <FontAwesomeIcon icon={faTriangleExclamation} className="h-3 w-3" />

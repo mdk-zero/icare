@@ -3,13 +3,16 @@
 import { json, notFound, route, sleep, type DemoContext } from "../router";
 import { newId, type DemoDb } from "../store";
 import {
+  evaluate,
   isRemovedActivity,
   parseCourse,
   parseRequirement,
   parseTerm,
   requirementLabel,
+  summarize,
   termBounds,
   termStatus,
+  type ProgressFacts,
   type RequirementInput,
   type RequirementNames,
   type RequirementRow,
@@ -17,7 +20,8 @@ import {
 import { listSkillSummaries } from "../fixtures/skills";
 import { seedCourses, type DemoCourseTables, type DemoOffering } from "../fixtures/courses";
 import { audit } from "./shared";
-import { byName, sectionName } from "./scope";
+import { byName, sectionName, teamLabel } from "./scope";
+import { taskCredit } from "../../task-ratings";
 
 /**
  * Courses, terms and course assignments (migration 065), answered from the
@@ -438,7 +442,7 @@ const checklist = (db: DemoDb, offeringId: string) =>
 
 const locked = (db: DemoDb, o: DemoOffering) => termStatus(termOf(db, o)) === "ended";
 
-route("GET", "/api/faculty/courses", (ctx) => {
+route("GET", "/api/faculty/courses", async (ctx) => {
   if (!instructorOnly(ctx)) return forbidden();
   const db = courseDb(ctx.db);
   const offerings = db.offerings
@@ -453,10 +457,27 @@ route("GET", "/api/faculty/courses", (ctx) => {
         sections: row.sections,
         student_count: row.student_count,
         requirement_count: row.requirement_count,
+        offering: o,
       };
     })
     .sort((a, b) => b.term.starts_on.localeCompare(a.term.starts_on) || a.course.code.localeCompare(b.course.code));
-  return { offerings };
+  return {
+    offerings: await Promise.all(
+      offerings.map(async ({ offering, ...rest }) => {
+        if (rest.requirement_count === 0 || rest.student_count === 0 || termStatus(rest.term) !== "current") {
+          return { ...rest, progress: null };
+        }
+        const result = await demoProgress(db, offering);
+        return {
+          ...rest,
+          progress: {
+            complete: result.students.filter((s) => s.total > 0 && s.done === s.total).length,
+            students: result.students.length,
+          },
+        };
+      }),
+    ),
+  };
 });
 
 route("GET", "/api/faculty/courses/:id", async (ctx) => {
@@ -622,4 +643,131 @@ route("POST", "/api/faculty/courses/:id/skills/suggest", async (ctx) => {
   const o = ownFacultyOffering(ctx, ctx.params.id);
   if (!o) return notFound("Course not found");
   return demoCourseSuggestions(courseOf(db, o));
+});
+
+// ---------------------------------------------------------------------------
+// Instructor: progress (the same evaluate() the server runs)
+// ---------------------------------------------------------------------------
+
+/** The demo store's graded work, shaped as the server's loadProgressFacts() shapes it. */
+function demoFacts(db: DemoDb, studentIds: string[], requirementIds: string[]): ProgressFacts {
+  const students = new Set(studentIds);
+  const reqs = new Set(requirementIds);
+  const skillTasks = db.tasks.filter((t) => t.skill_id);
+  const cases = db.assignments
+    .filter((a) => students.has(a.student_id) && a.status === "completed" && a.completed_at)
+    .map((a) => ({
+      student_id: a.student_id,
+      scenario_id: a.scenario_id,
+      score: a.score,
+      completed_at: a.completed_at!,
+      skills: skillTasks
+        .filter((t) => t.scenario_id === a.scenario_id)
+        .map((t) => {
+          const steps = db.steps.filter((s) => s.task_id === t.id);
+          const stepIds = new Set(steps.map((s) => s.id));
+          const ratings = db.stepRatings.filter((r) => r.assignment_id === a.id && stepIds.has(r.step_id)).map((r) => r.rating);
+          const completion = db.completions.find((c) => c.assignment_id === a.id && c.task_id === t.id);
+          return { skill_id: t.skill_id!, credit: taskCredit(completion, { total: steps.length, ratings }) };
+        }),
+    }));
+  const attempts = db.attempts
+    .filter((a) => students.has(a.student_id) && a.status === "submitted" && a.submitted_at)
+    .map((a) => ({ student_id: a.student_id, assessment_id: a.assessment_id, score: a.score, submitted_at: a.submitted_at!, skill_scores: {} }));
+  const presentations = db.caseSubmissions
+    .filter((c) => students.has(c.student_id) && c.status === "graded" && c.graded_at)
+    .map((c) => ({ student_id: c.student_id, presentation_id: c.presentation_id, score: c.score, graded_at: c.graded_at! }));
+  const scheduled = new Map(db.shifts.filter((s) => s.status === "scheduled").map((s) => [s.id, s.starts_at]));
+  const shifts = db.shiftEntries
+    .filter((e) => students.has(e.student_id) && (e.attendance_status === "present" || e.attendance_status === "late") && scheduled.has(e.shift_id))
+    .map((e) => ({ student_id: e.student_id, starts_at: scheduled.get(e.shift_id)! }));
+  const checks = db.requirementChecks.filter((c) => reqs.has(c.requirement_id) && students.has(c.student_id));
+  return { cases, attempts, quizSkills: {}, presentations, shifts, checks };
+}
+
+async function demoProgress(db: DemoDb, o: DemoOffering, onlyStudentId?: string) {
+  const items = checklist(db, o.id);
+  const roster = offeringRoster(db, o).students.filter((s) => !onlyStudentId || s.id === onlyStudentId);
+  const ids = roster.map((s) => s.id);
+  const term = termOf(db, o);
+  const skills = db.courseSkills.filter((s) => s.course_id === o.course_id).map((s) => s.skill_id);
+  const progress = evaluate(items, skills, term, ids, demoFacts(db, ids, items.map((r) => r.id)));
+  return {
+    requirements: await labelled(db, items),
+    students: roster.map((s) => ({
+      id: s.id,
+      name: s.name,
+      picture_url: s.picture_url,
+      sex: s.sex,
+      section_id: s.section_id ?? "",
+      team_id: s.team_id ?? "",
+      group_label: teamLabel(db, s.team_id) ?? "",
+      ...summarize(progress[s.id], items),
+    })),
+    progress,
+    totals: Object.fromEntries(items.map((r) => [r.id, ids.filter((id) => progress[id]?.[r.id]?.done).length])),
+  };
+}
+
+const offeringHeader = (db: DemoDb, o: DemoOffering) => {
+  const course = courseOf(db, o);
+  return {
+    id: o.id,
+    course: { id: course.id, code: course.code, title: course.title },
+    term: termRef(db, o),
+    status: termStatus(termOf(db, o)),
+  };
+};
+
+route("GET", "/api/faculty/courses/:id/progress", async (ctx) => {
+  if (!instructorOnly(ctx)) return forbidden();
+  const db = courseDb(ctx.db);
+  const o = ownFacultyOffering(ctx, ctx.params.id);
+  if (!o) return notFound("Course not found");
+  return { offering: offeringHeader(db, o), ...(await demoProgress(db, o)) };
+});
+
+route("POST", "/api/faculty/courses/:id/requirements/:requirementId/checks", async (ctx) => {
+  if (!instructorOnly(ctx)) return forbidden();
+  const db = courseDb(ctx.db);
+  const o = ownFacultyOffering(ctx, ctx.params.id);
+  if (!o) return notFound("Course not found");
+  const requirement = checklist(db, o.id).find((r) => r.id === ctx.params.requirementId);
+  if (!requirement) return notFound("Requirement not found");
+  const { student_id: studentId, checked } = ctx.body ?? {};
+  const note = typeof ctx.body?.note === "string" ? ctx.body.note.trim() : "";
+  if (typeof checked !== "boolean") return json({ error: "checked must be true or false" }, 400);
+  if (!offeringRoster(db, o).students.some((s) => s.id === studentId)) return notFound("Student not found");
+  if (checked && requirement.kind !== "manual" && !note) {
+    return json({ error: "Say why it is done: a note is needed to mark an automatic item done" }, 400);
+  }
+  db.requirementChecks = db.requirementChecks.filter((c) => !(c.requirement_id === requirement.id && c.student_id === studentId));
+  if (checked) {
+    db.requirementChecks.push({ requirement_id: requirement.id, student_id: studentId, checked_by: ctx.viewer.id, checked_at: new Date().toISOString(), note });
+  }
+  audit(db, ctx.viewer, checked ? "course.requirement.check" : "course.requirement.uncheck", "course_requirements", { student: studentId }, requirement.id);
+  const result = await demoProgress(db, o, studentId);
+  return { progress: result.progress[studentId][requirement.id] };
+});
+
+route("GET", "/api/faculty/students/:id/requirements", async (ctx) => {
+  if (!instructorOnly(ctx)) return forbidden();
+  const db = courseDb(ctx.db);
+  const studentId = ctx.params.id;
+  const courses = [];
+  for (const o of db.offerings.filter((x) => x.faculty_id === ctx.viewer.id)) {
+    if (!offeringRoster(db, o).students.some((s) => s.id === studentId)) continue;
+    const result = await demoProgress(db, o, studentId);
+    const row = result.students[0];
+    courses.push({
+      offering: offeringHeader(db, o),
+      requirements: result.requirements,
+      progress: result.progress[studentId] ?? {},
+      done: row?.done ?? 0,
+      total: row?.total ?? 0,
+    });
+  }
+  const order = { current: 0, upcoming: 1, ended: 2 } as const;
+  courses.sort((a, b) => order[a.offering.status] - order[b.offering.status] || b.offering.term.starts_on.localeCompare(a.offering.term.starts_on));
+  return { courses };
 });

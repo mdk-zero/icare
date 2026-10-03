@@ -197,6 +197,16 @@ export function citedSkillId(explanation: unknown): string | null {
   return id && isSkillId(id) ? id : null;
 }
 
+/**
+ * The skill a task's title names: "Assessing Body Temperature (Skill 1-1)" or
+ * "Skill 1-1 · …" → "1-1". Tasks built before migration 047 carry their skill
+ * only in the title.
+ */
+export function skillIdFromTitle(title: string): string | null {
+  const id = /\bSkills? (\d{1,2}-\d{1,2})\b/.exec(title)?.[1] ?? null;
+  return id && isSkillId(id) ? id : null;
+}
+
 /** Before migration 049 the skill_id columns don't exist. */
 export function isMissingSkillColumn(error: { code?: string } | null): boolean {
   return error?.code === '42703' || error?.code === 'PGRST204' || error?.code === '23503';
