@@ -36,7 +36,7 @@ const deanOnly = (ctx: Ctx) => ctx.role === "admin";
 /** A demo started before courses existed has a saved store without these tables. */
 export function courseDb(db: DemoDb): DemoDb {
   if ((db as Partial<DemoCourseTables>).terms === undefined) {
-    Object.assign(db, seedCourses({ scenarios: db.scenarios, casePresentations: db.casePresentations }));
+    Object.assign(db, seedCourses({ users: db.users, casePresentations: db.casePresentations }));
   }
   return db;
 }

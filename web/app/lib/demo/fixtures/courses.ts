@@ -1,6 +1,5 @@
 import { addDays, manilaToday, type RequirementCheckRow, type RequirementRow } from "../../course-progress";
-import { DEAN_ID, INSTRUCTOR_2_ID, INSTRUCTOR_ID, SECTION_A, SECTION_B, ago, demoId, KIND } from "./people";
-import type { DemoScenario } from "./school";
+import { DEAN_ID, INSTRUCTOR_2_ID, INSTRUCTOR_ID, SECTION_A, SECTION_B, ago, demoId, KIND, type DemoUser } from "./people";
 import type { DemoCasePresentation } from "./teaching";
 
 /**
@@ -47,9 +46,12 @@ export type DemoRequirementCheck = RequirementCheckRow;
 
 export const TERM_CURRENT = demoId(KIND.misc, 501);
 export const TERM_PAST = demoId(KIND.misc, 502);
-export const COURSE_NCM103 = demoId(KIND.misc, 511);
-export const COURSE_NCM112 = demoId(KIND.misc, 512);
+export const COURSE_HEALTH_ASSESSMENT = demoId(KIND.misc, 511);
+export const COURSE_FUNDAMENTALS = demoId(KIND.misc, 512);
 export const OFFERING_MAIN = demoId(KIND.misc, 521);
+const OFFERING_FUNDAMENTALS = demoId(KIND.misc, 522);
+const OFFERING_COLLEAGUE = demoId(KIND.misc, 524);
+const OFFERING_PAST = demoId(KIND.misc, 523);
 
 /** "1st Semester AY 2026–2027" for the semester containing `date`. */
 function semesterName(date: string): string {
@@ -69,10 +71,17 @@ export interface DemoCourseTables {
   requirementChecks: DemoRequirementCheck[];
 }
 
-export function seedCourses(input: {
-  scenarios: DemoScenario[];
-  casePresentations: DemoCasePresentation[];
-}): DemoCourseTables {
+const range = (chapter: number, from: number, to: number) =>
+  Array.from({ length: to - from + 1 }, (_, i) => `${chapter}-${from + i}`);
+
+/**
+ * The same two courses and checklists scripts/seed-courses.ts gives the live
+ * school. Every item is one each section can meet: the groups work different
+ * Patient Cases, so items are skills and counts their work shares, and the
+ * Case Presentation is the one given to both sections. Demo quizzes carry no
+ * skill links, so quiz counts here take any quiz.
+ */
+export function seedCourses(input: { users: DemoUser[]; casePresentations: DemoCasePresentation[] }): DemoCourseTables {
   const today = manilaToday();
   const currentStart = addDays(today, -60);
   const pastEnd = addDays(currentStart, -21);
@@ -87,32 +96,36 @@ export function seedCourses(input: {
 
   const courses: DemoCourse[] = [
     {
-      id: COURSE_NCM103,
+      id: COURSE_HEALTH_ASSESSMENT,
       admin_id: DEAN_ID,
-      code: "NCM 103",
+      code: "NCM 101",
       title: "Health Assessment",
-      description: "Systematic assessment of the adult client: vital signs, health history and the head-to-toe physical examination, with documentation of findings.",
+      description:
+        "Systematic assessment of the adult client: vital signs and pulse oximetry, the general survey, and the head-to-toe physical examination, with accurate documentation of findings.",
       created_at: ago(200),
     },
     {
-      id: COURSE_NCM112,
+      id: COURSE_FUNDAMENTALS,
       admin_id: DEAN_ID,
-      code: "NCM 112",
-      title: "Care of Clients with Problems in Oxygenation",
-      description: "Nursing care of clients with respiratory problems: pulse oximetry, oxygen delivery, airway management and suctioning.",
+      code: "NCM 103",
+      title: "Fundamentals of Nursing Practice",
+      description:
+        "Core nursing skills at the bedside: oxygen therapy and airway support, incentive spirometry, and starting, monitoring and maintaining peripheral IV access.",
       created_at: ago(200),
     },
   ];
 
   const courseSkills: DemoCourseSkill[] = [
-    ...["1-1", "1-4", "1-6", "1-7", "2-1", "2-2", "2-3"].map((skill_id) => ({ course_id: COURSE_NCM103, skill_id, source: "manual" as const })),
-    ...["14-1", "14-2", "14-3", "14-4", "14-6"].map((skill_id) => ({ course_id: COURSE_NCM112, skill_id, source: "ai" as const })),
+    ...[...range(1, 1, 7), ...range(2, 1, 8), "14-1"].map((skill_id) => ({ course_id: COURSE_HEALTH_ASSESSMENT, skill_id, source: "manual" as const })),
+    ...[...range(14, 1, 4), ...range(15, 1, 5)].map((skill_id) => ({ course_id: COURSE_FUNDAMENTALS, skill_id, source: "ai" as const })),
   ];
 
   const offerings: DemoOffering[] = [
-    { id: OFFERING_MAIN, course_id: COURSE_NCM103, term_id: TERM_CURRENT, faculty_id: INSTRUCTOR_ID, section_ids: [SECTION_A, SECTION_B], created_at: ago(58) },
-    { id: demoId(KIND.misc, 522), course_id: COURSE_NCM112, term_id: TERM_CURRENT, faculty_id: INSTRUCTOR_2_ID, section_ids: [SECTION_B], created_at: ago(58) },
-    { id: demoId(KIND.misc, 523), course_id: COURSE_NCM103, term_id: TERM_PAST, faculty_id: INSTRUCTOR_ID, section_ids: [SECTION_A], created_at: ago(200) },
+    { id: OFFERING_MAIN, course_id: COURSE_HEALTH_ASSESSMENT, term_id: TERM_CURRENT, faculty_id: INSTRUCTOR_ID, section_ids: [SECTION_A, SECTION_B], created_at: ago(58) },
+    { id: OFFERING_FUNDAMENTALS, course_id: COURSE_FUNDAMENTALS, term_id: TERM_CURRENT, faculty_id: INSTRUCTOR_ID, section_ids: [SECTION_A, SECTION_B], created_at: ago(58) },
+    // A colleague's copy with no checklist yet, so the Dean sees one still to set up.
+    { id: OFFERING_COLLEAGUE, course_id: COURSE_FUNDAMENTALS, term_id: TERM_CURRENT, faculty_id: INSTRUCTOR_2_ID, section_ids: [SECTION_B], created_at: ago(58) },
+    { id: OFFERING_PAST, course_id: COURSE_HEALTH_ASSESSMENT, term_id: TERM_PAST, faculty_id: INSTRUCTOR_ID, section_ids: [SECTION_A], created_at: ago(200) },
   ];
 
   const blank = {
@@ -125,28 +138,59 @@ export function seedCourses(input: {
     min_score: null,
     skills_only: false,
   };
-  const item = (n: number, offering_id: string, position: number, fields: Partial<RequirementRow> & Pick<RequirementRow, "kind">): DemoRequirement => ({
-    id: demoId(KIND.misc, 530 + n),
-    offering_id,
-    position,
-    title: "",
-    ...blank,
-    ...fields,
-    created_at: ago(55),
-  });
+  let n = 0;
+  const checklist = (offering_id: string, items: (Partial<RequirementRow> & Pick<RequirementRow, "kind">)[]): DemoRequirement[] =>
+    items.map((fields, position) => ({
+      id: demoId(KIND.misc, 530 + ++n),
+      offering_id,
+      position,
+      title: "",
+      ...blank,
+      ...fields,
+      created_at: ago(55),
+    }));
+
+  // The Case Presentation every section of the course was given.
+  const shared = input.casePresentations.find((p) => [SECTION_A, SECTION_B].every((s) => p.section_ids.includes(s)));
 
   const requirements: DemoRequirement[] = [
-    item(1, OFFERING_MAIN, 0, { kind: "count", activity_type: "scenario", target_count: 3 }),
-    item(2, OFFERING_MAIN, 1, { kind: "count", activity_type: "assessment", target_count: 2, min_score: 75 }),
-    ...(input.scenarios[0] ? [item(3, OFFERING_MAIN, 2, { kind: "activity", activity_type: "scenario", scenario_id: input.scenarios[0].id })] : []),
-    ...(input.casePresentations[0]
-      ? [item(4, OFFERING_MAIN, 3, { kind: "activity", activity_type: "case_presentation", presentation_id: input.casePresentations[0].id })]
-      : []),
-    item(5, OFFERING_MAIN, 4, { kind: "skill", skill_id: "1-7", min_score: 50 }),
-    item(6, OFFERING_MAIN, 5, { kind: "count", activity_type: "shift", target_count: 4 }),
-    item(7, OFFERING_MAIN, 6, { kind: "manual", title: "Submit the signed return-demonstration sheet" }),
-    item(8, demoId(KIND.misc, 523), 0, { kind: "count", activity_type: "scenario", target_count: 2 }),
+    ...checklist(OFFERING_MAIN, [
+      { kind: "count", activity_type: "assessment", target_count: 3, min_score: 75 },
+      { kind: "skill", skill_id: "1-1", min_score: 50 },
+      { kind: "skill", skill_id: "1-4", min_score: 50 },
+      { kind: "skill", skill_id: "1-6", min_score: 50 },
+      { kind: "skill", skill_id: "1-7", min_score: 50 },
+      // Each group has had four ward duties so far.
+      { kind: "count", activity_type: "shift", target_count: 4 },
+      { kind: "manual", title: "Head-to-toe assessment return demonstration, signed by the clinical instructor" },
+    ]),
+    ...checklist(OFFERING_FUNDAMENTALS, [
+      { kind: "count", activity_type: "scenario", target_count: 3 },
+      { kind: "count", activity_type: "assessment", target_count: 2, min_score: 75 },
+      { kind: "skill", skill_id: "14-1", min_score: 50 },
+      { kind: "skill", skill_id: "15-3", min_score: 50 },
+      ...(shared ? [{ kind: "activity" as const, activity_type: "case_presentation" as const, presentation_id: shared.id }] : []),
+      { kind: "manual", title: "Oxygen therapy return demonstration (nasal cannula and face mask)" },
+    ]),
+    ...checklist(OFFERING_PAST, [{ kind: "count", activity_type: "scenario", target_count: 2 }]),
   ];
 
-  return { terms, courses, courseSkills, offerings, requirements, requirementChecks: [] };
+  // Return demonstrations already signed off, as the live seed does: for some of
+  // the students doing well, never for one the model calls low performing.
+  const doingWell = input.users
+    .filter((u) => u.role === "student" && u.team_id && u.risk_level === "safe")
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const signOff = (title: string, share: number): DemoRequirementCheck[] => {
+    const requirement = requirements.find((r) => r.kind === "manual" && r.title === title);
+    if (!requirement) return [];
+    return doingWell
+      .filter((_, i) => (i * 7) % 10 < share * 10)
+      .map((s, i) => ({ requirement_id: requirement.id, student_id: s.id, checked_by: INSTRUCTOR_ID, checked_at: ago(4 + ((i * 3) % 21), 14, 30), note: "" }));
+  };
+  const requirementChecks = [
+    ...signOff("Head-to-toe assessment return demonstration, signed by the clinical instructor", 0.7),
+    ...signOff("Oxygen therapy return demonstration (nasal cannula and face mask)", 0.5),
+  ];
+
+  return { terms, courses, courseSkills, offerings, requirements, requirementChecks };
 }

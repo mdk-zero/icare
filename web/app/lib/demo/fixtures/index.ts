@@ -22,7 +22,7 @@ export function seed() {
     ...school,
     ...seedWard(school.rooms, school.patients, people.users),
     ...teaching,
-    ...seedCourses({ scenarios: school.scenarios, casePresentations: teaching.casePresentations }),
+    ...seedCourses({ users: people.users, casePresentations: teaching.casePresentations }),
     testRuns: system.testRuns,
     notifications: [
       ...seedNotifications(people.users, school.assignments, school.scenarios),
