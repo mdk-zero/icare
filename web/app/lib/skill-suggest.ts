@@ -94,3 +94,42 @@ export async function aiSuggestions(
   }
   return out;
 }
+
+/** A course spans a syllabus, not one patient, so it may call for many skills. */
+export const MAX_COURSE_SUGGESTIONS = 40;
+
+function buildCoursePrompt(courseText: string, catalog: readonly SkillSummary[]): string {
+  const list = catalog.map((s) => `${s.id}: ${s.title} (${s.area})`).join('\n');
+  return `You are a nursing curriculum coordinator. A Dean or instructor needs to know which Taylor's clinical nursing skills a course covers, so its semester requirements can be tied to them. Choose ONLY from this catalog (id: title (chapter)):
+
+${list}
+
+Course:
+"""
+${courseText}
+"""
+
+Pick every skill a student in this course would be taught and checked on, most central first, up to ${MAX_COURSE_SUGGESTIONS}. Stay within the course's scope: a health assessment course covers vital signs and assessment skills, not wound care or medication administration, unless the course text says so.
+
+Return ONLY JSON of this shape, no markdown:
+{"skills": [{"id": "1-7", "reason": "one short sentence tying the skill to the course"}]}`;
+}
+
+/** The AI's picks for a course, filtered to real catalog ids; throws when the AI is unavailable. */
+export async function courseSkillSuggestions(
+  courseText: string,
+  catalog: readonly SkillSummary[],
+): Promise<SkillSuggestion[]> {
+  const known = new Set(catalog.map((s) => s.id));
+  const raw = await callAI(buildCoursePrompt(courseText, catalog));
+  const list = Array.isArray(raw.skills) ? raw.skills : [];
+  const out: SkillSuggestion[] = [];
+  for (const item of list) {
+    const id = typeof item?.id === 'string' ? item.id.replace(/^skill\s*/i, '').trim() : '';
+    if (!known.has(id) || out.some((o) => o.id === id)) continue;
+    const reason = typeof item?.reason === 'string' ? item.reason.trim().slice(0, 240) : '';
+    out.push({ id, reason });
+    if (out.length === MAX_COURSE_SUGGESTIONS) break;
+  }
+  return out;
+}

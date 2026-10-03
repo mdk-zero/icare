@@ -19,7 +19,7 @@ test.describe('Dean portal', () => {
   });
 
   test('management pages load', async ({ page }) => {
-    for (const path of ['/admin/student-management', '/admin/faculty', '/admin/analytics']) {
+    for (const path of ['/admin/student-management', '/admin/faculty', '/admin/courses', '/admin/analytics']) {
       const res = await page.goto(path);
       expect(res?.ok(), path).toBeTruthy();
       await expect(page.getByRole('heading', { level: 1 })).toBeVisible();

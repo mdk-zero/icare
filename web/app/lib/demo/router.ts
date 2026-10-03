@@ -100,6 +100,7 @@ function ensureRoutes() {
     import("./handlers/teaching"),
     import("./handlers/admin"),
     import("./handlers/super-admin"),
+    import("./handlers/courses"),
   ]);
   return registered;
 }

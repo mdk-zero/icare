@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   faBedPulse,
+  faBookMedical,
   faChartBar,
   faClockRotateLeft,
   faFileLines,
@@ -31,6 +32,7 @@ const navItems: NavItem[] = [
   { id: "overview", label: "Overview", href: "/admin", icon: faHouse, section: "General" },
   { id: "students", label: "Students", href: "/admin/student-management", icon: faUsers, section: "Management" },
   { id: "faculty", label: "Instructors", href: "/admin/faculty", icon: faUserTie, section: "Management" },
+  { id: "courses", label: "Courses", href: "/admin/courses", icon: faBookMedical, section: "Management" },
   // Patients and Rooms folded into one page, as on the faculty side. The
   // patient chart keeps its /admin/patients/[id] route, so it counts here too.
   { id: "wards", label: "Wards", href: "/admin/wards", icon: faBedPulse, section: "Management" },

@@ -4140,3 +4140,107 @@ export async function uploadLibraryFile(
   onProgress(1);
   return { data: { kind, file_path: path, file_name: file.name, file_size: file.size, mime_type: file.type } };
 }
+
+// ---------------------------------------------------------------------------
+// Courses, terms and course assignments (migration 065)
+// ---------------------------------------------------------------------------
+
+export interface AcademicTerm {
+  id: string;
+  name: string;
+  /** "2026-08-10" */
+  starts_on: string;
+  ends_on: string;
+  offering_count: number;
+}
+
+export interface CourseSummary {
+  id: string;
+  code: string;
+  title: string;
+  description: string;
+  skill_ids: string[];
+  offering_count: number;
+}
+
+export interface CourseOfferingRow {
+  id: string;
+  course_id: string;
+  term_id: string;
+  faculty_id: string | null;
+  faculty_name: string | null;
+  /** has_group: whether the instructor supervises a group there, i.e. whether any students come from it. */
+  sections: { id: string; name: string; has_group: boolean }[];
+  student_count: number;
+  requirement_count: number;
+}
+
+export interface DeanCourses {
+  terms: AcademicTerm[];
+  courses: CourseSummary[];
+  offerings: CourseOfferingRow[];
+}
+
+const courseRequest = caseRequest;
+
+export const fetchDeanCourses = () => courseRequest<DeanCourses>('/api/admin/courses');
+
+export const createCourse = (input: { code: string; title: string; description: string }) =>
+  courseRequest<{ course: CourseSummary }>('/api/admin/courses', { method: 'POST', body: input });
+
+export const updateCourse = (id: string, input: { code: string; title: string; description: string }) =>
+  courseRequest<{ course: Omit<CourseSummary, 'skill_ids' | 'offering_count'> }>(`/api/admin/courses/${id}`, {
+    method: 'PATCH',
+    body: input,
+  });
+
+export const fetchCourseImpact = (id: string) =>
+  courseRequest<{ offering_count: number; requirement_count: number; check_count: number }>(`/api/admin/courses/${id}`);
+
+export const deleteCourse = (id: string) =>
+  courseRequest<{ success: true }>(`/api/admin/courses/${id}`, { method: 'DELETE' });
+
+export const saveDeanCourseSkills = (id: string, skillIds: string[], aiSkillIds: string[]) =>
+  courseRequest<{ skill_ids: string[] }>(`/api/admin/courses/${id}/skills`, {
+    method: 'PUT',
+    body: { skill_ids: skillIds, ai_skill_ids: aiSkillIds },
+  });
+
+export const suggestDeanCourseSkills = (id: string) =>
+  courseRequest<{ suggestions: SkillSuggestion[]; source: 'ai' | 'keywords' }>(`/api/admin/courses/${id}/skills/suggest`, {
+    method: 'POST',
+  });
+
+export const createTerm = (input: { name: string; starts_on: string; ends_on: string }) =>
+  courseRequest<{ term: AcademicTerm }>('/api/admin/terms', { method: 'POST', body: input });
+
+export const updateTerm = (id: string, input: { name: string; starts_on: string; ends_on: string }) =>
+  courseRequest<{ term: Omit<AcademicTerm, 'offering_count'> }>(`/api/admin/terms/${id}`, { method: 'PATCH', body: input });
+
+export const fetchTermImpact = (id: string) =>
+  courseRequest<{ offering_count: number; requirement_count: number }>(`/api/admin/terms/${id}`);
+
+export const deleteTerm = (id: string) => courseRequest<{ success: true }>(`/api/admin/terms/${id}`, { method: 'DELETE' });
+
+export const createCourseOffering = (input: {
+  course_id: string;
+  term_id: string;
+  faculty_id: string;
+  section_ids: string[];
+}) =>
+  courseRequest<{ offering: CourseOfferingRow; warnings: string[] }>('/api/admin/course-offerings', {
+    method: 'POST',
+    body: input,
+  });
+
+export const updateCourseOffering = (id: string, input: { faculty_id: string; section_ids: string[] }) =>
+  courseRequest<{ offering: Omit<CourseOfferingRow, 'requirement_count'>; warnings: string[] }>(
+    `/api/admin/course-offerings/${id}`,
+    { method: 'PATCH', body: input },
+  );
+
+export const fetchOfferingImpact = (id: string) =>
+  courseRequest<{ requirement_count: number; check_count: number }>(`/api/admin/course-offerings/${id}`);
+
+export const deleteCourseOffering = (id: string) =>
+  courseRequest<{ success: true }>(`/api/admin/course-offerings/${id}`, { method: 'DELETE' });
