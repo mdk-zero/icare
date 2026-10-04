@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faCalendarCheck,
@@ -538,6 +538,27 @@ export default function AssignmentGrader({
     toast("Request sent. You'll be notified when your dean answers.");
   };
 
+  // The checklist's column headers dock right under the pinned header above
+  // them, so they need to know where that header ends once it is docked.
+  const stickyHeadRef = useRef<HTMLDivElement>(null);
+  const [stickyHeadBottom, setStickyHeadBottom] = useState(0);
+  useEffect(() => {
+    const el = stickyHeadRef.current;
+    if (!el) return;
+    const lg = window.matchMedia("(min-width: 1024px)");
+    // Docked, the header sits one Shell padding (p-3 lg:p-5) above the
+    // scroller's content edge — its -top inset.
+    const measure = () => setStickyHeadBottom(el.offsetHeight - (lg.matches ? 20 : 12));
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    lg.addEventListener("change", measure);
+    return () => {
+      observer.disconnect();
+      lg.removeEventListener("change", measure);
+    };
+  }, []);
+
   return (
     <>
       <div className="overflow-clip rounded-2xl border border-hairline bg-surface shadow-tile">
@@ -548,7 +569,7 @@ export default function AssignmentGrader({
             scrolls under them. Like the finalize bar, the negative inset
             cancels Shell's padding (`p-3 lg:p-5`) so it docks at the
             window's top edge; keep the two in step. */}
-        <div className="sticky -top-3 z-20 bg-surface lg:-top-5">
+        <div ref={stickyHeadRef} className="sticky -top-3 z-20 bg-surface lg:-top-5">
           {/* Who, what, and the grade so far */}
           <div
             {...(onCollapse &&
@@ -729,6 +750,7 @@ export default function AssignmentGrader({
           totalPoints={totalPoints}
           rubric={gradingData?.rubric ?? DEFAULT_RUBRIC}
           readOnly={locked || finalizing}
+          stickyTop={stickyHeadBottom}
           onRateTask={handleRateTask}
           onRateSteps={handleRateSteps}
           noteDrafts={noteDrafts}

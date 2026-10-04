@@ -1,6 +1,6 @@
 "use client";
 
-import type { KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faCheck,
@@ -124,6 +124,8 @@ interface GradingTableProps {
   rubric: Rubric;
   /** A saved grade not being edited: shown, but nothing can be changed. */
   readOnly?: boolean;
+  /** Where the column headers dock while the checklist scrolls under them. */
+  stickyTop?: number;
   onRateTask: (task: GradingTask, rating: TaskRating | null) => void;
   onRateSteps: (task: GradingTask, changes: Map<string, TaskRating | null>) => void;
   noteDrafts: Record<string, string>;
@@ -149,7 +151,66 @@ export default function GradingTable({
   openNotes,
   onOpenNote,
   onNoteChange,
+  stickyTop = 0,
 }: GradingTableProps) {
+  // A task's heading row docks under the column headers, so it needs their height.
+  const theadRef = useRef<HTMLTableSectionElement>(null);
+  const [theadHeight, setTheadHeight] = useState(0);
+  useEffect(() => {
+    const el = theadRef.current;
+    if (!el) return;
+    const measure = () => setTheadHeight(el.offsetHeight);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [loading, tasks.length]);
+
+  // Only the task being read pins its heading. Table cells all stick against
+  // the whole table, so pinning every heading would leave a taller earlier
+  // one showing under a shorter later one. The task being read is the last
+  // one whose body has reached the column headers' lower edge; none while the
+  // next task's heading is on its way up to take its place.
+  const tableRef = useRef<HTMLTableElement>(null);
+  const [activeTask, setActiveTask] = useState(0);
+  useEffect(() => {
+    const table = tableRef.current;
+    const thead = theadRef.current;
+    if (!table || !thead) return;
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      // The header cells are what stick (the <thead> box itself scrolls away).
+      const line = (thead.querySelector("th") ?? thead).getBoundingClientRect().bottom + 1;
+      const bodies = Array.from(table.querySelectorAll<HTMLTableSectionElement>(":scope > tbody"));
+      let active = 0;
+      bodies.forEach((b, i) => {
+        if (b.getBoundingClientRect().top <= line) active = i;
+      });
+      // Let go once the next task reaches the pinned heading's lower edge, so
+      // the next heading rises into view instead of sliding under this one.
+      const next = bodies[active + 1];
+      const headingHeight = bodies[active]?.rows[0]?.getBoundingClientRect().height ?? 0;
+      if (next && next.getBoundingClientRect().top <= line + headingHeight) active = -1;
+      setActiveTask(active);
+    };
+    const onScroll = () => {
+      if (!frame) frame = requestAnimationFrame(update);
+    };
+    update();
+    // Capture: the page scrolls inside Shell's container, not the window.
+    document.addEventListener("scroll", onScroll, true);
+    window.addEventListener("resize", onScroll);
+    return () => {
+      document.removeEventListener("scroll", onScroll, true);
+      window.removeEventListener("resize", onScroll);
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, [loading, tasks.length]);
+
+  // Every header cell sticks (a <tr> can't), on an opaque background with a
+  // shadow for the rule border-collapse drops from sticky cells.
+  const headCell = "sticky z-[2] bg-subtle shadow-[inset_0_-1px_0_var(--color-hairline,rgba(0,0,0,0.08))]";
   if (loading) return <GradingTableSkeleton />;
   if (tasks.length === 0) {
     return <p className="px-5 py-10 text-center text-sm text-gray-500 sm:px-6">This patient case has no criteria.</p>;
@@ -157,8 +218,10 @@ export default function GradingTable({
 
   return (
     <div className="p-5 sm:p-6">
-      <div className="overflow-x-auto rounded-xl border border-hairline">
-        <table className="w-full min-w-[600px] border-collapse text-sm">
+      {/* Scrolls sideways on narrow screens; on wide ones it isn't a scroll
+          container, so the column headers can stick to the page. */}
+      <div className="overflow-x-auto rounded-xl border border-hairline lg:overflow-visible">
+        <table ref={tableRef} className="w-full min-w-[600px] border-collapse text-sm">
           <caption className="sr-only">
             Grading checklist: rate each task&apos;s sub-tasks Excellent ({MAX_RATING_POINTS} points), Satisfactory,
             or Needs Practice. An unrated sub-task earns no points.
@@ -170,16 +233,23 @@ export default function GradingTable({
             ))}
             <col className="w-[64px]" />
           </colgroup>
-          <thead>
+          <thead ref={theadRef}>
             <tr className="border-b border-hairline bg-subtle">
               <th
                 scope="col"
-                className="sticky left-0 z-[1] bg-subtle px-4 py-3 text-left align-bottom text-[11px] font-semibold uppercase tracking-wider text-gray-500"
+                style={{ top: stickyTop }}
+                className={`${headCell} left-0 z-[3] px-4 py-3 text-left align-bottom text-[11px] font-semibold uppercase tracking-wider text-gray-500`}
               >
                 Task / sub-task
               </th>
               {TASK_RATINGS.map((level) => (
-                <th key={level.key} scope="col" title={rubric[level.key]} className="cursor-help px-0.5 py-3 align-bottom">
+                <th
+                  key={level.key}
+                  scope="col"
+                  title={rubric[level.key]}
+                  style={{ top: stickyTop }}
+                  className={`${headCell} cursor-help px-0.5 py-3 align-bottom`}
+                >
                   <span className="flex flex-col items-center gap-1 text-center">
                     <span className={`h-2 w-2 rounded-full ${RATING_STYLE[level.key].dot}`} aria-hidden />
                     <span className="text-[10.5px] font-semibold leading-tight text-gray-700">{level.label}</span>
@@ -191,7 +261,8 @@ export default function GradingTable({
               ))}
               <th
                 scope="col"
-                className="py-3 pl-1 pr-4 text-right align-bottom text-[11px] font-semibold uppercase tracking-wider text-gray-500"
+                style={{ top: stickyTop }}
+                className={`${headCell} py-3 pl-1 pr-4 text-right align-bottom text-[11px] font-semibold uppercase tracking-wider text-gray-500`}
               >
                 Points
               </th>
@@ -210,6 +281,8 @@ export default function GradingTable({
               noteOpen={openNotes.has(task.id) || Boolean(task.remarks)}
               noteAutoFocus={openNotes.has(task.id) && !task.remarks}
               noteValue={noteDrafts[task.id] ?? task.remarks ?? ""}
+              stickyTop={stickyTop + theadHeight}
+              pinned={i === activeTask}
               onOpenNote={onOpenNote}
               onNoteChange={onNoteChange}
             />
@@ -263,6 +336,10 @@ interface TaskGroupProps {
   noteValue: string;
   onOpenNote: (taskId: string) => void;
   onNoteChange: (taskId: string, value: string) => void;
+  /** Where a task's heading row docks while its sub-tasks scroll under it. */
+  stickyTop: number;
+  /** Whether this is the task being read, the one whose heading stays in view. */
+  pinned: boolean;
 }
 
 function TaskGroup({
@@ -277,9 +354,15 @@ function TaskGroup({
   noteValue,
   onOpenNote,
   onNoteChange,
+  stickyTop,
+  pinned,
 }: TaskGroupProps) {
   const rows = checklistRows(task);
   const hasSteps = task.steps.length > 0;
+  // A task with sub-tasks keeps its heading row in view while they scroll
+  // under it; the next task's heading takes its place.
+  const pin = hasSteps && pinned;
+  const taskHead = `bg-subtle ${pin ? "sticky shadow-[inset_0_-1px_0_var(--color-hairline)]" : ""}`;
   const { earned, max } = taskPoints(task);
   const weight = totalPoints > 0 ? Math.round((task.points / totalPoints) * 100) : 0;
 
@@ -314,7 +397,8 @@ function TaskGroup({
       <tr className={`group/task ${hasSteps ? "bg-subtle" : ""}`}>
         <th
           scope="rowgroup"
-          className={`sticky left-0 z-[1] px-4 py-3.5 text-left align-top font-normal ${hasSteps ? "bg-subtle" : "bg-surface"}`}
+          style={pin ? { top: stickyTop } : undefined}
+          className={`sticky left-0 px-4 py-3.5 text-left align-top font-normal ${hasSteps ? `z-[2] ${taskHead}` : "z-[1] bg-surface"}`}
         >
           <div className="flex items-start gap-3">
             <span className="mt-0.5 font-mono text-xs font-medium tabular-nums text-gray-400">
@@ -366,7 +450,11 @@ function TaskGroup({
 
         {TASK_RATINGS.map((option) =>
           hasSteps ? (
-            <td key={option.key} className="px-0.5 py-3.5 text-center align-top">
+            <td
+              key={option.key}
+              style={pin ? { top: stickyTop } : undefined}
+              className={`${taskHead} z-[1] px-0.5 py-3.5 text-center align-top`}
+            >
               {openRows.length > 0 && !readOnly && (
                 <button
                   onClick={() => fillOpenRows(option.key)}
@@ -390,7 +478,10 @@ function TaskGroup({
           ),
         )}
 
-        <td className="py-3.5 pl-1 pr-4 text-right align-top">
+        <td
+          style={pin ? { top: stickyTop } : undefined}
+          className={`py-3.5 pl-1 pr-4 text-right align-top ${hasSteps ? `${taskHead} z-[1]` : ""}`}
+        >
           <span
             className={`block font-display text-base font-bold tabular-nums ${
               rows.every((r) => r.level === null) ? "text-gray-300" : rows.some((r) => r.implied) ? "text-gray-400" : "text-gray-800"
