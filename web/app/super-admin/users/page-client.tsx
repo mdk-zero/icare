@@ -17,6 +17,7 @@ import { usePageData } from "@/app/lib/use-page-data";
 import PageHeader from "../../components/PageHeader";
 import FilterSelect from "../../components/FilterSelect";
 import Avatar from "../../components/Avatar";
+import { SkeletonText } from "../../components/skeletons";
 import ChangeEmailDialog from "../../components/ChangeEmailDialog";
 
 type Role = "student" | "faculty" | "admin" | "super_admin";
@@ -359,7 +360,11 @@ export default function SuperAdminUsersClient() {
                   active ? "ring-2 ring-brand-600 border-transparent" : "hover:border-gray-300"
                 }`}
               >
-                <p className="text-2xl font-bold text-gray-800 tabular-nums">{loading ? "–" : tile.count}</p>
+                {loading ? (
+                  <SkeletonText className="my-1 h-6 w-10" />
+                ) : (
+                  <p className="text-2xl font-bold text-gray-800 tabular-nums">{tile.count}</p>
+                )}
                 <p className="text-xs text-gray-500">{tile.plural}</p>
               </button>
             );
@@ -396,7 +401,29 @@ export default function SuperAdminUsersClient() {
           sideways scroll nothing hinted at. */}
       <ul className={`${CARD} md:hidden divide-y divide-hairline overflow-hidden`}>
         {loading ? (
-          <li className="py-12 text-center text-gray-400">Loading accounts…</li>
+          Array.from({ length: 6 }).map((_, i) => (
+            <li key={i} className="p-4 space-y-3 animate-pulse" aria-hidden="true">
+              <div className="flex items-start gap-3">
+                <div className="h-10 w-10 shrink-0 rounded-full bg-gray-100" />
+                <div className="min-w-0 flex-1 space-y-2">
+                  <div className="h-4 w-36 rounded bg-gray-100" />
+                  <div className="h-3.5 w-48 rounded bg-gray-100" />
+                  <div className="flex gap-2">
+                    <div className="h-5 w-16 rounded-full bg-gray-100" />
+                    <div className="h-3.5 w-20 self-center rounded bg-gray-100" />
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <div className="h-3 w-44 rounded bg-gray-100" />
+                <div className="flex gap-1">
+                  <div className="h-8 w-8 rounded-lg bg-gray-100" />
+                  <div className="h-8 w-8 rounded-lg bg-gray-100" />
+                  <div className="h-8 w-8 rounded-lg bg-gray-100" />
+                </div>
+              </div>
+            </li>
+          ))
         ) : visible.length === 0 ? (
           <li className="py-12 text-center text-gray-400">No accounts match</li>
         ) : (
@@ -447,11 +474,38 @@ export default function SuperAdminUsersClient() {
             </thead>
             <tbody className="divide-y divide-hairline">
               {loading ? (
-                <tr>
-                  <td colSpan={6} className="py-12 text-center text-gray-400">
-                    Loading accounts…
-                  </td>
-                </tr>
+                Array.from({ length: 8 }).map((_, i) => (
+                  <tr key={i} className="animate-pulse" aria-hidden="true">
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 shrink-0 rounded-full bg-gray-100" />
+                        <div className="space-y-2">
+                          <div className="h-4 w-36 rounded bg-gray-100" />
+                          <div className="h-3.5 w-48 rounded bg-gray-100" />
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="h-5 w-20 rounded-full bg-gray-100" />
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="h-3.5 w-24 rounded bg-gray-100" />
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="h-3.5 w-20 rounded bg-gray-100" />
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="h-3.5 w-20 rounded bg-gray-100" />
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="flex justify-end gap-1">
+                        <div className="h-8 w-8 rounded-lg bg-gray-100" />
+                        <div className="h-8 w-8 rounded-lg bg-gray-100" />
+                        <div className="h-8 w-8 rounded-lg bg-gray-100" />
+                      </div>
+                    </td>
+                  </tr>
+                ))
               ) : visible.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="py-12 text-center text-gray-400">

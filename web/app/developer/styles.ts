@@ -91,6 +91,15 @@ select.dc-field { cursor: pointer; }
 .dc-grid tbody tr:hover td { background: #131f23; }
 .dc-null { color: #4e6469; font-style: italic; }
 
+/* Placeholder bars while the catalog or a page of rows loads. */
+.dc-skel {
+  display: block; height: 10px; border-radius: 3px;
+  background: var(--dc-raise);
+  animation: dc-pulse 1.6s ease-in-out infinite;
+}
+@keyframes dc-pulse { 50% { opacity: 0.45; } }
+@media (prefers-reduced-motion: reduce) { .dc-skel { animation: none; } }
+
 .dc-rail button {
   display: block; width: 100%; text-align: left;
   padding: 5px 10px; border-radius: 6px; border: 1px solid transparent;

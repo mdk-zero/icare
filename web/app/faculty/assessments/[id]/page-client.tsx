@@ -20,7 +20,6 @@ import {
   faRotateRight,
   faUsers,
 } from "@fortawesome/free-solid-svg-icons";
-import { SkeletonQuestionCard } from "../../../components/skeletons";
 import { toast } from "../../../components/Toast";
 import ConfirmModal from "../../../components/ConfirmModal";
 import { fetchSections, getCurrentUser, type Section, apiFetch } from "../../../lib/api";
@@ -813,21 +812,83 @@ export default function AssessmentQuestionsClient({
     });
 
   if (loading) {
+    // The page as it lands: back link and clock, the title card, the scoring
+    // criteria bar, the questions header, then a skill section and its questions.
+    const bar = (w: string, h = "h-3", tone = "bg-gray-100") => <div className={`${h} ${w} rounded ${tone}`} />;
     return (
-      <div className="space-y-4">
-        <div className="flex items-center gap-4">
-          <div className="p-2 rounded-lg border border-gray-200 bg-gray-100 animate-pulse w-9 h-9" />
-          <div className="space-y-2 animate-pulse">
-            <div className="h-5 w-48 bg-gray-100 rounded" />
-            <div className="h-4 w-64 bg-gray-100 rounded" />
+      <div className={`${formColumn} space-y-4`} aria-busy="true" aria-label="Loading the quiz">
+        <div className="flex items-center justify-between gap-3">
+          {bar("w-20", "h-4")}
+          <LiveClock variant="full" className="hidden lg:block" />
+        </div>
+        <div className="animate-pulse space-y-4">
+          <section>
+            <div className="h-6 w-36 rounded-t-lg bg-gray-200" />
+            <div className="space-y-3 rounded-xl rounded-tl-none border border-hairline border-l-[6px] border-l-gray-200 bg-surface px-6 py-5 shadow-tile sm:px-8 sm:py-6">
+              <div className="flex items-start justify-between gap-4">
+                {bar("w-2/3", "h-8", "bg-gray-200")}
+                <div className="flex gap-1">
+                  <div className="h-10 w-10 rounded-full bg-gray-100" />
+                  <div className="h-10 w-10 rounded-full bg-gray-100" />
+                </div>
+              </div>
+              {bar("w-full", "h-3.5")}
+              {bar("w-5/6", "h-3.5")}
+              <div className="flex flex-wrap gap-5 border-t border-hairline pt-3">
+                {bar("w-44")}
+                {bar("w-20")}
+                {bar("w-36")}
+                {bar("w-32")}
+              </div>
+            </div>
+          </section>
+          <div className="flex items-center justify-between rounded-xl border border-hairline bg-surface p-5 shadow-sm">
+            <div className="flex items-center gap-2">
+              <div className="h-4 w-4 rounded bg-gray-200" />
+              {bar("w-32", "h-4", "bg-gray-200")}
+            </div>
+            <div className="h-4 w-4 rounded bg-gray-100" />
           </div>
-        </div>
-        <div className="bg-surface rounded-xl border border-gray-200 shadow-sm animate-pulse p-4">
-          <div className="h-8 w-48 bg-gray-100 rounded" />
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <SkeletonQuestionCard />
-          <SkeletonQuestionCard />
+          <div className="space-y-2 rounded-xl border border-hairline border-t-[6px] border-t-gray-200 bg-surface px-5 py-4 shadow-tile sm:px-6">
+            {bar("w-36", "h-5", "bg-gray-200")}
+            {bar("w-72")}
+          </div>
+          <div className="flex items-start gap-2.5 rounded-xl border border-hairline border-l-[6px] border-l-gray-200 bg-surface px-5 py-4 shadow-tile sm:px-6">
+            <div className="mt-1 h-4 w-4 rounded bg-gray-200" />
+            <div className="flex-1 space-y-2">
+              {bar("w-80", "h-4", "bg-gray-200")}
+              {bar("w-64")}
+            </div>
+          </div>
+          {[0, 1].map((i) => (
+            <div key={i} className="overflow-hidden rounded-xl border border-gray-200 bg-surface shadow-sm">
+              <div className="space-y-2.5 px-5 py-4 sm:px-6">
+                <div className="flex items-center gap-2">
+                  <div className="h-6 w-6 rounded-full bg-gray-100" />
+                  <div className="h-6 w-28 rounded-lg bg-gray-100" />
+                </div>
+                <div className="h-10 rounded-xl border border-hairline bg-gray-50" />
+                {[0, 1, 2, 3].map((o) => (
+                  <div key={o} className="flex items-center gap-2">
+                    <div className="h-4 w-4 rounded-full bg-gray-100" />
+                    <div className="h-8 flex-1 rounded-lg border border-hairline bg-gray-50" />
+                  </div>
+                ))}
+              </div>
+              <div className="flex items-center justify-between border-t border-hairline bg-subtle px-5 py-3 sm:px-6">
+                <div className="flex gap-3">
+                  {bar("w-20", "h-6")}
+                  {bar("w-40", "h-6")}
+                  {bar("w-36", "h-6")}
+                </div>
+                <div className="flex gap-1.5">
+                  <div className="h-7 w-7 rounded-lg bg-gray-100" />
+                  <div className="h-7 w-7 rounded-lg bg-gray-100" />
+                  <div className="h-7 w-7 rounded-lg bg-gray-100" />
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     );

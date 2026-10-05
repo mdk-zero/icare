@@ -46,7 +46,7 @@ import {
   WardFixture,
   RoomPlacement,
 } from "../lib/api";
-import { SkeletonUnitGrid, SkeletonStatTile } from "./skeletons";
+import { SkeletonUnitGrid, SkeletonStatTile, SkeletonWardToolbar, SkeletonFloorPlan } from "./skeletons";
 import { FloorPlanCanvas, FloorPlanEditor, planChanges, planFromServer, type PlanDraft } from "./FloorPlan";
 import { RoomFormModal, RoomStudentsModal } from "./RoomModals";
 import { roomStatus, ROOM_STATUS_LABEL, ROOM_STATUS_TONE } from "../lib/rooms";
@@ -943,6 +943,7 @@ export default function PatientsManager({
           row. The patient search lives inside a room (below), so it is not shown
           here. Hidden while the roster loads, alongside the skeleton, and while
           an admin is editing the layout, which has controls of its own. */}
+      {loading && !selectedGroup && !editingLayout && <SkeletonWardToolbar toggle={showFloorPlan} />}
       {!loading && !selectedGroup && !editingLayout && (
         <div className="flex flex-wrap items-center gap-2 mb-4">
           {showFloorPlan && (
@@ -1020,7 +1021,7 @@ export default function PatientsManager({
       )}
 
       {loading ? (
-        <SkeletonUnitGrid />
+        showFloorPlan && view === "plan" ? <SkeletonFloorPlan /> : <SkeletonUnitGrid />
       ) : patients.length === 0 && !(manageRooms && planView) ? (
         <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] p-12 text-center">
           <FontAwesomeIcon icon={faUsers} className="w-12 h-12 text-gray-300 mx-auto mb-4" />

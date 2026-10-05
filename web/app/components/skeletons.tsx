@@ -261,12 +261,9 @@ export function SkeletonChartArea({ height = "h-36" }: { height?: string }) {
     <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04)] p-5 animate-pulse">
       <div className="h-4 w-32 bg-gray-100 rounded mb-4" />
       <div className={`${height} bg-gray-50 rounded-lg flex items-end gap-2 p-2`}>
-        {Array.from({ length: 8 }).map((_, i) => (
-          <div
-            key={i}
-            className="flex-1 bg-gray-100 rounded-t"
-            style={{ height: `${30 + Math.random() * 70}%` }}
-          />
+        {/* Fixed heights: random ones would change on every render. */}
+        {[55, 80, 40, 95, 65, 75, 45, 85].map((h, i) => (
+          <div key={i} className="flex-1 bg-gray-100 rounded-t" style={{ height: `${h}%` }} />
         ))}
       </div>
     </div>
@@ -686,4 +683,339 @@ export function SkeletonLibraryMaterials({ cards = 2 }: { cards?: number }) {
       </div>
     </div>
   );
+}
+
+/** Mirrors a term heading over its course cards: name, status pill, dates. */
+export function SkeletonTermHeading() {
+  return (
+    <div className="mb-2.5 flex items-center gap-2 animate-pulse">
+      <div className="h-4 w-44 rounded bg-gray-200" />
+      <div className="h-4 w-14 rounded-full bg-gray-100" />
+      <div className="h-3 w-32 rounded bg-gray-100" />
+    </div>
+  );
+}
+
+/** Mirrors a course card: code and title, section chips, counts, progress bar. */
+export function SkeletonCourseCard() {
+  return (
+    <div className="flex flex-col rounded-2xl border border-hairline bg-surface p-4 shadow-[0_1px_3px_0_rgba(0,0,0,0.04)] animate-pulse">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1 space-y-2">
+          <div className="h-5 w-24 rounded bg-gray-200" />
+          <div className="h-3.5 w-48 rounded bg-gray-100" />
+        </div>
+        <div className="mt-1.5 h-3.5 w-3.5 rounded bg-gray-100" />
+      </div>
+      <div className="mt-3 flex gap-1.5">
+        <div className="h-5 w-16 rounded-full bg-gray-100" />
+        <div className="h-5 w-16 rounded-full bg-gray-100" />
+      </div>
+      <div className="mt-auto flex items-center gap-4 pt-4">
+        <div className="h-3.5 w-24 rounded bg-gray-100" />
+        <div className="h-3.5 w-28 rounded bg-gray-100" />
+      </div>
+      <div className="mt-3 space-y-1.5">
+        <div className="flex justify-between">
+          <div className="h-3 w-44 rounded bg-gray-100" />
+          <div className="h-3 w-10 rounded bg-gray-100" />
+        </div>
+        <div className="h-1.5 rounded-full bg-gray-100" />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Mirrors a course's progress grid: the show-students filter and legend over
+ * a table of students (avatar, name, group, done/total) against requirements.
+ */
+export function SkeletonProgressGrid({ rows = 6, cols = 5 }: { rows?: number; cols?: number }) {
+  return (
+    <div className="animate-pulse" aria-hidden>
+      <div className="mb-3 flex flex-wrap items-center gap-3">
+        <div className="flex gap-1 rounded-xl bg-subtle p-1">
+          <div className="h-7 w-16 rounded-lg bg-surface" />
+          <div className="h-7 w-24 rounded-lg bg-gray-100" />
+          <div className="h-7 w-24 rounded-lg bg-gray-100" />
+        </div>
+        <div className="h-3 w-32 rounded bg-gray-100" />
+        <div className="h-3 w-36 rounded bg-gray-100" />
+      </div>
+      <div className="overflow-hidden rounded-xl border border-hairline bg-surface">
+        <div className="flex border-b border-hairline bg-subtle">
+          <div className="w-60 shrink-0 px-4 py-3">
+            <div className="h-3 w-16 rounded bg-gray-200" />
+          </div>
+          {Array.from({ length: cols }).map((_, i) => (
+            <div key={i} className="w-32 shrink-0 space-y-1.5 px-2 py-3">
+              <div className="h-2.5 w-6 rounded bg-gray-200" />
+              <div className="h-3 w-24 rounded bg-gray-200" />
+              <div className="h-2.5 w-10 rounded bg-gray-100" />
+            </div>
+          ))}
+        </div>
+        {Array.from({ length: rows }).map((_, r) => (
+          <div key={r} className="flex items-center border-b border-hairline last:border-b-0">
+            <div className="flex w-60 shrink-0 items-center gap-3 px-4 py-2.5">
+              <div className="h-8 w-8 shrink-0 rounded-full bg-gray-100" />
+              <div className="flex-1 space-y-1.5">
+                <div className="h-3 w-28 rounded bg-gray-200" />
+                <div className="h-2.5 w-20 rounded bg-gray-100" />
+              </div>
+              <div className="h-4 w-9 rounded-full bg-gray-100" />
+            </div>
+            {Array.from({ length: cols }).map((_, c) => (
+              <div key={c} className="w-32 shrink-0 px-2 py-2.5">
+                <div className="h-6 w-6 rounded-full bg-gray-100" />
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Mirrors the patient picker's rows: initials, name and diagnosis, room. */
+export function SkeletonPatientPickRows({ rows = 5 }: { rows?: number }) {
+  return (
+    <div className="divide-y divide-hairline animate-pulse" aria-hidden>
+      {Array.from({ length: rows }).map((_, i) => (
+        <div key={i} className="flex items-center gap-3 px-3 py-2.5">
+          <div className="h-7 w-7 shrink-0 rounded-full bg-gray-100" />
+          <div className="flex-1 space-y-1.5">
+            <div className="h-3 w-32 rounded bg-gray-200" />
+            <div className="h-2.5 w-52 rounded bg-gray-100" />
+          </div>
+          <div className="h-3 w-14 rounded bg-gray-100" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Mirrors the patient case editor: the case's own fields and its tasks on the
+ * left, the patient and room it runs on to the right.
+ */
+export function SkeletonCaseEditor() {
+  const field = (label: string, h: string) => (
+    <div className="space-y-2">
+      <div className={`h-3 rounded bg-gray-200 ${label}`} />
+      <div className={`rounded-lg border border-hairline bg-gray-50 ${h}`} />
+    </div>
+  );
+  return (
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 animate-pulse" aria-hidden>
+      <div className="space-y-4">
+        <div className="space-y-4 rounded-xl border border-hairline bg-surface p-4 shadow-[0_1px_3px_0_rgba(0,0,0,0.04)]">
+          {field("w-12", "h-10")}
+          {field("w-20", "h-24")}
+          {field("w-32", "h-24")}
+        </div>
+        <div className="space-y-3 rounded-xl border border-hairline bg-surface p-4 shadow-[0_1px_3px_0_rgba(0,0,0,0.04)]">
+          <div className="h-3.5 w-14 rounded bg-gray-200" />
+          <div className="h-2.5 w-56 rounded bg-gray-100" />
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-3 rounded-lg border border-hairline px-3 py-2.5">
+              <div className="h-5 w-5 rounded-full bg-gray-100" />
+              <div className="flex-1 space-y-1.5">
+                <div className="h-3 w-3/4 rounded bg-gray-200" />
+                <div className="h-2.5 w-20 rounded bg-gray-100" />
+              </div>
+              <div className="h-4 w-4 rounded bg-gray-100" />
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="space-y-4">
+        <div className="rounded-xl border border-hairline bg-surface p-4 shadow-[0_1px_3px_0_rgba(0,0,0,0.04)]">
+          <div className="mb-3 flex justify-between">
+            <div className="h-3.5 w-16 rounded bg-gray-200" />
+            <div className="h-3 w-28 rounded bg-gray-100" />
+          </div>
+          <div className="mb-2 h-10 rounded-lg border border-hairline bg-gray-50" />
+          <SkeletonPatientPickRows rows={4} />
+        </div>
+        <div className="space-y-2.5 rounded-xl border border-hairline bg-surface p-4 shadow-[0_1px_3px_0_rgba(0,0,0,0.04)]">
+          <div className="h-3.5 w-12 rounded bg-gray-200" />
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-3 py-1">
+              <div className="h-4 w-4 rounded-full bg-gray-100" />
+              <div className="h-3 w-36 rounded bg-gray-200" />
+              <div className="ml-auto h-3 w-16 rounded bg-gray-100" />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Mirrors grading a case presentation: back link, student and hand-in line,
+ * the written-up case on the left and the rubric on the right.
+ */
+export function SkeletonCaseGrading({ criteria = 5 }: { criteria?: number }) {
+  return (
+    <div className="space-y-4 animate-pulse" aria-busy="true" aria-label="Loading the case presentation">
+      <div className="h-4 w-48 rounded bg-gray-100" />
+      <div className="flex items-center justify-between gap-3">
+        <div className="space-y-2">
+          <div className="h-6 w-44 rounded bg-gray-200" />
+          <div className="h-3.5 w-64 rounded bg-gray-100" />
+        </div>
+        <div className="h-6 w-20 rounded-full bg-gray-100" />
+      </div>
+      <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,28rem)]">
+        <div className="space-y-3">
+          <div className="space-y-3 rounded-xl border border-hairline bg-surface p-4 shadow-tile">
+            <div className="h-3 w-48 rounded bg-gray-100" />
+            <div className="grid grid-cols-4 gap-3">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="space-y-1.5">
+                  <div className="h-2.5 w-14 rounded bg-gray-100" />
+                  <div className="h-3 w-20 rounded bg-gray-200" />
+                </div>
+              ))}
+            </div>
+            <div className="h-2.5 w-28 rounded bg-gray-100" />
+          </div>
+          {["w-32", "w-16", "w-24", "w-36", "w-44", "w-32"].map((w, i) => (
+            <div key={i} className="space-y-2 rounded-xl border border-hairline bg-surface p-4 shadow-tile">
+              <div className={`h-3.5 rounded bg-gray-200 ${w}`} />
+              <div className="h-3 w-3/4 rounded bg-gray-100" />
+            </div>
+          ))}
+        </div>
+        <section className="space-y-4 rounded-xl border border-hairline bg-surface p-4 shadow-tile">
+          <div className="flex items-baseline justify-between">
+            <div className="h-4 w-16 rounded bg-gray-200" />
+            <div className="h-3.5 w-36 rounded bg-gray-100" />
+          </div>
+          {Array.from({ length: criteria }).map((_, i) => (
+            <div key={i} className="space-y-2 border-t border-hairline pt-3 first:border-t-0 first:pt-0">
+              <div className="h-3.5 w-40 rounded bg-gray-200" />
+              <div className="h-2.5 w-full rounded bg-gray-100" />
+              <div className="grid grid-cols-3 gap-1.5">
+                <div className="h-7 rounded-lg bg-gray-100" />
+                <div className="h-7 rounded-lg bg-gray-100" />
+                <div className="h-7 rounded-lg bg-gray-100" />
+              </div>
+            </div>
+          ))}
+        </section>
+      </div>
+    </div>
+  );
+}
+
+/** Mirrors the ward toolbar: layout toggle, room search, filters, Admit Patient. */
+export function SkeletonWardToolbar({ toggle = true }: { toggle?: boolean }) {
+  return (
+    <div className="mb-4 flex flex-wrap items-center gap-2 animate-pulse" aria-hidden>
+      {toggle && (
+        <div className="flex gap-1 rounded-xl border border-gray-200 bg-surface p-1">
+          <div className="h-7 w-28 rounded-lg bg-gray-200" />
+          <div className="h-7 w-24 rounded-lg bg-gray-100" />
+        </div>
+      )}
+      <div className="h-10 w-full rounded-xl border border-hairline bg-surface sm:w-64" />
+      {Array.from({ length: 5 }).map((_, i) => (
+        <div key={i} className="h-9 w-24 rounded-lg border border-hairline bg-surface" />
+      ))}
+      <div className="ml-auto h-10 w-32 rounded-lg bg-gray-200" />
+    </div>
+  );
+}
+
+/** Mirrors the room layout: a heading over rows of rooms, each a name bar over beds. */
+export function SkeletonFloorPlan() {
+  const room = (beds: number, key: number) => (
+    <div key={key} className="flex-1 border-r-4 border-gray-200 p-2 last:border-r-0">
+      <div className="mb-2 flex items-center justify-between">
+        <div className="space-y-1">
+          <div className="h-3 w-24 rounded bg-gray-200" />
+          <div className="h-2 w-10 rounded bg-gray-100" />
+        </div>
+        <div className="h-3.5 w-8 rounded bg-gray-100" />
+      </div>
+      <div className="flex gap-1">
+        {Array.from({ length: beds }).map((_, b) => (
+          <div key={b} className="h-7 w-4 rounded-sm border border-gray-200 bg-gray-50" />
+        ))}
+      </div>
+    </div>
+  );
+  return (
+    <div className="animate-pulse" aria-busy="true" aria-label="Loading the ward">
+      <div className="mb-2 flex items-center justify-between">
+        <div className="h-4 w-28 rounded bg-gray-200" />
+        <div className="h-3 w-56 rounded bg-gray-100" />
+      </div>
+      <div className="space-y-6 rounded-xl border border-hairline bg-surface p-4">
+        <div className="flex border-4 border-gray-200">{[9, 7, 7, 3].map((b, i) => room(b, i))}</div>
+        <div className="flex border-4 border-gray-200">{[6, 5, 4, 4, 4].map((b, i) => room(b, i))}</div>
+        <div className="flex w-1/4 border-4 border-gray-200">{room(3, 0)}</div>
+      </div>
+    </div>
+  );
+}
+
+/** The plot of a chart inside its own card: bars rising from a baseline. */
+export function SkeletonChartBars({ height = 200, bars = 24 }: { height?: number; bars?: number }) {
+  const heights = [30, 45, 25, 60, 40, 70, 35, 55, 20, 65, 50, 80];
+  return (
+    <div className="animate-pulse" style={{ height }} aria-hidden="true">
+      <div className="flex h-full items-end gap-1 border-b border-l border-gray-100 pl-2">
+        {Array.from({ length: bars }).map((_, i) => (
+          <div key={i} className="flex-1 rounded-t bg-gray-100" style={{ height: `${heights[i % heights.length]}%` }} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** A donut with its total in the middle and a legend underneath. */
+export function SkeletonDonut({ legend = 4 }: { legend?: number }) {
+  return (
+    <div className="flex flex-col gap-4 animate-pulse" aria-hidden="true">
+      <div className="relative mx-auto aspect-square w-full max-w-[11rem]">
+        <div className="absolute inset-0 rounded-full border-[1.6rem] border-gray-100" />
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5">
+          <div className="h-7 w-10 rounded bg-gray-100" />
+          <div className="h-3 w-14 rounded bg-gray-100" />
+        </div>
+      </div>
+      <div className="flex flex-wrap justify-center gap-x-4 gap-y-2">
+        {Array.from({ length: legend }).map((_, i) => (
+          <div key={i} className="flex items-center gap-2">
+            <div className="h-2.5 w-2.5 rounded-full bg-gray-100" />
+            <div className="h-3 w-14 rounded bg-gray-100" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Label-on-the-left, value-on-the-right rows, like a definition list. */
+export function SkeletonKeyValues({ rows = 4 }: { rows?: number }) {
+  const widths = ["w-20", "w-28", "w-16", "w-24"];
+  return (
+    <div className="space-y-2.5 animate-pulse" aria-hidden="true">
+      {Array.from({ length: rows }).map((_, i) => (
+        <div key={i} className="flex justify-between gap-3">
+          <div className={`h-3.5 ${widths[i % widths.length]} rounded bg-gray-100`} />
+          <div className="h-3.5 w-16 rounded bg-gray-100" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** A bar standing in for one line of text. */
+export function SkeletonText({ className = "h-3.5 w-24" }: { className?: string }) {
+  return <span className={`block animate-pulse rounded bg-gray-100 ${className}`} aria-hidden="true" />;
 }

@@ -131,6 +131,16 @@ export default function UsersPanel() {
                 </tr>
               </thead>
               <tbody>
+                {loading && users.length === 0 &&
+                  Array.from({ length: 14 }).map((_, row) => (
+                    <tr key={row} aria-hidden="true">
+                      {["w-32", "w-44", "w-14", "w-20", "w-16", "w-24"].map((width, i) => (
+                        <td key={i}>
+                          <span className={`dc-skel ${width}`} />
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
                 {users.map((user) => (
                   <tr
                     key={user.id}

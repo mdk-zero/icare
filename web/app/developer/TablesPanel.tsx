@@ -196,6 +196,18 @@ export default function TablesPanel() {
               {tablesError}
             </p>
           )}
+          {tables.length === 0 && !tablesError &&
+            [8, 12].map((count, g) => (
+              <div key={g} aria-hidden="true">
+                <span className="dc-skel mx-2 mb-2 mt-1 w-12" style={{ height: 8 }} />
+                {Array.from({ length: count }).map((_, i) => (
+                  <span key={i} className="flex items-center justify-between gap-2 px-2 py-[7px]">
+                    <span className={`dc-skel ${["w-28", "w-20", "w-32", "w-24", "w-36", "w-16", "w-28", "w-24"][i % 8]}`} />
+                    <span className="dc-skel w-5" style={{ height: 8 }} />
+                  </span>
+                ))}
+              </div>
+            ))}
           {grouped.map(([schema, entries]) => (
             <div key={schema}>
               <p
@@ -234,9 +246,13 @@ export default function TablesPanel() {
               <p className="text-[13px]" style={{ color: "var(--dc-dim)" }}>
                 Pick a table to browse it.
               </p>
-              <p className="mt-1 text-[11.5px]" style={{ color: "#4e6469" }}>
-                {tables.length} relations, read straight from the live catalog.
-              </p>
+              {tables.length === 0 && !tablesError ? (
+                <span className="dc-skel mx-auto mt-2 w-56" />
+              ) : (
+                <p className="mt-1 text-[11.5px]" style={{ color: "#4e6469" }}>
+                  {tables.length} relations, read straight from the live catalog.
+                </p>
+              )}
             </div>
           </div>
         ) : (
@@ -354,9 +370,28 @@ export default function TablesPanel() {
                   {error}
                 </p>
               ) : !page ? (
-                <p className="p-4 text-[12px]" style={{ color: "var(--dc-dim)" }}>
-                  Loading…
-                </p>
+                <table className="dc-grid" aria-hidden="true">
+                  <thead>
+                    <tr>
+                      {Array.from({ length: 6 }).map((_, i) => (
+                        <th key={i}>
+                          <span className="dc-skel w-16" style={{ height: 8 }} />
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Array.from({ length: 14 }).map((_, row) => (
+                      <tr key={row}>
+                        {Array.from({ length: 6 }).map((_, i) => (
+                          <td key={i}>
+                            <span className={`dc-skel ${["w-40", "w-24", "w-32", "w-20", "w-28", "w-16"][(i + row) % 6]}`} />
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               ) : page.rows.length === 0 ? (
                 <p className="p-4 text-[12px]" style={{ color: "var(--dc-dim)" }}>
                   No rows{filters.length > 0 ? " match these filters" : ""}.

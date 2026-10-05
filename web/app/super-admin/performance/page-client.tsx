@@ -6,6 +6,7 @@ import { faGaugeHigh, faRotateRight } from "@fortawesome/free-solid-svg-icons";
 import { apiFetch } from "@/app/lib/api";
 import { usePageData } from "@/app/lib/use-page-data";
 import PageHeader from "../../components/PageHeader";
+import { SkeletonChartBars, SkeletonText } from "../../components/skeletons";
 import TimeSeriesChart from "../TimeSeriesChart";
 import SpeedGauge, { type SpeedScale } from "../SpeedGauge";
 import {
@@ -48,6 +49,8 @@ export default function PerformanceClient() {
   const bucket = data?.bucket ?? "hour";
   const series = useMemo(() => fillBuckets(data), [data]);
   const totals = data?.totals;
+  // Only the first load; a range switch keeps the previous numbers on screen.
+  const pending = loading && !data;
 
   const points = useMemo(
     () => ({
@@ -114,6 +117,13 @@ export default function PerformanceClient() {
               <h2 className="font-semibold text-gray-800">Speed</h2>
               <p className="text-xs text-gray-500 mb-4">How long users wait for an answer in this window</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                {pending ? (
+                  <>
+                    <GaugeSkeleton />
+                    <GaugeSkeleton />
+                  </>
+                ) : (
+                  <>
                 <SpeedGauge
                   label="Median response"
                   hint="Half of all requests are faster"
@@ -126,12 +136,18 @@ export default function PerformanceClient() {
                   value={totals?.requests ? totals.p95_ms : null}
                   scale={P95_SCALE}
                 />
+                  </>
+                )}
               </div>
             </section>
             <div className="grid grid-cols-3 lg:grid-cols-1 gap-3">
               {tiles.map((t) => (
                 <div key={t.label} className={`${CARD} p-4 flex flex-col justify-center`}>
-                  <p className="text-2xl font-bold text-gray-800 tabular-nums">{loading && !data ? "–" : t.value}</p>
+                  {pending ? (
+                    <SkeletonText className="my-1 h-6 w-16" />
+                  ) : (
+                    <p className="text-2xl font-bold text-gray-800 tabular-nums">{t.value}</p>
+                  )}
                   <p className="text-xs text-gray-500">{t.label}</p>
                 </div>
               ))}
@@ -142,6 +158,9 @@ export default function PerformanceClient() {
             <section className={`${CARD} p-4 xl:col-span-2`}>
               <h2 className="font-semibold text-gray-800">Response time</h2>
               <p className="text-xs text-gray-500 mb-3">Time from sending a request to its response arriving</p>
+              {pending ? (
+                <SkeletonChartBars height={220} bars={32} />
+              ) : (
               <TimeSeriesChart
                 ariaLabel="Response time over time, median and 95th percentile"
                 series={[
@@ -152,10 +171,14 @@ export default function PerformanceClient() {
                 bucket={bucket}
                 format={formatMs}
               />
+              )}
             </section>
             <section className={`${CARD} p-4`}>
               <h2 className="font-semibold text-gray-800">Throughput</h2>
               <p className="text-xs text-gray-500 mb-3">Requests per minute</p>
+              {pending ? (
+                <SkeletonChartBars height={180} />
+              ) : (
               <TimeSeriesChart
                 ariaLabel="Requests per minute over time"
                 kind="bar"
@@ -165,10 +188,14 @@ export default function PerformanceClient() {
                 format={(v) => (v < 10 ? v.toFixed(1) : Math.round(v).toString())}
                 height={180}
               />
+              )}
             </section>
             <section className={`${CARD} p-4`}>
               <h2 className="font-semibold text-gray-800">Reliability</h2>
               <p className="text-xs text-gray-500 mb-3">Requests answered without a server or network error</p>
+              {pending ? (
+                <SkeletonChartBars height={180} />
+              ) : (
               <TimeSeriesChart
                 ariaLabel="Share of successful requests over time"
                 series={[{ label: "Successful", color: "var(--chart-1)" }]}
@@ -178,6 +205,7 @@ export default function PerformanceClient() {
                 format={(v) => `${Math.round(v)}%`}
                 height={180}
               />
+              )}
             </section>
           </div>
 
@@ -219,10 +247,26 @@ export default function PerformanceClient() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-hairline">
-                  {routes.length === 0 ? (
+                  {pending ? (
+                    Array.from({ length: 6 }).map((_, i) => (
+                      <tr key={i} className="animate-pulse" aria-hidden="true">
+                        <td className="py-2.5 px-4">
+                          <div className="flex items-center gap-3">
+                            <div className="h-3.5 w-10 rounded bg-gray-100" />
+                            <div className={`h-3.5 rounded bg-gray-100 ${["w-56", "w-40", "w-64", "w-48"][i % 4]}`} />
+                          </div>
+                        </td>
+                        {[0, 1, 2, 3].map((j) => (
+                          <td key={j} className="py-2.5 px-4">
+                            <div className="ml-auto h-3.5 w-12 rounded bg-gray-100" />
+                          </td>
+                        ))}
+                      </tr>
+                    ))
+                  ) : routes.length === 0 ? (
                     <tr>
                       <td colSpan={5} className="py-10 text-center text-gray-400">
-                        {loading ? "Loading…" : "No requests recorded in this window yet"}
+                        No requests recorded in this window yet
                       </td>
                     </tr>
                   ) : (
@@ -253,6 +297,18 @@ export default function PerformanceClient() {
           </section>
         </>
       )}
+    </div>
+  );
+}
+
+/** A speed gauge's arc, reading and caption while the metrics load. */
+function GaugeSkeleton() {
+  return (
+    <div className="flex flex-col items-center animate-pulse" aria-hidden="true">
+      <div className="h-20 w-40 rounded-t-full border-[14px] border-b-0 border-gray-100" />
+      <div className="mt-3 h-6 w-16 rounded bg-gray-100" />
+      <div className="mt-2 h-3.5 w-28 rounded bg-gray-100" />
+      <div className="mt-1.5 h-3 w-36 rounded bg-gray-100" />
     </div>
   );
 }

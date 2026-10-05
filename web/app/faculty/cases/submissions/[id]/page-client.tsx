@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faArrowLeft, faFilePdf, faLock, faUserShield } from "@fortawesome/free-solid-svg-icons";
-import { SkeletonTable } from "../../../../components/skeletons";
+import { SkeletonCaseGrading } from "../../../../components/skeletons";
 import { toast } from "../../../../components/Toast";
 import { usePageData } from "../../../../lib/use-page-data";
 import { fetchCaseSubmission, gradeCaseSubmission, type CaseSubmission } from "../../../../lib/api";
@@ -81,7 +81,7 @@ export default function CaseGradingClient({ submissionId }: { submissionId: stri
     );
   }
 
-  if (loading || !grading) return <SkeletonTable rows={8} cols={3} />;
+  if (loading || !grading) return <SkeletonCaseGrading />;
 
   const { submission: s, presentation, student } = grading;
 

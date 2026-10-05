@@ -34,6 +34,7 @@ import { roomStatus, ROOM_STATUS_LABEL, ROOM_STATUS_TONE } from "../../../lib/ro
 import PageHeader from "../../../components/PageHeader";
 import { usePageData } from "../../../lib/use-page-data";
 import { EcgLoader } from "../../../components/EcgLoader";
+import { SkeletonPatientPickRows } from "../../../components/skeletons";
 import { LessonPanel, useLessonImport } from "../../../components/LessonImport";
 import { ChapterTile, hueStyle } from "../library-plan";
 import { TAYLORS_CHAPTERS } from "../../../../scripts/taylors-chapters";
@@ -414,9 +415,7 @@ export default function NewScenarioClient() {
                 </div>
                 <div className="max-h-[300px] overflow-y-auto custom-scrollbar">
                   {loadingData ? (
-                    <div className="p-8 text-center">
-                      <EcgLoader size="md" className="text-brand-600" />
-                    </div>
+                    <SkeletonPatientPickRows />
                   ) : filteredPatients.length === 0 ? (
                     <div className="p-6 text-center text-sm text-gray-500">
                       {patients.length === 0

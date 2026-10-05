@@ -32,6 +32,7 @@ import { roomStatus, ROOM_STATUS_LABEL, ROOM_STATUS_TONE } from "../../../../lib
 import { toast } from "../../../../components/Toast";
 import PageHeader from "../../../../components/PageHeader";
 import { EcgLoader } from "../../../../components/EcgLoader";
+import { SkeletonCaseEditor } from "../../../../components/skeletons";
 import { DEFAULT_RUBRIC, resolveRubric, type Rubric } from "../../../../lib/task-ratings";
 import RubricEditor, { rubricToStore } from "../../rubric-editor";
 
@@ -222,9 +223,7 @@ export default function EditScenarioClient({ scenarioId }: { scenarioId: string 
           title="Edit Patient Case"
           subtitle="Loading the patient case…"
         />
-        <div className="p-12 text-center">
-          <EcgLoader size="md" className="text-brand-600" />
-        </div>
+        <SkeletonCaseEditor />
       </div>
     );
   }

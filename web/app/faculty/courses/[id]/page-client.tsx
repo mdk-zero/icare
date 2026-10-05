@@ -36,6 +36,7 @@ import {
 } from "../../../lib/api";
 import { formatTermDates } from "../../../lib/course-progress";
 import RequirementModal from "./requirement-modal";
+import { SkeletonProgressGrid } from "../../../components/skeletons";
 import ProgressTab from "./progress-tab";
 
 type Tab = "progress" | "requirements" | "skills";
@@ -188,6 +189,7 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
         })}
       </div>
 
+      {tab === "progress" && !offering && loading && <SkeletonProgressGrid />}
       {tab === "progress" && offering && <ProgressTab offeringId={offeringId} signature={checklistSignature(requirements)} />}
 
       {tab === "requirements" && (

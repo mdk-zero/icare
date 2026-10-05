@@ -5,6 +5,7 @@ import Link from "next/link";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCheck, faListCheck, faUserCheck, faUsers } from "@fortawesome/free-solid-svg-icons";
 import Avatar from "../../../components/Avatar";
+import { SkeletonProgressGrid } from "../../../components/skeletons";
 import { usePageData } from "../../../lib/use-page-data";
 import { fetchCourseProgress, type CourseProgress } from "../../../lib/api";
 import type { ItemProgress } from "../../../lib/course-progress";
@@ -51,7 +52,7 @@ export default function ProgressTab({ offeringId, signature }: { offeringId: str
   }, [progress?.students, order?.rank, filter]);
 
   if (loading) {
-    return <div className="h-64 animate-pulse rounded-xl border border-hairline bg-surface" aria-hidden />;
+    return <SkeletonProgressGrid />;
   }
   if (data?.error) {
     return <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">{data.error}</div>;

@@ -7,6 +7,7 @@ import { faArrowRight, faHouse } from "@fortawesome/free-solid-svg-icons";
 import { apiFetch } from "@/app/lib/api";
 import { usePageData } from "@/app/lib/use-page-data";
 import PageHeader from "../components/PageHeader";
+import { SkeletonChartBars, SkeletonDonut, SkeletonKeyValues, SkeletonText } from "../components/skeletons";
 import TimeSeriesChart from "./TimeSeriesChart";
 import { CARD, MigrationPending } from "./ui";
 import { fillBuckets, formatMs, formatPct, reliability, type MetricsSummary } from "./metrics";
@@ -131,8 +132,26 @@ function ago(iso: string): string {
   return `${Math.round(hours / 24)} days ago`;
 }
 
-function Tile({ label, value, detail, href }: { label: string; value: string; detail?: string; href?: string }) {
-  const body = (
+function Tile({
+  label,
+  value,
+  detail,
+  href,
+  pending,
+}: {
+  label: string;
+  value: string;
+  detail?: string;
+  href?: string;
+  pending?: boolean;
+}) {
+  const body = pending ? (
+    <>
+      <p className="text-xs text-gray-500">{label}</p>
+      <SkeletonText className="mt-1.5 h-6 w-14" />
+      <SkeletonText className="mt-2 h-3 w-24" />
+    </>
+  ) : (
     <>
       <p className="text-xs text-gray-500">{label}</p>
       <p className="text-2xl font-bold text-gray-800 tabular-nums mt-0.5">{value}</p>
@@ -159,7 +178,8 @@ export default function SuperAdminDashboardClient() {
   const bench = data?.latest_runs.benchmark;
   const ai = data?.metrics?.ai;
   const dw = data?.latest_runs.dw_benchmark;
-  const dash = loading && !data ? "–" : "—";
+  const pending = loading && !data;
+  const dash = "—";
 
   return (
     <div>
@@ -184,6 +204,7 @@ export default function SuperAdminDashboardClient() {
           value={data ? data.accounts.total.toLocaleString() : dash}
           detail={data ? `${data.accounts.by_role.student ?? 0} students` : undefined}
           href="/super-admin/users"
+          pending={pending}
         />
         <Tile
           label="Active in 7 days"
@@ -193,18 +214,21 @@ export default function SuperAdminDashboardClient() {
               ? `${Math.round((data.accounts.active_7d / data.accounts.total) * 100)}% of accounts`
               : undefined
           }
+          pending={pending}
         />
         <Tile
           label="Response time · 24 h"
           value={totals?.requests ? formatMs(totals.p95_ms) : dash}
           detail={totals?.requests ? `p95 · median ${formatMs(totals.p50_ms)}` : "No requests yet"}
           href="/super-admin/performance"
+          pending={pending}
         />
         <Tile
           label="Reliability · 24 h"
           value={totals?.requests ? formatPct(reliability(totals.requests, totals.errors)) : dash}
           detail={totals?.requests ? `${totals.errors} errors in ${totals.requests.toLocaleString()} requests` : undefined}
           href="/super-admin/performance"
+          pending={pending}
         />
         <Tile
           label="Health"
@@ -215,6 +239,7 @@ export default function SuperAdminDashboardClient() {
               : "Not checked yet"
           }
           href="/super-admin/tests"
+          pending={pending}
         />
       </div>
 
@@ -226,6 +251,9 @@ export default function SuperAdminDashboardClient() {
               ? `Last 24 hours of API traffic from the web app, and the ${ai.requests.toLocaleString()} calls the server made to AI providers`
               : "Last 24 hours of API traffic from the web app"}
           </p>
+          {pending ? (
+            <SkeletonChartBars height={200} />
+          ) : (
           <TimeSeriesChart
             ariaLabel={ai ? "API requests and AI provider calls per hour over the last 24 hours" : "API requests per hour over the last 24 hours"}
             kind="bar"
@@ -242,11 +270,16 @@ export default function SuperAdminDashboardClient() {
             format={(v) => Math.round(v).toLocaleString()}
             height={200}
           />
+          )}
         </section>
 
         <section className={`${CARD} p-4`}>
           <h2 className="font-semibold text-gray-800 mb-3">Accounts by role</h2>
-          <RolePie byRole={data?.accounts.by_role ?? null} total={data?.accounts.total ?? 0} dash={dash} />
+          {pending ? (
+            <SkeletonDonut />
+          ) : (
+            <RolePie byRole={data?.accounts.by_role ?? null} total={data?.accounts.total ?? 0} dash={dash} />
+          )}
         </section>
       </div>
 
@@ -254,6 +287,9 @@ export default function SuperAdminDashboardClient() {
         <section className={`${CARD} p-4`}>
           <h2 className="font-semibold text-gray-800">New accounts</h2>
           <p className="text-xs text-gray-500 mb-3">Per week, last 8 weeks</p>
+          {pending ? (
+            <SkeletonChartBars height={170} bars={8} />
+          ) : (
           <TimeSeriesChart
             ariaLabel="New accounts per week over the last 8 weeks"
             kind="bar"
@@ -263,10 +299,12 @@ export default function SuperAdminDashboardClient() {
             format={(v) => Math.round(v).toString()}
             height={170}
           />
+          )}
         </section>
 
         <RunCard
           title="Latest load benchmark"
+          pending={pending}
           empty="No load benchmark yet"
           at={bench?.created_at}
           rows={
@@ -282,6 +320,7 @@ export default function SuperAdminDashboardClient() {
         />
         <RunCard
           title="Latest warehouse benchmark"
+          pending={pending}
           empty="No warehouse benchmark yet"
           at={dw?.created_at}
           rows={
@@ -298,12 +337,32 @@ export default function SuperAdminDashboardClient() {
   );
 }
 
-function RunCard({ title, empty, at, rows }: { title: string; empty: string; at?: string; rows: [string, string][] }) {
+function RunCard({
+  title,
+  empty,
+  at,
+  rows,
+  pending,
+}: {
+  title: string;
+  empty: string;
+  at?: string;
+  rows: [string, string][];
+  pending?: boolean;
+}) {
   return (
     <section className={`${CARD} p-4 flex flex-col`}>
       <h2 className="font-semibold text-gray-800">{title}</h2>
-      <p className="text-xs text-gray-500 mb-3">{at ? ago(at) : " "}</p>
-      {rows.length === 0 ? (
+      {pending ? (
+        <SkeletonText className="mb-3 mt-1 h-3 w-16" />
+      ) : (
+        <p className="text-xs text-gray-500 mb-3">{at ? ago(at) : " "}</p>
+      )}
+      {pending ? (
+        <div className="flex-1">
+          <SkeletonKeyValues />
+        </div>
+      ) : rows.length === 0 ? (
         <p className="text-sm text-gray-400 flex-1">{empty}</p>
       ) : (
         <dl className="space-y-1.5 text-sm flex-1">

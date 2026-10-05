@@ -19,6 +19,7 @@ import {
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import { apiFetch } from "@/app/lib/api";
 import { usePageData } from "@/app/lib/use-page-data";
+import { SkeletonText } from "../../components/skeletons";
 import { MODEL_EVAL_DATASET, MODEL_EVAL_SNAPSHOT } from "@/app/lib/model-eval-snapshot";
 import PageHeader from "../../components/PageHeader";
 import { CARD, MigrationPending } from "../ui";
@@ -202,7 +203,7 @@ export default function TestsClient() {
         </div>
       )}
       <div className="space-y-5">
-        <HealthSection runs={ofKind<HealthRun>("health")} onRun={addRun} />
+        <HealthSection runs={ofKind<HealthRun>("health")} onRun={addRun} loading={!loaded} />
         <SuiteSection
           kind="e2e"
           runs={ofKind<SuiteRun>("e2e")}
@@ -211,6 +212,7 @@ export default function TestsClient() {
           title="Frontend tests (Playwright)"
           subtitle="A real browser signs in and clicks through each portal, checking what users see"
           command="npm run test:e2e:report"
+          loading={!loaded}
         />
         <SuiteSection
           kind="api"
@@ -220,9 +222,10 @@ export default function TestsClient() {
           title="API tests (Postman)"
           subtitle="Every endpoint's status codes, response shape and role restrictions, run with Newman"
           command="npm run test:api:report"
+          loading={!loaded}
         />
-        <BenchmarkSection runs={ofKind<BenchRun>("benchmark")} onRun={addRun} />
-        <DwSection runs={ofKind<DwRun>("dw_benchmark")} onRun={addRun} />
+        <BenchmarkSection runs={ofKind<BenchRun>("benchmark")} onRun={addRun} loading={!loaded} />
+        <DwSection runs={ofKind<DwRun>("dw_benchmark")} onRun={addRun} loading={!loaded} />
         <MlSection />
       </div>
     </div>
@@ -294,9 +297,27 @@ function History<T extends TestRun>({
   );
 }
 
+/** A benchmark's summary line and its result rows while the runs load. */
+function RunSkeleton() {
+  return (
+    <div className="animate-pulse" aria-hidden="true">
+      <div className="mb-3 h-3 w-64 max-w-full rounded bg-gray-100" />
+      <div className="space-y-2">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="flex items-center gap-3">
+            <div className="h-3.5 w-32 shrink-0 rounded bg-gray-100" />
+            <div className="h-2.5 flex-1 rounded-full bg-gray-100" />
+            <div className="h-3.5 w-12 shrink-0 rounded bg-gray-100" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /* ---------------------------------------------------------------- health */
 
-function HealthSection({ runs, onRun }: { runs: HealthRun[]; onRun: (run: TestRun) => void }) {
+function HealthSection({ runs, onRun, loading }: { runs: HealthRun[]; onRun: (run: TestRun) => void; loading: boolean }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [picked, setPicked] = useState<HealthRun | null>(null);
@@ -322,7 +343,23 @@ function HealthSection({ runs, onRun }: { runs: HealthRun[]; onRun: (run: TestRu
         </button>
       </SectionHead>
       {error && <p className="text-sm text-rose-700 mb-3">{error}</p>}
-      {!shown ? (
+      {loading ? (
+        <>
+          <SkeletonText className="mb-3 h-3 w-48" />
+          <ul className="grid grid-cols-1 md:grid-cols-2 gap-2 animate-pulse" aria-hidden="true">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <li key={i} className="flex items-start gap-3 p-3 rounded-xl border border-hairline">
+                <div className="mt-0.5 h-4 w-4 shrink-0 rounded-full bg-gray-100" />
+                <div className="min-w-0 flex-1 space-y-1.5">
+                  <div className="h-3.5 w-32 rounded bg-gray-100" />
+                  <div className="h-3 w-44 rounded bg-gray-100" />
+                </div>
+                <div className="h-3 w-10 rounded bg-gray-100" />
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : !shown ? (
         <p className="text-sm text-gray-400">No health check has been run yet.</p>
       ) : (
         <>
@@ -365,7 +402,7 @@ function HealthSection({ runs, onRun }: { runs: HealthRun[]; onRun: (run: TestRu
 
 /* ------------------------------------------------------------- benchmark */
 
-function BenchmarkSection({ runs, onRun }: { runs: BenchRun[]; onRun: (run: TestRun) => void }) {
+function BenchmarkSection({ runs, onRun, loading }: { runs: BenchRun[]; onRun: (run: TestRun) => void; loading: boolean }) {
   const [targets, setTargets] = useState<string[]>(BENCHMARK_TARGETS.map((t) => t.id));
   const [levels, setLevels] = useState<number[]>(CONCURRENCY_LEVELS);
   const [perLevel, setPerLevel] = useState(20);
@@ -486,7 +523,9 @@ function BenchmarkSection({ runs, onRun }: { runs: BenchRun[]; onRun: (run: Test
       )}
       {error && <p className="text-sm text-rose-700 mb-3">{error}</p>}
 
-      {!shown ? (
+      {loading ? (
+        <RunSkeleton />
+      ) : !shown ? (
         !running && <p className="text-sm text-gray-400">No benchmark has been run yet.</p>
       ) : (
         <>
@@ -571,7 +610,7 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
 
 /* ------------------------------------------------------------ warehouse */
 
-function DwSection({ runs, onRun }: { runs: DwRun[]; onRun: (run: TestRun) => void }) {
+function DwSection({ runs, onRun, loading }: { runs: DwRun[]; onRun: (run: TestRun) => void; loading: boolean }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [picked, setPicked] = useState<DwRun | null>(null);
@@ -604,7 +643,9 @@ function DwSection({ runs, onRun }: { runs: DwRun[]; onRun: (run: TestRun) => vo
         </button>
       </SectionHead>
       {error && <p className="text-sm text-rose-700 mb-3">{error}</p>}
-      {!shown ? (
+      {loading ? (
+        <RunSkeleton />
+      ) : !shown ? (
         <p className="text-sm text-gray-400">No warehouse benchmark has been run yet.</p>
       ) : (
         <>
@@ -682,6 +723,7 @@ function SuiteSection({
   title,
   subtitle,
   command,
+  loading,
 }: {
   kind: "e2e" | "api";
   runs: SuiteRun[];
@@ -690,6 +732,7 @@ function SuiteSection({
   title: string;
   subtitle: string;
   command: string;
+  loading: boolean;
 }) {
   // By id: polling replaces the run objects as results arrive.
   const [pickedId, setPickedId] = useState<string | null>(null);
@@ -757,7 +800,19 @@ function SuiteSection({
         </div>
       ) : null}
 
-      {!shown || !s ? (
+      {loading ? (
+        <>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3 animate-pulse" aria-hidden="true">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="rounded-xl border border-hairline px-3 py-2">
+                <div className="my-1 h-5 w-10 rounded bg-gray-100" />
+                <div className="h-3 w-14 rounded bg-gray-100" />
+              </div>
+            ))}
+          </div>
+          <SkeletonText className="h-3 w-72 max-w-full" />
+        </>
+      ) : !shown || !s ? (
         <p className="text-sm text-gray-500">
           No run reported yet. From <code className="font-mono text-xs">web/</code>, run{" "}
           <code className="font-mono text-xs bg-subtle px-1.5 py-0.5 rounded">{command}</code>. The results appear here.
