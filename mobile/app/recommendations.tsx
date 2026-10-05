@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
-import { SectionHeader, SkeletonScreen, EmptyState } from '@/components/ui';
+import { SectionHeader, SkeletonBlock, EmptyState } from '@/components/ui';
 import { useApiData } from '@/hooks/useApiData';
 import { fetchRecommendations, dismissRecommendation } from '@/lib/api';
 
@@ -19,9 +19,7 @@ export default function RecommendationsScreen() {
   const styles = React.useMemo(() => createStyles(Palette, Accent, Shadow, Type), [Palette, Accent, Shadow, Type]);
   const RANK_ACCENT = React.useMemo(() => makeRankAccent(Accent), [Accent]);
 
-  if (loading && !data) {
-    return <SkeletonScreen />;
-  }
+  const pending = loading && !data;
 
   const recommendations = data ?? [];
 
@@ -60,9 +58,27 @@ export default function RecommendationsScreen() {
         </View>
       </View>
 
-      <SectionHeader title="Recommended for You" count={recommendations.length} />
+      <SectionHeader title="Recommended for You" count={pending ? undefined : recommendations.length} />
 
-      {recommendations.length === 0 && (
+      {pending &&
+        [0, 1].map((i) => (
+          <View key={i} style={styles.recommendationCard} accessibilityLabel={i === 0 ? 'Loading recommendations' : undefined}>
+            <View style={styles.recHeader}>
+              <View style={[styles.recIconContainer, { backgroundColor: Accent.violet.bg }]}>
+                <Ionicons name="document-text" size={18} color={Accent.violet.fg} />
+              </View>
+              <SkeletonBlock width={30} height={20} radius={999} />
+            </View>
+            <SkeletonBlock width="70%" height={16} style={{ marginTop: 4 }} />
+            <SkeletonBlock width="100%" height={12} style={{ marginTop: 8 }} />
+            <SkeletonBlock width="80%" height={12} style={{ marginTop: 6 }} />
+            <View style={styles.recActionRow}>
+              <SkeletonBlock width={80} height={13} />
+            </View>
+          </View>
+        ))}
+
+      {!pending && recommendations.length === 0 && (
         <EmptyState
           icon={error ? 'cloud-offline-outline' : 'bulb-outline'}
           message={error ?? 'No recommendations yet — they appear after your quiz results are analyzed.'}

@@ -13,7 +13,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
-import { SectionHeader, EmptyState } from '@/components/ui';
+import { SectionHeader, EmptyState, SkeletonBlock } from '@/components/ui';
 import { useApiData } from '@/hooks/useApiData';
 import {
   fetchAssistanceRequests,
@@ -190,7 +190,19 @@ export default function AssistanceScreen() {
         </>
       )}
 
-      <SectionHeader title="History" count={requests.length} />
+      <SectionHeader title="History" count={loading ? undefined : requests.length} />
+
+      {loading &&
+        [0, 1].map((i) => (
+          <View key={i} style={styles.historyCard} accessibilityLabel={i === 0 ? 'Loading your requests' : undefined}>
+            <View style={styles.historyHeader}>
+              <SkeletonBlock width={70} height={20} radius={999} />
+              <SkeletonBlock width={120} height={11} />
+            </View>
+            <SkeletonBlock width="90%" height={13} style={{ marginTop: 4 }} />
+            <SkeletonBlock width="60%" height={13} style={{ marginTop: 6 }} />
+          </View>
+        ))}
 
       {!loading && requests.length === 0 && (
         <EmptyState

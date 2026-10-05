@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Card, Badge, SkeletonScreen, EmptyState } from '@/components/ui';
+import { Card, Badge, SkeletonBlock, EmptyState } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { useApiData } from '@/hooks/useApiData';
@@ -19,7 +19,7 @@ import {
   ScenarioTasksResult,
   WardVitals,
 } from '@/lib/api';
-import { ClinicalTaskList } from '@/components/ClinicalTaskList';
+import { ClinicalTaskList, ClinicalTaskListSkeleton } from '@/components/ClinicalTaskList';
 import { AssistanceButton } from '@/components/AssistanceButton';
 
 /** How often an open scenario re-checks for the instructor's grades. */
@@ -151,7 +151,41 @@ export default function PatientHubScreen() {
 
 
   if (loading && !data) {
-    return <SkeletonScreen />;
+    return (
+      <View style={[styles.container, styles.content]} accessibilityLabel="Loading the patient">
+        <View style={styles.patientHeader}>
+          <SkeletonBlock width={56} height={56} radius={28} style={{ marginRight: Spacing.lg }} />
+          <View style={styles.patientInfo}>
+            <SkeletonBlock width="60%" height={20} />
+            <SkeletonBlock width="45%" height={12} style={{ marginTop: 6 }} />
+          </View>
+        </View>
+        <Card style={styles.scenarioCard}>
+          <View style={styles.scenarioHeader}>
+            <SkeletonBlock width={84} height={22} radius={Radius.pill} />
+          </View>
+          <SkeletonBlock width="80%" height={17} style={{ marginTop: 4 }} />
+          <SkeletonBlock width="50%" height={12} style={{ marginTop: 8 }} />
+          <SkeletonBlock width="100%" height={12} style={{ marginTop: Spacing.md }} />
+          <SkeletonBlock width="70%" height={12} style={{ marginTop: 6 }} />
+        </Card>
+        <Text style={styles.sectionTitle}>Latest Vitals</Text>
+        <Card style={styles.blockCard}>
+          <View style={styles.vitalsGrid}>
+            {['HR', 'BP', 'Temp', 'SpO₂'].map((label) => (
+              <View key={label} style={styles.vitalCell}>
+                <Text style={styles.vitalLabel}>{label}</Text>
+                <SkeletonBlock width={40} height={18} style={{ marginTop: 4 }} />
+              </View>
+            ))}
+          </View>
+        </Card>
+        <Text style={[styles.sectionTitle, styles.sectionSpacer]}>Clinical Tasks</Text>
+        <Card style={styles.blockCard}>
+          <ClinicalTaskListSkeleton />
+        </Card>
+      </View>
+    );
   }
 
   if (!patient) {
@@ -300,7 +334,8 @@ export default function PatientHubScreen() {
           <Text style={[styles.sectionTitle, styles.sectionSpacer]}>Clinical Tasks</Text>
           <Card style={styles.blockCard}>
             {chartError ? <Text style={styles.emptyText}>{chartError}</Text> : null}
-            {!chartError && tasks.length === 0 ? (
+            {!chartError && !taskResult ? <ClinicalTaskListSkeleton /> : null}
+            {!chartError && taskResult && tasks.length === 0 ? (
               <Text style={styles.emptyText}>No tasks have been set for this patient case yet.</Text>
             ) : null}
             <ClinicalTaskList tasks={tasks} />

@@ -8,7 +8,7 @@ import { Image } from "expo-image";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { Radius, Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
-import { SectionHeader, SkeletonScreen, SyncStatus } from "@/components/ui";
+import { SectionHeader, SkeletonBlock, SyncStatus } from "@/components/ui";
 import { useAuth } from "@/hooks/useAuth";
 import { useAvatarImage } from "@/hooks/useAvatar";
 import { useApiData, allCached } from "@/hooks/useApiData";
@@ -19,6 +19,9 @@ import {
   fetchPatients,
   ScenarioAssignment,
 } from "@/lib/api";
+
+/** Placeholder bars inside the teal hero: light on dark, not the usual grey. */
+const HERO_BAR = { backgroundColor: "rgba(255, 255, 255, 0.18)" };
 
 /** Teal ramp sampled from the pill logo's cap (same as login/header/tab bar). */
 const Teal = {
@@ -187,9 +190,9 @@ export default function DashboardScreen() {
   );
   const [assignments, assessments, progress, patients] = data ?? [[], [], null, []];
 
-  if (loading && !data) {
-    return <SkeletonScreen topOffset={insets.top + 88} />;
-  }
+  // The greeting needs nothing fetched; everything below it holds its shape
+  // with placeholders until the first load lands.
+  const pending = loading && !data;
 
   const openTasks = assignments.filter((a) => a.status !== "completed");
   const nextTask = openTasks[0] ?? null;
@@ -293,6 +296,28 @@ export default function DashboardScreen() {
       </Animated.View>
 
       {/* Next Up hero */}
+      {pending && (
+        <View style={styles.heroWrap} accessibilityLabel="Loading your next patient case">
+          <LinearGradient
+            colors={[Teal.deepest, Teal.deep, Teal.primary]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1.1, y: 1.4 }}
+            style={styles.heroCard}
+          >
+            <View style={styles.heroTopRow}>
+              <Text style={styles.heroEyebrow}>NEXT UP</Text>
+            </View>
+            <SkeletonBlock width="85%" height={19} radius={5} style={HERO_BAR} />
+            <SkeletonBlock width="55%" height={19} radius={5} style={[HERO_BAR, { marginTop: 6, marginBottom: Spacing.lg }]} />
+            <View style={styles.heroBottomRow}>
+              <SkeletonBlock width={130} height={28} radius={Radius.pill} style={HERO_BAR} />
+              <View style={styles.heroGo}>
+                <FontAwesome6 name="arrow-right" size={15} solid color={Teal.primary} />
+              </View>
+            </View>
+          </LinearGradient>
+        </View>
+      )}
       {nextTask && (
         <Animated.View entering={FadeInDown.duration(220).delay(40)}>
           <Pressable
@@ -341,7 +366,11 @@ export default function DashboardScreen() {
             <View style={[styles.statIconTile, { backgroundColor: stat.accent.bg }]}>
               <FontAwesome6 name={stat.icon} size={16} solid color={stat.accent.fg} />
             </View>
-            <Text style={styles.statValue}>{stat.value}</Text>
+            {pending ? (
+              <SkeletonBlock width={44} height={26} radius={6} style={{ marginVertical: 3 }} />
+            ) : (
+              <Text style={styles.statValue}>{stat.value}</Text>
+            )}
             <Text style={styles.statLabel}>{stat.label}</Text>
           </Pressable>
         ))}
@@ -350,13 +379,24 @@ export default function DashboardScreen() {
       {/* Patient Cases */}
       <Animated.View entering={FadeInDown.duration(220).delay(160)} style={styles.section}>
         <SectionHeader
-          title={nextTask ? "Up Later" : "Assigned Patient Cases"}
-          subtitle={`${openTasks.length} pending`}
+          title={nextTask || pending ? "Up Later" : "Assigned Patient Cases"}
+          subtitle={pending ? " " : `${openTasks.length} pending`}
           actionLabel="See all"
           onAction={() => router.push("/clinic")}
         />
         <View style={styles.taskList}>
-          {openTasks.length === 0 ? (
+          {pending ? (
+            [0, 1, 2].map((index) => (
+              <View key={index} style={[styles.taskItem, index > 0 && styles.taskItemBorder]}>
+                <View style={[styles.taskStatusBar, { backgroundColor: Palette.borderLight }]} />
+                <View style={styles.taskContent}>
+                  <SkeletonBlock width={["75%", "60%", "70%"][index] as `${number}%`} height={14} />
+                  <SkeletonBlock width={110} height={10} style={{ marginTop: 7 }} />
+                </View>
+                <FontAwesome6 name="chevron-right" size={13} color={Palette.textFaint} />
+              </View>
+            ))
+          ) : openTasks.length === 0 ? (
             <View style={styles.emptyTasksWrap}>
               <View style={styles.emptyTasksIcon}>
                 <FontAwesome6 name="clipboard-list" size={18} color={Teal.primary} />

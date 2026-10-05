@@ -4,7 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { Easing, interpolate, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
-import { SkeletonScreen, EmptyState, PrimaryButton } from '@/components/ui';
+import { SkeletonBlock, EmptyState, PrimaryButton } from '@/components/ui';
 import { useApiData } from '@/hooks/useApiData';
 import { fetchFlashcards, Flashcard } from '@/lib/api';
 import { Radius, Spacing } from '@/constants/theme';
@@ -73,7 +73,40 @@ export default function FlashcardsScreen() {
     rotation.set(0);
   };
 
-  if (loading && !data) return <SkeletonScreen />;
+  if (loading && !data) {
+    const light = { backgroundColor: 'rgba(255,255,255,0.18)', alignSelf: 'center' as const };
+    return (
+      <View style={[styles.container, styles.content]} accessibilityLabel="Loading flashcards">
+        <SkeletonBlock width="70%" height={20} style={{ marginBottom: Spacing.md }} />
+        <View style={styles.progressHead}>
+          <SkeletonBlock width={90} height={13} />
+          <SkeletonBlock width={60} height={13} />
+        </View>
+        <View style={styles.progressTrack} />
+        <View style={styles.cardWrap}>
+          <View style={styles.face}>
+            <LinearGradient
+              colors={[Teal.deepest, Teal.deep, Teal.primary]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.faceFill}
+            >
+              <View style={styles.faceHead}>
+                <Ionicons name="help-circle" size={16} color="#9FC8D2" />
+                <Text style={[styles.faceEyebrow, { color: '#9FC8D2' }]}>Question</Text>
+              </View>
+              <View style={[styles.faceBody, { gap: 10 }]}>
+                <SkeletonBlock width="85%" height={20} radius={5} style={light} />
+                <SkeletonBlock width="70%" height={20} radius={5} style={light} />
+                <SkeletonBlock width="45%" height={20} radius={5} style={light} />
+              </View>
+              <SkeletonBlock width={150} height={12} style={light} />
+            </LinearGradient>
+          </View>
+        </View>
+      </View>
+    );
+  }
 
   if (!cards || cards.length === 0) {
     // A server without this feature yet answers 404: say so plainly.

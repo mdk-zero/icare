@@ -4,6 +4,7 @@ import Svg, { Rect, Line, Path, Circle, G, Defs, Pattern, ClipPath } from 'react
 import { useTheme } from '@/hooks/useTheme';
 import type { DoorSide, WardFixture, WardRoom } from '@/lib/api';
 import { roomStatus } from '@/lib/rooms';
+import { SkeletonBlock } from '@/components/ui/Skeleton';
 import {
   FIXTURE_DOOR,
   FIXTURE_LABEL,
@@ -555,3 +556,46 @@ const styles = StyleSheet.create({
   },
   planLabel: { fontSize: 10, fontWeight: '600', letterSpacing: 2.2, textTransform: 'uppercase' },
 });
+
+/** The plan's frame and two rows of rooms, while the ward loads. Same cell
+ * size as the real sheet, so the page doesn't jump when it arrives. */
+export function FloorPlanSkeleton() {
+  const { isDark } = useTheme();
+  const c = isDark ? PLAN_COLORS.dark : PLAN_COLORS.light;
+  const rows = [
+    { top: 1, rooms: [5, 4, 4, 4] },
+    { top: 7, rooms: [3, 3, 3, 3, 3] },
+    { top: 12, rooms: [4] },
+  ];
+  return (
+    <View
+      style={[styles.frame, { borderColor: c.gridMajor, backgroundColor: c.paper, height: GRID_ROWS * MIN_CELL }]}
+      accessibilityLabel="Loading the room layout"
+    >
+      {rows.map((row) =>
+        row.rooms.map((w, i) => {
+          const left = 1 + row.rooms.slice(0, i).reduce((sum, n) => sum + n, 0);
+          return (
+            <View
+              key={`${row.top}-${i}`}
+              style={{
+                position: 'absolute',
+                left: left * MIN_CELL,
+                top: row.top * MIN_CELL,
+                width: w * MIN_CELL,
+                height: 4 * MIN_CELL,
+                borderWidth: 2,
+                borderColor: c.gridMajor,
+                padding: 6,
+                gap: 5,
+              }}
+            >
+              <SkeletonBlock width="70%" height={10} radius={3} />
+              <SkeletonBlock width="40%" height={7} radius={3} />
+            </View>
+          );
+        }),
+      )}
+    </View>
+  );
+}

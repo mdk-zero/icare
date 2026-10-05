@@ -4,7 +4,7 @@ import { Stack, useLocalSearchParams } from "expo-router";
 import { Radius, Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
 import { useApiData } from "@/hooks/useApiData";
-import { EmptyState, SkeletonList, SyncStatus } from "@/components/ui";
+import { EmptyState, SkeletonBlock, SyncStatus } from "@/components/ui";
 import { StatusDot, useRequirementTicks } from "@/components/RequirementTicks";
 import { fetchStudentRequirements, type ItemProgress } from "@/lib/api";
 import { TERM_STATUS_LABEL, canAct, statusText } from "@/lib/courses";
@@ -37,7 +37,27 @@ export default function StudentRequirementsScreen() {
       >
         <SyncStatus onSynced={reload} />
         {loading ? (
-          <SkeletonList />
+          <View style={{ marginBottom: Spacing.xl }} accessibilityLabel="Loading requirements">
+            <View style={styles.courseHeader}>
+              <View style={{ flex: 1 }}>
+                <SkeletonBlock width="70%" height={17} />
+                <SkeletonBlock width="45%" height={12} style={{ marginTop: 6 }} />
+              </View>
+              <SkeletonBlock width={42} height={24} radius={Radius.pill} />
+            </View>
+            <View style={styles.card}>
+              {[0, 1, 2, 3, 4].map((i) => (
+                <View key={i} style={[styles.row, i > 0 && styles.rowBorder]}>
+                  <SkeletonBlock width={22} height={22} radius={11} />
+                  <View style={{ flex: 1 }}>
+                    <SkeletonBlock width={["70%", "55%", "65%", "50%", "60%"][i] as `${number}%`} height={14} />
+                    <SkeletonBlock width="40%" height={11} style={{ marginTop: 6 }} />
+                  </View>
+                  <SkeletonBlock width={44} height={26} radius={13} />
+                </View>
+              ))}
+            </View>
+          </View>
         ) : !data ? (
           <EmptyState icon="cloud-offline-outline" message={error ?? "Could not load this student's requirements."} />
         ) : data.courses.length === 0 ? (

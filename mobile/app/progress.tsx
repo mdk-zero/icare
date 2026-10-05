@@ -1,7 +1,7 @@
 import React from 'react';
 import { ScrollView, View, Text, StyleSheet, RefreshControl, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Card, StatCard, SectionHeader, SkeletonScreen } from '@/components/ui';
+import { Card, StatCard, SectionHeader, SkeletonBlock } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { useApiData } from '@/hooks/useApiData';
@@ -119,9 +119,7 @@ export default function ProgressScreen() {
   const styles = React.useMemo(() => createStyles(Palette), [Palette]);
   const scoreColor = React.useMemo(() => makeScoreColor(Accent), [Accent]);
 
-  if (loading && !data) {
-    return <SkeletonScreen />;
-  }
+  const pending = loading && !data;
 
   const attempts = data?.attempts ?? [];
   const competencyScores = data?.competency_scores ?? [];
@@ -162,18 +160,29 @@ export default function ProgressScreen() {
             title="Overall Score"
             value={scored.length > 0 ? `${avgScore}%` : '—'}
             icon="bar-chart"
-            color={scoreColor(avgScore)}
+            color={pending ? Palette.primary : scoreColor(avgScore)}
+            loading={pending}
           />
         </View>
         <View style={styles.statItem}>
-          <StatCard title="Quizzes Taken" value={attempts.length} icon="pulse" color={Palette.primary} />
+          <StatCard title="Quizzes Taken" value={attempts.length} icon="pulse" color={Palette.primary} loading={pending} />
         </View>
       </View>
 
       <View style={styles.section}>
         <SectionHeader title="By Skill Area" />
         <Card>
-          {categoryStats.length === 0 && (
+          {pending &&
+            [0, 1, 2].map((index) => (
+              <View key={index} style={[styles.categoryItem, index > 0 && styles.rowBorder]}>
+                <SkeletonBlock width={["50%", "40%", "55%"][index] as `${number}%`} height={14} />
+                <View style={styles.categoryScore}>
+                  <View style={styles.progressBar} />
+                  <SkeletonBlock width={34} height={13} />
+                </View>
+              </View>
+            ))}
+          {!pending && categoryStats.length === 0 && (
             <Text style={styles.emptyText}>
               {error ?? 'No skill area scores yet — they appear as your instructor validates your work.'}
             </Text>
@@ -200,7 +209,18 @@ export default function ProgressScreen() {
       <View style={styles.section}>
         <SectionHeader title="Quiz History" count={quizzes.length || undefined} />
         <Card>
-          {quizzes.length === 0 && (
+          {pending &&
+            [0, 1, 2, 3].map((index) => (
+              <View key={index} style={[styles.quizRow, index > 0 && styles.rowBorder]}>
+                <View style={styles.quizInfo}>
+                  <SkeletonBlock width={["70%", "55%", "65%", "50%"][index] as `${number}%`} height={14} />
+                  <SkeletonBlock width={90} height={11} style={{ marginTop: 6 }} />
+                </View>
+                <SkeletonBlock width={38} height={16} />
+                <View style={styles.chevron} />
+              </View>
+            ))}
+          {!pending && quizzes.length === 0 && (
             <Text style={styles.emptyText}>No quiz attempts yet — take one from the Quizzes tab.</Text>
           )}
           {quizzes.map((group, index) => (

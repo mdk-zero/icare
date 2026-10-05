@@ -6,7 +6,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Radius, Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
 import { useApiData } from "@/hooks/useApiData";
-import { Avatar, EmptyState, SkeletonList, SyncStatus } from "@/components/ui";
+import { Avatar, EmptyState, SkeletonRows, SyncStatus } from "@/components/ui";
 import { fetchCourseProgress, fetchMyCourses, type CourseProgress } from "@/lib/api";
 import { termStatus } from "@/lib/courses";
 
@@ -92,7 +92,7 @@ export default function StudentsScreen() {
       </View>
 
       {loading ? (
-        <SkeletonList />
+        <SkeletonRows rows={7} leadSize={32} />
       ) : error && !data ? (
         <EmptyState icon="cloud-offline-outline" message={error} />
       ) : students.length === 0 ? (

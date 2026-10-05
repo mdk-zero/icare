@@ -7,7 +7,7 @@ import { Radius, Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/hooks/useAuth";
 import { useApiData } from "@/hooks/useApiData";
-import { EmptyState, SkeletonList, SyncStatus } from "@/components/ui";
+import { EmptyState, SkeletonBlock, SyncStatus } from "@/components/ui";
 import { fetchMyCourses, type InstructorCourse, type TermStatus } from "@/lib/api";
 import { TERM_STATUS_LABEL, termStatus } from "@/lib/courses";
 
@@ -46,7 +46,37 @@ export default function CoursesScreen() {
       <SyncStatus onSynced={reload} />
 
       {loading ? (
-        <SkeletonList />
+        <View style={styles.group} accessibilityLabel="Loading courses">
+          <View style={styles.groupHeader}>
+            <SkeletonBlock width="55%" height={18} />
+            <SkeletonBlock width={58} height={20} radius={999} />
+          </View>
+          {[0, 1].map((i) => (
+            <View key={i} style={styles.card}>
+              <View style={styles.cardTop}>
+                <View style={{ flex: 1 }}>
+                  <SkeletonBlock width={72} height={18} />
+                  <SkeletonBlock width="70%" height={13} style={{ marginTop: 6 }} />
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={Palette.textFaint} />
+              </View>
+              <View style={styles.chips}>
+                <SkeletonBlock width={62} height={20} radius={999} />
+                <SkeletonBlock width={62} height={20} radius={999} />
+              </View>
+              <View style={styles.meta}>
+                <SkeletonBlock width={150} height={11} />
+              </View>
+              <View style={{ marginTop: Spacing.md }}>
+                <View style={styles.progressLabelRow}>
+                  <SkeletonBlock width={120} height={11} />
+                  <SkeletonBlock width={40} height={11} />
+                </View>
+                <View style={styles.track} />
+              </View>
+            </View>
+          ))}
+        </View>
       ) : error && !data ? (
         <EmptyState icon="cloud-offline-outline" message={error} />
       ) : groups.length === 0 ? (

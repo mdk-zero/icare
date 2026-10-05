@@ -3,7 +3,7 @@ import { ScrollView, View, Text, StyleSheet, TouchableOpacity, Alert } from 'rea
 import Svg, { Path } from 'react-native-svg';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Card, PrimaryButton, SkeletonScreen, EmptyState } from '@/components/ui';
+import { Card, PrimaryButton, SkeletonBlock, EmptyState } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { startAttempt, submitAttempt, StartedAttempt, AttemptResult } from '@/lib/api';
@@ -319,7 +319,35 @@ export default function QuizInterfaceScreen() {
   }
 
   if (!started) {
-    return <SkeletonScreen />;
+    return (
+      <View style={[styles.container, styles.content]} accessibilityLabel="Loading the quiz">
+        <View style={styles.toolbar}>
+          <SkeletonBlock width={96} height={38} radius={Radius.md} />
+          <View style={styles.toolbarRight}>
+            <SkeletonBlock width={72} height={38} radius={Radius.md} />
+            <SkeletonBlock width={80} height={38} radius={Radius.md} />
+          </View>
+        </View>
+        <View style={styles.progressBar}>
+          <View style={styles.progressTrack} />
+          <SkeletonBlock width={30} height={14} />
+        </View>
+        <SkeletonBlock width={90} height={11} style={{ marginBottom: Spacing.xl }} />
+        <Card style={styles.questionCard}>
+          <SkeletonBlock width={80} height={11} style={{ marginBottom: Spacing.sm }} />
+          <SkeletonBlock width="100%" height={18} />
+          <SkeletonBlock width="85%" height={18} style={{ marginTop: 8 }} />
+          <SkeletonBlock width="50%" height={18} style={{ marginTop: 8 }} />
+        </Card>
+        <View style={styles.options}>
+          {['80%', '65%', '75%', '55%'].map((width, i) => (
+            <View key={i} style={styles.option}>
+              <SkeletonBlock width={width as `${number}%`} height={14} />
+            </View>
+          ))}
+        </View>
+      </View>
+    );
   }
 
   // ------------------------------------------------------------

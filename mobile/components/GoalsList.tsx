@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { SectionHeader } from '@/components/ui';
+import { SectionHeader, SkeletonBlock } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { fetchGoals, setGoalStatus, type StudentGoal } from '@/lib/api';
@@ -36,6 +36,13 @@ export function GoalsList() {
     <View style={styles.section}>
       <SectionHeader title="My Goals" />
       <View style={styles.listCard}>
+        {goals === null &&
+          ['70%', '55%', '62%'].map((width, i) => (
+            <View key={i} style={[styles.row, i > 0 && styles.divider]} accessibilityLabel={i === 0 ? 'Loading goals' : undefined}>
+              <SkeletonBlock width={20} height={20} radius={10} />
+              <SkeletonBlock width={width as `${number}%`} height={13} />
+            </View>
+          ))}
         {goals !== null && goals.length === 0 && (
           <Text style={styles.empty}>Set goals when you reflect on a graded patient case or quiz.</Text>
         )}

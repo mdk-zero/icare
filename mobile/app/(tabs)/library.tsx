@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
-import { ScreenHeader, SkeletonScreen, EmptyState } from '@/components/ui';
+import { ScreenHeader, SkeletonBlock, EmptyState } from '@/components/ui';
 import { useApiData } from '@/hooks/useApiData';
 import { fetchLibrary, type LibraryItem, type LibraryKind } from '@/lib/api';
 import { Radius, Spacing } from '@/constants/theme';
@@ -40,9 +40,7 @@ export default function LibraryScreen() {
     }, [reload]),
   );
 
-  if (loading && !data) {
-    return <SkeletonScreen topOffset={insets.top + 88} />;
-  }
+  const pending = loading && !data;
 
   const kinds = FILTERS.find((f) => f.id === filter)!.kinds;
   const chapters = (data?.chapters ?? [])
@@ -103,6 +101,37 @@ export default function LibraryScreen() {
           }
         />
       ) : null}
+
+      {pending
+        ? [3, 2].map((rows, ci) => (
+            <View key={ci} style={styles.chapter} accessibilityLabel="Loading materials">
+              <View style={styles.chapterHeader}>
+                <View style={{ flex: 1 }}>
+                  <SkeletonBlock width={70} height={10} radius={3} />
+                  <SkeletonBlock width="55%" height={16} style={{ marginTop: 6 }} />
+                </View>
+                <Ionicons name="chevron-up" size={18} color={Palette.textFaint} />
+              </View>
+              <View style={styles.skill}>
+                <SkeletonBlock width="70%" height={13} style={{ marginBottom: 8 }} />
+                {Array.from({ length: rows }).map((_, i) => (
+                  <View key={i} style={styles.row}>
+                    {i === 0 ? (
+                      <SkeletonBlock width={88} height={50} radius={8} />
+                    ) : (
+                      <SkeletonBlock width={44} height={44} radius={12} />
+                    )}
+                    <View style={{ flex: 1 }}>
+                      <SkeletonBlock width="85%" height={14} />
+                      <SkeletonBlock width="40%" height={11} style={{ marginTop: 7 }} />
+                    </View>
+                    <Ionicons name="chevron-forward" size={16} color={Palette.textFaint} />
+                  </View>
+                ))}
+              </View>
+            </View>
+          ))
+        : null}
 
       {chapters.map((c) => {
         const isCollapsed = collapsed.has(c.chapter);

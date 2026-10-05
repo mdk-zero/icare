@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
-import { SkeletonScreen, EmptyState } from '@/components/ui';
+import { SkeletonBlock, EmptyState } from '@/components/ui';
 import { useNotifications } from '@/hooks/useNotifications';
 import { AppNotification } from '@/lib/api';
 
@@ -44,7 +44,30 @@ export default function NotificationsScreen() {
   }, [refresh]);
 
   if (loading) {
-    return <SkeletonScreen />;
+    return (
+      <View style={[styles.container, styles.content]} accessibilityLabel="Loading notifications">
+        <View style={styles.summaryRow}>
+          <SkeletonBlock width={8} height={8} radius={4} style={{ marginRight: 8 }} />
+          <SkeletonBlock width={90} height={12} />
+        </View>
+        {[0, 1, 2, 3].map((i) => (
+          <View key={i} style={styles.notificationCard}>
+            <View style={styles.notificationHeader}>
+              <SkeletonBlock width={36} height={36} radius={Radius.sm + 2} style={{ marginRight: Spacing.md }} />
+              <View style={styles.notificationMeta}>
+                <SkeletonBlock width={["65%", "55%", "70%", "50%"][i] as `${number}%`} height={14} />
+                <SkeletonBlock width={56} height={18} radius={999} style={{ marginTop: 6 }} />
+              </View>
+            </View>
+            <SkeletonBlock width="100%" height={12} style={{ marginTop: 10 }} />
+            <SkeletonBlock width="75%" height={12} style={{ marginTop: 6 }} />
+            <View style={styles.notificationTimeRow}>
+              <SkeletonBlock width={120} height={10} />
+            </View>
+          </View>
+        ))}
+      </View>
+    );
   }
 
   const handleOpen = (notification: AppNotification) => {

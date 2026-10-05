@@ -3,7 +3,7 @@ import { ScrollView, View, Text, StyleSheet, Pressable } from 'react-native';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { SkeletonScreen, EmptyState, PrimaryButton } from '@/components/ui';
+import { SkeletonBlock, EmptyState, PrimaryButton } from '@/components/ui';
 import { useApiData } from '@/hooks/useApiData';
 import { fetchAssessments } from '@/lib/api';
 import { Radius, Spacing } from '@/constants/theme';
@@ -40,7 +40,51 @@ export default function QuizInfoScreen() {
     }, [reload]),
   );
 
-  if (loading && !data) return <SkeletonScreen />;
+  if (loading && !data) {
+    const light = { backgroundColor: 'rgba(255,255,255,0.18)' };
+    return (
+      <View style={[styles.container, styles.content]} accessibilityLabel="Loading the quiz">
+        <LinearGradient
+          colors={[Teal.deepest, Teal.deep, Teal.primary]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.hero}
+        >
+          <View style={styles.heroTop}>
+            <View style={styles.heroIcon}>
+              <Ionicons name="medkit" size={20} color="#fff" />
+            </View>
+            <SkeletonBlock width={90} height={10} radius={3} style={light} />
+          </View>
+          <SkeletonBlock width="85%" height={20} radius={5} style={[light, { marginTop: Spacing.md }]} />
+          <SkeletonBlock width="50%" height={20} radius={5} style={[light, { marginTop: 6 }]} />
+          <SkeletonBlock width="45%" height={12} style={[light, { marginTop: 10 }]} />
+        </LinearGradient>
+        <View style={styles.stats}>
+          {[0, 1, 2].map((i) => (
+            <View key={i} style={[styles.stat, i > 0 && styles.statDivider]}>
+              <SkeletonBlock width={40} height={18} />
+              <SkeletonBlock width={60} height={10} style={{ marginTop: 6 }} />
+            </View>
+          ))}
+        </View>
+        <View style={{ gap: 6 }}>
+          <SkeletonBlock width="100%" height={13} />
+          <SkeletonBlock width="70%" height={13} />
+        </View>
+        <View style={styles.card}>
+          <View style={styles.readyRow}>
+            <SkeletonBlock width={18} height={18} radius={9} />
+            <View style={{ flex: 1, gap: 6 }}>
+              <SkeletonBlock width="100%" height={12} />
+              <SkeletonBlock width="60%" height={12} />
+            </View>
+          </View>
+          <SkeletonBlock width="100%" height={52} radius={Radius.md} />
+        </View>
+      </View>
+    );
+  }
 
   const quiz = (data ?? []).find((q) => q.id === quizId) ?? null;
   if (!quiz) {

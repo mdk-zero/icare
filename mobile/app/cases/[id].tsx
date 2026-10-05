@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ScrollView, View, Text, TextInput, StyleSheet, Pressable, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Badge, Card, EmptyState, PrimaryButton, SkeletonScreen } from '@/components/ui';
+import { Badge, Card, EmptyState, PrimaryButton, SkeletonBlock } from '@/components/ui';
 import {
   IvfForm,
   ObservationList,
@@ -205,7 +205,56 @@ export default function CaseEditorScreen() {
     );
   };
 
-  if (loading && !data) return <SkeletonScreen />;
+  if (loading && !data) {
+    const field = (label: string, multiline = false) => (
+      <View style={styles.field}>
+        <Text style={styles.label}>{label}</Text>
+        <View style={[styles.input, multiline ? styles.multiline : { height: 44 }]} />
+      </View>
+    );
+    return (
+      <View style={[styles.container, styles.content]} accessibilityLabel="Loading your case">
+        <View style={styles.header}>
+          <SkeletonBlock width="75%" height={22} />
+          <View style={styles.headerRow}>
+            <SkeletonBlock width={70} height={20} radius={999} />
+            <SkeletonBlock width={110} height={12} />
+          </View>
+          <SkeletonBlock width="90%" height={13} />
+        </View>
+        <View style={[styles.privacy, { backgroundColor: Accent.amber.bg, borderColor: Accent.amber.border }]}>
+          <Ionicons name="shield-checkmark-outline" size={18} color={Accent.amber.fg} />
+          <View style={{ flex: 1, gap: 6 }}>
+            <SkeletonBlock width="100%" height={12} style={{ backgroundColor: Accent.amber.border }} />
+            <SkeletonBlock width="70%" height={12} style={{ backgroundColor: Accent.amber.border }} />
+          </View>
+        </View>
+        <Card style={styles.card}>
+          <Text style={styles.sectionTitle}>Patient</Text>
+          <View style={styles.row}>
+            <View style={styles.flex}>{field('Initials')}</View>
+            <View style={styles.flex}>{field('Age')}</View>
+          </View>
+          <View style={styles.field}>
+            <Text style={styles.label}>Sex</Text>
+            <View style={styles.segment}>
+              <View style={[styles.segmentItem, { height: 42 }]} />
+              <View style={[styles.segmentItem, { height: 42 }]} />
+            </View>
+          </View>
+          <View style={styles.row}>
+            <View style={styles.flex}>{field('Hospital')}</View>
+            <View style={styles.flex}>{field('Ward / unit')}</View>
+          </View>
+        </Card>
+        <Card style={styles.card}>
+          <Text style={styles.sectionTitle}>Presentation</Text>
+          {field('Admitting diagnosis')}
+          {field('Chief complaint', true)}
+        </Card>
+      </View>
+    );
+  }
   if (!data || !draft) {
     return (
       <View style={styles.center}>

@@ -9,13 +9,12 @@ import {
   ScreenHeader,
   SectionHeader,
   EmptyState,
-  SkeletonScreen,
   SkeletonBlock,
   RoomPages,
   Badge,
 } from "@/components/ui";
 import { useApiData } from "@/hooks/useApiData";
-import { FloorPlan } from "@/components/FloorPlan";
+import { FloorPlan, FloorPlanSkeleton } from "@/components/FloorPlan";
 import {
   fetchWard,
   fetchAiTips,
@@ -206,9 +205,9 @@ export default function ClinicScreen() {
     [router],
   );
 
-  if (loading && !data) {
-    return <SkeletonScreen topOffset={insets.top + 88} />;
-  }
+  // The header and section titles need nothing fetched; the plan and the
+  // assignment hold their shape until the ward arrives.
+  const pending = loading && !data;
 
   const rooms = data?.rooms ?? [];
   const patients = data?.patients ?? [];
@@ -270,6 +269,7 @@ export default function ClinicScreen() {
 
       <View style={styles.section}>
         <SectionHeader title="Room Layout" subtitle="Tap a room to see who is in it" />
+        {pending ? <FloorPlanSkeleton /> : null}
         {onPlan.length > 0 ? (
           <FloorPlan
             rooms={onPlan}
@@ -290,10 +290,32 @@ export default function ClinicScreen() {
             />
           </View>
         ) : null}
-        {rooms.length === 0 ? (
+        {rooms.length === 0 && !pending ? (
           <EmptyState icon="bed-outline" message="No rooms have been set up yet." />
         ) : null}
       </View>
+
+      {pending ? (
+        <View style={styles.banner} accessibilityLabel="Loading your assignment">
+          <View style={styles.bannerHeader}>
+            <View style={[styles.bannerIcon, { backgroundColor: Accent.teal.bg }]}>
+              <Ionicons name="pulse" size={17} color={Accent.teal.fg} />
+            </View>
+            <View style={styles.bannerHeaderText}>
+              <Text style={styles.bannerEyebrow}>Your assignment</Text>
+              <SkeletonBlock width="75%" height={15} style={{ marginTop: 4 }} />
+            </View>
+            <Ionicons name="chevron-forward" size={17} color={Palette.textFaint} />
+          </View>
+          <View style={styles.bannerRow}>
+            <SkeletonBlock width="65%" height={12} />
+          </View>
+          <View style={styles.progressWrap}>
+            <View style={[styles.progressTrack, { backgroundColor: Palette.borderLight }]} />
+            <SkeletonBlock width={52} height={11} />
+          </View>
+        </View>
+      ) : null}
 
       {openAssignments.length > 0
         ? openAssignments.map((assignment) => (

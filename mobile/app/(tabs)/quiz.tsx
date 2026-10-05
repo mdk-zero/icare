@@ -3,7 +3,7 @@ import { ScrollView, View, Text, StyleSheet, Pressable, RefreshControl } from 'r
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { ScreenHeader, SkeletonScreen, EmptyState } from '@/components/ui';
+import { ScreenHeader, SkeletonBlock, EmptyState } from '@/components/ui';
 import { useApiData } from '@/hooks/useApiData';
 import { fetchAssessments, StudentAssessment } from '@/lib/api';
 import { Radius, Spacing } from '@/constants/theme';
@@ -97,9 +97,7 @@ export default function QuizScreen() {
     }, [reload]),
   );
 
-  if (loading && !data) {
-    return <SkeletonScreen topOffset={insets.top + 88} />;
-  }
+  const pending = loading && !data;
 
   const assessments = data ?? [];
   const ongoing = assessments.filter((q) => q.attempt_count === 0);
@@ -134,7 +132,11 @@ export default function QuizScreen() {
               accessibilityState={{ selected: active }}
             >
               <Text style={[styles.segmentText, active && styles.segmentTextActive]}>{t.label}</Text>
-              <Text style={[styles.segmentCount, active && styles.segmentCountActive]}>{t.count}</Text>
+              {pending ? (
+                <SkeletonBlock width={12} height={11} radius={3} />
+              ) : (
+                <Text style={[styles.segmentCount, active && styles.segmentCountActive]}>{t.count}</Text>
+              )}
             </Pressable>
           );
         })}
@@ -142,7 +144,23 @@ export default function QuizScreen() {
 
       {error && !data ? <EmptyState icon="cloud-offline-outline" message={error} /> : null}
 
-      {shown.length === 0 && !error ? (
+      {pending ? (
+        <View style={styles.list} accessibilityLabel="Loading quizzes">
+          {[0, 1, 2, 3].map((i) => (
+            <View key={i} style={styles.row}>
+              <SkeletonBlock width={46} height={46} radius={23} />
+              <View style={styles.rowBody}>
+                <SkeletonBlock width={["80%", "65%", "75%", "55%"][i] as `${number}%`} height={15} />
+                <SkeletonBlock width="45%" height={11} style={{ marginTop: 6 }} />
+                <View style={styles.chips}>
+                  <SkeletonBlock width={64} height={16} radius={Radius.pill} />
+                  <SkeletonBlock width={48} height={16} radius={Radius.pill} />
+                </View>
+              </View>
+            </View>
+          ))}
+        </View>
+      ) : shown.length === 0 && !error ? (
         <EmptyState
           icon={tab === 'ongoing' ? 'checkmark-done-circle-outline' : 'document-text-outline'}
           message={

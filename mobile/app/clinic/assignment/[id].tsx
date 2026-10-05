@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ScrollView, View, Text, StyleSheet, Pressable, RefreshControl } from 'react-native';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Card, Badge, PrimaryButton, SkeletonScreen, EmptyState } from '@/components/ui';
+import { Card, Badge, PrimaryButton, SkeletonBlock, EmptyState } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { useApiData, allCached } from '@/hooks/useApiData';
@@ -13,7 +13,7 @@ import {
   fetchScenarioTasks,
   Scenario,
 } from '@/lib/api';
-import { ClinicalTaskList } from '@/components/ClinicalTaskList';
+import { ClinicalTaskList, ClinicalTaskListSkeleton } from '@/components/ClinicalTaskList';
 import { AssistanceButton } from '@/components/AssistanceButton';
 import { ReflectionCard } from '@/components/ReflectionCard';
 
@@ -122,7 +122,35 @@ export default function ScenarioBriefScreen() {
 
 
   if (loading && !data) {
-    return <SkeletonScreen />;
+    return (
+      <View style={[styles.container, styles.content]} accessibilityLabel="Loading the patient case">
+        <View style={styles.header}>
+          <SkeletonBlock width={76} height={22} radius={999} />
+          <SkeletonBlock width={70} height={22} radius={999} />
+        </View>
+        <SkeletonBlock width="85%" height={24} />
+        <SkeletonBlock width="55%" height={24} style={{ marginTop: 6 }} />
+        <SkeletonBlock width="50%" height={13} style={{ marginTop: 10, marginBottom: Spacing.lg }} />
+        <Card style={styles.reviewCard}>
+          <SkeletonBlock width={20} height={20} radius={10} />
+          <View style={styles.reviewText}>
+            <SkeletonBlock width="60%" height={15} />
+            <SkeletonBlock width="100%" height={12} style={{ marginTop: 8 }} />
+            <SkeletonBlock width="75%" height={12} style={{ marginTop: 6 }} />
+          </View>
+        </Card>
+        <Card style={styles.blockCard}>
+          <Text style={styles.blockLabel}>Patient Case</Text>
+          <SkeletonBlock width="100%" height={13} />
+          <SkeletonBlock width="95%" height={13} style={{ marginTop: 7 }} />
+          <SkeletonBlock width="60%" height={13} style={{ marginTop: 7 }} />
+        </Card>
+        <Card style={styles.blockCard}>
+          <Text style={styles.blockLabel}>Clinical Tasks</Text>
+          <ClinicalTaskListSkeleton rows={3} />
+        </Card>
+      </View>
+    );
   }
 
   if (!assignment) {

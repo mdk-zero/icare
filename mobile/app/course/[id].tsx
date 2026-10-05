@@ -5,7 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Radius, Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
 import { useApiData } from "@/hooks/useApiData";
-import { EmptyState, SkeletonList, SyncStatus } from "@/components/ui";
+import { EmptyState, SkeletonBlock, SyncStatus } from "@/components/ui";
 import { StatusDot, useRequirementTicks } from "@/components/RequirementTicks";
 import { fetchCourseProgress, type CourseRequirement, type ItemProgress } from "@/lib/api";
 import { TERM_STATUS_LABEL, canAct, statusText } from "@/lib/courses";
@@ -53,7 +53,31 @@ export default function CourseScreen() {
       >
         <SyncStatus onSynced={reload} />
         {loading ? (
-          <SkeletonList />
+          <View accessibilityLabel="Loading the course">
+            <SkeletonBlock width="75%" height={22} />
+            <SkeletonBlock width="60%" height={13} style={{ marginTop: 8, marginBottom: Spacing.lg }} />
+            <View style={styles.segment}>
+              <View style={[styles.segmentItem, styles.segmentActive]}>
+                <SkeletonBlock width={90} height={13} />
+              </View>
+              <View style={styles.segmentItem}>
+                <SkeletonBlock width={90} height={13} />
+              </View>
+            </View>
+            {[0, 1, 2, 3].map((index) => (
+              <View key={index} style={styles.card}>
+                <View style={styles.cardHeader}>
+                  <Text style={styles.number}>{index + 1}</Text>
+                  <View style={{ flex: 1 }}>
+                    <SkeletonBlock width={["75%", "60%", "70%", "55%"][index] as `${number}%`} height={15} />
+                    <View style={styles.track} />
+                    <SkeletonBlock width={150} height={11} />
+                  </View>
+                  <Ionicons name="chevron-down" size={18} color={Palette.textFaint} />
+                </View>
+              </View>
+            ))}
+          </View>
         ) : !data ? (
           <EmptyState icon="cloud-offline-outline" message={error ?? "This course could not be loaded."} />
         ) : (

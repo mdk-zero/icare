@@ -12,7 +12,7 @@ import { Stack, useLocalSearchParams } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { Ionicons } from '@expo/vector-icons';
 import Markdown from 'react-native-markdown-display';
-import { EmptyState, SkeletonScreen } from '@/components/ui';
+import { EmptyState, SkeletonBlock } from '@/components/ui';
 import { useApiData } from '@/hooks/useApiData';
 import { useTheme } from '@/hooks/useTheme';
 import { fetchLibraryMaterial, type LibraryMaterialDetail } from '@/lib/api';
@@ -37,7 +37,25 @@ export default function LibraryMaterialScreen() {
   const { data, loading, error, reload } = useApiData<LibraryMaterialDetail>(loader);
   const [showSteps, setShowSteps] = React.useState(false);
 
-  if (loading && !data) return <SkeletonScreen />;
+  if (loading && !data) {
+    return (
+      <View style={styles.container} accessibilityLabel="Loading the material">
+        <SkeletonBlock width="100%" height={Math.round(Math.min(width, 900) * 9 / 16)} radius={0} />
+        <View style={styles.body}>
+          <View style={styles.headerRow}>
+            <SkeletonBlock width={64} height={20} radius={999} />
+            <SkeletonBlock width={110} height={11} />
+          </View>
+          <SkeletonBlock width="85%" height={22} style={{ marginTop: 4 }} />
+          <SkeletonBlock width="55%" height={13} />
+          <SkeletonBlock width="40%" height={12} />
+          <SkeletonBlock width="100%" height={13} style={{ marginTop: 8 }} />
+          <SkeletonBlock width="90%" height={13} />
+          <SkeletonBlock width="70%" height={13} />
+        </View>
+      </View>
+    );
+  }
   if (!data) {
     return (
       <View style={styles.container}>

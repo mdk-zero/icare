@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Radius } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
+import { SkeletonBlock } from './Skeleton';
 
 interface StatCardProps {
   title: string;
@@ -13,6 +14,8 @@ interface StatCardProps {
   trendValue?: string;
   onPress?: () => void;
   color?: string;
+  /** Holds the value's place with a shimmering bar while it loads. */
+  loading?: boolean;
 }
 
 export function StatCard({
@@ -24,6 +27,7 @@ export function StatCard({
   trendValue,
   onPress,
   color,
+  loading,
 }: StatCardProps) {
   const { Palette, Accent, Shadow } = useTheme();
   const styles = React.useMemo(() => createStyles(Palette, Shadow), [Palette, Shadow]);
@@ -57,7 +61,11 @@ export function StatCard({
           </View>
         )}
       </View>
-      <Text style={styles.value}>{value}</Text>
+      {loading ? (
+        <SkeletonBlock width={56} height={24} radius={6} style={{ marginVertical: 4 }} />
+      ) : (
+        <Text style={styles.value}>{value}</Text>
+      )}
       <Text style={styles.title}>{title}</Text>
       {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
     </Container>

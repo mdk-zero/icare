@@ -3,6 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import type { ScenarioTask } from '@/lib/api';
+import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { TASK_RATING_LABEL, type TaskRating } from '@/lib/task-ratings';
 
 /**
@@ -51,6 +52,27 @@ export function ClinicalTaskList({ tasks }: { tasks: ScenarioTask[] }) {
           </View>
         );
       })}
+    </View>
+  );
+}
+
+/** The numbered rows while a case's tasks load. */
+export function ClinicalTaskListSkeleton({ rows = 4 }: { rows?: number }) {
+  const { Palette, Type } = useTheme();
+  const styles = React.useMemo(() => createStyles(Palette, Type), [Palette, Type]);
+  const widths = ['80%', '65%', '75%', '60%', '70%'] as const;
+  return (
+    <View accessibilityLabel="Loading tasks">
+      {Array.from({ length: rows }).map((_, idx) => (
+        <View key={idx} style={[styles.row, idx === rows - 1 && styles.rowLast]}>
+          <Text style={styles.number}>{String(idx + 1).padStart(2, '0')}</Text>
+          <View style={styles.body}>
+            <SkeletonBlock width={widths[idx % widths.length]} height={14} />
+            <SkeletonBlock width="45%" height={11} style={{ marginTop: 6 }} />
+          </View>
+          <Text style={styles.ungraded}>—</Text>
+        </View>
+      ))}
     </View>
   );
 }

@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { View, StyleSheet, ViewStyle, DimensionValue } from 'react-native';
+import { View, StyleSheet, ViewStyle, DimensionValue, StyleProp } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -15,7 +15,7 @@ interface SkeletonBlockProps {
   width?: DimensionValue;
   height?: number;
   radius?: number;
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
 }
 
 /** A single shimmering placeholder block — the atom every skeleton layout is built from. */
@@ -106,6 +106,46 @@ export function SkeletonScreen({ cards = 3, topOffset }: { cards?: number; topOf
   );
 }
 
+/** A bordered card of rows: a round avatar or square icon, two text lines and
+ * an optional pill or chevron on the right. Lists of people, notifications
+ * and materials all share this shape. */
+export function SkeletonRows({
+  rows = 5,
+  lead = 'avatar',
+  leadSize = 36,
+  trailing = 'pill',
+}: {
+  rows?: number;
+  lead?: 'avatar' | 'icon' | 'none';
+  leadSize?: number;
+  trailing?: 'pill' | 'chevron' | 'none';
+}) {
+  const { Palette, Shadow } = useTheme();
+  const styles = React.useMemo(() => createStyles(Palette, Shadow), [Palette, Shadow]);
+  const widths: DimensionValue[] = ['62%', '48%', '70%', '55%', '66%', '44%'];
+  return (
+    <View style={styles.rowsCard} accessibilityLabel="Loading">
+      {Array.from({ length: rows }).map((_, i) => (
+        <View key={i} style={[styles.rowItem, i > 0 && styles.rowItemBorder]}>
+          {lead !== 'none' && (
+            <SkeletonBlock
+              width={leadSize}
+              height={leadSize}
+              radius={lead === 'avatar' ? leadSize / 2 : Radius.md}
+            />
+          )}
+          <View style={{ flex: 1 }}>
+            <SkeletonBlock width={widths[i % widths.length]} height={14} />
+            <SkeletonBlock width="38%" height={11} style={{ marginTop: 6 }} />
+          </View>
+          {trailing === 'pill' && <SkeletonBlock width={44} height={24} radius={Radius.pill} />}
+          {trailing === 'chevron' && <SkeletonBlock width={10} height={14} radius={3} />}
+        </View>
+      ))}
+    </View>
+  );
+}
+
 const staticStyles = StyleSheet.create({
   screen: {
     padding: Spacing.lg,
@@ -133,6 +173,23 @@ function createStyles(Palette: ReturnType<typeof useTheme>['Palette'], Shadow: R
     cardHeaderRow: {
       flexDirection: 'row',
       alignItems: 'center',
+    },
+    rowsCard: {
+      backgroundColor: Palette.surface,
+      borderRadius: Radius.lg,
+      borderWidth: 1,
+      borderColor: Palette.border,
+      ...Shadow.card,
+    },
+    rowItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Spacing.md,
+      padding: Spacing.md,
+    },
+    rowItemBorder: {
+      borderTopWidth: 1,
+      borderTopColor: Palette.borderLight,
     },
     cardFooterRow: {
       flexDirection: 'row',

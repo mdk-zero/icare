@@ -2,7 +2,7 @@ import React from 'react';
 import { ScrollView, View, Text, StyleSheet, Pressable, RefreshControl } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Card, Badge, SkeletonScreen, EmptyState } from '@/components/ui';
+import { Card, Badge, SkeletonBlock, EmptyState } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { useApiData } from '@/hooks/useApiData';
@@ -25,7 +25,29 @@ export default function RoomCensusScreen() {
   const { data, loading, refreshing, error, refresh } = useApiData(fetchWard);
 
   if (loading && !data) {
-    return <SkeletonScreen />;
+    return (
+      <View style={[styles.container, styles.content]} accessibilityLabel="Loading the room">
+        <View style={styles.header}>
+          <SkeletonBlock width={48} height={48} radius={Radius.md} />
+          <View style={styles.headerText}>
+            <SkeletonBlock width="60%" height={20} />
+            <SkeletonBlock width="45%" height={12} style={{ marginTop: 6 }} />
+          </View>
+          <SkeletonBlock width={64} height={22} radius={Radius.pill} />
+        </View>
+        {[0, 1, 2].map((i) => (
+          <View key={i} style={styles.bedCard}>
+            <SkeletonBlock width={40} height={40} radius={20} />
+            <View style={styles.bedBody}>
+              <SkeletonBlock width={["60%", "50%", "65%"][i] as `${number}%`} height={15} />
+              <SkeletonBlock width="40%" height={11} style={{ marginTop: 6 }} />
+            </View>
+            <SkeletonBlock width={54} height={11} />
+            <Ionicons name="chevron-forward" size={17} color={Palette.textFaint} />
+          </View>
+        ))}
+      </View>
+    );
   }
 
   const room = data?.rooms.find((r) => r.id === roomId) ?? null;
