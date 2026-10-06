@@ -5,7 +5,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faBookMedical, faChevronRight } from "@fortawesome/free-solid-svg-icons";
 import { usePageData } from "../../../lib/use-page-data";
 import { fetchStudentRequirements, type StudentCourseRequirements } from "../../../lib/api";
-import { TERM_STATUS_LABEL, type ItemProgress } from "../../../lib/course-progress";
+import { TERM_STATUS_LABEL, requirementDetail, requirementName, type ItemProgress } from "../../../lib/course-progress";
 import { ItemStatus, canAct, statusText, useTicks } from "../../courses/progress-ui";
 
 /** One student's semester requirements, shared by the tile and the tab. */
@@ -69,7 +69,7 @@ export default function RequirementsTab({ studentId, studentName }: { studentId:
             </p>
           ) : (
             <ul className="divide-y divide-hairline rounded-xl border border-hairline">
-              {c.requirements.map((r) => {
+              {c.requirements.map((r, i) => {
                 const item = c.progress[r.id];
                 const actionable = canAct(r, item);
                 const key = `${studentId}:${r.id}`;
@@ -77,16 +77,15 @@ export default function RequirementsTab({ studentId, studentName }: { studentId:
                   <li key={r.id} className="flex items-center gap-3 px-4 py-3">
                     <ItemStatus requirement={r} item={item} />
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-gray-800">{r.title || r.label}</p>
+                      <p className="text-sm font-medium text-gray-800">{requirementName(i)}</p>
                       <p className="text-xs text-gray-500">
-                        {r.title && r.kind !== "manual" ? `${r.label} · ` : ""}
-                        {statusText(r, item)}
+                        {requirementDetail(r)} · {statusText(r, item)}
                       </p>
                     </div>
                     {actionable && (
                       <button
                         type="button"
-                        onClick={() => act(c.offering.id, { id: studentId, name: studentName }, r, item)}
+                        onClick={() => act(c.offering.id, { id: studentId, name: studentName }, r, requirementName(i), item)}
                         disabled={busy === key}
                         className="shrink-0 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-subtle disabled:opacity-50"
                       >

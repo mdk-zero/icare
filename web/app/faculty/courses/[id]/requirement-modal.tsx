@@ -63,6 +63,7 @@ const scoreText = (n: number | null) => (n === null ? "" : String(n));
 export default function RequirementModal({
   offeringId,
   requirement,
+  name,
   courseSkillIds,
   catalog,
   onClose,
@@ -71,6 +72,8 @@ export default function RequirementModal({
   offeringId: string;
   /** null: a new item. */
   requirement: CourseRequirement | null;
+  /** The item's "Lab Activity #3" name, when editing. */
+  name?: string;
   courseSkillIds: string[];
   catalog: SkillSummary[];
   onClose: () => void;
@@ -196,7 +199,7 @@ export default function RequirementModal({
             </span>
             <div>
               <h2 className="font-display text-lg font-semibold text-gray-900">
-                {requirement ? "Edit requirement" : "Add a requirement"}
+                {requirement ? `Edit ${name ?? "requirement"}` : "Add a requirement"}
               </h2>
               <p className="text-sm text-gray-500">Automatic items tick themselves once the work is graded</p>
             </div>
@@ -408,7 +411,7 @@ export default function RequirementModal({
               onChange={(e) => setTitle(e.target.value)}
               maxLength={MAX_REQUIREMENT_TITLE}
               disabled={saving}
-              placeholder={kind === "manual" ? "Submit the signed return-demonstration sheet" : "Shown above the automatic description"}
+              placeholder={kind === "manual" ? "Submit the signed return-demonstration sheet" : "Shown before the automatic description"}
               className={inputClass}
             />
           </div>

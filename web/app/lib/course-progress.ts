@@ -347,6 +347,19 @@ export function requirementLabel(req: RequirementRow, names: RequirementNames): 
   }
 }
 
+/**
+ * What the course pages call an item: "Lab Activity #3", by its place in the
+ * checklist (positions keep gaps after a removal, so pass the list index).
+ */
+export function requirementName(index: number): string {
+  return `Lab Activity #${index + 1}`;
+}
+
+/** What a Lab Activity asks for: the instructor's own label, if any, then requirementLabel(). */
+export function requirementDetail(req: Pick<RequirementRow, 'kind' | 'title'> & { label: string }): string {
+  return req.title && req.kind !== 'manual' ? `${req.title} — ${req.label}` : req.label;
+}
+
 // ---------------------------------------------------------------------------
 // Progress
 // ---------------------------------------------------------------------------

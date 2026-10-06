@@ -4,7 +4,7 @@ import { useState, type ReactNode } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCheck, faUserCheck, faXmark } from "@fortawesome/free-solid-svg-icons";
 import { setRequirementCheck, type CourseRequirement } from "../../lib/api";
-import type { ItemProgress } from "../../lib/course-progress";
+import { requirementDetail, type ItemProgress } from "../../lib/course-progress";
 import { EcgLoader } from "../../components/EcgLoader";
 import { toast } from "../../components/Toast";
 
@@ -69,6 +69,8 @@ type Pending = {
   offeringId: string;
   student: { id: string; name: string };
   requirement: CourseRequirement;
+  /** "Lab Activity #3" (requirementName). */
+  name: string;
   item: ItemProgress | undefined;
 };
 
@@ -78,7 +80,13 @@ type Pending = {
  * cannot see), and removing the mark needs a confirmation.
  */
 export function useTicks(onSaved: (studentId: string, requirementId: string, item: ItemProgress) => void): {
-  act: (offeringId: string, student: { id: string; name: string }, requirement: CourseRequirement, item: ItemProgress | undefined) => void;
+  act: (
+    offeringId: string,
+    student: { id: string; name: string },
+    requirement: CourseRequirement,
+    name: string,
+    item: ItemProgress | undefined,
+  ) => void;
   busy: string | null;
   dialog: ReactNode;
 } {
@@ -98,9 +106,9 @@ export function useTicks(onSaved: (studentId: string, requirementId: string, ite
     return true;
   };
 
-  const act: ReturnType<typeof useTicks>["act"] = (offeringId, student, requirement, item) => {
+  const act: ReturnType<typeof useTicks>["act"] = (offeringId, student, requirement, name, item) => {
     if (!canAct(requirement, item)) return;
-    const p = { offeringId, student, requirement, item };
+    const p = { offeringId, student, requirement, name, item };
     if (requirement.kind === "manual") void send(p, !item?.done);
     else setPending(p);
   };
@@ -132,7 +140,6 @@ function MarkDoneDialog({
 }) {
   const removing = pending.item?.done === true;
   const [note, setNote] = useState("");
-  const name = pending.requirement.title || pending.requirement.label;
 
   return (
     <div
@@ -172,7 +179,8 @@ function MarkDoneDialog({
           }}
         >
           <p className="text-sm text-gray-700">
-            <span className="font-semibold">{name}</span>
+            <span className="font-semibold">{pending.name}</span>
+            <span className="block text-gray-500">{requirementDetail(pending.requirement)}</span>
           </p>
           {removing ? (
             <p className="text-sm text-gray-600">

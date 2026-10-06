@@ -8,7 +8,7 @@ import Avatar from "../../../components/Avatar";
 import { SkeletonProgressGrid } from "../../../components/skeletons";
 import { usePageData } from "../../../lib/use-page-data";
 import { fetchCourseProgress, type CourseProgress } from "../../../lib/api";
-import type { ItemProgress } from "../../../lib/course-progress";
+import { requirementDetail, requirementName, type ItemProgress } from "../../../lib/course-progress";
 import { ItemStatus, canAct, statusText, useTicks } from "../progress-ui";
 
 type Filter = "all" | "incomplete" | "complete";
@@ -127,11 +127,10 @@ export default function ProgressTab({ offeringId, signature }: { offeringId: str
                 {reqs.map((r, i) => (
                   <th
                     key={r.id}
-                    title={r.title ? `${r.title}: ${r.label}` : r.label}
-                    className="min-w-[7.5rem] max-w-[10rem] border-b border-hairline bg-subtle px-2 py-3 text-left align-bottom"
+                    title={requirementDetail(r)}
+                    className="min-w-[7.5rem] border-b border-hairline bg-subtle px-2 py-3 text-left align-bottom"
                   >
-                    <span className="block text-[11px] font-semibold text-gray-400">#{i + 1}</span>
-                    <span className="line-clamp-2 text-xs font-medium text-gray-700">{r.title || r.label}</span>
+                    <span className="block whitespace-nowrap text-xs font-medium text-gray-700">{requirementName(i)}</span>
                     <span className="mt-1 block text-[11px] font-semibold text-brand-700">
                       {progress.totals[r.id] ?? 0}/{progress.students.length}
                     </span>
@@ -160,7 +159,7 @@ export default function ProgressTab({ offeringId, signature }: { offeringId: str
                       </span>
                     </div>
                   </td>
-                  {reqs.map((r) => {
+                  {reqs.map((r, i) => {
                     const item = progress.progress[s.id]?.[r.id];
                     const actionable = canAct(r, item);
                     const text = statusText(r, item);
@@ -170,9 +169,9 @@ export default function ProgressTab({ offeringId, signature }: { offeringId: str
                         <button
                           type="button"
                           title={text}
-                          aria-label={`${s.name}, ${r.title || r.label}: ${text}`}
+                          aria-label={`${s.name}, ${requirementName(i)}: ${text}`}
                           disabled={!actionable || busy === key}
-                          onClick={() => act(offeringId, s, r, item)}
+                          onClick={() => act(offeringId, s, r, requirementName(i), item)}
                           className={`rounded-full transition-transform ${
                             actionable ? "cursor-pointer hover:scale-110" : "cursor-default"
                           } ${busy === key ? "animate-pulse" : ""}`}
@@ -189,8 +188,9 @@ export default function ProgressTab({ offeringId, signature }: { offeringId: str
         </div>
       </div>
       <p className="mt-2 text-xs text-gray-500">
-        Click a manual item to tick it. Click an automatic item to mark it done with a note, for work done outside the
-        app. Items met by graded work can&rsquo;t be unticked.
+        Hover a Lab Activity to see what it asks for; the Requirements tab lists them all. Click a manual item to tick
+        it. Click an automatic item to mark it done with a note, for work done outside the app. Items met by graded work
+        can&rsquo;t be unticked.
       </p>
       {dialog}
     </div>

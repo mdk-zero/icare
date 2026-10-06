@@ -34,7 +34,7 @@ import {
   type CourseRequirement,
   type SkillSummary,
 } from "../../../lib/api";
-import { formatTermDates } from "../../../lib/course-progress";
+import { formatTermDates, requirementDetail, requirementName } from "../../../lib/course-progress";
 import RequirementModal from "./requirement-modal";
 import { SkeletonProgressGrid } from "../../../components/skeletons";
 import ProgressTab from "./progress-tab";
@@ -111,6 +111,7 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
   }
 
   const noGroup = offering?.sections.filter((s) => !s.has_group) ?? [];
+  const removingName = removing ? requirementName(requirements.findIndex((r) => r.id === removing.id)) : "";
 
   return (
     <div>
@@ -197,8 +198,8 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
           {loading ? (
             <ul className="divide-y divide-hairline" aria-hidden>
               {Array.from({ length: 4 }).map((_, i) => (
-                <li key={i} className="flex animate-pulse items-center gap-3 px-4 py-4">
-                  <div className="h-7 w-7 rounded-full bg-gray-100" />
+                <li key={i} className="animate-pulse space-y-2 px-4 py-4">
+                  <div className="h-4 w-28 rounded bg-gray-100" />
                   <div className="h-4 w-72 rounded bg-gray-100" />
                 </li>
               ))}
@@ -268,6 +269,7 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
         <RequirementModal
           offeringId={offeringId}
           requirement={editing === "new" ? null : editing}
+          name={editing === "new" ? undefined : requirementName(requirements.findIndex((r) => r.id === editing.id))}
           courseSkillIds={detail?.skill_ids ?? []}
           catalog={catalog}
           onClose={() => setEditing(null)}
@@ -281,7 +283,7 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
         <ConfirmModal
           config={{
             title: "Remove this requirement?",
-            message: `"${removing.title || removing.label}" comes off the checklist${removing.kind === "manual" ? ", with any ticks you gave on it" : ""}. Graded work is not touched.`,
+            message: `${removingName} (${requirementDetail(removing)}) comes off the checklist${removing.kind === "manual" ? ", with any ticks you gave on it" : ""}, and the ones after it move up a number. Graded work is not touched.`,
             confirmLabel: "Remove",
             loading: removeBusy,
             onConfirm: () => void confirmRemove(),
@@ -347,12 +349,9 @@ function RequirementRowView({
   const manual = r.kind === "manual";
   return (
     <li className="flex items-center gap-3 px-4 py-3">
-      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-subtle text-xs font-semibold text-gray-500">
-        {index + 1}
-      </span>
       <div className="min-w-0 flex-1">
-        {r.title && !manual && <p className="text-sm font-semibold text-gray-800">{r.title}</p>}
-        <p className={`text-sm ${r.title && !manual ? "text-gray-500" : "font-medium text-gray-800"}`}>{r.label}</p>
+        <p className="text-sm font-semibold text-gray-800">{requirementName(index)}</p>
+        <p className="text-sm text-gray-500">{requirementDetail(r)}</p>
         <div className="mt-1 flex flex-wrap gap-1.5">
           <span
             className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
@@ -392,7 +391,7 @@ function RequirementRowView({
           </button>
           <ActionsMenu
             variant="compact"
-            label={`Actions for requirement ${index + 1}`}
+            label={`Actions for ${requirementName(index)}`}
             actions={[
               { label: "Edit", icon: faPenToSquare, onClick: onEdit },
               { label: "Remove", icon: faTrashCan, danger: true, onClick: onRemove },
