@@ -61,6 +61,7 @@
   --animate-float-medium: floatMedium 4.5s ease-in-out infinite;
   --animate-rise: rise 0.45s cubic-bezier(0.22, 0.61, 0.36, 1) backwards;
   --animate-phrase-in: phraseIn 0.4s ease-out;
+  --animate-fade-in: fadeIn 0.2s ease-out backwards;
 }
 
 /*
@@ -158,6 +159,13 @@
   to {
     opacity: 1;
     transform: none;
+  }
+}
+
+/* A tab's content arriving: opacity only, so nothing moves when tabs switch. */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
   }
 }
 
