@@ -1,11 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faArrowDown,
-  faArrowLeft,
   faArrowUp,
   faBookMedical,
   faChartColumn,
@@ -15,7 +14,6 @@ import {
   faPlus,
   faTrashCan,
   faTriangleExclamation,
-  faUserCheck,
   faWandMagicSparkles,
 } from "@fortawesome/free-solid-svg-icons";
 import PageHeader from "../../../components/PageHeader";
@@ -38,13 +36,16 @@ import { formatTermDates, requirementDetail, requirementNames } from "../../../l
 import RequirementModal from "./requirement-modal";
 import { SkeletonProgressGrid } from "../../../components/skeletons";
 import ProgressTab from "./progress-tab";
-
-type Tab = "progress" | "requirements" | "skills";
+import CourseCrumbs from "./course-crumbs";
+import { courseTabHref, parseCourseTab, type CourseTab } from "../course-tabs";
 
 const NO_SKILLS: SkillSummary[] = [];
 
 export default function FacultyCourseClient({ offeringId }: { offeringId: string }) {
-  const [tab, setTab] = useState<Tab>("progress");
+  // The tab lives in the URL, so it can be linked to and Back returns to it.
+  // replaceState keeps useSearchParams in step without a navigation.
+  const tab = parseCourseTab(useSearchParams().get("tab"));
+  const setTab = (next: CourseTab) => window.history.replaceState(null, "", courseTabHref(offeringId, next));
   const [editing, setEditing] = useState<CourseRequirement | null | "new">(null);
   const [removing, setRemoving] = useState<CourseRequirement | null>(null);
   const [removeBusy, setRemoveBusy] = useState(false);
@@ -104,7 +105,7 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
   if (!loading && !offering) {
     return (
       <div>
-        <BackLink />
+        <CourseCrumbs offeringId={offeringId} code={null} tab={tab} />
         <div className="rounded-2xl border border-amber-300 bg-amber-50 px-5 py-4 text-sm text-amber-800">
           {loadError ?? "This course could not be found."}
         </div>
@@ -116,7 +117,7 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
 
   return (
     <div>
-      <BackLink />
+      <CourseCrumbs offeringId={offeringId} code={offering?.course.code ?? null} tab={tab} />
       <PageHeader
         badge={{ icon: <FontAwesomeIcon icon={faBookMedical} className="h-3.5 w-3.5" />, label: offering?.term.name ?? "Course" }}
         title={offering ? `${offering.course.code} · ${offering.course.title}` : "Course"}
@@ -179,11 +180,13 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
               role="tab"
               aria-selected={active}
               onClick={() => setTab(t.id)}
-              className={`flex shrink-0 items-center gap-2 border-b-2 px-3.5 py-2.5 text-sm font-medium transition-colors ${
+              className={`flex flex-1 items-center justify-center gap-2 border-b-2 px-2 py-2.5 text-sm font-medium transition-colors sm:flex-none sm:px-3.5 ${
                 active ? "border-brand-600 text-brand-700" : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-800"
               }`}
             >
-              <FontAwesomeIcon icon={t.icon} className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline-flex">
+                <FontAwesomeIcon icon={t.icon} className="h-3.5 w-3.5" />
+              </span>
               {t.label}
               <span className="rounded-full bg-gray-100 px-1.5 text-[11px] font-semibold text-gray-500">{t.count}</span>
             </button>
@@ -192,7 +195,13 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
       </div>
 
       {tab === "progress" && !offering && loading && <SkeletonProgressGrid />}
-      {tab === "progress" && offering && <ProgressTab offeringId={offeringId} signature={checklistSignature(requirements)} />}
+      {tab === "progress" && offering && (
+        <ProgressTab
+          offeringId={offeringId}
+          signature={checklistSignature(requirements)}
+          onOpenRequirements={() => setTab("requirements")}
+        />
+      )}
 
       {tab === "requirements" && (
         <div className="overflow-hidden rounded-xl border border-hairline bg-surface">
@@ -211,8 +220,18 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
               <p className="font-semibold text-gray-700">No requirements yet</p>
               <p className="mx-auto mt-1 max-w-md text-sm text-gray-500">
                 List what your students must accomplish this term, such as &ldquo;3 Patient Cases graded&rdquo; or a skill
-                from the course. Automatic items tick themselves once the work is graded.
+                from the course. Automatic items are met once the work is graded; you score Lab Activities yourself.
               </p>
+              {!locked && (
+                <button
+                  type="button"
+                  onClick={() => setEditing("new")}
+                  className="mt-4 inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-700"
+                >
+                  <FontAwesomeIcon icon={faPlus} className="h-3.5 w-3.5" />
+                  Add the first requirement
+                </button>
+              )}
             </div>
           ) : (
             <ol className="divide-y divide-hairline">
@@ -285,7 +304,7 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
         <ConfirmModal
           config={{
             title: "Remove this requirement?",
-            message: `${nameOf(removing.id)} (${requirementDetail(removing)}) comes off the checklist${removing.kind === "manual" ? ", with any ticks you gave on it" : ""}. Later items of the same kind are renumbered. Graded work is not touched.`,
+            message: `${nameOf(removing.id)} (${requirementDetail(removing)}) comes off the checklist, with any scores or marks you entered on it. Later items of the same kind are renumbered. Graded work is not touched.`,
             confirmLabel: "Remove",
             loading: removeBusy,
             onConfirm: () => void confirmRemove(),
@@ -322,15 +341,6 @@ function checklistSignature(requirements: CourseRequirement[]): string {
   return String(hash >>> 0);
 }
 
-function BackLink() {
-  return (
-    <Link href="/faculty/courses" className="mb-3 inline-flex items-center gap-2 text-sm font-medium text-brand-700 hover:underline">
-      <FontAwesomeIcon icon={faArrowLeft} className="h-3 w-3" />
-      All courses
-    </Link>
-  );
-}
-
 function RequirementRowView({
   index,
   name,
@@ -351,6 +361,7 @@ function RequirementRowView({
   onRemove: () => void;
 }) {
   const manual = r.kind === "manual";
+  const shifts = r.kind === "count" && r.activity_type === "shift";
   return (
     <li className="flex items-center gap-3 px-4 py-3">
       <div className="min-w-0 flex-1">
@@ -362,8 +373,8 @@ function RequirementRowView({
               manual ? "bg-violet-50 text-violet-700" : "bg-brand-600/10 text-brand-700"
             }`}
           >
-            <FontAwesomeIcon icon={manual ? faUserCheck : faListCheck} className="h-2.5 w-2.5" />
-            {manual ? "You tick it" : "Ticks when graded"}
+            <FontAwesomeIcon icon={manual ? faPenToSquare : faListCheck} className="h-2.5 w-2.5" />
+            {manual ? "You enter the score" : shifts ? "Met by attendance" : "Met by graded work"}
           </span>
           {r.removed && (
             <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-700">

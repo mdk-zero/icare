@@ -712,6 +712,31 @@ function judge(
   }
 }
 
+/** A course card's figures, for a running term. */
+export interface OfferingSummary {
+  students: number;
+  /** Met every item. */
+  complete: number;
+  /** Met some items, not all. */
+  in_progress: number;
+  /** Lab Activities (manual items) still waiting for a score, across the roster. */
+  to_score: number;
+}
+
+export function offeringSummary(
+  requirements: readonly RequirementRow[],
+  students: readonly { id: string; done: number; total: number }[],
+  progress: Record<string, Record<string, ItemProgress>>,
+): OfferingSummary {
+  const labs = requirements.filter((r) => r.kind === 'manual');
+  return {
+    students: students.length,
+    complete: students.filter((s) => s.total > 0 && s.done === s.total).length,
+    in_progress: students.filter((s) => s.done > 0 && s.done < s.total).length,
+    to_score: students.reduce((n, s) => n + labs.filter((r) => !progress[s.id]?.[r.id]?.done).length, 0),
+  };
+}
+
 /** How many of the checklist's items a student has met. */
 export function summarize(row: Record<string, ItemProgress> | undefined, requirements: readonly RequirementRow[]) {
   return { done: requirements.filter((r) => row?.[r.id]?.done).length, total: requirements.length };

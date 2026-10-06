@@ -696,50 +696,63 @@ export function SkeletonTermHeading() {
   );
 }
 
-/** Mirrors a course card: code and title, section chips, counts, progress bar. */
+/** Mirrors a course card: code and title, section chips and students, roster bar, tab links. */
 export function SkeletonCourseCard() {
   return (
-    <div className="flex flex-col rounded-2xl border border-hairline bg-surface p-4 shadow-[0_1px_3px_0_rgba(0,0,0,0.04)] animate-pulse">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1 space-y-2">
-          <div className="h-5 w-24 rounded bg-gray-200" />
-          <div className="h-3.5 w-48 rounded bg-gray-100" />
+    <div className="flex flex-col rounded-2xl border border-hairline bg-surface shadow-[0_1px_3px_0_rgba(0,0,0,0.04)] animate-pulse">
+      <div className="flex-1 p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1 space-y-2">
+            <div className="h-5 w-24 rounded bg-gray-200" />
+            <div className="h-3.5 w-48 rounded bg-gray-100" />
+          </div>
+          <div className="mt-1.5 h-3.5 w-3.5 rounded bg-gray-100" />
         </div>
-        <div className="mt-1.5 h-3.5 w-3.5 rounded bg-gray-100" />
-      </div>
-      <div className="mt-3 flex gap-1.5">
-        <div className="h-5 w-16 rounded-full bg-gray-100" />
-        <div className="h-5 w-16 rounded-full bg-gray-100" />
-      </div>
-      <div className="mt-auto flex items-center gap-4 pt-4">
-        <div className="h-3.5 w-24 rounded bg-gray-100" />
-        <div className="h-3.5 w-28 rounded bg-gray-100" />
-      </div>
-      <div className="mt-3 space-y-1.5">
-        <div className="flex justify-between">
-          <div className="h-3 w-44 rounded bg-gray-100" />
-          <div className="h-3 w-10 rounded bg-gray-100" />
+        <div className="mt-3 flex items-center gap-1.5">
+          <div className="h-5 w-16 rounded-full bg-gray-100" />
+          <div className="h-5 w-16 rounded-full bg-gray-100" />
+          <div className="ml-auto h-3 w-20 rounded bg-gray-100" />
         </div>
-        <div className="h-1.5 rounded-full bg-gray-100" />
+        <div className="mt-4 space-y-1.5">
+          <div className="h-2 rounded-full bg-gray-100" />
+          <div className="flex gap-3">
+            <div className="h-3 w-20 rounded bg-gray-100" />
+            <div className="h-3 w-16 rounded bg-gray-100" />
+            <div className="h-3 w-20 rounded bg-gray-100" />
+          </div>
+        </div>
+      </div>
+      <div className="grid grid-cols-3 border-t border-hairline">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div key={i} className={`flex justify-center py-3 ${i > 0 ? "border-l border-hairline" : ""}`}>
+            <div className="h-3 w-16 rounded bg-gray-100" />
+          </div>
+        ))}
       </div>
     </div>
   );
 }
 
 /**
- * Mirrors a course's progress grid: the show-students filter and legend over
- * a table of students (avatar, name, group, done/total) against requirements.
+ * Mirrors a course's progress grid: search, group and status filters, the
+ * legend, then a table of students (avatar, name, group, done/total) against
+ * requirements.
  */
 export function SkeletonProgressGrid({ rows = 6, cols = 5 }: { rows?: number; cols?: number }) {
   return (
     <div className="animate-pulse" aria-hidden>
-      <div className="mb-3 flex flex-wrap items-center gap-3">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <div className="h-9 min-w-[12rem] flex-1 rounded-xl border border-gray-200 bg-surface sm:max-w-xs" />
+        <div className="h-9 w-32 rounded-xl border border-gray-200 bg-surface" />
         <div className="flex gap-1 rounded-xl bg-subtle p-1">
-          <div className="h-7 w-16 rounded-lg bg-surface" />
+          <div className="h-7 w-14 rounded-lg bg-surface" />
           <div className="h-7 w-24 rounded-lg bg-gray-100" />
           <div className="h-7 w-24 rounded-lg bg-gray-100" />
         </div>
+      </div>
+      <div className="mb-3 flex flex-wrap items-center gap-4">
         <div className="h-3 w-32 rounded bg-gray-100" />
+        <div className="h-3 w-24 rounded bg-gray-100" />
         <div className="h-3 w-36 rounded bg-gray-100" />
       </div>
       <div className="overflow-hidden rounded-xl border border-hairline bg-surface">

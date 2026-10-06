@@ -7,5 +7,6 @@ export const metadata: Metadata = {
 
 export default async function FacultyCoursePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  return <FacultyCourseClient offeringId={id} />;
+  // Keyed by course, so switching courses starts each one fresh.
+  return <FacultyCourseClient key={id} offeringId={id} />;
 }

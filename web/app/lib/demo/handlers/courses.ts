@@ -6,6 +6,7 @@ import {
   MAX_SCORE_NOTE,
   evaluate,
   isRemovedActivity,
+  offeringSummary,
   parseCourse,
   parseRequirement,
   parseScore,
@@ -476,13 +477,7 @@ route("GET", "/api/faculty/courses", async (ctx) => {
           return { ...rest, progress: null };
         }
         const result = await demoProgress(db, offering);
-        return {
-          ...rest,
-          progress: {
-            complete: result.students.filter((s) => s.total > 0 && s.done === s.total).length,
-            students: result.students.length,
-          },
-        };
+        return { ...rest, progress: offeringSummary(result.requirements, result.students, result.progress) };
       }),
     ),
   };

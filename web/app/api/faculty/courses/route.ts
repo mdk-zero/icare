@@ -2,12 +2,12 @@ import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { courseFailure, loadOfferingRosters, loadOfferingSections, must, requireRole } from '@/app/lib/courses';
 import { loadOfferingProgress } from '@/app/lib/course-requirements';
-import { termStatus } from '@/app/lib/course-progress';
+import { offeringSummary, termStatus, type OfferingSummary } from '@/app/lib/course-progress';
 
 /**
  * GET: the signed-in instructor's course assignments, newest term first,
  * each with its sections, students and checklist size, and for a running
- * term how many students have met the whole checklist.
+ * term how far the roster has got and the Lab Activity scores still to enter.
  */
 export async function GET() {
   const { session, response } = await requireRole('faculty');
@@ -71,9 +71,9 @@ export async function GET() {
           a.course.code.localeCompare(b.course.code, undefined, { numeric: true }),
       );
 
-    // How many students have met every item: only for running terms, since it
-    // reads the term's graded work for the whole roster.
-    const summaries = new Map<string, { complete: number; students: number }>();
+    // Only for running terms, since it reads the term's graded work for the
+    // whole roster.
+    const summaries = new Map<string, OfferingSummary>();
     await Promise.all(
       offerings
         .filter((o) => o.requirement_count > 0 && o.student_count > 0 && termStatus(o.term) === 'current')
@@ -85,10 +85,7 @@ export async function GET() {
             faculty_id: session.uid,
             section_ids: o.sections.map((s) => s.id),
           });
-          summaries.set(o.id, {
-            complete: result.students.filter((s) => s.total > 0 && s.done === s.total).length,
-            students: result.students.length,
-          });
+          summaries.set(o.id, offeringSummary(result.requirements, result.students, result.progress));
         }),
     );
 

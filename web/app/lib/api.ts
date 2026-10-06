@@ -6,7 +6,7 @@ import type { AttendanceTally, ShiftAttendanceStatus } from './shifts';
 import { resolveRubric, type Rubric, type TaskRating } from './task-ratings';
 import { reportNetworkFailure, reportNetworkSuccess } from './connectivity';
 import { endDemo, isDemo } from './demo/session';
-import type { ItemProgress, RequirementInput, RequirementRow, TermStatus } from './course-progress';
+import type { ItemProgress, OfferingSummary, RequirementInput, RequirementRow, TermStatus } from './course-progress';
 
 export interface User {
   id: string;
@@ -4269,8 +4269,8 @@ export interface FacultyCourseSummary {
   sections: { id: string; name: string; has_group: boolean }[];
   student_count: number;
   requirement_count: number;
-  /** Running terms only: students who have met every item. */
-  progress: { complete: number; students: number } | null;
+  /** Running terms only: how far the roster has got (offeringSummary). */
+  progress: OfferingSummary | null;
 }
 
 export interface FacultyCourseDetail {
