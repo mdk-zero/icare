@@ -44,3 +44,6 @@ app-example
 
 # JetBrains IDE
 .idea/
+
+# Service account
+icare-499602-5b6ba1744700.json
