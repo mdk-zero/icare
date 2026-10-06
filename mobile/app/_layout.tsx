@@ -7,6 +7,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider, useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/hooks/useTheme';
 import { ThemePreferenceProvider } from '@/hooks/useThemePreference';
+import { useUpdatePrompt } from '@/hooks/useUpdatePrompt';
 import { BootLoader } from '@/components/ui/BootLoader';
 import { ConnectionToast } from '@/components/ui/ConnectionToast';
 import { startConnectivityMonitor } from '@/lib/client';
@@ -103,6 +104,7 @@ function ThemedApp() {
   // App-lifetime reachability heartbeat: without it the app only learns it is
   // offline when a request the student made happens to fail.
   useEffect(() => startConnectivityMonitor(), []);
+  useUpdatePrompt();
 
   return (
     <ThemeProvider value={isDark ? DarkTheme : DefaultTheme}>
