@@ -88,6 +88,8 @@ function defaultTerm(terms: AcademicTerm[]): string {
 }
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+/** Instructors' ticks, marks and entered scores, as the delete dialogs count them. */
+const entriesPhrase = (n: number) => plural(n, "instructor score or tick", "instructor scores and ticks");
 
 type Dialog =
   | { kind: "course"; course: CourseSummary | null }
@@ -475,7 +477,7 @@ export default function CoursesClient() {
             i.offering_count === 0
               ? "No instructor is assigned this course."
               : `${plural(i.offering_count, "course assignment")} and ${plural(i.requirement_count, "checklist item")} are removed.`,
-            ...(i.check_count > 0 ? [`${plural(i.check_count, "instructor tick")} on students' checklists are removed.`] : []),
+            ...(i.check_count > 0 ? [`${entriesPhrase(i.check_count)} on students' checklists are removed.`] : []),
             "Graded Patient Cases, Quizzes and Case Presentations are not touched.",
           ]}
           keepLabel="Keep course"
@@ -533,7 +535,7 @@ export default function CoursesClient() {
           describe={(i) => [
             i.requirement_count === 0
               ? "The instructor has not set up a checklist for it yet."
-              : `Its checklist of ${plural(i.requirement_count, "item")} is removed${i.check_count > 0 ? `, with ${plural(i.check_count, "instructor tick")}` : ""}.`,
+              : `Its checklist of ${plural(i.requirement_count, "item")} is removed${i.check_count > 0 ? `, with ${entriesPhrase(i.check_count)}` : ""}.`,
             "Graded work is not touched.",
           ]}
           keepLabel="Keep assignment"

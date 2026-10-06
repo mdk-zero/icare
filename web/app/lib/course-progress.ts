@@ -138,6 +138,23 @@ export interface RequirementCheckRow {
   note: string;
 }
 
+/**
+ * A course_requirement_scores row (066): the score a student earned on work
+ * the app has no grade for, entered by the instructor.
+ */
+export interface RequirementScoreRow {
+  id: string;
+  requirement_id: string;
+  student_id: string;
+  score: number;
+  note: string;
+  entered_by: string | null;
+  entered_at: string;
+}
+
+/** An entered score, as a cell carries it. */
+export type ScoreEntry = Pick<RequirementScoreRow, 'id' | 'score' | 'note' | 'entered_at'>;
+
 // ---------------------------------------------------------------------------
 // Input
 // ---------------------------------------------------------------------------
@@ -425,30 +442,72 @@ export interface ProgressFacts {
   presentations: GradedPresentationFact[];
   shifts: AttendedShiftFact[];
   checks: RequirementCheckRow[];
+  /** Scores the instructor entered (066). Not bound to the term: the item is. */
+  scores: RequirementScoreRow[];
 }
 
-export const NO_FACTS: ProgressFacts = { cases: [], attempts: [], quizSkills: {}, presentations: [], shifts: [], checks: [] };
+export const NO_FACTS: ProgressFacts = { cases: [], attempts: [], quizSkills: {}, presentations: [], shifts: [], checks: [], scores: [] };
 
 export interface ItemProgress {
   done: boolean;
-  /** graded: met by graded work. instructor: ticked (manual) or marked done by the instructor. */
+  /** graded: met by graded work. instructor: met by a score you entered, or your tick or mark. */
   source: 'graded' | 'instructor' | null;
   /** Count items: qualifying work so far. Others: 1 when met, else 0. */
   current: number;
   target: number;
   /** When it was first met. */
   done_at: string | null;
-  /** The best qualifying score seen, for activity and skill items. */
+  /** The best score seen, graded or entered, for activity, skill and manual items. */
   best_score: number | null;
   /**
    * Count items over scored work: the mean of every score of that kind in the
-   * term, met or not (each Quiz at its best attempt). Null for shifts.
+   * term, met or not (each Quiz at its best attempt), entered scores
+   * included. Null for shifts.
    */
   avg_score: number | null;
   /** Skill items: the band of the best evidence ("Satisfactory"), or null with none. */
   level: string | null;
-  /** The instructor's note on a tick or a mark-done. */
+  /** The student has graded work behind the item: an attempt, a case, skill evidence. */
+  has_grade: boolean;
+  /** Scores you entered for this student, oldest first. */
+  entries: ScoreEntry[];
+  /** A tick or mark-done without a score: shift marks, and ticks from before 066. */
+  marked: boolean;
+  /** The note on that tick or mark. */
   note: string | null;
+}
+
+/**
+ * How an instructor fills an item in by hand. score: they enter the score
+ * the student earned. mark: a shift count has no score, so they mark it done
+ * with a note.
+ */
+export function entryMode(req: Pick<RequirementRow, 'kind' | 'activity_type'>): 'score' | 'mark' {
+  return req.kind === 'count' && req.activity_type === 'shift' ? 'mark' : 'score';
+}
+
+/**
+ * Why a score can't be entered now, or null when it can: on a Lab Activity
+ * always (it replaces the one there), on an activity or skill only while the
+ * student has no grade on it, and on a count, one more piece of work, until
+ * it is met.
+ */
+export function scoreBlock(req: RequirementRow, item: ItemProgress | undefined): string | null {
+  if (entryMode(req) !== 'score') return 'Attendance has no score: mark it done instead';
+  if (isRemovedActivity(req)) return 'The linked activity was deleted';
+  if (req.kind === 'manual') return null;
+  if (req.kind === 'count') return item?.done ? 'Already met: no more scores are needed' : null;
+  return item?.has_grade ? 'The student already has a grade on this; change it by regrading their work' : null;
+}
+
+export const canEnterScore = (req: RequirementRow, item: ItemProgress | undefined) => scoreBlock(req, item) === null;
+
+export const MAX_SCORE_NOTE = 500;
+
+/** An entered score: a number from 0 to 100, kept to two decimals, or null. */
+export function parseScore(value: unknown): number | null {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 100) return null;
+  return Math.round(value * 100) / 100;
 }
 
 /** "Excellent" / "Satisfactory" / "Needs Practice", the bands of task-ratings.ts. */
@@ -469,10 +528,11 @@ const mean = (scores: (number | null)[]) => {
 
 /**
  * Judge every student against every checklist item, from graded work inside
- * the term. Nothing automatic is stored: this runs on every read, so a grade
- * given a minute ago shows straight away. A manual item is met by the
- * instructor's tick; an automatic item is met by graded work, or by the
- * instructor marking it done (an override with a note).
+ * the term and the scores the instructor entered. Nothing automatic is
+ * stored: this runs on every read, so a grade given a minute ago shows
+ * straight away. An entered score counts like a grade (a count's extra
+ * piece of work, a Lab Activity's result); a tick or mark without a score
+ * (shift counts, and ticks from before 066) meets the item outright.
  */
 export function evaluate(
   requirements: readonly RequirementRow[],
@@ -488,6 +548,11 @@ export function evaluate(
   const shifts = inside(facts.shifts, (s) => s.starts_at);
   const courseSkills = new Set(courseSkillIds);
   const check = new Map(facts.checks.map((c) => [`${c.requirement_id}:${c.student_id}`, c]));
+  const entered = new Map<string, ScoreEntry[]>();
+  for (const row of [...(facts.scores ?? [])].sort((a, b) => a.entered_at.localeCompare(b.entered_at))) {
+    const key = `${row.requirement_id}:${row.student_id}`;
+    entered.set(key, [...(entered.get(key) ?? []), { id: row.id, score: Number(row.score), note: row.note, entered_at: row.entered_at }]);
+  }
 
   const result: Record<string, Record<string, ItemProgress>> = {};
   for (const studentId of studentIds) {
@@ -499,14 +564,16 @@ export function evaluate(
     };
     const row: Record<string, ItemProgress> = {};
     for (const req of requirements) {
-      const auto = judge(req, own, facts.quizSkills, courseSkills);
+      const entries = entered.get(`${req.id}:${studentId}`) ?? [];
+      const { by, ...auto } = judge(req, own, facts.quizSkills, courseSkills, entries);
       const tick = check.get(`${req.id}:${studentId}`);
+      const base = { ...auto, entries, marked: !!tick, note: tick?.note || null };
       if (auto.done) {
-        row[req.id] = { ...auto, source: 'graded', note: null };
+        row[req.id] = { ...base, source: by };
       } else if (tick) {
-        row[req.id] = { ...auto, done: true, source: 'instructor', done_at: tick.checked_at, note: tick.note || null };
+        row[req.id] = { ...base, done: true, source: 'instructor', done_at: tick.checked_at };
       } else {
-        row[req.id] = { ...auto, source: null, note: null };
+        row[req.id] = { ...base, source: null };
       }
     }
     result[studentId] = row;
@@ -514,46 +581,62 @@ export function evaluate(
   return result;
 }
 
-type Judged = Omit<ItemProgress, 'source' | 'note'>;
+type Judged = Omit<ItemProgress, 'source' | 'note' | 'entries' | 'marked'> & { by: ItemProgress['source'] };
+
+type Evidence = { at: string; score: number | null };
 
 function judge(
   req: RequirementRow,
   own: { cases: GradedCaseFact[]; attempts: QuizAttemptFact[]; presentations: GradedPresentationFact[]; shifts: AttendedShiftFact[] },
   quizSkills: Record<string, string[]>,
   courseSkills: Set<string>,
+  entries: ScoreEntry[],
 ): Judged {
-  const none: Judged = { done: false, current: 0, target: 1, done_at: null, best_score: null, avg_score: null, level: null };
-  const single = (qualifying: { at: string; score: number | null }[], all: (number | null)[]): Judged => {
-    const doneAt = earliest(qualifying.map((q) => q.at));
-    return { done: doneAt !== null, current: doneAt ? 1 : 0, target: 1, done_at: doneAt, best_score: max(all), avg_score: null, level: null };
-  };
   const min = req.min_score;
+  const enteredEvidence: Evidence[] = entries.map((e) => ({ at: e.entered_at, score: e.score }));
+  // Met by graded work if it can be, else by an entered score.
+  const once = (graded: Evidence[], level: (best: number | null) => string | null = () => null): Judged => {
+    const gradedAt = earliest(graded.filter((g) => meets(g.score, min)).map((g) => g.at));
+    const enteredAt = earliest(enteredEvidence.filter((e) => meets(e.score, min)).map((e) => e.at));
+    const doneAt = gradedAt ?? enteredAt;
+    const best = max([...graded, ...enteredEvidence].map((e) => e.score));
+    return {
+      done: doneAt !== null,
+      by: gradedAt ? 'graded' : enteredAt ? 'instructor' : null,
+      current: doneAt ? 1 : 0,
+      target: 1,
+      done_at: doneAt,
+      best_score: best,
+      avg_score: null,
+      level: level(best),
+      has_grade: graded.length > 0,
+    };
+  };
 
   switch (req.kind) {
     case 'manual':
-      return none;
+      // No minimum: any score the instructor enters meets it.
+      return once([]);
 
     case 'activity': {
       if (req.scenario_id) {
-        const mine = own.cases.filter((c) => c.scenario_id === req.scenario_id);
-        return single(mine.filter((c) => meets(c.score, min)).map((c) => ({ at: c.completed_at, score: c.score })), mine.map((c) => c.score));
+        return once(own.cases.filter((c) => c.scenario_id === req.scenario_id).map((c) => ({ at: c.completed_at, score: c.score })));
       }
       if (req.assessment_id) {
-        const mine = own.attempts.filter((a) => a.assessment_id === req.assessment_id);
-        return single(mine.filter((a) => meets(a.score, min)).map((a) => ({ at: a.submitted_at, score: a.score })), mine.map((a) => a.score));
+        return once(own.attempts.filter((a) => a.assessment_id === req.assessment_id).map((a) => ({ at: a.submitted_at, score: a.score })));
       }
       if (req.presentation_id) {
-        const mine = own.presentations.filter((p) => p.presentation_id === req.presentation_id);
-        return single(mine.filter((p) => meets(p.score, min)).map((p) => ({ at: p.graded_at, score: p.score })), mine.map((p) => p.score));
+        return once(own.presentations.filter((p) => p.presentation_id === req.presentation_id).map((p) => ({ at: p.graded_at, score: p.score })));
       }
-      return none; // the linked activity was deleted
+      // The linked activity was deleted.
+      return { done: false, by: null, current: 0, target: 1, done_at: null, best_score: null, avg_score: null, level: null, has_grade: false };
     }
 
     case 'count': {
       const target = req.target_count ?? 1;
       const covers = (skills: string[]) => !req.skills_only || skills.some((s) => courseSkills.has(s));
       let dates: string[];
-      // Every score of the kind, met or not, for the average.
+      // Every graded score of the kind, met or not, for the average.
       let scores: (number | null)[] = [];
       switch (req.activity_type) {
         case 'scenario': {
@@ -588,23 +671,30 @@ function judge(
         default:
           dates = [];
       }
-      dates.sort();
-      const done = dates.length >= target;
+      const hasGrade = dates.length > 0 || scores.length > 0;
+      // Each entered score is one more piece of work (shifts take none).
+      const extra = req.activity_type === 'shift' ? [] : entries;
+      const graded = [...dates].sort();
+      const all = [...graded, ...extra.filter((e) => meets(e.score, min)).map((e) => e.entered_at)].sort();
+      const done = all.length >= target;
+      const byGrades = graded.length >= target;
       return {
         done,
-        current: dates.length,
+        by: byGrades ? 'graded' : done ? 'instructor' : null,
+        current: all.length,
         target,
-        done_at: done ? dates[target - 1] : null,
+        done_at: byGrades ? graded[target - 1] : done ? all[target - 1] : null,
         best_score: null,
-        avg_score: mean(scores),
+        avg_score: mean([...scores, ...extra.map((e) => e.score)]),
         level: null,
+        has_grade: hasGrade,
       };
     }
 
     case 'skill': {
       const skill = req.skill_id;
-      if (!skill) return none;
-      const evidence: { at: string; score: number }[] = [];
+      if (!skill) return once([]);
+      const evidence: Evidence[] = [];
       for (const c of own.cases) {
         for (const s of c.skills) {
           // A task the student did not perform earns no credit and is no evidence.
@@ -616,17 +706,8 @@ function judge(
         const score = a.skill_scores[skill] ?? a.score;
         if (score !== null) evidence.push({ at: a.submitted_at, score });
       }
-      const best = max(evidence.map((e) => e.score));
-      const doneAt = earliest(evidence.filter((e) => e.score >= (min ?? 0)).map((e) => e.at));
-      return {
-        done: doneAt !== null,
-        current: doneAt ? 1 : 0,
-        target: 1,
-        done_at: doneAt,
-        best_score: best,
-        avg_score: null,
-        level: best === null ? null : scoreBand(best),
-      };
+      // A skill's minimum is a band (Satisfactory 50, Excellent 83); none means any evidence.
+      return once(evidence, (best) => (best === null ? null : scoreBand(best)));
     }
   }
 }

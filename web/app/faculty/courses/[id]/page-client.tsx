@@ -149,7 +149,7 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
       {locked && (
         <div className="mb-4 flex items-start gap-2.5 rounded-xl border border-hairline bg-subtle px-4 py-3 text-sm text-gray-600">
           <FontAwesomeIcon icon={faLock} className="mt-0.5 h-4 w-4 shrink-0 text-gray-400" />
-          This term has ended, so the checklist is locked. You can still change ticks.
+          This term has ended, so the checklist is locked. You can still enter scores.
         </div>
       )}
       {noGroup.length > 0 && (

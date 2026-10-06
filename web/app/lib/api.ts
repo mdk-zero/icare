@@ -4381,5 +4381,24 @@ export const setRequirementCheck = (
     body: input,
   });
 
+/**
+ * Enter the score a student earned on work the app has no grade for (066):
+ * the student's one score on an item, or one more piece of work on a count.
+ */
+export const addRequirementScore = (
+  offeringId: string,
+  requirementId: string,
+  input: { student_id: string; score: number; note?: string },
+) =>
+  courseRequest<{ progress: ItemProgress }>(`/api/faculty/courses/${offeringId}/requirements/${requirementId}/scores`, {
+    method: 'POST',
+    body: input,
+  });
+
+export const removeRequirementScore = (offeringId: string, requirementId: string, scoreId: string) =>
+  courseRequest<{ progress: ItemProgress }>(`/api/faculty/courses/${offeringId}/requirements/${requirementId}/scores/${scoreId}`, {
+    method: 'DELETE',
+  });
+
 export const fetchStudentRequirements = (studentId: string) =>
   courseRequest<StudentCourseRequirements>(`/api/faculty/students/${studentId}/requirements`);

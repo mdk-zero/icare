@@ -1,21 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { logAudit } from '@/app/lib/audit';
-import {
-  badRequest,
-  courseFailure,
-  labelRequirements,
-  loadCourseSkillIds,
-  loadOfferingRosters,
-  loadOwnOffering,
-  loadRequirements,
-  must,
-  notFound,
-  readJson,
-  requireRole,
-} from '@/app/lib/courses';
-import { loadProgressFacts } from '@/app/lib/course-requirements';
-import { evaluate } from '@/app/lib/course-progress';
+import { badRequest, courseFailure, labelRequirements, loadStudentTarget, must, readJson, requireRole } from '@/app/lib/courses';
+import { loadItemProgress } from '@/app/lib/course-requirements';
 
 interface RouteParams {
   params: Promise<{ id: string; requirementId: string }>;
@@ -27,8 +14,10 @@ const MAX_NOTE = 500;
  * POST { student_id, checked, note? }: tick or untick one student on one item.
  *
  * On a manual item this is the tick itself. On an automatic item, checking
- * marks it done for work the system cannot see (a quiz taken on paper) and
- * needs a note; unchecking removes only that mark, never graded work.
+ * marks it done for work the system cannot see and needs a note; unchecking
+ * removes only that mark, never graded work. The web portal now enters a
+ * score instead (/scores, 066) and uses this only for shift counts and to
+ * remove earlier ticks and marks; the mobile app still ticks and marks here.
  *
  * Idempotent, so the mobile app can replay it from its offline outbox.
  * Allowed after the term ends: only the item list is locked then.
@@ -49,16 +38,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
   try {
     const supabase = getSupabaseAdmin();
-    const offering = await loadOwnOffering(supabase, session.uid, id);
-    if (!offering) return notFound('Course');
-    const requirement = (await loadRequirements(supabase, [id])).find((r) => r.id === requirementId);
-    if (!requirement) return notFound('Requirement');
-
-    const roster = (
-      await loadOfferingRosters(supabase, [{ id, faculty_id: offering.faculty_id, section_ids: offering.section_ids }])
-    ).get(id);
-    const student = roster?.students.find((s) => s.id === studentId);
-    if (!student) return notFound('Student');
+    const target = await loadStudentTarget(supabase, session.uid, id, requirementId, studentId);
+    if ('response' in target) return target.response;
+    const { offering, requirement, student } = target;
 
     const manual = requirement.kind === 'manual';
     if (checked) {
@@ -87,15 +69,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    // The item as it now stands for this student, graded work included.
-    const [facts, skills, [labelled]] = await Promise.all([
-      loadProgressFacts(supabase, [requirement], offering.term, [studentId]),
-      loadCourseSkillIds(supabase, [offering.course.id]),
+    const [item, [labelled]] = await Promise.all([
+      loadItemProgress(supabase, offering, requirement, studentId),
       labelRequirements(supabase, [requirement]),
     ]);
-    const item = evaluate([requirement], skills.get(offering.course.id) ?? [], offering.term, [studentId], facts)[studentId][
-      requirementId
-    ];
 
     await logAudit(
       session,

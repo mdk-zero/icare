@@ -9,6 +9,7 @@ import {
   type QuizAttemptFact,
   type RequirementCheckRow,
   type RequirementRow,
+  type RequirementScoreRow,
   type TermWindow,
 } from './course-progress';
 import { fetchStepRatings, fetchTaskCompletions, fetchTaskSteps, stepGradesByTask } from './scenario-tasks';
@@ -53,23 +54,21 @@ export async function loadProgressFacts(
   const wantsShifts = has((r) => r.kind === 'count' && r.activity_type === 'shift');
 
   if (studentIds.length === 0 || requirements.length === 0) {
-    return { cases: [], attempts: [], quizSkills: {}, presentations: [], shifts: [], checks: [] };
+    return { cases: [], attempts: [], quizSkills: {}, presentations: [], shifts: [], checks: [], scores: [] };
   }
   const { from, to } = termBounds(term);
 
-  const [cases, attempts, presentations, shifts, checks] = await Promise.all([
+  const requirementIds = requirements.map((r) => r.id);
+  const [cases, attempts, presentations, shifts, checks, scores] = await Promise.all([
     wantsCases ? loadCases(supabase, studentIds, from, to, wantsCaseSkills, skillItems) : Promise.resolve([]),
     wantsAttempts ? loadAttempts(supabase, studentIds, from, to, skillItems) : Promise.resolve([]),
     wantsPresentations ? loadPresentations(supabase, studentIds, from, to) : Promise.resolve([]),
     wantsShifts ? loadShifts(supabase, studentIds, from, to) : Promise.resolve([]),
-    loadChecks(
-      supabase,
-      requirements.map((r) => r.id),
-      studentIds,
-    ),
+    loadChecks(supabase, requirementIds, studentIds),
+    loadScores(supabase, requirementIds, studentIds),
   ]);
   const quizSkills = wantsQuizSkills ? await loadQuizSkills(supabase, [...new Set(attempts.map((a) => a.assessment_id))]) : {};
-  return { cases, attempts, quizSkills, presentations, shifts, checks };
+  return { cases, attempts, quizSkills, presentations, shifts, checks, scores };
 }
 
 async function loadCases(
@@ -291,6 +290,43 @@ async function loadChecks(supabase: Supabase, requirementIds: string[], studentI
         .in('student_id', part),
     ) ?? []) as RequirementCheckRow[],
   );
+}
+
+/** One item as it now stands for one student: graded work, entered scores and ticks. */
+export async function loadItemProgress(
+  supabase: Supabase,
+  offering: OwnOffering,
+  requirement: RequirementRow,
+  studentId: string,
+): Promise<ItemProgress> {
+  const [facts, skills] = await Promise.all([
+    loadProgressFacts(supabase, [requirement], offering.term, [studentId]),
+    loadCourseSkillIds(supabase, [offering.course.id]),
+  ]);
+  return evaluate([requirement], skills.get(offering.course.id) ?? [], offering.term, [studentId], facts)[studentId][requirement.id];
+}
+
+export const SCORES_NEED_MIGRATION = 'Entering scores needs database migration 066 (course requirement scores) applied first.';
+
+/** Before 066 the scores table doesn't exist, and there are no entered scores to read. */
+export function isMissingScoresTable(error: { code?: string } | null): boolean {
+  return error?.code === '42P01' || error?.code === 'PGRST205';
+}
+
+async function loadScores(supabase: Supabase, requirementIds: string[], studentIds: string[]): Promise<RequirementScoreRow[]> {
+  if (requirementIds.length === 0) return [];
+  return chunked(studentIds, async (part) => {
+    const res = await supabase
+      .from('course_requirement_scores')
+      .select('id, requirement_id, student_id, score, note, entered_by, entered_at')
+      .in('requirement_id', requirementIds)
+      .in('student_id', part);
+    if (res.error) {
+      if (isMissingScoresTable(res.error)) return [];
+      throw res.error;
+    }
+    return ((res.data ?? []) as RequirementScoreRow[]).map((r) => ({ ...r, score: Number(r.score) }));
+  });
 }
 
 // ---------------------------------------------------------------------------

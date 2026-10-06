@@ -9,7 +9,7 @@ import { SkeletonProgressGrid } from "../../../components/skeletons";
 import { usePageData } from "../../../lib/use-page-data";
 import { fetchCourseProgress, type CourseProgress } from "../../../lib/api";
 import { requirementDetail, requirementNames, type ItemProgress } from "../../../lib/course-progress";
-import { ItemStatus, canAct, statusText, useTicks } from "../progress-ui";
+import { ItemStatus, canAct, statusText, useEntryDialog } from "../progress-ui";
 
 type Filter = "all" | "incomplete" | "complete";
 
@@ -36,7 +36,7 @@ export default function ProgressTab({ offeringId, signature }: { offeringId: str
     setOrder({ key: rosterKey, rank: Object.fromEntries(ranked.map((s, i) => [s.id, i])) });
   }
 
-  const { act, busy, dialog } = useTicks((studentId, requirementId, item) =>
+  const { act, busy, dialog } = useEntryDialog((studentId, requirementId, item) =>
     setData((prev) => {
       if (!prev?.data) return prev!;
       return { data: applyTick(prev.data, studentId, requirementId, item) };
@@ -118,7 +118,7 @@ export default function ProgressTab({ offeringId, signature }: { offeringId: str
             <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-violet-100 text-violet-700">
               <FontAwesomeIcon icon={faUserCheck} className="h-2 w-2" />
             </span>
-            Ticked or marked by you
+            Entered or marked by you
           </span>
         </div>
       </div>
@@ -197,8 +197,9 @@ export default function ProgressTab({ offeringId, signature }: { offeringId: str
       <p className="mt-2 text-xs text-gray-500">
         A cell shows the student&rsquo;s best score on that activity or skill; a count of graded work shows their average
         across that work this term. Hover a column&rsquo;s name to see what it asks for; the Requirements tab lists
-        them all. Click a manual item to tick it. Click an automatic item to mark it done with a note, for work done outside
-        the app. Items met by graded work can&rsquo;t be unticked.
+        them all. Click a cell with no grade to enter the score the student earned outside the app, such as a Lab
+        Activity or a Quiz taken on paper; on a count, each score is one more piece of work. Attendance is marked done
+        with a note. Grades from graded work can&rsquo;t be changed here.
       </p>
       {dialog}
     </div>

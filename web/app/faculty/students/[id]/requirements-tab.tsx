@@ -6,7 +6,7 @@ import { faBookMedical, faChevronRight } from "@fortawesome/free-solid-svg-icons
 import { usePageData } from "../../../lib/use-page-data";
 import { fetchStudentRequirements, type StudentCourseRequirements } from "../../../lib/api";
 import { TERM_STATUS_LABEL, requirementDetail, requirementNames, type ItemProgress } from "../../../lib/course-progress";
-import { ItemStatus, canAct, statusText, useTicks } from "../../courses/progress-ui";
+import { ItemStatus, actionLabel, canAct, statusText, useEntryDialog } from "../../courses/progress-ui";
 
 /** One student's semester requirements, shared by the tile and the tab. */
 export function useStudentRequirements(studentId: string) {
@@ -23,7 +23,7 @@ export default function RequirementsTab({ studentId, studentName }: { studentId:
   const { data, loading, setData } = useStudentRequirements(studentId);
   const courses = data?.data?.courses ?? [];
 
-  const { act, busy, dialog } = useTicks((_student, requirementId, item) =>
+  const { act, busy, dialog } = useEntryDialog((_student, requirementId, item) =>
     setData((prev) => {
       if (!prev?.data) return prev!;
       return { data: { courses: prev.data.courses.map((c) => applyTick(c, requirementId, item)) } };
@@ -93,7 +93,7 @@ export default function RequirementsTab({ studentId, studentName }: { studentId:
                           disabled={busy === key}
                           className="shrink-0 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-subtle disabled:opacity-50"
                         >
-                          {r.kind === "manual" ? (item?.done ? "Untick" : "Tick") : item?.done ? "Remove mark" : "Mark done"}
+                          {actionLabel(r, item)}
                         </button>
                       )}
                     </li>

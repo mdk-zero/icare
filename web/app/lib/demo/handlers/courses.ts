@@ -3,12 +3,15 @@
 import { json, notFound, route, sleep, type DemoContext } from "../router";
 import { newId, type DemoDb } from "../store";
 import {
+  MAX_SCORE_NOTE,
   evaluate,
   isRemovedActivity,
   parseCourse,
   parseRequirement,
+  parseScore,
   parseTerm,
   requirementLabel,
+  scoreBlock,
   summarize,
   termBounds,
   termStatus,
@@ -38,6 +41,8 @@ export function courseDb(db: DemoDb): DemoDb {
   if ((db as Partial<DemoCourseTables>).terms === undefined) {
     Object.assign(db, seedCourses({ users: db.users, casePresentations: db.casePresentations }));
   }
+  // A demo saved before entered scores existed.
+  db.requirementScores ??= [];
   return db;
 }
 
@@ -89,7 +94,9 @@ function requirementsOf(db: DemoDb, offeringIds: string[]) {
   const ids = new Set(offeringIds);
   const requirements = db.requirements.filter((r) => ids.has(r.offering_id));
   const reqIds = new Set(requirements.map((r) => r.id));
-  return { requirements, checks: db.requirementChecks.filter((c) => reqIds.has(c.requirement_id)) };
+  // Ticks and entered scores alike, as the server's countInstructorEntries counts them.
+  const checks = [...db.requirementChecks, ...(db.requirementScores ?? [])].filter((c) => reqIds.has(c.requirement_id));
+  return { requirements, checks };
 }
 
 /** Removes offerings and everything hanging off them, as the database cascade would. */
@@ -98,6 +105,7 @@ function dropOfferings(db: DemoDb, offeringIds: string[]) {
   const reqIds = new Set(requirements.map((r) => r.id));
   const ids = new Set(offeringIds);
   db.requirementChecks = db.requirementChecks.filter((c) => !reqIds.has(c.requirement_id));
+  db.requirementScores = db.requirementScores.filter((c) => !reqIds.has(c.requirement_id));
   db.requirements = db.requirements.filter((r) => !reqIds.has(r.id));
   db.offerings = db.offerings.filter((o) => !ids.has(o.id));
 }
@@ -543,7 +551,7 @@ function linkProblem(db: DemoDb, o: DemoOffering, input: RequirementInput): stri
   return null;
 }
 
-const LOCKED = "This term has ended, so its checklist is locked. Ticks can still be changed.";
+const LOCKED = "This term has ended, so its checklist is locked. Scores and ticks can still be changed.";
 
 route("POST", "/api/faculty/courses/:id/requirements", async (ctx) => {
   if (!instructorOnly(ctx)) return forbidden();
@@ -612,6 +620,7 @@ route("DELETE", "/api/faculty/courses/:id/requirements/:requirementId", (ctx) =>
   if (!checklist(db, o.id).some((r) => r.id === id)) return notFound("Requirement not found");
   db.requirements = db.requirements.filter((r) => r.id !== id);
   db.requirementChecks = db.requirementChecks.filter((c) => c.requirement_id !== id);
+  db.requirementScores = db.requirementScores.filter((c) => c.requirement_id !== id);
   audit(db, ctx.viewer, "course.requirement.delete", "course_requirements", {}, id);
   return { success: true };
 });
@@ -682,7 +691,8 @@ function demoFacts(db: DemoDb, studentIds: string[], requirementIds: string[]): 
     .filter((e) => students.has(e.student_id) && (e.attendance_status === "present" || e.attendance_status === "late") && scheduled.has(e.shift_id))
     .map((e) => ({ student_id: e.student_id, starts_at: scheduled.get(e.shift_id)! }));
   const checks = db.requirementChecks.filter((c) => reqs.has(c.requirement_id) && students.has(c.student_id));
-  return { cases, attempts, quizSkills: {}, presentations, shifts, checks };
+  const scores = db.requirementScores.filter((c) => reqs.has(c.requirement_id) && students.has(c.student_id));
+  return { cases, attempts, quizSkills: {}, presentations, shifts, checks, scores };
 }
 
 async function demoProgress(db: DemoDb, o: DemoOffering, onlyStudentId?: string) {
@@ -748,6 +758,55 @@ route("POST", "/api/faculty/courses/:id/requirements/:requirementId/checks", asy
   audit(db, ctx.viewer, checked ? "course.requirement.check" : "course.requirement.uncheck", "course_requirements", { student: studentId }, requirement.id);
   const result = await demoProgress(db, o, studentId);
   return { progress: result.progress[studentId][requirement.id] };
+});
+
+route("POST", "/api/faculty/courses/:id/requirements/:requirementId/scores", async (ctx) => {
+  if (!instructorOnly(ctx)) return forbidden();
+  const db = courseDb(ctx.db);
+  const o = ownFacultyOffering(ctx, ctx.params.id);
+  if (!o) return notFound("Course not found");
+  const requirement = checklist(db, o.id).find((r) => r.id === ctx.params.requirementId);
+  if (!requirement) return notFound("Requirement not found");
+  const studentId = ctx.body?.student_id;
+  const score = parseScore(ctx.body?.score);
+  const note = typeof ctx.body?.note === "string" ? ctx.body.note.trim() : "";
+  if (score === null) return json({ error: "The score must be a number from 0 to 100" }, 400);
+  if (note.length > MAX_SCORE_NOTE) return json({ error: `The note is too long (max ${MAX_SCORE_NOTE} characters)` }, 400);
+  if (typeof studentId !== "string" || !offeringRoster(db, o).students.some((s) => s.id === studentId)) return notFound("Student not found");
+  const before = (await demoProgress(db, o, studentId)).progress[studentId][requirement.id];
+  const blocked = scoreBlock(requirement, before);
+  if (blocked) return json({ error: blocked }, 400);
+  // One score per student, except on a count, where each is a piece of work.
+  if (requirement.kind !== "count") {
+    db.requirementScores = db.requirementScores.filter((x) => !(x.requirement_id === requirement.id && x.student_id === studentId));
+  }
+  db.requirementScores.push({
+    id: newId(),
+    requirement_id: requirement.id,
+    student_id: studentId,
+    score,
+    note,
+    entered_by: ctx.viewer.id,
+    entered_at: new Date().toISOString(),
+  });
+  audit(db, ctx.viewer, "course.requirement.score", "course_requirements", { student: studentId, score }, requirement.id);
+  const result = await demoProgress(db, o, studentId);
+  return { progress: result.progress[studentId][requirement.id] };
+});
+
+route("DELETE", "/api/faculty/courses/:id/requirements/:requirementId/scores/:scoreId", async (ctx) => {
+  if (!instructorOnly(ctx)) return forbidden();
+  const db = courseDb(ctx.db);
+  const o = ownFacultyOffering(ctx, ctx.params.id);
+  if (!o) return notFound("Course not found");
+  const requirement = checklist(db, o.id).find((r) => r.id === ctx.params.requirementId);
+  if (!requirement) return notFound("Requirement not found");
+  const row = db.requirementScores.find((x) => x.id === ctx.params.scoreId && x.requirement_id === requirement.id);
+  if (!row) return notFound("Score not found");
+  db.requirementScores = db.requirementScores.filter((x) => x.id !== row.id);
+  audit(db, ctx.viewer, "course.requirement.score_remove", "course_requirements", { student: row.student_id, score: row.score }, requirement.id);
+  const result = await demoProgress(db, o, row.student_id);
+  return { progress: result.progress[row.student_id][requirement.id] };
 });
 
 route("GET", "/api/faculty/students/:id/requirements", async (ctx) => {

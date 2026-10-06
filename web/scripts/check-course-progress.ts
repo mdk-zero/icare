@@ -1,7 +1,8 @@
 /**
  * Behavioural checks for the semester requirements engine (evaluate() in
  * app/lib/course-progress.ts): the term window, minimum scores, quiz retakes,
- * counts, skill evidence, skills_only, manual ticks and instructor overrides.
+ * counts, skill evidence, skills_only, manual ticks, instructor overrides and
+ * entered scores.
  * There is no test runner in this repo.
  *
  *   npx tsx scripts/check-course-progress.ts
@@ -14,9 +15,11 @@ import {
   parseRequirement,
   requirementLabel,
   requirementNames,
+  scoreBlock,
   summarize,
   type ProgressFacts,
   type RequirementRow,
+  type RequirementScoreRow,
 } from '../app/lib/course-progress';
 
 let failures = 0;
@@ -55,6 +58,7 @@ const facts = (over: Partial<ProgressFacts>): ProgressFacts => ({
   presentations: [],
   shifts: [],
   checks: [],
+  scores: [],
   ...over,
 });
 const one = (r: RequirementRow, f: ProgressFacts, skills: string[] = []) => evaluate([r], skills, term, [S], f)[S][r.id];
@@ -156,6 +160,42 @@ const both = one(
 eq('graded work wins over an override', both.source, 'graded');
 const removed = req({ kind: 'activity', activity_type: 'scenario' });
 eq('a removed activity can never be met by graded work', one(removed, caseFacts).done, false);
+
+console.log('entered scores (066)');
+let k = 0;
+const entry = (r: RequirementRow, score: number, at = '2026-09-20T00:00:00Z'): RequirementScoreRow => ({
+  id: `e${++k}`,
+  requirement_id: r.id,
+  student_id: S,
+  score,
+  note: '',
+  entered_by: 'f',
+  entered_at: at,
+});
+const scoredLab = one(manual, facts({ scores: [entry(manual, 88)] }));
+eq('a Lab Activity is met by its entered score', [scoredLab.done, scoredLab.source, scoredLab.best_score, scoredLab.entries.length], [true, 'instructor', 88, 1]);
+const paperQuiz = req({ kind: 'activity', activity_type: 'assessment', assessment_id: 'q9', min_score: 75 });
+const paperPass = one(paperQuiz, facts({ scores: [entry(paperQuiz, 80)] }));
+eq('an entered score at the minimum meets an ungraded Quiz', [paperPass.done, paperPass.source, paperPass.has_grade], [true, 'instructor', false]);
+const paperFail = one(paperQuiz, facts({ scores: [entry(paperQuiz, 60)] }));
+eq('an entered score below the minimum does not', [paperFail.done, paperFail.best_score], [false, 60]);
+eq('a graded Quiz takes no entered score', scoreBlock(quizItem, quiz) !== null, true);
+eq('an ungraded Quiz does', scoreBlock(paperQuiz, paperFail), null);
+const threeQuizzes = req({ kind: 'count', activity_type: 'assessment', target_count: 3, min_score: 75 });
+const oneGraded = { attempts: [{ student_id: S, assessment_id: 'q1', score: 80, submitted_at: '2026-09-03T01:00:00Z', skill_scores: {} }] };
+const partial = one(threeQuizzes, facts({ ...oneGraded, scores: [entry(threeQuizzes, 90), entry(threeQuizzes, 70)] }));
+eq('each entered score is one more piece of work; below the minimum it joins only the average', [partial.current, partial.avg_score, partial.done], [2, 80, false]);
+const filled = one(threeQuizzes, facts({ ...oneGraded, scores: [entry(threeQuizzes, 90), entry(threeQuizzes, 70), entry(threeQuizzes, 85, '2026-09-25T00:00:00Z')] }));
+eq('entered scores can complete a count, which is then yours', [filled.done, filled.source, filled.done_at], [true, 'instructor', '2026-09-25T00:00:00Z']);
+eq('a met count takes no more scores', scoreBlock(threeQuizzes, filled) !== null, true);
+const shiftEntries = one(shifts, facts({ scores: [entry(shifts, 90)] }));
+eq('shift counts ignore entered scores', [shiftEntries.current, shiftEntries.avg_score], [0, null]);
+eq('shift counts take a mark, not a score', scoreBlock(shifts, shiftEntries) !== null, true);
+const skillEntry = req({ kind: 'skill', skill_id: '5-1', min_score: 50 });
+const skillScored = one(skillEntry, facts({ scores: [entry(skillEntry, 70)] }));
+eq('an entered score is skill evidence', [skillScored.done, skillScored.source, skillScored.level !== null], [true, 'instructor', true]);
+const legacy = one(manual, facts({ checks: [{ requirement_id: manual.id, student_id: S, checked_by: 'f', checked_at: '2026-09-09T00:00:00Z', note: '' }] }));
+eq('a tick from before 066 still counts, and shows as a mark', [legacy.done, legacy.marked, legacy.best_score], [true, true, null]);
 
 console.log('summarize');
 const all = [caseItem, manual];

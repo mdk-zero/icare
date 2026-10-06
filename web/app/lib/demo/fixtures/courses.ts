@@ -1,4 +1,4 @@
-import { addDays, manilaToday, type RequirementCheckRow, type RequirementRow } from "../../course-progress";
+import { addDays, manilaToday, type RequirementCheckRow, type RequirementRow, type RequirementScoreRow } from "../../course-progress";
 import { DEAN_ID, INSTRUCTOR_2_ID, INSTRUCTOR_ID, SECTION_A, SECTION_B, ago, demoId, KIND, type DemoUser } from "./people";
 import type { DemoCasePresentation } from "./teaching";
 
@@ -43,6 +43,7 @@ export interface DemoOffering {
 
 export type DemoRequirement = RequirementRow & { created_at: string };
 export type DemoRequirementCheck = RequirementCheckRow;
+export type DemoRequirementScore = RequirementScoreRow;
 
 export const TERM_CURRENT = demoId(KIND.misc, 501);
 export const TERM_PAST = demoId(KIND.misc, 502);
@@ -69,6 +70,7 @@ export interface DemoCourseTables {
   offerings: DemoOffering[];
   requirements: DemoRequirement[];
   requirementChecks: DemoRequirementCheck[];
+  requirementScores: DemoRequirementScore[];
 }
 
 const range = (chapter: number, from: number, to: number) =>
@@ -175,22 +177,31 @@ export function seedCourses(input: { users: DemoUser[]; casePresentations: DemoC
     ...checklist(OFFERING_PAST, [{ kind: "count", activity_type: "scenario", target_count: 2 }]),
   ];
 
-  // Return demonstrations already signed off, as the live seed does: for some of
-  // the students doing well, never for one the model calls low performing.
+  // Return demonstrations already scored: for some of the students doing well,
+  // never for one the model calls low performing.
   const doingWell = input.users
     .filter((u) => u.role === "student" && u.team_id && u.risk_level === "safe")
     .sort((a, b) => a.name.localeCompare(b.name));
-  const signOff = (title: string, share: number): DemoRequirementCheck[] => {
+  let scoreN = 0;
+  const signOff = (title: string, share: number): DemoRequirementScore[] => {
     const requirement = requirements.find((r) => r.kind === "manual" && r.title === title);
     if (!requirement) return [];
     return doingWell
       .filter((_, i) => (i * 7) % 10 < share * 10)
-      .map((s, i) => ({ requirement_id: requirement.id, student_id: s.id, checked_by: INSTRUCTOR_ID, checked_at: ago(4 + ((i * 3) % 21), 14, 30), note: "" }));
+      .map((s, i) => ({
+        id: demoId(KIND.misc, 600 + ++scoreN),
+        requirement_id: requirement.id,
+        student_id: s.id,
+        score: 78 + ((i * 7) % 20),
+        note: "",
+        entered_by: INSTRUCTOR_ID,
+        entered_at: ago(4 + ((i * 3) % 21), 14, 30),
+      }));
   };
-  const requirementChecks = [
+  const requirementScores = [
     ...signOff("Head-to-toe assessment return demonstration, signed by the clinical instructor", 0.7),
     ...signOff("Oxygen therapy return demonstration (nasal cannula and face mask)", 0.5),
   ];
 
-  return { terms, courses, courseSkills, offerings, requirements, requirementChecks };
+  return { terms, courses, courseSkills, offerings, requirements, requirementChecks: [], requirementScores };
 }

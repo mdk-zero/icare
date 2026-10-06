@@ -411,7 +411,42 @@ export async function loadOwnOffering(supabase: Supabase, facultyId: string, id:
   };
 }
 
-export const TERM_ENDED_LOCK = 'This term has ended, so its checklist is locked. Ticks can still be changed.';
+/**
+ * The caller's own offering, one item on its checklist and one student on
+ * its roster, for the routes that fill an item in; or the 404 to return.
+ */
+export async function loadStudentTarget(
+  supabase: Supabase,
+  facultyId: string,
+  offeringId: string,
+  requirementId: string,
+  studentId: string,
+): Promise<{ offering: OwnOffering; requirement: RequirementRow; student: RosterStudent } | { response: NextResponse }> {
+  const offering = await loadOwnOffering(supabase, facultyId, offeringId);
+  if (!offering) return { response: notFound('Course') };
+  const requirement = (await loadRequirements(supabase, [offeringId])).find((r) => r.id === requirementId);
+  if (!requirement) return { response: notFound('Requirement') };
+  const roster = (
+    await loadOfferingRosters(supabase, [{ id: offeringId, faculty_id: offering.faculty_id, section_ids: offering.section_ids }])
+  ).get(offeringId);
+  const student = roster?.students.find((s) => s.id === studentId);
+  if (!student) return { response: notFound('Student') };
+  return { offering, requirement, student };
+}
+
+/**
+ * Ticks, marks and entered scores on the given items: what deleting them
+ * takes with it. Before 066 there is no scores table, which counts as none.
+ */
+export async function countInstructorEntries(supabase: Supabase, requirementIds: string[]): Promise<number> {
+  if (requirementIds.length === 0) return 0;
+  const count = async (table: 'course_requirement_checks' | 'course_requirement_scores') =>
+    (await supabase.from(table).select('requirement_id', { count: 'exact', head: true }).in('requirement_id', requirementIds)).count ?? 0;
+  const [checks, scores] = await Promise.all([count('course_requirement_checks'), count('course_requirement_scores')]);
+  return checks + scores;
+}
+
+export const TERM_ENDED_LOCK = 'This term has ended, so its checklist is locked. Scores and ticks can still be changed.';
 
 /** Requirements of the given offerings, in checklist order. */
 export async function loadRequirements(supabase: Supabase, offeringIds: string[]): Promise<RequirementRow[]> {

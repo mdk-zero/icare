@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { logAudit } from '@/app/lib/audit';
-import { badRequest, courseFailure, must, notFound, parseCourse, readJson, requireRole } from '@/app/lib/courses';
+import { badRequest, countInstructorEntries, courseFailure, must, notFound, parseCourse, readJson, requireRole } from '@/app/lib/courses';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -9,7 +9,7 @@ interface RouteParams {
 
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
 
-/** What deleting the course would take with it: its assignments, their checklists and ticks. */
+/** What deleting the course would take with it: its assignments, their checklists, scores and ticks. */
 async function courseImpact(supabase: Supabase, courseId: string) {
   const offerings = (must(await supabase.from('course_offerings').select('id').eq('course_id', courseId)) ?? []) as {
     id: string;
@@ -19,13 +19,11 @@ async function courseImpact(supabase: Supabase, courseId: string) {
   const requirements = (must(
     await supabase.from('course_requirements').select('id').in('offering_id', offeringIds),
   ) ?? []) as { id: string }[];
-  const { count } = requirements.length
-    ? await supabase
-        .from('course_requirement_checks')
-        .select('requirement_id', { count: 'exact', head: true })
-        .in('requirement_id', requirements.map((r) => r.id))
-    : { count: 0 };
-  return { offering_count: offeringIds.length, requirement_count: requirements.length, check_count: count ?? 0 };
+  const entries = await countInstructorEntries(
+    supabase,
+    requirements.map((r) => r.id),
+  );
+  return { offering_count: offeringIds.length, requirement_count: requirements.length, check_count: entries };
 }
 
 async function ownCourse(supabase: Supabase, adminId: string, id: string) {

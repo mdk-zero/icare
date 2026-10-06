@@ -4,6 +4,7 @@ import { logAudit } from '@/app/lib/audit';
 import {
   badRequest,
   checkAssignmentTarget,
+  countInstructorEntries,
   courseFailure,
   loadDeanOffering,
   loadOfferingRosters,
@@ -27,13 +28,11 @@ async function offeringImpact(supabase: Supabase, offeringId: string) {
   const requirements = (must(
     await supabase.from('course_requirements').select('id').eq('offering_id', offeringId),
   ) ?? []) as { id: string }[];
-  const { count } = requirements.length
-    ? await supabase
-        .from('course_requirement_checks')
-        .select('requirement_id', { count: 'exact', head: true })
-        .in('requirement_id', requirements.map((r) => r.id))
-    : { count: 0 };
-  return { requirement_count: requirements.length, check_count: count ?? 0 };
+  const entries = await countInstructorEntries(
+    supabase,
+    requirements.map((r) => r.id),
+  );
+  return { requirement_count: requirements.length, check_count: entries };
 }
 
 export async function GET(_request: NextRequest, { params }: RouteParams) {
