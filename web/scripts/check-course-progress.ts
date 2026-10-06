@@ -13,6 +13,7 @@ import {
   inTerm,
   parseRequirement,
   requirementLabel,
+  requirementNames,
   summarize,
   type ProgressFacts,
   type RequirementRow,
@@ -104,12 +105,19 @@ eq('skills_only counts cases covering a course skill', one(onlySkills, caseFacts
 eq('skills_only with no matching skills counts none', one(onlySkills, caseFacts, ['5-1']).current, 0);
 const twoQuizzes = req({ kind: 'count', activity_type: 'assessment', target_count: 2, min_score: 75 });
 eq('each Quiz counts once, however many attempts', one(twoQuizzes, retakes).current, 1);
+eq('the average is over cases inside the term', counted.avg_score, 80);
+eq('the average follows skills_only', one(onlySkills, caseFacts, ['14-1']).avg_score, 70);
+const failedQuiz = facts({
+  attempts: [
+    ...retakes.attempts,
+    { student_id: S, assessment_id: 'q2', score: 40, submitted_at: '2026-09-04T01:00:00Z', skill_scores: {} },
+  ],
+});
+eq('the average takes each Quiz at its best attempt, failed ones too', one(twoQuizzes, failedQuiz).avg_score, 60);
 const shifts = req({ kind: 'count', activity_type: 'shift', target_count: 2 });
-eq(
-  'shifts attended inside the term',
-  one(shifts, facts({ shifts: [{ student_id: S, starts_at: '2026-09-01T00:00:00Z' }, { student_id: S, starts_at: '2027-01-05T00:00:00Z' }] })).current,
-  1,
-);
+const attended = one(shifts, facts({ shifts: [{ student_id: S, starts_at: '2026-09-01T00:00:00Z' }, { student_id: S, starts_at: '2027-01-05T00:00:00Z' }] }));
+eq('shifts attended inside the term', attended.current, 1);
+eq('shifts have no score to average', attended.avg_score, null);
 
 console.log('skill');
 const skill = req({ kind: 'skill', skill_id: '1-7', min_score: 50 });
@@ -168,6 +176,22 @@ eq('one shift', requirementLabel(req({ kind: 'count', activity_type: 'shift', ta
 eq('activity with a minimum', requirementLabel(caseMin, names), 'Patient Case: Asthma · 75%+');
 eq('skill with a level', requirementLabel(skill, names), 'Skill 1-7 · Assessing Blood Pressure (satisfactory or better)');
 eq('removed activity', requirementLabel(removed, names), 'Removed Patient Case');
+
+console.log('requirementNames');
+eq(
+  'numbered within each topic, in checklist order',
+  requirementNames([
+    req({ kind: 'count', activity_type: 'assessment', target_count: 3 }),
+    req({ kind: 'skill', skill_id: '1-1' }),
+    req({ kind: 'activity', activity_type: 'assessment', assessment_id: 'q1' }),
+    req({ kind: 'skill', skill_id: '1-4' }),
+    req({ kind: 'count', activity_type: 'scenario', target_count: 2 }),
+    req({ kind: 'activity', activity_type: 'case_presentation', presentation_id: 'p1' }),
+    req({ kind: 'count', activity_type: 'shift', target_count: 4 }),
+    req({ kind: 'manual', title: 'Return demonstration' }),
+  ]),
+  ['Quiz #1', 'Skill #1', 'Quiz #2', 'Skill #2', 'Patient Case #1', 'Case Presentation #1', 'Attendance #1', 'Lab Activity #1'],
+);
 
 if (failures > 0) {
   console.error(`\n${failures} check(s) failed`);

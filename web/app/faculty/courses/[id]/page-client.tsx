@@ -34,7 +34,7 @@ import {
   type CourseRequirement,
   type SkillSummary,
 } from "../../../lib/api";
-import { formatTermDates, requirementDetail, requirementName } from "../../../lib/course-progress";
+import { formatTermDates, requirementDetail, requirementNames } from "../../../lib/course-progress";
 import RequirementModal from "./requirement-modal";
 import { SkeletonProgressGrid } from "../../../components/skeletons";
 import ProgressTab from "./progress-tab";
@@ -59,6 +59,8 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
   const requirements = detail?.requirements ?? [];
   const locked = offering?.locked ?? false;
   const skillById = useMemo(() => new Map(catalog.map((s) => [s.id, s])), [catalog]);
+  const names = requirementNames(requirements);
+  const nameOf = (id: string) => names[requirements.findIndex((r) => r.id === id)] ?? "requirement";
 
   const move = async (index: number, delta: -1 | 1) => {
     const next = [...requirements];
@@ -111,7 +113,6 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
   }
 
   const noGroup = offering?.sections.filter((s) => !s.has_group) ?? [];
-  const removingName = removing ? requirementName(requirements.findIndex((r) => r.id === removing.id)) : "";
 
   return (
     <div>
@@ -219,6 +220,7 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
                 <RequirementRowView
                   key={r.id}
                   index={i}
+                  name={names[i]}
                   requirement={r}
                   last={i === requirements.length - 1}
                   locked={locked}
@@ -269,7 +271,7 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
         <RequirementModal
           offeringId={offeringId}
           requirement={editing === "new" ? null : editing}
-          name={editing === "new" ? undefined : requirementName(requirements.findIndex((r) => r.id === editing.id))}
+          name={editing === "new" ? undefined : nameOf(editing.id)}
           courseSkillIds={detail?.skill_ids ?? []}
           catalog={catalog}
           onClose={() => setEditing(null)}
@@ -283,7 +285,7 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
         <ConfirmModal
           config={{
             title: "Remove this requirement?",
-            message: `${removingName} (${requirementDetail(removing)}) comes off the checklist${removing.kind === "manual" ? ", with any ticks you gave on it" : ""}, and the ones after it move up a number. Graded work is not touched.`,
+            message: `${nameOf(removing.id)} (${requirementDetail(removing)}) comes off the checklist${removing.kind === "manual" ? ", with any ticks you gave on it" : ""}. Later items of the same kind are renumbered. Graded work is not touched.`,
             confirmLabel: "Remove",
             loading: removeBusy,
             onConfirm: () => void confirmRemove(),
@@ -331,6 +333,7 @@ function BackLink() {
 
 function RequirementRowView({
   index,
+  name,
   requirement: r,
   last,
   locked,
@@ -339,6 +342,7 @@ function RequirementRowView({
   onRemove,
 }: {
   index: number;
+  name: string;
   requirement: CourseRequirement;
   last: boolean;
   locked: boolean;
@@ -350,7 +354,7 @@ function RequirementRowView({
   return (
     <li className="flex items-center gap-3 px-4 py-3">
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold text-gray-800">{requirementName(index)}</p>
+        <p className="text-sm font-semibold text-gray-800">{name}</p>
         <p className="text-sm text-gray-500">{requirementDetail(r)}</p>
         <div className="mt-1 flex flex-wrap gap-1.5">
           <span
@@ -391,7 +395,7 @@ function RequirementRowView({
           </button>
           <ActionsMenu
             variant="compact"
-            label={`Actions for ${requirementName(index)}`}
+            label={`Actions for ${name}`}
             actions={[
               { label: "Edit", icon: faPenToSquare, onClick: onEdit },
               { label: "Remove", icon: faTrashCan, danger: true, onClick: onRemove },

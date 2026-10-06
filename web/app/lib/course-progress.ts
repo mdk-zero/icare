@@ -347,15 +347,36 @@ export function requirementLabel(req: RequirementRow, names: RequirementNames): 
   }
 }
 
-/**
- * What the course pages call an item: "Lab Activity #3", by its place in the
- * checklist (positions keep gaps after a removal, so pass the list index).
- */
-export function requirementName(index: number): string {
-  return `Lab Activity #${index + 1}`;
+/** The kind of work an item is about, which names it. Manual items are hands-on lab work. */
+const TOPIC: Record<ActivityType, string> = {
+  scenario: 'Patient Case',
+  assessment: 'Quiz',
+  case_presentation: 'Case Presentation',
+  shift: 'Attendance',
+};
+
+export function requirementTopic(req: Pick<RequirementRow, 'kind' | 'activity_type'>): string {
+  if (req.kind === 'skill') return 'Skill';
+  if (req.kind === 'manual') return 'Lab Activity';
+  return TOPIC[req.activity_type ?? 'scenario'];
 }
 
-/** What a Lab Activity asks for: the instructor's own label, if any, then requirementLabel(). */
+/**
+ * What the course pages call each item, numbered within its topic in
+ * checklist order: "Quiz #1", "Skill #2", "Patient Case #1". Pass the whole
+ * checklist, sorted, since positions keep gaps after a removal.
+ */
+export function requirementNames(requirements: readonly Pick<RequirementRow, 'kind' | 'activity_type'>[]): string[] {
+  const seen = new Map<string, number>();
+  return requirements.map((r) => {
+    const topic = requirementTopic(r);
+    const n = (seen.get(topic) ?? 0) + 1;
+    seen.set(topic, n);
+    return `${topic} #${n}`;
+  });
+}
+
+/** What an item asks for: the instructor's own label, if any, then requirementLabel(). */
 export function requirementDetail(req: Pick<RequirementRow, 'kind' | 'title'> & { label: string }): string {
   return req.title && req.kind !== 'manual' ? `${req.title} — ${req.label}` : req.label;
 }
@@ -419,6 +440,11 @@ export interface ItemProgress {
   done_at: string | null;
   /** The best qualifying score seen, for activity and skill items. */
   best_score: number | null;
+  /**
+   * Count items over scored work: the mean of every score of that kind in the
+   * term, met or not (each Quiz at its best attempt). Null for shifts.
+   */
+  avg_score: number | null;
   /** Skill items: the band of the best evidence ("Satisfactory"), or null with none. */
   level: string | null;
   /** The instructor's note on a tick or a mark-done. */
@@ -435,6 +461,10 @@ const earliest = (dates: string[]) => (dates.length ? dates.reduce((a, b) => (a 
 const max = (scores: (number | null)[]) => {
   const real = scores.filter((s): s is number => s !== null);
   return real.length ? Math.max(...real) : null;
+};
+const mean = (scores: (number | null)[]) => {
+  const real = scores.filter((s): s is number => s !== null);
+  return real.length ? real.reduce((a, b) => a + b, 0) / real.length : null;
 };
 
 /**
@@ -492,10 +522,10 @@ function judge(
   quizSkills: Record<string, string[]>,
   courseSkills: Set<string>,
 ): Judged {
-  const none: Judged = { done: false, current: 0, target: 1, done_at: null, best_score: null, level: null };
+  const none: Judged = { done: false, current: 0, target: 1, done_at: null, best_score: null, avg_score: null, level: null };
   const single = (qualifying: { at: string; score: number | null }[], all: (number | null)[]): Judged => {
     const doneAt = earliest(qualifying.map((q) => q.at));
-    return { done: doneAt !== null, current: doneAt ? 1 : 0, target: 1, done_at: doneAt, best_score: max(all), level: null };
+    return { done: doneAt !== null, current: doneAt ? 1 : 0, target: 1, done_at: doneAt, best_score: max(all), avg_score: null, level: null };
   };
   const min = req.min_score;
 
@@ -523,25 +553,34 @@ function judge(
       const target = req.target_count ?? 1;
       const covers = (skills: string[]) => !req.skills_only || skills.some((s) => courseSkills.has(s));
       let dates: string[];
+      // Every score of the kind, met or not, for the average.
+      let scores: (number | null)[] = [];
       switch (req.activity_type) {
-        case 'scenario':
-          dates = own.cases
-            .filter((c) => meets(c.score, min) && covers(c.skills.map((s) => s.skill_id)))
-            .map((c) => c.completed_at);
+        case 'scenario': {
+          const mine = own.cases.filter((c) => covers(c.skills.map((s) => s.skill_id)));
+          dates = mine.filter((c) => meets(c.score, min)).map((c) => c.completed_at);
+          scores = mine.map((c) => c.score);
           break;
+        }
         case 'assessment': {
-          // Each Quiz counts once, from its first qualifying attempt.
+          // Each Quiz counts once, from its first qualifying attempt, and
+          // averages in at its best attempt.
           const first = new Map<string, string>();
+          const best = new Map<string, number | null>();
           for (const a of own.attempts) {
-            if (!meets(a.score, min) || !covers(quizSkills[a.assessment_id] ?? [])) continue;
+            if (!covers(quizSkills[a.assessment_id] ?? [])) continue;
+            best.set(a.assessment_id, max([best.get(a.assessment_id) ?? null, a.score]));
+            if (!meets(a.score, min)) continue;
             const seen = first.get(a.assessment_id);
             if (!seen || a.submitted_at < seen) first.set(a.assessment_id, a.submitted_at);
           }
           dates = [...first.values()];
+          scores = [...best.values()];
           break;
         }
         case 'case_presentation':
           dates = own.presentations.filter((p) => meets(p.score, min)).map((p) => p.graded_at);
+          scores = own.presentations.map((p) => p.score);
           break;
         case 'shift':
           dates = own.shifts.map((s) => s.starts_at);
@@ -551,7 +590,15 @@ function judge(
       }
       dates.sort();
       const done = dates.length >= target;
-      return { done, current: dates.length, target, done_at: done ? dates[target - 1] : null, best_score: null, level: null };
+      return {
+        done,
+        current: dates.length,
+        target,
+        done_at: done ? dates[target - 1] : null,
+        best_score: null,
+        avg_score: mean(scores),
+        level: null,
+      };
     }
 
     case 'skill': {
@@ -577,6 +624,7 @@ function judge(
         target: 1,
         done_at: doneAt,
         best_score: best,
+        avg_score: null,
         level: best === null ? null : scoreBand(best),
       };
     }

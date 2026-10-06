@@ -11,49 +11,67 @@ import { toast } from "../../components/Toast";
 const dateFmt = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" });
 const when = (at: string | null) => (at ? dateFmt.format(new Date(at)) : "");
 
+/** The score a cell shows: the activity's or skill's best, or a count's average. */
+function itemScore(item: ItemProgress | undefined): number | null {
+  return item ? (item.best_score ?? item.avg_score) : null;
+}
+
+/** "best 86%" or "average 78%", for the hover text. */
+function scorePhrase(item: ItemProgress): string {
+  const score = itemScore(item);
+  if (score === null) return "";
+  return `${item.best_score !== null ? "best" : "average"} ${Math.round(score)}%`;
+}
+
 /** What a cell says when hovered or read aloud. */
 export function statusText(requirement: CourseRequirement, item: ItemProgress | undefined): string {
   if (!item) return "Not started";
+  const score = scorePhrase(item);
   if (item.done && item.source === "instructor") {
     return requirement.kind === "manual"
       ? `Ticked by you on ${when(item.done_at)}${item.note ? `: ${item.note}` : ""}`
-      : `Marked done by you on ${when(item.done_at)}${item.note ? `: ${item.note}` : ""}`;
+      : `Marked done by you on ${when(item.done_at)}${item.note ? `: ${item.note}` : ""}${score ? ` · graded work ${score}` : ""}`;
   }
   if (item.done) {
-    return `Met on ${when(item.done_at)}${item.best_score !== null ? ` · best ${Math.round(item.best_score)}%` : ""}`;
+    if (requirement.kind === "count" && requirement.activity_type === "shift") return `Met on ${when(item.done_at)} · ${item.current} attended`;
+    return `Met on ${when(item.done_at)}${score ? ` · ${score}` : ""}`;
   }
-  if (requirement.kind === "count") return `${item.current} of ${item.target} so far`;
-  if (requirement.kind === "skill" && item.level) return `Best so far: ${item.level}`;
+  if (requirement.kind === "count") return `${item.current} of ${item.target} so far${score ? ` · ${score}` : ""}`;
+  if (requirement.kind === "skill" && item.best_score !== null) return `Best so far: ${Math.round(item.best_score)}% (${item.level}), below the minimum`;
   if (item.best_score !== null) return `Best so far: ${Math.round(item.best_score)}%, below the minimum`;
   return requirement.kind === "manual" ? "Not ticked" : "Not met yet";
 }
 
-/** One student's standing on one item: a tick, "3/5", a band, or an empty ring. */
+const PILL = "inline-flex h-7 min-w-7 items-center justify-center gap-1 whitespace-nowrap rounded-full px-2 text-[11px] font-semibold";
+
+/**
+ * One student's standing on one item: their score (green once met, amber
+ * below it), a shift count, a violet mark for your ticks, or an empty ring.
+ */
 export function ItemStatus({ requirement, item }: { requirement: CourseRequirement; item: ItemProgress | undefined }) {
+  const score = itemScore(item);
+  const scoreText = score === null ? null : `${Math.round(score)}%`;
+  // Only items with no score (shifts) show a count.
+  const count = requirement.kind === "count" && item ? `${item.current}/${item.target}` : null;
+
+  if (item?.done && item.source === "instructor") {
+    return (
+      <span className={`${PILL} bg-violet-100 text-violet-700`}>
+        <FontAwesomeIcon icon={faUserCheck} className="h-3 w-3" />
+        {requirement.kind !== "manual" && scoreText}
+      </span>
+    );
+  }
   if (item?.done) {
-    const byYou = item.source === "instructor";
     return (
-      <span
-        className={`inline-flex h-7 w-7 items-center justify-center rounded-full ${
-          byYou ? "bg-violet-100 text-violet-700" : "bg-emerald-100 text-emerald-700"
-        }`}
-      >
-        <FontAwesomeIcon icon={byYou ? faUserCheck : faCheck} className="h-3.5 w-3.5" />
+      <span className={`${PILL} bg-emerald-100 text-emerald-700`}>
+        {scoreText ?? count ?? <FontAwesomeIcon icon={faCheck} className="h-3.5 w-3.5" />}
       </span>
     );
   }
-  if (requirement.kind === "count" && item && item.current > 0) {
+  if (scoreText || (count && item && item.current > 0)) {
     return (
-      <span className="inline-flex h-7 min-w-7 items-center justify-center rounded-full bg-amber-50 px-1.5 text-[11px] font-semibold text-amber-700 ring-1 ring-inset ring-amber-600/20">
-        {item.current}/{item.target}
-      </span>
-    );
-  }
-  if (requirement.kind === "skill" && item?.level) {
-    return (
-      <span className="inline-flex h-7 items-center rounded-full bg-amber-50 px-2 text-[10px] font-semibold text-amber-700 ring-1 ring-inset ring-amber-600/20">
-        {item.level}
-      </span>
+      <span className={`${PILL} bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-600/20`}>{scoreText ?? count}</span>
     );
   }
   return <span className="inline-block h-7 w-7 rounded-full border-2 border-dashed border-gray-200" />;
@@ -69,7 +87,7 @@ type Pending = {
   offeringId: string;
   student: { id: string; name: string };
   requirement: CourseRequirement;
-  /** "Lab Activity #3" (requirementName). */
+  /** "Quiz #2" (requirementNames). */
   name: string;
   item: ItemProgress | undefined;
 };

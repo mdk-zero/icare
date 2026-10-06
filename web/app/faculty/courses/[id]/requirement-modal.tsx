@@ -72,7 +72,7 @@ export default function RequirementModal({
   offeringId: string;
   /** null: a new item. */
   requirement: CourseRequirement | null;
-  /** The item's "Lab Activity #3" name, when editing. */
+  /** The item's "Quiz #2" name (requirementNames), when editing. */
   name?: string;
   courseSkillIds: string[];
   catalog: SkillSummary[];
