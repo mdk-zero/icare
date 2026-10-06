@@ -32,12 +32,20 @@ import {
   type CourseRequirement,
   type SkillSummary,
 } from "../../../lib/api";
-import { formatTermDates, requirementDetail, requirementNames } from "../../../lib/course-progress";
+import {
+  formatTermDates,
+  inTopicOrder,
+  requirementDetail,
+  requirementNames,
+  topicKey,
+  type RequirementTopicKey,
+} from "../../../lib/course-progress";
 import RequirementModal from "./requirement-modal";
 import { SkeletonProgressGrid } from "../../../components/skeletons";
 import ProgressTab from "./progress-tab";
 import CourseCrumbs from "./course-crumbs";
 import { courseTabHref, parseCourseTab, type CourseTab } from "../course-tabs";
+import { TopicIcon, groupByTopic } from "../topics";
 
 const NO_SKILLS: SkillSummary[] = [];
 
@@ -47,6 +55,12 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
   const tab = parseCourseTab(useSearchParams().get("tab"));
   const setTab = (next: CourseTab) => window.history.replaceState(null, "", courseTabHref(offeringId, next));
   const [editing, setEditing] = useState<CourseRequirement | null | "new">(null);
+  // The section a new item was added from, which sets its starting kind.
+  const [preset, setPreset] = useState<RequirementTopicKey | null>(null);
+  const addRequirement = (topic: RequirementTopicKey | null = null) => {
+    setPreset(topic);
+    setEditing("new");
+  };
   const [removing, setRemoving] = useState<CourseRequirement | null>(null);
   const [removeBusy, setRemoveBusy] = useState(false);
   const [skillsOpen, setSkillsOpen] = useState(false);
@@ -63,10 +77,14 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
   const names = requirementNames(requirements);
   const nameOf = (id: string) => names[requirements.findIndex((r) => r.id === id)] ?? "requirement";
 
-  const move = async (index: number, delta: -1 | 1) => {
-    const next = [...requirements];
-    const [item] = next.splice(index, 1);
-    next.splice(index + delta, 0, item);
+  // Items move within their section. The saved order becomes the shown one
+  // (grouped by topic), so the mobile app lists them the same way.
+  const move = async (id: string, delta: -1 | 1) => {
+    const next = inTopicOrder(requirements);
+    const i = next.findIndex((r) => r.id === id);
+    const j = i + delta;
+    if (i < 0 || j < 0 || j >= next.length || topicKey(next[i]) !== topicKey(next[j])) return;
+    [next[i], next[j]] = [next[j], next[i]];
     const ids = next.map((r) => r.id);
     setData((prev) => (prev?.data ? { data: { ...prev.data, requirements: next.map((r, position) => ({ ...r, position })) } } : prev!));
     const result = await reorderRequirements(offeringId, ids);
@@ -132,7 +150,7 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
             : tab === "requirements"
             ? {
                 icon: <FontAwesomeIcon icon={faPlus} className="h-4 w-4" />,
-                onClick: () => setEditing("new"),
+                onClick: () => addRequirement(),
                 label: locked ? "The term has ended, so the checklist is locked" : "Add a requirement to the checklist",
                 text: "Add Requirement",
                 disabled: !offering || locked,
@@ -203,55 +221,97 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
         />
       )}
 
-      {tab === "requirements" && (
-        <div className="overflow-hidden rounded-xl border border-hairline bg-surface">
-          {loading ? (
-            <ul className="divide-y divide-hairline" aria-hidden>
-              {Array.from({ length: 4 }).map((_, i) => (
-                <li key={i} className="animate-pulse space-y-2 px-4 py-4">
-                  <div className="h-4 w-28 rounded bg-gray-100" />
-                  <div className="h-4 w-72 rounded bg-gray-100" />
-                </li>
-              ))}
-            </ul>
-          ) : requirements.length === 0 ? (
-            <div className="px-6 py-12 text-center">
-              <FontAwesomeIcon icon={faListCheck} className="mb-3 h-7 w-7 text-gray-300" />
-              <p className="font-semibold text-gray-700">No requirements yet</p>
-              <p className="mx-auto mt-1 max-w-md text-sm text-gray-500">
-                List what your students must accomplish this term, such as &ldquo;3 Patient Cases graded&rdquo; or a skill
-                from the course. Automatic items are met once the work is graded; you score Lab Activities yourself.
-              </p>
-              {!locked && (
-                <button
-                  type="button"
-                  onClick={() => setEditing("new")}
-                  className="mt-4 inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-700"
-                >
-                  <FontAwesomeIcon icon={faPlus} className="h-3.5 w-3.5" />
-                  Add the first requirement
-                </button>
-              )}
-            </div>
-          ) : (
-            <ol className="divide-y divide-hairline">
-              {requirements.map((r, i) => (
-                <RequirementRowView
-                  key={r.id}
-                  index={i}
-                  name={names[i]}
-                  requirement={r}
-                  last={i === requirements.length - 1}
-                  locked={locked}
-                  onMove={(delta) => void move(i, delta)}
-                  onEdit={() => setEditing(r)}
-                  onRemove={() => setRemoving(r)}
-                />
-              ))}
-            </ol>
-          )}
-        </div>
-      )}
+      {tab === "requirements" &&
+        (loading ? (
+          <div className="space-y-4" aria-hidden>
+            {[3, 2].map((rows, k) => (
+              <div key={k} className="animate-pulse overflow-hidden rounded-xl border border-hairline bg-surface">
+                <div className="flex items-center gap-3 border-b border-hairline px-4 py-3">
+                  <div className="h-8 w-8 rounded-lg bg-gray-100" />
+                  <div className="space-y-1.5">
+                    <div className="h-3.5 w-32 rounded bg-gray-200" />
+                    <div className="h-3 w-44 rounded bg-gray-100" />
+                  </div>
+                </div>
+                {Array.from({ length: rows }).map((_, i) => (
+                  <div key={i} className="space-y-2 border-b border-hairline px-4 py-3.5 last:border-b-0">
+                    <div className="h-3.5 w-24 rounded bg-gray-100" />
+                    <div className="h-3.5 w-72 rounded bg-gray-100" />
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        ) : requirements.length === 0 ? (
+          <div className="rounded-xl border border-hairline bg-surface px-6 py-12 text-center">
+            <FontAwesomeIcon icon={faListCheck} className="mb-3 h-7 w-7 text-gray-300" />
+            <p className="font-semibold text-gray-700">No requirements yet</p>
+            <p className="mx-auto mt-1 max-w-md text-sm text-gray-500">
+              List what your students must accomplish this term, such as &ldquo;3 Patient Cases graded&rdquo; or a skill
+              from the course. Automatic items are met once the work is graded; you score Lab Activities yourself.
+            </p>
+            {!locked && (
+              <button
+                type="button"
+                onClick={() => addRequirement()}
+                className="mt-4 inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-700"
+              >
+                <FontAwesomeIcon icon={faPlus} className="h-3.5 w-3.5" />
+                Add the first requirement
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {groupByTopic(requirements).map(({ topic, items }) => (
+              <section
+                key={topic.key}
+                aria-labelledby={`topic-${topic.key}`}
+                className="relative overflow-hidden rounded-xl border border-hairline bg-surface"
+              >
+                <span className={`absolute inset-y-0 left-0 w-1 ${topic.bar}`} aria-hidden />
+                <header className="flex items-center gap-3 border-b border-hairline bg-subtle/60 py-3 pl-5 pr-3">
+                  <TopicIcon topic={topic} />
+                  <div className="min-w-0 flex-1">
+                    <h3 id={`topic-${topic.key}`} className="flex items-center gap-2 font-display text-[15px] font-semibold text-gray-900">
+                      {topic.label}
+                      <span className="rounded-full bg-surface px-1.5 text-[11px] font-semibold text-gray-500 ring-1 ring-inset ring-hairline">
+                        {items.length}
+                      </span>
+                    </h3>
+                    <p className="text-xs text-gray-500">{topic.blurb}</p>
+                  </div>
+                  {!locked && (
+                    <button
+                      type="button"
+                      onClick={() => addRequirement(topic.key)}
+                      aria-label={`Add to ${topic.label}`}
+                      className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors hover:bg-surface ${topic.text}`}
+                    >
+                      <FontAwesomeIcon icon={faPlus} className="h-3 w-3" />
+                      Add
+                    </button>
+                  )}
+                </header>
+                <ol className="divide-y divide-hairline">
+                  {items.map(({ requirement: r, name }, i) => (
+                    <RequirementRowView
+                      key={r.id}
+                      name={name}
+                      requirement={r}
+                      first={i === 0}
+                      last={i === items.length - 1}
+                      locked={locked}
+                      onMove={(delta) => void move(r.id, delta)}
+                      onEdit={() => setEditing(r)}
+                      onRemove={() => setRemoving(r)}
+                    />
+                  ))}
+                </ol>
+              </section>
+            ))}
+          </div>
+        ))}
 
       {tab === "skills" && (
         <div className="rounded-xl border border-hairline bg-surface p-4">
@@ -291,6 +351,7 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
           offeringId={offeringId}
           requirement={editing === "new" ? null : editing}
           name={editing === "new" ? undefined : nameOf(editing.id)}
+          preset={editing === "new" ? preset : null}
           courseSkillIds={detail?.skill_ids ?? []}
           catalog={catalog}
           onClose={() => setEditing(null)}
@@ -342,55 +403,43 @@ function checklistSignature(requirements: CourseRequirement[]): string {
 }
 
 function RequirementRowView({
-  index,
   name,
   requirement: r,
+  first,
   last,
   locked,
   onMove,
   onEdit,
   onRemove,
 }: {
-  index: number;
   name: string;
   requirement: CourseRequirement;
+  first: boolean;
   last: boolean;
   locked: boolean;
   onMove: (delta: -1 | 1) => void;
   onEdit: () => void;
   onRemove: () => void;
 }) {
-  const manual = r.kind === "manual";
-  const shifts = r.kind === "count" && r.activity_type === "shift";
   return (
-    <li className="flex items-center gap-3 px-4 py-3">
+    <li className="flex items-center gap-3 py-3 pl-5 pr-3">
       <div className="min-w-0 flex-1">
         <p className="text-sm font-semibold text-gray-800">{name}</p>
         <p className="text-sm text-gray-500">{requirementDetail(r)}</p>
-        <div className="mt-1 flex flex-wrap gap-1.5">
-          <span
-            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-              manual ? "bg-violet-50 text-violet-700" : "bg-brand-600/10 text-brand-700"
-            }`}
-          >
-            <FontAwesomeIcon icon={manual ? faPenToSquare : faListCheck} className="h-2.5 w-2.5" />
-            {manual ? "You enter the score" : shifts ? "Met by attendance" : "Met by graded work"}
+        {r.removed && (
+          <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-700">
+            <FontAwesomeIcon icon={faTriangleExclamation} className="h-2.5 w-2.5" />
+            The linked activity was deleted
           </span>
-          {r.removed && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-700">
-              <FontAwesomeIcon icon={faTriangleExclamation} className="h-2.5 w-2.5" />
-              The linked activity was deleted
-            </span>
-          )}
-        </div>
+        )}
       </div>
       {!locked && (
         <div className="flex shrink-0 items-center gap-1">
           <button
             type="button"
             onClick={() => onMove(-1)}
-            disabled={index === 0}
-            aria-label="Move up"
+            disabled={first}
+            aria-label={`Move ${name} up`}
             className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 disabled:opacity-30"
           >
             <FontAwesomeIcon icon={faArrowUp} className="h-3.5 w-3.5" />
@@ -399,7 +448,7 @@ function RequirementRowView({
             type="button"
             onClick={() => onMove(1)}
             disabled={last}
-            aria-label="Move down"
+            aria-label={`Move ${name} down`}
             className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 disabled:opacity-30"
           >
             <FontAwesomeIcon icon={faArrowDown} className="h-3.5 w-3.5" />
@@ -417,4 +466,3 @@ function RequirementRowView({
     </li>
   );
 }
-

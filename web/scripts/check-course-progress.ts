@@ -14,6 +14,7 @@ import {
   inTerm,
   parseRequirement,
   requirementLabel,
+  inTopicOrder,
   requirementNames,
   scoreBlock,
   summarize,
@@ -231,6 +232,21 @@ eq(
     req({ kind: 'manual', title: 'Return demonstration' }),
   ]),
   ['Quiz #1', 'Skill #1', 'Quiz #2', 'Skill #2', 'Patient Case #1', 'Case Presentation #1', 'Attendance #1', 'Lab Activity #1'],
+);
+
+console.log('inTopicOrder');
+const mixed = [
+  req({ kind: 'manual', title: 'Return demo' }),
+  req({ kind: 'count', activity_type: 'assessment', target_count: 2 }),
+  req({ kind: 'skill', skill_id: '1-1' }),
+  req({ kind: 'count', activity_type: 'shift', target_count: 4 }),
+  req({ kind: 'activity', activity_type: 'scenario', scenario_id: 'sc1' }),
+  req({ kind: 'activity', activity_type: 'assessment', assessment_id: 'q1' }),
+];
+eq(
+  'sections in a fixed order, each in checklist order',
+  requirementNames(inTopicOrder(mixed)),
+  ['Patient Case #1', 'Quiz #1', 'Quiz #2', 'Skill #1', 'Lab Activity #1', 'Attendance #1'],
 );
 
 if (failures > 0) {

@@ -364,18 +364,34 @@ export function requirementLabel(req: RequirementRow, names: RequirementNames): 
   }
 }
 
-/** The kind of work an item is about, which names it. Manual items are hands-on lab work. */
-const TOPIC: Record<ActivityType, string> = {
+/** The kind of work an item is about, which names and groups it. Manual items are hands-on lab work. */
+export type RequirementTopicKey = ActivityType | 'skill' | 'manual';
+
+/** The order the checklist is shown in: graded app work, skills, hands-on lab work, attendance. */
+export const TOPIC_ORDER: readonly RequirementTopicKey[] = ['scenario', 'assessment', 'case_presentation', 'skill', 'manual', 'shift'];
+
+const TOPIC: Record<RequirementTopicKey, string> = {
   scenario: 'Patient Case',
   assessment: 'Quiz',
   case_presentation: 'Case Presentation',
+  skill: 'Skill',
+  manual: 'Lab Activity',
   shift: 'Attendance',
 };
 
+export function topicKey(req: Pick<RequirementRow, 'kind' | 'activity_type'>): RequirementTopicKey {
+  if (req.kind === 'skill' || req.kind === 'manual') return req.kind;
+  return req.activity_type ?? 'scenario';
+}
+
 export function requirementTopic(req: Pick<RequirementRow, 'kind' | 'activity_type'>): string {
-  if (req.kind === 'skill') return 'Skill';
-  if (req.kind === 'manual') return 'Lab Activity';
-  return TOPIC[req.activity_type ?? 'scenario'];
+  return TOPIC[topicKey(req)];
+}
+
+/** The checklist as it is shown: grouped by topic in TOPIC_ORDER, each group in checklist order. */
+export function inTopicOrder<R extends Pick<RequirementRow, 'kind' | 'activity_type'>>(requirements: readonly R[]): R[] {
+  const rank = (r: R) => TOPIC_ORDER.indexOf(topicKey(r));
+  return requirements.map((r, i) => ({ r, i })).sort((a, b) => rank(a.r) - rank(b.r) || a.i - b.i).map(({ r }) => r);
 }
 
 /**

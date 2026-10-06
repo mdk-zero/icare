@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faCheck, faPenToSquare, faTrashCan, faUserCheck, faXmark } from "@fortawesome/free-solid-svg-icons";
+import { faCheck, faTrashCan, faUserCheck, faXmark } from "@fortawesome/free-solid-svg-icons";
 import {
   addRequirementScore,
   removeRequirementScore,
@@ -21,6 +21,7 @@ import {
 } from "../../lib/course-progress";
 import { EcgLoader } from "../../components/EcgLoader";
 import { toast } from "../../components/Toast";
+import { topicOf } from "./topics";
 
 const dateFmt = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" });
 const when = (at: string | null) => (at ? dateFmt.format(new Date(at)) : "");
@@ -263,8 +264,8 @@ function EntryDialog({
       >
         <div className="flex items-center justify-between border-b border-hairline bg-subtle px-5 py-3">
           <div className="flex min-w-0 items-center gap-3">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-violet-100">
-              <FontAwesomeIcon icon={mode === "mark" ? faUserCheck : faPenToSquare} className="h-5 w-5 text-violet-700" />
+            <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${topicOf(requirement).tile}`}>
+              <FontAwesomeIcon icon={topicOf(requirement).icon} className="h-5 w-5" />
             </span>
             <div className="min-w-0">
               <h2 className="truncate font-display text-lg font-semibold text-gray-900">{title}</h2>

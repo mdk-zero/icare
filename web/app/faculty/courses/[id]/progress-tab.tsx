@@ -8,8 +8,9 @@ import Avatar from "../../../components/Avatar";
 import { SkeletonProgressGrid } from "../../../components/skeletons";
 import { usePageData } from "../../../lib/use-page-data";
 import { fetchCourseProgress, type CourseProgress } from "../../../lib/api";
-import { requirementDetail, requirementNames, type ItemProgress } from "../../../lib/course-progress";
+import { requirementDetail, type ItemProgress } from "../../../lib/course-progress";
 import { ItemStatus, canAct, statusText, useEntryDialog } from "../progress-ui";
+import { TopicIcon, groupByTopic } from "../topics";
 
 type Filter = "all" | "incomplete" | "complete";
 
@@ -55,7 +56,7 @@ export default function ProgressTab({
     }),
   );
 
-  const groups = useMemo(
+  const groupLabels = useMemo(
     () =>
       [...new Set((progress?.students ?? []).map((s) => s.group_label).filter(Boolean))].sort((a, b) =>
         a.localeCompare(b, undefined, { numeric: true }),
@@ -110,10 +111,12 @@ export default function ProgressTab({
   }
 
   const complete = scoped.filter(isComplete).length;
-  const reqs = progress.requirements;
-  const names = requirementNames(reqs);
-  const focusIndex = reqs.findIndex((r) => r.id === focus);
-  const focused = focusIndex >= 0 ? reqs[focusIndex] : null;
+  // Columns run section by section (Patient Cases, Quizzes, ...), each
+  // section opening with a divider.
+  const sections = groupByTopic(progress.requirements);
+  const cols = sections.flatMap((g, k) => g.items.map((it, j) => ({ ...it, topic: g.topic, divider: k > 0 && j === 0 })));
+  const focusedCol = cols.find((c) => c.requirement.id === focus) ?? null;
+  const focused = focusedCol?.requirement ?? null;
   const narrowed = query.trim() !== "" || group !== "";
 
   return (
@@ -133,7 +136,7 @@ export default function ProgressTab({
             className="w-full rounded-xl border border-gray-200 bg-surface py-2 pl-10 pr-3 text-sm text-gray-700 placeholder:text-gray-400 transition-all focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/50"
           />
         </div>
-        {groups.length > 1 && (
+        {groupLabels.length > 1 && (
           <select
             value={group}
             onChange={(e) => setGroup(e.target.value)}
@@ -141,7 +144,7 @@ export default function ProgressTab({
             className="rounded-xl border border-gray-200 bg-surface py-2 pl-3 pr-8 text-sm text-gray-700 transition-all focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/50"
           >
             <option value="">All groups</option>
-            {groups.map((g) => (
+            {groupLabels.map((g) => (
               <option key={g} value={g}>
                 {g}
               </option>
@@ -199,10 +202,10 @@ export default function ProgressTab({
 
       {focused && (
         <div className="mb-3 flex items-start gap-3 rounded-xl border border-brand-600/20 bg-brand-600/5 px-4 py-3 text-sm" role="status">
-          <FontAwesomeIcon icon={faCircleInfo} className="mt-0.5 h-4 w-4 shrink-0 text-brand-600" />
+          {focusedCol && <TopicIcon topic={focusedCol.topic} size="sm" />}
           <div className="min-w-0 flex-1">
             <p className="text-gray-700">
-              <span className="font-semibold text-gray-900">{names[focusIndex]}</span> · {requirementDetail(focused)}
+              <span className="font-semibold text-gray-900">{focusedCol?.name}</span> · {requirementDetail(focused)}
             </p>
             <p className="mt-0.5 text-xs text-gray-500">
               {progress.totals[focused.id] ?? 0} of {progress.students.length} students met it
@@ -228,17 +231,36 @@ export default function ProgressTab({
           <table className="w-full border-separate border-spacing-0 text-sm">
             <thead>
               <tr>
-                <th className="sticky left-0 z-10 min-w-[11rem] border-b border-hairline bg-subtle px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-500 sm:min-w-[15rem] sm:px-4">
+                <th
+                  rowSpan={2}
+                  className="sticky left-0 z-10 min-w-[11rem] border-b border-hairline bg-subtle px-3 py-3 text-left align-bottom text-[11px] font-semibold uppercase tracking-wider text-gray-500 sm:min-w-[15rem] sm:px-4"
+                >
                   Student
                 </th>
-                {reqs.map((r, i) => {
+                {sections.map((g, k) => (
+                  <th
+                    key={g.topic.key}
+                    colSpan={g.items.length}
+                    scope="colgroup"
+                    className={`relative bg-subtle px-2 pb-0.5 pt-3 text-left ${k > 0 ? "border-l border-hairline" : ""}`}
+                  >
+                    <span className={`absolute inset-x-0 top-0 h-[3px] ${g.topic.bar}`} aria-hidden />
+                    <span className={`flex items-center gap-1.5 whitespace-nowrap text-xs font-semibold ${g.topic.text}`}>
+                      <TopicIcon topic={g.topic} size="sm" />
+                      {g.topic.label}
+                    </span>
+                  </th>
+                ))}
+              </tr>
+              <tr>
+                {cols.map(({ requirement: r, name, divider }) => {
                   const on = r.id === focus;
                   return (
                     <th
                       key={r.id}
                       className={`min-w-[7.5rem] border-b border-hairline px-2 py-2 text-left align-bottom transition-colors ${
                         on ? "bg-brand-600/10" : "bg-subtle"
-                      }`}
+                      } ${divider ? "border-l" : ""}`}
                     >
                       <button
                         type="button"
@@ -252,7 +274,7 @@ export default function ProgressTab({
                             on ? "text-brand-800" : "text-gray-700 group-hover/col:text-brand-700"
                           }`}
                         >
-                          {names[i]}
+                          {name}
                           <FontAwesomeIcon
                             icon={faCircleInfo}
                             className={`h-2.5 w-2.5 ${on ? "text-brand-600" : "text-gray-300 group-hover/col:text-brand-600"}`}
@@ -270,7 +292,7 @@ export default function ProgressTab({
             <tbody>
               {students.length === 0 && (
                 <tr>
-                  <td colSpan={reqs.length + 1} className="px-4 py-10 text-center text-sm text-gray-500">
+                  <td colSpan={cols.length + 1} className="px-4 py-10 text-center text-sm text-gray-500">
                     {narrowed ? "No students match your search or group." : "No students in this view."}
                   </td>
                 </tr>
@@ -297,7 +319,7 @@ export default function ProgressTab({
                       </span>
                     </div>
                   </td>
-                  {reqs.map((r, i) => {
+                  {cols.map(({ requirement: r, name, divider }) => {
                     const item = progress.progress[s.id]?.[r.id];
                     const actionable = canAct(r, item);
                     const text = statusText(r, item);
@@ -305,14 +327,16 @@ export default function ProgressTab({
                     return (
                       <td
                         key={r.id}
-                        className={`border-b border-hairline px-2 py-2.5 group-hover:bg-subtle ${r.id === focus ? "bg-brand-600/[0.04]" : ""}`}
+                        className={`border-b border-hairline px-2 py-2.5 group-hover:bg-subtle ${r.id === focus ? "bg-brand-600/[0.04]" : ""} ${
+                          divider ? "border-l" : ""
+                        }`}
                       >
                         <button
                           type="button"
                           title={text}
-                          aria-label={`${s.name}, ${names[i]}: ${text}`}
+                          aria-label={`${s.name}, ${name}: ${text}`}
                           disabled={!actionable || busy === key}
-                          onClick={() => act(offeringId, s, r, names[i], item)}
+                          onClick={() => act(offeringId, s, r, name, item)}
                           className={`rounded-full transition-transform ${
                             actionable ? "cursor-pointer hover:scale-110" : "cursor-default"
                           } ${busy === key ? "animate-pulse" : ""}`}

@@ -385,6 +385,28 @@
   --color-purple-600: #a586f0;
   --color-purple-700: #c0aaf6;
   --color-purple-800: #d9cbfb;
+
+  /* The checklist's topic accents (Quizzes, Skills, Lab Activities). */
+  --color-sky-50: #0b2130;
+  --color-sky-100: #0e2b3f;
+  --color-sky-200: #133852;
+  --color-sky-600: #4fb6ea;
+  --color-sky-700: #84cdf3;
+  --color-sky-800: #b6e1f9;
+
+  --color-indigo-50: #171a36;
+  --color-indigo-100: #1e2247;
+  --color-indigo-200: #282e5f;
+  --color-indigo-600: #8f96f5;
+  --color-indigo-700: #b0b5f8;
+  --color-indigo-800: #d0d3fb;
+
+  --color-violet-50: #1e1534;
+  --color-violet-100: #281c46;
+  --color-violet-200: #35265e;
+  --color-violet-600: #a98bf3;
+  --color-violet-700: #c4aef7;
+  --color-violet-800: #ddd0fb;
 }
 
 /* The browser paints scrollbars and form controls to match. */

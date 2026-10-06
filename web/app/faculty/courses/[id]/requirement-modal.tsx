@@ -9,7 +9,7 @@ import {
   faListCheck,
   faPenToSquare,
   faTriangleExclamation,
-  faUserCheck,
+  faFlask,
   faXmark,
 } from "@fortawesome/free-solid-svg-icons";
 import {
@@ -28,6 +28,7 @@ import {
   requirementLabel,
   type ActivityType,
   type RequirementKind,
+  type RequirementTopicKey,
 } from "../../../lib/course-progress";
 import { PASSING_SCORE } from "../../../lib/reports/data";
 import { EcgLoader } from "../../../components/EcgLoader";
@@ -37,7 +38,7 @@ const KINDS: { kind: RequirementKind; label: string; hint: string; icon: IconDef
   { kind: "activity", label: "Specific activity", hint: "One Patient Case, Quiz or Case Presentation", icon: faClipboardCheck },
   { kind: "count", label: "Count", hint: "A number of graded activities, or shifts attended", icon: faHashtag },
   { kind: "skill", label: "Skill", hint: "Graded work covering one of the course's skills", icon: faListCheck },
-  { kind: "manual", label: "Manual", hint: "Anything else; you tick it per student", icon: faUserCheck },
+  { kind: "manual", label: "Lab Activity", hint: "Hands-on work, like a return demonstration; you enter each score", icon: faFlask },
 ];
 
 const ACTIVITY_TYPES: { type: Exclude<ActivityType, "shift">; label: string }[] = [
@@ -64,6 +65,7 @@ export default function RequirementModal({
   offeringId,
   requirement,
   name,
+  preset,
   courseSkillIds,
   catalog,
   onClose,
@@ -74,14 +76,20 @@ export default function RequirementModal({
   requirement: CourseRequirement | null;
   /** The item's "Quiz #2" name (requirementNames), when editing. */
   name?: string;
+  /** A new item's starting kind, from the section it was added from. */
+  preset?: RequirementTopicKey | null;
   courseSkillIds: string[];
   catalog: SkillSummary[];
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const [kind, setKind] = useState<RequirementKind>(requirement?.kind ?? "count");
+  const [kind, setKind] = useState<RequirementKind>(
+    requirement?.kind ?? (preset === "skill" || preset === "manual" ? preset : "count"),
+  );
   const [title, setTitle] = useState(requirement?.title ?? "");
-  const [activityType, setActivityType] = useState<ActivityType>(requirement?.activity_type ?? "scenario");
+  const [activityType, setActivityType] = useState<ActivityType>(
+    requirement?.activity_type ?? (preset && preset !== "skill" && preset !== "manual" ? preset : "scenario"),
+  );
   const [activityId, setActivityId] = useState(
     requirement?.scenario_id ?? requirement?.assessment_id ?? requirement?.presentation_id ?? "",
   );
