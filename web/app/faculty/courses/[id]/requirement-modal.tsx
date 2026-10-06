@@ -66,6 +66,7 @@ export default function RequirementModal({
   requirement,
   name,
   preset,
+  presetSkillId,
   courseSkillIds,
   catalog,
   onClose,
@@ -78,6 +79,8 @@ export default function RequirementModal({
   name?: string;
   /** A new item's starting kind, from the section it was added from. */
   preset?: RequirementTopicKey | null;
+  /** A new Skill item's skill, when added from the Skills tab. */
+  presetSkillId?: string | null;
   courseSkillIds: string[];
   catalog: SkillSummary[];
   onClose: () => void;
@@ -96,7 +99,7 @@ export default function RequirementModal({
   const [targetCount, setTargetCount] = useState(String(requirement?.target_count ?? 3));
   const [minScore, setMinScore] = useState(scoreText(requirement?.min_score ?? null));
   const [skillsOnly, setSkillsOnly] = useState(requirement?.skills_only ?? false);
-  const [skillId, setSkillId] = useState(requirement?.skill_id ?? "");
+  const [skillId, setSkillId] = useState(requirement?.skill_id ?? presetSkillId ?? "");
   const [skillLevel, setSkillLevel] = useState<number | null>(requirement ? requirement.min_score : 50);
   const [activities, setActivities] = useState<CourseActivities | null>(null);
   const [saving, setSaving] = useState(false);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -14,7 +14,6 @@ import {
   faPlus,
   faTrashCan,
   faTriangleExclamation,
-  faWandMagicSparkles,
 } from "@fortawesome/free-solid-svg-icons";
 import PageHeader from "../../../components/PageHeader";
 import ActionsMenu from "../../../components/ActionsMenu";
@@ -45,6 +44,7 @@ import { SkeletonProgressGrid } from "../../../components/skeletons";
 import ProgressTab from "./progress-tab";
 import CourseCrumbs from "./course-crumbs";
 import CourseTabBar, { COURSE_TAB_PANEL_ID, courseTabId } from "./course-tab-bar";
+import SkillsTab from "./skills-tab";
 import { courseTabHref, parseCourseTab, type CourseTab } from "../course-tabs";
 import { TopicIcon, groupByTopic } from "../topics";
 
@@ -57,9 +57,9 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
   const setTab = (next: CourseTab) => window.history.replaceState(null, "", courseTabHref(offeringId, next));
   const [editing, setEditing] = useState<CourseRequirement | null | "new">(null);
   // The section a new item was added from, which sets its starting kind.
-  const [preset, setPreset] = useState<RequirementTopicKey | null>(null);
-  const addRequirement = (topic: RequirementTopicKey | null = null) => {
-    setPreset(topic);
+  const [preset, setPreset] = useState<{ topic: RequirementTopicKey | null; skillId: string | null }>({ topic: null, skillId: null });
+  const addRequirement = (topic: RequirementTopicKey | null = null, skillId: string | null = null) => {
+    setPreset({ topic, skillId });
     setEditing("new");
   };
   const [removing, setRemoving] = useState<CourseRequirement | null>(null);
@@ -74,7 +74,6 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
   const offering = detail?.offering ?? null;
   const requirements = detail?.requirements ?? [];
   const locked = offering?.locked ?? false;
-  const skillById = useMemo(() => new Map(catalog.map((s) => [s.id, s])), [catalog]);
   const names = requirementNames(requirements);
   const nameOf = (id: string) => names[requirements.findIndex((r) => r.id === id)] ?? "requirement";
 
@@ -108,18 +107,6 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
     toast("Requirement removed");
     await refresh();
   };
-
-  const skillGroups = useMemo(() => {
-    const groups = new Map<number, { area: string; skills: SkillSummary[] }>();
-    for (const id of detail?.skill_ids ?? []) {
-      const s = skillById.get(id);
-      if (!s) continue;
-      const g = groups.get(s.chapter) ?? { area: s.area, skills: [] };
-      g.skills.push(s);
-      groups.set(s.chapter, g);
-    }
-    return [...groups.entries()].sort((a, b) => a[0] - b[0]);
-  }, [detail?.skill_ids, skillById]);
 
   if (!loading && !offering) {
     return (
@@ -286,39 +273,19 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
             </div>
           ))}
 
-        {tab === "skills" && (
-          <div className="rounded-xl border border-hairline bg-surface p-4">
-            <p className="mb-3 text-sm text-gray-500">
-              The skills from the catalog this course covers. The list is shared with your Dean and every instructor teaching{" "}
-              {offering?.course.code ?? "the course"}; skill requirements choose from it.
-            </p>
-            {skillGroups.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-gray-300 px-6 py-10 text-center">
-                <FontAwesomeIcon icon={faWandMagicSparkles} className="mb-3 h-7 w-7 text-gray-300" />
-                <p className="font-semibold text-gray-700">No skills picked yet</p>
-                <p className="mt-1 text-sm text-gray-500">Use Edit Skills to pick them, or let Detect with AI suggest them from the course description.</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {skillGroups.map(([chapter, g]) => (
-                  <section key={chapter}>
-                    <h3 className="mb-1.5 text-sm font-semibold text-gray-800">
-                      Chapter {chapter} · {g.area}
-                    </h3>
-                    <ul className="flex flex-wrap gap-1.5">
-                      {g.skills.map((s) => (
-                        <li key={s.id} className="rounded-lg bg-brand-600/10 px-2.5 py-1 text-xs text-brand-800">
-                          <span className="font-mono">{s.id}</span> {s.title}
-                        </li>
-                      ))}
-                    </ul>
-                  </section>
-                ))}
-              </div>
-            )}
-          </div>
+        {tab === "skills" && offering && (
+          <SkillsTab
+            offeringId={offeringId}
+            courseCode={offering.course.code}
+            skillIds={detail?.skill_ids ?? []}
+            catalog={catalog}
+            requirements={requirements}
+            signature={checklistSignature(requirements)}
+            locked={locked}
+            onAddRequirement={(skillId) => addRequirement("skill", skillId)}
+            onEditSkills={() => setSkillsOpen(true)}
+          />
         )}
-
       </div>
 
       {editing && offering && (
@@ -326,7 +293,8 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
           offeringId={offeringId}
           requirement={editing === "new" ? null : editing}
           name={editing === "new" ? undefined : nameOf(editing.id)}
-          preset={editing === "new" ? preset : null}
+          preset={editing === "new" ? preset.topic : null}
+          presetSkillId={editing === "new" ? preset.skillId : null}
           courseSkillIds={detail?.skill_ids ?? []}
           catalog={catalog}
           onClose={() => setEditing(null)}
