@@ -69,7 +69,7 @@ const navItems: NavItem[] = [
     label: "Case Presentations",
     href: "/faculty/cases",
     icon: faFilePrescription,
-    section: "Teaching",
+    section: "Clinical",
   },
   // Study materials per Taylor's skill that students open in the mobile app.
   {
