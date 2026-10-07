@@ -91,8 +91,8 @@ export default function DemoPicker({ onClose }: { onClose: () => void }) {
               Try iCARE++
             </h2>
             <p className="mt-1 text-sm leading-relaxed text-white/55">
-              Pick a role to explore. It runs on sample data — change anything you like; it all resets
-              when you log out.
+              Pick a role to explore. It runs on sample data — change anything you like; it all
+              resets when you log out.
             </p>
           </div>
           <button
@@ -120,7 +120,9 @@ export default function DemoPicker({ onClose }: { onClose: () => void }) {
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block font-semibold leading-tight text-white">{label}</span>
-                  <span className="mt-0.5 block text-sm leading-snug text-white/55">{description}</span>
+                  <span className="mt-0.5 block text-sm leading-snug text-white/55">
+                    {description}
+                  </span>
                 </span>
                 {starting === role ? (
                   <EcgLoader className="text-(--auth-accent)" />

@@ -54,11 +54,18 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
   // The tab lives in the URL, so it can be linked to and Back returns to it.
   // replaceState keeps useSearchParams in step without a navigation.
   const tab = parseCourseTab(useSearchParams().get("tab"));
-  const setTab = (next: CourseTab) => window.history.replaceState(null, "", courseTabHref(offeringId, next));
+  const setTab = (next: CourseTab) =>
+    window.history.replaceState(null, "", courseTabHref(offeringId, next));
   const [editing, setEditing] = useState<CourseRequirement | null | "new">(null);
   // The section a new item was added from, which sets its starting kind.
-  const [preset, setPreset] = useState<{ topic: RequirementTopicKey | null; skillId: string | null }>({ topic: null, skillId: null });
-  const addRequirement = (topic: RequirementTopicKey | null = null, skillId: string | null = null) => {
+  const [preset, setPreset] = useState<{
+    topic: RequirementTopicKey | null;
+    skillId: string | null;
+  }>({ topic: null, skillId: null });
+  const addRequirement = (
+    topic: RequirementTopicKey | null = null,
+    skillId: string | null = null,
+  ) => {
     setPreset({ topic, skillId });
     setEditing("new");
   };
@@ -66,8 +73,12 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
   const [removeBusy, setRemoveBusy] = useState(false);
   const [skillsOpen, setSkillsOpen] = useState(false);
 
-  const { data, loading, refresh, setData } = usePageData(`faculty:course:${offeringId}`, () => fetchFacultyCourse(offeringId));
-  const { data: catalog = NO_SKILLS } = usePageData("skills:catalog", fetchSkillCatalog, { freshFor: 10 * 60_000 });
+  const { data, loading, refresh, setData } = usePageData(`faculty:course:${offeringId}`, () =>
+    fetchFacultyCourse(offeringId),
+  );
+  const { data: catalog = NO_SKILLS } = usePageData("skills:catalog", fetchSkillCatalog, {
+    freshFor: 10 * 60_000,
+  });
 
   const detail = data?.data ?? null;
   const loadError = data?.error ?? null;
@@ -86,7 +97,11 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
     if (i < 0 || j < 0 || j >= next.length || topicKey(next[i]) !== topicKey(next[j])) return;
     [next[i], next[j]] = [next[j], next[i]];
     const ids = next.map((r) => r.id);
-    setData((prev) => (prev?.data ? { data: { ...prev.data, requirements: next.map((r, position) => ({ ...r, position })) } } : prev!));
+    setData((prev) =>
+      prev?.data
+        ? { data: { ...prev.data, requirements: next.map((r, position) => ({ ...r, position })) } }
+        : prev!,
+    );
     const result = await reorderRequirements(offeringId, ids);
     if (result.error !== undefined) {
       toast(result.error, "error");
@@ -125,13 +140,11 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
     <div>
       <CourseCrumbs offeringId={offeringId} code={offering?.course.code ?? null} tab={tab} />
       <PageHeader
-        badge={{ icon: <FontAwesomeIcon icon={faBookMedical} className="h-3.5 w-3.5" />, label: offering?.term.name ?? "Course" }}
+        badge={{
+          icon: <FontAwesomeIcon icon={faBookMedical} className="h-3.5 w-3.5" />,
+          label: offering?.term.name ?? "Course",
+        }}
         title={offering ? `${offering.course.code} · ${offering.course.title}` : "Course"}
-        subtitle={
-          offering
-            ? `${formatTermDates(offering.term)} · ${offering.sections.map((s) => s.name).join(", ")} · ${offering.student_count} student${offering.student_count === 1 ? "" : "s"}`
-            : "Loading…"
-        }
       />
 
       {locked && (
@@ -151,27 +164,56 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
         active={tab}
         onChange={setTab}
         tabs={[
-          { id: "progress", label: "Progress", icon: faChartColumn, count: offering?.student_count ?? 0 },
-          { id: "requirements", label: "Requirements", icon: faListCheck, count: requirements.length },
-          { id: "skills", label: "Skills", icon: faBookMedical, count: detail?.skill_ids.length ?? 0 },
+          {
+            id: "progress",
+            label: "Progress",
+            icon: faChartColumn,
+            count: offering?.student_count ?? 0,
+          },
+          {
+            id: "requirements",
+            label: "Requirements",
+            icon: faListCheck,
+            count: requirements.length,
+          },
+          {
+            id: "skills",
+            label: "Skills",
+            icon: faBookMedical,
+            count: detail?.skill_ids.length ?? 0,
+          },
         ]}
         action={
           tab === "requirements"
             ? {
                 icon: faPlus,
                 text: "Add Requirement",
-                label: locked ? "The term has ended, so the checklist is locked" : "Add a requirement to the checklist",
+                label: locked
+                  ? "The term has ended, so the checklist is locked"
+                  : "Add a requirement to the checklist",
                 onClick: () => addRequirement(),
                 disabled: !offering || locked,
               }
             : tab === "skills"
-              ? { icon: faPenToSquare, text: "Edit Skills", label: "Edit the course's skill list", onClick: () => setSkillsOpen(true), disabled: !offering }
+              ? {
+                  icon: faPenToSquare,
+                  text: "Edit Skills",
+                  label: "Edit the course's skill list",
+                  onClick: () => setSkillsOpen(true),
+                  disabled: !offering,
+                }
               : undefined
         }
       />
 
       {/* Keyed by tab so its content fades in; opacity only, nothing moves. */}
-      <div key={tab} id={COURSE_TAB_PANEL_ID} role="tabpanel" aria-labelledby={courseTabId(tab)} className="animate-fade-in">
+      <div
+        key={tab}
+        id={COURSE_TAB_PANEL_ID}
+        role="tabpanel"
+        aria-labelledby={courseTabId(tab)}
+        className="animate-fade-in"
+      >
         {tab === "progress" && !offering && loading && <SkeletonProgressGrid />}
         {tab === "progress" && offering && (
           <ProgressTab
@@ -185,7 +227,10 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
           (loading ? (
             <div className="space-y-4" aria-hidden>
               {[3, 2].map((rows, k) => (
-                <div key={k} className="animate-pulse overflow-hidden rounded-xl border border-hairline bg-surface">
+                <div
+                  key={k}
+                  className="animate-pulse overflow-hidden rounded-xl border border-hairline bg-surface"
+                >
                   <div className="flex items-center gap-3 border-b border-hairline px-4 py-3">
                     <div className="h-8 w-8 rounded-lg bg-gray-100" />
                     <div className="space-y-1.5">
@@ -194,7 +239,10 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
                     </div>
                   </div>
                   {Array.from({ length: rows }).map((_, i) => (
-                    <div key={i} className="space-y-2 border-b border-hairline px-4 py-3.5 last:border-b-0">
+                    <div
+                      key={i}
+                      className="space-y-2 border-b border-hairline px-4 py-3.5 last:border-b-0"
+                    >
                       <div className="h-3.5 w-24 rounded bg-gray-100" />
                       <div className="h-3.5 w-72 rounded bg-gray-100" />
                     </div>
@@ -207,8 +255,9 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
               <FontAwesomeIcon icon={faListCheck} className="mb-3 h-7 w-7 text-gray-300" />
               <p className="font-semibold text-gray-700">No requirements yet</p>
               <p className="mx-auto mt-1 max-w-md text-sm text-gray-500">
-                List what your students must accomplish this term, such as &ldquo;3 Patient Cases graded&rdquo; or a skill
-                from the course. Automatic items are met once the work is graded; you score Lab Activities yourself.
+                List what your students must accomplish this term, such as &ldquo;3 Patient Cases
+                graded&rdquo; or a skill from the course. Automatic items are met once the work is
+                graded; you score Lab Activities yourself.
               </p>
               {!locked && (
                 <button
@@ -233,7 +282,10 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
                   <header className="flex items-center gap-3 border-b border-hairline bg-subtle/60 py-3 pl-5 pr-3">
                     <TopicIcon topic={topic} />
                     <div className="min-w-0 flex-1">
-                      <h3 id={`topic-${topic.key}`} className="flex items-center gap-2 font-display text-[15px] font-semibold text-gray-900">
+                      <h3
+                        id={`topic-${topic.key}`}
+                        className="flex items-center gap-2 font-display text-[15px] font-semibold text-gray-900"
+                      >
                         {topic.label}
                         <span className="rounded-full bg-surface px-1.5 text-[11px] font-semibold text-gray-500 ring-1 ring-inset ring-hairline">
                           {items.length}
@@ -340,7 +392,19 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
 function checklistSignature(requirements: CourseRequirement[]): string {
   let hash = 5381;
   // The label is derived from the rest, so the item fields are enough.
-  const fields = requirements.map((r) => [r.id, r.position, r.kind, r.activity_type, r.scenario_id, r.assessment_id, r.presentation_id, r.target_count, r.skill_id, r.min_score, r.skills_only]);
+  const fields = requirements.map((r) => [
+    r.id,
+    r.position,
+    r.kind,
+    r.activity_type,
+    r.scenario_id,
+    r.assessment_id,
+    r.presentation_id,
+    r.target_count,
+    r.skill_id,
+    r.min_score,
+    r.skills_only,
+  ]);
   for (const ch of JSON.stringify(fields)) hash = ((hash << 5) + hash + ch.charCodeAt(0)) | 0;
   return String(hash >>> 0);
 }

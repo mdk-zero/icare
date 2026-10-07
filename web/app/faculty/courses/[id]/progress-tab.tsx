@@ -3,7 +3,14 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faCircleInfo, faListCheck, faMagnifyingGlass, faUserCheck, faUsers, faXmark } from "@fortawesome/free-solid-svg-icons";
+import {
+  faCircleInfo,
+  faListCheck,
+  faMagnifyingGlass,
+  faUserCheck,
+  faUsers,
+  faXmark,
+} from "@fortawesome/free-solid-svg-icons";
 import Avatar from "../../../components/Avatar";
 import { SkeletonProgressGrid } from "../../../components/skeletons";
 import { usePageData } from "../../../lib/use-page-data";
@@ -34,18 +41,24 @@ export default function ProgressTab({
   const [query, setQuery] = useState("");
   const [group, setGroup] = useState("");
   const [focus, setFocus] = useState<string | null>(null);
-  const { data, loading, setData } = usePageData(`faculty:course-progress:${offeringId}:${signature}`, () =>
-    fetchCourseProgress(offeringId),
+  const { data, loading, setData } = usePageData(
+    `faculty:course-progress:${offeringId}:${signature}`,
+    () => fetchCourseProgress(offeringId),
   );
   const progress = data?.data ?? null;
 
   // Rows are ranked once, lowest progress first, and keep that order while the
   // instructor works: every write refetches the grid, and re-sorting then
   // would move the row being scored out from under the pointer.
-  const rosterKey = (progress?.students ?? []).map((s) => s.id).sort().join(",");
+  const rosterKey = (progress?.students ?? [])
+    .map((s) => s.id)
+    .sort()
+    .join(",");
   const [order, setOrder] = useState<{ key: string; rank: Record<string, number> } | null>(null);
   if (progress && order?.key !== rosterKey) {
-    const ranked = [...progress.students].sort((a, b) => ratio(a) - ratio(b) || a.name.localeCompare(b.name));
+    const ranked = [...progress.students].sort(
+      (a, b) => ratio(a) - ratio(b) || a.name.localeCompare(b.name),
+    );
     setOrder({ key: rosterKey, rank: Object.fromEntries(ranked.map((s, i) => [s.id, i])) });
   }
 
@@ -58,8 +71,8 @@ export default function ProgressTab({
 
   const groupLabels = useMemo(
     () =>
-      [...new Set((progress?.students ?? []).map((s) => s.group_label).filter(Boolean))].sort((a, b) =>
-        a.localeCompare(b, undefined, { numeric: true }),
+      [...new Set((progress?.students ?? []).map((s) => s.group_label).filter(Boolean))].sort(
+        (a, b) => a.localeCompare(b, undefined, { numeric: true }),
       ),
     [progress?.students],
   );
@@ -70,17 +83,27 @@ export default function ProgressTab({
     const q = query.trim().toLowerCase();
     return [...(progress?.students ?? [])]
       .sort((a, b) => (rank[a.id] ?? 0) - (rank[b.id] ?? 0))
-      .filter((s) => (!group || s.group_label === group) && (!q || s.name.toLowerCase().includes(q)));
+      .filter(
+        (s) => (!group || s.group_label === group) && (!q || s.name.toLowerCase().includes(q)),
+      );
   }, [progress?.students, order?.rank, query, group]);
   const isComplete = (s: { done: number; total: number }) => s.total > 0 && s.done === s.total;
   const students =
-    filter === "complete" ? scoped.filter(isComplete) : filter === "incomplete" ? scoped.filter((s) => !isComplete(s)) : scoped;
+    filter === "complete"
+      ? scoped.filter(isComplete)
+      : filter === "incomplete"
+        ? scoped.filter((s) => !isComplete(s))
+        : scoped;
 
   if (loading) {
     return <SkeletonProgressGrid />;
   }
   if (data?.error) {
-    return <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">{data.error}</div>;
+    return (
+      <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        {data.error}
+      </div>
+    );
   }
   if (!progress || progress.requirements.length === 0) {
     return (
@@ -114,7 +137,9 @@ export default function ProgressTab({
   // Columns run section by section (Patient Cases, Quizzes, ...), each
   // section opening with a divider.
   const sections = groupByTopic(progress.requirements);
-  const cols = sections.flatMap((g, k) => g.items.map((it, j) => ({ ...it, topic: g.topic, divider: k > 0 && j === 0 })));
+  const cols = sections.flatMap((g, k) =>
+    g.items.map((it, j) => ({ ...it, topic: g.topic, divider: k > 0 && j === 0 })),
+  );
   const focusedCol = cols.find((c) => c.requirement.id === focus) ?? null;
   const focused = focusedCol?.requirement ?? null;
   const narrowed = query.trim() !== "" || group !== "";
@@ -151,7 +176,11 @@ export default function ProgressTab({
             ))}
           </select>
         )}
-        <div className="flex gap-1 rounded-xl bg-subtle p-1" role="radiogroup" aria-label="Show students">
+        <div
+          className="flex gap-1 rounded-xl bg-subtle p-1"
+          role="radiogroup"
+          aria-label="Show students"
+        >
           {(
             [
               ["all", "All", scoped.length],
@@ -166,7 +195,9 @@ export default function ProgressTab({
               aria-checked={filter === key}
               onClick={() => setFilter(key)}
               className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                filter === key ? "bg-surface text-brand-700 shadow-sm" : "text-gray-500 hover:text-gray-800"
+                filter === key
+                  ? "bg-surface text-brand-700 shadow-sm"
+                  : "text-gray-500 hover:text-gray-800"
               }`}
             >
               {label} <span className="text-xs opacity-70">{n}</span>
@@ -175,44 +206,27 @@ export default function ProgressTab({
         </div>
       </div>
 
-      <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-gray-500">
-        <span className="flex items-center gap-1.5">
-          <span className="inline-flex h-4 items-center rounded-full bg-emerald-100 px-1.5 text-[10px] font-semibold text-emerald-700">
-            86%
-          </span>
-          Met by graded work
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="inline-flex h-4 items-center rounded-full bg-amber-50 px-1.5 text-[10px] font-semibold text-amber-700 ring-1 ring-inset ring-amber-600/20">
-            62%
-          </span>
-          Not met yet
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-violet-100 text-violet-700">
-            <FontAwesomeIcon icon={faUserCheck} className="h-2 w-2" />
-          </span>
-          Entered or marked by you
-        </span>
-        <span className="flex items-center gap-1.5 sm:ml-auto">
-          <FontAwesomeIcon icon={faCircleInfo} className="h-3 w-3 text-gray-400" />
-          Tap a column&rsquo;s name to see what it asks for
-        </span>
-      </div>
-
       {focused && (
-        <div className="mb-3 flex items-start gap-3 rounded-xl border border-brand-600/20 bg-brand-600/5 px-4 py-3 text-sm" role="status">
+        <div
+          className="mb-3 flex items-start gap-3 rounded-xl border border-brand-600/20 bg-brand-600/5 px-4 py-3 text-sm"
+          role="status"
+        >
           {focusedCol && <TopicIcon topic={focusedCol.topic} size="sm" />}
           <div className="min-w-0 flex-1">
             <p className="text-gray-700">
-              <span className="font-semibold text-gray-900">{focusedCol?.name}</span> · {requirementDetail(focused)}
+              <span className="font-semibold text-gray-900">{focusedCol?.name}</span> ·{" "}
+              {requirementDetail(focused)}
             </p>
             <p className="mt-0.5 text-xs text-gray-500">
               {progress.totals[focused.id] ?? 0} of {progress.students.length} students met it
               {focused.kind === "manual" ? " · click a student’s cell to enter their score" : ""}
             </p>
           </div>
-          <button type="button" onClick={onOpenRequirements} className="shrink-0 text-xs font-semibold text-brand-700 hover:underline">
+          <button
+            type="button"
+            onClick={onOpenRequirements}
+            className="shrink-0 text-xs font-semibold text-brand-700 hover:underline"
+          >
             Edit
           </button>
           <button
@@ -244,8 +258,13 @@ export default function ProgressTab({
                     scope="colgroup"
                     className={`relative bg-subtle px-2 pb-0.5 pt-3 text-left ${k > 0 ? "border-l border-hairline" : ""}`}
                   >
-                    <span className={`absolute inset-x-0 top-0 h-[3px] ${g.topic.bar}`} aria-hidden />
-                    <span className={`flex items-center gap-1.5 whitespace-nowrap text-xs font-semibold ${g.topic.text}`}>
+                    <span
+                      className={`absolute inset-x-0 top-0 h-[3px] ${g.topic.bar}`}
+                      aria-hidden
+                    />
+                    <span
+                      className={`flex items-center gap-1.5 whitespace-nowrap text-xs font-semibold ${g.topic.text}`}
+                    >
                       <TopicIcon topic={g.topic} size="sm" />
                       {g.topic.label}
                     </span>
@@ -292,8 +311,13 @@ export default function ProgressTab({
             <tbody>
               {students.length === 0 && (
                 <tr>
-                  <td colSpan={cols.length + 1} className="px-4 py-10 text-center text-sm text-gray-500">
-                    {narrowed ? "No students match your search or group." : "No students in this view."}
+                  <td
+                    colSpan={cols.length + 1}
+                    className="px-4 py-10 text-center text-sm text-gray-500"
+                  >
+                    {narrowed
+                      ? "No students match your search or group."
+                      : "No students in this view."}
                   </td>
                 </tr>
               )}
@@ -302,17 +326,28 @@ export default function ProgressTab({
                   <td className="sticky left-0 z-10 border-b border-hairline bg-surface px-3 py-2.5 group-hover:bg-subtle sm:px-4">
                     <div className="flex items-center gap-3">
                       <span className="hidden shrink-0 sm:block">
-                        <Avatar name={s.name} src={s.picture_url} userId={s.id} sex={s.sex} size="sm" />
+                        <Avatar
+                          name={s.name}
+                          src={s.picture_url}
+                          userId={s.id}
+                          sex={s.sex}
+                          size="sm"
+                        />
                       </span>
                       <div className="min-w-0">
-                        <Link href={`/faculty/students/${s.id}`} className="block truncate font-medium text-gray-800 hover:underline">
+                        <Link
+                          href={`/faculty/students/${s.id}`}
+                          className="block truncate font-medium text-gray-800 hover:underline"
+                        >
                           {s.name}
                         </Link>
                         <p className="truncate text-xs text-gray-500">{s.group_label}</p>
                       </div>
                       <span
                         className={`ml-auto shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                          s.total > 0 && s.done === s.total ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-gray-600"
+                          s.total > 0 && s.done === s.total
+                            ? "bg-emerald-50 text-emerald-700"
+                            : "bg-gray-100 text-gray-600"
                         }`}
                       >
                         {s.done}/{s.total}
@@ -353,9 +388,10 @@ export default function ProgressTab({
         </div>
       </div>
       <p className="mt-2 text-xs text-gray-500">
-        A cell shows the best score on that activity or skill; a count shows the average across that work this term. Click
-        a cell with no grade to enter the score the student earned outside the app; on a count, each score adds one more
-        piece of work. Grades from graded work can&rsquo;t be changed here.
+        A cell shows the best score on that activity or skill; a count shows the average across that
+        work this term. Click a cell with no grade to enter the score the student earned outside the
+        app; on a count, each score adds one more piece of work. Grades from graded work can&rsquo;t
+        be changed here.
       </p>
       {dialog}
     </div>
@@ -367,12 +403,20 @@ function ratio(s: { done: number; total: number }) {
 }
 
 /** The progress after one tick: the cell, the student's count and the item's total. */
-function applyTick(data: CourseProgress, studentId: string, requirementId: string, item: ItemProgress): CourseProgress {
+function applyTick(
+  data: CourseProgress,
+  studentId: string,
+  requirementId: string,
+  item: ItemProgress,
+): CourseProgress {
   const before = data.progress[studentId]?.[requirementId]?.done ?? false;
   const delta = Number(item.done) - Number(before);
   return {
     ...data,
-    progress: { ...data.progress, [studentId]: { ...data.progress[studentId], [requirementId]: item } },
+    progress: {
+      ...data.progress,
+      [studentId]: { ...data.progress[studentId], [requirementId]: item },
+    },
     students: data.students.map((s) => (s.id === studentId ? { ...s, done: s.done + delta } : s)),
     totals: { ...data.totals, [requirementId]: (data.totals[requirementId] ?? 0) + delta },
   };

@@ -53,7 +53,9 @@ export default function FacultyCoursesClient() {
   const [showPast, setShowPast] = useState(false);
 
   const terms = [...new Map(offerings.map((o) => [o.term.id, o.term])).values()].sort(
-    (a, b) => STATUS_ORDER[termStatus(a)] - STATUS_ORDER[termStatus(b)] || b.starts_on.localeCompare(a.starts_on),
+    (a, b) =>
+      STATUS_ORDER[termStatus(a)] - STATUS_ORDER[termStatus(b)] ||
+      b.starts_on.localeCompare(a.starts_on),
   );
   const active = terms.filter((t) => termStatus(t) !== "ended");
   const past = terms.filter((t) => termStatus(t) === "ended");
@@ -65,7 +67,10 @@ export default function FacultyCoursesClient() {
   return (
     <div>
       <PageHeader
-        badge={{ icon: <FontAwesomeIcon icon={faBookMedical} className="h-3.5 w-3.5" />, label: "Teaching" }}
+        badge={{
+          icon: <FontAwesomeIcon icon={faBookMedical} className="h-3.5 w-3.5" />,
+          label: "Teaching",
+        }}
         title="Courses"
         subtitle="The courses your Dean assigned you, and what your students must accomplish in each"
       />
@@ -90,7 +95,9 @@ export default function FacultyCoursesClient() {
         <div className="rounded-2xl border border-dashed border-gray-300 bg-surface px-6 py-14 text-center">
           <FontAwesomeIcon icon={faBookMedical} className="mb-3 h-8 w-8 text-gray-300" />
           <p className="font-semibold text-gray-700">No courses yet</p>
-          <p className="mt-1 text-sm text-gray-500">Your Dean assigns courses on their Courses page. They appear here once assigned.</p>
+          <p className="mt-1 text-sm text-gray-500">
+            Your Dean assigns courses on their Courses page. They appear here once assigned.
+          </p>
         </div>
       ) : (
         <div className="space-y-8">
@@ -106,7 +113,10 @@ export default function FacultyCoursesClient() {
                   aria-expanded={pastOpen}
                   className="group flex w-full items-center gap-2.5 text-sm font-semibold text-gray-500 transition-colors hover:text-gray-800"
                 >
-                  <FontAwesomeIcon icon={faChevronRight} className={`h-3 w-3 transition-transform ${pastOpen ? "rotate-90" : ""}`} />
+                  <FontAwesomeIcon
+                    icon={faChevronRight}
+                    className={`h-3 w-3 transition-transform ${pastOpen ? "rotate-90" : ""}`}
+                  />
                   Past terms
                   <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-semibold text-gray-500">
                     {plural(pastCourses, "course")}
@@ -129,7 +139,13 @@ export default function FacultyCoursesClient() {
   );
 }
 
-function TermSection({ term, offerings }: { term: CourseTermRef; offerings: FacultyCourseSummary[] }) {
+function TermSection({
+  term,
+  offerings,
+}: {
+  term: CourseTermRef;
+  offerings: FacultyCourseSummary[];
+}) {
   const status = termStatus(term);
   return (
     <section aria-labelledby={`term-${term.id}`}>
@@ -137,7 +153,9 @@ function TermSection({ term, offerings }: { term: CourseTermRef; offerings: Facu
         <h2 id={`term-${term.id}`} className="font-display text-base font-semibold text-gray-900">
           {term.name}
         </h2>
-        <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${STATUS_STYLE[status]}`}>
+        <span
+          className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${STATUS_STYLE[status]}`}
+        >
           {TERM_STATUS_LABEL[status]}
         </span>
         <span className="text-sm text-gray-500">{formatTermDates(term)}</span>
@@ -173,13 +191,18 @@ function CourseCard({ offering: o }: { offering: FacultyCourseSummary }) {
   const toScore = o.progress?.to_score ?? 0;
   const next =
     o.requirement_count === 0 && status !== "ended"
-      ? { tab: "requirements" as const, icon: faPlus, text: "Set up the checklist", tone: "bg-brand-600/10 text-brand-800 hover:bg-brand-600/15" }
+      ? {
+          tab: "requirements" as const,
+          icon: faPlus,
+          text: "Set up the checklist",
+          tone: "bg-brand-600/10 text-brand-800 hover:bg-brand-600/15",
+        }
       : toScore > 0
         ? {
             tab: "progress" as const,
             icon: faPenToSquare,
             text: `${plural(toScore, "Lab Activity score")} to enter`,
-            tone: "bg-violet-50 text-violet-800 hover:bg-violet-100",
+            tone: "bg-teal-50 text-teal-800 hover:bg-teal-100",
           }
         : null;
   const note =
@@ -221,7 +244,9 @@ function CourseCard({ offering: o }: { offering: FacultyCourseSummary }) {
             <span
               key={s.id}
               className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                s.has_group ? "bg-brand-600/10 text-brand-700" : "bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-600/20"
+                s.has_group
+                  ? "bg-brand-600/10 text-brand-700"
+                  : "bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-600/20"
               }`}
             >
               {s.name}
@@ -254,7 +279,10 @@ function CourseCard({ offering: o }: { offering: FacultyCourseSummary }) {
         )}
       </div>
 
-      <nav aria-label={`${o.course.code} tabs`} className="relative z-10 grid grid-cols-3 border-t border-hairline">
+      <nav
+        aria-label={`${o.course.code} tabs`}
+        className="relative z-10 grid grid-cols-3 border-t border-hairline"
+      >
         {COURSE_TABS.map((t, i) => (
           <Link
             key={t}
@@ -266,7 +294,9 @@ function CourseCard({ offering: o }: { offering: FacultyCourseSummary }) {
             <FontAwesomeIcon icon={TAB_ICON[t]} className="h-3 w-3" />
             {TAB_LABEL[t]}
             {t === "requirements" && o.requirement_count > 0 && (
-              <span className="rounded-full bg-gray-100 px-1.5 text-[10px] font-semibold text-gray-500">{o.requirement_count}</span>
+              <span className="rounded-full bg-gray-100 px-1.5 text-[10px] font-semibold text-gray-500">
+                {o.requirement_count}
+              </span>
             )}
           </Link>
         ))}
@@ -288,8 +318,12 @@ function RosterBar({ summary: p }: { summary: OfferingSummary }) {
         role="img"
         aria-label={`${p.complete} of ${p.students} students met every requirement, ${partway} partway, ${notStarted} not started`}
       >
-        {p.complete > 0 && <span className="rounded-full bg-emerald-500" style={{ width: width(p.complete) }} />}
-        {partway > 0 && <span className="rounded-full bg-amber-400" style={{ width: width(partway) }} />}
+        {p.complete > 0 && (
+          <span className="rounded-full bg-emerald-500" style={{ width: width(p.complete) }} />
+        )}
+        {partway > 0 && (
+          <span className="rounded-full bg-amber-400" style={{ width: width(partway) }} />
+        )}
       </div>
       <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-gray-500" aria-hidden>
         <Count tone="bg-emerald-500" n={p.complete} label="complete" />
