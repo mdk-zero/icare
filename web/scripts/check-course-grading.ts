@@ -18,6 +18,7 @@ import {
   gradingLeaves,
   gradingSignature,
   gradingSummary,
+  isGradeable,
   leafOf,
   parseGradeLeaf,
   parseGrading,
@@ -26,6 +27,7 @@ import {
   refile,
   type GradingSplit,
 } from '../app/lib/course-grading';
+import { seed } from '../app/lib/demo/fixtures';
 import {
   MigrationNeeded,
   REQUIREMENT_COLUMNS,
@@ -239,6 +241,20 @@ eq('leaf null unfiles', parseGradeLeaf(null), { ok: true, value: null });
 eq('leaf empty string unfiles', parseGradeLeaf(''), { ok: true, value: null });
 eq('leaf id', parseGradeLeaf('M'), { ok: true, value: 'M' });
 eq('leaf junk', parseGradeLeaf(7), { ok: false, error: 'Choose what this counts toward' });
+
+console.log('demo fixtures');
+const demo = seed();
+const demoSplits = demo.offerings.filter((o) => o.grading);
+eq('two demo courses have a split', demoSplits.length, 2);
+for (const o of demoSplits) {
+  const items = demo.requirements.filter((r) => r.offering_id === o.id);
+  const parsedDemo = parseGrading(o.grading, items);
+  check(`demo ${o.id} split is valid`, parsedDemo.ok, parsedDemo.ok ? '' : parsedDemo.error);
+  eq(`demo ${o.id} files every gradeable item`, items.filter((r) => isGradeable(r) && leafOf(o.grading ?? null, r.id) === null).length, 0);
+  check(`demo ${o.id} has a Written Exam`, items.some((r) => r.manual_type === 'exam'));
+}
+const examIds = new Set(demo.requirements.filter((r) => r.manual_type === 'exam').map((r) => r.id));
+check('demo exams have entered scores', demo.requirementScores.some((sc) => examIds.has(sc.requirement_id)));
 
 async function fallbackChecks() {
   console.log('pre-067 fallback');

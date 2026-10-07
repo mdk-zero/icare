@@ -22,6 +22,18 @@ import {
   type RequirementRow,
 } from "../../course-progress";
 import { listSkillSummaries } from "../fixtures/skills";
+import {
+  GRADING_CHANGED,
+  GRADING_ENDED_LOCK,
+  fileItem,
+  gradeLeafProblem,
+  gradingSignature,
+  gradingSummary,
+  parseGradeLeaf,
+  parseGrading,
+  refile,
+  type GradingSplit,
+} from "../../course-grading";
 import { seedCourses, type DemoCourseTables, type DemoOffering } from "../fixtures/courses";
 import { audit } from "./shared";
 import { byName, sectionName, teamLabel } from "./scope";
@@ -44,6 +56,8 @@ export function courseDb(db: DemoDb): DemoDb {
   }
   // A demo saved before entered scores existed.
   db.requirementScores ??= [];
+  // A demo saved before Written Exams (067): every manual item was a Lab Activity.
+  for (const r of db.requirements) r.manual_type ??= "lab";
   return db;
 }
 
@@ -503,7 +517,28 @@ route("GET", "/api/faculty/courses/:id", async (ctx) => {
     },
     requirements: await labelled(db, checklist(db, o.id)),
     skill_ids: db.courseSkills.filter((s) => s.course_id === course.id).map((s) => s.skill_id),
+    grading: o.grading ?? null,
+    grading_ready: true,
   };
+});
+
+/** File a just-saved item in the offering's split, the way the real routes do. */
+function refileDemo(o: DemoOffering, next: (split: GradingSplit) => GradingSplit) {
+  if (o.grading) o.grading = next(o.grading);
+}
+
+route("PUT", "/api/faculty/courses/:id/grading", (ctx) => {
+  if (!instructorOnly(ctx)) return forbidden();
+  const db = courseDb(ctx.db);
+  const o = ownFacultyOffering(ctx, ctx.params.id);
+  if (!o) return notFound("Course not found");
+  if (locked(db, o)) return json({ error: GRADING_ENDED_LOCK }, 409);
+  if (gradingSignature(o.grading ?? null) !== ctx.body?.base) return json({ error: GRADING_CHANGED }, 409);
+  const parsed = parseGrading(ctx.body ?? {}, checklist(db, o.id));
+  if (!parsed.ok) return json({ error: parsed.error }, 400);
+  o.grading = parsed.value;
+  audit(db, ctx.viewer, "course.grading.update", "course_offerings", { split: gradingSummary(parsed.value) }, o.id);
+  return { grading: parsed.value };
 });
 
 route("GET", "/api/faculty/courses/:id/activities", (ctx) => {
@@ -556,7 +591,10 @@ route("POST", "/api/faculty/courses/:id/requirements", async (ctx) => {
   if (locked(db, o)) return json({ error: LOCKED }, 409);
   const parsed = parseRequirement(ctx.body ?? {});
   if (!parsed.ok) return json({ error: parsed.error }, 400);
-  const problem = linkProblem(db, o, parsed.value);
+  const leaf = parseGradeLeaf(ctx.body?.grade_leaf_id);
+  if (!leaf.ok) return json({ error: leaf.error }, 400);
+  const problem =
+    linkProblem(db, o, parsed.value) ?? (typeof leaf.value === "string" ? gradeLeafProblem(o.grading ?? null, leaf.value) : null);
   if (problem) return json({ error: problem }, 400);
   const items = checklist(db, o.id);
   const row = {
@@ -567,6 +605,7 @@ route("POST", "/api/faculty/courses/:id/requirements", async (ctx) => {
     created_at: new Date().toISOString(),
   };
   db.requirements.push(row);
+  refileDemo(o, (split) => refile(split, row, leaf.value));
   const [requirement] = await labelled(db, [row]);
   audit(db, ctx.viewer, "course.requirement.create", "course_requirements", { label: requirement.label }, row.id);
   return json({ requirement }, 201);
@@ -597,9 +636,13 @@ route("PATCH", "/api/faculty/courses/:id/requirements/:requirementId", async (ct
   if (!current) return notFound("Requirement not found");
   const parsed = parseRequirement(ctx.body ?? {});
   if (!parsed.ok) return json({ error: parsed.error }, 400);
-  const problem = linkProblem(db, o, parsed.value);
+  const leaf = parseGradeLeaf(ctx.body?.grade_leaf_id);
+  if (!leaf.ok) return json({ error: leaf.error }, 400);
+  const problem =
+    linkProblem(db, o, parsed.value) ?? (typeof leaf.value === "string" ? gradeLeafProblem(o.grading ?? null, leaf.value) : null);
   if (problem) return json({ error: problem }, 400);
   Object.assign(current, parsed.value);
+  refileDemo(o, (split) => refile(split, current, leaf.value));
   const [requirement] = await labelled(db, [current]);
   audit(db, ctx.viewer, "course.requirement.update", "course_requirements", { label: requirement.label }, current.id);
   return { requirement };
@@ -616,6 +659,7 @@ route("DELETE", "/api/faculty/courses/:id/requirements/:requirementId", (ctx) =>
   db.requirements = db.requirements.filter((r) => r.id !== id);
   db.requirementChecks = db.requirementChecks.filter((c) => c.requirement_id !== id);
   db.requirementScores = db.requirementScores.filter((c) => c.requirement_id !== id);
+  refileDemo(o, (split) => fileItem(split, id, null));
   audit(db, ctx.viewer, "course.requirement.delete", "course_requirements", {}, id);
   return { success: true };
 });
@@ -729,7 +773,7 @@ route("GET", "/api/faculty/courses/:id/progress", async (ctx) => {
   const db = courseDb(ctx.db);
   const o = ownFacultyOffering(ctx, ctx.params.id);
   if (!o) return notFound("Course not found");
-  return { offering: offeringHeader(db, o), ...(await demoProgress(db, o)) };
+  return { offering: offeringHeader(db, o), ...(await demoProgress(db, o)), grading: o.grading ?? null, grading_ready: true };
 });
 
 route("POST", "/api/faculty/courses/:id/requirements/:requirementId/checks", async (ctx) => {
