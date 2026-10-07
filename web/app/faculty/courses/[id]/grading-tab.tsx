@@ -22,7 +22,7 @@ import {
   GRADING_LIMITS,
   GRADING_NEEDS_MIGRATION,
   addComponent,
-  dropUnknown,
+  settle,
   fileItem,
   isGradeable,
   leafOf,
@@ -33,7 +33,7 @@ import {
   type GradingSplit,
 } from "../../../lib/course-grading";
 import { TOPICS } from "../topics";
-import { isDirty, savedDraft, startDraft, type GradingDraft } from "../grading-draft";
+import { isDirty, saveBase, savedDraft, startDraft, type GradingDraft } from "../grading-draft";
 import GradingItemPicker from "./grading-item-picker";
 
 const newId = () => crypto.randomUUID();
@@ -151,7 +151,7 @@ export default function GradingTab({
     setSaving(true);
     setError(null);
     const progress = loadingToast(split ? "Saving grading split…" : "Clearing grading split…");
-    const result = await saveCourseGrading(offeringId, split, state.base);
+    const result = await saveCourseGrading(offeringId, split, saveBase(state, requirements));
     setSaving(false);
     if (result.error !== undefined) {
       progress.error(result.error);
@@ -200,8 +200,8 @@ export default function GradingTab({
   }
 
   const readOnly = locked || saving;
-  // Ids no longer on the checklist are dropped, so a stale one can't block saving.
-  const parsed = parseGrading(dropUnknown(draft, requirements), requirements);
+  // Ids no longer on the checklist, or turned into attendance, are dropped, so a stale one can't block saving.
+  const parsed = parseGrading(settle(draft, requirements), requirements);
   const problem = parsed.ok ? null : parsed.error;
   const partsTotal = total(draft.parts);
 

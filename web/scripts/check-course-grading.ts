@@ -27,10 +27,11 @@ import {
   presetSplit,
   readStoredSplit,
   refile,
+  settle,
   type GradingSplit,
 } from '../app/lib/course-grading';
 import { seed } from '../app/lib/demo/fixtures';
-import { followServer, savedDraft, startDraft } from '../app/faculty/courses/grading-draft';
+import { afterItemSaved, followServer, saveBase, savedDraft, startDraft } from '../app/faculty/courses/grading-draft';
 import {
   MigrationNeeded,
   REQUIREMENT_COLUMNS,
@@ -287,6 +288,33 @@ const edited = { ...clean, draft: { parts: [{ ...oldSplit.parts[0], name: 'Mine'
 const kept = followServer(edited, newSplit);
 eq('unsaved edits survive a newer server split', kept.draft?.parts[0].name, 'Mine');
 eq('…and keep their old base, so saving them is refused', kept.base, gradingSignature(oldSplit));
+
+console.log('item changes during unsaved edits');
+const sSettle = split();
+sSettle.parts[1].items = [lab.id, shifts.id, 'gone', quizzes.id];
+eq('settle drops removed and attendance ids, keeps order', settle(sSettle, reqs)?.parts[1].items, [lab.id, quizzes.id]);
+eq('settle keeps null', settle(null, reqs), null);
+eq('startDraft remembers where it began', startDraft(oldSplit).from, oldSplit);
+eq('a clean draft adopting the server moves from', followServer(clean, newSplit).from, newSplit);
+eq('a dirty draft keeps from', followServer(edited, newSplit).from, oldSplit);
+eq('savedDraft moves from', savedDraft(edited, newSplit).from, newSplit);
+const before = split();
+const dirty = { ...startDraft(before), draft: { parts: [{ ...before.parts[0], name: 'Exams' }, before.parts[1]] } };
+const reqsAfter = reqs.filter((r) => r.id !== quizB.id);
+eq("after a removal, a dirty draft saves against the server's new split", saveBase(dirty, reqsAfter), gradingSignature(fileItem(before, quizB.id, null)));
+check('a dirty draft holding a removed item still parses', parseGrading(settle(dirty.draft, reqsAfter), reqsAfter).ok);
+const elsewhere: GradingSplit = { parts: [before.parts[0], { ...before.parts[1], name: 'Lab' }] };
+check('a change made elsewhere still differs', saveBase(dirty, reqs) !== gradingSignature(elsewhere));
+const toShift: RequirementRow = { ...quizB, kind: 'count', activity_type: 'shift', target_count: 4, assessment_id: null };
+const reqsShift = reqs.map((r) => (r.id === quizB.id ? toShift : r));
+eq('an item turned into attendance: the save base matches the server', saveBase(dirty, reqsShift), gradingSignature(refile(before, toShift, undefined)));
+eq('…and the dirty draft unfiles it', leafOf(afterItemSaved(dirty, toShift, 'F').draft, quizB.id), null);
+const fresh = req({ kind: 'manual', title: 'Final exam', manual_type: 'exam' });
+const withNew = { ...dirty, draft: addComponent(dirty.draft!, 'W', { id: 'X', name: 'Practical', weight: 0, items: [] }) };
+eq('a new item lands in an unsaved component', leafOf(afterItemSaved(withNew, fresh, 'X').draft, fresh.id), 'X');
+eq('…and discarding the draft leaves it uncounted', leafOf(startDraft(before).draft, fresh.id), null);
+const cleanBefore = startDraft(before);
+check('a clean draft is left for the server to file', afterItemSaved(cleanBefore, fresh, 'M') === cleanBefore);
 
 console.log('demo fixtures');
 const demo = seed();

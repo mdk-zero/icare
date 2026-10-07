@@ -286,6 +286,20 @@ export function dropUnknown(split: GradingSplit | null, requirements: readonly R
   };
 }
 
+/**
+ * The split with every item unfiled that is no longer on the checklist or can
+ * no longer be graded (turned into attendance): what the item routes do to the
+ * stored split when an item is removed or changed. Order and the rest stay.
+ */
+export function settle(split: GradingSplit | null, requirements: readonly RequirementRow[]): GradingSplit | null {
+  if (!split) return null;
+  const counts = new Set(requirements.filter(isGradeable).map((r) => r.id));
+  const keep = (items: string[]) => items.filter((id) => counts.has(id));
+  return {
+    parts: split.parts.map((p) => ({ ...p, items: keep(p.items), components: p.components.map((c) => ({ ...c, items: keep(c.items) })) })),
+  };
+}
+
 /** The split with the item taken out of every leaf and, unless leafId is null, filed under leafId. */
 export function fileItem(split: GradingSplit, requirementId: string, leafId: string | null): GradingSplit {
   // Already there: keep its place, and leave the split untouched.
