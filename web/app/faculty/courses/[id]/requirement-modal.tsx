@@ -86,6 +86,8 @@ export default function RequirementModal({
   courseSkillIds,
   catalog,
   grading,
+  leafId: startLeaf,
+  fileLocally,
   onClose,
   onSaved,
 }: {
@@ -100,10 +102,19 @@ export default function RequirementModal({
   presetSkillId?: string | null;
   courseSkillIds: string[];
   catalog: SkillSummary[];
-  /** The course's grading split, for "Counts toward"; null hides it. */
+  /** The split as the Grading tab shows it, unsaved edits included, for "Counts toward"; null hides it. */
   grading: GradingSplit | null;
+  /** A new item's starting "Counts toward" (absent: not counted). */
+  leafId?: string | null;
+  /**
+   * The split has unsaved edits: leave "Counts toward" out of the request, so
+   * the stored split is untouched, and report it through onSaved for the
+   * page to file the item in the draft.
+   */
+  fileLocally: boolean;
   onClose: () => void;
-  onSaved: () => void;
+  /** `leafId` is where the item should count (null: nowhere), or undefined when the form didn't ask. */
+  onSaved: (saved: CourseRequirement, leafId: string | null | undefined) => void;
 }) {
   const [kind, setKind] = useState<RequirementKind>(
     requirement?.kind ?? (preset === "skill" || preset === "manual" ? preset : preset === "exam" ? "manual" : "count"),
@@ -122,7 +133,7 @@ export default function RequirementModal({
   const [skillsOnly, setSkillsOnly] = useState(requirement?.skills_only ?? false);
   const [skillId, setSkillId] = useState(requirement?.skill_id ?? presetSkillId ?? "");
   const [skillLevel, setSkillLevel] = useState<number | null>(requirement ? requirement.min_score : 50);
-  const [leafId, setLeafId] = useState(requirement ? leafOf(grading, requirement.id) ?? "" : "");
+  const [leafId, setLeafId] = useState(requirement ? leafOf(grading, requirement.id) ?? "" : startLeaf ?? "");
   const [activities, setActivities] = useState<CourseActivities | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -207,7 +218,7 @@ export default function RequirementModal({
     setSaving(true);
     setError(null);
     const progress = loadingToast(requirement ? "Saving requirement…" : "Adding requirement…");
-    const input = showLeaf ? { ...parsed.value, grade_leaf_id: leafId || null } : parsed.value;
+    const input = showLeaf && !fileLocally ? { ...parsed.value, grade_leaf_id: leafId || null } : parsed.value;
     const result = requirement
       ? await updateRequirement(offeringId, requirement.id, input)
       : await addRequirement(offeringId, input);
@@ -218,7 +229,7 @@ export default function RequirementModal({
       return;
     }
     progress.success(requirement ? "Requirement saved" : "Requirement added");
-    onSaved();
+    onSaved(result.data.requirement, showLeaf ? leafId || null : undefined);
   };
 
   return (

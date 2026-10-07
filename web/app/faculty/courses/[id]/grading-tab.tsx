@@ -5,17 +5,19 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faCircleCheck,
   faLock,
+  faPenToSquare,
   faPercent,
   faPlus,
   faTrashCan,
   faTriangleExclamation,
   faXmark,
 } from "@fortawesome/free-solid-svg-icons";
+import { type MenuAction } from "../../../components/ActionsMenu";
 import ConfirmModal from "../../../components/ConfirmModal";
 import { EcgLoader } from "../../../components/EcgLoader";
 import { loadingToast } from "../../../components/Toast";
 import { saveCourseGrading, type CourseRequirement } from "../../../lib/api";
-import { inTopicOrder, requirementDetail, requirementNames, topicKey } from "../../../lib/course-progress";
+import { inTopicOrder, requirementNames } from "../../../lib/course-progress";
 import {
   GRADING_CHANGED,
   GRADING_ENDED_LOCK,
@@ -32,9 +34,10 @@ import {
   type GradePart,
   type GradingSplit,
 } from "../../../lib/course-grading";
-import { TOPICS } from "../topics";
 import { isDirty, saveBase, savedDraft, startDraft, type GradingDraft } from "../grading-draft";
 import GradingItemPicker from "./grading-item-picker";
+import ChecklistSection from "./checklist-section";
+import ItemRow from "./requirement-row";
 
 const newId = () => crypto.randomUUID();
 const round = (n: number) => Math.round(n * 100) / 100;
@@ -88,8 +91,10 @@ const inputClass =
 
 /**
  * The course's grading split: weighted parts ("Written Exams 30%") and,
- * inside a part, components ("Midterm 15%"), with checklist items filed
- * under them. Edits stay in a draft until saved; the page holds the draft
+ * inside a part, components ("Midterm 15%"), with the checklist's items
+ * listed under them and the rest below as not counted. Items are added,
+ * edited and removed here, through the page's item form; the split's own
+ * edits stay in a draft until saved; the page holds the draft
  * (grading-draft.ts), so it survives a look at another tab. The draft
  * remembers the split it started from, so a save over a newer split is
  * refused rather than undoing it.
@@ -103,6 +108,9 @@ export default function GradingTab({
   state,
   onChange,
   onSaved,
+  onNewItem,
+  onEditItem,
+  onRemoveItem,
 }: {
   offeringId: string;
   requirements: CourseRequirement[];
@@ -113,6 +121,10 @@ export default function GradingTab({
   state: GradingDraft;
   onChange: Dispatch<SetStateAction<GradingDraft>>;
   onSaved: () => Promise<void> | void;
+  /** Open the item form for a new item counting toward this leaf (null: not counted). */
+  onNewItem: (leafId: string | null) => void;
+  onEditItem: (requirement: CourseRequirement) => void;
+  onRemoveItem: (requirement: CourseRequirement) => void;
 }) {
   const { draft } = state;
   const dirty = isDirty(state);
@@ -127,13 +139,46 @@ export default function GradingTab({
     const list = requirementNames(ordered);
     return new Map(ordered.map((r, i) => [r.id, list[i]]));
   }, [ordered]);
-  const byId = useMemo(() => new Map(requirements.map((r) => [r.id, r])), [requirements]);
+
+  const plainActions = (r: CourseRequirement): MenuAction[] => [
+    { label: "Edit", icon: faPenToSquare, onClick: () => onEditItem(r) },
+    { label: "Remove", icon: faTrashCan, danger: true, onClick: () => onRemoveItem(r) },
+  ];
+  // With no split to file them under (or before 067), the whole checklist in one list.
+  const wholeChecklist = (
+    <ChecklistSection
+      title="Checklist"
+      items={ordered}
+      names={names}
+      locked={locked}
+      onNew={() => onNewItem(null)}
+      actionsFor={plainActions}
+      empty={
+        <>
+          <p>No items yet</p>
+          {!locked && (
+            <button
+              type="button"
+              onClick={() => onNewItem(null)}
+              className="mt-3 inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-700"
+            >
+              <FontAwesomeIcon icon={faPlus} className="h-3.5 w-3.5" />
+              Add the first item
+            </button>
+          )}
+        </>
+      }
+    />
+  );
 
   if (!gradingReady) {
     return (
-      <div className="flex items-start gap-2.5 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-        <FontAwesomeIcon icon={faTriangleExclamation} className="mt-0.5 h-4 w-4 shrink-0" />
-        {GRADING_NEEDS_MIGRATION}
+      <div className="space-y-4">
+        <div className="flex items-start gap-2.5 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <FontAwesomeIcon icon={faTriangleExclamation} className="mt-0.5 h-4 w-4 shrink-0" />
+          {GRADING_NEEDS_MIGRATION}
+        </div>
+        {wholeChecklist}
       </div>
     );
   }
@@ -167,34 +212,37 @@ export default function GradingTab({
 
   if (!draft) {
     return (
-      <div className="rounded-xl border border-dashed border-gray-300 bg-surface px-6 py-10 text-center">
-        <span className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-brand-600/10 text-brand-600">
-          <FontAwesomeIcon icon={faPercent} className="h-5 w-5" />
-        </span>
-        <h3 className="font-display text-base font-semibold text-gray-900">No grading split yet</h3>
-        <p className="mx-auto mt-1 max-w-md text-sm text-gray-500">
-          {locked
-            ? GRADING_ENDED_LOCK
-            : "Divide the grade into parts that add up to 100%, split them further if you like, and choose which checklist items count toward each."}
-        </p>
-        {!locked && (
-          <div className="mt-5 flex flex-wrap justify-center gap-2">
-            <button
-              type="button"
-              onClick={() => edit(presetSplit(newId))}
-              className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-[0_2px_8px_-1px_rgb(27_107_123_/_0.35)] transition-all hover:bg-brand-700"
-            >
-              Start from Written Exams 30 / Laboratory & Skills 70
-            </button>
-            <button
-              type="button"
-              onClick={() => edit({ parts: [{ id: newId(), name: "Part 1", weight: 100, items: [], components: [] }] })}
-              className="rounded-lg border border-gray-200 bg-surface px-4 py-2 text-sm font-medium text-gray-700 transition-all hover:bg-gray-50"
-            >
-              Start blank
-            </button>
-          </div>
-        )}
+      <div className="space-y-4">
+        <div className="rounded-xl border border-dashed border-gray-300 bg-surface px-6 py-10 text-center">
+          <span className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-brand-600/10 text-brand-600">
+            <FontAwesomeIcon icon={faPercent} className="h-5 w-5" />
+          </span>
+          <h3 className="font-display text-base font-semibold text-gray-900">No grading split yet</h3>
+          <p className="mx-auto mt-1 max-w-md text-sm text-gray-500">
+            {locked
+              ? GRADING_ENDED_LOCK
+              : "Divide the grade into parts that add up to 100%, split them further if you like, and choose which checklist items count toward each."}
+          </p>
+          {!locked && (
+            <div className="mt-5 flex flex-wrap justify-center gap-2">
+              <button
+                type="button"
+                onClick={() => edit(presetSplit(newId))}
+                className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-[0_2px_8px_-1px_rgb(27_107_123_/_0.35)] transition-all hover:bg-brand-700"
+              >
+                Start from Written Exams 30 / Laboratory & Skills 70
+              </button>
+              <button
+                type="button"
+                onClick={() => edit({ parts: [{ id: newId(), name: "Part 1", weight: 100, items: [], components: [] }] })}
+                className="rounded-lg border border-gray-200 bg-surface px-4 py-2 text-sm font-medium text-gray-700 transition-all hover:bg-gray-50"
+              >
+                Start blank
+              </button>
+            </div>
+          )}
+        </div>
+        {wholeChecklist}
       </div>
     );
   }
@@ -234,49 +282,52 @@ export default function GradingTab({
   const unfiled = ordered.filter((r) => isGradeable(r) && leafOf(draft, r.id) === null);
   const attendance = ordered.filter((r) => !isGradeable(r));
 
-  const chips = (leaf: GradeComponent, label: string) => (
-    <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-      {leaf.items
-        .map((id) => byId.get(id))
-        .filter((r): r is CourseRequirement => !!r)
-        .map((r) => {
-          const topic = TOPICS[topicKey(r)];
-          return (
-            <span
-              key={r.id}
-              title={requirementDetail(r)}
-              className={`inline-flex items-center gap-1.5 rounded-full border border-hairline bg-subtle py-0.5 pl-1 pr-2 text-xs font-medium ${topic.text}`}
+  const rowActions = (r: CourseRequirement): MenuAction[] => [
+    { label: "Edit", icon: faPenToSquare, onClick: () => onEditItem(r) },
+    { label: "Stop counting", icon: faXmark, onClick: () => edit(fileItem(draft, r.id, null)) },
+    { label: "Remove", icon: faTrashCan, danger: true, onClick: () => onRemoveItem(r) },
+  ];
+
+  // A leaf's items as rows, by kind and then checklist order, with its add buttons.
+  const leafItems = (leaf: GradeComponent, label: string) => {
+    const filed = new Set(leaf.items);
+    const rows = ordered.filter((r) => filed.has(r.id));
+    return (
+      <div className="min-w-0">
+        {rows.length > 0 && (
+          <ul className="divide-y divide-hairline">
+            {rows.map((r) => (
+              <ItemRow key={r.id} requirement={r} name={names.get(r.id) ?? ""} actions={readOnly ? null : rowActions(r)} />
+            ))}
+          </ul>
+        )}
+        {readOnly ? (
+          rows.length === 0 && <p className="py-1 text-xs text-gray-400">No items yet</p>
+        ) : (
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 py-1.5">
+            <button
+              type="button"
+              onClick={() => onNewItem(leaf.id)}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-700 hover:underline"
             >
-              <span className={`flex h-4 w-4 items-center justify-center rounded-full ${topic.tile}`}>
-                <FontAwesomeIcon icon={topic.icon} className="h-2 w-2" />
-              </span>
-              {names.get(r.id)}
-              {!readOnly && (
-                <button
-                  type="button"
-                  onClick={() => edit(fileItem(draft, r.id, null))}
-                  aria-label={`Stop counting ${names.get(r.id)} toward ${label}`}
-                  className="-mr-1 rounded-full p-0.5 text-gray-400 hover:bg-gray-200 hover:text-gray-600"
-                >
-                  <FontAwesomeIcon icon={faXmark} className="h-2.5 w-2.5" />
-                </button>
-              )}
-            </span>
-          );
-        })}
-      {!readOnly && (
-        <button
-          type="button"
-          onClick={() => setPicking({ id: leaf.id, label })}
-          className="inline-flex items-center gap-1 rounded-full border border-dashed border-gray-300 px-2 py-0.5 text-xs font-medium text-gray-500 transition-colors hover:border-brand-600 hover:text-brand-700"
-        >
-          <FontAwesomeIcon icon={faPlus} className="h-2.5 w-2.5" />
-          Add items
-        </button>
-      )}
-      {readOnly && leaf.items.length === 0 && <span className="text-xs text-gray-400">No items</span>}
-    </div>
-  );
+              <FontAwesomeIcon icon={faPlus} className="h-2.5 w-2.5" />
+              New item
+            </button>
+            {unfiled.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setPicking({ id: leaf.id, label })}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-brand-700 hover:underline"
+              >
+                <FontAwesomeIcon icon={faPlus} className="h-2.5 w-2.5" />
+                Existing item
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   // A percent is a few digits, so its box is sized for "33.33", with the sign inside.
   const weightField = (value: number, onChange: (n: number) => void, label: string) =>
@@ -377,33 +428,32 @@ export default function GradingTab({
 
             <div className="border-t border-hairline">
               {part.components.length === 0 ? (
-                <div className="px-4 py-3">{chips(part, partLabel)}</div>
+                <div className="px-4 py-2">{leafItems(part, partLabel)}</div>
               ) : (
                 <ul className="divide-y divide-hairline">
                   {part.components.map((c, j) => {
                     const label = `${partLabel} › ${c.name.trim() || `Component ${j + 1}`}`;
                     return (
-                      <li
-                        key={c.id}
-                        className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 py-2.5 pl-6 pr-4 sm:grid-cols-[minmax(0,14rem)_minmax(0,1fr)_auto] sm:pl-9"
-                      >
-                        <div className="flex min-w-0 items-center gap-2">
-                          <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: shade(color, j) }} aria-hidden />
-                          <input
-                            value={c.name}
-                            onChange={(e) => setComponent(part.id, c.id, { name: e.target.value })}
-                            maxLength={GRADING_LIMITS.name}
-                            disabled={readOnly}
-                            placeholder="e.g. Midterm"
-                            aria-label="Component name"
-                            className={`${inputClass} w-full min-w-0 font-medium`}
-                          />
+                      <li key={c.id} className="py-2.5 pl-6 pr-4 sm:pl-9">
+                        <div className="flex items-center gap-3">
+                          <div className="flex min-w-0 flex-1 items-center gap-2">
+                            <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: shade(color, j) }} aria-hidden />
+                            <input
+                              value={c.name}
+                              onChange={(e) => setComponent(part.id, c.id, { name: e.target.value })}
+                              maxLength={GRADING_LIMITS.name}
+                              disabled={readOnly}
+                              placeholder="e.g. Midterm"
+                              aria-label="Component name"
+                              className={`${inputClass} w-full min-w-0 font-medium sm:max-w-56`}
+                            />
+                          </div>
+                          <div className="flex shrink-0 items-center gap-1">
+                            {weightField(c.weight, (weight) => setComponent(part.id, c.id, { weight }), label)}
+                            {!readOnly && removeButton(() => removeComponent(part.id, c.id), `Remove ${label}`)}
+                          </div>
                         </div>
-                        <div className="flex items-center gap-1 sm:order-3">
-                          {weightField(c.weight, (weight) => setComponent(part.id, c.id, { weight }), label)}
-                          {!readOnly && removeButton(() => removeComponent(part.id, c.id), `Remove ${label}`)}
-                        </div>
-                        <div className="col-span-2 pl-4 sm:order-2 sm:col-span-1 sm:pl-0">{chips(c, label)}</div>
+                        <div className="pl-4">{leafItems(c, label)}</div>
                       </li>
                     );
                   })}
@@ -449,27 +499,16 @@ export default function GradingTab({
         </button>
       )}
 
-      {(unfiled.length > 0 || attendance.length > 0) && (
-        <section className="rounded-xl border border-hairline bg-surface px-4 py-3">
-          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">Not counted in the grade</h3>
-          <div className="flex flex-wrap gap-1.5">
-            {unfiled.map((r) => (
-              <span key={r.id} title={requirementDetail(r)} className="rounded-full bg-subtle px-2 py-0.5 text-xs font-medium text-gray-700">
-                {names.get(r.id)}
-              </span>
-            ))}
-            {attendance.map((r) => (
-              <span
-                key={r.id}
-                title="Attendance has no score, so it can't count toward the grade"
-                className="rounded-full bg-subtle px-2 py-0.5 text-xs font-medium text-gray-400 line-through decoration-gray-300"
-              >
-                {names.get(r.id)}
-              </span>
-            ))}
-          </div>
-          {attendance.length > 0 && <p className="mt-2 text-xs text-gray-400">Attendance has no score, so it can&apos;t count.</p>}
-        </section>
+      {(unfiled.length > 0 || attendance.length > 0 || !locked) && (
+        <ChecklistSection
+          title="Not counted in the grade"
+          items={[...unfiled, ...attendance]}
+          names={names}
+          locked={locked}
+          onNew={() => onNewItem(null)}
+          actionsFor={plainActions}
+          noteFor={(r) => (isGradeable(r) ? undefined : "No score, so it can't count")}
+        />
       )}
 
       {!locked && (

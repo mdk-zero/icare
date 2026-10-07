@@ -47,7 +47,7 @@ import CourseCrumbs from "./course-crumbs";
 import CourseTabBar, { COURSE_TAB_PANEL_ID, courseTabId } from "./course-tab-bar";
 import SkillsTab from "./skills-tab";
 import GradingTab from "./grading-tab";
-import { followServer, startDraft } from "../grading-draft";
+import { afterItemSaved, followServer, isDirty, startDraft } from "../grading-draft";
 import { courseTabHref, parseCourseTab, type CourseTab } from "../course-tabs";
 import { TopicIcon, groupByTopic } from "../topics";
 
@@ -60,16 +60,19 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
   const setTab = (next: CourseTab) =>
     window.history.replaceState(null, "", courseTabHref(offeringId, next));
   const [editing, setEditing] = useState<CourseRequirement | null | "new">(null);
-  // The section a new item was added from, which sets its starting kind.
+  // Where a new item was added from: a section sets its starting kind, a
+  // grading component what it counts toward.
   const [preset, setPreset] = useState<{
     topic: RequirementTopicKey | null;
     skillId: string | null;
-  }>({ topic: null, skillId: null });
+    leafId: string | null;
+  }>({ topic: null, skillId: null, leafId: null });
   const addRequirement = (
     topic: RequirementTopicKey | null = null,
     skillId: string | null = null,
+    leafId: string | null = null,
   ) => {
-    setPreset({ topic, skillId });
+    setPreset({ topic, skillId, leafId });
     setEditing("new");
   };
   const [removing, setRemoving] = useState<CourseRequirement | null>(null);
@@ -352,6 +355,9 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
             state={gradingDraft}
             onChange={setGradingDraft}
             onSaved={refresh}
+            onNewItem={(leafId) => addRequirement(null, null, leafId)}
+            onEditItem={setEditing}
+            onRemoveItem={setRemoving}
           />
         )}
 
@@ -379,10 +385,13 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
           presetSkillId={editing === "new" ? preset.skillId : null}
           courseSkillIds={detail?.skill_ids ?? []}
           catalog={catalog}
-          grading={detail?.grading ?? null}
+          grading={gradingDraft.draft}
+          leafId={editing === "new" ? preset.leafId : undefined}
+          fileLocally={isDirty(gradingDraft)}
           onClose={() => setEditing(null)}
-          onSaved={async () => {
+          onSaved={async (saved, leafId) => {
             setEditing(null);
+            setGradingDraft((s) => afterItemSaved(s, saved, leafId));
             await refresh();
           }}
         />
