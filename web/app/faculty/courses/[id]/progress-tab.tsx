@@ -7,6 +7,8 @@ import {
   faCircleInfo,
   faListCheck,
   faMagnifyingGlass,
+  faPercent,
+  faTriangleExclamation,
   faUserCheck,
   faUsers,
   faXmark,
@@ -16,6 +18,8 @@ import { SkeletonProgressGrid } from "../../../components/skeletons";
 import { usePageData } from "../../../lib/use-page-data";
 import { fetchCourseProgress, type CourseProgress } from "../../../lib/api";
 import { requirementDetail, type ItemProgress } from "../../../lib/course-progress";
+import { computeGrades, formatGrade } from "../../../lib/course-grading";
+import GradeBreakdown from "./grade-breakdown";
 import { ItemStatus, canAct, statusText, useEntryDialog } from "../progress-ui";
 import { TopicIcon, groupByTopic } from "../topics";
 
@@ -26,26 +30,35 @@ type Filter = "all" | "incomplete" | "complete";
  * search, a group filter and a complete/incomplete filter on top. A column's
  * name explains what the item asks for; a cell opens score entry where the
  * student has no grade. `signature` changes with the checklist, so an edited
- * checklist is fetched afresh.
+ * checklist is fetched afresh. With a grading split, a last column gives each
+ * student's weighted grade so far, worked out here from the same progress,
+ * so a score entered in a cell moves it at once.
  */
 export default function ProgressTab({
   offeringId,
   signature,
   onOpenRequirements,
+  onOpenGrading,
 }: {
   offeringId: string;
   signature: string;
   onOpenRequirements: () => void;
+  onOpenGrading: () => void;
 }) {
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
   const [group, setGroup] = useState("");
   const [focus, setFocus] = useState<string | null>(null);
+  const [gradeFocus, setGradeFocus] = useState<string | null>(null);
   const { data, loading, setData } = usePageData(
     `faculty:course-progress:${offeringId}:${signature}`,
     () => fetchCourseProgress(offeringId),
   );
   const progress = data?.data ?? null;
+  const graded = useMemo(
+    () => computeGrades(progress?.grading ?? null, progress?.requirements ?? [], progress?.progress ?? {}),
+    [progress],
+  );
 
   // Rows are ranked once, lowest progress first, and keep that order while the
   // instructor works: every write refetches the grid, and re-sorting then
@@ -140,6 +153,8 @@ export default function ProgressTab({
   const cols = sections.flatMap((g, k) =>
     g.items.map((it, j) => ({ ...it, topic: g.topic, divider: k > 0 && j === 0 })),
   );
+  const split = progress.grading && !graded.invalid ? progress.grading : null;
+  const gradeStudent = split ? progress.students.find((s) => s.id === gradeFocus) ?? null : null;
   const focusedCol = cols.find((c) => c.requirement.id === focus) ?? null;
   const focused = focusedCol?.requirement ?? null;
   const narrowed = query.trim() !== "" || group !== "";
@@ -204,7 +219,59 @@ export default function ProgressTab({
             </button>
           ))}
         </div>
+        {progress.grading_ready && !progress.grading && (
+          <button
+            type="button"
+            onClick={onOpenGrading}
+            className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-700 hover:underline sm:ml-auto"
+          >
+            <FontAwesomeIcon icon={faPercent} className="h-3 w-3" />
+            Set up grading
+          </button>
+        )}
+        {graded.invalid && (
+          <button
+            type="button"
+            onClick={onOpenGrading}
+            className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 ring-1 ring-inset ring-amber-600/20 sm:ml-auto"
+          >
+            <FontAwesomeIcon icon={faTriangleExclamation} className="h-3 w-3" />
+            Grading split needs fixing
+          </button>
+        )}
       </div>
+
+      {split && gradeStudent && graded.grades[gradeStudent.id] && (
+        <div
+          className="mb-3 flex items-start gap-3 rounded-xl border border-brand-600/20 bg-brand-600/5 px-4 py-3 text-sm"
+          role="status"
+        >
+          <div className="min-w-0 flex-1">
+            <p className="mb-2 text-gray-700">
+              <span className="font-semibold text-gray-900">{gradeStudent.name}</span> ·{" "}
+              {graded.grades[gradeStudent.id].grade === null
+                ? "no scored work yet"
+                : `${formatGrade(graded.grades[gradeStudent.id].grade!)}${graded.grades[gradeStudent.id].scored_weight < 100 ? " so far" : ""}`}
+            </p>
+            <GradeBreakdown split={split} grade={graded.grades[gradeStudent.id]} />
+          </div>
+          <button
+            type="button"
+            onClick={onOpenGrading}
+            className="shrink-0 text-xs font-semibold text-brand-700 hover:underline"
+          >
+            Edit split
+          </button>
+          <button
+            type="button"
+            onClick={() => setGradeFocus(null)}
+            aria-label="Close"
+            className="-m-1 shrink-0 rounded-lg p-1 text-gray-400 transition-colors hover:bg-brand-600/10 hover:text-gray-600"
+          >
+            <FontAwesomeIcon icon={faXmark} className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
 
       {focused && (
         <div
@@ -270,6 +337,14 @@ export default function ProgressTab({
                     </span>
                   </th>
                 ))}
+                {split && (
+                  <th
+                    rowSpan={2}
+                    className="min-w-[6.5rem] border-b border-l border-hairline bg-subtle px-3 py-3 text-left align-bottom text-[11px] font-semibold uppercase tracking-wider text-gray-500"
+                  >
+                    Grade
+                  </th>
+                )}
               </tr>
               <tr>
                 {cols.map(({ requirement: r, name, divider }) => {
@@ -312,7 +387,7 @@ export default function ProgressTab({
               {students.length === 0 && (
                 <tr>
                   <td
-                    colSpan={cols.length + 1}
+                    colSpan={cols.length + (split ? 2 : 1)}
                     className="px-4 py-10 text-center text-sm text-gray-500"
                   >
                     {narrowed
@@ -381,6 +456,17 @@ export default function ProgressTab({
                       </td>
                     );
                   })}
+                  {split && (
+                    <td className="border-b border-l border-hairline px-3 py-2.5 group-hover:bg-subtle">
+                      <GradeCell
+                        grade={graded.grades[s.id]?.grade ?? null}
+                        scoredWeight={graded.grades[s.id]?.scored_weight ?? 0}
+                        open={gradeFocus === s.id}
+                        label={s.name}
+                        onClick={() => setGradeFocus(gradeFocus === s.id ? null : s.id)}
+                      />
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -392,9 +478,42 @@ export default function ProgressTab({
         work this term. Click a cell with no grade to enter the score the student earned outside the
         app; on a count, each score adds one more piece of work. Grades from graded work can&rsquo;t
         be changed here.
+        {split &&
+          " The Grade column weighs these scores by your grading split; work with no score yet is left out."}
       </p>
       {dialog}
     </div>
+  );
+}
+
+/** A student's weighted grade so far; opens the breakdown above the grid. */
+function GradeCell({
+  grade,
+  scoredWeight,
+  open,
+  label,
+  onClick,
+}: {
+  grade: number | null;
+  scoredWeight: number;
+  open: boolean;
+  label: string;
+  onClick: () => void;
+}) {
+  const soFar = grade !== null && scoredWeight < 100;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={open}
+      aria-label={`${label}: grade ${grade === null ? "not yet scored" : `${formatGrade(grade)}${soFar ? " so far" : ""}`}`}
+      className={`-mx-1.5 block rounded-lg px-1.5 py-0.5 text-left transition-colors hover:bg-brand-600/10 ${open ? "bg-brand-600/10" : ""}`}
+    >
+      <span className={`block font-semibold tabular-nums ${grade === null ? "text-gray-400" : "text-gray-900"}`}>
+        {grade === null ? "—" : formatGrade(grade)}
+      </span>
+      {soFar && <span className="block text-[10px] font-medium uppercase tracking-wider text-gray-400">so far</span>}
+    </button>
   );
 }
 

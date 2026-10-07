@@ -228,6 +228,7 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
             offeringId={offeringId}
             signature={checklistSignature(requirements)}
             onOpenRequirements={() => setTab("requirements")}
+            onOpenGrading={() => setTab("grading")}
           />
         )}
 
