@@ -7,6 +7,7 @@ import { resolveRubric, type Rubric, type TaskRating } from './task-ratings';
 import { reportNetworkFailure, reportNetworkSuccess } from './connectivity';
 import { endDemo, isDemo } from './demo/session';
 import type { ItemProgress, OfferingSummary, RequirementInput, RequirementRow, TermStatus } from './course-progress';
+import type { GradingSplit } from './course-grading';
 
 export interface User {
   id: string;
@@ -4286,6 +4287,10 @@ export interface FacultyCourseDetail {
   };
   requirements: CourseRequirement[];
   skill_ids: string[];
+  /** The grading split (067), or null when none is set up. */
+  grading: GradingSplit | null;
+  /** False until migration 067 is applied. */
+  grading_ready: boolean;
 }
 
 export interface CourseActivities {
@@ -4355,6 +4360,8 @@ export interface CourseProgress {
   progress: Record<string, Record<string, ItemProgress>>;
   /** requirement id → students who met it */
   totals: Record<string, number>;
+  grading: GradingSplit | null;
+  grading_ready: boolean;
 }
 
 export interface StudentCourseRequirements {

@@ -24,6 +24,13 @@ import {
   refile,
   type GradingSplit,
 } from '../app/lib/course-grading';
+import {
+  MigrationNeeded,
+  REQUIREMENT_COLUMNS,
+  isMissingGradingSchema,
+  normaliseRequirement,
+  requirementQuery,
+} from '../app/lib/course-schema';
 
 let failures = 0;
 function check(label: string, ok: boolean, detail = '') {
@@ -224,8 +231,44 @@ eq('preset', presetSplit(() => 'id').parts.map((p) => [p.name, p.weight]), [
 ]);
 eq('format', [formatGrade(82.3456), formatGrade(100)], ['82.3%', '100%']);
 
-if (failures > 0) {
-  console.error(`\n${failures} check(s) failed`);
-  process.exit(1);
+async function fallbackChecks() {
+  console.log('pre-067 fallback');
+  const calls: string[] = [];
+  const data = await requirementQuery((_columns, legacy) => {
+    calls.push(legacy ? 'legacy' : 'full');
+    return Promise.resolve(legacy ? { data: ['ok'], error: null } : { data: null, error: { code: '42703' } });
+  });
+  eq('retries without manual_type on 42703', [calls, data], [['full', 'legacy'], ['ok']]);
+  let legacyColumns = '';
+  await requirementQuery((columns, legacy) => {
+    if (legacy) legacyColumns = columns;
+    return Promise.resolve(legacy ? { data: 1, error: null } : { data: null, error: { code: 'PGRST204' } });
+  });
+  check('legacy columns drop manual_type', !legacyColumns.includes('manual_type') && legacyColumns.includes('skills_only'), legacyColumns);
+  check('full columns name manual_type', REQUIREMENT_COLUMNS.endsWith(', manual_type'), REQUIREMENT_COLUMNS);
+  let threw: unknown = null;
+  try {
+    await requirementQuery(() => Promise.resolve({ data: null, error: { code: '23505' } }));
+  } catch (e) {
+    threw = e;
+  }
+  eq('other errors throw', (threw as { code?: string } | null)?.code, '23505');
+  eq('normalise', normaliseRequirement({ ...lab, manual_type: undefined, min_score: '75.00' }), { ...lab, min_score: 75, manual_type: 'lab' });
+  check(
+    'missing-grading codes',
+    isMissingGradingSchema({ code: '42703' }) &&
+      isMissingGradingSchema({ code: 'PGRST204' }) &&
+      !isMissingGradingSchema({ code: '42P01' }) &&
+      !isMissingGradingSchema(null),
+  );
+  const migration = new MigrationNeeded('needs 067');
+  check('MigrationNeeded is an Error with its message', migration instanceof Error && migration.message === 'needs 067');
 }
-console.log('\nAll checks passed');
+
+void fallbackChecks().then(() => {
+  if (failures > 0) {
+    console.error(`\n${failures} check(s) failed`);
+    process.exit(1);
+  }
+  console.log('\nAll checks passed');
+});

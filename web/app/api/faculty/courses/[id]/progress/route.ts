@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
-import { courseFailure, loadOwnOffering, notFound, requireRole } from '@/app/lib/courses';
+import { courseFailure, loadGrading, loadOwnOffering, notFound, requireRole } from '@/app/lib/courses';
 import { loadOfferingProgress } from '@/app/lib/course-requirements';
 import { termStatus } from '@/app/lib/course-progress';
 
@@ -12,7 +12,8 @@ interface RouteParams {
  * GET: every student on the course's roster against every checklist item.
  * Automatic items are judged from graded work inside the term on each read;
  * manual ticks and the instructor's mark-dones come from
- * course_requirement_checks.
+ * course_requirement_checks. The grading split comes along so the page can
+ * work out each student's grade from this same progress.
  */
 export async function GET(_request: NextRequest, { params }: RouteParams) {
   const { session, response } = await requireRole('faculty');
@@ -23,7 +24,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
     const supabase = getSupabaseAdmin();
     const offering = await loadOwnOffering(supabase, session.uid, id);
     if (!offering) return notFound('Course');
-    const result = await loadOfferingProgress(supabase, offering);
+    const [result, grading] = await Promise.all([loadOfferingProgress(supabase, offering), loadGrading(supabase, id)]);
     return NextResponse.json({
       offering: {
         id,
@@ -35,6 +36,8 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
       students: result.students,
       progress: result.progress,
       totals: result.totals,
+      grading: grading.grading,
+      grading_ready: grading.ready,
     });
   } catch (err) {
     return courseFailure(err, 'Unable to load progress');

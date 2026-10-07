@@ -16,8 +16,17 @@ import {
   type RequirementRow,
 } from './course-progress';
 import { canFacultySeeScenario } from './scenario-visibility';
+import { readStoredSplit, type GradingSplit } from './course-grading';
+import { MigrationNeeded, isMissingGradingSchema, normaliseRequirement, requirementQuery } from './course-schema';
 
 export { parseCourse, parseTerm, type CourseInput, type TermInput } from './course-progress';
+export {
+  MigrationNeeded,
+  REQUIREMENT_COLUMNS,
+  isMissingGradingSchema,
+  normaliseRequirement,
+  requirementQuery,
+} from './course-schema';
 
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
 
@@ -48,8 +57,11 @@ export async function requireRole(
   return { session };
 }
 
-/** The 503 before migration 065, otherwise a logged 500. */
+/** The 503 before migration 065 (or a later one a feature needs), otherwise a logged 500. */
 export function courseFailure(err: unknown, message: string): NextResponse {
+  if (err instanceof MigrationNeeded) {
+    return NextResponse.json({ error: err.message }, { status: 503 });
+  }
   if (isMissingCourseSchema(err)) {
     return NextResponse.json({ error: COURSES_NEED_MIGRATION }, { status: 503 });
   }
@@ -448,21 +460,28 @@ export async function countInstructorEntries(supabase: Supabase, requirementIds:
 
 export const TERM_ENDED_LOCK = 'This term has ended, so its checklist is locked. Scores and ticks can still be changed.';
 
-/** Requirements of the given offerings, in checklist order. */
+/** Requirements of the given offerings, in checklist order. Before 067 every manual item reads as a Lab Activity. */
 export async function loadRequirements(supabase: Supabase, offeringIds: string[]): Promise<RequirementRow[]> {
   if (offeringIds.length === 0) return [];
-  const rows = must(
-    await supabase
+  const rows = await requirementQuery((columns) =>
+    supabase
       .from('course_requirements')
-      .select(
-        'id, offering_id, position, kind, title, activity_type, scenario_id, assessment_id, presentation_id, target_count, skill_id, min_score, skills_only',
-      )
+      .select(columns)
       .in('offering_id', offeringIds)
       .order('position')
       .order('created_at'),
-  ) as RequirementRow[];
-  // numeric(5,2) can come back as a string.
-  return rows.map((r) => ({ ...r, min_score: r.min_score === null ? null : Number(r.min_score) }));
+  );
+  return ((rows ?? []) as unknown as Record<string, unknown>[]).map(normaliseRequirement);
+}
+
+/** The offering's grading split (067), and whether the column exists yet (ready). */
+export async function loadGrading(supabase: Supabase, offeringId: string): Promise<{ grading: GradingSplit | null; ready: boolean }> {
+  const res = await supabase.from('course_offerings').select('grading').eq('id', offeringId).maybeSingle();
+  if (res.error) {
+    if (isMissingGradingSchema(res.error)) return { grading: null, ready: false };
+    throw res.error;
+  }
+  return { grading: readStoredSplit((res.data as { grading?: unknown } | null)?.grading), ready: true };
 }
 
 /** The titles checklist items link to, for requirementLabel(). */
