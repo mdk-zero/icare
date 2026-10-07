@@ -29,6 +29,7 @@ config({ path: '.env.local' });
 import { getSupabaseAdmin } from '../app/lib/supabase/server';
 import { parseRequirement, type RequirementInput } from '../app/lib/course-progress';
 import { loadOwnOffering } from '../app/lib/courses';
+import { requirementWrite } from '../app/lib/course-schema';
 import { loadOfferingProgress } from '../app/lib/course-requirements';
 
 const DRY_RUN = process.argv.includes('--dry-run');
@@ -261,7 +262,9 @@ async function seedChecklist(offeringId: string, course: CourseSeed, teacher: Te
     must(
       await supabase
         .from('course_requirements')
-        .insert({ ...parsed.value, offering_id: offeringId, position: position++, created_by: teacher.id })
+        // Seeded items are never Written Exams, so manual_type (067) is left to
+        // its default and the seed runs before and after 067 alike.
+        .insert({ ...requirementWrite(parsed.value, true), offering_id: offeringId, position: position++, created_by: teacher.id })
         .select('id'),
       'create requirement',
     );

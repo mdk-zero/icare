@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faCircleCheck,
@@ -22,8 +22,8 @@ import {
   GRADING_LIMITS,
   GRADING_NEEDS_MIGRATION,
   addComponent,
+  dropUnknown,
   fileItem,
-  gradingSignature,
   isGradeable,
   leafOf,
   parseGrading,
@@ -33,6 +33,7 @@ import {
   type GradingSplit,
 } from "../../../lib/course-grading";
 import { TOPICS } from "../topics";
+import { isDirty, savedDraft, startDraft, type GradingDraft } from "../grading-draft";
 import GradingItemPicker from "./grading-item-picker";
 
 const newId = () => crypto.randomUUID();
@@ -45,9 +46,10 @@ const inputClass =
 /**
  * The course's grading split: weighted parts ("Written Exams 30%") and,
  * inside a part, components ("Midterm 15%"), with checklist items filed
- * under them. Edits stay in a draft until saved. The draft remembers the
- * split it started from, so a save over a newer split is refused rather
- * than undoing it.
+ * under them. Edits stay in a draft until saved; the page holds the draft
+ * (grading-draft.ts), so it survives a look at another tab. The draft
+ * remembers the split it started from, so a save over a newer split is
+ * refused rather than undoing it.
  */
 export default function GradingTab({
   offeringId,
@@ -55,6 +57,8 @@ export default function GradingTab({
   grading,
   gradingReady,
   locked,
+  state,
+  onChange,
   onSaved,
 }: {
   offeringId: string;
@@ -62,18 +66,13 @@ export default function GradingTab({
   grading: GradingSplit | null;
   gradingReady: boolean;
   locked: boolean;
+  /** The unsaved edits, held by the page. */
+  state: GradingDraft;
+  onChange: Dispatch<SetStateAction<GradingDraft>>;
   onSaved: () => Promise<void> | void;
 }) {
-  const serverSig = gradingSignature(grading);
-  const [draft, setDraft] = useState<GradingSplit | null>(grading);
-  const [base, setBase] = useState(serverSig);
-  const dirty = gradingSignature(draft) !== base;
-  // Every write refetches the page: follow the server's split while there
-  // are no unsaved edits, and keep the draft once there are.
-  if (serverSig !== base && !dirty) {
-    setDraft(grading);
-    setBase(serverSig);
-  }
+  const { draft } = state;
+  const dirty = isDirty(state);
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -97,12 +96,11 @@ export default function GradingTab({
   }
 
   const edit = (next: GradingSplit | null) => {
-    setDraft(next);
+    onChange((s) => ({ ...s, draft: next }));
     setError(null);
   };
   const discard = () => {
-    setDraft(grading);
-    setBase(serverSig);
+    onChange(startDraft(grading));
     setError(null);
   };
 
@@ -110,7 +108,7 @@ export default function GradingTab({
     setSaving(true);
     setError(null);
     const progress = loadingToast(split ? "Saving grading split…" : "Clearing grading split…");
-    const result = await saveCourseGrading(offeringId, split, base);
+    const result = await saveCourseGrading(offeringId, split, state.base);
     setSaving(false);
     if (result.error !== undefined) {
       progress.error(result.error);
@@ -118,8 +116,8 @@ export default function GradingTab({
       return false;
     }
     progress.success(split ? "Grading split saved" : "Grading split cleared");
-    setDraft(result.data.grading);
-    setBase(gradingSignature(result.data.grading));
+    const saved = result.data.grading;
+    onChange((s) => savedDraft(s, saved));
     await onSaved();
     return true;
   };
@@ -159,7 +157,8 @@ export default function GradingTab({
   }
 
   const readOnly = locked || saving;
-  const parsed = parseGrading(draft, requirements);
+  // Ids no longer on the checklist are dropped, so a stale one can't block saving.
+  const parsed = parseGrading(dropUnknown(draft, requirements), requirements);
   const problem = parsed.ok ? null : parsed.error;
   const partsTotal = total(draft.parts);
 
@@ -330,7 +329,7 @@ export default function GradingTab({
                       </div>
                     );
                   })}
-                  <p className={`text-xs ${Math.abs(inside - part.weight) <= 0.01 ? "text-gray-500" : "font-medium text-amber-700"}`}>
+                  <p className={`text-xs ${inside === round(part.weight) ? "text-gray-500" : "font-medium text-amber-700"}`}>
                     Components add up to {inside}% of {Number.isFinite(part.weight) ? part.weight : 0}%
                   </p>
                 </>
@@ -363,10 +362,10 @@ export default function GradingTab({
         )}
         <span
           className={`ml-auto inline-flex items-center gap-1.5 text-sm font-semibold ${
-            Math.abs(partsTotal - 100) <= 0.01 ? "text-emerald-700" : "text-amber-700"
+            partsTotal === 100 ? "text-emerald-700" : "text-amber-700"
           }`}
         >
-          {Math.abs(partsTotal - 100) <= 0.01 ? (
+          {partsTotal === 100 ? (
             <>
               <FontAwesomeIcon icon={faCircleCheck} className="h-3.5 w-3.5" />
               100%

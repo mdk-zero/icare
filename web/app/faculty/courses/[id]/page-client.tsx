@@ -47,6 +47,7 @@ import CourseCrumbs from "./course-crumbs";
 import CourseTabBar, { COURSE_TAB_PANEL_ID, courseTabId } from "./course-tab-bar";
 import SkillsTab from "./skills-tab";
 import GradingTab from "./grading-tab";
+import { followServer, startDraft } from "../grading-draft";
 import { courseTabHref, parseCourseTab, type CourseTab } from "../course-tabs";
 import { TopicIcon, groupByTopic } from "../topics";
 
@@ -86,6 +87,12 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
   const loadError = data?.error ?? null;
   const offering = detail?.offering ?? null;
   const requirements = detail?.requirements ?? [];
+  // The Grading tab's unsaved edits live here, so looking at another tab
+  // doesn't throw them away. They follow the server's split while clean.
+  const serverGrading = detail?.grading ?? null;
+  const [gradingDraft, setGradingDraft] = useState(() => startDraft(serverGrading));
+  const followed = followServer(gradingDraft, serverGrading);
+  if (followed !== gradingDraft) setGradingDraft(followed);
   const locked = offering?.locked ?? false;
   const names = requirementNames(requirements);
   const nameOf = (id: string) => names[requirements.findIndex((r) => r.id === id)] ?? "requirement";
@@ -342,6 +349,8 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
             grading={detail.grading ?? null}
             gradingReady={detail.grading_ready ?? false}
             locked={locked}
+            state={gradingDraft}
+            onChange={setGradingDraft}
             onSaved={refresh}
           />
         )}

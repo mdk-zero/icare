@@ -13,6 +13,8 @@ import type { ItemProgress, RequirementRow } from '../app/lib/course-progress';
 import {
   addComponent,
   computeGrades,
+  dropUnknown,
+  fileItem,
   formatGrade,
   gradeLeafProblem,
   gradingLeaves,
@@ -28,6 +30,7 @@ import {
   type GradingSplit,
 } from '../app/lib/course-grading';
 import { seed } from '../app/lib/demo/fixtures';
+import { followServer, savedDraft, startDraft } from '../app/faculty/courses/grading-draft';
 import {
   MigrationNeeded,
   REQUIREMENT_COLUMNS,
@@ -244,6 +247,46 @@ eq('leaf null unfiles', parseGradeLeaf(null), { ok: true, value: null });
 eq('leaf empty string unfiles', parseGradeLeaf(''), { ok: true, value: null });
 eq('leaf id', parseGradeLeaf('M'), { ok: true, value: 'M' });
 eq('leaf junk', parseGradeLeaf(7), { ok: false, error: 'Choose what this counts toward' });
+
+console.log('final review fixes');
+// #4: sums are compared in hundredths, so 99.99 and 100.01 never slip through.
+const two = (a: number, b: number) => ({
+  parts: [
+    { id: 'a', name: 'A', weight: a, items: [], components: [] },
+    { id: 'b', name: 'B', weight: b, items: [], components: [] },
+  ],
+});
+eq('99.99 refused', err(two(50, 49.99)), 'The parts add up to 99.99%, not 100%');
+eq('100.01 refused', err(two(50, 50.01)), 'The parts add up to 100.01%, not 100%');
+eq('99.99 refused (other split)', err(two(60.01, 39.98)), 'The parts add up to 99.99%, not 100%');
+const sNear = split();
+sNear.parts[0].components[1].weight = 14.99;
+eq('component sum off by 0.01 refused', err(sNear), 'The components of "Written Exams" add up to 29.99%, not 30%');
+check('thirds still save', parseGrading(thirds, reqs).ok);
+// #3: ids no longer on the checklist are dropped before validating.
+const sGone = split();
+sGone.parts[1].items = [lab.id, 'gone'];
+eq('dropUnknown removes stale ids', dropUnknown(sGone, reqs)?.parts[1].items, [lab.id]);
+check('a stored split with a stale id can be saved once cleaned', parseGrading(dropUnknown(sGone, reqs), reqs).ok);
+eq('dropUnknown keeps null', dropUnknown(null, reqs), null);
+// #5: filing an item where it already is changes nothing.
+const sTwo = split();
+sTwo.parts[1].items = [lab.id, quizzes.id];
+eq('re-filing in place keeps the order', fileItem(sTwo, lab.id, 'L').parts[1].items, [lab.id, quizzes.id]);
+eq('re-filing in place keeps the signature', gradingSignature(refile(sTwo, lab, 'L')), gradingSignature(sTwo));
+// #1/#2: the Grading draft follows the server only when the server's split changes.
+const oldSplit = split();
+const newSplit = split();
+newSplit.parts[0].name = 'Exams';
+const afterSave = savedDraft(startDraft(oldSplit), newSplit);
+eq('a save is not undone while the refetch is pending', followServer(afterSave, oldSplit).draft?.parts[0].name, 'Exams');
+eq('the refetch then confirms it', gradingSignature(followServer(afterSave, newSplit).draft), gradingSignature(newSplit));
+const clean = startDraft(oldSplit);
+eq('a clean draft follows a newer server split', followServer(clean, newSplit).draft?.parts[0].name, 'Exams');
+const edited = { ...clean, draft: { parts: [{ ...oldSplit.parts[0], name: 'Mine' }, oldSplit.parts[1]] } };
+const kept = followServer(edited, newSplit);
+eq('unsaved edits survive a newer server split', kept.draft?.parts[0].name, 'Mine');
+eq('…and keep their old base, so saving them is refused', kept.base, gradingSignature(oldSplit));
 
 console.log('demo fixtures');
 const demo = seed();

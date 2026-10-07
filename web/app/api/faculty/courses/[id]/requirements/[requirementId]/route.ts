@@ -100,8 +100,10 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     if (!current) return notFound('Requirement');
     const [labelled] = await labelRequirements(supabase, [current]);
 
-    must(await supabase.from('course_requirements').delete().eq('id', requirementId));
+    // Out of the grading split first: if the delete then fails, the item is
+    // merely uncounted, where the other order could leave a stale id behind.
     await refileRequirement(supabase, id, await loadGrading(supabase, id), (split) => fileItem(split, requirementId, null));
+    must(await supabase.from('course_requirements').delete().eq('id', requirementId));
 
     await logAudit(
       session,

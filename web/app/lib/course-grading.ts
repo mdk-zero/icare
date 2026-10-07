@@ -48,7 +48,8 @@ export interface GradeResult {
 
 export const GRADING_LIMITS = { parts: 10, components: 10, name: 60 } as const;
 
-const TOLERANCE = 0.01;
+/** Weights carry two decimals, so sums are compared in whole hundredths: 99.99 is not 100. */
+const hundredths = (n: number) => Math.round(n * 100);
 const MAX_ID = 64;
 
 export const GRADING_ENDED_LOCK = 'This term has ended, so its grading split is locked. Scores can still be changed.';
@@ -111,11 +112,11 @@ export function splitProblem(split: GradingSplit): string | null {
       : `"${badWeight.name.trim()}" needs a percent above 0`;
   }
   const total = sum(parts);
-  if (Math.abs(total - 100) > TOLERANCE) return `The parts add up to ${percent(total)}, not 100%`;
+  if (hundredths(total) !== 10000) return `The parts add up to ${percent(total)}, not 100%`;
   for (const p of parts) {
     if (!p.components.length) continue;
     const inside = sum(p.components);
-    if (Math.abs(inside - p.weight) > TOLERANCE) {
+    if (hundredths(inside) !== hundredths(p.weight)) {
       return `The components of "${p.name.trim()}" add up to ${percent(inside)}, not ${percent(p.weight)}`;
     }
   }
@@ -271,8 +272,24 @@ export function gradeLeafProblem(split: GradingSplit | null, leafId: string): st
   return 'That grading component no longer exists. Reload and try again.';
 }
 
+/**
+ * The split without ids no longer on the checklist. A save that removed an
+ * item but not its id (a failed second write, two tabs racing) would
+ * otherwise leave a split nothing can save.
+ */
+export function dropUnknown(split: GradingSplit | null, requirements: readonly RequirementRow[]): GradingSplit | null {
+  if (!split) return null;
+  const known = new Set(requirements.map((r) => r.id));
+  const keep = (items: string[]) => items.filter((id) => known.has(id));
+  return {
+    parts: split.parts.map((p) => ({ ...p, items: keep(p.items), components: p.components.map((c) => ({ ...c, items: keep(c.items) })) })),
+  };
+}
+
 /** The split with the item taken out of every leaf and, unless leafId is null, filed under leafId. */
 export function fileItem(split: GradingSplit, requirementId: string, leafId: string | null): GradingSplit {
+  // Already there: keep its place, and leave the split untouched.
+  if (leafId !== null && leafOf(split, requirementId) === leafId) return split;
   const place = (node: GradeComponent) => {
     const items = node.items.filter((id) => id !== requirementId);
     return node.id === leafId ? [...items, requirementId] : items;
