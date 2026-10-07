@@ -23,6 +23,7 @@ import {
   type RequirementRow,
   type RequirementScoreRow,
 } from '../app/lib/course-progress';
+import { COURSE_TABS, parseCourseTab } from '../app/faculty/courses/course-tabs';
 
 let failures = 0;
 function check(label: string, ok: boolean, detail = '') {
@@ -266,6 +267,12 @@ const parsedSkill = parseRequirement({ kind: 'skill', skill_id: '1-1', manual_ty
 eq('non-manual forced to lab', parsedSkill.ok && parsedSkill.value.manual_type, 'lab');
 const parsedBad = parseRequirement({ kind: 'manual', title: 'x', manual_type: 'quiz' });
 eq('bad manual_type', parsedBad.ok ? null : parsedBad.error, 'Choose Lab Activity or Written Exam');
+
+console.log('course tabs');
+eq('three tabs', COURSE_TABS, ['progress', 'grading', 'skills']);
+eq('old Requirements links open Grading', parseCourseTab('requirements'), 'grading');
+eq('unknown tabs open Progress', parseCourseTab('nope'), 'progress');
+eq('Grading', parseCourseTab('grading'), 'grading');
 
 if (failures > 0) {
   console.error(`\n${failures} check(s) failed`);

@@ -9,7 +9,6 @@ import {
   faMagnifyingGlass,
   faPercent,
   faTriangleExclamation,
-  faUserCheck,
   faUsers,
   faXmark,
 } from "@fortawesome/free-solid-svg-icons";
@@ -37,12 +36,10 @@ type Filter = "all" | "incomplete" | "complete";
 export default function ProgressTab({
   offeringId,
   signature,
-  onOpenRequirements,
   onOpenGrading,
 }: {
   offeringId: string;
   signature: string;
-  onOpenRequirements: () => void;
   onOpenGrading: () => void;
 }) {
   const [filter, setFilter] = useState<Filter>("all");
@@ -126,7 +123,7 @@ export default function ProgressTab({
         action={
           <button
             type="button"
-            onClick={onOpenRequirements}
+            onClick={onOpenGrading}
             className="mt-4 inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-700"
           >
             <FontAwesomeIcon icon={faListCheck} className="h-3.5 w-3.5" />
@@ -291,7 +288,7 @@ export default function ProgressTab({
           </div>
           <button
             type="button"
-            onClick={onOpenRequirements}
+            onClick={onOpenGrading}
             className="shrink-0 text-xs font-semibold text-brand-700 hover:underline"
           >
             Edit

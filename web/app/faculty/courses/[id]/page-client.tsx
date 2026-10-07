@@ -4,20 +4,15 @@ import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
-  faArrowDown,
-  faArrowUp,
   faBookMedical,
   faChartColumn,
-  faListCheck,
   faLock,
   faPenToSquare,
   faPercent,
   faPlus,
-  faTrashCan,
   faTriangleExclamation,
 } from "@fortawesome/free-solid-svg-icons";
 import PageHeader from "../../../components/PageHeader";
-import ActionsMenu from "../../../components/ActionsMenu";
 import ConfirmModal from "../../../components/ConfirmModal";
 import CourseSkillsModal from "../../../components/CourseSkillsModal";
 import { toast } from "../../../components/Toast";
@@ -26,18 +21,14 @@ import {
   deleteRequirement,
   fetchFacultyCourse,
   fetchSkillCatalog,
-  reorderRequirements,
   saveCourseSkills,
   suggestCourseSkills,
   type CourseRequirement,
   type SkillSummary,
 } from "../../../lib/api";
 import {
-  formatTermDates,
-  inTopicOrder,
   requirementDetail,
   requirementNames,
-  topicKey,
   type RequirementTopicKey,
 } from "../../../lib/course-progress";
 import RequirementModal from "./requirement-modal";
@@ -45,11 +36,11 @@ import { SkeletonProgressGrid } from "../../../components/skeletons";
 import ProgressTab from "./progress-tab";
 import CourseCrumbs from "./course-crumbs";
 import CourseTabBar, { COURSE_TAB_PANEL_ID, courseTabId } from "./course-tab-bar";
+import { ChecklistSkeleton } from "./checklist-section";
 import SkillsTab from "./skills-tab";
 import GradingTab from "./grading-tab";
 import { afterItemSaved, followServer, isDirty, startDraft } from "../grading-draft";
 import { courseTabHref, parseCourseTab, type CourseTab } from "../course-tabs";
-import { TopicIcon, groupByTopic } from "../topics";
 
 const NO_SKILLS: SkillSummary[] = [];
 
@@ -79,7 +70,7 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
   const [removeBusy, setRemoveBusy] = useState(false);
   const [skillsOpen, setSkillsOpen] = useState(false);
 
-  const { data, loading, refresh, setData } = usePageData(`faculty:course:${offeringId}`, () =>
+  const { data, loading, refresh } = usePageData(`faculty:course:${offeringId}`, () =>
     fetchFacultyCourse(offeringId),
   );
   const { data: catalog = NO_SKILLS } = usePageData("skills:catalog", fetchSkillCatalog, {
@@ -99,27 +90,6 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
   const locked = offering?.locked ?? false;
   const names = requirementNames(requirements);
   const nameOf = (id: string) => names[requirements.findIndex((r) => r.id === id)] ?? "requirement";
-
-  // Items move within their section. The saved order becomes the shown one
-  // (grouped by topic), so the mobile app lists them the same way.
-  const move = async (id: string, delta: -1 | 1) => {
-    const next = inTopicOrder(requirements);
-    const i = next.findIndex((r) => r.id === id);
-    const j = i + delta;
-    if (i < 0 || j < 0 || j >= next.length || topicKey(next[i]) !== topicKey(next[j])) return;
-    [next[i], next[j]] = [next[j], next[i]];
-    const ids = next.map((r) => r.id);
-    setData((prev) =>
-      prev?.data
-        ? { data: { ...prev.data, requirements: next.map((r, position) => ({ ...r, position })) } }
-        : prev!,
-    );
-    const result = await reorderRequirements(offeringId, ids);
-    if (result.error !== undefined) {
-      toast(result.error, "error");
-      await refresh();
-    }
-  };
 
   const confirmRemove = async () => {
     if (!removing) return;
@@ -183,9 +153,9 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
             count: offering?.student_count ?? 0,
           },
           {
-            id: "requirements",
-            label: "Requirements",
-            icon: faListCheck,
+            id: "grading",
+            label: "Grading",
+            icon: faPercent,
             count: requirements.length,
           },
           {
@@ -194,21 +164,15 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
             icon: faBookMedical,
             count: detail?.skill_ids.length ?? 0,
           },
-          {
-            id: "grading",
-            label: "Grading",
-            icon: faPercent,
-            count: detail?.grading?.parts.length ?? 0,
-          },
         ]}
         action={
-          tab === "requirements"
+          tab === "grading"
             ? {
                 icon: faPlus,
-                text: "Add Requirement",
+                text: "Add item",
                 label: locked
                   ? "The term has ended, so the checklist is locked"
-                  : "Add a requirement to the checklist",
+                  : "Add an item to the checklist",
                 onClick: () => addRequirement(),
                 disabled: !offering || locked,
               }
@@ -237,114 +201,11 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
           <ProgressTab
             offeringId={offeringId}
             signature={checklistSignature(requirements)}
-            onOpenRequirements={() => setTab("requirements")}
             onOpenGrading={() => setTab("grading")}
           />
         )}
 
-        {tab === "requirements" &&
-          (loading ? (
-            <div className="space-y-4" aria-hidden>
-              {[3, 2].map((rows, k) => (
-                <div
-                  key={k}
-                  className="animate-pulse overflow-hidden rounded-xl border border-hairline bg-surface"
-                >
-                  <div className="flex items-center gap-3 border-b border-hairline px-4 py-3">
-                    <div className="h-8 w-8 rounded-lg bg-gray-100" />
-                    <div className="space-y-1.5">
-                      <div className="h-3.5 w-32 rounded bg-gray-200" />
-                      <div className="h-3 w-44 rounded bg-gray-100" />
-                    </div>
-                  </div>
-                  {Array.from({ length: rows }).map((_, i) => (
-                    <div
-                      key={i}
-                      className="space-y-2 border-b border-hairline px-4 py-3.5 last:border-b-0"
-                    >
-                      <div className="h-3.5 w-24 rounded bg-gray-100" />
-                      <div className="h-3.5 w-72 rounded bg-gray-100" />
-                    </div>
-                  ))}
-                </div>
-              ))}
-            </div>
-          ) : requirements.length === 0 ? (
-            <div className="rounded-xl border border-hairline bg-surface px-6 py-12 text-center">
-              <FontAwesomeIcon icon={faListCheck} className="mb-3 h-7 w-7 text-gray-300" />
-              <p className="font-semibold text-gray-700">No requirements yet</p>
-              <p className="mx-auto mt-1 max-w-md text-sm text-gray-500">
-                List what your students must accomplish this term, such as &ldquo;3 Patient Cases
-                graded&rdquo; or a skill from the course. Automatic items are met once the work is
-                graded; you score Lab Activities yourself.
-              </p>
-              {!locked && (
-                <button
-                  type="button"
-                  onClick={() => addRequirement()}
-                  className="mt-4 inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-700"
-                >
-                  <FontAwesomeIcon icon={faPlus} className="h-3.5 w-3.5" />
-                  Add the first requirement
-                </button>
-              )}
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {groupByTopic(requirements).map(({ topic, items }) => (
-                <section
-                  key={topic.key}
-                  aria-labelledby={`topic-${topic.key}`}
-                  className="relative overflow-hidden rounded-xl border border-hairline bg-surface"
-                >
-                  <span className={`absolute inset-y-0 left-0 w-1 ${topic.bar}`} aria-hidden />
-                  <header className="flex items-center gap-3 border-b border-hairline bg-subtle/60 py-3 pl-5 pr-3">
-                    <TopicIcon topic={topic} />
-                    <div className="min-w-0 flex-1">
-                      <h3
-                        id={`topic-${topic.key}`}
-                        className="flex items-center gap-2 font-display text-[15px] font-semibold text-gray-900"
-                      >
-                        {topic.label}
-                        <span className="rounded-full bg-surface px-1.5 text-[11px] font-semibold text-gray-500 ring-1 ring-inset ring-hairline">
-                          {items.length}
-                        </span>
-                      </h3>
-                      <p className="text-xs text-gray-500">{topic.blurb}</p>
-                    </div>
-                    {!locked && (
-                      <button
-                        type="button"
-                        onClick={() => addRequirement(topic.key)}
-                        aria-label={`Add to ${topic.label}`}
-                        className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors hover:bg-surface ${topic.text}`}
-                      >
-                        <FontAwesomeIcon icon={faPlus} className="h-3 w-3" />
-                        Add
-                      </button>
-                    )}
-                  </header>
-                  <ol className="divide-y divide-hairline">
-                    {items.map(({ requirement: r, name }, i) => (
-                      <RequirementRowView
-                        key={r.id}
-                        name={name}
-                        requirement={r}
-                        first={i === 0}
-                        last={i === items.length - 1}
-                        locked={locked}
-                        onMove={(delta) => void move(r.id, delta)}
-                        onEdit={() => setEditing(r)}
-                        onRemove={() => setRemoving(r)}
-                      />
-                    ))}
-                  </ol>
-                </section>
-              ))}
-            </div>
-          ))}
-
-        {tab === "grading" && !offering && loading && <SkeletonProgressGrid />}
+        {tab === "grading" && !offering && loading && <ChecklistSkeleton />}
         {tab === "grading" && offering && detail && (
           <GradingTab
             offeringId={offeringId}
@@ -447,69 +308,4 @@ function checklistSignature(requirements: CourseRequirement[]): string {
   ]);
   for (const ch of JSON.stringify(fields)) hash = ((hash << 5) + hash + ch.charCodeAt(0)) | 0;
   return String(hash >>> 0);
-}
-
-function RequirementRowView({
-  name,
-  requirement: r,
-  first,
-  last,
-  locked,
-  onMove,
-  onEdit,
-  onRemove,
-}: {
-  name: string;
-  requirement: CourseRequirement;
-  first: boolean;
-  last: boolean;
-  locked: boolean;
-  onMove: (delta: -1 | 1) => void;
-  onEdit: () => void;
-  onRemove: () => void;
-}) {
-  return (
-    <li className="flex items-center gap-3 py-3 pl-5 pr-3">
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold text-gray-800">{name}</p>
-        <p className="text-sm text-gray-500">{requirementDetail(r)}</p>
-        {r.removed && (
-          <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-700">
-            <FontAwesomeIcon icon={faTriangleExclamation} className="h-2.5 w-2.5" />
-            The linked activity was deleted
-          </span>
-        )}
-      </div>
-      {!locked && (
-        <div className="flex shrink-0 items-center gap-1">
-          <button
-            type="button"
-            onClick={() => onMove(-1)}
-            disabled={first}
-            aria-label={`Move ${name} up`}
-            className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 disabled:opacity-30"
-          >
-            <FontAwesomeIcon icon={faArrowUp} className="h-3.5 w-3.5" />
-          </button>
-          <button
-            type="button"
-            onClick={() => onMove(1)}
-            disabled={last}
-            aria-label={`Move ${name} down`}
-            className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 disabled:opacity-30"
-          >
-            <FontAwesomeIcon icon={faArrowDown} className="h-3.5 w-3.5" />
-          </button>
-          <ActionsMenu
-            variant="compact"
-            label={`Actions for ${name}`}
-            actions={[
-              { label: "Edit", icon: faPenToSquare, onClick: onEdit },
-              { label: "Remove", icon: faTrashCan, danger: true, onClick: onRemove },
-            ]}
-          />
-        </div>
-      )}
-    </li>
-  );
 }

@@ -10,7 +10,6 @@ import {
   faChartColumn,
   faPercent,
   faChevronRight,
-  faListCheck,
   faPenToSquare,
   faPlus,
   faTriangleExclamation,
@@ -172,16 +171,14 @@ function TermSection({
 
 const TAB_ICON: Record<(typeof COURSE_TABS)[number], IconDefinition> = {
   progress: faChartColumn,
-  requirements: faListCheck,
-  skills: faBookMedical,
   grading: faPercent,
+  skills: faBookMedical,
 };
 
 const TAB_LABEL: Record<(typeof COURSE_TABS)[number], string> = {
   progress: "Progress",
-  requirements: "Requirements",
-  skills: "Skills",
   grading: "Grading",
+  skills: "Skills",
 };
 
 /**
@@ -195,7 +192,7 @@ function CourseCard({ offering: o }: { offering: FacultyCourseSummary }) {
   const next =
     o.requirement_count === 0 && status !== "ended"
       ? {
-          tab: "requirements" as const,
+          tab: "grading" as const,
           icon: faPlus,
           text: "Set up the checklist",
           tone: "bg-brand-600/10 text-brand-800 hover:bg-brand-600/15",
@@ -296,7 +293,7 @@ function CourseCard({ offering: o }: { offering: FacultyCourseSummary }) {
           >
             <FontAwesomeIcon icon={TAB_ICON[t]} className="h-3 w-3" />
             {TAB_LABEL[t]}
-            {t === "requirements" && o.requirement_count > 0 && (
+            {t === "grading" && o.requirement_count > 0 && (
               <span className="rounded-full bg-gray-100 px-1.5 text-[10px] font-semibold text-gray-500">
                 {o.requirement_count}
               </span>
