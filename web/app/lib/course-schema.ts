@@ -6,7 +6,8 @@
  * imports — so the fallback can be checked without a database.
  */
 
-import type { RequirementRow } from './course-progress';
+import { EXAMS_NEED_MIGRATION } from './course-grading';
+import type { RequirementInput, RequirementRow } from './course-progress';
 
 const LEGACY_REQUIREMENT_COLUMNS =
   'id, offering_id, position, kind, title, activity_type, scenario_id, assessment_id, presentation_id, target_count, skill_id, min_score, skills_only';
@@ -47,4 +48,17 @@ export async function requirementQuery<D>(
 export function normaliseRequirement(row: Record<string, unknown>): RequirementRow {
   const r = row as unknown as RequirementRow;
   return { ...r, min_score: r.min_score === null ? null : Number(r.min_score), manual_type: r.manual_type ?? 'lab' };
+}
+
+/**
+ * A checklist item's fields as written to course_requirements: as they are
+ * once 067 is applied, and without manual_type before it. A Written Exam
+ * can't be saved before 067, since it would come back a Lab Activity.
+ */
+export function requirementWrite(value: RequirementInput, legacy: boolean): Record<string, unknown> {
+  if (!legacy) return { ...value };
+  if (value.manual_type === 'exam') throw new MigrationNeeded(EXAMS_NEED_MIGRATION);
+  const { manual_type: _manualType, ...rest } = value;
+  void _manualType;
+  return rest;
 }

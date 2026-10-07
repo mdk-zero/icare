@@ -4305,13 +4305,16 @@ export const fetchFacultyCourse = (id: string) => courseRequest<FacultyCourseDet
 
 export const fetchCourseActivities = (id: string) => courseRequest<CourseActivities>(`/api/faculty/courses/${id}/activities`);
 
-export const addRequirement = (offeringId: string, input: RequirementInput) =>
+/** A checklist item's fields, with where it counts in the grading split (null: not counted; absent: unchanged). */
+export type RequirementSave = RequirementInput & { grade_leaf_id?: string | null };
+
+export const addRequirement = (offeringId: string, input: RequirementSave) =>
   courseRequest<{ requirement: CourseRequirement }>(`/api/faculty/courses/${offeringId}/requirements`, {
     method: 'POST',
     body: input,
   });
 
-export const updateRequirement = (offeringId: string, requirementId: string, input: RequirementInput) =>
+export const updateRequirement = (offeringId: string, requirementId: string, input: RequirementSave) =>
   courseRequest<{ requirement: CourseRequirement }>(`/api/faculty/courses/${offeringId}/requirements/${requirementId}`, {
     method: 'PATCH',
     body: input,
@@ -4319,6 +4322,17 @@ export const updateRequirement = (offeringId: string, requirementId: string, inp
 
 export const deleteRequirement = (offeringId: string, requirementId: string) =>
   courseRequest<{ success: true }>(`/api/faculty/courses/${offeringId}/requirements/${requirementId}`, { method: 'DELETE' });
+
+/**
+ * Replace the course's grading split (null clears it). `base` is
+ * gradingSignature() of the split the edits started from: a 409 means it
+ * changed since.
+ */
+export const saveCourseGrading = (offeringId: string, grading: GradingSplit | null, base: string) =>
+  courseRequest<{ grading: GradingSplit | null }>(`/api/faculty/courses/${offeringId}/grading`, {
+    method: 'PUT',
+    body: { parts: grading?.parts ?? [], base },
+  });
 
 export const reorderRequirements = (offeringId: string, ids: string[]) =>
   courseRequest<{ ids: string[] }>(`/api/faculty/courses/${offeringId}/requirements/order`, { method: 'PUT', body: { ids } });

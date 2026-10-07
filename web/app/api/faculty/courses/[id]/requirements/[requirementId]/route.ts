@@ -7,23 +7,30 @@ import {
   checkRequirementLinks,
   courseFailure,
   labelRequirements,
+  loadGrading,
   loadOwnOffering,
   loadRequirements,
   must,
+  normaliseRequirement,
   notFound,
   readJson,
+  refileRequirement,
   requireRole,
+  requirementQuery,
 } from '@/app/lib/courses';
-import { parseRequirement, termStatus, type RequirementRow } from '@/app/lib/course-progress';
+import { requirementWrite } from '@/app/lib/course-schema';
+import { parseRequirement, termStatus } from '@/app/lib/course-progress';
+import { fileItem, gradeLeafProblem, parseGradeLeaf, refile } from '@/app/lib/course-grading';
 
 interface RouteParams {
   params: Promise<{ id: string; requirementId: string }>;
 }
 
-const COLUMNS =
-  'id, offering_id, position, kind, title, activity_type, scenario_id, assessment_id, presentation_id, target_count, skill_id, min_score, skills_only';
-
-/** PATCH: replace an item's fields (its place in the checklist stays). */
+/**
+ * PATCH: replace an item's fields (its place in the checklist stays). A
+ * `grade_leaf_id` moves it in the grading split (null: not counted); an item
+ * that becomes an attendance count is taken out of the split either way.
+ */
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   const { session, response } = await requireRole('faculty');
   if (response) return response;
@@ -33,6 +40,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   if (!body) return badRequest('Invalid JSON body');
   const parsed = parseRequirement(body);
   if (!parsed.ok) return badRequest(parsed.error);
+  const leaf = parseGradeLeaf(body.grade_leaf_id);
+  if (!leaf.ok) return badRequest(leaf.error);
 
   try {
     const supabase = getSupabaseAdmin();
@@ -44,11 +53,21 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     const problem = await checkRequirementLinks(supabase, session.uid, offering, parsed.value);
     if (problem) return badRequest(problem);
+    const grading = await loadGrading(supabase, id);
+    const leafProblem = typeof leaf.value === 'string' ? gradeLeafProblem(grading.grading, leaf.value) : null;
+    if (leafProblem) return badRequest(leafProblem);
 
-    const data = must(
-      await supabase.from('course_requirements').update(parsed.value).eq('id', requirementId).select(COLUMNS).single(),
+    const data = await requirementQuery((columns, legacy) =>
+      supabase
+        .from('course_requirements')
+        .update(requirementWrite(parsed.value, legacy))
+        .eq('id', requirementId)
+        .select(columns)
+        .single(),
     );
-    const [requirement] = await labelRequirements(supabase, [data as RequirementRow]);
+    const row = normaliseRequirement(data as unknown as Record<string, unknown>);
+    await refileRequirement(supabase, id, grading, (split) => refile(split, row, leaf.value));
+    const [requirement] = await labelRequirements(supabase, [row]);
 
     await logAudit(
       session,
@@ -66,7 +85,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   }
 }
 
-/** DELETE: remove an item, with any ticks on it. */
+/** DELETE: remove an item, with any ticks on it, and take it out of the grading split. */
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   const { session, response } = await requireRole('faculty');
   if (response) return response;
@@ -82,6 +101,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     const [labelled] = await labelRequirements(supabase, [current]);
 
     must(await supabase.from('course_requirements').delete().eq('id', requirementId));
+    await refileRequirement(supabase, id, await loadGrading(supabase, id), (split) => fileItem(split, requirementId, null));
 
     await logAudit(
       session,

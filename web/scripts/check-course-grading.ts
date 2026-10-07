@@ -17,7 +17,9 @@ import {
   gradeLeafProblem,
   gradingLeaves,
   gradingSignature,
+  gradingSummary,
   leafOf,
+  parseGradeLeaf,
   parseGrading,
   presetSplit,
   readStoredSplit,
@@ -30,6 +32,7 @@ import {
   isMissingGradingSchema,
   normaliseRequirement,
   requirementQuery,
+  requirementWrite,
 } from '../app/lib/course-schema';
 
 let failures = 0;
@@ -230,6 +233,12 @@ eq('preset', presetSplit(() => 'id').parts.map((p) => [p.name, p.weight]), [
   ['Laboratory & Skills', 70],
 ]);
 eq('format', [formatGrade(82.3456), formatGrade(100)], ['82.3%', '100%']);
+eq('summary', [gradingSummary(split()), gradingSummary(null)], ['Written Exams 30% · Laboratory & Skills 70%', 'cleared']);
+eq('leaf absent', parseGradeLeaf(undefined), { ok: true, value: undefined });
+eq('leaf null unfiles', parseGradeLeaf(null), { ok: true, value: null });
+eq('leaf empty string unfiles', parseGradeLeaf(''), { ok: true, value: null });
+eq('leaf id', parseGradeLeaf('M'), { ok: true, value: 'M' });
+eq('leaf junk', parseGradeLeaf(7), { ok: false, error: 'Choose what this counts toward' });
 
 async function fallbackChecks() {
   console.log('pre-067 fallback');
@@ -260,6 +269,20 @@ async function fallbackChecks() {
       isMissingGradingSchema({ code: 'PGRST204' }) &&
       !isMissingGradingSchema({ code: '42P01' }) &&
       !isMissingGradingSchema(null),
+  );
+  const { id: _id, offering_id: _o, position: _p, ...input } = { ...lab, manual_type: 'exam' as const };
+  void [_id, _o, _p];
+  eq('write keeps manual_type once 067 is live', requirementWrite(input, false).manual_type, 'exam');
+  eq('legacy write drops manual_type', 'manual_type' in requirementWrite({ ...input, manual_type: 'lab' }, true), false);
+  let examError: unknown = null;
+  try {
+    requirementWrite(input, true);
+  } catch (e) {
+    examError = e;
+  }
+  check(
+    'legacy exam write needs 067',
+    examError instanceof MigrationNeeded && examError.message === 'Written Exams need database migration 067 (course grading) applied first.',
   );
   const migration = new MigrationNeeded('needs 067');
   check('MigrationNeeded is an Error with its message', migration instanceof Error && migration.message === 'needs 067');

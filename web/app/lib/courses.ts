@@ -16,7 +16,7 @@ import {
   type RequirementRow,
 } from './course-progress';
 import { canFacultySeeScenario } from './scenario-visibility';
-import { readStoredSplit, type GradingSplit } from './course-grading';
+import { gradingSignature, readStoredSplit, type GradingSplit } from './course-grading';
 import { MigrationNeeded, isMissingGradingSchema, normaliseRequirement, requirementQuery } from './course-schema';
 
 export { parseCourse, parseTerm, type CourseInput, type TermInput } from './course-progress';
@@ -472,6 +472,27 @@ export async function loadRequirements(supabase: Supabase, offeringIds: string[]
       .order('created_at'),
   );
   return ((rows ?? []) as unknown as Record<string, unknown>[]).map(normaliseRequirement);
+}
+
+/** Store the offering's grading split (null clears it). */
+export async function writeGrading(supabase: Supabase, offeringId: string, grading: GradingSplit | null): Promise<void> {
+  must(await supabase.from('course_offerings').update({ grading }).eq('id', offeringId));
+}
+
+/**
+ * Keep the grading split in step with a checklist item that was just saved
+ * or removed: `next` makes the new split from the stored one, and it is
+ * written only if it changed. Nothing happens before 067 or without a split.
+ */
+export async function refileRequirement(
+  supabase: Supabase,
+  offeringId: string,
+  stored: { grading: GradingSplit | null; ready: boolean },
+  next: (split: GradingSplit) => GradingSplit,
+): Promise<void> {
+  if (!stored.ready || !stored.grading) return;
+  const updated = next(stored.grading);
+  if (gradingSignature(updated) !== gradingSignature(stored.grading)) await writeGrading(supabase, offeringId, updated);
 }
 
 /** The offering's grading split (067), and whether the column exists yet (ready). */

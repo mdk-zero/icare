@@ -330,6 +330,19 @@ export function gradingSignature(split: GradingSplit | null): string {
   return JSON.stringify(canonical(split ?? null));
 }
 
+/** For the audit log: "Written Exams 30% · Laboratory & Skills 70%", or "cleared". */
+export function gradingSummary(split: GradingSplit | null): string {
+  return split ? split.parts.map((p) => `${p.name} ${percent(p.weight)}`).join(' · ') : 'cleared';
+}
+
+/** A checklist item's "Counts toward" from a request: absent leaves it where it is, null or "" unfiles it. */
+export function parseGradeLeaf(value: unknown): Parsed<string | null | undefined> {
+  if (value === undefined) return { ok: true, value: undefined };
+  if (value === null || value === '') return { ok: true, value: null };
+  if (isId(value)) return { ok: true, value };
+  return { ok: false, error: 'Choose what this counts toward' };
+}
+
 /** "82.3%": a grade to one decimal at most. */
 export function formatGrade(n: number): string {
   return `${Math.round(n * 10) / 10}%`;

@@ -7,22 +7,28 @@ import {
   checkRequirementLinks,
   courseFailure,
   labelRequirements,
+  loadGrading,
   loadOwnOffering,
   loadRequirements,
+  normaliseRequirement,
   notFound,
   readJson,
+  refileRequirement,
   requireRole,
+  requirementQuery,
 } from '@/app/lib/courses';
-import { MAX_REQUIREMENTS, parseRequirement, termStatus, type RequirementRow } from '@/app/lib/course-progress';
+import { requirementWrite } from '@/app/lib/course-schema';
+import { MAX_REQUIREMENTS, parseRequirement, termStatus } from '@/app/lib/course-progress';
+import { gradeLeafProblem, parseGradeLeaf, refile } from '@/app/lib/course-grading';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
 }
 
-const COLUMNS =
-  'id, offering_id, position, kind, title, activity_type, scenario_id, assessment_id, presentation_id, target_count, skill_id, min_score, skills_only';
-
-/** POST: add an item to the end of the course's requirements checklist. */
+/**
+ * POST: add an item to the end of the course's requirements checklist,
+ * filed under the grading split's `grade_leaf_id` when one is sent.
+ */
 export async function POST(request: NextRequest, { params }: RouteParams) {
   const { session, response } = await requireRole('faculty');
   if (response) return response;
@@ -32,6 +38,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   if (!body) return badRequest('Invalid JSON body');
   const parsed = parseRequirement(body);
   if (!parsed.ok) return badRequest(parsed.error);
+  const leaf = parseGradeLeaf(body.grade_leaf_id);
+  if (!leaf.ok) return badRequest(leaf.error);
 
   try {
     const supabase = getSupabaseAdmin();
@@ -43,19 +51,25 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     if (existing.length >= MAX_REQUIREMENTS) return badRequest(`A checklist can have at most ${MAX_REQUIREMENTS} items`);
     const problem = await checkRequirementLinks(supabase, session.uid, offering, parsed.value);
     if (problem) return badRequest(problem);
+    const grading = await loadGrading(supabase, id);
+    const leafProblem = typeof leaf.value === 'string' ? gradeLeafProblem(grading.grading, leaf.value) : null;
+    if (leafProblem) return badRequest(leafProblem);
 
-    const { data, error } = await supabase
-      .from('course_requirements')
-      .insert({
-        ...parsed.value,
-        offering_id: id,
-        position: existing.reduce((max, r) => Math.max(max, r.position + 1), 0),
-        created_by: session.uid,
-      })
-      .select(COLUMNS)
-      .single();
-    if (error) throw error;
-    const [requirement] = await labelRequirements(supabase, [data as RequirementRow]);
+    const data = await requirementQuery((columns, legacy) =>
+      supabase
+        .from('course_requirements')
+        .insert({
+          ...requirementWrite(parsed.value, legacy),
+          offering_id: id,
+          position: existing.reduce((max, r) => Math.max(max, r.position + 1), 0),
+          created_by: session.uid,
+        })
+        .select(columns)
+        .single(),
+    );
+    const row = normaliseRequirement(data as unknown as Record<string, unknown>);
+    await refileRequirement(supabase, id, grading, (split) => refile(split, row, leaf.value));
+    const [requirement] = await labelRequirements(supabase, [row]);
 
     await logAudit(
       session,
