@@ -105,7 +105,11 @@ export function splitProblem(split: GradingSplit): string | null {
   }
 
   const badWeight = named.find((x) => !(Number.isFinite(x.weight) && x.weight > 0 && x.weight <= 100));
-  if (badWeight) return `"${badWeight.name.trim()}" needs a percent above 0`;
+  if (badWeight) {
+    return badWeight.weight > 100
+      ? `"${badWeight.name.trim()}" can be at most 100%`
+      : `"${badWeight.name.trim()}" needs a percent above 0`;
+  }
   const total = sum(parts);
   if (Math.abs(total - 100) > TOLERANCE) return `The parts add up to ${percent(total)}, not 100%`;
   for (const p of parts) {

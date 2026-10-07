@@ -340,7 +340,7 @@ export default function ProgressTab({
                 {split && (
                   <th
                     rowSpan={2}
-                    className="min-w-[6.5rem] border-b border-l border-hairline bg-subtle px-3 py-3 text-left align-bottom text-[11px] font-semibold uppercase tracking-wider text-gray-500"
+                    className="sticky right-0 z-10 min-w-[6.5rem] border-b border-l border-hairline bg-subtle px-3 py-3 text-left align-bottom text-[11px] font-semibold uppercase tracking-wider text-gray-500"
                   >
                     Grade
                   </th>
@@ -457,7 +457,7 @@ export default function ProgressTab({
                     );
                   })}
                   {split && (
-                    <td className="border-b border-l border-hairline px-3 py-2.5 group-hover:bg-subtle">
+                    <td className="sticky right-0 z-10 border-b border-l border-hairline bg-surface px-3 py-2.5 group-hover:bg-subtle">
                       <GradeCell
                         grade={graded.grades[s.id]?.grade ?? null}
                         scoredWeight={graded.grades[s.id]?.scored_weight ?? 0}

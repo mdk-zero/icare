@@ -196,6 +196,9 @@ eq('duplicate name', err(sSame), 'Two parts are both called "written exams"');
 const sZero = split();
 sZero.parts[0].components[0].weight = 0;
 eq('zero weight', err(sZero), '"Midterm" needs a percent above 0');
+const sBig = split();
+sBig.parts[0].components[0].weight = 105;
+eq('weight over 100', err(sBig), '"Midterm" can be at most 100%');
 eq(
   'too many parts',
   err({
