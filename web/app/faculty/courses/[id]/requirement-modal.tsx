@@ -5,6 +5,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import {
   faClipboardCheck,
+  faFilePen,
   faHashtag,
   faListCheck,
   faPenToSquare,
@@ -27,18 +28,28 @@ import {
   parseRequirement,
   requirementLabel,
   type ActivityType,
+  type ManualType,
   type RequirementKind,
   type RequirementTopicKey,
 } from "../../../lib/course-progress";
+import { gradingLeaves, isGradeable, leafOf, type GradingSplit } from "../../../lib/course-grading";
 import { PASSING_SCORE } from "../../../lib/reports/data";
 import { EcgLoader } from "../../../components/EcgLoader";
 import { loadingToast } from "../../../components/Toast";
 
-const KINDS: { kind: RequirementKind; label: string; hint: string; icon: IconDefinition }[] = [
+/** Manual items come as two cards, told apart by manualType. */
+const KINDS: { kind: RequirementKind; manualType?: ManualType; label: string; hint: string; icon: IconDefinition }[] = [
   { kind: "activity", label: "Specific activity", hint: "One Patient Case, Quiz or Case Presentation", icon: faClipboardCheck },
   { kind: "count", label: "Count", hint: "A number of graded activities, or shifts attended", icon: faHashtag },
   { kind: "skill", label: "Skill", hint: "Graded work covering one of the course's skills", icon: faListCheck },
-  { kind: "manual", label: "Lab Activity", hint: "Hands-on work, like a return demonstration; you enter each score", icon: faFlask },
+  {
+    kind: "manual",
+    manualType: "lab",
+    label: "Lab Activity",
+    hint: "Hands-on work, like a return demonstration; you enter each score",
+    icon: faFlask,
+  },
+  { kind: "manual", manualType: "exam", label: "Written Exam", hint: "A paper exam; you enter each score", icon: faFilePen },
 ];
 
 const ACTIVITY_TYPES: { type: Exclude<ActivityType, "shift">; label: string }[] = [
@@ -69,6 +80,7 @@ export default function RequirementModal({
   presetSkillId,
   courseSkillIds,
   catalog,
+  grading,
   onClose,
   onSaved,
 }: {
@@ -83,12 +95,15 @@ export default function RequirementModal({
   presetSkillId?: string | null;
   courseSkillIds: string[];
   catalog: SkillSummary[];
+  /** The course's grading split, for "Counts toward"; null hides it. */
+  grading: GradingSplit | null;
   onClose: () => void;
   onSaved: () => void;
 }) {
   const [kind, setKind] = useState<RequirementKind>(
     requirement?.kind ?? (preset === "skill" || preset === "manual" ? preset : preset === "exam" ? "manual" : "count"),
   );
+  const [manualType, setManualType] = useState<ManualType>(requirement?.manual_type ?? (preset === "exam" ? "exam" : "lab"));
   const [title, setTitle] = useState(requirement?.title ?? "");
   const [activityType, setActivityType] = useState<ActivityType>(
     requirement?.activity_type ??
@@ -102,6 +117,7 @@ export default function RequirementModal({
   const [skillsOnly, setSkillsOnly] = useState(requirement?.skills_only ?? false);
   const [skillId, setSkillId] = useState(requirement?.skill_id ?? presetSkillId ?? "");
   const [skillLevel, setSkillLevel] = useState<number | null>(requirement ? requirement.min_score : 50);
+  const [leafId, setLeafId] = useState(requirement ? leafOf(grading, requirement.id) ?? "" : "");
   const [activities, setActivities] = useState<CourseActivities | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -147,9 +163,13 @@ export default function RequirementModal({
     min_score: kind === "skill" ? skillLevel : minScore === "" ? null : Number(minScore),
     skills_only: skillsOnly,
     skill_id: skillId,
+    manual_type: manualType,
     ...(link ? { [link]: activityId } : {}),
   };
   const parsed = parseRequirement(body);
+  const leaves = gradingLeaves(grading);
+  // Attendance has no score, so it never counts toward the grade.
+  const showLeaf = leaves.length > 0 && isGradeable({ kind, activity_type: activityType });
 
   const options =
     activityType === "scenario"
@@ -182,9 +202,10 @@ export default function RequirementModal({
     setSaving(true);
     setError(null);
     const progress = loadingToast(requirement ? "Saving requirement…" : "Adding requirement…");
+    const input = showLeaf ? { ...parsed.value, grade_leaf_id: leafId || null } : parsed.value;
     const result = requirement
-      ? await updateRequirement(offeringId, requirement.id, parsed.value)
-      : await addRequirement(offeringId, parsed.value);
+      ? await updateRequirement(offeringId, requirement.id, input)
+      : await addRequirement(offeringId, input);
     setSaving(false);
     if (result.error !== undefined) {
       progress.error(result.error);
@@ -230,16 +251,21 @@ export default function RequirementModal({
           <fieldset>
             <legend className={labelClass}>Kind</legend>
             <div className="grid grid-cols-2 gap-2">
-              {KINDS.map((k) => {
-                const active = kind === k.kind;
+              {KINDS.map((k, i) => {
+                const active = kind === k.kind && (k.kind !== "manual" || manualType === k.manualType);
+                // An odd card out spans the row rather than leaving a gap.
+                const alone = i === KINDS.length - 1 && KINDS.length % 2 === 1;
                 return (
                   <button
-                    key={k.kind}
+                    key={`${k.kind}:${k.manualType ?? ""}`}
                     type="button"
-                    onClick={() => pickKind(k.kind)}
+                    onClick={() => {
+                      pickKind(k.kind);
+                      if (k.manualType) setManualType(k.manualType);
+                    }}
                     aria-pressed={active}
                     disabled={saving}
-                    className={`flex items-start gap-2.5 rounded-xl border p-3 text-left transition-colors ${
+                    className={`flex items-start gap-2.5 rounded-xl border p-3 text-left transition-colors ${alone ? "col-span-2" : ""} ${
                       active ? "border-brand-600 bg-brand-600/5" : "border-hairline hover:border-gray-300 hover:bg-subtle"
                     }`}
                   >
@@ -423,10 +449,38 @@ export default function RequirementModal({
               onChange={(e) => setTitle(e.target.value)}
               maxLength={MAX_REQUIREMENT_TITLE}
               disabled={saving}
-              placeholder={kind === "manual" ? "Submit the signed return-demonstration sheet" : "Shown before the automatic description"}
+              placeholder={
+                kind !== "manual"
+                  ? "Shown before the automatic description"
+                  : manualType === "exam"
+                    ? "Midterm written exam"
+                    : "Submit the signed return-demonstration sheet"
+              }
               className={inputClass}
             />
           </div>
+
+          {showLeaf && (
+            <div>
+              <label htmlFor="req-leaf" className={labelClass}>
+                Counts toward
+              </label>
+              <select
+                id="req-leaf"
+                value={leafId}
+                onChange={(e) => setLeafId(e.target.value)}
+                disabled={saving}
+                className={inputClass}
+              >
+                <option value="">Not counted in the grade</option>
+                {leaves.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {preview && (
             <p className="rounded-lg border border-hairline bg-subtle p-2.5 text-sm text-gray-700">

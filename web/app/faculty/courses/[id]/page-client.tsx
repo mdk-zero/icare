@@ -349,6 +349,7 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
           presetSkillId={editing === "new" ? preset.skillId : null}
           courseSkillIds={detail?.skill_ids ?? []}
           catalog={catalog}
+          grading={detail?.grading ?? null}
           onClose={() => setEditing(null)}
           onSaved={async () => {
             setEditing(null);
