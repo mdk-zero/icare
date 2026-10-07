@@ -14,6 +14,7 @@
     "db:backfill-criteria": "tsx scripts/backfill-assessment-criteria.ts",
     "check:selection": "tsx scripts/check-assessment-selection.ts",
     "check:courses": "tsx scripts/check-course-progress.ts",
+    "check:grading": "tsx scripts/check-course-grading.ts",
     "db:seed:basic-cases": "tsx scripts/seed-basic-cases.ts",
     "db:seed:scenario-quizzes": "tsx scripts/seed-scenario-quizzes.ts",
     "db:seed:student-history": "tsx scripts/seed-student-history.ts",
