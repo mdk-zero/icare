@@ -40,6 +40,49 @@ const newId = () => crypto.randomUUID();
 const round = (n: number) => Math.round(n * 100) / 100;
 const total = (rows: { weight: number }[]) => round(rows.reduce((t, r) => t + (Number.isFinite(r.weight) ? r.weight : 0), 0));
 
+const finite = (n: number) => (Number.isFinite(n) ? n : 0);
+
+/** Part k's colour: the categorical slots the group charts use, led by the brand teal. */
+const partColor = (k: number) => `var(--color-group-${(k % 6) + 1})`;
+/** Component j of a part: steps of the part's colour toward the surface, so they read as its pieces. */
+const SHADES = [100, 66, 44, 30, 20];
+const shade = (color: string, j: number) => `color-mix(in oklab, ${color} ${SHADES[j % SHADES.length]}%, var(--color-surface))`;
+const HATCH = "repeating-linear-gradient(135deg, var(--color-hairline) 0 4px, transparent 4px 8px)";
+
+/**
+ * The whole grade as one bar: a segment per part, cut into its components,
+ * with any share not yet assigned hatched at the end (or within the part).
+ */
+function SplitBar({ parts }: { parts: GradePart[] }) {
+  const sum = total(parts);
+  const described = parts.map((p, k) => `${p.name.trim() || `Part ${k + 1}`} ${finite(p.weight)}%`).join(", ");
+  return (
+    <div role="img" aria-label={`Grade split: ${described || "nothing yet"}`} className="flex h-3 w-full gap-0.5 overflow-hidden rounded-full bg-subtle">
+      {parts.map((p, k) => {
+        const weight = Math.max(0, finite(p.weight));
+        if (!weight) return null;
+        const color = partColor(k);
+        const left = round(weight - total(p.components));
+        return (
+          <div key={p.id} className="flex h-full gap-px" style={{ flex: `${weight} 0 0` }}>
+            {p.components.length === 0 ? (
+              <div className="h-full flex-1" style={{ background: color }} />
+            ) : (
+              <>
+                {p.components.map((c, j) =>
+                  finite(c.weight) > 0 ? <div key={c.id} className="h-full" style={{ flex: `${c.weight} 0 0`, background: shade(color, j) }} /> : null,
+                )}
+                {left > 0 && <div className="h-full" style={{ flex: `${left} 0 0`, background: HATCH }} />}
+              </>
+            )}
+          </div>
+        );
+      })}
+      {sum < 100 && <div className="h-full" style={{ flex: `${round(100 - sum)} 0 0`, background: HATCH }} />}
+    </div>
+  );
+}
+
 const inputClass =
   "rounded-lg border border-gray-300 bg-surface px-2.5 py-1.5 text-sm text-gray-900 transition-all placeholder:text-gray-400 focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30 disabled:border-transparent disabled:bg-transparent disabled:px-0";
 
@@ -192,7 +235,7 @@ export default function GradingTab({
   const attendance = ordered.filter((r) => !isGradeable(r));
 
   const chips = (leaf: GradeComponent, label: string) => (
-    <div className="flex flex-wrap items-center gap-1.5">
+    <div className="flex min-w-0 flex-wrap items-center gap-1.5">
       {leaf.items
         .map((id) => byId.get(id))
         .filter((r): r is CourseRequirement => !!r)
@@ -235,21 +278,36 @@ export default function GradingTab({
     </div>
   );
 
-  const weightInput = (value: number, onChange: (n: number) => void, label: string) => (
-    <label className="flex shrink-0 items-center gap-1 text-sm text-gray-500">
-      <input
-        type="number"
-        min={0}
-        max={100}
-        step={0.01}
-        value={Number.isFinite(value) ? value : ""}
-        onChange={(e) => onChange(e.target.value === "" ? NaN : Number(e.target.value))}
-        disabled={readOnly}
-        aria-label={`${label} percent`}
-        className={`${inputClass} w-20 text-right font-semibold`}
-      />
-      %
-    </label>
+  // A percent is a few digits, so its box is sized for "33.33", with the sign inside.
+  const weightField = (value: number, onChange: (n: number) => void, label: string) =>
+    readOnly ? (
+      <span className="text-sm font-semibold tabular-nums text-gray-900">{finite(value)}%</span>
+    ) : (
+      <label className="inline-flex shrink-0 items-center rounded-lg border border-gray-300 bg-surface transition-all focus-within:border-brand-600 focus-within:ring-2 focus-within:ring-brand-600/30">
+        <input
+          type="number"
+          inputMode="decimal"
+          min={0}
+          max={100}
+          step={0.01}
+          value={Number.isFinite(value) ? value : ""}
+          onChange={(e) => onChange(e.target.value === "" ? NaN : Number(e.target.value))}
+          aria-label={`${label} percent`}
+          className="w-14 bg-transparent py-1.5 pl-2 text-right text-sm font-semibold tabular-nums text-gray-900 [appearance:textfield] focus:outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+        />
+        <span className="select-none pl-0.5 pr-2.5 text-sm text-gray-400">%</span>
+      </label>
+    );
+
+  const removeButton = (onClick: () => void, label: string) => (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-rose-50 hover:text-rose-600"
+    >
+      <FontAwesomeIcon icon={faTrashCan} className="h-3.5 w-3.5" />
+    </button>
   );
 
   return (
@@ -261,17 +319,47 @@ export default function GradingTab({
         </div>
       )}
 
-      <p className="text-sm text-gray-500">
-        Percents are of the final grade: a part&apos;s components add up to the part. Each component averages the items in it,
-        and work with no score yet is left out, so the grade reads as the grade so far.
-      </p>
+      <section className="rounded-xl border border-hairline bg-surface p-4">
+        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+          <h3 className="font-display text-sm font-semibold text-gray-900">Final grade</h3>
+          <span className={`inline-flex items-center gap-1.5 text-sm font-semibold tabular-nums ${partsTotal === 100 ? "text-emerald-700" : "text-amber-700"}`}>
+            {partsTotal === 100 ? (
+              <>
+                <FontAwesomeIcon icon={faCircleCheck} className="h-3.5 w-3.5" />
+                100%
+              </>
+            ) : partsTotal < 100 ? (
+              `${partsTotal}% · ${round(100 - partsTotal)}% left to assign`
+            ) : (
+              `${partsTotal}% · ${round(partsTotal - 100)}% over`
+            )}
+          </span>
+        </div>
+        <SplitBar parts={draft.parts} />
+        <ul className="mt-3 flex flex-wrap gap-x-5 gap-y-1.5 text-sm">
+          {draft.parts.map((p, k) => (
+            <li key={p.id} className="flex min-w-0 items-center gap-2">
+              <span className="h-2.5 w-2.5 shrink-0 rounded-[3px]" style={{ background: partColor(k) }} aria-hidden />
+              <span className="truncate text-gray-700">{p.name.trim() || `Part ${k + 1}`}</span>
+              <span className="font-semibold tabular-nums text-gray-900">{finite(p.weight)}%</span>
+            </li>
+          ))}
+        </ul>
+        <p className="mt-3 border-t border-hairline pt-3 text-xs leading-relaxed text-gray-500">
+          Percents are of the final grade, and a part&apos;s components add up to the part. Each component averages the items in
+          it; work with no score yet is left out, so a grade reads as the grade so far.
+        </p>
+      </section>
 
       {draft.parts.map((part, k) => {
         const inside = total(part.components);
         const partLabel = part.name.trim() || `Part ${k + 1}`;
+        const color = partColor(k);
+        const balanced = inside === round(finite(part.weight));
         return (
-          <section key={part.id} className="overflow-hidden rounded-xl border border-hairline bg-surface">
-            <div className="flex flex-wrap items-center gap-3 border-b border-hairline bg-subtle px-4 py-3">
+          <section key={part.id} className="rounded-xl border border-hairline bg-surface">
+            <header className="flex items-center gap-2.5 px-4 py-3">
+              <span className="h-3 w-3 shrink-0 rounded-[4px]" style={{ background: color }} aria-hidden />
               <input
                 value={part.name}
                 onChange={(e) => setPart(part.id, { name: e.target.value })}
@@ -279,104 +367,87 @@ export default function GradingTab({
                 disabled={readOnly}
                 placeholder="Part name, e.g. Written Exams"
                 aria-label="Part name"
-                className={`${inputClass} min-w-0 flex-1 font-display font-semibold`}
+                className={`${inputClass} min-w-0 flex-1 font-display text-base font-semibold sm:max-w-xs`}
               />
-              {weightInput(part.weight, (weight) => setPart(part.id, { weight }), partLabel)}
-              {!readOnly && (
-                <button
-                  type="button"
-                  onClick={() => removePart(part.id)}
-                  aria-label={`Remove ${partLabel}`}
-                  className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-rose-50 hover:text-rose-600"
-                >
-                  <FontAwesomeIcon icon={faTrashCan} className="h-3.5 w-3.5" />
-                </button>
-              )}
-            </div>
+              <div className="ml-auto flex shrink-0 items-center gap-1">
+                {weightField(part.weight, (weight) => setPart(part.id, { weight }), partLabel)}
+                {!readOnly && removeButton(() => removePart(part.id), `Remove ${partLabel}`)}
+              </div>
+            </header>
 
-            <div className="space-y-2 px-4 py-3">
+            <div className="border-t border-hairline">
               {part.components.length === 0 ? (
-                chips(part, partLabel)
+                <div className="px-4 py-3">{chips(part, partLabel)}</div>
               ) : (
-                <>
+                <ul className="divide-y divide-hairline">
                   {part.components.map((c, j) => {
                     const label = `${partLabel} › ${c.name.trim() || `Component ${j + 1}`}`;
                     return (
-                      <div key={c.id} className="rounded-lg border border-hairline px-3 py-2.5">
-                        <div className="mb-2 flex items-center gap-3">
+                      <li
+                        key={c.id}
+                        className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 py-2.5 pl-6 pr-4 sm:grid-cols-[minmax(0,14rem)_minmax(0,1fr)_auto] sm:pl-9"
+                      >
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: shade(color, j) }} aria-hidden />
                           <input
                             value={c.name}
                             onChange={(e) => setComponent(part.id, c.id, { name: e.target.value })}
                             maxLength={GRADING_LIMITS.name}
                             disabled={readOnly}
-                            placeholder="Component, e.g. Midterm"
+                            placeholder="e.g. Midterm"
                             aria-label="Component name"
-                            className={`${inputClass} min-w-0 flex-1 font-medium`}
+                            className={`${inputClass} w-full min-w-0 font-medium`}
                           />
-                          {weightInput(c.weight, (weight) => setComponent(part.id, c.id, { weight }), label)}
-                          {!readOnly && (
-                            <button
-                              type="button"
-                              onClick={() => removeComponent(part.id, c.id)}
-                              aria-label={`Remove ${label}`}
-                              className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-rose-50 hover:text-rose-600"
-                            >
-                              <FontAwesomeIcon icon={faTrashCan} className="h-3 w-3" />
-                            </button>
-                          )}
                         </div>
-                        {chips(c, label)}
-                      </div>
+                        <div className="flex items-center gap-1 sm:order-3">
+                          {weightField(c.weight, (weight) => setComponent(part.id, c.id, { weight }), label)}
+                          {!readOnly && removeButton(() => removeComponent(part.id, c.id), `Remove ${label}`)}
+                        </div>
+                        <div className="col-span-2 pl-4 sm:order-2 sm:col-span-1 sm:pl-0">{chips(c, label)}</div>
+                      </li>
                     );
                   })}
-                  <p className={`text-xs ${inside === round(part.weight) ? "text-gray-500" : "font-medium text-amber-700"}`}>
-                    Components add up to {inside}% of {Number.isFinite(part.weight) ? part.weight : 0}%
-                  </p>
-                </>
+                </ul>
               )}
-              {!readOnly && part.components.length < GRADING_LIMITS.components && (
-                <button
-                  type="button"
-                  onClick={() => addComponentTo(part)}
-                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-700 hover:underline"
-                >
-                  <FontAwesomeIcon icon={faPlus} className="h-2.5 w-2.5" />
-                  {part.components.length === 0 ? "Split into components" : "Add component"}
-                </button>
+              {!readOnly && (
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-hairline px-4 py-2.5">
+                  {part.components.length < GRADING_LIMITS.components && (
+                    <button
+                      type="button"
+                      onClick={() => addComponentTo(part)}
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-700 hover:underline"
+                    >
+                      <FontAwesomeIcon icon={faPlus} className="h-2.5 w-2.5" />
+                      {part.components.length === 0 ? "Split into components" : "Add component"}
+                    </button>
+                  )}
+                  {part.components.length > 0 && (
+                    <span
+                      className={`ml-auto inline-flex items-center gap-1.5 text-xs tabular-nums ${
+                        balanced ? "text-gray-500" : "font-medium text-amber-700"
+                      } sm:mr-9`}
+                    >
+                      {balanced && <FontAwesomeIcon icon={faCircleCheck} className="h-3 w-3 text-emerald-600" />}
+                      Components add up to {inside}% of {finite(part.weight)}%
+                    </span>
+                  )}
+                </div>
               )}
             </div>
           </section>
         );
       })}
 
-      <div className="flex flex-wrap items-center gap-3">
-        {!readOnly && draft.parts.length < GRADING_LIMITS.parts && (
-          <button
-            type="button"
-            onClick={addPart}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-gray-300 px-3 py-2 text-sm font-medium text-gray-600 transition-colors hover:border-brand-600 hover:text-brand-700"
-          >
-            <FontAwesomeIcon icon={faPlus} className="h-3 w-3" />
-            Add part
-          </button>
-        )}
-        <span
-          className={`ml-auto inline-flex items-center gap-1.5 text-sm font-semibold ${
-            partsTotal === 100 ? "text-emerald-700" : "text-amber-700"
-          }`}
+      {!readOnly && draft.parts.length < GRADING_LIMITS.parts && (
+        <button
+          type="button"
+          onClick={addPart}
+          className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-gray-300 px-3 py-2.5 text-sm font-medium text-gray-600 transition-colors hover:border-brand-600 hover:bg-brand-50 hover:text-brand-700"
         >
-          {partsTotal === 100 ? (
-            <>
-              <FontAwesomeIcon icon={faCircleCheck} className="h-3.5 w-3.5" />
-              100%
-            </>
-          ) : partsTotal < 100 ? (
-            `${partsTotal}% · ${round(100 - partsTotal)}% left to assign`
-          ) : (
-            `${partsTotal}% · ${round(partsTotal - 100)}% over`
-          )}
-        </span>
-      </div>
+          <FontAwesomeIcon icon={faPlus} className="h-3 w-3" />
+          Add part
+        </button>
+      )}
 
       {(unfiled.length > 0 || attendance.length > 0) && (
         <section className="rounded-xl border border-hairline bg-surface px-4 py-3">
