@@ -394,7 +394,7 @@
   --color-purple-700: #c0aaf6;
   --color-purple-800: #d9cbfb;
 
-  /* The checklist's topic accents (Quizzes, Skills, Lab Activities). */
+  /* The checklist's topic accents (Quizzes, Skills, Lab Activities, Written Exams). */
   --color-sky-50: #0b2130;
   --color-sky-100: #0e2b3f;
   --color-sky-200: #133852;
@@ -415,6 +415,13 @@
   --color-violet-600: #a98bf3;
   --color-violet-700: #c4aef7;
   --color-violet-800: #ddd0fb;
+
+  --color-fuchsia-50: #2a1230;
+  --color-fuchsia-100: #361740;
+  --color-fuchsia-200: #471d54;
+  --color-fuchsia-600: #e07de8;
+  --color-fuchsia-700: #eba6f0;
+  --color-fuchsia-800: #f4cdf6;
 }
 
 /* The browser paints scrollbars and form controls to match. */

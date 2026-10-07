@@ -110,6 +110,8 @@ export const COURSE_LIMITS = {
 export type RequirementKind = 'activity' | 'count' | 'skill' | 'manual';
 /** scenario = Patient Case, assessment = Quiz; shift only for count items. */
 export type ActivityType = 'scenario' | 'assessment' | 'case_presentation' | 'shift';
+/** A manual item scored by hand: hands-on lab work, or a written (paper) exam (067). */
+export type ManualType = 'lab' | 'exam';
 
 /** A course_requirements row. */
 export interface RequirementRow {
@@ -127,6 +129,8 @@ export interface RequirementRow {
   /** null: graded is enough. */
   min_score: number | null;
   skills_only: boolean;
+  /** Manual items: a Lab Activity or a Written Exam. Always 'lab' on the other kinds. */
+  manual_type: ManualType;
 }
 
 /** A course_requirement_checks row: a manual tick, or an override on an automatic item. */
@@ -253,11 +257,14 @@ export function parseRequirement(body: Record<string, unknown>): Parsed<Requirem
     skill_id: null,
     min_score: null,
     skills_only: false,
+    manual_type: 'lab',
   };
 
   if (kind === 'manual') {
     if (!title) return { ok: false, error: 'Describe the requirement' };
-    return { ok: true, value: base };
+    const type = body.manual_type ?? 'lab';
+    if (type !== 'lab' && type !== 'exam') return { ok: false, error: 'Choose Lab Activity or Written Exam' };
+    return { ok: true, value: { ...base, manual_type: type } };
   }
 
   if (kind === 'skill') {
@@ -364,32 +371,40 @@ export function requirementLabel(req: RequirementRow, names: RequirementNames): 
   }
 }
 
-/** The kind of work an item is about, which names and groups it. Manual items are hands-on lab work. */
-export type RequirementTopicKey = ActivityType | 'skill' | 'manual';
+/**
+ * The kind of work an item is about, which names and groups it. Manual items
+ * are hands-on lab work ('manual') or a written exam ('exam').
+ */
+export type RequirementTopicKey = ActivityType | 'skill' | 'manual' | 'exam';
 
-/** The order the checklist is shown in: graded app work, skills, hands-on lab work, attendance. */
-export const TOPIC_ORDER: readonly RequirementTopicKey[] = ['scenario', 'assessment', 'case_presentation', 'skill', 'manual', 'shift'];
+/** What decides an item's topic. manual_type is optional: without it a manual item is a Lab Activity. */
+export type TopicFields = Pick<RequirementRow, 'kind' | 'activity_type'> & Partial<Pick<RequirementRow, 'manual_type'>>;
+
+/** The order the checklist is shown in: graded app work, written exams, skills, hands-on lab work, attendance. */
+export const TOPIC_ORDER: readonly RequirementTopicKey[] = ['scenario', 'assessment', 'exam', 'case_presentation', 'skill', 'manual', 'shift'];
 
 const TOPIC: Record<RequirementTopicKey, string> = {
   scenario: 'Patient Case',
   assessment: 'Quiz',
+  exam: 'Written Exam',
   case_presentation: 'Case Presentation',
   skill: 'Skill',
   manual: 'Lab Activity',
   shift: 'Attendance',
 };
 
-export function topicKey(req: Pick<RequirementRow, 'kind' | 'activity_type'>): RequirementTopicKey {
-  if (req.kind === 'skill' || req.kind === 'manual') return req.kind;
+export function topicKey(req: TopicFields): RequirementTopicKey {
+  if (req.kind === 'manual') return req.manual_type === 'exam' ? 'exam' : 'manual';
+  if (req.kind === 'skill') return 'skill';
   return req.activity_type ?? 'scenario';
 }
 
-export function requirementTopic(req: Pick<RequirementRow, 'kind' | 'activity_type'>): string {
+export function requirementTopic(req: TopicFields): string {
   return TOPIC[topicKey(req)];
 }
 
 /** The checklist as it is shown: grouped by topic in TOPIC_ORDER, each group in checklist order. */
-export function inTopicOrder<R extends Pick<RequirementRow, 'kind' | 'activity_type'>>(requirements: readonly R[]): R[] {
+export function inTopicOrder<R extends TopicFields>(requirements: readonly R[]): R[] {
   const rank = (r: R) => TOPIC_ORDER.indexOf(topicKey(r));
   return requirements.map((r, i) => ({ r, i })).sort((a, b) => rank(a.r) - rank(b.r) || a.i - b.i).map(({ r }) => r);
 }
@@ -399,7 +414,7 @@ export function inTopicOrder<R extends Pick<RequirementRow, 'kind' | 'activity_t
  * checklist order: "Quiz #1", "Skill #2", "Patient Case #1". Pass the whole
  * checklist, sorted, since positions keep gaps after a removal.
  */
-export function requirementNames(requirements: readonly Pick<RequirementRow, 'kind' | 'activity_type'>[]): string[] {
+export function requirementNames(requirements: readonly TopicFields[]): string[] {
   const seen = new Map<string, number>();
   return requirements.map((r) => {
     const topic = requirementTopic(r);
@@ -735,7 +750,7 @@ export interface OfferingSummary {
   complete: number;
   /** Met some items, not all. */
   in_progress: number;
-  /** Lab Activities (manual items) still waiting for a score, across the roster. */
+  /** Lab Activities and Written Exams (manual items) still waiting for a score, across the roster. */
   to_score: number;
 }
 

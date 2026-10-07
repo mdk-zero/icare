@@ -87,11 +87,12 @@ export default function RequirementModal({
   onSaved: () => void;
 }) {
   const [kind, setKind] = useState<RequirementKind>(
-    requirement?.kind ?? (preset === "skill" || preset === "manual" ? preset : "count"),
+    requirement?.kind ?? (preset === "skill" || preset === "manual" ? preset : preset === "exam" ? "manual" : "count"),
   );
   const [title, setTitle] = useState(requirement?.title ?? "");
   const [activityType, setActivityType] = useState<ActivityType>(
-    requirement?.activity_type ?? (preset && preset !== "skill" && preset !== "manual" ? preset : "scenario"),
+    requirement?.activity_type ??
+      (preset && preset !== "skill" && preset !== "manual" && preset !== "exam" ? preset : "scenario"),
   );
   const [activityId, setActivityId] = useState(
     requirement?.scenario_id ?? requirement?.assessment_id ?? requirement?.presentation_id ?? "",

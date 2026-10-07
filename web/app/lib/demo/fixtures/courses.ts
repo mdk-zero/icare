@@ -139,6 +139,7 @@ export function seedCourses(input: { users: DemoUser[]; casePresentations: DemoC
     skill_id: null,
     min_score: null,
     skills_only: false,
+    manual_type: "lab" as const,
   };
   let n = 0;
   const checklist = (offering_id: string, items: (Partial<RequirementRow> & Pick<RequirementRow, "kind">)[]): DemoRequirement[] =>

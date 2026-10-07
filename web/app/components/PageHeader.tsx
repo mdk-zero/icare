@@ -9,7 +9,7 @@ interface PageHeaderProps {
    */
   badge?: { icon: ReactNode; label: string };
   title: string;
-  subtitle: string;
+  subtitle?: string;
   action?: {
     icon: ReactNode;
     onClick: () => void;
@@ -81,12 +81,14 @@ export default function PageHeader({ badge, title, subtitle, action }: PageHeade
           </h1>
           {/* A measure, not a container width: long standfirsts stay readable
               on a wide screen instead of running the full width of the page. */}
-          <p
-            className="animate-rise mt-2.5 max-w-[62ch] text-pretty text-[15px] leading-relaxed text-slate-500"
-            style={step(2)}
-          >
-            {subtitle}
-          </p>
+          {subtitle && (
+            <p
+              className="animate-rise mt-2.5 max-w-[62ch] text-pretty text-[15px] leading-relaxed text-slate-500"
+              style={step(2)}
+            >
+              {subtitle}
+            </p>
+          )}
         </div>
 
         <div className="flex shrink-0 flex-col items-end gap-3">

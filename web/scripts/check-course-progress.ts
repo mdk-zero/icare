@@ -16,6 +16,7 @@ import {
   requirementLabel,
   inTopicOrder,
   requirementNames,
+  topicKey,
   scoreBlock,
   summarize,
   type ProgressFacts,
@@ -44,6 +45,7 @@ const blank = {
   skill_id: null,
   min_score: null,
   skills_only: false,
+  manual_type: 'lab',
 } as const;
 let n = 0;
 const req = (fields: Partial<RequirementRow> & Pick<RequirementRow, 'kind'>): RequirementRow => ({
@@ -248,6 +250,22 @@ eq(
   requirementNames(inTopicOrder(mixed)),
   ['Patient Case #1', 'Quiz #1', 'Quiz #2', 'Skill #1', 'Lab Activity #1', 'Attendance #1'],
 );
+
+console.log('Written Exams');
+const exam = req({ kind: 'manual', title: 'Midterm exam', manual_type: 'exam' });
+const lab = req({ kind: 'manual', title: 'Return demo' });
+const quizCount = req({ kind: 'count', activity_type: 'assessment', target_count: 2 });
+eq('exam topic', topicKey(exam), 'exam');
+eq('manual without manual_type is a Lab Activity', topicKey({ kind: 'manual', activity_type: null }), 'manual');
+eq('exam names', requirementNames([exam, lab, req({ kind: 'manual', title: 'Final', manual_type: 'exam' })]),
+  ['Written Exam #1', 'Lab Activity #1', 'Written Exam #2']);
+eq('exams sit after Quizzes', inTopicOrder([lab, exam, quizCount]).map((r) => r.id), [quizCount.id, exam.id, lab.id]);
+const parsedExam = parseRequirement({ kind: 'manual', title: 'Midterm', manual_type: 'exam' });
+eq('parse keeps exam', parsedExam.ok && parsedExam.value.manual_type, 'exam');
+const parsedSkill = parseRequirement({ kind: 'skill', skill_id: '1-1', manual_type: 'exam' });
+eq('non-manual forced to lab', parsedSkill.ok && parsedSkill.value.manual_type, 'lab');
+const parsedBad = parseRequirement({ kind: 'manual', title: 'x', manual_type: 'quiz' });
+eq('bad manual_type', parsedBad.ok ? null : parsedBad.error, 'Choose Lab Activity or Written Exam');
 
 if (failures > 0) {
   console.error(`\n${failures} check(s) failed`);

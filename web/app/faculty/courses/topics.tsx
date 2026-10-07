@@ -1,6 +1,7 @@
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faCalendarCheck,
+  faFilePen,
   faFilePrescription,
   faFlask,
   faHandHoldingMedical,
@@ -73,6 +74,15 @@ export const TOPICS: Record<RequirementTopicKey, TopicStyle> = {
     tile: "bg-indigo-50 text-indigo-700",
     bar: "bg-indigo-500",
     text: "text-indigo-700",
+  },
+  exam: {
+    key: "exam",
+    label: "Written Exams",
+    icon: faFilePen,
+    blurb: "Scores you enter",
+    tile: "bg-fuchsia-50 text-fuchsia-700",
+    bar: "bg-fuchsia-500",
+    text: "text-fuchsia-700",
   },
   manual: {
     key: "manual",
