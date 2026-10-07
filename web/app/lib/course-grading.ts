@@ -300,6 +300,17 @@ export function settle(split: GradingSplit | null, requirements: readonly Requir
   };
 }
 
+/**
+ * Whether a save's `base` still describes the stored split. It may match the
+ * split as stored, or the split with removed and attendance items taken out
+ * (what the Grading tab sends, see saveBase): an id left behind by a removed
+ * item must never make the split impossible to save or clear.
+ */
+export function baseMatches(base: unknown, stored: GradingSplit | null, requirements: readonly RequirementRow[]): boolean {
+  if (typeof base !== 'string') return false;
+  return base === gradingSignature(stored) || base === gradingSignature(settle(stored, requirements));
+}
+
 /** The split with the item taken out of every leaf and, unless leafId is null, filed under leafId. */
 export function fileItem(split: GradingSplit, requirementId: string, leafId: string | null): GradingSplit {
   // Already there: keep its place, and leave the split untouched.

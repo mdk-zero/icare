@@ -17,7 +17,7 @@ import {
   GRADING_CHANGED,
   GRADING_ENDED_LOCK,
   GRADING_NEEDS_MIGRATION,
-  gradingSignature,
+  baseMatches,
   gradingSummary,
   parseGrading,
 } from '@/app/lib/course-grading';
@@ -29,8 +29,9 @@ interface RouteParams {
 /**
  * PUT { parts, base }: replace the course's grading split in one write.
  * `base` is gradingSignature() of the split the instructor started editing
- * from; if the split has changed since (an item filed from the checklist,
- * another tab), the save is refused rather than undoing that change.
+ * from, less items since removed or turned into attendance (baseMatches); if
+ * the split has changed otherwise (an item filed from the checklist, another
+ * tab), the save is refused rather than undoing that change.
  * `{ parts: [] }` clears the split.
  */
 export async function PUT(request: NextRequest, { params }: RouteParams) {
@@ -49,11 +50,12 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     const stored = await loadGrading(supabase, id);
     if (!stored.ready) return NextResponse.json({ error: GRADING_NEEDS_MIGRATION }, { status: 503 });
-    if (gradingSignature(stored.grading) !== body.base) {
+    const requirements = await loadRequirements(supabase, [id]);
+    if (!baseMatches(body.base, stored.grading, requirements)) {
       return NextResponse.json({ error: GRADING_CHANGED }, { status: 409 });
     }
 
-    const parsed = parseGrading(body, await loadRequirements(supabase, [id]));
+    const parsed = parseGrading(body, requirements);
     if (!parsed.ok) return badRequest(parsed.error);
     await writeGrading(supabase, id, parsed.value);
 

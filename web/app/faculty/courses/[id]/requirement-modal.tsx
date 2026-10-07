@@ -470,7 +470,7 @@ export default function RequirementModal({
                   ? "Shown before the automatic description"
                   : manualType === "exam"
                     ? "Midterm written exam"
-                    : "Submit the signed return-demonstration sheet"
+                    : "Signed skills-lab check-off sheet"
               }
               className={inputClass}
             />

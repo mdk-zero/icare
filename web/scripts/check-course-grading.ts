@@ -26,6 +26,7 @@ import {
   parseGrading,
   presetSplit,
   readStoredSplit,
+  baseMatches,
   refile,
   settle,
   type GradingSplit,
@@ -315,6 +316,16 @@ eq('a new item lands in an unsaved component', leafOf(afterItemSaved(withNew, fr
 eq('…and discarding the draft leaves it uncounted', leafOf(startDraft(before).draft, fresh.id), null);
 const cleanBefore = startDraft(before);
 check('a clean draft is left for the server to file', afterItemSaved(cleanBefore, fresh, 'M') === cleanBefore);
+
+console.log('stale ids already in the stored split');
+const ghosted: GradingSplit = { parts: [{ id: 'P', name: 'Exams', weight: 100, items: [quizA.id, lab.id, 'ghost'], components: [] }] };
+const renamedGhost = { ...startDraft(ghosted), draft: { parts: [{ ...ghosted.parts[0], name: 'Exams 2' }] } };
+check('a save over a stored stale id is accepted', baseMatches(saveBase(renamedGhost, reqs), ghosted, reqs));
+check('…and so is clearing it', baseMatches(saveBase(startDraft(ghosted), reqs), ghosted, reqs));
+check('a page still sending the raw signature is accepted', baseMatches(gradingSignature(ghosted), ghosted, reqs));
+check('a removal made here is accepted', baseMatches(saveBase(dirty, reqsAfter), fileItem(before, quizB.id, null), reqsAfter));
+check('a change made elsewhere is refused', !baseMatches(saveBase(renamedGhost, reqs), { parts: [{ ...ghosted.parts[0], name: 'Other' }] }, reqs));
+check('junk is refused', !baseMatches(undefined, ghosted, reqs) && !baseMatches(42, ghosted, reqs));
 
 console.log('demo fixtures');
 const demo = seed();

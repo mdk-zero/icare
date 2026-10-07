@@ -25,9 +25,9 @@ import { listSkillSummaries } from "../fixtures/skills";
 import {
   GRADING_CHANGED,
   GRADING_ENDED_LOCK,
+  baseMatches,
   fileItem,
   gradeLeafProblem,
-  gradingSignature,
   gradingSummary,
   parseGradeLeaf,
   parseGrading,
@@ -533,8 +533,9 @@ route("PUT", "/api/faculty/courses/:id/grading", (ctx) => {
   const o = ownFacultyOffering(ctx, ctx.params.id);
   if (!o) return notFound("Course not found");
   if (locked(db, o)) return json({ error: GRADING_ENDED_LOCK }, 409);
-  if (gradingSignature(o.grading ?? null) !== ctx.body?.base) return json({ error: GRADING_CHANGED }, 409);
-  const parsed = parseGrading(ctx.body ?? {}, checklist(db, o.id));
+  const items = checklist(db, o.id);
+  if (!baseMatches(ctx.body?.base, o.grading ?? null, items)) return json({ error: GRADING_CHANGED }, 409);
+  const parsed = parseGrading(ctx.body ?? {}, items);
   if (!parsed.ok) return json({ error: parsed.error }, 400);
   o.grading = parsed.value;
   audit(db, ctx.viewer, "course.grading.update", "course_offerings", { split: gradingSummary(parsed.value) }, o.id);
