@@ -68,9 +68,9 @@ export const TOPICS: Record<RequirementTopicKey, TopicStyle> = {
   },
   skill: {
     key: "skill",
-    label: "Skills",
+    label: "Return Demonstrations",
     icon: faHandHoldingMedical,
-    blurb: "Met by graded work on the skill",
+    blurb: "Met by graded Patient Case tasks or Quizzes on the skill",
     tile: "bg-indigo-50 text-indigo-700",
     bar: "bg-indigo-500",
     text: "text-indigo-700",

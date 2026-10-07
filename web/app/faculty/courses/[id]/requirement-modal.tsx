@@ -41,12 +41,17 @@ import { loadingToast } from "../../../components/Toast";
 const KINDS: { kind: RequirementKind; manualType?: ManualType; label: string; hint: string; icon: IconDefinition }[] = [
   { kind: "activity", label: "Specific activity", hint: "One Patient Case, Quiz or Case Presentation", icon: faClipboardCheck },
   { kind: "count", label: "Count", hint: "A number of graded activities, or shifts attended", icon: faHashtag },
-  { kind: "skill", label: "Skill", hint: "Graded work covering one of the course's skills", icon: faListCheck },
+  {
+    kind: "skill",
+    label: "Return Demonstration",
+    hint: "A course skill, met by graded Patient Case tasks or Quizzes on it",
+    icon: faListCheck,
+  },
   {
     kind: "manual",
     manualType: "lab",
     label: "Lab Activity",
-    hint: "Hands-on work, like a return demonstration; you enter each score",
+    hint: "Hands-on work you score yourself, like a lab report or a skills-lab check-off",
     icon: faFlask,
   },
   { kind: "manual", manualType: "exam", label: "Written Exam", hint: "A paper exam; you enter each score", icon: faFilePen },
@@ -91,7 +96,7 @@ export default function RequirementModal({
   name?: string;
   /** A new item's starting kind, from the section it was added from. */
   preset?: RequirementTopicKey | null;
-  /** A new Skill item's skill, when added from the Skills tab. */
+  /** A new Return Demonstration's skill, when added from the Skills tab. */
   presetSkillId?: string | null;
   courseSkillIds: string[];
   catalog: SkillSummary[];

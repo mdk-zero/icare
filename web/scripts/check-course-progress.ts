@@ -233,7 +233,7 @@ eq(
     req({ kind: 'count', activity_type: 'shift', target_count: 4 }),
     req({ kind: 'manual', title: 'Return demonstration' }),
   ]),
-  ['Quiz #1', 'Skill #1', 'Quiz #2', 'Skill #2', 'Patient Case #1', 'Case Presentation #1', 'Attendance #1', 'Lab Activity #1'],
+  ['Quiz #1', 'Return Demonstration #1', 'Quiz #2', 'Return Demonstration #2', 'Patient Case #1', 'Case Presentation #1', 'Attendance #1', 'Lab Activity #1'],
 );
 
 console.log('inTopicOrder');
@@ -248,7 +248,7 @@ const mixed = [
 eq(
   'sections in a fixed order, each in checklist order',
   requirementNames(inTopicOrder(mixed)),
-  ['Patient Case #1', 'Quiz #1', 'Quiz #2', 'Skill #1', 'Lab Activity #1', 'Attendance #1'],
+  ['Patient Case #1', 'Quiz #1', 'Quiz #2', 'Return Demonstration #1', 'Lab Activity #1', 'Attendance #1'],
 );
 
 console.log('Written Exams');

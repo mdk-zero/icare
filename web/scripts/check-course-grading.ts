@@ -301,6 +301,15 @@ for (const o of demoSplits) {
 }
 const examIds = new Set(demo.requirements.filter((r) => r.manual_type === 'exam').map((r) => r.id));
 check('demo exams have entered scores', demo.requirementScores.some((sc) => examIds.has(sc.requirement_id)));
+const handScored = demo.requirements.filter((r) => r.kind === 'manual' && r.manual_type === 'lab').map((r) => r.title);
+eq('no hand-scored demo item is called a return demonstration', handScored.filter((t) => /return demonstration/i.test(t)), []);
+const demoComponents = demoSplits.flatMap((o) => o.grading!.parts.flatMap((p) => p.components));
+const returnDemos = demoComponents.filter((c) => /return demonstration/i.test(c.name));
+check('a demo component is named Return demonstrations', returnDemos.length > 0);
+check(
+  '…and holds only Return Demonstrations (skill items)',
+  returnDemos.every((c) => c.items.length > 0 && c.items.every((id) => demo.requirements.find((r) => r.id === id)?.kind === 'skill')),
+);
 // The ended term is a finished semester: every student's grade is complete, not "so far".
 const today = new Date().toISOString().slice(0, 10);
 const ended = demo.offerings.find((o) => demo.terms.find((t) => t.id === o.term_id)!.ends_on < today && o.grading);

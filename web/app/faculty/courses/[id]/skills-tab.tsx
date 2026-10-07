@@ -18,7 +18,7 @@ interface ChapterGroup {
 
 /**
  * The course's skill list, read against its checklist: each chapter as a
- * card, each skill showing whether a Skill requirement covers it and how
+ * card, each skill showing whether a Return Demonstration covers it and how
  * many students have met it, or offering to add one. A skill opens to show
  * its goal and how many steps its checklist has.
  */
@@ -62,7 +62,7 @@ export default function SkillsTab({
     return [...map.values()].sort((a, b) => a.chapter - b.chapter);
   }, [catalog, skillIds]);
 
-  // Which Skill requirement covers each skill, named as the checklist names it.
+  // Which Return Demonstration covers each skill, named as the checklist names it.
   const coverage = useMemo(() => {
     const names = requirementNames(requirements);
     const map = new Map<string, { id: string; name: string }[]>();
@@ -149,7 +149,7 @@ export default function SkillsTab({
               )}
             </div>
             <p className="mt-2 text-xs text-gray-500">
-              Shared with your Dean and every instructor teaching {courseCode}; Skill requirements choose from this list.
+              Shared with your Dean and every instructor teaching {courseCode}; Return Demonstrations choose from this list.
             </p>
           </div>
         </div>

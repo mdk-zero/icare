@@ -388,7 +388,7 @@ const TOPIC: Record<RequirementTopicKey, string> = {
   assessment: 'Quiz',
   exam: 'Written Exam',
   case_presentation: 'Case Presentation',
-  skill: 'Skill',
+  skill: 'Return Demonstration',
   manual: 'Lab Activity',
   shift: 'Attendance',
 };
@@ -411,7 +411,7 @@ export function inTopicOrder<R extends TopicFields>(requirements: readonly R[]):
 
 /**
  * What the course pages call each item, numbered within its topic in
- * checklist order: "Quiz #1", "Skill #2", "Patient Case #1". Pass the whole
+ * checklist order: "Quiz #1", "Return Demonstration #2", "Patient Case #1". Pass the whole
  * checklist, sorted, since positions keep gaps after a removal.
  */
 export function requirementNames(requirements: readonly TopicFields[]): string[] {

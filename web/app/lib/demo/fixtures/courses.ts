@@ -168,7 +168,7 @@ export function seedCourses(input: { users: DemoUser[]; casePresentations: DemoC
       { kind: "skill", skill_id: "1-7", min_score: 50 },
       // Each group has had four ward duties so far.
       { kind: "count", activity_type: "shift", target_count: 4 },
-      { kind: "manual", title: "Head-to-toe assessment return demonstration, signed by the clinical instructor" },
+      { kind: "manual", title: "Head-to-toe assessment check-off, signed by the clinical instructor" },
       { kind: "manual", manual_type: "exam", title: "Midterm written exam" },
     ]),
     ...checklist(OFFERING_FUNDAMENTALS, [
@@ -177,7 +177,7 @@ export function seedCourses(input: { users: DemoUser[]; casePresentations: DemoC
       { kind: "skill", skill_id: "14-1", min_score: 50 },
       { kind: "skill", skill_id: "15-3", min_score: 50 },
       ...(shared ? [{ kind: "activity" as const, activity_type: "case_presentation" as const, presentation_id: shared.id }] : []),
-      { kind: "manual", title: "Oxygen therapy return demonstration (nasal cannula and face mask)" },
+      { kind: "manual", title: "Oxygen therapy check-off (nasal cannula and face mask)" },
       { kind: "manual", manual_type: "exam", title: "Midterm written exam" },
     ]),
     // Last semester's run, finished: two paper exams and three pieces of
@@ -185,13 +185,13 @@ export function seedCourses(input: { users: DemoUser[]; casePresentations: DemoC
     ...checklist(OFFERING_PAST, [
       { kind: "manual", manual_type: "exam", title: "Midterm written exam" },
       { kind: "manual", manual_type: "exam", title: "Final written exam" },
-      { kind: "manual", title: "Vital signs return demonstration" },
-      { kind: "manual", title: "Head-to-toe assessment return demonstration" },
+      { kind: "manual", title: "Vital signs check-off" },
+      { kind: "manual", title: "Head-to-toe assessment check-off" },
       { kind: "manual", title: "Nursing health history write-up" },
     ]),
   ];
 
-  // Return demonstrations already scored: for some of the students doing well,
+  // Lab check-offs already scored: for some of the students doing well,
   // never for one the model calls low performing.
   const doingWell = input.users
     .filter((u) => u.role === "student" && u.team_id && u.risk_level === "safe")
@@ -247,13 +247,13 @@ export function seedCourses(input: { users: DemoUser[]; casePresentations: DemoC
     }));
   };
   const requirementScores = [
-    ...signOff("Head-to-toe assessment return demonstration, signed by the clinical instructor", 0.7),
-    ...signOff("Oxygen therapy return demonstration (nasal cannula and face mask)", 0.5),
+    ...signOff("Head-to-toe assessment check-off, signed by the clinical instructor", 0.7),
+    ...signOff("Oxygen therapy check-off (nasal cannula and face mask)", 0.5),
     ...midterm(OFFERING_MAIN),
     ...midterm(OFFERING_FUNDAMENTALS),
-    ...finished("Vital signs return demonstration", 3, 165),
+    ...finished("Vital signs check-off", 3, 165),
     ...finished("Midterm written exam", 0, 145),
-    ...finished("Head-to-toe assessment return demonstration", 5, 125),
+    ...finished("Head-to-toe assessment check-off", 5, 125),
     ...finished("Nursing health history write-up", 9, 105),
     ...finished("Final written exam", 2, 88),
   ];
@@ -289,8 +289,8 @@ export function seedCourses(input: { users: DemoUser[]; casePresentations: DemoC
           weight: 70,
           items: [],
           components: [
-            { id: sid(), name: "Return demonstrations", weight: 30, items: itemIds(OFFERING_MAIN, lab) },
-            { id: sid(), name: "Skills", weight: 40, items: itemIds(OFFERING_MAIN, (r) => r.kind === "skill") },
+            { id: sid(), name: "Lab check-offs", weight: 30, items: itemIds(OFFERING_MAIN, lab) },
+            { id: sid(), name: "Return demonstrations", weight: 40, items: itemIds(OFFERING_MAIN, (r) => r.kind === "skill") },
           ],
         },
       ],
@@ -334,7 +334,7 @@ export function seedCourses(input: { users: DemoUser[]; casePresentations: DemoC
           weight: 60,
           items: [],
           components: [
-            { id: sid(), name: "Return demonstrations", weight: 40, items: itemIds(OFFERING_PAST, (r) => r.title.endsWith("return demonstration")) },
+            { id: sid(), name: "Lab check-offs", weight: 40, items: itemIds(OFFERING_PAST, (r) => r.title.endsWith("check-off")) },
             { id: sid(), name: "Health history write-up", weight: 20, items: itemIds(OFFERING_PAST, (r) => r.title === "Nursing health history write-up") },
           ],
         },
