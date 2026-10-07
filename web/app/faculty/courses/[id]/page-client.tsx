@@ -11,6 +11,7 @@ import {
   faListCheck,
   faLock,
   faPenToSquare,
+  faPercent,
   faPlus,
   faTrashCan,
   faTriangleExclamation,
@@ -45,6 +46,7 @@ import ProgressTab from "./progress-tab";
 import CourseCrumbs from "./course-crumbs";
 import CourseTabBar, { COURSE_TAB_PANEL_ID, courseTabId } from "./course-tab-bar";
 import SkillsTab from "./skills-tab";
+import GradingTab from "./grading-tab";
 import { courseTabHref, parseCourseTab, type CourseTab } from "../course-tabs";
 import { TopicIcon, groupByTopic } from "../topics";
 
@@ -181,6 +183,12 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
             label: "Skills",
             icon: faBookMedical,
             count: detail?.skill_ids.length ?? 0,
+          },
+          {
+            id: "grading",
+            label: "Grading",
+            icon: faPercent,
+            count: detail?.grading?.parts.length ?? 0,
           },
         ]}
         action={
@@ -324,6 +332,18 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
               ))}
             </div>
           ))}
+
+        {tab === "grading" && !offering && loading && <SkeletonProgressGrid />}
+        {tab === "grading" && offering && detail && (
+          <GradingTab
+            offeringId={offeringId}
+            requirements={requirements}
+            grading={detail.grading ?? null}
+            gradingReady={detail.grading_ready ?? false}
+            locked={locked}
+            onSaved={refresh}
+          />
+        )}
 
         {tab === "skills" && offering && (
           <SkillsTab

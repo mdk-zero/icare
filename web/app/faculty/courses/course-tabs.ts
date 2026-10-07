@@ -1,5 +1,5 @@
 /** The tabs of a course's page, in order. The URL's ?tab= picks one, so a tab can be linked to and Back returns to it. */
-export const COURSE_TABS = ["progress", "requirements", "skills"] as const;
+export const COURSE_TABS = ["progress", "requirements", "skills", "grading"] as const;
 
 export type CourseTab = (typeof COURSE_TABS)[number];
 

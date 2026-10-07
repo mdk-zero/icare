@@ -8,6 +8,7 @@ import {
   faArrowRight,
   faBookMedical,
   faChartColumn,
+  faPercent,
   faChevronRight,
   faListCheck,
   faPenToSquare,
@@ -173,12 +174,14 @@ const TAB_ICON: Record<(typeof COURSE_TABS)[number], IconDefinition> = {
   progress: faChartColumn,
   requirements: faListCheck,
   skills: faBookMedical,
+  grading: faPercent,
 };
 
 const TAB_LABEL: Record<(typeof COURSE_TABS)[number], string> = {
   progress: "Progress",
   requirements: "Requirements",
   skills: "Skills",
+  grading: "Grading",
 };
 
 /**
