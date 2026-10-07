@@ -9,7 +9,7 @@
  *
  * Exits non-zero if any expectation fails.
  */
-import type { ItemProgress, RequirementRow } from '../app/lib/course-progress';
+import { NO_FACTS, evaluate, type ItemProgress, type RequirementRow } from '../app/lib/course-progress';
 import {
   addComponent,
   computeGrades,
@@ -291,7 +291,7 @@ eq('…and keep their old base, so saving them is refused', kept.base, gradingSi
 console.log('demo fixtures');
 const demo = seed();
 const demoSplits = demo.offerings.filter((o) => o.grading);
-eq('two demo courses have a split', demoSplits.length, 2);
+eq('three demo courses have a split', demoSplits.length, 3);
 for (const o of demoSplits) {
   const items = demo.requirements.filter((r) => r.offering_id === o.id);
   const parsedDemo = parseGrading(o.grading, items);
@@ -301,6 +301,21 @@ for (const o of demoSplits) {
 }
 const examIds = new Set(demo.requirements.filter((r) => r.manual_type === 'exam').map((r) => r.id));
 check('demo exams have entered scores', demo.requirementScores.some((sc) => examIds.has(sc.requirement_id)));
+// The ended term is a finished semester: every student's grade is complete, not "so far".
+const today = new Date().toISOString().slice(0, 10);
+const ended = demo.offerings.find((o) => demo.terms.find((t) => t.id === o.term_id)!.ends_on < today && o.grading);
+check('the ended demo course has a split', !!ended);
+if (ended) {
+  const teamIds = new Set(demo.teams.filter((t) => t.faculty_id === ended.faculty_id && ended.section_ids.includes(t.section_id)).map((t) => t.id));
+  const roster = demo.users.filter((u) => u.role === 'student' && u.team_id && teamIds.has(u.team_id)).map((u) => u.id);
+  const items = demo.requirements.filter((r) => r.offering_id === ended.id);
+  const term = demo.terms.find((t) => t.id === ended.term_id)!;
+  const progress = evaluate(items, [], term, roster, { ...NO_FACTS, scores: demo.requirementScores });
+  const { invalid, grades } = computeGrades(ended.grading ?? null, items, progress);
+  check('the ended demo course has students', roster.length > 0);
+  eq('every student in the ended demo course has a complete grade', invalid || roster.filter((id) => grades[id]?.grade === null || grades[id]?.scored_weight !== 100).length, 0);
+  check('the ended demo course grades spread out', new Set(roster.map((id) => Math.round(grades[id]?.grade ?? 0))).size > 3);
+}
 
 async function fallbackChecks() {
   console.log('pre-067 fallback');

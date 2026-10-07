@@ -180,7 +180,15 @@ export function seedCourses(input: { users: DemoUser[]; casePresentations: DemoC
       { kind: "manual", title: "Oxygen therapy return demonstration (nasal cannula and face mask)" },
       { kind: "manual", manual_type: "exam", title: "Midterm written exam" },
     ]),
-    ...checklist(OFFERING_PAST, [{ kind: "count", activity_type: "scenario", target_count: 2 }]),
+    // Last semester's run, finished: two paper exams and three pieces of
+    // clinical work, every one scored.
+    ...checklist(OFFERING_PAST, [
+      { kind: "manual", manual_type: "exam", title: "Midterm written exam" },
+      { kind: "manual", manual_type: "exam", title: "Final written exam" },
+      { kind: "manual", title: "Vital signs return demonstration" },
+      { kind: "manual", title: "Head-to-toe assessment return demonstration" },
+      { kind: "manual", title: "Nursing health history write-up" },
+    ]),
   ];
 
   // Return demonstrations already scored: for some of the students doing well,
@@ -221,15 +229,38 @@ export function seedCourses(input: { users: DemoUser[]; casePresentations: DemoC
       entered_at: ago(10 + (i % 5), 9, 0),
     }));
   };
+  // Last semester's section A, scored on everything inside the term, so its
+  // grades are final. The students doing well now did then too.
+  const lastTerm = students.filter((s) => s.section_id === SECTION_A);
+  let pastN = 0;
+  const finished = (title: string, shift: number, daysAgo: number): DemoRequirementScore[] => {
+    const item = requirements.find((r) => r.offering_id === OFFERING_PAST && r.title === title);
+    if (!item) return [];
+    return lastTerm.map((s, i) => ({
+      id: demoId(KIND.misc, 1000 + ++pastN),
+      requirement_id: item.id,
+      student_id: s.id,
+      score: s.risk_level === "safe" ? 80 + ((i * 7 + shift) % 17) : 62 + ((i * 5 + shift) % 16),
+      note: "",
+      entered_by: INSTRUCTOR_ID,
+      entered_at: ago(daysAgo + (i % 3), 10, 0),
+    }));
+  };
   const requirementScores = [
     ...signOff("Head-to-toe assessment return demonstration, signed by the clinical instructor", 0.7),
     ...signOff("Oxygen therapy return demonstration (nasal cannula and face mask)", 0.5),
     ...midterm(OFFERING_MAIN),
     ...midterm(OFFERING_FUNDAMENTALS),
+    ...finished("Vital signs return demonstration", 3, 165),
+    ...finished("Midterm written exam", 0, 145),
+    ...finished("Head-to-toe assessment return demonstration", 5, 125),
+    ...finished("Nursing health history write-up", 9, 105),
+    ...finished("Final written exam", 2, 88),
   ];
 
   // Both running courses come graded Written Exams 30 / Laboratory & Skills 70,
-  // every item that takes a score filed; attendance never counts.
+  // every item that takes a score filed; attendance never counts. Last
+  // semester's run was weighted its own way, and its grades are final.
   let splitN = 0;
   const sid = () => demoId(KIND.misc, 700 + ++splitN);
   const itemIds = (offeringId: string, match: (r: DemoRequirement) => boolean) =>
@@ -281,6 +312,30 @@ export function seedCourses(input: { users: DemoUser[]; casePresentations: DemoC
               items: itemIds(OFFERING_FUNDAMENTALS, (r) => r.kind === "skill" || (r.kind === "count" && r.activity_type === "scenario")),
             },
             ...(presentation.length ? [{ id: sid(), name: "Case presentation", weight: 20, items: presentation }] : []),
+          ],
+        },
+      ],
+    },
+    [OFFERING_PAST]: {
+      parts: [
+        {
+          id: sid(),
+          name: "Written Exams",
+          weight: 40,
+          items: [],
+          components: [
+            { id: sid(), name: "Midterm", weight: 20, items: itemIds(OFFERING_PAST, (r) => r.title === "Midterm written exam") },
+            { id: sid(), name: "Final", weight: 20, items: itemIds(OFFERING_PAST, (r) => r.title === "Final written exam") },
+          ],
+        },
+        {
+          id: sid(),
+          name: "Clinical Performance",
+          weight: 60,
+          items: [],
+          components: [
+            { id: sid(), name: "Return demonstrations", weight: 40, items: itemIds(OFFERING_PAST, (r) => r.title.endsWith("return demonstration")) },
+            { id: sid(), name: "Health history write-up", weight: 20, items: itemIds(OFFERING_PAST, (r) => r.title === "Nursing health history write-up") },
           ],
         },
       ],
