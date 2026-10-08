@@ -114,7 +114,8 @@ export default function AttendanceTab({ studentId, studentName }: { studentId: s
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-600/10 text-brand-600">
                 <FontAwesomeIcon icon={kind.icon} className="h-4 w-4" />
               </span>
-              <div className="min-w-0 flex-1">
+              {/* On a phone the chip and its action wrap under the title rather than squeeze it. */}
+              <div className="min-w-0 flex-1 basis-[calc(100%-3rem)] sm:basis-auto">
                 <p className="truncate text-sm font-semibold text-gray-800">
                   {r.title} <span className="font-normal text-gray-400">· {kind.label}</span>
                 </p>
@@ -128,7 +129,7 @@ export default function AttendanceTab({ studentId, studentName }: { studentId: s
                   </p>
                 )}
               </div>
-              <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold ${CHIP[r.status]}`}>
+              <span className={`ml-12 shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold sm:ml-0 ${CHIP[r.status]}`}>
                 {ATTENDANCE_LABEL[r.status]}
               </span>
               {attendance.can_excuse && r.status === "absent" && (
