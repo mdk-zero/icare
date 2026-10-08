@@ -30,6 +30,8 @@ export interface ActivityFact {
   student_id: string;
   kind: ActivityKind;
   activity_id: string;
+  /** What was given: the patient case, the quiz, or the case presentation, shared by every student given it. */
+  source_id: string;
   title: string;
   deadline: string | null;
   /** When the work was done: the first graded task, the first submitted attempt, the hand-in. */
@@ -62,7 +64,7 @@ export interface AttendanceTally {
 
 /** The rows activities are built from, as the database (or the demo) holds them. */
 export interface ActivitySources {
-  scenarioAssignments: { id: string; student_id: string; title: string; deadline: string | null }[];
+  scenarioAssignments: { id: string; student_id: string; scenario_id: string; title: string; deadline: string | null }[];
   /** Graded tasks: a row is written when the instructor grades a task. */
   completions: { assignment_id: string; completed_at: string }[];
   /** default_deadline: the quiz's own deadline, which an assignment without one inherits. */
@@ -118,6 +120,7 @@ export function collectActivities(src: ActivitySources): ActivityFact[] {
         student_id: a.student_id,
         kind: 'scenario',
         activity_id: a.id,
+        source_id: a.scenario_id,
         title: a.title,
         deadline: a.deadline,
         done_at: firstGraded.get(a.id) ?? null,
@@ -128,6 +131,7 @@ export function collectActivities(src: ActivitySources): ActivityFact[] {
         student_id: a.student_id,
         kind: 'assessment',
         activity_id: a.id,
+        source_id: a.assessment_id,
         title: a.title,
         deadline: a.deadline ?? a.default_deadline,
         done_at: firstSubmitted.get(`${a.student_id}:${a.assessment_id}`) ?? null,
@@ -138,6 +142,7 @@ export function collectActivities(src: ActivitySources): ActivityFact[] {
         student_id: s.student_id,
         kind: 'case_presentation',
         activity_id: s.presentation_id,
+        source_id: s.presentation_id,
         title: s.title,
         deadline: s.deadline,
         done_at: s.submitted_at,
@@ -173,6 +178,33 @@ export function attendanceRows(activities: readonly ActivityFact[], excuses: rea
     const diff = Date.parse(a.deadline!) - Date.parse(b.deadline!);
     return group(a) === 0 ? diff : -diff;
   });
+}
+
+export interface ActivityGroup {
+  kind: ActivityKind;
+  source_id: string;
+  title: string;
+  deadline: string;
+  tally: AttendanceTally;
+}
+
+/**
+ * Rows grouped into the activities a section was given, for the section
+ * report: one per patient case, quiz or case presentation and deadline,
+ * newest deadline first. Activities with no deadline are left out.
+ */
+export function byActivity(rows: readonly AttendanceRow[]): ActivityGroup[] {
+  const groups = new Map<string, { kind: ActivityKind; source_id: string; title: string; deadline: string; statuses: AttendanceStatus[] }>();
+  for (const r of rows) {
+    if (!r.deadline) continue;
+    const key = `${r.kind}:${r.source_id}:${Date.parse(r.deadline)}`;
+    const g = groups.get(key) ?? { kind: r.kind, source_id: r.source_id, title: r.title, deadline: r.deadline, statuses: [] };
+    g.statuses.push(r.status);
+    groups.set(key, g);
+  }
+  return [...groups.values()]
+    .sort((a, b) => Date.parse(b.deadline) - Date.parse(a.deadline))
+    .map(({ statuses, ...g }) => ({ ...g, tally: tallyAttendance(statuses) }));
 }
 
 export const MAX_EXCUSE_REASON = 300;

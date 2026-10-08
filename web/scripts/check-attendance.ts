@@ -13,6 +13,7 @@ import {
   attendanceRows,
   attendanceStatus,
   attendedCount,
+  byActivity,
   collectActivities,
   isMissingExcusesTable,
   parseExcuse,
@@ -20,6 +21,7 @@ import {
   MAX_EXCUSE_REASON,
   type ActivityFact,
   type ActivitySources,
+  type AttendanceRow,
   type ExcuseFact,
 } from '../app/lib/attendance';
 import { deadlineFromInput, parseDeadline } from '../app/lib/deadline-input';
@@ -63,8 +65,8 @@ eq('attended = present + late', attendedCount(['present', 'late', 'absent', 'exc
 console.log('collecting activities');
 const sources: ActivitySources = {
   scenarioAssignments: [
-    { id: 'sa1', student_id: 's1', title: 'Asthma', deadline: D },
-    { id: 'sa2', student_id: 's1', title: 'Cellulitis', deadline: D },
+    { id: 'sa1', student_id: 's1', scenario_id: 'asthma', title: 'Asthma', deadline: D },
+    { id: 'sa2', student_id: 's1', scenario_id: 'cellulitis', title: 'Cellulitis', deadline: D },
   ],
   completions: [
     { assignment_id: 'sa1', completed_at: '2026-10-10T10:00:00.000Z' },
@@ -92,6 +94,9 @@ eq('quiz done at its earliest submitted attempt', find('assessment', 'qa1')?.don
 eq('case presentation is keyed by presentation', find('case_presentation', 'cp1')?.student_id, 's1');
 eq('case presentation done when handed in', find('case_presentation', 'cp1')?.done_at, '2026-10-09T12:00:00.000Z');
 eq('one activity per assignment or submission', collected.length, 4);
+eq('a RetDem knows its patient case', find('scenario', 'sa1')?.source_id, 'asthma');
+eq('a quiz knows its quiz', find('assessment', 'qa1')?.source_id, 'q1');
+eq('a case presentation is its own source', find('case_presentation', 'cp1')?.source_id, 'cp1');
 
 console.log('rows');
 const NOW = Date.parse('2026-10-10T00:00:00Z');
@@ -100,6 +105,7 @@ const act = (id: string, deadline: string | null, done_at: string | null, studen
   student_id,
   kind: 'scenario',
   activity_id: id,
+  source_id: id,
   title: id,
   deadline,
   done_at,
@@ -135,6 +141,37 @@ eq(
   attendanceRows([act('absent', at(-1), null, 's2')], [excuse('absent', 's1')], NOW)[0].status,
   'absent',
 );
+
+console.log('by activity, for the section report');
+const sectionRow = (student_id: string, kind: AttendanceRow['kind'], source_id: string, deadline: string | null, status: AttendanceRow['status']): AttendanceRow => ({
+  student_id,
+  kind,
+  activity_id: `${source_id}-${student_id}`,
+  source_id,
+  title: source_id,
+  deadline,
+  done_at: null,
+  status,
+  excuse: null,
+});
+const D1 = '2026-10-01T09:00:00.000Z';
+const D2 = '2026-10-05T09:00:00.000Z';
+const grouped = byActivity([
+  sectionRow('s1', 'scenario', 'asthma', D1, 'present'),
+  sectionRow('s2', 'scenario', 'asthma', D1, 'present'),
+  sectionRow('s3', 'scenario', 'asthma', D1, 'absent'),
+  sectionRow('s1', 'assessment', 'vitals', D2, 'late'),
+  sectionRow('s2', 'assessment', 'vitals', D2, 'excused'),
+  sectionRow('s3', 'assessment', 'vitals', D2, 'excused'),
+  sectionRow('s1', 'scenario', 'fever', null, 'no_deadline'),
+]);
+eq('each activity once, newest deadline first', grouped.map((g) => g.source_id), ['vitals', 'asthma']);
+eq('the quiz tally', grouped[0]?.tally, { present: 0, late: 1, absent: 0, excused: 2, rate: 100 });
+eq('the RetDem tally', grouped[1]?.tally, { present: 2, late: 0, absent: 1, excused: 0, rate: 67 });
+eq('the same case with another deadline is another row', byActivity([
+  sectionRow('s1', 'scenario', 'asthma', D1, 'present'),
+  sectionRow('s2', 'scenario', 'asthma', D2, 'present'),
+]).length, 2);
 
 console.log('excuse requests');
 const ok = parseExcuse({ kind: 'scenario', activity_id: 'a', reason: '  Sick  ' });

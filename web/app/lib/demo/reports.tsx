@@ -5,7 +5,8 @@ import { ReportShell, StatGrid, Table, type ReportDocument, type ReportMeta } fr
 import { CASE_CRITERIA } from "../case-rubric";
 import { ratingLabel } from "../task-ratings";
 import type { DemoContext } from "./router";
-import { caseAverage, lastActivity, mean, quizAverage, submittedAttempts } from "./handlers/derive";
+import { caseAverage, demoAttendanceRows, lastActivity, mean, quizAverage, submittedAttempts } from "./handlers/derive";
+import { byActivity, tallyAttendance } from "../attendance";
 import { sectionName, teamLabel as teamLabelUi, userById, visibleSections, visibleStudents } from "./handlers/scope";
 
 /** The PDF's built-in Helvetica has no middle dot, so labels use an en dash. */
@@ -56,7 +57,7 @@ function studentReport(ctx: Ctx, id: string): Built {
   if (!s || !visibleStudents(db, ctx.role, ctx.viewer.id).some((x) => x.id === id)) return { error: "Not found", status: 404 };
   const cases = db.assignments.filter((a) => a.student_id === id).sort((a, b) => b.assigned_at.localeCompare(a.assigned_at));
   const attempts = submittedAttempts(db, id);
-  const shifts = db.shiftEntries.filter((e) => e.student_id === id && e.attendance_status !== "scheduled");
+  const attendance = tallyAttendance(demoAttendanceRows(db, [id]).map((r) => r.status));
   return {
     subject: s.name,
     doc: (
@@ -69,7 +70,7 @@ function studentReport(ctx: Ctx, id: string): Built {
           { label: "Patient case average", value: pct(caseAverage(db, id)) },
           { label: "Quiz average", value: pct(quizAverage(db, id)) },
           { label: "Cases graded", value: cases.filter((a) => a.status === "completed").length },
-          { label: "Shifts attended", value: `${shifts.filter((e) => e.attendance_status !== "absent").length}/${shifts.length}` },
+          { label: "Attendance", value: pct(attendance.rate) },
         ]} />
         <H>Patient cases</H>
         <Table head={["Case", "Status", "Score", "Deadline"]} widths={[4, 1.4, 1, 1.4]} rows={cases.map((a) => [
@@ -192,15 +193,36 @@ function attendanceReport(ctx: Ctx, id: string): Built {
   const name = sectionName(db, id);
   if (!name) return { error: "Not found", status: 404 };
   const students = visibleStudents(db, ctx.role, ctx.viewer.id).filter((s) => s.section_id === id);
-  const tally = (sid: string, status: string) => db.shiftEntries.filter((e) => e.student_id === sid && e.attendance_status === status).length;
+  const rows = demoAttendanceRows(db, students.map((s) => s.id));
+  const tallyOf = (sid: string) => tallyAttendance(rows.filter((r) => r.student_id === sid).map((r) => r.status));
+  const section = tallyAttendance(rows.map((r) => r.status));
+  const activities = byActivity(rows);
   return {
     subject: name,
     doc: (
-      <Shell ctx={ctx} title={`Attendance — ${name}`} heading="Shift Attendance Report" rows={[{ label: "Section", value: name }]}>
-        <Table head={["Student", "Present", "Late", "Absent", "Excused"]} widths={[3, 1, 1, 1, 1]} rows={students.map((s) => [
-          s.name, tally(s.id, "present"), tally(s.id, "late"), tally(s.id, "absent"), tally(s.id, "excused"),
+      <Shell ctx={ctx} title={`Attendance — ${name}`} heading="Attendance Report" rows={[
+        { label: "Section", value: name },
+        { label: "Students", value: String(students.length) },
+        { label: "Activities", value: String(activities.length) },
+        { label: "Section attendance", value: section.rate === null ? "Nothing past its deadline yet" : `${section.rate}%` },
+      ]}>
+        <StatGrid items={[
+          { label: "Present", value: section.present },
+          { label: "Late", value: section.late },
+          { label: "Absent", value: section.absent },
+          { label: "Excused", value: section.excused },
+          { label: "Upcoming", value: rows.filter((r) => r.status === "upcoming").length },
+        ]} />
+        <H>Attendance by student</H>
+        <Table head={["Student", "Present", "Late", "Absent", "Excused", "Rate"]} widths={[3, 1, 1, 1, 1, 1]} rows={students.map((s) => {
+          const t = tallyOf(s.id);
+          return [s.name, t.present, t.late, t.absent, t.excused, t.rate === null ? "—" : `${t.rate}%`];
+        })} />
+        <H>By activity</H>
+        <Table head={["Activity", "Due", "Present", "Late", "Absent", "Excused"]} widths={[3, 1.6, 1, 1, 1, 1]} rows={activities.map((a) => [
+          a.title, date(a.deadline), a.tally.present, a.tally.late, a.tally.absent, a.tally.excused,
         ])} />
-        <Text style={note}>Attendance is detected from sign-ins and app activity during each shift; instructors only excuse absences.</Text>
+        <Text style={note}>Rate counts present and late as attended. Excused and upcoming activities are left out of the rate.</Text>
       </Shell>
     ),
   };

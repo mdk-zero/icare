@@ -27,6 +27,7 @@ export function demoAttendanceRows(db: DemoDb, studentIds: readonly string[], no
     scenarioAssignments: scenarioAssignments.map((a) => ({
       id: a.id,
       student_id: a.student_id,
+      scenario_id: a.scenario_id,
       title: scenarioTitle.get(a.scenario_id) ?? "Patient case",
       deadline: a.deadline,
     })),

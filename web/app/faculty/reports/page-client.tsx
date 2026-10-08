@@ -310,8 +310,8 @@ export default function FacultyReportsClient() {
       type: "attendance",
       label: "Attendance",
       icon: faCalendarCheck,
-      blurb: "Clinical duty attendance for a section, by student and by shift.",
-      contents: ["Present / late / absent tally", "By student with rate", "By shift"],
+      blurb: "Activity attendance for a section, by student and by activity.",
+      contents: ["Present / late / absent tally", "By student with rate", "By activity"],
       noun: "sections",
       list: {
         items: attendanceTargets,

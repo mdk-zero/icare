@@ -16,12 +16,12 @@ import {
   scenarioStatus,
   studentWork,
 } from './data';
-import { tallyAttendance, type ShiftAttendanceStatus } from '../shifts';
+import { byActivity, tallyAttendance } from '../attendance';
+import { loadActivityAttendance } from '../activity-attendance';
 import { isActiveSkillArea } from '@/scripts/taylors-chapters';
 import { CASE_CRITERIA, isLateSubmission, type CaseObservations } from '../case-rubric';
 import { isLateSubmission as isLateAttempt } from '../assessment-timing';
 import { ratingLabel, scoreDescriptor, type TaskRating } from '../task-ratings';
-import { closeEndedShifts } from '../shift-presence';
 
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
 
@@ -73,7 +73,6 @@ export async function buildStudentReport(
   meta: ReportMeta,
   studentId: string,
 ): Promise<BuildResult> {
-  await closeEndedShifts(supabase);
   const { data: student } = await supabase
     .from('users')
     .select('id, name, email, sections(name)')
@@ -82,7 +81,7 @@ export async function buildStudentReport(
     .maybeSingle();
   if (!student) return { error: 'Student not found', status: 404 };
 
-  const [groups, { data: scenarios }, cases, { data: attempts }, { data: scores }, { data: shifts }] = await Promise.all([
+  const [groups, { data: scenarios }, cases, { data: attempts }, { data: scores }, activityAttendance] = await Promise.all([
     groupNames(supabase, [studentId]),
     supabase
       .from('scenario_assignments')
@@ -105,7 +104,7 @@ export async function buildStudentReport(
       .select('score, created_at, competency_areas(name)')
       .eq('student_id', studentId)
       .order('created_at', { ascending: false }),
-    supabase.from('shift_assignments').select('attendance_status, shifts!inner(status)').eq('student_id', studentId),
+    loadActivityAttendance(supabase, [studentId]),
   ]);
   if (cases.error) console.error('Report: failed to read case submissions', cases.error);
 
@@ -155,12 +154,8 @@ export async function buildStudentReport(
   }
   const areas = [...byArea.entries()].sort(([a], [b]) => a.localeCompare(b));
 
-  // A cancelled shift is nobody's absence.
-  const attendance = tallyAttendance(
-    (shifts ?? [])
-      .filter((s) => (s as unknown as { shifts: { status: string } }).shifts.status !== 'cancelled')
-      .map((s) => s.attendance_status as ShiftAttendanceStatus),
-  );
+  // From each activity's deadline: on time, late, missed or excused.
+  const attendance = tallyAttendance(activityAttendance.rows.map((r) => r.status));
 
   const section = (student as unknown as { sections: { name: string } | null }).sections?.name ?? 'Unassigned';
 
@@ -216,7 +211,7 @@ export async function buildStudentReport(
         emptyText="No skill area ratings recorded yet."
       />
 
-      <Text style={styles.sectionTitle}>Clinical attendance</Text>
+      <Text style={styles.sectionTitle}>Attendance</Text>
       <StatGrid
         items={[
           { label: 'Present', value: attendance.present },
@@ -227,8 +222,8 @@ export async function buildStudentReport(
       />
       <Text style={note}>
         Grades use the verbal scale instructors grade on: Excellent, Satisfactory or Needs Practice. Skill
-        Assessments pass at {PASSING_SCORE}%. Attendance counts late as attended and leaves excused and
-        unmarked shifts out.
+        Assessments pass at {PASSING_SCORE}%. Attendance counts late as attended and leaves excused and upcoming
+        activities out.
       </Text>
     </ReportShell>
   );
@@ -793,12 +788,13 @@ export async function buildDischargeReport(
 }
 
 /**
- * Clinical attendance for one section: a per-student rate plus the shift-by-
- * shift grid behind it.
+ * Attendance for one section: a per-student rate plus the activity-by-
+ * activity counts behind it, from each RetDem, Quiz and Case Presentation's
+ * deadline.
  *
- * Rates come from `tallyAttendance`, the same function the attendance screens
- * use, so a printed report and the page it was printed from can never disagree
- * about what counts as attended.
+ * Rates come from `tallyAttendance`, the same function the student's
+ * Attendance tab uses, so a printed report and the page it was printed from
+ * can never disagree about what counts as attended.
  */
 export async function buildAttendanceReport(
   supabase: Supabase,
@@ -806,28 +802,12 @@ export async function buildAttendanceReport(
   sectionId: string,
   scope: StudentScope = null,
 ): Promise<BuildResult> {
-  await closeEndedShifts(supabase);
   const { data: section } = await supabase
     .from('sections')
     .select('id, name')
     .eq('id', sectionId)
     .maybeSingle();
   if (!section) return { error: 'Section not found', status: 404 };
-
-  const { data: shifts } = await supabase
-    .from('shifts')
-    .select('id, label, shift_type, starts_at, status')
-    .eq('section_id', sectionId)
-    .order('starts_at', { ascending: true })
-    .limit(200);
-
-  const shiftList = (shifts ?? []) as {
-    id: string;
-    label: string | null;
-    shift_type: string;
-    starts_at: string;
-    status: string;
-  }[];
 
   const { data: students } = await supabase
     .from('users')
@@ -840,51 +820,18 @@ export async function buildAttendanceReport(
     (s) => !scope || scope.includes(s.id),
   );
 
-  const assignments = shiftList.length
-    ? ((
-        await supabase
-          .from('shift_assignments')
-          .select('shift_id, student_id, attendance_status')
-          .in(
-            'shift_id',
-            shiftList.map((s) => s.id),
-          )
-      ).data ?? [])
-    : [];
-
-  // student -> shift -> status
-  const grid = new Map<string, Map<string, ShiftAttendanceStatus>>();
-  for (const row of assignments as {
-    shift_id: string;
-    student_id: string;
-    attendance_status: ShiftAttendanceStatus;
-  }[]) {
-    const byShift = grid.get(row.student_id) ?? new Map<string, ShiftAttendanceStatus>();
-    byShift.set(row.shift_id, row.attendance_status);
-    grid.set(row.student_id, byShift);
-  }
-
-  // A cancelled shift is not a shift anyone failed to attend, so it is left
-  // out of the rates entirely rather than counted against the roster.
-  const counted = shiftList.filter((s) => s.status !== 'cancelled');
-
-  const perStudent = studentList.map((student) => {
-    const byShift = grid.get(student.id);
-    const statuses = counted
-      .map((shift) => byShift?.get(shift.id))
-      .filter((v): v is ShiftAttendanceStatus => !!v);
-    const tally = tallyAttendance(statuses);
-    return { student, tally };
-  });
-
-  const sectionTally = tallyAttendance(
-    perStudent.flatMap(({ student }) =>
-      counted
-        .map((shift) => grid.get(student.id)?.get(shift.id))
-        .filter((v): v is ShiftAttendanceStatus => !!v),
-    ),
+  const { rows } = await loadActivityAttendance(
+    supabase,
+    studentList.map((s) => s.id),
   );
 
+  const perStudent = studentList.map((student) => ({
+    student,
+    tally: tallyAttendance(rows.filter((r) => r.student_id === student.id).map((r) => r.status)),
+  }));
+  const sectionTally = tallyAttendance(rows.map((r) => r.status));
+  const upcoming = rows.filter((r) => r.status === 'upcoming').length;
+  const activities = byActivity(rows);
 
   const summaryRows = perStudent.map(({ student, tally }) => [
     student.name,
@@ -898,15 +845,15 @@ export async function buildAttendanceReport(
   const pdf = (
     <ReportShell
       title={`Attendance — ${section.name}`}
-      heading="Clinical Attendance Report"
+      heading="Attendance Report"
       meta={meta}
       metaRows={[
         { label: 'Section', value: section.name },
         { label: 'Students', value: String(studentList.length) },
-        { label: 'Shifts', value: String(counted.length) },
+        { label: 'Activities', value: String(activities.length) },
         {
           label: 'Section attendance',
-          value: sectionTally.rate === null ? 'Not yet marked' : `${sectionTally.rate}%`,
+          value: sectionTally.rate === null ? 'Nothing past its deadline yet' : `${sectionTally.rate}%`,
         },
       ]}
     >
@@ -917,7 +864,7 @@ export async function buildAttendanceReport(
           { label: 'Late', value: sectionTally.late },
           { label: 'Absent', value: sectionTally.absent },
           { label: 'Excused', value: sectionTally.excused },
-          { label: 'Unmarked', value: sectionTally.scheduled },
+          { label: 'Upcoming', value: upcoming },
         ]}
       />
 
@@ -928,26 +875,22 @@ export async function buildAttendanceReport(
         emptyText="No students are enrolled in this section."
       />
 
-      <Text style={styles.sectionTitle}>Shifts</Text>
+      <Text style={styles.sectionTitle}>By activity</Text>
       <Table
-        head={['Shift', 'Marked', 'Present', 'Absent']}
-        rows={counted.map((shift) => {
-          const statuses = studentList
-            .map((s) => grid.get(s.id)?.get(shift.id))
-            .filter((v): v is ShiftAttendanceStatus => !!v);
-          const t = tallyAttendance(statuses);
-          return [
-            `${shift.label || shift.shift_type.toUpperCase()}, ${date(shift.starts_at)}`,
-            t.total - t.scheduled,
-            t.present + t.late,
-            t.absent,
-          ];
-        })}
-        emptyText="No shifts have been scheduled for this section."
+        head={['Activity', 'Due', 'Present', 'Late', 'Absent', 'Excused']}
+        widths={[3, 1.6, 1, 1, 1, 1]}
+        rows={activities.map((a) => [
+          a.title,
+          date(a.deadline),
+          a.tally.present,
+          a.tally.late,
+          a.tally.absent,
+          a.tally.excused,
+        ])}
+        emptyText="No activities with a deadline yet."
       />
       <Text style={{ fontSize: 8, color: '#6b7280', marginTop: 6 }}>
-        Rate counts present and late as attended. Excused and unmarked shifts are excluded from
-        the rate rather than counted as absences. Cancelled shifts are omitted entirely.
+        Rate counts present and late as attended. Excused and upcoming activities are left out of the rate.
       </Text>
     </ReportShell>
   );

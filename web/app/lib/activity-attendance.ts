@@ -41,10 +41,11 @@ export async function loadActivityAttendance(
   const [scenarioAssignments, quizAssignments, attempts, caseSubmissions, excuses] = await Promise.all([
     chunked(studentIds, async (part) =>
       ((must(
-        await supabase.from('scenario_assignments').select('id, student_id, deadline, scenarios(title)').in('student_id', part),
-      ) ?? []) as unknown as { id: string; student_id: string; deadline: string | null; scenarios: Title }[]).map((a) => ({
+        await supabase.from('scenario_assignments').select('id, student_id, scenario_id, deadline, scenarios(title)').in('student_id', part),
+      ) ?? []) as unknown as { id: string; student_id: string; scenario_id: string; deadline: string | null; scenarios: Title }[]).map((a) => ({
         id: a.id,
         student_id: a.student_id,
+        scenario_id: a.scenario_id,
         title: a.scenarios?.title ?? 'Patient case',
         deadline: a.deadline,
       })),
