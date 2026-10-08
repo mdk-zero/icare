@@ -25,6 +25,15 @@ export const ATTENDANCE_LABEL: Record<AttendanceStatus, string> = {
 
 const KINDS: readonly ActivityKind[] = ['scenario', 'assessment', 'case_presentation'];
 
+export const ACTIVITY_KIND_LABEL: Record<ActivityKind, string> = {
+  scenario: 'RetDem',
+  assessment: 'Quiz',
+  case_presentation: 'Case Presentation',
+};
+
+/** "Quiz · Vital Signs": a RetDem and a Quiz can share a title. */
+export const activityLabel = (kind: ActivityKind, title: string) => `${ACTIVITY_KIND_LABEL[kind]} · ${title}`;
+
 /** One student's piece of deadline-bound work. activity_id: the assignment, or the case presentation. */
 export interface ActivityFact {
   student_id: string;

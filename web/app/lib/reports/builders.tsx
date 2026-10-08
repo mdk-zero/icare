@@ -16,7 +16,7 @@ import {
   scenarioStatus,
   studentWork,
 } from './data';
-import { byActivity, tallyAttendance } from '../attendance';
+import { activityLabel, byActivity, tallyAttendance } from '../attendance';
 import { loadActivityAttendance } from '../activity-attendance';
 import { isActiveSkillArea } from '@/scripts/taylors-chapters';
 import { CASE_CRITERIA, isLateSubmission, type CaseObservations } from '../case-rubric';
@@ -880,7 +880,7 @@ export async function buildAttendanceReport(
         head={['Activity', 'Due', 'Present', 'Late', 'Absent', 'Excused']}
         widths={[3, 1.6, 1, 1, 1, 1]}
         rows={activities.map((a) => [
-          a.title,
+          activityLabel(a.kind, a.title),
           date(a.deadline),
           a.tally.present,
           a.tally.late,

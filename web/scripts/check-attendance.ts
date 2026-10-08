@@ -12,6 +12,7 @@
 import {
   attendanceRows,
   attendanceStatus,
+  activityLabel,
   attendedCount,
   byActivity,
   collectActivities,
@@ -26,6 +27,7 @@ import {
 } from '../app/lib/attendance';
 import { deadlineFromInput, parseDeadline } from '../app/lib/deadline-input';
 import { seed } from '../app/lib/demo/fixtures';
+import { loadActivityAttendance } from '../app/lib/activity-attendance';
 import { demoAttendanceRows } from '../app/lib/demo/handlers/derive';
 
 let failures = 0;
@@ -173,6 +175,10 @@ eq('the same case with another deadline is another row', byActivity([
   sectionRow('s2', 'scenario', 'asthma', D2, 'present'),
 ]).length, 2);
 
+eq('a report row names the kind of activity', activityLabel('assessment', 'Vital Signs'), 'Quiz · Vital Signs');
+eq('a RetDem row', activityLabel('scenario', 'Asthma'), 'RetDem · Asthma');
+eq('a case presentation row', activityLabel('case_presentation', 'Fluid balance'), 'Case Presentation · Fluid balance');
+
 console.log('excuse requests');
 const ok = parseExcuse({ kind: 'scenario', activity_id: 'a', reason: '  Sick  ' });
 eq('a valid excuse, trimmed', ok.ok ? ok.value : ok.error, { kind: 'scenario', activity_id: 'a', reason: 'Sick' });
@@ -213,8 +219,68 @@ for (const status of ['present', 'late', 'absent', 'excused', 'upcoming'] as con
   check(`the demo has a ${status} activity`, demoStatuses.has(status), [...demoStatuses].join(', '));
 }
 
-if (failures > 0) {
-  console.error(`\n${failures} check(s) failed`);
-  process.exit(1);
+async function rowCapChecks() {
+  console.log('the loader reads past PostgREST\'s 1000-row cap');
+  type Row = Record<string, unknown>;
+  // Like PostgREST: every response holds at most 1000 rows, unless a range asks for a page.
+  const fake = (tables: Record<string, Row[]>, missing: string[]) =>
+    ({
+      from(table: string) {
+        let rows = tables[table] ?? [];
+        let range: [number, number] | null = null;
+        const q = {
+          select: () => q,
+          in: (col: string, vals: unknown[]) => ((rows = rows.filter((r) => vals.includes(r[col]))), q),
+          eq: (col: string, val: unknown) => ((rows = rows.filter((r) => r[col] === val)), q),
+          order: () => q,
+          range: (from: number, to: number) => ((range = [from, to]), q),
+          then: (ok: (v: unknown) => unknown, bad?: (e: unknown) => unknown) => {
+            if (missing.includes(table)) return Promise.resolve({ data: null, error: { code: 'PGRST205' } }).then(ok, bad);
+            const [from, to] = range ?? [0, 999];
+            return Promise.resolve({ data: rows.slice(from, Math.min(to, from + 999) + 1), error: null }).then(ok, bad);
+          },
+        };
+        return q;
+      },
+    }) as never;
+  const due = '2026-10-10T09:00:00.000Z';
+  const early = '2026-10-09T09:00:00.000Z';
+  const students = Array.from({ length: 50 }, (_, i) => `st${i}`);
+  // 250 RetDems, six graded tasks each: 200 assignments a chunk is 1200 completions, past the cap.
+  const scenarioAssignments = students.flatMap((st, i) =>
+    Array.from({ length: 5 }, (_, k) => ({ id: `sa${i}-${k}`, student_id: st, scenario_id: `sc${k}`, deadline: due, scenarios: { title: `Case ${k}` } })),
+  );
+  const completions = scenarioAssignments.flatMap((a) => Array.from({ length: 6 }, (_, t) => ({ assignment_id: a.id, task_id: `t${t}`, completed_at: early })));
+  // 1200 attempts on other quizzes come before the one on the assigned quiz.
+  const attempts = [
+    ...Array.from({ length: 1200 }, (_, i) => ({ student_id: 'st0', assessment_id: `other${i}`, status: 'submitted', submitted_at: early })),
+    { student_id: 'st0', assessment_id: 'q1', status: 'submitted', submitted_at: early },
+  ];
+  const { rows, excusesReady } = await loadActivityAttendance(
+    fake(
+      {
+        scenario_assignments: scenarioAssignments,
+        scenario_task_completions: completions,
+        assessment_assignments: [{ id: 'qa1', student_id: 'st0', assessment_id: 'q1', deadline: due, assessments: { title: 'Vital Signs', deadline: null } }],
+        assessment_attempts: attempts,
+        case_submissions: [],
+      },
+      ['activity_excuses'],
+    ),
+    students,
+    { now: Date.parse('2026-10-11T00:00:00Z') },
+  );
+  const status = (kind: string, id: string) => rows.find((r) => r.kind === kind && r.activity_id === id)?.status;
+  eq('every RetDem is read', rows.filter((r) => r.kind === 'scenario').length, 250);
+  eq('a RetDem whose grades come after row 1000 is still present', status('scenario', 'sa39-4'), 'present');
+  eq('a quiz whose attempt comes after row 1000 is still present', status('assessment', 'qa1'), 'present');
+  eq('no excuses table: excuses not ready', excusesReady, false);
 }
-console.log('\nAll checks passed');
+
+rowCapChecks().then(() => {
+  if (failures > 0) {
+    console.error(`\n${failures} check(s) failed`);
+    process.exit(1);
+  }
+  console.log('\nAll checks passed');
+});

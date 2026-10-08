@@ -106,6 +106,11 @@ export default function AttendanceTab({ studentId, studentName }: { studentId: s
         </span>
       </div>
 
+      {/* Said on the page too: a disabled button's tooltip doesn't show on a phone. */}
+      {attendance.can_excuse && !attendance.excuses_ready && rows.some((r) => r.status === "absent") && (
+        <p className="rounded-lg bg-subtle px-3 py-2 text-xs text-gray-600">{EXCUSES_NEED_MIGRATION}</p>
+      )}
+
       <ul className="divide-y divide-hairline overflow-hidden rounded-xl border border-hairline">
         {rows.map((r) => {
           const kind = KIND[r.kind];

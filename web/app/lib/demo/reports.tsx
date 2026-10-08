@@ -6,7 +6,7 @@ import { CASE_CRITERIA } from "../case-rubric";
 import { ratingLabel } from "../task-ratings";
 import type { DemoContext } from "./router";
 import { caseAverage, demoAttendanceRows, lastActivity, mean, quizAverage, submittedAttempts } from "./handlers/derive";
-import { byActivity, tallyAttendance } from "../attendance";
+import { activityLabel, byActivity, tallyAttendance } from "../attendance";
 import { sectionName, teamLabel as teamLabelUi, userById, visibleSections, visibleStudents } from "./handlers/scope";
 
 /** The PDF's built-in Helvetica has no middle dot, so labels use an en dash. */
@@ -220,7 +220,7 @@ function attendanceReport(ctx: Ctx, id: string): Built {
         })} />
         <H>By activity</H>
         <Table head={["Activity", "Due", "Present", "Late", "Absent", "Excused"]} widths={[3, 1.6, 1, 1, 1, 1]} rows={activities.map((a) => [
-          a.title, date(a.deadline), a.tally.present, a.tally.late, a.tally.absent, a.tally.excused,
+          activityLabel(a.kind, a.title), date(a.deadline), a.tally.present, a.tally.late, a.tally.absent, a.tally.excused,
         ])} />
         <Text style={note}>Rate counts present and late as attended. Excused and upcoming activities are left out of the rate.</Text>
       </Shell>

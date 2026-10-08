@@ -3,6 +3,7 @@ import { summarizeAnomalyReasons } from './vitals/rules';
 import type { SessionPayload } from './auth/session';
 import { getFacultySectionIds } from './roster';
 import { getScopedStudentIds } from './admin-scope';
+import { fetchAll } from './fetch-all';
 
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
 
@@ -280,27 +281,6 @@ const DUE_SOON_DAYS = 7;
 const LOW_AVERAGE = 60;
 /** No recorded activity for this long flags a student. */
 const INACTIVE_DAYS = 7;
-/** PostgREST caps a response at 1000 rows; ask for pages of that size. */
-const PAGE = 1000;
-
-/**
- * Every row a query matches, a page at a time, so nothing is silently cut off
- * at the row cap. The row shape is asserted here rather than inferred: the
- * client types a many-to-one embed (`scenarios(title)`) as an array, though
- * PostgREST returns it as a single object.
- */
-async function fetchAll<T>(
-  page: (from: number, to: number) => PromiseLike<{ data: unknown[] | null; error: unknown }>,
-): Promise<T[]> {
-  const rows: T[] = [];
-  for (let from = 0; ; from += PAGE) {
-    const { data, error } = await page(from, from + PAGE - 1);
-    if (error) throw error;
-    rows.push(...((data ?? []) as T[]));
-    if (!data || data.length < PAGE) return rows;
-  }
-}
-
 /** The Monday (UTC) starting the week `ms` falls in, as the analytics trend buckets it. */
 function weekStart(ms: number): number {
   const d = new Date(ms);

@@ -21,7 +21,6 @@
     "db:seed:student-history": "tsx scripts/seed-student-history.ts",
     "db:seed:clinical-records": "tsx scripts/seed-clinical-records.ts",
     "db:seed:discharged": "tsx scripts/seed-discharged-patients.ts",
-    "db:seed:shifts": "tsx scripts/seed-shift-schedule.ts",
     "db:seed:sections": "tsx scripts/seed-sections.ts",
     "test:e2e": "playwright test",
     "test:e2e:report": "node tests/with-report.mjs npx playwright test",
