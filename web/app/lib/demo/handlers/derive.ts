@@ -3,7 +3,7 @@ import type { DemoUser } from "../fixtures/people";
 import type { DemoAssignment } from "../fixtures/school";
 import type { TaskRating } from "@/app/lib/task-ratings";
 import { sectionName, teamLabel } from "./scope";
-import { attendanceRows, collectActivities, type AttendanceRow, type ExcuseFact } from "@/app/lib/attendance";
+import { attendanceRows, collectActivities, type AttendanceRow } from "@/app/lib/attendance";
 
 /**
  * Read-side helpers shared by the demo's handlers: the joins and roll-ups
@@ -54,7 +54,7 @@ export function demoAttendanceRows(db: DemoDb, studentIds: readonly string[], no
       })),
   });
   // A store saved before excuses existed has none.
-  const excuses = ((db as { excuses?: ExcuseFact[] }).excuses ?? []).filter((e) => ids.has(e.student_id));
+  const excuses = (db.excuses ?? []).filter((e) => ids.has(e.student_id));
   return attendanceRows(activities, excuses, now);
 }
 

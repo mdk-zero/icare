@@ -6,6 +6,7 @@ import { seedWard } from "./ward";
 import { seedTeaching } from "./teaching";
 import { seedSystem } from "./system";
 import { seedCourses } from "./courses";
+import { seedExcuses, type DemoExcuse } from "./attendance";
 
 /** A fresh copy of every demo table, as it stands before the visitor changes anything. */
 export function seed() {
@@ -29,5 +30,6 @@ export function seed() {
       system.accessRequest,
     ] as DemoNotification[],
     audit: seedAudit() as DemoAudit[],
+    excuses: seedExcuses(people.users, people.teams, school.assignments, school.completions) as DemoExcuse[],
   };
 }

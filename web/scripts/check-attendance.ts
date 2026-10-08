@@ -23,6 +23,8 @@ import {
   type ExcuseFact,
 } from '../app/lib/attendance';
 import { deadlineFromInput, parseDeadline } from '../app/lib/deadline-input';
+import { seed } from '../app/lib/demo/fixtures';
+import { demoAttendanceRows } from '../app/lib/demo/handlers/derive';
 
 let failures = 0;
 function check(label: string, ok: boolean, detail = '') {
@@ -165,6 +167,14 @@ eq('a blank deadline is refused', deadlineError(parseDeadline('  ')), 'Set a dea
 eq('optional: none is fine', parseDeadline('', { optional: true }), { ok: true, value: null });
 eq('an unreadable deadline', deadlineError(parseDeadline('soon')), 'Invalid deadline');
 eq('a timestamp', parseDeadline('2026-10-10T09:00:00.000Z'), { ok: true, value: '2026-10-10T09:00:00.000Z' });
+
+console.log('the demo has every kind of attendance');
+const demo = seed();
+check('the demo seeds an excused absence', (demo.excuses?.length ?? 0) >= 1, `${demo.excuses?.length ?? 0} excuses`);
+const demoStatuses = new Set(demoAttendanceRows(demo, demo.users.filter((u) => u.role === 'student').map((u) => u.id)).map((r) => r.status));
+for (const status of ['present', 'late', 'absent', 'excused', 'upcoming'] as const) {
+  check(`the demo has a ${status} activity`, demoStatuses.has(status), [...demoStatuses].join(', '));
+}
 
 if (failures > 0) {
   console.error(`\n${failures} check(s) failed`);

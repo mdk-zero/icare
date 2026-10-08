@@ -180,7 +180,9 @@ export function seedTeaching(users: DemoUser[]) {
           : [];
       const credit = { excellent: 1, satisfactory: 2 / 3, needs_practice: 1 / 3 };
       const score = ratings.length ? Math.round((ratings.reduce((sum, r) => sum + credit[r.rating], 0) / ratings.length) * 100) : null;
-      const submittedAt = status === "submitted" || status === "graded" ? (first ? ago(10 + (i % 3) * 0.3, 21) : ago(1 + (i % 2), 20)) : null;
+      // The weaker students handed the first one in a day late.
+      const submittedAt =
+        status === "submitted" || status === "graded" ? (first ? (weak ? ago(8, 10) : ago(10 + (i % 3) * 0.3, 21)) : ago(1 + (i % 2), 20)) : null;
       submissions.push({
         id: demoId(KIND.caseSubmission, n),
         presentation_id: p.id,
