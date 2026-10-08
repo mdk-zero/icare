@@ -60,7 +60,7 @@ const facts = (over: Partial<ProgressFacts>): ProgressFacts => ({
   attempts: [],
   quizSkills: {},
   presentations: [],
-  shifts: [],
+  attended: [],
   checks: [],
   scores: [],
   ...over,
@@ -123,9 +123,21 @@ const failedQuiz = facts({
 });
 eq('the average takes each Quiz at its best attempt, failed ones too', one(twoQuizzes, failedQuiz).avg_score, 60);
 const shifts = req({ kind: 'count', activity_type: 'shift', target_count: 2 });
-const attended = one(shifts, facts({ shifts: [{ student_id: S, starts_at: '2026-09-01T00:00:00Z' }, { student_id: S, starts_at: '2027-01-05T00:00:00Z' }] }));
-eq('shifts attended inside the term', attended.current, 1);
-eq('shifts have no score to average', attended.avg_score, null);
+const attended = one(shifts, facts({ attended: [{ student_id: S, deadline: '2026-09-01T00:00:00Z' }, { student_id: S, deadline: '2027-01-05T00:00:00Z' }] }));
+eq('activities attended inside the term', attended.current, 1);
+eq('attendance has no score to average', attended.avg_score, null);
+
+console.log('attendance counts activities inside the term');
+const firstSem = { starts_on: '2026-06-22', ends_on: '2026-10-24' };
+const attendance = (rows: ProgressFacts['attended']) => evaluate([shifts], [], firstSem, [S], facts({ attended: rows }))[S][shifts.id];
+const twoInside = attendance([
+  { student_id: S, deadline: '2026-07-01T09:00:00Z' },
+  { student_id: S, deadline: '2026-08-01T09:00:00Z' },
+  { student_id: S, deadline: '2026-11-05T09:00:00Z' },
+]);
+eq('two of three are due inside the term', [twoInside.current, twoInside.done], [2, true]);
+eq('one due after the term counts for nothing', attendance([{ student_id: S, deadline: '2026-11-05T09:00:00Z' }]).current, 0);
+eq("another student's attendance isn't counted", attendance([{ student_id: 'someone-else', deadline: '2026-07-01T09:00:00Z' }]).current, 0);
 
 console.log('skill');
 const skill = req({ kind: 'skill', skill_id: '1-7', min_score: 50 });
@@ -216,7 +228,8 @@ eq('activity keeps only its own link', activityParsed.ok && [activityParsed.valu
 console.log('requirementLabel');
 const names = { scenarios: { sc1: 'Asthma' }, quizzes: { q1: 'Vital Signs' }, presentations: {}, skills: { '1-7': 'Assessing Blood Pressure' } };
 eq('count of quizzes with a pass mark', requirementLabel(req({ kind: 'count', activity_type: 'assessment', target_count: 3, min_score: 75 }), names), '3 Quizzes passed at 75%+');
-eq('one shift', requirementLabel(req({ kind: 'count', activity_type: 'shift', target_count: 1 }), names), '1 shift attended');
+eq('one activity', requirementLabel(req({ kind: 'count', activity_type: 'shift', target_count: 1 }), names), '1 activity attended');
+eq('fifteen activities', requirementLabel(req({ kind: 'count', activity_type: 'shift', target_count: 15 }), names), '15 activities attended');
 eq('activity with a minimum', requirementLabel(caseMin, names), 'Patient Case: Asthma · 75%+');
 eq('skill with a level', requirementLabel(skill, names), 'Skill 1-7 · Assessing Blood Pressure (satisfactory or better)');
 eq('removed activity', requirementLabel(removed, names), 'Removed Patient Case');

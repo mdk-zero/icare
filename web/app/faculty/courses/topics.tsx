@@ -97,7 +97,7 @@ export const TOPICS: Record<RequirementTopicKey, TopicStyle> = {
     key: "shift",
     label: "Attendance",
     icon: faCalendarCheck,
-    blurb: "Counted from shift attendance",
+    blurb: "Counted from activities done by their deadline",
     tile: "bg-slate-100 text-slate-700",
     bar: "bg-slate-400",
     text: "text-slate-700",

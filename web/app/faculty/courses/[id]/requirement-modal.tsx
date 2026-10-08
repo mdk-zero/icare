@@ -40,7 +40,7 @@ import { loadingToast } from "../../../components/Toast";
 /** Manual items come as two cards, told apart by manualType. */
 const KINDS: { kind: RequirementKind; manualType?: ManualType; label: string; hint: string; icon: IconDefinition }[] = [
   { kind: "activity", label: "Specific activity", hint: "One Patient Case, Quiz or Case Presentation", icon: faClipboardCheck },
-  { kind: "count", label: "Count", hint: "A number of graded activities, or shifts attended", icon: faHashtag },
+  { kind: "count", label: "Count", hint: "A number of graded activities, or activities attended", icon: faHashtag },
   {
     kind: "skill",
     label: "Return Demonstration",
@@ -67,7 +67,7 @@ const COUNT_TYPES: { type: ActivityType; label: string }[] = [
   { type: "scenario", label: "Patient Cases graded" },
   { type: "assessment", label: "Quizzes completed" },
   { type: "case_presentation", label: "Case Presentations graded" },
-  { type: "shift", label: "Shifts attended" },
+  { type: "shift", label: "Activities attended" },
 ];
 
 const inputClass =

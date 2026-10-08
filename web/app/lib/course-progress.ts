@@ -108,7 +108,7 @@ export const COURSE_LIMITS = {
 // ---------------------------------------------------------------------------
 
 export type RequirementKind = 'activity' | 'count' | 'skill' | 'manual';
-/** scenario = Patient Case, assessment = Quiz; shift only for count items. */
+/** scenario = Patient Case, assessment = Quiz; shift (Attendance: activities attended) only for count items. */
 export type ActivityType = 'scenario' | 'assessment' | 'case_presentation' | 'shift';
 /** A manual item scored by hand: hands-on lab work, or a written (paper) exam (067). */
 export type ManualType = 'lab' | 'exam';
@@ -322,7 +322,7 @@ const COUNT_NOUN: Record<ActivityType, [string, string]> = {
   scenario: ['Patient Case', 'Patient Cases'],
   assessment: ['Quiz', 'Quizzes'],
   case_presentation: ['Case Presentation', 'Case Presentations'],
-  shift: ['shift', 'shifts'],
+  shift: ['activity', 'activities'],
 };
 
 function scoreSuffix(min: number | null): string {
@@ -458,10 +458,13 @@ export interface GradedPresentationFact {
   graded_at: string;
 }
 
-/** A shift the student was present (or late) for. */
-export interface AttendedShiftFact {
+/**
+ * An activity (RetDem, Quiz, Case Presentation) the student did by its
+ * deadline or late (lib/attendance.ts). It falls in the term by its deadline.
+ */
+export interface AttendedActivityFact {
   student_id: string;
-  starts_at: string;
+  deadline: string;
 }
 
 /** The graded work the checklist is judged on. Rows outside the term are ignored. */
@@ -471,13 +474,14 @@ export interface ProgressFacts {
   /** Each Quiz's skills, from its criteria and questions. */
   quizSkills: Record<string, string[]>;
   presentations: GradedPresentationFact[];
-  shifts: AttendedShiftFact[];
+  /** Activities attended, for Attendance items. */
+  attended: AttendedActivityFact[];
   checks: RequirementCheckRow[];
   /** Scores the instructor entered (066). Not bound to the term: the item is. */
   scores: RequirementScoreRow[];
 }
 
-export const NO_FACTS: ProgressFacts = { cases: [], attempts: [], quizSkills: {}, presentations: [], shifts: [], checks: [], scores: [] };
+export const NO_FACTS: ProgressFacts = { cases: [], attempts: [], quizSkills: {}, presentations: [], attended: [], checks: [], scores: [] };
 
 export interface ItemProgress {
   done: boolean;
@@ -493,7 +497,7 @@ export interface ItemProgress {
   /**
    * Count items over scored work: the mean of every score of that kind in the
    * term, met or not (each Quiz at its best attempt), entered scores
-   * included. Null for shifts.
+   * included. Null for attendance.
    */
   avg_score: number | null;
   /** Skill items: the band of the best evidence ("Satisfactory"), or null with none. */
@@ -502,7 +506,7 @@ export interface ItemProgress {
   has_grade: boolean;
   /** Scores you entered for this student, oldest first. */
   entries: ScoreEntry[];
-  /** A tick or mark-done without a score: shift marks, and ticks from before 066. */
+  /** A tick or mark-done without a score: attendance marks, and ticks from before 066. */
   marked: boolean;
   /** The note on that tick or mark. */
   note: string | null;
@@ -510,7 +514,7 @@ export interface ItemProgress {
 
 /**
  * How an instructor fills an item in by hand. score: they enter the score
- * the student earned. mark: a shift count has no score, so they mark it done
+ * the student earned. mark: attendance has no score, so they mark it done
  * with a note.
  */
 export function entryMode(req: Pick<RequirementRow, 'kind' | 'activity_type'>): 'score' | 'mark' {
@@ -563,7 +567,7 @@ const mean = (scores: (number | null)[]) => {
  * stored: this runs on every read, so a grade given a minute ago shows
  * straight away. An entered score counts like a grade (a count's extra
  * piece of work, a Lab Activity's result); a tick or mark without a score
- * (shift counts, and ticks from before 066) meets the item outright.
+ * (attendance, and ticks from before 066) meets the item outright.
  */
 export function evaluate(
   requirements: readonly RequirementRow[],
@@ -576,7 +580,7 @@ export function evaluate(
   const cases = inside(facts.cases, (c) => c.completed_at);
   const attempts = inside(facts.attempts, (a) => a.submitted_at);
   const presentations = inside(facts.presentations, (p) => p.graded_at);
-  const shifts = inside(facts.shifts, (s) => s.starts_at);
+  const attended = inside(facts.attended, (a) => a.deadline);
   const courseSkills = new Set(courseSkillIds);
   const check = new Map(facts.checks.map((c) => [`${c.requirement_id}:${c.student_id}`, c]));
   const entered = new Map<string, ScoreEntry[]>();
@@ -591,7 +595,7 @@ export function evaluate(
       cases: cases.filter((c) => c.student_id === studentId),
       attempts: attempts.filter((a) => a.student_id === studentId),
       presentations: presentations.filter((p) => p.student_id === studentId),
-      shifts: shifts.filter((s) => s.student_id === studentId),
+      attended: attended.filter((a) => a.student_id === studentId),
     };
     const row: Record<string, ItemProgress> = {};
     for (const req of requirements) {
@@ -618,7 +622,7 @@ type Evidence = { at: string; score: number | null };
 
 function judge(
   req: RequirementRow,
-  own: { cases: GradedCaseFact[]; attempts: QuizAttemptFact[]; presentations: GradedPresentationFact[]; shifts: AttendedShiftFact[] },
+  own: { cases: GradedCaseFact[]; attempts: QuizAttemptFact[]; presentations: GradedPresentationFact[]; attended: AttendedActivityFact[] },
   quizSkills: Record<string, string[]>,
   courseSkills: Set<string>,
   entries: ScoreEntry[],
@@ -697,13 +701,14 @@ function judge(
           scores = own.presentations.map((p) => p.score);
           break;
         case 'shift':
-          dates = own.shifts.map((s) => s.starts_at);
+          // Attendance: activities done by their deadline, or late.
+          dates = own.attended.map((a) => a.deadline);
           break;
         default:
           dates = [];
       }
       const hasGrade = dates.length > 0 || scores.length > 0;
-      // Each entered score is one more piece of work (shifts take none).
+      // Each entered score is one more piece of work (attendance takes none).
       const extra = req.activity_type === 'shift' ? [] : entries;
       const graded = [...dates].sort();
       const all = [...graded, ...extra.filter((e) => meets(e.score, min)).map((e) => e.entered_at)].sort();

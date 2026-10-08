@@ -3,6 +3,7 @@ import type { DemoUser } from "../fixtures/people";
 import type { DemoAssignment } from "../fixtures/school";
 import type { TaskRating } from "@/app/lib/task-ratings";
 import { sectionName, teamLabel } from "./scope";
+import { attendanceRows, collectActivities, type AttendanceRow, type ExcuseFact } from "@/app/lib/attendance";
 
 /**
  * Read-side helpers shared by the demo's handlers: the joins and roll-ups
@@ -10,6 +11,52 @@ import { sectionName, teamLabel } from "./scope";
  */
 
 export const DAY_MS = 86_400_000;
+
+/**
+ * Students' activities with their attendance from deadlines, as
+ * loadActivityAttendance works it out over the real tables.
+ */
+export function demoAttendanceRows(db: DemoDb, studentIds: readonly string[], now = Date.now()): AttendanceRow[] {
+  const ids = new Set(studentIds);
+  const scenarioTitle = new Map(db.scenarios.map((s) => [s.id, s.title]));
+  const quizTitle = new Map(db.quizzes.map((q) => [q.id, q.title]));
+  const presentation = new Map(db.casePresentations.map((p) => [p.id, p]));
+  const scenarioAssignments = db.assignments.filter((a) => ids.has(a.student_id));
+  const assignmentIds = new Set(scenarioAssignments.map((a) => a.id));
+  const activities = collectActivities({
+    scenarioAssignments: scenarioAssignments.map((a) => ({
+      id: a.id,
+      student_id: a.student_id,
+      title: scenarioTitle.get(a.scenario_id) ?? "Patient case",
+      deadline: a.deadline,
+    })),
+    completions: db.completions.filter((c) => assignmentIds.has(c.assignment_id)),
+    quizAssignments: db.quizAssignments
+      .filter((q) => ids.has(q.student_id))
+      .map((q) => ({
+        id: q.id,
+        student_id: q.student_id,
+        assessment_id: q.assessment_id,
+        title: quizTitle.get(q.assessment_id) ?? "Quiz",
+        deadline: q.deadline,
+        // Demo quizzes carry no deadline of their own.
+        default_deadline: null,
+      })),
+    attempts: db.attempts.filter((a) => ids.has(a.student_id)),
+    caseSubmissions: db.caseSubmissions
+      .filter((c) => ids.has(c.student_id))
+      .map((c) => ({
+        student_id: c.student_id,
+        presentation_id: c.presentation_id,
+        title: presentation.get(c.presentation_id)?.title ?? "Case presentation",
+        deadline: presentation.get(c.presentation_id)?.deadline ?? null,
+        submitted_at: c.submitted_at,
+      })),
+  });
+  // A store saved before excuses existed has none.
+  const excuses = ((db as { excuses?: ExcuseFact[] }).excuses ?? []).filter((e) => ids.has(e.student_id));
+  return attendanceRows(activities, excuses, now);
+}
 
 export function mean(values: number[]): number | null {
   if (values.length === 0) return null;

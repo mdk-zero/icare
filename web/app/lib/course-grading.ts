@@ -57,7 +57,7 @@ export const GRADING_NEEDS_MIGRATION = 'The grading split needs database migrati
 export const EXAMS_NEED_MIGRATION = 'Written Exams need database migration 067 (course grading) applied first.';
 export const GRADING_CHANGED = 'The grading split changed since you opened it. Reload to see the latest.';
 
-/** Attendance (shift counts) has no score, so it can't count toward a grade. */
+/** Attendance (activities attended) has no score, so it can't count toward a grade. */
 export function isGradeable(req: Pick<RequirementRow, 'kind' | 'activity_type'>): boolean {
   return entryMode(req) === 'score';
 }

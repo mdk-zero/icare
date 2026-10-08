@@ -36,6 +36,7 @@ import {
 } from "../../course-grading";
 import { seedCourses, type DemoCourseTables, type DemoOffering } from "../fixtures/courses";
 import { audit } from "./shared";
+import { demoAttendanceRows } from "./derive";
 import { byName, sectionName, teamLabel } from "./scope";
 import { taskCredit } from "../../task-ratings";
 
@@ -726,13 +727,12 @@ function demoFacts(db: DemoDb, studentIds: string[], requirementIds: string[]): 
   const presentations = db.caseSubmissions
     .filter((c) => students.has(c.student_id) && c.status === "graded" && c.graded_at)
     .map((c) => ({ student_id: c.student_id, presentation_id: c.presentation_id, score: c.score, graded_at: c.graded_at! }));
-  const scheduled = new Map(db.shifts.filter((s) => s.status === "scheduled").map((s) => [s.id, s.starts_at]));
-  const shifts = db.shiftEntries
-    .filter((e) => students.has(e.student_id) && (e.attendance_status === "present" || e.attendance_status === "late") && scheduled.has(e.shift_id))
-    .map((e) => ({ student_id: e.student_id, starts_at: scheduled.get(e.shift_id)! }));
+  const attended = demoAttendanceRows(db, [...students])
+    .filter((r) => r.status === "present" || r.status === "late")
+    .map((r) => ({ student_id: r.student_id, deadline: r.deadline as string }));
   const checks = db.requirementChecks.filter((c) => reqs.has(c.requirement_id) && students.has(c.student_id));
   const scores = db.requirementScores.filter((c) => reqs.has(c.requirement_id) && students.has(c.student_id));
-  return { cases, attempts, quizSkills: {}, presentations, shifts, checks, scores };
+  return { cases, attempts, quizSkills: {}, presentations, attended, checks, scores };
 }
 
 async function demoProgress(db: DemoDb, o: DemoOffering, onlyStudentId?: string) {

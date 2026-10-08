@@ -46,13 +46,13 @@ function scorePhrase(requirement: CourseRequirement, item: ItemProgress): string
 /** What a cell says when hovered or read aloud. */
 export function statusText(requirement: CourseRequirement, item: ItemProgress | undefined): string {
   if (!item) return "Not started";
-  const shift = entryMode(requirement) === "mark";
+  const attendance = entryMode(requirement) === "mark";
   const parts: string[] = [];
   if (item.done) parts.push(`Met on ${when(item.done_at)}`);
   else if (requirement.kind === "count") parts.push(`${item.current} of ${item.target} so far`);
   else if (item.best_score !== null) parts.push(`Best so far: ${Math.round(item.best_score)}%${item.level ? ` (${item.level})` : ""}, below the minimum`);
   else parts.push(requirement.kind === "manual" ? "No score yet" : "Not met yet");
-  if (item.done && shift) parts.push(`${item.current} attended`);
+  if (item.done && attendance) parts.push(`${item.current} attended`);
   if (item.done || requirement.kind === "count") {
     const score = scorePhrase(requirement, item);
     if (score) parts.push(score);
@@ -67,13 +67,13 @@ const PILL = "inline-flex h-7 min-w-7 items-center justify-center gap-1 whitespa
 
 /**
  * One student's standing on one item: their score (green once met by graded
- * work, violet when met by a score or mark of yours, amber below it), a shift
+ * work, violet when met by a score or mark of yours, amber below it), an attendance
  * count, or an empty ring.
  */
 export function ItemStatus({ requirement, item }: { requirement: CourseRequirement; item: ItemProgress | undefined }) {
   const score = itemScore(item);
   const scoreText = score === null ? null : `${Math.round(score)}%`;
-  // Only items with no score (shifts) show a count.
+  // Only items with no score (attendance) show a count.
   const count = requirement.kind === "count" && item ? `${item.current}/${item.target}` : null;
 
   if (item?.done && item.source === "instructor") {
@@ -386,8 +386,8 @@ function EntryDialog({
           {canMark && (
             <>
               <p className="text-sm text-gray-600">
-                Attendance is counted from the shifts. Mark it done when the student met it some other way, such as a
-                make-up duty.
+                Attendance is counted from activities done by their deadline. Mark it done when the student met it some
+                other way, such as a make-up activity.
               </p>
               <div>
                 <label htmlFor="entry-note" className="mb-1.5 block text-sm font-semibold text-gray-700">
