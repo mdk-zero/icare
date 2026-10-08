@@ -28,12 +28,6 @@ const ROLES: { role: DemoRole; label: string; description: string; icon: IconDef
     description: "Instructors, students, wards and school-wide analytics",
     icon: faBuildingColumns,
   },
-  {
-    role: "super_admin",
-    label: "Admin",
-    description: "Accounts, system health and test results",
-    icon: faUserShield,
-  },
 ];
 
 /**
