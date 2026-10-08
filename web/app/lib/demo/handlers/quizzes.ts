@@ -5,6 +5,7 @@ import { newId } from "../store";
 import type { DemoQuiz } from "../fixtures/school";
 import { SKILL_QUESTIONS } from "@/scripts/data/skill-questions";
 import { audit } from "./shared";
+import { parseDeadline } from "@/app/lib/deadline-input";
 import { byName, sectionName, teamLabel, visibleSections, visibleStudents } from "./scope";
 
 /** Quizzes (skill assessments): the builder, publishing, assigning and results. */
@@ -402,7 +403,10 @@ route("POST", "/api/faculty/assessments/:id/assign", (ctx) => {
     ...studentIds.filter((id) => scope.has(id)),
     ...db.users.filter((u) => u.role === "student" && u.section_id && sectionIds.includes(u.section_id) && scope.has(u.id)).map((u) => u.id),
   ]);
-  const deadline = typeof body?.deadline === "string" && body.deadline ? new Date(body.deadline).toISOString() : null;
+  // Demo quizzes have no deadline of their own to inherit, so one is required.
+  const deadlineCheck = parseDeadline(body?.deadline);
+  if (!deadlineCheck.ok) return json({ error: deadlineCheck.error }, 400);
+  const deadline = deadlineCheck.value;
   const already = new Set(db.quizAssignments.filter((a) => a.assessment_id === quiz.id).map((a) => a.student_id));
   for (const id of targets) {
     if (already.has(id)) continue;

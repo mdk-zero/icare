@@ -6,6 +6,7 @@ import type { DemoCasePresentation, DemoMaterial } from "../fixtures/teaching";
 import { CASE_CRITERIA, isLateSubmission } from "@/app/lib/case-rubric";
 import { isTaskRating, type TaskRating } from "@/app/lib/task-ratings";
 import { audit } from "./shared";
+import { parseDeadline } from "@/app/lib/deadline-input";
 import { DAY_MS, hasWork, lastActivity, mean } from "./derive";
 import { listSkillSummaries } from "../fixtures/skills";
 import { byName, sectionName, userById, visibleSections, visibleStudents } from "./scope";
@@ -102,12 +103,14 @@ route("POST", "/api/faculty/cases", (ctx) => {
   if (!title) return json({ error: "Give the case presentation a title" }, 400);
   const sectionIds: string[] = Array.isArray(body?.section_ids) ? body.section_ids : [];
   if (sectionIds.length === 0) return json({ error: "Choose at least one section" }, 400);
+  const deadlineCheck = parseDeadline(body?.deadline);
+  if (!deadlineCheck.ok) return json({ error: deadlineCheck.error }, 400);
   const now = new Date().toISOString();
   const p: DemoCasePresentation = {
     id: newId(),
     title,
     instructions: typeof body?.instructions === "string" ? body.instructions : "",
-    deadline: body?.deadline ? new Date(body.deadline).toISOString() : null,
+    deadline: deadlineCheck.value,
     section_ids: sectionIds,
     created_by: viewer.id,
     created_at: now,
@@ -155,7 +158,12 @@ route("PATCH", "/api/faculty/cases/:id", (ctx) => {
   if (ctx.role !== "admin" && p.created_by !== ctx.viewer.id) return json({ error: "Only the instructor who assigned it can change it" }, 403);
   if (typeof body?.title === "string" && body.title.trim()) p.title = body.title.trim();
   if (typeof body?.instructions === "string") p.instructions = body.instructions;
-  if (body && "deadline" in body) p.deadline = body.deadline ? new Date(body.deadline).toISOString() : null;
+  if (body && "deadline" in body) {
+    // It can move, but not go: attendance is measured against it.
+    const deadlineCheck = parseDeadline(body.deadline);
+    if (!deadlineCheck.ok) return json({ error: deadlineCheck.error }, 400);
+    p.deadline = deadlineCheck.value;
+  }
   let added = 0;
   if (Array.isArray(body?.section_ids)) {
     p.section_ids = body.section_ids;

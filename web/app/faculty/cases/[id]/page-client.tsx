@@ -20,7 +20,8 @@ import {
   type Section,
 } from "../../../lib/api";
 import { scoreDescriptor } from "../../../lib/task-ratings";
-import { CaseStatusBadge, formatDue, fromLocalInput, inputClassName, labelClassName, toLocalInput } from "../case-ui";
+import { CaseStatusBadge, formatDue, inputClassName, labelClassName, toLocalInput } from "../case-ui";
+import { deadlineFromInput } from "../../../lib/deadline-input";
 
 const FILTERS: { key: CaseSubmissionStatus | "all"; label: string }[] = [
   { key: "all", label: "All" },
@@ -258,11 +259,12 @@ function EditModal({
 
   const save = async () => {
     if (!title.trim()) return toast("Give the presentation a title");
+    if (!deadline) return toast("Set a deadline");
     setBusy(true);
     const res = await updateCasePresentation(presentation.id, {
       title: title.trim(),
       instructions,
-      deadline: fromLocalInput(deadline),
+      deadline: deadlineFromInput(deadline),
       ...(added.size > 0 ? { section_ids: [...presentation.section_ids, ...added] } : {}),
     });
     setBusy(false);
@@ -301,6 +303,7 @@ function EditModal({
           <input
             id="edit-deadline"
             type="datetime-local"
+            required
             value={deadline}
             onChange={(e) => setDeadline(e.target.value)}
             className={inputClassName}

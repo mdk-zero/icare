@@ -48,6 +48,7 @@ import {
   assignPatientRooms,
   FacultyPatient,
 } from "../../lib/api";
+import { deadlineFromInput } from "../../lib/deadline-input";
 import { usePageData } from "../../lib/use-page-data";
 import { SkeletonStatTile, SkeletonScenarioCard } from "../../components/skeletons";
 import PageHeader from "../../components/PageHeader";
@@ -438,7 +439,8 @@ export default function FacultyScenariosClient() {
     const assignments = await assignScenarioToStudents(
       selectedScenario.id,
       selectedStudents,
-      assignDeadline,
+      // A date means the end of that day, here: deadlines decide attendance.
+      deadlineFromInput(assignDeadline) ?? "",
       assignRequired,
     );
 

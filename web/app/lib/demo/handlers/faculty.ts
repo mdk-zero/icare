@@ -4,6 +4,7 @@ import { json, ndjson, notFound, route, type DemoContext } from "../router";
 import { newId } from "../store";
 import type { DemoAssignment, DemoScenario } from "../fixtures/school";
 import { audit } from "./shared";
+import { parseDeadline } from "@/app/lib/deadline-input";
 import {
   DAY_MS,
   assignmentRow,
@@ -775,8 +776,9 @@ route("POST", "/api/faculty/teams/:id/assign-cases", (ctx) => {
   if (!team) return notFound("Group not found");
   const scenario = db.scenarios.find((s) => s.id === body?.scenario_id);
   if (!scenario) return notFound("Patient case not found");
-  const deadline = typeof body?.deadline === "string" ? body.deadline : null;
-  if (!deadline || Number.isNaN(Date.parse(deadline))) return json({ error: "Choose a deadline" }, 400);
+  const deadlineCheck = parseDeadline(body?.deadline);
+  if (!deadlineCheck.ok) return json({ error: deadlineCheck.error }, 400);
+  const deadline = deadlineCheck.value as string;
   const assigned: string[] = [];
   const skipped: string[] = [];
   for (const member of db.users.filter((u) => u.role === "student" && u.team_id === team.id)) {
@@ -975,9 +977,11 @@ route("POST", "/api/faculty/scenarios/:id/assign", (ctx) => {
   const mine = myStudentIds(ctx);
   if (ids.length === 0) return json({ error: "Choose at least one student" }, 400);
   if (ids.some((id) => !mine.has(id))) return forbidden();
+  const deadlineCheck = parseDeadline(body?.deadline);
+  if (!deadlineCheck.ok) return json({ error: deadlineCheck.error }, 400);
   const created = ids
     .filter((id) => !db.assignments.some((a) => a.student_id === id && a.scenario_id === scenario.id))
-    .map((id) => newAssignment(scenario, id, body?.deadline ?? new Date(Date.now() + 7 * DAY_MS).toISOString(), body?.required !== false, viewer.id, userById(db, id)?.team_id ?? null));
+    .map((id) => newAssignment(scenario, id, deadlineCheck.value as string, body?.required !== false, viewer.id, userById(db, id)?.team_id ?? null));
   db.assignments.unshift(...created);
   audit(db, viewer, "scenario.assign", "scenarios", { message: `Assigned “${scenario.title}” to ${created.length} student(s)` }, scenario.id);
   return { assignments: created.map((a) => assignmentRow(db, a)) };

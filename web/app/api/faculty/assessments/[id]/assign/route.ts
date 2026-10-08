@@ -4,6 +4,7 @@ import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { getScopedStudentIds } from '@/app/lib/admin-scope';
 import { logAudit } from '@/app/lib/audit';
 import { getFacultySectionIds, getFacultyStudentIds } from '@/app/lib/roster';
+import { parseDeadline } from '@/app/lib/deadline-input';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -49,11 +50,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   if (sectionIds.length === 0 && studentIds.length === 0) {
     return NextResponse.json({ error: 'Select at least one section' }, { status: 400 });
   }
-  const deadlineValue =
-    typeof deadline === 'string' && deadline.length > 0 ? new Date(deadline) : null;
-  if (deadlineValue && Number.isNaN(deadlineValue.getTime())) {
-    return NextResponse.json({ error: 'Invalid deadline' }, { status: 400 });
-  }
+  // Read as optional here; once the assessment is loaded, it is required
+  // unless the assessment has a deadline of its own for assignments to inherit.
+  const deadlineCheck = parseDeadline(deadline, { optional: true });
+  if (!deadlineCheck.ok) return NextResponse.json({ error: deadlineCheck.error }, { status: 400 });
+  const deadlineValue = deadlineCheck.value ? new Date(deadlineCheck.value) : null;
   const attemptsOverride =
     max_attempts === undefined || max_attempts === null ? null : Number(max_attempts);
   if (attemptsOverride !== null && (!Number.isInteger(attemptsOverride) || attemptsOverride <= 0)) {
@@ -68,11 +69,14 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     const { data: assessment } = await supabase
       .from('assessments')
-      .select('id, title, target_sections')
+      .select('id, title, target_sections, deadline')
       .eq('id', assessmentId)
       .single();
     if (!assessment) {
       return NextResponse.json({ error: 'Assessment not found' }, { status: 404 });
+    }
+    if (!deadlineValue && !assessment.deadline) {
+      return NextResponse.json({ error: 'Set a deadline' }, { status: 400 });
     }
 
     // Faculty reach only the sections they handle; admin may use any.

@@ -9,6 +9,7 @@ import {
   type FacultyTeam,
   type SimulationScenario,
 } from "../../lib/api";
+import { deadlineFromInput } from "../../lib/deadline-input";
 import { toast } from "../../components/Toast";
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
@@ -48,7 +49,8 @@ export default function AssignCasesModal({
   const assign = async () => {
     if (!chosen || !deadline) return;
     setBusy(true);
-    const result = await assignGroupCase(group.id, { scenario_id: chosen, deadline, required });
+    // A date means the end of that day, here: deadlines decide attendance.
+    const result = await assignGroupCase(group.id, { scenario_id: chosen, deadline: deadlineFromInput(deadline) ?? "", required });
     setBusy(false);
     if ("error" in result) {
       setError(result.error);

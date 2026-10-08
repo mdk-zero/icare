@@ -10,6 +10,7 @@ import {
   PRESENTATION_COLUMNS,
 } from '@/app/lib/cases';
 import { isLateSubmission } from '@/app/lib/case-rubric';
+import { parseDeadline } from '@/app/lib/deadline-input';
 
 const MAX_TITLE = 200;
 const MAX_INSTRUCTIONS = 4000;
@@ -115,10 +116,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: `Title must be at most ${MAX_TITLE} characters` }, { status: 400 });
   }
   const instructionsValue = typeof instructions === 'string' ? instructions.trim().slice(0, MAX_INSTRUCTIONS) : '';
-  const deadlineValue = typeof deadline === 'string' && deadline.length > 0 ? new Date(deadline) : null;
-  if (deadlineValue && Number.isNaN(deadlineValue.getTime())) {
-    return NextResponse.json({ error: 'Invalid deadline' }, { status: 400 });
-  }
+  // Every activity has a deadline: it is what attendance is measured against.
+  const deadlineCheck = parseDeadline(deadline);
+  if (!deadlineCheck.ok) return NextResponse.json({ error: deadlineCheck.error }, { status: 400 });
   const sectionIds = uniqueStrings(section_ids);
   if (sectionIds.length === 0) return NextResponse.json({ error: 'Select at least one section' }, { status: 400 });
 
@@ -130,7 +130,7 @@ export async function POST(request: NextRequest) {
       .insert({
         title: titleValue,
         instructions: instructionsValue,
-        deadline: deadlineValue ? deadlineValue.toISOString() : null,
+        deadline: deadlineCheck.value,
         section_ids: sectionIds,
         created_by: session.uid,
       })

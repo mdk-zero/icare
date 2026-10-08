@@ -22,7 +22,7 @@ import {
   type ActivitySources,
   type ExcuseFact,
 } from '../app/lib/attendance';
-import { deadlineFromInput } from '../app/lib/deadline-input';
+import { deadlineFromInput, parseDeadline } from '../app/lib/deadline-input';
 
 let failures = 0;
 function check(label: string, ok: boolean, detail = '') {
@@ -157,6 +157,14 @@ eq('a date means the end of that day', deadlineFromInput('2026-10-10'), '2026-10
 eq('a date and time is local time', deadlineFromInput('2026-10-10T17:00'), '2026-10-10T09:00:00.000Z');
 eq('empty', deadlineFromInput(''), null);
 eq('unreadable', deadlineFromInput('nope'), null);
+
+console.log('deadlines sent to the API');
+const deadlineError = (r: ReturnType<typeof parseDeadline>) => (r.ok ? null : r.error);
+eq('no deadline is refused', deadlineError(parseDeadline(undefined)), 'Set a deadline');
+eq('a blank deadline is refused', deadlineError(parseDeadline('  ')), 'Set a deadline');
+eq('optional: none is fine', parseDeadline('', { optional: true }), { ok: true, value: null });
+eq('an unreadable deadline', deadlineError(parseDeadline('soon')), 'Invalid deadline');
+eq('a timestamp', parseDeadline('2026-10-10T09:00:00.000Z'), { ok: true, value: '2026-10-10T09:00:00.000Z' });
 
 if (failures > 0) {
   console.error(`\n${failures} check(s) failed`);

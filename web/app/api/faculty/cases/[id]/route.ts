@@ -11,6 +11,7 @@ import {
   PRESENTATION_COLUMNS,
 } from '@/app/lib/cases';
 import { isLateSubmission } from '@/app/lib/case-rubric';
+import { parseDeadline } from '@/app/lib/deadline-input';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -144,12 +145,10 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       update.instructions = typeof instructions === 'string' ? instructions.trim().slice(0, 4000) : '';
     }
     if (deadline !== undefined) {
-      if (deadline === null || deadline === '') update.deadline = null;
-      else {
-        const d = typeof deadline === 'string' ? new Date(deadline) : null;
-        if (!d || Number.isNaN(d.getTime())) return NextResponse.json({ error: 'Invalid deadline' }, { status: 400 });
-        update.deadline = d.toISOString();
-      }
+      // It can move, but not go: attendance is measured against it.
+      const deadlineCheck = parseDeadline(deadline);
+      if (!deadlineCheck.ok) return NextResponse.json({ error: deadlineCheck.error }, { status: 400 });
+      update.deadline = deadlineCheck.value;
     }
 
     let addedSections: string[] = [];

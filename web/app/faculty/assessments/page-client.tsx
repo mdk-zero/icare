@@ -24,6 +24,7 @@ import { fetchFacultySections, getCurrentUser, type Section, apiFetch } from "..
 import { toast } from "../../components/Toast";
 import ConfirmModal from "../../components/ConfirmModal";
 import { usePageData } from "../../lib/use-page-data";
+import { deadlineFromInput } from "../../lib/deadline-input";
 
 const inputClassName =
   "w-full px-4 py-3 bg-surface border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 focus:bg-surface transition-all text-sm shadow-sm";
@@ -254,7 +255,7 @@ export default function FacultyAssessmentsClient() {
       credentials: "include",
       body: JSON.stringify({
         section_ids: Array.from(selectedSections),
-        deadline: assignDeadline || null,
+        deadline: deadlineFromInput(assignDeadline),
         max_attempts: assignMaxAttempts ? Number(assignMaxAttempts) : null,
       }),
     });
@@ -546,9 +547,10 @@ export default function FacultyAssessmentsClient() {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className={labelClassName}>Deadline (optional)</label>
+                <label className={labelClassName}>Deadline</label>
                 <input
                   type="datetime-local"
+                  required
                   value={assignDeadline}
                   onChange={(e) => setAssignDeadline(e.target.value)}
                   className={inputClassName}
@@ -646,7 +648,8 @@ export default function FacultyAssessmentsClient() {
                 </button>
                 <button
                   onClick={submitAssign}
-                  disabled={busy || selectedSections.size === 0}
+                  disabled={busy || selectedSections.size === 0 || !assignDeadline}
+                  title={assignDeadline ? undefined : "Set a deadline first"}
                   className="px-6 py-2 bg-brand-600 text-white rounded-lg text-sm hover:bg-brand-700 disabled:opacity-60"
                 >
                   {busy ? "Assigning…" : "Assign"}

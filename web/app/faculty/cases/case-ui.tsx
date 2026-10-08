@@ -35,6 +35,3 @@ export function toLocalInput(iso: string | null): string {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
-
-/** datetime-local value → ISO, or null when empty. */
-export const fromLocalInput = (value: string) => (value ? new Date(value).toISOString() : null);

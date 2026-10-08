@@ -24,7 +24,8 @@ import {
   type CasePresentationSummary,
   type Section,
 } from "../../lib/api";
-import { formatDue, fromLocalInput, inputClassName, labelClassName } from "./case-ui";
+import { formatDue, inputClassName, labelClassName } from "./case-ui";
+import { deadlineFromInput } from "../../lib/deadline-input";
 
 const NO_PRESENTATIONS: CasePresentationSummary[] = [];
 const NO_SECTIONS: Section[] = [];
@@ -197,11 +198,12 @@ function CreateModal({
   const submit = async () => {
     if (!title.trim()) return toast("Give the presentation a title");
     if (selected.size === 0) return toast("Select at least one section");
+    if (!deadline) return toast("Set a deadline");
     setBusy(true);
     const res = await createCasePresentation({
       title: title.trim(),
       instructions,
-      deadline: fromLocalInput(deadline),
+      deadline: deadlineFromInput(deadline),
       section_ids: [...selected],
     });
     setBusy(false);
@@ -237,10 +239,11 @@ function CreateModal({
           />
         </div>
         <div>
-          <label className={labelClassName} htmlFor="case-deadline">Due (optional)</label>
+          <label className={labelClassName} htmlFor="case-deadline">Due</label>
           <input
             id="case-deadline"
             type="datetime-local"
+            required
             value={deadline}
             onChange={(e) => setDeadline(e.target.value)}
             className={inputClassName}
@@ -291,7 +294,7 @@ function CreateModal({
           </button>
           <button
             onClick={submit}
-            disabled={busy || selected.size === 0}
+            disabled={busy || selected.size === 0 || !deadline}
             className="px-6 py-2 bg-brand-600 text-white rounded-lg text-sm hover:bg-brand-700 disabled:opacity-60"
           >
             {busy ? "Creating…" : "Create & assign"}

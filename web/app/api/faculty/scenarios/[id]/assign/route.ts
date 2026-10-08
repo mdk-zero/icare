@@ -3,6 +3,7 @@ import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { getFacultyStudentIds } from '@/app/lib/roster';
 import { isMissingTeamTables } from '@/app/lib/teams';
+import { parseDeadline } from '@/app/lib/deadline-input';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -49,12 +50,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: 'Choose at least one student' }, { status: 400 });
   }
 
-  const parsedDeadline = typeof deadline === 'string' && deadline.trim().length > 0
-    ? new Date(deadline)
-    : null;
-  if (deadline && (parsedDeadline === null || isNaN(parsedDeadline.getTime()))) {
-    return NextResponse.json({ error: 'Invalid deadline' }, { status: 400 });
-  }
+  // Every activity has a deadline: it is what attendance is measured against.
+  const deadlineCheck = parseDeadline(deadline);
+  if (!deadlineCheck.ok) return NextResponse.json({ error: deadlineCheck.error }, { status: 400 });
+  const parsedDeadline = new Date(deadlineCheck.value as string);
 
   try {
     const supabase = getSupabaseAdmin();
@@ -111,7 +110,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       student_id: studentId,
       ...(teamOf.has(studentId) ? { team_id: teamOf.get(studentId) } : {}),
       assigned_by: session.uid,
-      deadline: parsedDeadline ? parsedDeadline.toISOString() : null,
+      deadline: parsedDeadline.toISOString(),
       required: typeof required === 'boolean' ? required : true,
       status: 'pending' as const,
     }));
