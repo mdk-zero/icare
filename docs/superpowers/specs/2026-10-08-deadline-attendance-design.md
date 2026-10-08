@@ -25,10 +25,10 @@ No server imports, so the API, the reports, the course checklist and the demo sh
 - **An activity** is one student's piece of deadline-bound work:
   - **RetDem:** a `scenario_assignments` row. `activity_id` is the assignment id.
   - **Quiz:** an `assessment_assignments` row. Its deadline is `coalesce(assignment.deadline, assessment.deadline)`. `activity_id` is the assignment id.
-  - **Case Presentation:** one `case_presentations` row per expected student. The expected students are the creator's group members in the presentation's sections. This is the same reach the presentation already has (`scopedCaseStudents` / roster rules), because a `case_submissions` row only exists once the student starts. A student with a submission row is included even if no longer on that roster. `activity_id` is the presentation id.
+  - **Case Presentation:** one `case_submissions` row per assigned student. Assigning (`assignCasePresentation`) already creates a row for every group member it reaches, so the rows are the roster. Its deadline is the presentation's. `activity_id` is the presentation id.
 - **Done at:**
   - RetDem: the earliest `scenario_task_completions.completed_at` for the assignment. A completion row is written when the instructor grades a task; since 057 every task is faculty-verified.
-  - Quiz: the earliest `submitted_at` among the assignment's submitted attempts.
+  - Quiz: the earliest `submitted_at` among the student's submitted attempts on that quiz. Older attempts and every demo attempt carry no `assignment_id`, so attempts are matched by student and quiz.
   - Case Presentation: `case_submissions.submitted_at`.
 - **Status** at time `now`:
 
@@ -114,7 +114,7 @@ create table if not exists public.activity_excuses (
   - The Attendance topic blurb becomes "Counted from activities done by their deadline".
   - The modal's count option reads "Activities attended".
   - The count kind's hint becomes "A number of graded activities, or activities attended".
-  - The detail line reads "Attend N activities", and the progress hover reads "N attended".
+  - The detail line reads "15 activities attended" (was "15 shifts attended"), and the progress hover reads "N attended".
 - **Dashboard:** the Duty card and `upcoming_shifts` go. "Due soon" and the overdue count stay.
 
 ## Removed
@@ -158,7 +158,7 @@ create table if not exists public.activity_excuses (
   - the rate leaves out excused, upcoming and no-deadline;
   - a rate is null with nothing counted;
   - a quiz with no assignment deadline uses the assessment's default.
-- **`check:courses`:** an Attendance item counts present and late inside the term only (a deadline outside the term is ignored, and excused isn't counted). The UI label is "Attend N activities".
+- **`check:courses`:** an Attendance item counts present and late inside the term only (a deadline outside the term is ignored, and excused isn't counted). The label reads "15 activities attended".
 - **`check:grading`:** attendance still can't be filed.
 - **Migration:** 068 is run against a local throwaway Postgres (the live DB diverges from the migration files).
 - **Build:** typecheck, eslint, and `NEXT_DIST_DIR=.next-build npm run build`.
