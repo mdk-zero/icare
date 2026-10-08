@@ -29,7 +29,7 @@ const SUITES: [string, string][] = [
   ["faculty", "dashboard lists students needing attention"],
   ["faculty", "grades a patient case and saves the score"],
   ["faculty", "asks the dean before changing a saved grade"],
-  ["faculty", "schedules a shift for a group"],
+  ["faculty", "excuses an absence"],
   ["faculty", "publishes a quiz once criteria total 100%"],
   ["admin", "assigns groups to an instructor"],
   ["admin", "renames a section and retargets quizzes"],
@@ -115,7 +115,7 @@ export function seedSystem() {
       name,
       status: failing && i === 6 ? "failed" : "passed",
       duration_ms: 800 + ((i * 613) % 4200),
-      error: failing && i === 6 ? "Timed out waiting for the shift calendar to render" : null,
+      error: failing && i === 6 ? "Timed out waiting for the attendance tab to render" : null,
     }));
     runs.push({
       id: id(),

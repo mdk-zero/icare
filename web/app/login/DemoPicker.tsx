@@ -19,7 +19,7 @@ const ROLES: { role: DemoRole; label: string; description: string; icon: IconDef
   {
     role: "faculty",
     label: "Instructor",
-    description: "Groups, patient cases, quizzes, shifts and grading",
+    description: "Groups, patient cases, quizzes and grading",
     icon: faChalkboardUser,
   },
   {

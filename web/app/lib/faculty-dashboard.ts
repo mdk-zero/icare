@@ -3,7 +3,6 @@ import { summarizeAnomalyReasons } from './vitals/rules';
 import type { SessionPayload } from './auth/session';
 import { getFacultySectionIds } from './roster';
 import { getScopedStudentIds } from './admin-scope';
-import { closeEndedShifts } from './shift-presence';
 
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
 
@@ -352,20 +351,6 @@ export interface ReviewItem {
   submitted_at: string;
 }
 
-export interface DutyShift {
-  id: string;
-  label: string | null;
-  shift_type: string;
-  starts_at: string;
-  ends_at: string;
-  section: string | null;
-  room: string | null;
-  rostered: number;
-  /** Present or late. */
-  checked_in: number;
-  absent: number;
-}
-
 export interface DueItem {
   kind: 'scenario' | 'quiz';
   id: string;
@@ -381,7 +366,6 @@ export interface FacultyOverview {
   attention: AttentionStudent[];
   attention_total: number;
   review_queue: { total: number; items: ReviewItem[] };
-  upcoming_shifts: DutyShift[];
   due_soon: DueItem[];
   overdue_assignments: number;
   students_behind: number;
@@ -410,24 +394,11 @@ interface QuizAssignmentRow {
   assessments: { title: string } | null;
 }
 
-interface ShiftRow {
-  id: string;
-  label: string | null;
-  shift_type: string;
-  starts_at: string;
-  ends_at: string;
-  section_id: string | null;
-  /** Migration 064; absent before it. */
-  team_id?: string | null;
-  rooms: { name: string; room_number: string } | null;
-  shift_assignments: { attendance_status: string }[];
-}
-
 /**
  * Everything the faculty landing page shows beyond the headline counts, from
  * one pass over the data: a ranked list of students who need a look, each
- * section's recent performance and trend, the review queue, upcoming duty,
- * and what falls due this week.
+ * section's recent performance and trend, the review queue, and what falls
+ * due this week.
  *
  * `risks` and `alerts` are passed in because the route has already built them
  * for the headline counts.
@@ -452,9 +423,7 @@ export async function buildFacultyOverview(
   const traceFrom = weekStart(now) - (TRACE_WEEKS - 1) * 7 * DAY_MS;
   const attemptsFrom = Math.min(traceFrom, now - 2 * RECENT_DAYS * DAY_MS);
 
-  // Duty counts absences, so settle any shift that ended unattended first.
-  await closeEndedShifts(supabase);
-  const [sectionRows, scenarioRows, quizRows, attempts, lastActivity, shiftRows, teamRows] = await Promise.all([
+  const [sectionRows, scenarioRows, quizRows, attempts, lastActivity] = await Promise.all([
     sectionIds.length > 0
       ? supabase.from('sections').select('id, name').in('id', sectionIds).order('name')
       : Promise.resolve({ data: [] as { id: string; name: string }[] }),
@@ -491,24 +460,7 @@ export async function buildFacultyOverview(
         )
       : Promise.resolve([]),
     getLastActivityByStudent(supabase, ids),
-    sectionIds.length > 0
-      ? supabase
-          .from('shifts')
-          // `*` so team_id comes back once 064 is applied and nothing breaks before it.
-          .select('*, rooms(name, room_number), shift_assignments(attendance_status)')
-          .in('section_id', sectionIds)
-          .eq('status', 'scheduled')
-          .gt('ends_at', new Date(now).toISOString())
-          .order('starts_at')
-          .limit(20)
-      : Promise.resolve({ data: [] as ShiftRow[] }),
-    sectionIds.length > 0
-      ? supabase.from('teams').select('id, name, faculty_id').in('section_id', sectionIds)
-      : Promise.resolve({ data: [] as { id: string; name: string; faculty_id: string | null }[] }),
   ]);
-  const teamById = new Map(
-    ((teamRows.data ?? []) as { id: string; name: string; faculty_id: string | null }[]).map((t) => [t.id, t]),
-  );
 
   const sections = (sectionRows.data ?? []) as { id: string; name: string }[];
   const sectionName = new Map(sections.map((s) => [s.id, s.name]));
@@ -664,32 +616,6 @@ export async function buildFacultyOverview(
     .filter((r) => r.urgency > 0)
     .sort((a, b) => b.urgency - a.urgency || a.student.name.localeCompare(b.student.name));
 
-  // ---- Duty -----------------------------------------------------------
-  // An instructor's duty is their own groups' shifts plus older section-wide ones.
-  const upcoming: DutyShift[] = ((shiftRows.data ?? []) as unknown as ShiftRow[])
-    .filter(
-      (shift) =>
-        session.role !== 'faculty' || !shift.team_id || teamById.get(shift.team_id)?.faculty_id === session.uid,
-    )
-    .slice(0, 4)
-    .map((shift) => {
-      const roster = shift.shift_assignments ?? [];
-      const team = shift.team_id ? teamById.get(shift.team_id) : undefined;
-      const section = shift.section_id ? sectionName.get(shift.section_id) ?? null : null;
-      return {
-        id: shift.id,
-        label: shift.label,
-        shift_type: shift.shift_type,
-        starts_at: shift.starts_at,
-        ends_at: shift.ends_at,
-        section: team ? [section, team.name].filter(Boolean).join(' · ') : section,
-        room: shift.rooms ? `${shift.rooms.name} · ${shift.rooms.room_number}` : null,
-        rostered: roster.length,
-        checked_in: roster.filter((r) => r.attendance_status === 'present' || r.attendance_status === 'late').length,
-        absent: roster.filter((r) => r.attendance_status === 'absent').length,
-      };
-    });
-
   let scoredAt: string | null = null;
   for (const r of risks.values()) {
     if (!scoredAt || r.predicted_at > scoredAt) scoredAt = r.predicted_at;
@@ -704,7 +630,6 @@ export async function buildFacultyOverview(
       // Longest-waiting first: those are the ones students are chasing.
       items: reviewItems.sort((a, b) => a.submitted_at.localeCompare(b.submitted_at)).slice(0, 5),
     },
-    upcoming_shifts: upcoming,
     due_soon: [...dueSoon.values()].sort((a, b) => a.deadline.localeCompare(b.deadline)).slice(0, 5),
     overdue_assignments: [...overdueBy.values()].reduce((sum, n) => sum + n, 0),
     students_behind: overdueBy.size,

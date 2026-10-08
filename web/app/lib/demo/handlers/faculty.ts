@@ -218,29 +218,6 @@ function overview(ctx: Ctx) {
     .filter((r) => r.urgency > 0)
     .sort((a, b) => b.urgency - a.urgency || a.student.name.localeCompare(b.student.name));
 
-  const teams = ownTeams(db, ctx.role, ctx.viewer.id);
-  const upcoming = db.shifts
-    .filter((s) => s.status === "scheduled" && Date.parse(s.ends_at) > now)
-    .filter((s) => !s.team_id || teams.some((t) => t.id === s.team_id))
-    .sort((a, b) => a.starts_at.localeCompare(b.starts_at))
-    .slice(0, 4)
-    .map((s) => {
-      const roster = db.shiftEntries.filter((e) => e.shift_id === s.id);
-      const room = db.rooms.find((r) => r.id === s.room_id);
-      return {
-        id: s.id,
-        label: s.label,
-        shift_type: s.shift_type,
-        starts_at: s.starts_at,
-        ends_at: s.ends_at,
-        section: s.team_id ? teamLabel(db, s.team_id) : sectionName(db, s.section_id),
-        room: room ? `${room.name} · ${room.room_number}` : null,
-        rostered: roster.length,
-        checked_in: roster.filter((r) => r.attendance_status === "present" || r.attendance_status === "late").length,
-        absent: roster.filter((r) => r.attendance_status === "absent").length,
-      };
-    });
-
   return {
     sections: sections.map((section) => {
       const members = students.filter((s) => s.section_id === section.id);
@@ -267,7 +244,6 @@ function overview(ctx: Ctx) {
       total: reviewItems.length,
       items: reviewItems.sort((a, b) => a.submitted_at.localeCompare(b.submitted_at)).slice(0, 5),
     },
-    upcoming_shifts: upcoming,
     due_soon: [...dueSoon.values()].sort((a, b) => a.deadline.localeCompare(b.deadline)).slice(0, 5),
     overdue_assignments: [...overdueBy.values()].reduce((sum, n) => sum + n, 0),
     students_behind: overdueBy.size,
@@ -462,7 +438,7 @@ route("DELETE", "/api/faculty/students", (ctx) => {
   db.assignments = db.assignments.filter((a) => a.student_id !== student.id);
   db.quizAssignments = db.quizAssignments.filter((a) => a.student_id !== student.id);
   db.attempts = db.attempts.filter((a) => a.student_id !== student.id);
-  db.shiftEntries = db.shiftEntries.filter((e) => e.student_id !== student.id);
+  db.excuses = (db.excuses ?? []).filter((e) => e.student_id !== student.id);
   audit(db, ctx.viewer, "user.delete", "users", { message: `Deleted student ${student.name}` }, student.id);
   return { success: true };
 });

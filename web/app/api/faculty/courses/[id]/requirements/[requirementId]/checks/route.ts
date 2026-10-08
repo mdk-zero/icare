@@ -16,7 +16,7 @@ const MAX_NOTE = 500;
  * On a manual item this is the tick itself. On an automatic item, checking
  * marks it done for work the system cannot see and needs a note; unchecking
  * removes only that mark, never graded work. The web portal now enters a
- * score instead (/scores, 066) and uses this only for shift counts and to
+ * score instead (/scores, 066) and uses this only for attendance items and to
  * remove earlier ticks and marks; the mobile app still ticks and marks here.
  *
  * Idempotent, so the mobile app can replay it from its offline outbox.

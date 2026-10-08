@@ -1,11 +1,9 @@
 import { SignJWT, jwtVerify } from 'jose';
 import { cookies, headers } from 'next/headers';
-import { after } from 'next/server';
 import { getSupabaseAdmin } from '../supabase/server';
 import { isMissingColumn, liveSession } from './live-user';
 import { SESSION_COOKIE, getSecret, signSession, verifySession } from './jwt';
 import type { SessionPayload } from './jwt';
-import { recordShiftActivity } from '../shift-presence';
 
 // Signing and verification live in ./jwt so middleware can share them without
 // pulling in next/headers. Re-exported here so existing importers are unaffected.
@@ -46,16 +44,7 @@ export async function clearSessionCookie(): Promise<void> {
 /** The signed-in user, checked against their live row (see liveSession). */
 export async function readSession(): Promise<SessionPayload | null> {
   const claims = await readTokenClaims();
-  const session = claims ? await liveSession(claims) : null;
-  // A student using the app during their shift is marked present on it.
-  if (session?.role === 'student') {
-    try {
-      after(() => recordShiftActivity(session.uid).catch((err) => console.error('Shift presence failed', err)));
-    } catch {
-      // Outside a request (nothing to attend); never let it cost the session.
-    }
-  }
-  return session;
+  return claims ? await liveSession(claims) : null;
 }
 
 /**

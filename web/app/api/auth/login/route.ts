@@ -1,5 +1,4 @@
-import { NextResponse, after } from 'next/server';
-import { recordShiftActivity } from '@/app/lib/shift-presence';
+import { NextResponse } from 'next/server';
 import { findUserByEmail, toPublicUser, touchLastLogin } from '@/app/lib/auth/user';
 import { verifyPassword } from '@/app/lib/auth/password';
 import { setSessionCookie, signSession } from '@/app/lib/auth/session';
@@ -50,10 +49,6 @@ export async function POST(request: Request) {
     const publicUser = toPublicUser(row);
     const token = await signSession({ uid: publicUser.id, role: publicUser.role, email: publicUser.email });
     await setSessionCookie(token);
-    if (publicUser.role === 'student') {
-      // Signing in during a shift checks the student in.
-      after(() => recordShiftActivity(publicUser.id, new Date(), { force: true }).catch((err) => console.error('Shift presence failed', err)));
-    }
     return NextResponse.json({ user: publicUser, sessionToken: token });
   } catch (err) {
     console.error('Login handler failed', err);

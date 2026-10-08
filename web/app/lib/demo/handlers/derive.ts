@@ -3,7 +3,7 @@ import type { DemoUser } from "../fixtures/people";
 import type { DemoAssignment } from "../fixtures/school";
 import type { TaskRating } from "@/app/lib/task-ratings";
 import { sectionName, teamLabel } from "./scope";
-import { attendanceRows, collectActivities, type AttendanceRow } from "@/app/lib/attendance";
+import { attendanceRows, collectActivities, tallyAttendance, type AttendanceRow } from "@/app/lib/attendance";
 
 /**
  * Read-side helpers shared by the demo's handlers: the joins and roll-ups
@@ -210,9 +210,8 @@ export function prediction(db: DemoDb, s: DemoUser) {
   const quiz = quizAverage(db, s.id) ?? 0;
   const cases = caseAverage(db, s.id) ?? 0;
   const overdue = db.assignments.filter((a) => a.student_id === s.id && a.status === "overdue").length;
-  const entries = db.shiftEntries.filter((e) => e.student_id === s.id && e.attendance_status !== "scheduled");
-  const attended = entries.filter((e) => ["present", "late", "excused"].includes(e.attendance_status)).length;
-  const attendance = entries.length ? Math.round((attended / entries.length) * 100) : 100;
+  // Activities done by their deadline (or late); nothing past one yet reads as full attendance.
+  const attendance = tallyAttendance(demoAttendanceRows(db, [s.id]).map((r) => r.status)).rate ?? 100;
   const daysInactive = Math.round((Date.now() - Date.parse(lastActivity(db, s.id) ?? new Date().toISOString())) / DAY_MS);
   const features = {
     avg_quiz_score: quiz,

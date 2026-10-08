@@ -6,7 +6,6 @@ import {
   faBedPulse,
   faBookMedical,
   faBookOpen,
-  faCalendarCheck,
   faChartBar,
   faClipboardList,
   faFileLines,
@@ -88,13 +87,6 @@ const navItems: NavItem[] = [
     label: "Wards",
     href: "/faculty/monitoring",
     icon: faBedPulse,
-    section: "Clinical",
-  },
-  {
-    id: "shifts",
-    label: "Shifts",
-    href: "/faculty/attendance",
-    icon: faCalendarCheck,
     section: "Clinical",
   },
   {

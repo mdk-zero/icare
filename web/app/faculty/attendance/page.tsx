@@ -1,10 +1,10 @@
-import type { Metadata } from "next";
-import AttendanceClient from "./page-client";
+import { redirect } from "next/navigation";
 
-export const metadata: Metadata = {
-  title: "Attendance | iCARE++ Instructor",
-};
-
+/**
+ * The Shifts page is gone: attendance now comes from each RetDem, Quiz and
+ * Case Presentation's deadline, on the student's profile and in reports.
+ * Kept as a redirect rather than deleted: this path is in bookmarks.
+ */
 export default function FacultyAttendancePage() {
-  return <AttendanceClient />;
+  redirect("/faculty");
 }

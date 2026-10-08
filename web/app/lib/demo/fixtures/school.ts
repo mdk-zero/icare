@@ -2,7 +2,7 @@
  * The demo school's teaching record: the ward, its patients, eight patient
  * cases built on Taylor's checklists, five weeks of group case work at every
  * stage (graded, awaiting review, under way), the paired quizzes and their
- * attempts, and the shift roster with its attendance.
+ * attempts.
  *
  * Everything is generated from a fixed random seed, so every demo starts from
  * the same data; only the dates move, relative to the day the demo starts.
@@ -208,31 +208,6 @@ export interface DemoAttempt {
   started_at: string;
   submitted_at: string | null;
   time_taken_seconds: number | null;
-}
-
-export interface DemoShift {
-  id: string;
-  section_id: string | null;
-  team_id: string | null;
-  room_id: string | null;
-  label: string | null;
-  shift_type: "am" | "pm" | "night" | "custom";
-  starts_at: string;
-  ends_at: string;
-  notes: string | null;
-  status: "scheduled" | "cancelled";
-  created_by: string;
-  created_at: string;
-}
-
-export interface DemoShiftEntry {
-  id: string;
-  shift_id: string;
-  student_id: string;
-  attendance_status: "scheduled" | "present" | "late" | "absent" | "excused";
-  checked_in_at: string | null;
-  checked_out_at: string | null;
-  notes: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -651,69 +626,6 @@ export function seedSchool(users: DemoUser[], teams: DemoTeam[]) {
     }
   });
 
-  // --- Shifts --------------------------------------------------------------------
-  // Each group has a weekly AM duty; this week's is today for Group A of BSN 3101.
-  const shifts: DemoShift[] = [];
-  const shiftEntries: DemoShiftEntry[] = [];
-  let shiftN = 0;
-  let entryN = 0;
-  const activeRooms = rooms.filter((r) => r.status === "active");
-  teams.forEach((team, g) => {
-    const room = activeRooms[g % activeRooms.length];
-    for (const week of [3, 2, 1, 0, -1]) {
-      shiftN += 1;
-      const dayOffset = week * 7 + g; // groups on different weekdays
-      const startsAt = ago(dayOffset, 7);
-      const endsAt = ago(dayOffset, 15);
-      const shift: DemoShift = {
-        id: demoId(KIND.shift, shiftN),
-        section_id: team.section_id,
-        team_id: team.id,
-        room_id: room.id,
-        label: `${team.name} ward duty`,
-        shift_type: "am",
-        starts_at: startsAt,
-        ends_at: endsAt,
-        notes: week === 0 && g === 0 ? "Bring your own stethoscope and penlight." : null,
-        status: "scheduled",
-        created_by: team.faculty_id ?? INSTRUCTOR_ID,
-        created_at: ago(35),
-      };
-      shifts.push(shift);
-      const now = Date.now();
-      for (const student of studentsOf(team.id)) {
-        entryN += 1;
-        const weak = student.risk_level === "at_risk";
-        let status: DemoShiftEntry["attendance_status"] = "scheduled";
-        let checkedIn: string | null = null;
-        if (Date.parse(startsAt) < now) {
-          const roll = random();
-          if (weak ? roll < 0.3 : roll < 0.04) status = "absent";
-          else if (weak ? roll < 0.6 : roll < 0.16) status = "late";
-          else status = "present";
-          if (Date.parse(endsAt) > now && status === "absent" && !weak) status = "scheduled";
-          if (status === "present") checkedIn = new Date(Date.parse(startsAt) - random() * 20 * 60_000).toISOString();
-          if (status === "late") checkedIn = new Date(Date.parse(startsAt) + (17 + random() * 30) * 60_000).toISOString();
-        }
-        shiftEntries.push({
-          id: demoId(KIND.shift, 1000 + entryN),
-          shift_id: shift.id,
-          student_id: student.id,
-          attendance_status: status,
-          checked_in_at: checkedIn,
-          checked_out_at: checkedIn && Date.parse(endsAt) < now ? endsAt : null,
-          notes: null,
-        });
-      }
-    }
-  });
-  // One excused absence, so the instructor's own action shows in the record.
-  const absent = shiftEntries.find((e) => e.attendance_status === "absent");
-  if (absent) {
-    absent.attendance_status = "excused";
-    absent.notes = "Medical certificate submitted.";
-  }
-
   return {
     rooms,
     patients,
@@ -728,7 +640,5 @@ export function seedSchool(users: DemoUser[], teams: DemoTeam[]) {
     questions,
     quizAssignments,
     attempts,
-    shifts,
-    shiftEntries,
   };
 }

@@ -281,7 +281,7 @@ route("DELETE", "/api/admin/students", (ctx) => {
   db.assignments = db.assignments.filter((a) => !targets.includes(a.student_id));
   db.quizAssignments = db.quizAssignments.filter((a) => !targets.includes(a.student_id));
   db.attempts = db.attempts.filter((a) => !targets.includes(a.student_id));
-  db.shiftEntries = db.shiftEntries.filter((e) => !targets.includes(e.student_id));
+  db.excuses = (db.excuses ?? []).filter((e) => !targets.includes(e.student_id));
   audit(db, ctx.viewer, "user.delete", "users", { message: `Deleted ${plural(targets.length, "student")}` });
   return { deleted: targets.length, skipped: ids.length - targets.length };
 });

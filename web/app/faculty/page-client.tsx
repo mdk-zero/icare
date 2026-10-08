@@ -27,18 +27,15 @@ import PageHeader from "../components/PageHeader";
 import StatTile from "../components/StatTile";
 import { CardLabel } from "../components/Card";
 import AttentionList from "./_overview/AttentionList";
-import DutyCard from "./_overview/DutyCard";
 import WaitingCard from "./_overview/WaitingCard";
 import SectionMonitor from "./_overview/SectionMonitor";
 import AlertFeed from "./_overview/AlertFeed";
 import ActivityFeed from "./_overview/ActivityFeed";
 import {
   addressedName,
-  clockTime,
   greeting,
   listSentence,
   plural,
-  relativeDay,
   timeAgo,
 } from "./_overview/format";
 
@@ -54,7 +51,6 @@ const EMPTY_OVERVIEW: FacultyOverview = {
   attention: [],
   attention_total: 0,
   review_queue: { total: 0, items: [] },
-  upcoming_shifts: [],
   due_soon: [],
   overdue_assignments: 0,
   students_behind: 0,
@@ -64,7 +60,7 @@ const EMPTY_OVERVIEW: FacultyOverview = {
 };
 
 /** The masthead's standfirst: the day in one or two sentences, not a slogan. */
-function briefing(stats: FacultyStats | null, overview: FacultyOverview, now: number): string {
+function briefing(stats: FacultyStats | null, overview: FacultyOverview): string {
   const parts: string[] = [];
   const flagged = overview.attention_total;
   if (flagged > 0)
@@ -76,24 +72,11 @@ function briefing(stats: FacultyStats | null, overview: FacultyOverview, now: nu
   if (overdue > 0)
     parts.push(`${plural(overdue, "assignment")} ${overdue === 1 ? "is" : "are"} overdue`);
 
-  let text =
+  const text =
     parts.length > 0
       ? `${listSentence(parts)}.`
       : "Everyone is on track and nothing is waiting on you.";
-  text = text.charAt(0).toUpperCase() + text.slice(1);
-
-  const next = overview.upcoming_shifts[0];
-  if (next) {
-    const live = Date.parse(next.starts_at) <= now;
-    const day = relativeDay(next.starts_at);
-    // Mid-sentence, "Today" and "Tomorrow" lose their capital; weekdays keep theirs.
-    const when = day === "Today" || day === "Tomorrow" ? day.toLowerCase() : day;
-    const withSection = next.section ? ` with ${next.section}` : "";
-    text += live
-      ? ` You're on duty now${withSection}.`
-      : ` Next on duty: ${when} at ${clockTime(next.starts_at)}${withSection}.`;
-  }
-  return text;
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 export default function FacultyDashboard() {
@@ -109,15 +92,12 @@ export default function FacultyDashboard() {
       overview: dashboard?.overview ?? EMPTY_OVERVIEW,
       alerts: alertsData?.alerts ?? [],
       addressee: addressedName(user),
-      // Everything on the page is as of this moment, so "live" and "overdue"
-      // can't disagree with each other across a re-render.
-      loadedAt: Date.now(),
     };
   });
 
   if (loading || !data) return <OverviewSkeleton />;
 
-  const { stats, activities, overview, alerts, addressee, loadedAt } = data;
+  const { stats, activities, overview, alerts, addressee } = data;
   const total = stats?.total_students ?? 0;
   const atRisk = stats?.at_risk_students ?? 0;
   const review = stats?.awaiting_review ?? 0;
@@ -140,7 +120,7 @@ export default function FacultyDashboard() {
           label: "Dashboard",
         }}
         title={`${greeting()}${addressee ? `, ${addressee}.` : ""}`}
-        subtitle={briefing(stats, overview, loadedAt)}
+        subtitle={briefing(stats, overview)}
       />
 
       <div className="space-y-4">
@@ -205,7 +185,6 @@ export default function FacultyDashboard() {
             />
           </div>
           <div className="animate-rise flex flex-col gap-4" style={rise(2)}>
-            <DutyCard shifts={overview.upcoming_shifts} now={loadedAt} />
             <WaitingCard review={overview.review_queue} dueSoon={overview.due_soon} />
           </div>
         </div>

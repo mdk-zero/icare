@@ -14,8 +14,8 @@ interface RouteParams {
  * app has no grade for, such as a return demonstration or a Quiz taken on
  * paper (migration 066). On a Lab Activity, Patient Case, Quiz, Case
  * Presentation or skill item it is the student's one score, replacing an
- * earlier entry; on a count it is one more piece of work. Shift counts take
- * no score: they are marked done on /checks.
+ * earlier entry; on a count it is one more piece of work. Attendance items
+ * take no score: they are marked done on /checks.
  *
  * Allowed after the term ends: only the item list is locked then.
  */

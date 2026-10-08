@@ -204,9 +204,9 @@ eq('each entered score is one more piece of work; below the minimum it joins onl
 const filled = one(threeQuizzes, facts({ ...oneGraded, scores: [entry(threeQuizzes, 90), entry(threeQuizzes, 70), entry(threeQuizzes, 85, '2026-09-25T00:00:00Z')] }));
 eq('entered scores can complete a count, which is then yours', [filled.done, filled.source, filled.done_at], [true, 'instructor', '2026-09-25T00:00:00Z']);
 eq('a met count takes no more scores', scoreBlock(threeQuizzes, filled) !== null, true);
-const shiftEntries = one(shifts, facts({ scores: [entry(shifts, 90)] }));
-eq('shift counts ignore entered scores', [shiftEntries.current, shiftEntries.avg_score], [0, null]);
-eq('shift counts take a mark, not a score', scoreBlock(shifts, shiftEntries) !== null, true);
+const attendanceEntries = one(shifts, facts({ scores: [entry(shifts, 90)] }));
+eq('attendance ignores entered scores', [attendanceEntries.current, attendanceEntries.avg_score], [0, null]);
+eq('attendance takes a mark, not a score', scoreBlock(shifts, attendanceEntries) !== null, true);
 const skillEntry = req({ kind: 'skill', skill_id: '5-1', min_score: 50 });
 const skillScored = one(skillEntry, facts({ scores: [entry(skillEntry, 70)] }));
 eq('an entered score is skill evidence', [skillScored.done, skillScored.source, skillScored.level !== null], [true, 'instructor', true]);
