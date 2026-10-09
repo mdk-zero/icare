@@ -4,7 +4,6 @@ import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faCircleCheck,
-  faCircleInfo,
   faLock,
   faPenToSquare,
   faPercent,
@@ -579,29 +578,8 @@ function AutoGrading({
   requirements: CourseRequirement[];
   names: Map<string, string>;
 }) {
-  const total = split.parts.reduce((n, p) => n + p.items.length, 0);
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border border-hairline bg-surface px-4 py-3 text-sm">
-        <span className="text-gray-700">
-          <span className="font-semibold text-gray-900">Final grade</span> = average of all{" "}
-          <span className="font-semibold tabular-nums text-gray-900">{total}</span>
-          {total === 1 ? " item" : " items"}
-        </span>
-        <ul className="flex flex-wrap gap-x-5 gap-y-1.5">
-          {split.parts.map((p, k) => (
-            <li key={p.id} className="flex min-w-0 items-center gap-2">
-              <span className="h-2.5 w-2.5 shrink-0 rounded-[3px]" style={{ background: partColor(k) }} aria-hidden />
-              <span className="truncate text-gray-700">{p.name}</span>
-              <span className="font-semibold tabular-nums text-gray-900">{p.items.length}</span>
-            </li>
-          ))}
-        </ul>
-        <InfoTip label="How the grade is computed">
-          {`The final grade is the average of every item below. Each part's grade is the average of its own items, so a part with more items counts for more. Items are added on their own: every patient case, quiz and case presentation you make for this course lands in its part. Work with no score yet is left out, so a grade reads as the grade so far.`}
-        </InfoTip>
-      </div>
-
       {split.parts.map((p, k) => {
         const filed = new Set(p.items);
         const rows = requirements.filter((r) => filed.has(r.id));
@@ -638,27 +616,5 @@ function AutoGrading({
         );
       })}
     </div>
-  );
-}
-
-/** A small info button whose explanation shows on hover or focus. */
-function InfoTip({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <span className="group relative ml-auto inline-flex">
-      <button
-        type="button"
-        aria-label={label}
-        className="inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-xs font-medium text-gray-500 transition-colors hover:bg-subtle hover:text-brand-700 focus-visible:bg-subtle focus-visible:outline-none"
-      >
-        <FontAwesomeIcon icon={faCircleInfo} className="h-3.5 w-3.5" />
-        {label}
-      </button>
-      <span
-        role="tooltip"
-        className="pointer-events-none absolute right-0 top-full z-20 mt-1.5 w-80 max-w-[80vw] rounded-lg bg-gray-900 px-3 py-2.5 text-xs leading-relaxed text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
-      >
-        {children}
-      </span>
-    </span>
   );
 }

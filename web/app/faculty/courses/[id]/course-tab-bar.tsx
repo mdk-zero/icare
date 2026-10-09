@@ -31,6 +31,7 @@ export const courseTabId = (tab: CourseTab) => `course-tab-${tab}`;
  * nothing on the page. One underline slides to the open tab.
  *
  * Keyboard: the tabs are one stop; arrows, Home and End move between them.
+ * The row stays in view while the tab below it scrolls.
  */
 export default function CourseTabBar({
   tabs,
@@ -70,7 +71,9 @@ export default function CourseTabBar({
   };
 
   return (
-    <div className="mb-4 flex h-12 items-stretch gap-2 shadow-[inset_0_-1px_0_var(--color-hairline)]">
+    // Sticks to the top of the scroll area on every tab; the negative offset
+    // cancels the shell's padding so it sits flush with the top edge.
+    <div className="sticky -top-3 z-30 mb-4 flex h-12 items-stretch gap-2 bg-canvas shadow-[inset_0_-1px_0_var(--color-hairline)] lg:-top-5">
       <div ref={listRef} role="tablist" aria-label="Course" className="relative flex min-w-0 flex-1 items-stretch gap-1 sm:flex-none">
         {tabs.map((t, i) => {
           const on = t.id === active;

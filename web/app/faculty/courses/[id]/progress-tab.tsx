@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import Link from "next/link";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -16,9 +16,13 @@ import Avatar from "../../../components/Avatar";
 import { SkeletonProgressGrid } from "../../../components/skeletons";
 import { usePageData } from "../../../lib/use-page-data";
 import { fetchCourseProgress, type CourseProgress } from "../../../lib/api";
-import { requirementDetail, type ItemProgress } from "../../../lib/course-progress";
+import {
+  requirementDetail,
+  type ItemProgress,
+} from "../../../lib/course-progress";
 import { computeGrades, formatGrade } from "../../../lib/course-grading";
 import GradeBreakdown from "./grade-breakdown";
+import StickySectionGrid, { GROUP_ROW_ATTR } from "./sticky-section-grid";
 import { ItemStatus, canAct, statusText, useEntryDialog } from "../progress-ui";
 import { TopicIcon, groupByTopic } from "../topics";
 
@@ -55,57 +59,80 @@ export default function ProgressTab({
   // Automatic grading (070): the items are activities, scored only by grading them.
   const auto = !!progress?.grading?.auto;
   const graded = useMemo(
-    () => computeGrades(progress?.grading ?? null, progress?.requirements ?? [], progress?.progress ?? {}),
+    () =>
+      computeGrades(
+        progress?.grading ?? null,
+        progress?.requirements ?? [],
+        progress?.progress ?? {},
+      ),
     [progress],
   );
 
-  // Rows are ranked once, lowest progress first, and keep that order while the
-  // instructor works: every write refetches the grid, and re-sorting then
-  // would move the row being scored out from under the pointer.
-  const rosterKey = (progress?.students ?? [])
-    .map((s) => s.id)
-    .sort()
-    .join(",");
-  const [order, setOrder] = useState<{ key: string; rank: Record<string, number> } | null>(null);
-  if (progress && order?.key !== rosterKey) {
-    const ranked = [...progress.students].sort(
-      (a, b) => ratio(a) - ratio(b) || a.name.localeCompare(b.name),
-    );
-    setOrder({ key: rosterKey, rank: Object.fromEntries(ranked.map((s, i) => [s.id, i])) });
-  }
-
-  const { act, busy, dialog } = useEntryDialog((studentId, requirementId, item) =>
-    setData((prev) => {
-      if (!prev?.data) return prev!;
-      return { data: applyTick(prev.data, studentId, requirementId, item) };
-    }),
+  const { act, busy, dialog } = useEntryDialog(
+    (studentId, requirementId, item) =>
+      setData((prev) => {
+        if (!prev?.data) return prev!;
+        return { data: applyTick(prev.data, studentId, requirementId, item) };
+      }),
   );
 
   const groupLabels = useMemo(
     () =>
-      [...new Set((progress?.students ?? []).map((s) => s.group_label).filter(Boolean))].sort(
-        (a, b) => a.localeCompare(b, undefined, { numeric: true }),
-      ),
+      [
+        ...new Set(
+          (progress?.students ?? []).map((s) => s.group_label).filter(Boolean),
+        ),
+      ].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })),
     [progress?.students],
   );
 
   // Search and group narrow the roster; the status counts follow what is left.
+  // By section, then group (the label reads "BSN 3101 · Group A"), then name
+  // A-Z, as on the Performance tab. The order doesn't move while scores change.
   const scoped = useMemo(() => {
-    const rank = order?.rank ?? {};
     const q = query.trim().toLowerCase();
     return [...(progress?.students ?? [])]
-      .sort((a, b) => (rank[a.id] ?? 0) - (rank[b.id] ?? 0))
+      .sort(
+        (a, b) =>
+          (a.group_label || "~").localeCompare(
+            b.group_label || "~",
+            undefined,
+            { numeric: true },
+          ) || a.name.localeCompare(b.name),
+      )
       .filter(
-        (s) => (!group || s.group_label === group) && (!q || s.name.toLowerCase().includes(q)),
+        (s) =>
+          (!group || s.group_label === group) &&
+          (!q || s.name.toLowerCase().includes(q)),
       );
-  }, [progress?.students, order?.rank, query, group]);
-  const isComplete = (s: { done: number; total: number }) => s.total > 0 && s.done === s.total;
+  }, [progress?.students, query, group]);
+  const isComplete = (s: { done: number; total: number }) =>
+    s.total > 0 && s.done === s.total;
   const students =
     filter === "complete"
       ? scoped.filter(isComplete)
       : filter === "incomplete"
         ? scoped.filter((s) => !isComplete(s))
         : scoped;
+  // One table per section, its groups inside it, as on the Performance tab.
+  const rosterSections: {
+    id: string;
+    name: string;
+    students: typeof students;
+  }[] = [];
+  for (const s of students) {
+    const id = s.section_id || "none";
+    let section = rosterSections.find((x) => x.id === id);
+    if (!section) {
+      section = {
+        id,
+        name: s.group_label.split(" · ")[0] || "No section",
+        students: [],
+      };
+      rosterSections.push(section);
+    }
+    section.students.push(s);
+  }
 
   if (loading) {
     return <SkeletonProgressGrid />;
@@ -133,14 +160,16 @@ export default function ProgressTab({
           </button>
         }
       >
-        List what your students must accomplish this term; each student&rsquo;s progress shows here.
+        List what your students must accomplish this term; each student&rsquo;s
+        progress shows here.
       </EmptyState>
     );
   }
   if (progress.students.length === 0) {
     return (
       <EmptyState icon={faUsers} title="No students yet">
-        Students come from the groups you supervise in this course&rsquo;s sections.
+        Students come from the groups you supervise in this course&rsquo;s
+        sections.
       </EmptyState>
     );
   }
@@ -150,10 +179,24 @@ export default function ProgressTab({
   // section opening with a divider.
   const sections = groupByTopic(progress.requirements);
   const cols = sections.flatMap((g, k) =>
-    g.items.map((it, j) => ({ ...it, topic: g.topic, divider: k > 0 && j === 0 })),
+    g.items.map((it, j) => ({
+      ...it,
+      topic: g.topic,
+      divider: k > 0 && j === 0,
+    })),
   );
+  // A column is as wide as its name needs ("Case Presentation #1" more than
+  // "Quiz #1"), with a floor so short names still leave room for a score.
+  const colWidth = (name: string) =>
+    Math.max(7.5, Math.ceil(((name.length * 6.6 + 34) / 16) * 4) / 4);
+  const GRADE_WIDTH = 7.5;
+  /** How many of these students completed the item. */
+  const doneIn = (list: { id: string }[], requirementId: string) =>
+    list.filter((x) => progress.progress[x.id]?.[requirementId]?.done).length;
   const split = progress.grading && !graded.invalid ? progress.grading : null;
-  const gradeStudent = split ? progress.students.find((s) => s.id === gradeFocus) ?? null : null;
+  const gradeStudent = split
+    ? (progress.students.find((s) => s.id === gradeFocus) ?? null)
+    : null;
   const focusedCol = cols.find((c) => c.requirement.id === focus) ?? null;
   const focused = focusedCol?.requirement ?? null;
   const narrowed = query.trim() !== "" || group !== "";
@@ -247,12 +290,18 @@ export default function ProgressTab({
         >
           <div className="min-w-0 flex-1">
             <p className="mb-2 text-gray-700">
-              <span className="font-semibold text-gray-900">{gradeStudent.name}</span> ·{" "}
+              <span className="font-semibold text-gray-900">
+                {gradeStudent.name}
+              </span>{" "}
+              ·{" "}
               {graded.grades[gradeStudent.id].grade === null
                 ? "no scored work yet"
                 : `${formatGrade(graded.grades[gradeStudent.id].grade!)}${graded.grades[gradeStudent.id].scored_weight < 100 ? " so far" : ""}`}
             </p>
-            <GradeBreakdown split={split} grade={graded.grades[gradeStudent.id]} />
+            <GradeBreakdown
+              split={split}
+              grade={graded.grades[gradeStudent.id]}
+            />
           </div>
           <button
             type="button"
@@ -280,12 +329,17 @@ export default function ProgressTab({
           {focusedCol && <TopicIcon topic={focusedCol.topic} size="sm" />}
           <div className="min-w-0 flex-1">
             <p className="text-gray-700">
-              <span className="font-semibold text-gray-900">{focusedCol?.name}</span> ·{" "}
-              {requirementDetail(focused)}
+              <span className="font-semibold text-gray-900">
+                {focusedCol?.name}
+              </span>{" "}
+              · {requirementDetail(focused)}
             </p>
             <p className="mt-0.5 text-xs text-gray-500">
-              {progress.totals[focused.id] ?? 0} of {progress.students.length} students met it
-              {focused.kind === "manual" ? " · click a student’s cell to enter their score" : ""}
+              {progress.totals[focused.id] ?? 0} of {progress.students.length}{" "}
+              students met it
+              {focused.kind === "manual"
+                ? " · click a student’s cell to enter their score"
+                : ""}
             </p>
           </div>
           <button
@@ -306,187 +360,269 @@ export default function ProgressTab({
         </div>
       )}
 
-      <div className="overflow-clip rounded-xl border border-hairline bg-surface">
-        <div className="overflow-x-auto">
-          <table className="w-full border-separate border-spacing-0 text-sm">
-            <thead>
-              <tr>
-                <th
-                  rowSpan={2}
-                  className="sticky left-0 z-10 min-w-[11rem] border-b border-hairline bg-subtle px-3 py-3 text-left align-bottom text-[11px] font-semibold uppercase tracking-wider text-gray-500 sm:min-w-[15rem] sm:px-4"
-                >
-                  Student
-                </th>
-                {sections.map((g, k) => (
-                  <th
-                    key={g.topic.key}
-                    colSpan={g.items.length}
-                    scope="colgroup"
-                    className={`relative bg-subtle px-2 pb-0.5 pt-3 text-left ${k > 0 ? "border-l border-hairline" : ""}`}
-                  >
-                    <span
-                      className={`absolute inset-x-0 top-0 h-[3px] ${g.topic.bar}`}
-                      aria-hidden
-                    />
-                    <span
-                      className={`flex items-center gap-1.5 whitespace-nowrap text-xs font-semibold ${g.topic.text}`}
-                    >
-                      <TopicIcon topic={g.topic} size="sm" />
-                      {g.topic.label}
-                    </span>
-                  </th>
-                ))}
-                {split && (
-                  <th
-                    rowSpan={2}
-                    className="sticky right-0 z-10 min-w-[6.5rem] border-b border-l border-hairline bg-subtle px-3 py-3 text-left align-bottom text-[11px] font-semibold uppercase tracking-wider text-gray-500"
-                  >
-                    Grade
-                  </th>
-                )}
-              </tr>
-              <tr>
-                {cols.map(({ requirement: r, name, divider }) => {
-                  const on = r.id === focus;
-                  return (
+      {students.length === 0 && (
+        <p className="rounded-xl border border-dashed border-gray-300 bg-surface px-4 py-10 text-center text-sm text-gray-500">
+          {narrowed
+            ? "No students match your search or group."
+            : "No students in this view."}
+        </p>
+      )}
+      <div className="space-y-5">
+        {rosterSections.map((section) => {
+          const list = section.students;
+          // Counts in the header are for the whole section, whatever the filters show.
+          const roster = progress.students.filter(
+            (x) => (x.section_id || "none") === section.id,
+          );
+          return (
+            <StickySectionGrid
+              key={section.id}
+              label={`Section ${section.name}`}
+              width={`${17 + cols.reduce((w, c) => w + colWidth(c.name), 0) + (split ? GRADE_WIDTH : 0)}rem`}
+              heading={
+                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                  <h3 className="font-display text-base font-semibold text-gray-900">
+                    Section {section.name}
+                  </h3>
+                  <span className="text-xs text-gray-500">
+                    {list.length} student{list.length === 1 ? "" : "s"}
+                  </span>
+                </div>
+              }
+              colgroup={
+                <colgroup>
+                  <col style={{ width: "17rem" }} />
+                  {cols.map(({ requirement: r, name }) => (
+                    <col key={r.id} style={{ width: `${colWidth(name)}rem` }} />
+                  ))}
+                  {split && <col style={{ width: `${GRADE_WIDTH}rem` }} />}
+                </colgroup>
+              }
+              head={
+                <thead>
+                  <tr>
                     <th
-                      key={r.id}
-                      className={`min-w-[7.5rem] border-b border-hairline px-2 py-2 text-left align-bottom transition-colors ${
-                        on ? "bg-brand-600/10" : "bg-subtle"
-                      } ${divider ? "border-l" : ""}`}
+                      rowSpan={2}
+                      className="sticky left-0 z-10 min-w-[11rem] border-b border-hairline bg-subtle px-3 py-3 text-left align-bottom text-[11px] font-semibold uppercase tracking-wider text-gray-500 sm:min-w-[15rem] sm:px-4"
                     >
-                      <button
-                        type="button"
-                        onClick={() => setFocus(on ? null : r.id)}
-                        aria-pressed={on}
-                        title={requirementDetail(r)}
-                        className="group/col -mx-1 block w-[calc(100%+0.5rem)] rounded-lg px-1 py-1 text-left transition-colors hover:bg-brand-600/10"
+                      <span className="flex items-end justify-between gap-2">
+                        Student
+                        {/* Names the done/total pill in each row below. */}
+                        <span
+                          className="font-medium normal-case tracking-normal text-gray-400"
+                          title="How many of this course's items each student has completed"
+                        >
+                          Items done
+                        </span>
+                      </span>
+                    </th>
+                    {sections.map((g, k) => (
+                      <th
+                        key={g.topic.key}
+                        colSpan={g.items.length}
+                        scope="colgroup"
+                        className={`relative bg-subtle px-2 pb-0.5 pt-3 text-left ${k > 0 ? "border-l border-hairline" : ""}`}
                       >
                         <span
-                          className={`flex items-center gap-1 whitespace-nowrap text-xs font-medium ${
-                            on ? "text-brand-800" : "text-gray-700 group-hover/col:text-brand-700"
-                          }`}
-                        >
-                          {name}
-                          <FontAwesomeIcon
-                            icon={faCircleInfo}
-                            className={`h-2.5 w-2.5 ${on ? "text-brand-600" : "text-gray-300 group-hover/col:text-brand-600"}`}
-                          />
-                        </span>
-                        <span className="mt-1 block text-[11px] font-semibold text-brand-700">
-                          {progress.totals[r.id] ?? 0}/{progress.students.length}
-                        </span>
-                      </button>
-                    </th>
-                  );
-                })}
-              </tr>
-            </thead>
-            <tbody>
-              {students.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={cols.length + (split ? 2 : 1)}
-                    className="px-4 py-10 text-center text-sm text-gray-500"
-                  >
-                    {narrowed
-                      ? "No students match your search or group."
-                      : "No students in this view."}
-                  </td>
-                </tr>
-              )}
-              {students.map((s) => (
-                <tr key={s.id} className="group">
-                  <td className="sticky left-0 z-10 border-b border-hairline bg-surface px-3 py-2.5 group-hover:bg-subtle sm:px-4">
-                    <div className="flex items-center gap-3">
-                      <span className="hidden shrink-0 sm:block">
-                        <Avatar
-                          name={s.name}
-                          src={s.picture_url}
-                          userId={s.id}
-                          sex={s.sex}
-                          size="sm"
+                          className={`absolute inset-x-0 top-0 h-[3px] ${g.topic.bar}`}
+                          aria-hidden
                         />
-                      </span>
-                      <div className="min-w-0">
-                        <Link
-                          href={`/faculty/students/${s.id}`}
-                          className="block truncate font-medium text-gray-800 hover:underline"
+                        <span
+                          className={`flex items-center gap-1.5 whitespace-nowrap text-xs font-semibold ${g.topic.text}`}
                         >
-                          {s.name}
-                        </Link>
-                        <p className="truncate text-xs text-gray-500">{s.group_label}</p>
-                      </div>
-                      <span
-                        className={`ml-auto shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                          s.total > 0 && s.done === s.total
-                            ? "bg-emerald-50 text-emerald-700"
-                            : "bg-gray-100 text-gray-600"
-                        }`}
+                          <TopicIcon topic={g.topic} size="sm" />
+                          {g.topic.label}
+                        </span>
+                      </th>
+                    ))}
+                    {split && (
+                      <th
+                        rowSpan={2}
+                        className="sticky right-0 z-10 border-b border-l border-hairline bg-subtle px-3 py-3 text-left align-bottom text-[11px] font-semibold uppercase tracking-wider text-gray-500"
                       >
-                        {s.done}/{s.total}
-                      </span>
-                    </div>
-                  </td>
-                  {cols.map(({ requirement: r, name, divider }) => {
-                    const item = progress.progress[s.id]?.[r.id];
-                    // With automatic grading (070) a score only comes from grading the
-                    // activity itself, so nothing is entered here.
-                    const actionable = !auto && canAct(r, item);
-                    const text = statusText(r, item);
-                    const key = `${s.id}:${r.id}`;
-                    return (
-                      <td
-                        key={r.id}
-                        className={`border-b border-hairline px-2 py-2.5 group-hover:bg-subtle ${r.id === focus ? "bg-brand-600/[0.04]" : ""} ${
-                          divider ? "border-l" : ""
-                        }`}
-                      >
-                        <button
-                          type="button"
-                          title={text}
-                          aria-label={`${s.name}, ${name}: ${text}`}
-                          disabled={!actionable || busy === key}
-                          onClick={() => act(offeringId, s, r, name, item)}
-                          className={`rounded-full transition-transform ${
-                            actionable ? "cursor-pointer hover:scale-110" : "cursor-default"
-                          } ${busy === key ? "animate-pulse" : ""}`}
+                        Grade
+                      </th>
+                    )}
+                  </tr>
+                  <tr>
+                    {cols.map(({ requirement: r, name, divider }) => {
+                      const on = r.id === focus;
+                      return (
+                        <th
+                          key={r.id}
+                          className={`border-b border-hairline px-2 py-2 text-left align-bottom transition-colors ${
+                            on ? "bg-brand-600/10" : "bg-subtle"
+                          } ${divider ? "border-l" : ""}`}
                         >
-                          <ItemStatus requirement={r} item={item} />
-                        </button>
+                          <button
+                            type="button"
+                            onClick={() => setFocus(on ? null : r.id)}
+                            aria-pressed={on}
+                            title={`${requirementDetail(r)}\n${doneIn(roster, r.id)} of ${roster.length} students in this section completed it.`}
+                            className="group/col -mx-1 block w-[calc(100%+0.5rem)] rounded-lg px-1 py-1 text-left transition-colors hover:bg-brand-600/10"
+                          >
+                            <span
+                              className={`flex items-center gap-1 whitespace-nowrap text-xs font-medium ${
+                                on
+                                  ? "text-brand-800"
+                                  : "text-gray-700 group-hover/col:text-brand-700"
+                              }`}
+                            >
+                              {name}
+                              <FontAwesomeIcon
+                                icon={faCircleInfo}
+                                className={`h-2.5 w-2.5 ${on ? "text-brand-600" : "text-gray-300 group-hover/col:text-brand-600"}`}
+                              />
+                            </span>
+                            <span className="mt-1 block text-[11px] font-semibold text-brand-700">
+                              {doneIn(roster, r.id)}/{roster.length}
+                            </span>
+                          </button>
+                        </th>
+                      );
+                    })}
+                  </tr>
+                </thead>
+              }
+            >
+              <tbody>
+                {list.map((s, i) => (
+                  <Fragment key={s.id}>
+                    {(i === 0 || list[i - 1].group_label !== s.group_label) && (
+                      <tr
+                        {...{
+                          [GROUP_ROW_ATTR]: `${s.group_label.split(" · ").slice(1).join(" · ") || "No group"} · ${
+                            list.filter((x) => x.group_label === s.group_label)
+                              .length
+                          } students`,
+                        }}
+                      >
+                        <th
+                          colSpan={cols.length + (split ? 2 : 1)}
+                          scope="colgroup"
+                          className="border-b border-hairline bg-subtle/60 px-0 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-500"
+                        >
+                          <span className="sticky left-0 inline-block px-4">
+                            {s.group_label.split(" · ").slice(1).join(" · ") ||
+                              "No group"}
+                            <span className="ml-2 font-medium normal-case tracking-normal text-gray-400">
+                              {
+                                list.filter(
+                                  (x) => x.group_label === s.group_label,
+                                ).length
+                              }{" "}
+                              students
+                            </span>
+                          </span>
+                        </th>
+                      </tr>
+                    )}
+                    <tr className="group">
+                      <td className="sticky left-0 z-10 border-b border-hairline bg-surface px-3 py-2.5 group-hover:bg-subtle sm:px-4">
+                        <div className="flex items-center gap-3">
+                          <span className="hidden shrink-0 sm:block">
+                            <Avatar
+                              name={s.name}
+                              src={s.picture_url}
+                              userId={s.id}
+                              sex={s.sex}
+                              size="sm"
+                            />
+                          </span>
+                          <div className="min-w-0">
+                            <Link
+                              href={`/faculty/students/${s.id}`}
+                              className="block truncate font-medium text-gray-800 hover:underline"
+                            >
+                              {s.name}
+                            </Link>
+                            <p className="truncate text-xs text-gray-500">
+                              {s.group_label}
+                            </p>
+                          </div>
+                          <span
+                            title={`${s.done} of ${s.total} items completed`}
+                            aria-label={`${s.done} of ${s.total} items completed`}
+                            className={`ml-auto shrink-0 cursor-pointer rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                              s.total > 0 && s.done === s.total
+                                ? "bg-emerald-50 text-emerald-700"
+                                : "bg-gray-100 text-gray-600"
+                            }`}
+                          >
+                            {s.done}/{s.total}
+                          </span>
+                        </div>
                       </td>
-                    );
-                  })}
-                  {split && (
-                    <td className="sticky right-0 z-10 border-b border-l border-hairline bg-surface px-3 py-2.5 group-hover:bg-subtle">
-                      <GradeCell
-                        grade={graded.grades[s.id]?.grade ?? null}
-                        scoredWeight={graded.grades[s.id]?.scored_weight ?? 0}
-                        open={gradeFocus === s.id}
-                        label={s.name}
-                        onClick={() => setGradeFocus(gradeFocus === s.id ? null : s.id)}
-                      />
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                      {cols.map(({ requirement: r, name, divider }) => {
+                        const item = progress.progress[s.id]?.[r.id];
+                        // With automatic grading (070) a score only comes from grading the
+                        // activity itself, so nothing is entered here.
+                        const actionable = !auto && canAct(r, item);
+                        const text = statusText(r, item);
+                        const key = `${s.id}:${r.id}`;
+                        return (
+                          <td
+                            key={r.id}
+                            className={`border-b border-hairline px-2 py-2.5 group-hover:bg-subtle ${r.id === focus ? "bg-brand-600/[0.04]" : ""} ${
+                              divider ? "border-l" : ""
+                            }`}
+                          >
+                            <button
+                              type="button"
+                              title={text}
+                              aria-label={`${s.name}, ${name}: ${text}`}
+                              disabled={!actionable || busy === key}
+                              onClick={() => act(offeringId, s, r, name, item)}
+                              className={`rounded-full transition-transform ${
+                                actionable
+                                  ? "cursor-pointer hover:scale-110"
+                                  : "cursor-default"
+                              } ${busy === key ? "animate-pulse" : ""}`}
+                            >
+                              <ItemStatus requirement={r} item={item} />
+                            </button>
+                          </td>
+                        );
+                      })}
+                      {split && (
+                        <td className="sticky right-0 z-10 border-b border-l border-hairline bg-surface px-3 py-2.5 group-hover:bg-subtle">
+                          <GradeCell
+                            grade={graded.grades[s.id]?.grade ?? null}
+                            scoredWeight={
+                              graded.grades[s.id]?.scored_weight ?? 0
+                            }
+                            open={gradeFocus === s.id}
+                            label={s.name}
+                            onClick={() =>
+                              setGradeFocus(gradeFocus === s.id ? null : s.id)
+                            }
+                          />
+                        </td>
+                      )}
+                    </tr>
+                  </Fragment>
+                ))}
+              </tbody>
+            </StickySectionGrid>
+          );
+        })}
       </div>
       <p className="mt-2 text-xs text-gray-500">
         {auto ? (
           <>
-            A cell shows the student&rsquo;s best score on that patient case, quiz or case presentation, and
-            fills in on its own once you grade the work. Scores can&rsquo;t be entered here.
-            {split && " The Grade column is the average of every scored item; work with no score yet is left out."}
+            A cell shows the student&rsquo;s best score on that patient case,
+            quiz or case presentation, and fills in on its own once you grade
+            the work. Scores can&rsquo;t be entered here.
+            {split &&
+              " The Grade column is the average of every scored item; work with no score yet is left out."}
           </>
         ) : (
           <>
-            A cell shows the best score on that activity or skill; a count shows the average across that
-            work this term. Click a cell with no grade to enter the score the student earned outside the
-            app; on a count, each score adds one more piece of work. Grades from graded work can&rsquo;t
-            be changed here.
+            A cell shows the best score on that activity or skill; a count shows
+            the average across that work this term. Click a cell with no grade
+            to enter the score the student earned outside the app; on a count,
+            each score adds one more piece of work. Grades from graded work
+            can&rsquo;t be changed here.
             {split &&
               " The Grade column weighs these scores by your grading split; work with no score yet is left out."}
           </>
@@ -520,16 +656,18 @@ function GradeCell({
       aria-label={`${label}: grade ${grade === null ? "not yet scored" : `${formatGrade(grade)}${soFar ? " so far" : ""}`}`}
       className={`-mx-1.5 block rounded-lg px-1.5 py-0.5 text-left transition-colors hover:bg-brand-600/10 ${open ? "bg-brand-600/10" : ""}`}
     >
-      <span className={`block font-semibold tabular-nums ${grade === null ? "text-gray-400" : "text-gray-900"}`}>
+      <span
+        className={`block font-semibold tabular-nums ${grade === null ? "text-gray-400" : "text-gray-900"}`}
+      >
         {grade === null ? "—" : formatGrade(grade)}
       </span>
-      {soFar && <span className="block text-[10px] font-medium uppercase tracking-wider text-gray-400">so far</span>}
+      {soFar && (
+        <span className="block text-[10px] font-medium uppercase tracking-wider text-gray-400">
+          so far
+        </span>
+      )}
     </button>
   );
-}
-
-function ratio(s: { done: number; total: number }) {
-  return s.total === 0 ? 1 : s.done / s.total;
 }
 
 /** The progress after one tick: the cell, the student's count and the item's total. */
@@ -547,8 +685,13 @@ function applyTick(
       ...data.progress,
       [studentId]: { ...data.progress[studentId], [requirementId]: item },
     },
-    students: data.students.map((s) => (s.id === studentId ? { ...s, done: s.done + delta } : s)),
-    totals: { ...data.totals, [requirementId]: (data.totals[requirementId] ?? 0) + delta },
+    students: data.students.map((s) =>
+      s.id === studentId ? { ...s, done: s.done + delta } : s,
+    ),
+    totals: {
+      ...data.totals,
+      [requirementId]: (data.totals[requirementId] ?? 0) + delta,
+    },
   };
 }
 
