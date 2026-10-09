@@ -22,6 +22,7 @@ import {
 } from "../../../lib/course-progress";
 import { computeGrades, formatGrade } from "../../../lib/course-grading";
 import GradeBreakdown from "./grade-breakdown";
+import StickySectionGrid, { GROUP_ROW_ATTR } from "./sticky-section-grid";
 import { ItemStatus, canAct, statusText, useEntryDialog } from "../progress-ui";
 import { TopicIcon, groupByTopic } from "../topics";
 
@@ -184,6 +185,14 @@ export default function ProgressTab({
       divider: k > 0 && j === 0,
     })),
   );
+  // A column is as wide as its name needs ("Case Presentation #1" more than
+  // "Quiz #1"), with a floor so short names still leave room for a score.
+  const colWidth = (name: string) =>
+    Math.max(7.5, Math.ceil(((name.length * 6.6 + 34) / 16) * 4) / 4);
+  const GRADE_WIDTH = 7.5;
+  /** How many of these students completed the item. */
+  const doneIn = (list: { id: string }[], requirementId: string) =>
+    list.filter((x) => progress.progress[x.id]?.[requirementId]?.done).length;
   const split = progress.grading && !graded.invalid ? progress.grading : null;
   const gradeStudent = split
     ? (progress.students.find((s) => s.id === gradeFocus) ?? null)
@@ -361,217 +370,240 @@ export default function ProgressTab({
       <div className="space-y-5">
         {rosterSections.map((section) => {
           const list = section.students;
+          // Counts in the header are for the whole section, whatever the filters show.
+          const roster = progress.students.filter(
+            (x) => (x.section_id || "none") === section.id,
+          );
           return (
-            <section
+            <StickySectionGrid
               key={section.id}
-              aria-label={`Section ${section.name}`}
-              className="space-y-2"
-            >
-              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                <h3 className="font-display text-base font-semibold text-gray-900">
-                  Section {section.name}
-                </h3>
-                <span className="text-xs text-gray-500">
-                  {list.length} student{list.length === 1 ? "" : "s"}
-                </span>
-              </div>
-              <div className="overflow-clip rounded-xl border border-hairline bg-surface">
-                <div className="overflow-x-auto">
-                  <table className="w-full border-separate border-spacing-0 text-sm">
-                    <thead>
-                      <tr>
-                        <th
-                          rowSpan={2}
-                          className="sticky left-0 z-10 min-w-[11rem] border-b border-hairline bg-subtle px-3 py-3 text-left align-bottom text-[11px] font-semibold uppercase tracking-wider text-gray-500 sm:min-w-[15rem] sm:px-4"
-                        >
-                          Student
-                        </th>
-                        {sections.map((g, k) => (
-                          <th
-                            key={g.topic.key}
-                            colSpan={g.items.length}
-                            scope="colgroup"
-                            className={`relative bg-subtle px-2 pb-0.5 pt-3 text-left ${k > 0 ? "border-l border-hairline" : ""}`}
-                          >
-                            <span
-                              className={`absolute inset-x-0 top-0 h-[3px] ${g.topic.bar}`}
-                              aria-hidden
-                            />
-                            <span
-                              className={`flex items-center gap-1.5 whitespace-nowrap text-xs font-semibold ${g.topic.text}`}
-                            >
-                              <TopicIcon topic={g.topic} size="sm" />
-                              {g.topic.label}
-                            </span>
-                          </th>
-                        ))}
-                        {split && (
-                          <th
-                            rowSpan={2}
-                            className="sticky right-0 z-10 min-w-[6.5rem] border-b border-l border-hairline bg-subtle px-3 py-3 text-left align-bottom text-[11px] font-semibold uppercase tracking-wider text-gray-500"
-                          >
-                            Grade
-                          </th>
-                        )}
-                      </tr>
-                      <tr>
-                        {cols.map(({ requirement: r, name, divider }) => {
-                          const on = r.id === focus;
-                          return (
-                            <th
-                              key={r.id}
-                              className={`min-w-[7.5rem] border-b border-hairline px-2 py-2 text-left align-bottom transition-colors ${
-                                on ? "bg-brand-600/10" : "bg-subtle"
-                              } ${divider ? "border-l" : ""}`}
-                            >
-                              <button
-                                type="button"
-                                onClick={() => setFocus(on ? null : r.id)}
-                                aria-pressed={on}
-                                title={requirementDetail(r)}
-                                className="group/col -mx-1 block w-[calc(100%+0.5rem)] rounded-lg px-1 py-1 text-left transition-colors hover:bg-brand-600/10"
-                              >
-                                <span
-                                  className={`flex items-center gap-1 whitespace-nowrap text-xs font-medium ${
-                                    on
-                                      ? "text-brand-800"
-                                      : "text-gray-700 group-hover/col:text-brand-700"
-                                  }`}
-                                >
-                                  {name}
-                                  <FontAwesomeIcon
-                                    icon={faCircleInfo}
-                                    className={`h-2.5 w-2.5 ${on ? "text-brand-600" : "text-gray-300 group-hover/col:text-brand-600"}`}
-                                  />
-                                </span>
-                                <span className="mt-1 block text-[11px] font-semibold text-brand-700">
-                                  {progress.totals[r.id] ?? 0}/
-                                  {progress.students.length}
-                                </span>
-                              </button>
-                            </th>
-                          );
-                        })}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {list.map((s, i) => (
-                        <Fragment key={s.id}>
-                          {(i === 0 ||
-                            list[i - 1].group_label !== s.group_label) && (
-                            <tr>
-                              <th
-                                colSpan={cols.length + (split ? 2 : 1)}
-                                scope="colgroup"
-                                className="sticky left-0 border-b border-hairline bg-subtle/60 px-4 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-500"
-                              >
-                                {s.group_label
-                                  .split(" · ")
-                                  .slice(1)
-                                  .join(" · ") || "No group"}
-                                <span className="ml-2 font-medium normal-case tracking-normal text-gray-400">
-                                  {
-                                    list.filter(
-                                      (x) => x.group_label === s.group_label,
-                                    ).length
-                                  }{" "}
-                                  students
-                                </span>
-                              </th>
-                            </tr>
-                          )}
-                          <tr className="group">
-                            <td className="sticky left-0 z-10 border-b border-hairline bg-surface px-3 py-2.5 group-hover:bg-subtle sm:px-4">
-                              <div className="flex items-center gap-3">
-                                <span className="hidden shrink-0 sm:block">
-                                  <Avatar
-                                    name={s.name}
-                                    src={s.picture_url}
-                                    userId={s.id}
-                                    sex={s.sex}
-                                    size="sm"
-                                  />
-                                </span>
-                                <div className="min-w-0">
-                                  <Link
-                                    href={`/faculty/students/${s.id}`}
-                                    className="block truncate font-medium text-gray-800 hover:underline"
-                                  >
-                                    {s.name}
-                                  </Link>
-                                  <p className="truncate text-xs text-gray-500">
-                                    {s.group_label}
-                                  </p>
-                                </div>
-                                <span
-                                  className={`ml-auto shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                                    s.total > 0 && s.done === s.total
-                                      ? "bg-emerald-50 text-emerald-700"
-                                      : "bg-gray-100 text-gray-600"
-                                  }`}
-                                >
-                                  {s.done}/{s.total}
-                                </span>
-                              </div>
-                            </td>
-                            {cols.map(({ requirement: r, name, divider }) => {
-                              const item = progress.progress[s.id]?.[r.id];
-                              // With automatic grading (070) a score only comes from grading the
-                              // activity itself, so nothing is entered here.
-                              const actionable = !auto && canAct(r, item);
-                              const text = statusText(r, item);
-                              const key = `${s.id}:${r.id}`;
-                              return (
-                                <td
-                                  key={r.id}
-                                  className={`border-b border-hairline px-2 py-2.5 group-hover:bg-subtle ${r.id === focus ? "bg-brand-600/[0.04]" : ""} ${
-                                    divider ? "border-l" : ""
-                                  }`}
-                                >
-                                  <button
-                                    type="button"
-                                    title={text}
-                                    aria-label={`${s.name}, ${name}: ${text}`}
-                                    disabled={!actionable || busy === key}
-                                    onClick={() =>
-                                      act(offeringId, s, r, name, item)
-                                    }
-                                    className={`rounded-full transition-transform ${
-                                      actionable
-                                        ? "cursor-pointer hover:scale-110"
-                                        : "cursor-default"
-                                    } ${busy === key ? "animate-pulse" : ""}`}
-                                  >
-                                    <ItemStatus requirement={r} item={item} />
-                                  </button>
-                                </td>
-                              );
-                            })}
-                            {split && (
-                              <td className="sticky right-0 z-10 border-b border-l border-hairline bg-surface px-3 py-2.5 group-hover:bg-subtle">
-                                <GradeCell
-                                  grade={graded.grades[s.id]?.grade ?? null}
-                                  scoredWeight={
-                                    graded.grades[s.id]?.scored_weight ?? 0
-                                  }
-                                  open={gradeFocus === s.id}
-                                  label={s.name}
-                                  onClick={() =>
-                                    setGradeFocus(
-                                      gradeFocus === s.id ? null : s.id,
-                                    )
-                                  }
-                                />
-                              </td>
-                            )}
-                          </tr>
-                        </Fragment>
-                      ))}
-                    </tbody>
-                  </table>
+              label={`Section ${section.name}`}
+              width={`${17 + cols.reduce((w, c) => w + colWidth(c.name), 0) + (split ? GRADE_WIDTH : 0)}rem`}
+              heading={
+                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                  <h3 className="font-display text-base font-semibold text-gray-900">
+                    Section {section.name}
+                  </h3>
+                  <span className="text-xs text-gray-500">
+                    {list.length} student{list.length === 1 ? "" : "s"}
+                  </span>
                 </div>
-              </div>
-            </section>
+              }
+              colgroup={
+                <colgroup>
+                  <col style={{ width: "17rem" }} />
+                  {cols.map(({ requirement: r, name }) => (
+                    <col key={r.id} style={{ width: `${colWidth(name)}rem` }} />
+                  ))}
+                  {split && <col style={{ width: `${GRADE_WIDTH}rem` }} />}
+                </colgroup>
+              }
+              head={
+                <thead>
+                  <tr>
+                    <th
+                      rowSpan={2}
+                      className="sticky left-0 z-10 min-w-[11rem] border-b border-hairline bg-subtle px-3 py-3 text-left align-bottom text-[11px] font-semibold uppercase tracking-wider text-gray-500 sm:min-w-[15rem] sm:px-4"
+                    >
+                      <span className="flex items-end justify-between gap-2">
+                        Student
+                        {/* Names the done/total pill in each row below. */}
+                        <span
+                          className="font-medium normal-case tracking-normal text-gray-400"
+                          title="How many of this course's items each student has completed"
+                        >
+                          Items done
+                        </span>
+                      </span>
+                    </th>
+                    {sections.map((g, k) => (
+                      <th
+                        key={g.topic.key}
+                        colSpan={g.items.length}
+                        scope="colgroup"
+                        className={`relative bg-subtle px-2 pb-0.5 pt-3 text-left ${k > 0 ? "border-l border-hairline" : ""}`}
+                      >
+                        <span
+                          className={`absolute inset-x-0 top-0 h-[3px] ${g.topic.bar}`}
+                          aria-hidden
+                        />
+                        <span
+                          className={`flex items-center gap-1.5 whitespace-nowrap text-xs font-semibold ${g.topic.text}`}
+                        >
+                          <TopicIcon topic={g.topic} size="sm" />
+                          {g.topic.label}
+                        </span>
+                      </th>
+                    ))}
+                    {split && (
+                      <th
+                        rowSpan={2}
+                        className="sticky right-0 z-10 border-b border-l border-hairline bg-subtle px-3 py-3 text-left align-bottom text-[11px] font-semibold uppercase tracking-wider text-gray-500"
+                      >
+                        Grade
+                      </th>
+                    )}
+                  </tr>
+                  <tr>
+                    {cols.map(({ requirement: r, name, divider }) => {
+                      const on = r.id === focus;
+                      return (
+                        <th
+                          key={r.id}
+                          className={`border-b border-hairline px-2 py-2 text-left align-bottom transition-colors ${
+                            on ? "bg-brand-600/10" : "bg-subtle"
+                          } ${divider ? "border-l" : ""}`}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => setFocus(on ? null : r.id)}
+                            aria-pressed={on}
+                            title={`${requirementDetail(r)}\n${doneIn(roster, r.id)} of ${roster.length} students in this section completed it.`}
+                            className="group/col -mx-1 block w-[calc(100%+0.5rem)] rounded-lg px-1 py-1 text-left transition-colors hover:bg-brand-600/10"
+                          >
+                            <span
+                              className={`flex items-center gap-1 whitespace-nowrap text-xs font-medium ${
+                                on
+                                  ? "text-brand-800"
+                                  : "text-gray-700 group-hover/col:text-brand-700"
+                              }`}
+                            >
+                              {name}
+                              <FontAwesomeIcon
+                                icon={faCircleInfo}
+                                className={`h-2.5 w-2.5 ${on ? "text-brand-600" : "text-gray-300 group-hover/col:text-brand-600"}`}
+                              />
+                            </span>
+                            <span className="mt-1 block text-[11px] font-semibold text-brand-700">
+                              {doneIn(roster, r.id)}/{roster.length}
+                            </span>
+                          </button>
+                        </th>
+                      );
+                    })}
+                  </tr>
+                </thead>
+              }
+            >
+              <tbody>
+                {list.map((s, i) => (
+                  <Fragment key={s.id}>
+                    {(i === 0 || list[i - 1].group_label !== s.group_label) && (
+                      <tr
+                        {...{
+                          [GROUP_ROW_ATTR]: `${s.group_label.split(" · ").slice(1).join(" · ") || "No group"} · ${
+                            list.filter((x) => x.group_label === s.group_label)
+                              .length
+                          } students`,
+                        }}
+                      >
+                        <th
+                          colSpan={cols.length + (split ? 2 : 1)}
+                          scope="colgroup"
+                          className="border-b border-hairline bg-subtle/60 px-0 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-500"
+                        >
+                          <span className="sticky left-0 inline-block px-4">
+                            {s.group_label.split(" · ").slice(1).join(" · ") ||
+                              "No group"}
+                            <span className="ml-2 font-medium normal-case tracking-normal text-gray-400">
+                              {
+                                list.filter(
+                                  (x) => x.group_label === s.group_label,
+                                ).length
+                              }{" "}
+                              students
+                            </span>
+                          </span>
+                        </th>
+                      </tr>
+                    )}
+                    <tr className="group">
+                      <td className="sticky left-0 z-10 border-b border-hairline bg-surface px-3 py-2.5 group-hover:bg-subtle sm:px-4">
+                        <div className="flex items-center gap-3">
+                          <span className="hidden shrink-0 sm:block">
+                            <Avatar
+                              name={s.name}
+                              src={s.picture_url}
+                              userId={s.id}
+                              sex={s.sex}
+                              size="sm"
+                            />
+                          </span>
+                          <div className="min-w-0">
+                            <Link
+                              href={`/faculty/students/${s.id}`}
+                              className="block truncate font-medium text-gray-800 hover:underline"
+                            >
+                              {s.name}
+                            </Link>
+                            <p className="truncate text-xs text-gray-500">
+                              {s.group_label}
+                            </p>
+                          </div>
+                          <span
+                            title={`${s.done} of ${s.total} items completed`}
+                            aria-label={`${s.done} of ${s.total} items completed`}
+                            className={`ml-auto shrink-0 cursor-pointer rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                              s.total > 0 && s.done === s.total
+                                ? "bg-emerald-50 text-emerald-700"
+                                : "bg-gray-100 text-gray-600"
+                            }`}
+                          >
+                            {s.done}/{s.total}
+                          </span>
+                        </div>
+                      </td>
+                      {cols.map(({ requirement: r, name, divider }) => {
+                        const item = progress.progress[s.id]?.[r.id];
+                        // With automatic grading (070) a score only comes from grading the
+                        // activity itself, so nothing is entered here.
+                        const actionable = !auto && canAct(r, item);
+                        const text = statusText(r, item);
+                        const key = `${s.id}:${r.id}`;
+                        return (
+                          <td
+                            key={r.id}
+                            className={`border-b border-hairline px-2 py-2.5 group-hover:bg-subtle ${r.id === focus ? "bg-brand-600/[0.04]" : ""} ${
+                              divider ? "border-l" : ""
+                            }`}
+                          >
+                            <button
+                              type="button"
+                              title={text}
+                              aria-label={`${s.name}, ${name}: ${text}`}
+                              disabled={!actionable || busy === key}
+                              onClick={() => act(offeringId, s, r, name, item)}
+                              className={`rounded-full transition-transform ${
+                                actionable
+                                  ? "cursor-pointer hover:scale-110"
+                                  : "cursor-default"
+                              } ${busy === key ? "animate-pulse" : ""}`}
+                            >
+                              <ItemStatus requirement={r} item={item} />
+                            </button>
+                          </td>
+                        );
+                      })}
+                      {split && (
+                        <td className="sticky right-0 z-10 border-b border-l border-hairline bg-surface px-3 py-2.5 group-hover:bg-subtle">
+                          <GradeCell
+                            grade={graded.grades[s.id]?.grade ?? null}
+                            scoredWeight={
+                              graded.grades[s.id]?.scored_weight ?? 0
+                            }
+                            open={gradeFocus === s.id}
+                            label={s.name}
+                            onClick={() =>
+                              setGradeFocus(gradeFocus === s.id ? null : s.id)
+                            }
+                          />
+                        </td>
+                      )}
+                    </tr>
+                  </Fragment>
+                ))}
+              </tbody>
+            </StickySectionGrid>
           );
         })}
       </div>
