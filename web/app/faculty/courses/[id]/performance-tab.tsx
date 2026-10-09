@@ -160,6 +160,20 @@ export default function PerformanceTab({
   }
 
   const gradeOf = (id: string) => graded.grades[id];
+  // The label reads "BSN 3101 · Group A": the section, then the group.
+  const sectionName = (label: string) => label.split(" · ")[0] || "No section";
+  const groupName = (label: string) =>
+    label.split(" · ").slice(1).join(" · ") || "No group";
+  const sections: { id: string; name: string; students: typeof rows }[] = [];
+  for (const s of rows) {
+    const id = s.section_id || "none";
+    let section = sections.find((x) => x.id === id);
+    if (!section) {
+      section = { id, name: sectionName(s.group_label), students: [] };
+      sections.push(section);
+    }
+    section.students.push(s);
+  }
   const classPart = (partId: string) =>
     mean(rows.map((s) => gradeOf(s.id)?.parts[partId]));
   const classFinal = mean(rows.map((s) => gradeOf(s.id)?.grade));
@@ -311,156 +325,191 @@ export default function PerformanceTab({
         )}
       </div>
 
-      {/* One row per student */}
-      <div className="overflow-clip rounded-xl border border-hairline bg-surface">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[40rem] border-separate border-spacing-0 text-sm">
-            <thead>
-              <tr>
-                <th className="sticky left-0 z-10 border-b border-hairline bg-subtle px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-500">
-                  Student
-                </th>
-                {parts.map((p, k) => (
-                  <th
-                    key={p.id}
-                    className="border-b border-hairline bg-subtle px-3 py-3 text-right align-bottom"
-                  >
-                    <span className="flex items-center justify-end gap-1.5 text-xs font-semibold text-gray-700">
-                      <span
-                        className="h-2 w-2 shrink-0 rounded-[3px]"
-                        style={{ background: partColor(k) }}
-                        aria-hidden
-                      />
-                      {p.name}
-                    </span>
-                    <span className="block text-[11px] font-medium tabular-nums text-gray-400">
-                      {auto
-                        ? `${p.items.length} item${p.items.length === 1 ? "" : "s"}`
-                        : `${p.weight}% of grade`}
-                    </span>
-                  </th>
-                ))}
-                <th className="border-b border-hairline bg-subtle px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-gray-500">
-                  Final grade
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((s, i) => {
-                const g = gradeOf(s.id);
-                // A heading row where a new section and group starts.
-                const startsGroup =
-                  i === 0 || rows[i - 1].group_label !== s.group_label;
-                const scored = parts.filter((p) => g?.parts[p.id] != null);
-                const formula = auto
-                  ? `average of ${Math.round(((g?.scored_weight ?? 0) / 100) * itemCount)} of ${itemCount} items`
-                  : scored
-                      .map((p) => `${num(g!.parts[p.id]!)} × ${p.weight}%`)
-                      .join(" + ");
-                return (
-                  <Fragment key={s.id}>
-                    {startsGroup && (
-                      <tr>
+      {/* One table per section, its groups inside it */}
+      {sections.map((section) => {
+        const list = section.students;
+        const final = mean(list.map((s) => gradeOf(s.id)?.grade));
+        return (
+          <section
+            key={section.id}
+            aria-label={`Section ${section.name}`}
+            className="space-y-2"
+          >
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <h3 className="font-display text-base font-semibold text-gray-900">
+                Section {section.name}
+              </h3>
+              <span className="text-xs text-gray-500">
+                {list.length} student{list.length === 1 ? "" : "s"}
+              </span>
+              <span className="ml-auto text-sm text-gray-600">
+                Section average{" "}
+                <span
+                  className={`font-display font-semibold tabular-nums ${tone(final)}`}
+                >
+                  {final === null ? "—" : formatGrade(final)}
+                </span>
+              </span>
+            </div>
+            <div className="overflow-clip rounded-xl border border-hairline bg-surface">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[40rem] border-separate border-spacing-0 text-sm">
+                  <thead>
+                    <tr>
+                      <th className="sticky left-0 z-10 border-b border-hairline bg-subtle px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+                        Student
+                      </th>
+                      {parts.map((p, k) => (
                         <th
-                          colSpan={parts.length + 2}
-                          scope="colgroup"
-                          className="sticky left-0 border-b border-hairline bg-subtle/60 px-4 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-500"
+                          key={p.id}
+                          className="border-b border-hairline bg-subtle px-3 py-3 text-right align-bottom"
                         >
-                          {s.group_label || "No group"}
-                          <span className="ml-2 font-medium normal-case tracking-normal text-gray-400">
-                            {
-                              rows.filter(
-                                (x) => x.group_label === s.group_label,
-                              ).length
-                            }{" "}
-                            students
+                          <span className="flex items-center justify-end gap-1.5 text-xs font-semibold text-gray-700">
+                            <span
+                              className="h-2 w-2 shrink-0 rounded-[3px]"
+                              style={{ background: partColor(k) }}
+                              aria-hidden
+                            />
+                            {p.name}
+                          </span>
+                          <span className="block text-[11px] font-medium tabular-nums text-gray-400">
+                            {auto
+                              ? `${p.items.length} item${p.items.length === 1 ? "" : "s"}`
+                              : `${p.weight}% of grade`}
                           </span>
                         </th>
-                      </tr>
-                    )}
-                    <tr className="group">
-                      <td className="sticky left-0 z-10 border-b border-hairline bg-surface px-4 py-2.5 group-hover:bg-subtle">
-                        <div className="flex items-center gap-3">
-                          <Avatar
-                            name={s.name}
-                            src={s.picture_url}
-                            userId={s.id}
-                            sex={s.sex}
-                            size="sm"
-                          />
-                          <div className="min-w-0">
-                            <Link
-                              href={`/faculty/students/${s.id}`}
-                              className="block truncate font-medium text-gray-800 hover:underline"
-                            >
-                              {s.name}
-                            </Link>
-                            <p className="truncate text-xs text-gray-500">
-                              {s.group_label}
-                            </p>
-                          </div>
-                        </div>
+                      ))}
+                      <th className="border-b border-hairline bg-subtle px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+                        Final grade
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {list.map((s, i) => {
+                      const g = gradeOf(s.id);
+                      // A heading row where a new group starts.
+                      const startsGroup =
+                        i === 0 || list[i - 1].group_label !== s.group_label;
+                      const scored = parts.filter(
+                        (p) => g?.parts[p.id] != null,
+                      );
+                      const formula = auto
+                        ? `average of ${Math.round(((g?.scored_weight ?? 0) / 100) * itemCount)} of ${itemCount} items`
+                        : scored
+                            .map(
+                              (p) => `${num(g!.parts[p.id]!)} × ${p.weight}%`,
+                            )
+                            .join(" + ");
+                      return (
+                        <Fragment key={s.id}>
+                          {startsGroup && (
+                            <tr>
+                              <th
+                                colSpan={parts.length + 2}
+                                scope="colgroup"
+                                className="sticky left-0 border-b border-hairline bg-subtle/60 px-4 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-500"
+                              >
+                                {groupName(s.group_label)}
+                                <span className="ml-2 font-medium normal-case tracking-normal text-gray-400">
+                                  {
+                                    list.filter(
+                                      (x) => x.group_label === s.group_label,
+                                    ).length
+                                  }{" "}
+                                  students
+                                </span>
+                              </th>
+                            </tr>
+                          )}
+                          <tr className="group">
+                            <td className="sticky left-0 z-10 border-b border-hairline bg-surface px-4 py-2.5 group-hover:bg-subtle">
+                              <div className="flex items-center gap-3">
+                                <Avatar
+                                  name={s.name}
+                                  src={s.picture_url}
+                                  userId={s.id}
+                                  sex={s.sex}
+                                  size="sm"
+                                />
+                                <div className="min-w-0">
+                                  <Link
+                                    href={`/faculty/students/${s.id}`}
+                                    className="block truncate font-medium text-gray-800 hover:underline"
+                                  >
+                                    {s.name}
+                                  </Link>
+                                  <p className="truncate text-xs text-gray-500">
+                                    {s.group_label}
+                                  </p>
+                                </div>
+                              </div>
+                            </td>
+                            {parts.map((p) => {
+                              const v = g?.parts[p.id];
+                              return (
+                                <td
+                                  key={p.id}
+                                  className={`border-b border-hairline px-3 py-2.5 text-right font-semibold tabular-nums group-hover:bg-subtle ${tone(v)}`}
+                                >
+                                  {v == null ? "—" : formatGrade(v)}
+                                </td>
+                              );
+                            })}
+                            <td className="border-b border-hairline px-4 py-2.5 text-right group-hover:bg-subtle">
+                              <span
+                                className={`font-display text-base font-semibold tabular-nums ${tone(g?.grade)}`}
+                              >
+                                {g?.grade == null ? "—" : formatGrade(g.grade)}
+                              </span>
+                              {g?.grade != null && (
+                                <span
+                                  className="block text-[11px] tabular-nums text-gray-500"
+                                  title="Each part's average times its percent"
+                                >
+                                  {formula}
+                                  {(auto
+                                    ? (g.scored_weight ?? 0) < 100
+                                    : scored.length < parts.length) &&
+                                    " · so far"}
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        </Fragment>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr>
+                      <td className="sticky left-0 z-10 bg-subtle px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                        Section average
                       </td>
                       {parts.map((p) => {
-                        const v = g?.parts[p.id];
+                        const avg = mean(
+                          list.map((s) => gradeOf(s.id)?.parts[p.id]),
+                        );
                         return (
                           <td
                             key={p.id}
-                            className={`border-b border-hairline px-3 py-2.5 text-right font-semibold tabular-nums group-hover:bg-subtle ${tone(v)}`}
+                            className={`bg-subtle px-3 py-3 text-right font-semibold tabular-nums ${tone(avg)}`}
                           >
-                            {v == null ? "—" : formatGrade(v)}
+                            {avg === null ? "—" : formatGrade(avg)}
                           </td>
                         );
                       })}
-                      <td className="border-b border-hairline px-4 py-2.5 text-right group-hover:bg-subtle">
-                        <span
-                          className={`font-display text-base font-semibold tabular-nums ${tone(g?.grade)}`}
-                        >
-                          {g?.grade == null ? "—" : formatGrade(g.grade)}
-                        </span>
-                        {g?.grade != null && (
-                          <span
-                            className="block text-[11px] tabular-nums text-gray-500"
-                            title="Each part's average times its percent"
-                          >
-                            {formula}
-                            {(auto
-                              ? (g.scored_weight ?? 0) < 100
-                              : scored.length < parts.length) && " · so far"}
-                          </span>
-                        )}
+                      <td
+                        className={`bg-subtle px-4 py-3 text-right font-display text-base font-semibold tabular-nums ${tone(final)}`}
+                      >
+                        {final === null ? "—" : formatGrade(final)}
                       </td>
                     </tr>
-                  </Fragment>
-                );
-              })}
-            </tbody>
-            <tfoot>
-              <tr>
-                <td className="sticky left-0 z-10 bg-subtle px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
-                  Class average
-                </td>
-                {parts.map((p) => {
-                  const avg = classPart(p.id);
-                  return (
-                    <td
-                      key={p.id}
-                      className={`bg-subtle px-3 py-3 text-right font-semibold tabular-nums ${tone(avg)}`}
-                    >
-                      {avg === null ? "—" : formatGrade(avg)}
-                    </td>
-                  );
-                })}
-                <td
-                  className={`bg-subtle px-4 py-3 text-right font-display text-base font-semibold tabular-nums ${tone(classFinal)}`}
-                >
-                  {classFinal === null ? "—" : formatGrade(classFinal)}
-                </td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      </div>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          </section>
+        );
+      })}
       {rows.length === 0 && (
         <p className="text-center text-sm text-gray-500">No students match.</p>
       )}

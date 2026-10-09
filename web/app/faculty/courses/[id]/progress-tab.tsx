@@ -52,6 +52,8 @@ export default function ProgressTab({
     () => fetchCourseProgress(offeringId),
   );
   const progress = data?.data ?? null;
+  // Automatic grading (070): the items are activities, scored only by grading them.
+  const auto = !!progress?.grading?.auto;
   const graded = useMemo(
     () => computeGrades(progress?.grading ?? null, progress?.requirements ?? [], progress?.progress ?? {}),
     [progress],
@@ -428,7 +430,9 @@ export default function ProgressTab({
                   </td>
                   {cols.map(({ requirement: r, name, divider }) => {
                     const item = progress.progress[s.id]?.[r.id];
-                    const actionable = canAct(r, item);
+                    // With automatic grading (070) a score only comes from grading the
+                    // activity itself, so nothing is entered here.
+                    const actionable = !auto && canAct(r, item);
                     const text = statusText(r, item);
                     const key = `${s.id}:${r.id}`;
                     return (
@@ -471,12 +475,22 @@ export default function ProgressTab({
         </div>
       </div>
       <p className="mt-2 text-xs text-gray-500">
-        A cell shows the best score on that activity or skill; a count shows the average across that
-        work this term. Click a cell with no grade to enter the score the student earned outside the
-        app; on a count, each score adds one more piece of work. Grades from graded work can&rsquo;t
-        be changed here.
-        {split &&
-          " The Grade column weighs these scores by your grading split; work with no score yet is left out."}
+        {auto ? (
+          <>
+            A cell shows the student&rsquo;s best score on that patient case, quiz or case presentation, and
+            fills in on its own once you grade the work. Scores can&rsquo;t be entered here.
+            {split && " The Grade column is the average of every scored item; work with no score yet is left out."}
+          </>
+        ) : (
+          <>
+            A cell shows the best score on that activity or skill; a count shows the average across that
+            work this term. Click a cell with no grade to enter the score the student earned outside the
+            app; on a count, each score adds one more piece of work. Grades from graded work can&rsquo;t
+            be changed here.
+            {split &&
+              " The Grade column weighs these scores by your grading split; work with no score yet is left out."}
+          </>
+        )}
       </p>
       {dialog}
     </div>
