@@ -339,10 +339,11 @@ console.log("student's own view");
 }
 
 console.log('course tabs');
-eq('three tabs', COURSE_TABS, ['progress', 'grading', 'skills']);
+eq('four tabs, Grading first', COURSE_TABS, ['grading', 'progress', 'performance', 'skills']);
 eq('old Requirements links open Grading', parseCourseTab('requirements'), 'grading');
-eq('unknown tabs open Progress', parseCourseTab('nope'), 'progress');
-eq('Grading', parseCourseTab('grading'), 'grading');
+eq('unknown tabs open Grading', parseCourseTab('nope'), 'grading');
+eq('Performance', parseCourseTab('performance'), 'performance');
+eq('Progress', parseCourseTab('progress'), 'progress');
 
 if (failures > 0) {
   console.error(`\n${failures} check(s) failed`);
