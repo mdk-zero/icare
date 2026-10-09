@@ -34,10 +34,6 @@ interface AuthContextType {
     password: string,
     rememberMe?: boolean,
   ) => Promise<{ ok: boolean; error?: string }>;
-  loginWithGoogle: (
-    idToken: string,
-    rememberMe?: boolean,
-  ) => Promise<{ ok: boolean; onboardingToken?: string; error?: string }>;
   logout: () => Promise<void>;
   /** Re-reads the session, e.g. after a password change or profile edit. */
   refreshUser: () => Promise<void>;
@@ -150,33 +146,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const loginWithGoogle = async (
-    idToken: string,
-    rememberMe: boolean = true,
-  ): Promise<{ ok: boolean; onboardingToken?: string; error?: string }> => {
-    setIsLoading(true);
-    try {
-      const result = await apiClient.loginWithGoogle(idToken, rememberMe);
-      if ("needsAccount" in result) {
-        return { ok: false, onboardingToken: result.onboardingToken };
-      }
-      setUser(result.user);
-      AsyncStorage.setItem(USER_KEY, JSON.stringify(result.user)).catch(() => {});
-      flushOutbox().catch(() => {});
-      startNotificationStream();
-      return { ok: true };
-    } catch (error) {
-      const message = isNetworkError(error)
-        ? "Cannot reach the iCARE++ server. Check your connection and API URL."
-        : error instanceof Error
-          ? error.message
-          : "Google sign-in failed";
-      return { ok: false, error: message };
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const logout = async () => {
     // Before the token goes away, so the live feed doesn't reconnect into a 401
     // and leak the previous account's notifications into the next session.
@@ -206,7 +175,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isBootstrapping,
         isAuthenticated: !!user,
         login,
-        loginWithGoogle,
         logout,
         refreshUser,
       }}

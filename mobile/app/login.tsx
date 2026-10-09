@@ -11,7 +11,6 @@ import {
   TextInput,
   ActivityIndicator,
   Keyboard,
-  Linking,
   useWindowDimensions,
   type LayoutChangeEvent,
 } from "react-native";
@@ -27,18 +26,11 @@ import Svg, {
   Path,
 } from "react-native-svg";
 import { LinearGradient } from "expo-linear-gradient";
-import * as WebBrowser from "expo-web-browser";
 import { Radius, Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/hooks/useAuth";
 import { API_URL } from "@/lib/client";
-import { GOOGLE_SIGN_IN_CONFIGURED, idTokenFrom, useGoogleIdToken } from "@/lib/google";
 import logoImg from "@/assets/images/logo-pill.png";
-
-// Required once per app so the browser sheet closes itself after the
-// provider redirects back into the app.
-WebBrowser.maybeCompleteAuthSession();
-
 
 /** Gradient stops sampled from the pill logo's teal cap. */
 const Teal = {
@@ -141,9 +133,8 @@ export default function LoginScreen() {
   const [isNetworkIssue, setIsNetworkIssue] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
-  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [focusedField, setFocusedField] = useState<string | null>(null);
-  const { login, loginWithGoogle, isLoading } = useAuth();
+  const { login, isLoading } = useAuth();
   const router = useRouter();
   const emailRef = useRef<TextInput>(null);
   const passwordRef = useRef<TextInput>(null);
@@ -160,8 +151,6 @@ export default function LoginScreen() {
   const insets = useSafeAreaInsets();
   const { Palette, Accent } = useTheme();
   const styles = React.useMemo(() => createStyles(Palette, Accent), [Palette, Accent]);
-
-  const [googleRequest, googleResponse, promptGoogleSignIn] = useGoogleIdToken();
 
   const handleLogin = async () => {
     setError("");
@@ -180,36 +169,6 @@ export default function LoginScreen() {
       setIsNetworkIssue(message.toLowerCase().includes("cannot reach"));
     }
   };
-
-  const handleGoogleIdToken = React.useCallback(
-    async (idToken: string) => {
-      setError("");
-      setIsNetworkIssue(false);
-      setIsGoogleLoading(true);
-      try {
-        const result = await loginWithGoogle(idToken, rememberMe);
-        if (result.ok) {
-          router.replace("/(tabs)");
-        } else if (result.onboardingToken) {
-          // No account yet: request one on the web contact form, which opens
-          // with this Google email filled in and links it to the request.
-          setError(
-            "This Google account doesn't have an iCARE++ account yet. We've opened the request form in your browser.",
-          );
-          Linking.openURL(`${API_URL}/signup?google=${encodeURIComponent(result.onboardingToken)}`).catch(() => {
-            setError(`Open ${API_URL}/signup in your browser to request an account.`);
-          });
-        } else {
-          const message = result.error ?? "Google sign-in failed.";
-          setError(message);
-          setIsNetworkIssue(message.toLowerCase().includes("cannot reach"));
-        }
-      } finally {
-        setIsGoogleLoading(false);
-      }
-    },
-    [loginWithGoogle, rememberMe, router],
-  );
 
   // Android draws edge-to-edge, so the system no longer shrinks the screen when
   // the keyboard opens and the fields end up hidden behind it. The
@@ -256,28 +215,6 @@ export default function LoginScreen() {
     const y = Math.max(0, Math.min(needed, ceiling));
     if (y > 0) scrollRef.current?.scrollTo({ y, animated: true });
   };
-
-  // googleResponse is an external auth result delivered as state, so reacting
-  // to it here is what this effect is for.
-  React.useEffect(() => {
-    if (!googleResponse) return;
-    if (googleResponse.type === "success") {
-      const idToken = idTokenFrom(googleResponse);
-      if (idToken) {
-        // handleGoogleIdToken clears the form and raises its spinner before it
-        // awaits, so this one write is synchronous. That is the intended
-        // response to a sign-in result arriving, and it happens at most once
-        // per prompt.
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        handleGoogleIdToken(idToken);
-      } else {
-        setError("Google sign-in did not return a valid credential.");
-      }
-    } else if (googleResponse.type === "error") {
-      setError(googleResponse.error?.message ?? "Google sign-in failed.");
-    }
-    // 'cancel'/'dismiss': the user backed out — no error to show.
-  }, [googleResponse, handleGoogleIdToken]);
 
   return (
     <View style={styles.container}>
@@ -483,34 +420,6 @@ export default function LoginScreen() {
                   </>
                 )}
               </Pressable>
-
-              {GOOGLE_SIGN_IN_CONFIGURED && (
-                <>
-                  <View style={styles.dividerRow}>
-                    <View style={styles.dividerLine} />
-                    <Text style={styles.dividerText}>or continue with</Text>
-                    <View style={styles.dividerLine} />
-                  </View>
-
-                  <Pressable
-                    style={({ pressed }) => [
-                      styles.googleButton,
-                      (pressed || isLoading || isGoogleLoading) && styles.buttonPressed,
-                    ]}
-                    onPress={() => promptGoogleSignIn()}
-                    disabled={!googleRequest || isLoading || isGoogleLoading}
-                  >
-                    {isGoogleLoading ? (
-                      <ActivityIndicator size="small" color={Teal.primary} />
-                    ) : (
-                      <>
-                        <FontAwesome6 name="google" size={16} color={Teal.primary} />
-                        <Text style={styles.googleButtonText}>Sign in with Google</Text>
-                      </>
-                    )}
-                  </Pressable>
-                </>
-              )}
             </View>
 
             <View style={styles.footer}>
@@ -768,39 +677,6 @@ function createStyles(
       fontSize: 14,
       fontWeight: "600",
       color: Teal.primary,
-    },
-    dividerRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: Spacing.md,
-      marginTop: Spacing.sm,
-    },
-    dividerLine: {
-      flex: 1,
-      height: 1,
-      backgroundColor: Palette.borderLight,
-    },
-    dividerText: {
-      fontSize: 12,
-      fontWeight: "600",
-      color: Palette.textMuted,
-      letterSpacing: 0.2,
-    },
-    googleButton: {
-      flexDirection: "row",
-      justifyContent: "center",
-      alignItems: "center",
-      gap: Spacing.sm,
-      backgroundColor: Palette.surface,
-      borderRadius: Radius.lg,
-      borderWidth: 1.5,
-      borderColor: Palette.borderLight,
-      paddingVertical: 15,
-    },
-    googleButtonText: {
-      color: Palette.ink,
-      fontSize: 15,
-      fontWeight: "700",
     },
     footer: {
       flexDirection: "row",

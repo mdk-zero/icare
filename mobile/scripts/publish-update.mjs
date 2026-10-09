@@ -9,8 +9,8 @@
  * Why the wrapper: `eas update` never reads the `env` block of eas.json, which
  * is where this project keeps its EXPO_PUBLIC_* values (there are no EAS
  * server-side variables). Run bare, it ships a bundle with no API URL. Every
- * phone would then call the emulator default http://10.0.2.2:3000, and Google
- * sign-in would disappear. Running without --environment is worse: .env.local's
+ * phone would then call the emulator default http://10.0.2.2:3000. Running
+ * without --environment is worse: .env.local's
  * dev values get bundled. This script feeds the update the same values
  * `eas build` used for that profile. `--environment` makes eas-cli set
  * EXPO_NO_DOTENV, so .env.local never gets bundled.

@@ -16,8 +16,7 @@ import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { useAuth } from '@/hooks/useAuth';
 import { useAvatarImage, useAvatarPicker } from '@/hooks/useAvatar';
-import { connectGoogle, disconnectGoogle, updateProfile } from '@/lib/api';
-import { GOOGLE_SIGN_IN_CONFIGURED, idTokenFrom, useGoogleIdToken } from '@/lib/google';
+import { updateProfile } from '@/lib/api';
 import { roleLabel } from '@/lib/roles';
 
 /** First letter of the first name plus the last — matches the web avatar. */
@@ -66,58 +65,6 @@ export default function AccountScreen() {
     } finally {
       setSaving(false);
     }
-  };
-
-  const [googleRequest, googleResponse, promptGoogle] = useGoogleIdToken();
-  const [googleBusy, setGoogleBusy] = React.useState(false);
-  const googleLinked = user?.google_linked ?? false;
-
-  // The picker's answer arrives as state; link the account it returns.
-  React.useEffect(() => {
-    if (!googleResponse) return;
-    if (googleResponse.type === 'error') {
-      Alert.alert('Google', googleResponse.error?.message ?? 'Google sign-in failed.');
-      return;
-    }
-    const idToken = idTokenFrom(googleResponse);
-    if (!idToken) return;
-    let cancelled = false;
-    (async () => {
-      setGoogleBusy(true);
-      try {
-        await connectGoogle(idToken);
-        await refreshUser();
-        if (!cancelled) Alert.alert('Google connected', 'You can now sign in with Continue with Google.');
-      } catch (err) {
-        if (!cancelled) Alert.alert('Error', err instanceof Error ? err.message : 'Could not connect Google.');
-      } finally {
-        if (!cancelled) setGoogleBusy(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [googleResponse, refreshUser]);
-
-  const handleDisconnectGoogle = () => {
-    Alert.alert('Disconnect Google?', "You'll sign in with your email and password only.", [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Disconnect',
-        style: 'destructive',
-        onPress: async () => {
-          setGoogleBusy(true);
-          try {
-            await disconnectGoogle();
-            await refreshUser();
-          } catch (err) {
-            Alert.alert('Error', err instanceof Error ? err.message : 'Could not disconnect Google.');
-          } finally {
-            setGoogleBusy(false);
-          }
-        },
-      },
-    ]);
   };
 
   const roleName = user?.role ? roleLabel(user.role) : '—';
@@ -230,39 +177,6 @@ export default function AccountScreen() {
           </View>
           <Ionicons name="chevron-forward" size={17} color={Palette.textFaint} />
         </Pressable>
-        {GOOGLE_SIGN_IN_CONFIGURED && (
-          <Pressable
-            style={({ pressed }) => [styles.linkRow, styles.linkBorder, pressed && styles.pressed]}
-            onPress={() => {
-              if (googleBusy) return;
-              if (!googleLinked) promptGoogle();
-              else if (user?.has_password) handleDisconnectGoogle();
-            }}
-            disabled={googleBusy || (!googleLinked && !googleRequest) || (googleLinked && !user?.has_password)}
-            accessibilityRole="button"
-          >
-            <View style={[styles.linkIcon, { backgroundColor: Accent.blue.bg }]}>
-              <Ionicons name="logo-google" size={17} color={Accent.blue.fg} />
-            </View>
-            <View style={styles.linkTextWrap}>
-              <Text style={styles.linkTitle}>{googleLinked ? 'Google connected' : 'Connect to Google'}</Text>
-              <Text style={styles.linkSub}>
-                {googleLinked
-                  ? user?.has_password
-                    ? 'Tap to disconnect'
-                    : 'Continue with Google signs you in'
-                  : 'Sign in with Continue with Google'}
-              </Text>
-            </View>
-            {googleBusy ? (
-              <ActivityIndicator size="small" color={Palette.textFaint} />
-            ) : googleLinked ? (
-              <Ionicons name="checkmark-circle" size={18} color={Accent.green.fg} />
-            ) : (
-              <Ionicons name="chevron-forward" size={17} color={Palette.textFaint} />
-            )}
-          </Pressable>
-        )}
       </View>
     </ScrollView>
   );
@@ -411,12 +325,6 @@ function createStyles(
     linkRow: {
       flexDirection: 'row',
       alignItems: 'center',
-    },
-    linkBorder: {
-      borderTopWidth: 1,
-      borderTopColor: Palette.borderLight,
-      marginTop: Spacing.md,
-      paddingTop: Spacing.md,
     },
     linkIcon: {
       width: 34,

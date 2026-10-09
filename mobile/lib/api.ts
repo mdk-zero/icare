@@ -7,7 +7,6 @@
 
 import {
   api,
-  ApiError,
   apiUpload,
   cachedGet,
   CachedResult,
@@ -35,8 +34,6 @@ export interface User {
   sex?: 'male' | 'female' | null;
   picture_url?: string | null;
   has_password?: boolean;
-  /** A Google account is connected, so "Continue with Google" signs in too. */
-  google_linked?: boolean;
   force_password_change?: boolean;
   /** Section name from `/api/auth/session`; null when unassigned. */
   section?: string | null;
@@ -52,52 +49,6 @@ export async function login(email: string, password: string, rememberMe: boolean
   // over from a previous account on this device before adopting this one.
   await clearCache();
   await setToken(result.sessionToken, rememberMe);
-  return result.user;
-}
-
-export type GoogleLoginResult = { user: User } | { needsAccount: true; onboardingToken: string };
-
-/**
- * Same `/api/auth/google` endpoint the web app uses: exchanges a verified
- * Google ID token for a session. A Google account with no iCARE++ user comes
- * back as `needsAccount` with a signed token that opens the web contact form
- * with that Google email filled in — accounts are requested, not self-made.
- */
-export async function loginWithGoogle(idToken: string, rememberMe: boolean = true): Promise<GoogleLoginResult> {
-  let result: { user?: User; sessionToken?: string };
-  try {
-    result = await api<{ user?: User; sessionToken?: string }>('/api/auth/google', {
-      method: 'POST',
-      body: { id_token: idToken },
-      auth: false,
-    });
-  } catch (err) {
-    const body = err instanceof ApiError ? (err.body as { code?: unknown; onboarding_token?: unknown } | null) : null;
-    if (body?.code === 'no_account' && typeof body.onboarding_token === 'string') {
-      return { needsAccount: true, onboardingToken: body.onboarding_token };
-    }
-    throw err;
-  }
-  if (!result.user || !result.sessionToken) {
-    throw new Error('Google sign-in failed.');
-  }
-  await clearCache();
-  await setToken(result.sessionToken, rememberMe);
-  return { user: result.user };
-}
-
-/** Profile "Connect to Google": links the Google account behind this ID token. */
-export async function connectGoogle(idToken: string): Promise<User> {
-  const result = await api<{ user: User }>('/api/users/google', {
-    method: 'POST',
-    body: { id_token: idToken },
-  });
-  return result.user;
-}
-
-/** The server refuses when there's no password to fall back on. */
-export async function disconnectGoogle(): Promise<User> {
-  const result = await api<{ user: User }>('/api/users/google', { method: 'DELETE' });
   return result.user;
 }
 
