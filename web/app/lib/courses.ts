@@ -3,7 +3,7 @@ import type { getSupabaseAdmin } from './supabase/server';
 import { readSession } from './auth/session';
 import type { SessionPayload } from './auth/jwt';
 import { isSkillId, listSkills } from './taylor-skills';
-import { courseSkillSuggestions, keywordSuggestions } from './skill-suggest';
+import { courseSkillSuggestions, keywordSuggestions, type SkillSuggestion } from './skill-suggest';
 import { aiErrorResponse } from './ai/generate';
 import { isMissingTeamTables, manageableSectionIds } from './teams';
 import { getAdminScope, ownsFaculty } from './admin-scope';
@@ -319,6 +319,113 @@ export async function replaceCourseSkills(
 }
 
 // ---------------------------------------------------------------------------
+// The instructor's own skills (071)
+// ---------------------------------------------------------------------------
+
+export const OFFERING_SKILLS_NEED_MIGRATION =
+  'Picking your own skills needs database migration 071 (offering skills) applied first.';
+
+/** Before 071 the offering_skills table doesn't exist. */
+function isMissingOfferingSkills(error: { code?: string } | null | undefined): boolean {
+  return error?.code === '42P01' || error?.code === 'PGRST205';
+}
+
+export interface SkillList {
+  skill_ids: string[];
+  /** The ones the AI picked. */
+  ai_skill_ids: string[];
+}
+
+/**
+ * Each offering's skill list: the instructor's own picks (071). Before 071
+ * an offering reads its course's shared list instead.
+ */
+export async function loadOfferingSkills(
+  supabase: Supabase,
+  offerings: { id: string; course: { id: string } }[],
+): Promise<Map<string, SkillList>> {
+  const map = new Map(offerings.map((o) => [o.id, { skill_ids: [] as string[], ai_skill_ids: [] as string[] }]));
+  if (offerings.length === 0) return map;
+  const own = await supabase
+    .from('offering_skills')
+    .select('offering_id, skill_id, source')
+    .in('offering_id', offerings.map((o) => o.id));
+  if (!own.error) {
+    for (const r of (own.data ?? []) as { offering_id: string; skill_id: string; source: string }[]) {
+      const list = map.get(r.offering_id);
+      if (!list) continue;
+      list.skill_ids.push(r.skill_id);
+      if (r.source === 'ai') list.ai_skill_ids.push(r.skill_id);
+    }
+    return map;
+  }
+  if (!isMissingOfferingSkills(own.error)) throw own.error;
+  const shared = must(
+    await supabase
+      .from('course_skills')
+      .select('course_id, skill_id, source')
+      .in('course_id', [...new Set(offerings.map((o) => o.course.id))]),
+  ) as { course_id: string; skill_id: string; source: string }[];
+  for (const o of offerings) {
+    const list = map.get(o.id)!;
+    for (const r of shared) {
+      if (r.course_id !== o.course.id) continue;
+      list.skill_ids.push(r.skill_id);
+      if (r.source === 'ai') list.ai_skill_ids.push(r.skill_id);
+    }
+  }
+  return map;
+}
+
+/** Whether a skill is on the offering's list. */
+export async function offeringHasSkill(
+  supabase: Supabase,
+  offering: { id: string; course: { id: string } },
+  skillId: string,
+): Promise<boolean> {
+  const lists = await loadOfferingSkills(supabase, [offering]);
+  return lists.get(offering.id)?.skill_ids.includes(skillId) ?? false;
+}
+
+/**
+ * Replace the instructor's skill list for one offering. `aiIds` are the ids
+ * the AI picked; skills already on the list keep their source.
+ */
+export async function replaceOfferingSkills(
+  supabase: Supabase,
+  offeringId: string,
+  skillIds: string[],
+  aiIds: string[],
+  uid: string,
+): Promise<{ added: string[]; removed: string[] }> {
+  const wanted = [...new Set(skillIds)].filter(isSkillId);
+  const current = await supabase.from('offering_skills').select('skill_id').eq('offering_id', offeringId);
+  if (isMissingOfferingSkills(current.error)) throw new MigrationNeeded(OFFERING_SKILLS_NEED_MIGRATION);
+  const have = new Set((must(current) as { skill_id: string }[]).map((r) => r.skill_id));
+  const keep = new Set(wanted);
+  const removed = [...have].filter((id) => !keep.has(id));
+  const added = wanted.filter((id) => !have.has(id));
+
+  if (removed.length) {
+    must(await supabase.from('offering_skills').delete().eq('offering_id', offeringId).in('skill_id', removed));
+  }
+  if (added.length) {
+    const ai = new Set(aiIds);
+    must(
+      await supabase.from('offering_skills').insert(
+        added.map((skill_id) => ({
+          offering_id: offeringId,
+          skill_id,
+          source: ai.has(skill_id) ? 'ai' : 'manual',
+          added_by: uid,
+        })),
+      ),
+    );
+  }
+  return { added, removed };
+}
+
+// ---------------------------------------------------------------------------
 // Notifications
 // ---------------------------------------------------------------------------
 
@@ -346,15 +453,15 @@ export async function notifyCourseAssigned(
 // AI skill detection
 // ---------------------------------------------------------------------------
 
-/**
- * Suggest a course's skills from its code, title and description: the AI
- * first, keyword matching when it is unavailable. Nothing is saved; the
- * caller shows the picks for the user to confirm.
- */
-export async function suggestCourseSkillsResponse(
+type SkillDetection =
+  | { ok: true; suggestions: SkillSuggestion[]; source: 'ai' | 'keywords' }
+  | { ok: false; error: unknown };
+
+/** The course's skills from its code, title and description: the AI first, keyword matching when it is unavailable. */
+async function detectCourseSkills(
   supabase: Supabase,
   course: { code: string; title: string; description: string },
-): Promise<NextResponse> {
+): Promise<SkillDetection> {
   const courseText = [
     `Code: ${course.code}`,
     `Title: ${course.title}`,
@@ -366,17 +473,70 @@ export async function suggestCourseSkillsResponse(
   let aiError: unknown = null;
   try {
     const suggestions = await courseSkillSuggestions(courseText, catalog);
-    if (suggestions.length > 0) return NextResponse.json({ suggestions, source: 'ai' });
+    if (suggestions.length > 0) return { ok: true, suggestions, source: 'ai' };
   } catch (err) {
     aiError = err;
     console.warn('AI course skill detection failed, matching keywords instead', err instanceof Error ? err.message : err);
   }
   const suggestions = keywordSuggestions(courseText, catalog);
-  if (suggestions.length === 0 && aiError) {
-    const { error, status } = aiErrorResponse(aiError, 'skill suggestions');
+  if (suggestions.length === 0 && aiError) return { ok: false, error: aiError };
+  return { ok: true, suggestions, source: 'keywords' };
+}
+
+/**
+ * Suggest a course's skills for the user to confirm. Nothing is saved; the
+ * caller shows the picks.
+ */
+export async function suggestCourseSkillsResponse(
+  supabase: Supabase,
+  course: { code: string; title: string; description: string },
+): Promise<NextResponse> {
+  const found = await detectCourseSkills(supabase, course);
+  if (!found.ok) {
+    const { error, status } = aiErrorResponse(found.error, 'skill suggestions');
     return NextResponse.json({ error }, { status });
   }
-  return NextResponse.json({ suggestions, source: 'keywords' });
+  return NextResponse.json({ suggestions: found.suggestions, source: found.source });
+}
+
+/** Audit actions on an instructor's skill list. */
+export const OFFERING_SKILLS_ACTION = 'offering.skills.update';
+export const AUTO_SKILLS_ACTION = 'offering.skills.auto';
+
+/**
+ * The system's first pick of an instructor's skills for one offering:
+ * detected from the course's details and saved as AI picks, for the
+ * instructor to add to or trim. Runs only while the list is empty and
+ * neither the instructor nor the system has set it before, so a list
+ * cleared on purpose stays cleared. Returns null when it didn't run (or the
+ * AI was unavailable, so a later visit tries again).
+ */
+export async function autoPickOfferingSkills(
+  supabase: Supabase,
+  offering: { id: string; course: { code: string; title: string; description: string } },
+  uid: string,
+): Promise<{ skill_ids: string[]; source: 'ai' | 'keywords' } | null> {
+  const [skills, history] = await Promise.all([
+    supabase.from('offering_skills').select('skill_id', { count: 'exact', head: true }).eq('offering_id', offering.id),
+    supabase
+      .from('audit_logs')
+      .select('id', { count: 'exact', head: true })
+      .eq('entity_type', 'course_offerings')
+      .eq('entity_id', offering.id)
+      .in('action', [OFFERING_SKILLS_ACTION, AUTO_SKILLS_ACTION]),
+  ]);
+  // Before 071 there is no list of the instructor's own to fill.
+  if (isMissingOfferingSkills(skills.error)) return null;
+  if (skills.error) throw skills.error;
+  if ((skills.count ?? 0) > 0) return null;
+  // An unreadable history counts as "already decided", so the AI never runs twice by mistake.
+  if (history.error || (history.count ?? 0) > 0) return null;
+
+  const found = await detectCourseSkills(supabase, offering.course);
+  if (!found.ok) return null;
+  const ids = found.suggestions.map((s) => s.id).slice(0, MAX_COURSE_SKILLS);
+  if (ids.length) await replaceOfferingSkills(supabase, offering.id, ids, ids, uid);
+  return { skill_ids: ids, source: found.source };
 }
 
 // ---------------------------------------------------------------------------
@@ -667,15 +827,9 @@ export async function checkRequirementLinks(
   }
   if (input.skill_id) {
     if (!isSkillId(input.skill_id)) return 'Unknown skill';
-    const onCourse = must(
-      await supabase
-        .from('course_skills')
-        .select('skill_id')
-        .eq('course_id', offering.course.id)
-        .eq('skill_id', input.skill_id)
-        .maybeSingle(),
-    );
-    if (!onCourse) return `Add skill ${input.skill_id} to the course's skill list first`;
+    if (!(await offeringHasSkill(supabase, offering, input.skill_id))) {
+      return `Add skill ${input.skill_id} to your skill list first`;
+    }
   }
   return null;
 }

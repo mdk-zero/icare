@@ -3,7 +3,7 @@ import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import {
   courseFailure,
   labelRequirements,
-  loadCourseSkillIds,
+  loadOfferingSkills,
   loadGrading,
   loadOfferingRosters,
   loadOwnOffering,
@@ -20,8 +20,9 @@ interface RouteParams {
 
 /**
  * GET: one of the instructor's course assignments — the course, term and
- * sections, the checklist with its labels, the course's shared skills, and
- * the grading split (067; grading_ready is false until it is applied).
+ * sections, the checklist with its labels, the instructor's own skills (and
+ * which of them the AI picked), and the grading split (067; grading_ready is
+ * false until it is applied).
  */
 export async function GET(_request: NextRequest, { params }: RouteParams) {
   const { session, response } = await requireRole('faculty');
@@ -35,7 +36,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
 
     const [requirements, skills, rosters, sectionRows, grading] = await Promise.all([
       loadRequirements(supabase, [id]),
-      loadCourseSkillIds(supabase, [offering.course.id]),
+      loadOfferingSkills(supabase, [offering]),
       loadOfferingRosters(supabase, [{ id, faculty_id: offering.faculty_id, section_ids: offering.section_ids }]),
       offering.section_ids.length
         ? supabase.from('sections').select('id, name').in('id', offering.section_ids).then(must)
@@ -59,7 +60,8 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
         student_count: roster?.students.length ?? 0,
       },
       requirements: await labelRequirements(supabase, requirements),
-      skill_ids: skills.get(offering.course.id) ?? [],
+      skill_ids: skills.get(id)?.skill_ids ?? [],
+      ai_skill_ids: skills.get(id)?.ai_skill_ids ?? [],
       grading: grading.grading,
       grading_ready: grading.ready,
       grading_auto: !!grading.grading?.auto,

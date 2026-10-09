@@ -33,6 +33,20 @@ export interface DemoCourseSkill {
   source: "manual" | "ai";
 }
 
+/** An instructor's own skill pick for one offering (071). */
+export interface DemoOfferingSkill {
+  offering_id: string;
+  skill_id: string;
+  source: "manual" | "ai";
+}
+
+/** Each offering starts from its course's shared list, as migration 071 backfills. */
+export function seedOfferingSkills(offerings: { id: string; course_id: string }[], courseSkills: DemoCourseSkill[]): DemoOfferingSkill[] {
+  return offerings.flatMap((o) =>
+    courseSkills.filter((s) => s.course_id === o.course_id).map((s) => ({ offering_id: o.id, skill_id: s.skill_id, source: s.source })),
+  );
+}
+
 export interface DemoOffering {
   id: string;
   course_id: string;
@@ -70,6 +84,7 @@ export interface DemoCourseTables {
   terms: DemoTerm[];
   courses: DemoCourse[];
   courseSkills: DemoCourseSkill[];
+  offeringSkills: DemoOfferingSkill[];
   offerings: DemoOffering[];
   requirements: DemoRequirement[];
   requirementChecks: DemoRequirementCheck[];
@@ -121,7 +136,9 @@ export function seedCourses(input: { users: DemoUser[]; casePresentations: DemoC
   ];
 
   const courseSkills: DemoCourseSkill[] = [
-    ...[...range(1, 1, 7), ...range(2, 1, 8), "14-1"].map((skill_id) => ({ course_id: COURSE_HEALTH_ASSESSMENT, skill_id, source: "manual" as const })),
+    // The AI's pick for Health Assessment, plus one skill an instructor added by hand.
+    ...[...range(1, 1, 7), ...range(2, 1, 8)].map((skill_id) => ({ course_id: COURSE_HEALTH_ASSESSMENT, skill_id, source: "ai" as const })),
+    { course_id: COURSE_HEALTH_ASSESSMENT, skill_id: "14-1", source: "manual" as const },
     ...[...range(14, 1, 4), ...range(15, 1, 5)].map((skill_id) => ({ course_id: COURSE_FUNDAMENTALS, skill_id, source: "ai" as const })),
   ];
 
@@ -343,5 +360,6 @@ export function seedCourses(input: { users: DemoUser[]; casePresentations: DemoC
   };
   for (const o of offerings) o.grading = grading[o.id] ?? null;
 
-  return { terms, courses, courseSkills, offerings, requirements, requirementChecks: [], requirementScores };
+  const offeringSkills = seedOfferingSkills(offerings, courseSkills);
+  return { terms, courses, courseSkills, offeringSkills, offerings, requirements, requirementChecks: [], requirementScores };
 }

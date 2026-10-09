@@ -2,10 +2,10 @@
 
 import { useMemo, useRef, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faChevronDown, faPenToSquare, faPlus, faWandMagicSparkles } from "@fortawesome/free-solid-svg-icons";
+import { faChevronDown, faPenToSquare, faRobot, faWandMagicSparkles } from "@fortawesome/free-solid-svg-icons";
 import { usePageData } from "../../../lib/use-page-data";
-import { fetchCourseProgress, fetchSkillDetails, type CourseRequirement, type SkillSummary } from "../../../lib/api";
-import { requirementNames } from "../../../lib/course-progress";
+import { fetchSkillDetails, type SkillSummary } from "../../../lib/api";
+import { EcgLoader } from "../../../components/EcgLoader";
 import { TOPICS, TopicIcon } from "../topics";
 
 const SKILLS = TOPICS.skill;
@@ -17,31 +17,26 @@ interface ChapterGroup {
 }
 
 /**
- * The course's skill list, read against its checklist: each chapter as a
- * card, each skill showing whether a Return Demonstration covers it and how
- * many students have met it, or offering to add one. A skill opens to show
- * its goal and how many steps its checklist has.
+ * The instructor's own skill list for this course: the skills the AI picked
+ * from the course's details, plus the ones they added with Edit Skills. Each chapter is a
+ * card whose header stays in view while its skills scroll; a skill opens to
+ * show its goal and how many steps its checklist has.
  */
 export default function SkillsTab({
-  offeringId,
   courseCode,
   skillIds,
+  aiSkillIds,
   catalog,
-  requirements,
-  signature,
-  locked,
-  onAddRequirement,
+  picking,
   onEditSkills,
 }: {
-  offeringId: string;
   courseCode: string;
   skillIds: string[];
+  /** The skills the AI picked. */
+  aiSkillIds: string[];
   catalog: SkillSummary[];
-  requirements: CourseRequirement[];
-  /** The checklist's signature, so the progress shared with the Progress tab is the same cache entry. */
-  signature: string;
-  locked: boolean;
-  onAddRequirement: (skillId: string) => void;
+  /** The AI is picking the course's skills right now. */
+  picking: boolean;
   onEditSkills: () => void;
 }) {
   const [open, setOpen] = useState<Set<string>>(() => new Set());
@@ -62,22 +57,7 @@ export default function SkillsTab({
     return [...map.values()].sort((a, b) => a.chapter - b.chapter);
   }, [catalog, skillIds]);
 
-  // Which Return Demonstration covers each skill, named as the checklist names it.
-  const coverage = useMemo(() => {
-    const names = requirementNames(requirements);
-    const map = new Map<string, { id: string; name: string }[]>();
-    requirements.forEach((r, i) => {
-      if (r.kind !== "skill" || !r.skill_id) return;
-      map.set(r.skill_id, [...(map.get(r.skill_id) ?? []), { id: r.id, name: names[i] }]);
-    });
-    return map;
-  }, [requirements]);
-
-  const { data: progress } = usePageData(coverage.size > 0 ? `faculty:course-progress:${offeringId}:${signature}` : null, () =>
-    fetchCourseProgress(offeringId),
-  );
-  const totals = progress?.data?.totals ?? {};
-  const roster = progress?.data?.students.length ?? 0;
+  const byAi = useMemo(() => new Set(aiSkillIds), [aiSkillIds]);
 
   const shown = groups.flatMap((g) => g.skills.map((s) => s.id));
   const { data: details } = usePageData(shown.length ? `skills:details:${shown.join(",")}` : null, () => fetchSkillDetails(shown), {
@@ -86,7 +66,25 @@ export default function SkillsTab({
   const detailById = useMemo(() => new Map((details ?? []).map((d) => [d.id, d])), [details]);
 
   const total = shown.length;
-  const onChecklist = shown.filter((id) => coverage.has(id)).length;
+  const picked = shown.filter((id) => byAi.has(id)).length;
+  const added = total - picked;
+
+  if (total === 0 && picking) {
+    return (
+      <div className="rounded-xl border border-dashed border-gray-300 bg-surface px-6 py-12 text-center">
+        <span className={`mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl ${SKILLS.tile}`}>
+          <FontAwesomeIcon icon={faRobot} className="h-5 w-5" />
+        </span>
+        <p className="flex items-center justify-center gap-2 font-semibold text-gray-700">
+          <EcgLoader />
+          Picking the skills {courseCode} covers…
+        </p>
+        <p className="mx-auto mt-1 max-w-md text-sm text-gray-500">
+          The AI is reading the course&rsquo;s title and description. You can add more with Edit Skills afterwards.
+        </p>
+      </div>
+    );
+  }
 
   if (total === 0) {
     return (
@@ -96,7 +94,7 @@ export default function SkillsTab({
         </span>
         <p className="font-semibold text-gray-700">No skills picked yet</p>
         <p className="mx-auto mt-1 max-w-md text-sm text-gray-500">
-          Pick the skills {courseCode} covers by hand, or let Detect with AI suggest them from the course description.
+          The AI couldn&rsquo;t pick {courseCode}&rsquo;s skills from its details. Pick them by hand, or try Detect with AI again.
         </p>
         <button
           type="button"
@@ -135,21 +133,25 @@ export default function SkillsTab({
             </div>
           </div>
           <div className="min-w-[14rem] flex-1">
-            <div className="flex items-baseline justify-between gap-3 text-sm">
-              <span className="font-medium text-gray-700">On the checklist</span>
-              <span className="tabular-nums text-gray-500">
-                <span className="font-semibold text-gray-900">{onChecklist}</span> of {total}
+            <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 text-sm">
+              <span className="inline-flex items-center gap-1.5 text-gray-600">
+                <FontAwesomeIcon icon={faRobot} className={`h-3 w-3 ${SKILLS.text}`} />
+                <span className="font-semibold tabular-nums text-gray-900">{picked}</span> picked by the AI
+              </span>
+              <span className="inline-flex items-center gap-1.5 text-gray-600">
+                <FontAwesomeIcon icon={faPenToSquare} className="h-3 w-3 text-gray-400" />
+                <span className="font-semibold tabular-nums text-gray-900">{added}</span> added by you
               </span>
             </div>
-            <div className="mt-2 flex gap-[3px]" role="img" aria-label={`${onChecklist} of ${total} skills are on the checklist`}>
+            <div className="mt-2 flex gap-[3px]" role="img" aria-label={`${picked} of ${total} skills were picked by the AI`}>
               {groups.flatMap((g) =>
                 g.skills.map((s) => (
-                  <span key={s.id} className={`h-2 min-w-[3px] flex-1 rounded-full ${coverage.has(s.id) ? SKILLS.bar : "bg-gray-100"}`} />
+                  <span key={s.id} className={`h-2 min-w-[3px] flex-1 rounded-full ${byAi.has(s.id) ? SKILLS.bar : "bg-gray-300"}`} />
                 )),
               )}
             </div>
             <p className="mt-2 text-xs text-gray-500">
-              Shared with your Dean and every instructor teaching {courseCode}; Return Demonstrations choose from this list.
+              {`Your own list: the AI picked these from the course's details; add the ones your setup needs with Edit Skills. Other ${courseCode} instructors pick their own.`}
             </p>
           </div>
         </div>
@@ -172,7 +174,7 @@ export default function SkillsTab({
       </section>
 
       {groups.map((g) => {
-        const covered = g.skills.filter((s) => coverage.has(s.id)).length;
+        const fromAi = g.skills.filter((s) => byAi.has(s.id)).length;
         return (
           <section
             key={g.chapter}
@@ -180,9 +182,10 @@ export default function SkillsTab({
               chapterRefs.current[g.chapter] = el;
             }}
             aria-labelledby={`chapter-${g.chapter}`}
-            className="scroll-mt-4 overflow-hidden rounded-xl border border-hairline bg-surface"
+            className="scroll-mt-14 overflow-clip rounded-xl border border-hairline bg-surface"
           >
-            <header className="flex items-center gap-4 border-b border-hairline px-5 py-3">
+            {/* Stays under the course tab bar while the chapter's skills scroll past. */}
+            <header className="sticky top-9 z-10 flex items-center gap-4 border-b border-hairline bg-surface px-5 py-3 lg:top-7">
               <span className={`font-display text-[28px] font-semibold leading-none tabular-nums ${SKILLS.text}`} aria-hidden>
                 {String(g.chapter).padStart(2, "0")}
               </span>
@@ -193,15 +196,14 @@ export default function SkillsTab({
                 </h3>
               </div>
               <span className="shrink-0 text-xs text-gray-500">
-                <span className="font-semibold tabular-nums text-gray-700">{covered}</span> of {g.skills.length} on the checklist
+                {`${g.skills.length} skill${g.skills.length === 1 ? "" : "s"}`}
+                {fromAi > 0 && (fromAi === g.skills.length ? " · all by the AI" : ` · ${fromAi} by the AI`)}
               </span>
             </header>
             <ul className="divide-y divide-hairline">
               {g.skills.map((s) => {
-                const items = coverage.get(s.id) ?? [];
                 const expanded = open.has(s.id);
                 const detail = detailById.get(s.id);
-                const met = items.length ? Math.max(...items.map((it) => totals[it.id] ?? 0)) : 0;
                 return (
                   <li key={s.id}>
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-5 py-3">
@@ -219,37 +221,22 @@ export default function SkillsTab({
                           className={`h-3 w-3 shrink-0 text-gray-300 transition-transform group-hover:text-gray-500 ${expanded ? "rotate-180" : ""}`}
                         />
                       </button>
-                      <div className="flex w-full shrink-0 items-center justify-end gap-2 sm:w-60">
-                        {items.length > 0 ? (
-                          <>
-                            <span className={`text-xs font-semibold ${SKILLS.text}`}>
-                              {items[0].name}
-                              {items.length > 1 ? ` +${items.length - 1}` : ""}
-                            </span>
-                            {roster > 0 && (
-                              <>
-                                <span className="h-1.5 w-14 overflow-hidden rounded-full bg-gray-100" aria-hidden>
-                                  <span className={`block h-full rounded-full ${SKILLS.bar}`} style={{ width: `${(met / roster) * 100}%` }} />
-                                </span>
-                                <span className="w-[4.5rem] whitespace-nowrap text-right text-xs tabular-nums text-gray-500">
-                                  {met}/{roster} met
-                                </span>
-                              </>
-                            )}
-                          </>
-                        ) : locked ? (
-                          <span className="text-xs text-gray-400">Not on the checklist</span>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => onAddRequirement(s.id)}
-                            className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors hover:bg-indigo-50 ${SKILLS.text}`}
-                          >
-                            <FontAwesomeIcon icon={faPlus} className="h-3 w-3" />
-                            Add to checklist
-                          </button>
-                        )}
-                      </div>
+                      {byAi.has(s.id) ? (
+                        <span
+                          className={`inline-flex shrink-0 items-center gap-1.5 rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold ${SKILLS.text}`}
+                          title="The AI picked this skill from the course's details"
+                        >
+                          <FontAwesomeIcon icon={faRobot} className="h-2.5 w-2.5" />
+                          AI pick
+                        </span>
+                      ) : (
+                        <span
+                          className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-semibold text-gray-500"
+                          title="You added this skill with Edit Skills"
+                        >
+                          Added by you
+                        </span>
+                      )}
                     </div>
                     {expanded && (
                       <div id={`skill-${s.id}`} className="animate-fade-in pb-4 pl-[5.25rem] pr-5 text-sm">

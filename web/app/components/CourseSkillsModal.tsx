@@ -17,14 +17,18 @@ import { loadingToast } from "./Toast";
 type Result<T> = { data: T; error?: undefined } | { data?: undefined; error: string };
 
 /**
- * Edits a course's shared skill list: the part of the skills catalog the
- * course covers. The Dean and every instructor teaching the course see the
- * same list. "Detect with AI" ticks the skills the course's code, title and
- * description point at; nothing is saved until Save.
+ * Edits a skill list: the part of the skills catalog a course covers. The
+ * Dean edits the course's shared list; an instructor edits their own list
+ * for the course they teach (`own`), which no one else sees. The system has usually picked some already (tagged "AI pick");
+ * the user ticks the ones their setup also needs. "Detect with AI" ticks the
+ * skills the course's code, title and description point at; nothing is saved
+ * until Save.
  */
 export default function CourseSkillsModal({
   course,
   initial,
+  aiPicked = [],
+  own = false,
   onSuggest,
   onSave,
   onClose,
@@ -32,6 +36,10 @@ export default function CourseSkillsModal({
 }: {
   course: { code: string; title: string };
   initial: readonly string[];
+  /** The saved skills the AI picked. */
+  aiPicked?: readonly string[];
+  /** The instructor's own list rather than the course's shared one. */
+  own?: boolean;
   onSuggest: () => Promise<Result<{ suggestions: SkillSuggestion[]; source: "ai" | "keywords" }>>;
   onSave: (skillIds: string[], aiSkillIds: string[]) => Promise<Result<{ skill_ids: string[] }>>;
   onClose: () => void;
@@ -40,6 +48,7 @@ export default function CourseSkillsModal({
   const [catalog, setCatalog] = useState<SkillSummary[] | null>(null);
   const [selected, setSelected] = useState<Set<string>>(() => new Set(initial));
   const [reasons, setReasons] = useState<Record<string, string>>({});
+  const savedByAi = useMemo(() => new Set(aiPicked), [aiPicked]);
   const [search, setSearch] = useState("");
   const [onlySelected, setOnlySelected] = useState(false);
   /** Expanded chapters; null until the user toggles one, meaning "chapters with picks". */
@@ -164,7 +173,9 @@ export default function CourseSkillsModal({
                 {course.code} skills
               </h2>
               <p className="truncate text-sm text-gray-500">
-                {selected.size} selected · shared by every instructor teaching {course.title}
+                {own
+                  ? `${selected.size} selected · your own list for ${course.title}`
+                  : `${selected.size} selected · shared by every instructor teaching ${course.title}`}
               </p>
             </div>
           </div>
@@ -234,7 +245,8 @@ export default function CourseSkillsModal({
               const expanded = isOpen(chapter, skills);
               return (
                 <section key={chapter} className="rounded-xl">
-                  <div className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-subtle">
+                  {/* Stays at the top of the list while its skills scroll past. */}
+                  <div className="sticky -top-2 z-10 flex items-center gap-2 rounded-lg bg-surface px-2 py-1.5 hover:bg-subtle">
                     <button
                       type="button"
                       onClick={() => toggleChapterOpen(chapter, skills)}
@@ -280,6 +292,12 @@ export default function CourseSkillsModal({
                             <span className="min-w-0 text-sm">
                               <span className="font-mono text-xs text-gray-500">{s.id}</span>{" "}
                               <span className="text-gray-800">{s.title}</span>
+                              {!reasons[s.id] && savedByAi.has(s.id) && selected.has(s.id) && (
+                                <span className="ml-1.5 inline-flex items-center gap-1 rounded-full bg-brand-600/10 px-1.5 py-px align-middle text-[10px] font-semibold text-brand-700">
+                                  <FontAwesomeIcon icon={faRobot} className="h-2.5 w-2.5" />
+                                  AI pick
+                                </span>
+                              )}
                               {reasons[s.id] && (
                                 <span className="mt-0.5 flex items-start gap-1.5 text-xs text-brand-700">
                                   <FontAwesomeIcon icon={faRobot} className="mt-0.5 h-3 w-3 shrink-0" />

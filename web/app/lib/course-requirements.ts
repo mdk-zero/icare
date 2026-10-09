@@ -22,7 +22,7 @@ import { isMissingCaseTables } from './cases';
 import { loadActivityAttendance } from './activity-attendance';
 import {
   labelRequirements,
-  loadCourseSkillIds,
+  loadOfferingSkills,
   loadOfferingRosters,
   loadRequirements,
   loadStudentOfferings,
@@ -306,9 +306,11 @@ export async function loadItemProgress(
 ): Promise<ItemProgress> {
   const [facts, skills] = await Promise.all([
     loadProgressFacts(supabase, [requirement], offering.term, [studentId]),
-    loadCourseSkillIds(supabase, [offering.course.id]),
+    loadOfferingSkills(supabase, [offering]),
   ]);
-  return evaluate([requirement], skills.get(offering.course.id) ?? [], offering.term, [studentId], facts)[studentId][requirement.id];
+  return evaluate([requirement], skills.get(offering.id)?.skill_ids ?? [], offering.term, [studentId], facts)[studentId][
+    requirement.id
+  ];
 }
 
 export const SCORES_NEED_MIGRATION = 'Entering scores needs database migration 066 (course requirement scores) applied first.';
@@ -355,14 +357,14 @@ export async function loadOfferingProgress(
 ): Promise<OfferingProgress> {
   const [requirements, skills, rosters] = await Promise.all([
     loadRequirements(supabase, [offering.id]),
-    loadCourseSkillIds(supabase, [offering.course.id]),
+    loadOfferingSkills(supabase, [offering]),
     loadOfferingRosters(supabase, [{ id: offering.id, faculty_id: offering.faculty_id, section_ids: offering.section_ids }]),
   ]);
   const roster = rosters.get(offering.id) ?? { students: [], sectionsWithoutGroup: [] };
   const students = onlyStudentId ? roster.students.filter((s) => s.id === onlyStudentId) : roster.students;
   const ids = students.map((s) => s.id);
   const facts = await loadProgressFacts(supabase, requirements, offering.term, ids);
-  const progress = evaluate(requirements, skills.get(offering.course.id) ?? [], offering.term, ids, facts);
+  const progress = evaluate(requirements, skills.get(offering.id)?.skill_ids ?? [], offering.term, ids, facts);
   const totals = Object.fromEntries(
     requirements.map((r) => [r.id, ids.filter((id) => progress[id]?.[r.id]?.done).length]),
   );
@@ -393,14 +395,14 @@ export async function loadStudentCourses(supabase: Supabase, studentId: string):
   if (offerings.length === 0) return [];
   const [requirements, skills] = await Promise.all([
     loadRequirements(supabase, offerings.map((o) => o.id)),
-    loadCourseSkillIds(supabase, [...new Set(offerings.map((o) => o.course.id))]),
+    loadOfferingSkills(supabase, offerings),
   ]);
   const labelled = await labelRequirements(supabase, requirements);
   const courses = await Promise.all(
     offerings.map(async (o): Promise<StudentCourse> => {
       const own = labelled.filter((r) => r.offering_id === o.id);
       const facts = await loadProgressFacts(supabase, own, o.term, [studentId]);
-      const row = evaluate(own, skills.get(o.course.id) ?? [], o.term, [studentId], facts)[studentId];
+      const row = evaluate(own, skills.get(o.id)?.skill_ids ?? [], o.term, [studentId], facts)[studentId];
       return {
         id: o.id,
         course: { code: o.course.code, title: o.course.title },

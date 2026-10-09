@@ -4154,6 +4154,8 @@ export interface FacultyCourseDetail {
   };
   requirements: CourseRequirement[];
   skill_ids: string[];
+  /** The skills the AI picked, rather than an instructor or Dean. */
+  ai_skill_ids?: string[];
   /** The grading split (067), or null when none is set up. */
   grading: GradingSplit | null;
   /** False until migration 067 is applied. */
@@ -4209,6 +4211,13 @@ export const saveCourseSkills = (offeringId: string, skillIds: string[], aiSkill
     method: 'PUT',
     body: { skill_ids: skillIds, ai_skill_ids: aiSkillIds },
   });
+
+/** The system's first pick of the course's skills; picked is null when it didn't run. */
+export const autoPickCourseSkills = (offeringId: string) =>
+  courseRequest<{ picked: { skill_ids: string[]; source: 'ai' | 'keywords' } | null }>(
+    `/api/faculty/courses/${offeringId}/skills/auto`,
+    { method: 'POST' },
+  );
 
 export const suggestCourseSkills = (offeringId: string) =>
   courseRequest<{ suggestions: SkillSuggestion[]; source: 'ai' | 'keywords' }>(`/api/faculty/courses/${offeringId}/skills/suggest`, {

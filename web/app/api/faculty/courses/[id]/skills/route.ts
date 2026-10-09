@@ -4,12 +4,13 @@ import { logAudit } from '@/app/lib/audit';
 import { isSkillId } from '@/app/lib/taylor-skills';
 import {
   MAX_COURSE_SKILLS,
+  OFFERING_SKILLS_ACTION,
   badRequest,
   courseFailure,
   loadOwnOffering,
   notFound,
   readJson,
-  replaceCourseSkills,
+  replaceOfferingSkills,
   requireRole,
   stringList,
 } from '@/app/lib/courses';
@@ -19,9 +20,8 @@ interface RouteParams {
 }
 
 /**
- * PUT { skill_ids, ai_skill_ids? }: replace the skill list of this
- * assignment's course. The list is shared: the Dean and every instructor
- * teaching the course see the change.
+ * PUT { skill_ids, ai_skill_ids? }: replace the instructor's own skill list
+ * for this assignment. Other instructors teaching the course keep theirs.
  */
 export async function PUT(request: NextRequest, { params }: RouteParams) {
   const { session, response } = await requireRole('faculty');
@@ -40,14 +40,14 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     const offering = await loadOwnOffering(supabase, session.uid, id);
     if (!offering) return notFound('Course');
 
-    const { added, removed } = await replaceCourseSkills(supabase, offering.course.id, skillIds, aiIds, session.uid);
+    const { added, removed } = await replaceOfferingSkills(supabase, id, skillIds, aiIds, session.uid);
     if (added.length || removed.length) {
       await logAudit(
         session,
         {
-          action: 'course.skills.update',
-          entityType: 'courses',
-          entityId: offering.course.id,
+          action: OFFERING_SKILLS_ACTION,
+          entityType: 'course_offerings',
+          entityId: id,
           details: { code: offering.course.code, added, removed },
         },
         request,

@@ -32,7 +32,7 @@ import {
   refile,
   type GradingSplit,
 } from "../../course-grading";
-import { seedCourses, type DemoCourseTables, type DemoOffering, type DemoRequirement } from "../fixtures/courses";
+import { seedCourses, seedOfferingSkills, type DemoCourseTables, type DemoOffering, type DemoRequirement } from "../fixtures/courses";
 import { audit } from "./shared";
 import { demoAttendanceRows } from "./derive";
 import { byName, sectionName, teamLabel } from "./scope";
@@ -55,6 +55,8 @@ export function courseDb(db: DemoDb): DemoDb {
   }
   // A demo saved before entered scores existed.
   db.requirementScores ??= [];
+  // A demo saved before instructors picked their own skills (071).
+  db.offeringSkills ??= seedOfferingSkills(db.offerings, db.courseSkills);
   // A demo saved before Written Exams (067): every manual item was a Lab Activity.
   for (const r of db.requirements) r.manual_type ??= "lab";
   return db;
@@ -257,6 +259,28 @@ export async function demoCourseSuggestions(course: { code: string; title: strin
         ["1-7", "Blood pressure is the course's core measurement skill."],
       ];
   return { suggestions: picks.map(([id, reason]) => ({ id, reason })), source: "ai" as const };
+}
+
+/** The instructor's own skill list for one offering. */
+const ownSkills = (db: DemoDb, o: DemoOffering) => db.offeringSkills.filter((s) => s.offering_id === o.id);
+
+/**
+ * The system's first pick of an instructor's skills, as
+ * autoPickOfferingSkills(): only while the list is empty and neither the
+ * instructor nor the system has set it before.
+ */
+async function demoAutoPick(db: DemoDb, o: DemoOffering, viewer: DemoContext["viewer"]) {
+  if (ownSkills(db, o).length > 0) return null;
+  const decided = db.audit.some(
+    (a) => a.entity_id === o.id && (a.action === "offering.skills.update" || a.action === "offering.skills.auto"),
+  );
+  if (decided) return null;
+  const course = courseOf(db, o);
+  const { suggestions, source } = await demoCourseSuggestions(course);
+  const ids = suggestions.map((s) => s.id);
+  db.offeringSkills.push(...ids.map((skill_id) => ({ offering_id: o.id, skill_id, source: "ai" as const })));
+  audit(db, viewer, "offering.skills.auto", "course_offerings", { code: course.code, added: ids, source }, o.id);
+  return { skill_ids: ids, source };
 }
 
 route("POST", "/api/admin/courses/:id/skills/suggest", async (ctx) => {
@@ -584,7 +608,8 @@ route("GET", "/api/faculty/courses/:id", async (ctx) => {
       student_count: row.student_count,
     },
     requirements: await labelled(db, checklist(db, o.id)),
-    skill_ids: db.courseSkills.filter((s) => s.course_id === course.id).map((s) => s.skill_id),
+    skill_ids: ownSkills(db, o).map((s) => s.skill_id),
+    ai_skill_ids: ownSkills(db, o).filter((s) => s.source === "ai").map((s) => s.skill_id),
     grading: autoSplit(checklist(db, o.id)),
     grading_ready: true,
     grading_auto: true,
@@ -651,7 +676,7 @@ function linkProblem(db: DemoDb, o: DemoOffering, input: RequirementInput): stri
   if (input.presentation_id && !db.casePresentations.some((p) => p.id === input.presentation_id)) {
     return "That Case Presentation was not found";
   }
-  if (input.skill_id && !db.courseSkills.some((s) => s.course_id === o.course_id && s.skill_id === input.skill_id)) {
+  if (input.skill_id && !ownSkills(db, o).some((s) => s.skill_id === input.skill_id)) {
     return `Add skill ${input.skill_id} to the course's skill list first`;
   }
   return null;
@@ -732,14 +757,23 @@ route("PUT", "/api/faculty/courses/:id/skills", (ctx) => {
   }
   const ai = new Set<string>(Array.isArray(ctx.body?.ai_skill_ids) ? ctx.body.ai_skill_ids : []);
   const wanted = [...new Set(ids as string[])];
-  const before = db.courseSkills.filter((s) => s.course_id === o.course_id);
+  const before = ownSkills(db, o);
   const kept = before.filter((s) => wanted.includes(s.skill_id));
   const added = wanted
     .filter((id) => !before.some((s) => s.skill_id === id))
-    .map((skill_id) => ({ course_id: o.course_id, skill_id, source: ai.has(skill_id) ? ("ai" as const) : ("manual" as const) }));
-  db.courseSkills = [...db.courseSkills.filter((s) => s.course_id !== o.course_id), ...kept, ...added];
-  audit(db, ctx.viewer, "course.skills.update", "courses", { added: added.map((s) => s.skill_id) }, o.course_id);
+    .map((skill_id) => ({ offering_id: o.id, skill_id, source: ai.has(skill_id) ? ("ai" as const) : ("manual" as const) }));
+  db.offeringSkills = [...db.offeringSkills.filter((s) => s.offering_id !== o.id), ...kept, ...added];
+  audit(db, ctx.viewer, "offering.skills.update", "course_offerings", { added: added.map((s) => s.skill_id) }, o.id);
   return { skill_ids: wanted };
+});
+
+route("POST", "/api/faculty/courses/:id/skills/auto", async (ctx) => {
+  if (!instructorOnly(ctx)) return forbidden();
+  const db = courseDb(ctx.db);
+  const o = ownFacultyOffering(ctx, ctx.params.id);
+  if (!o) return notFound("Course not found");
+  if (termStatus(termOf(db, o)) === "ended") return { picked: null };
+  return { picked: await demoAutoPick(db, o, ctx.viewer) };
 });
 
 route("POST", "/api/faculty/courses/:id/skills/suggest", async (ctx) => {
@@ -795,7 +829,7 @@ async function demoProgress(db: DemoDb, o: DemoOffering, onlyStudentId?: string)
   const roster = offeringRoster(db, o).students.filter((s) => !onlyStudentId || s.id === onlyStudentId);
   const ids = roster.map((s) => s.id);
   const term = termOf(db, o);
-  const skills = db.courseSkills.filter((s) => s.course_id === o.course_id).map((s) => s.skill_id);
+  const skills = ownSkills(db, o).map((s) => s.skill_id);
   const progress = evaluate(items, skills, term, ids, demoFacts(db, ids, items.map((r) => r.id)));
   return {
     requirements: await labelled(db, items),

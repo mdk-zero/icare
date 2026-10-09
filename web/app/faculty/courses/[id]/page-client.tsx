@@ -18,6 +18,7 @@ import CourseSkillsModal from "../../../components/CourseSkillsModal";
 import { toast } from "../../../components/Toast";
 import { usePageData } from "../../../lib/use-page-data";
 import {
+  autoPickCourseSkills,
   deleteRequirement,
   fetchFacultyCourse,
   fetchSkillCatalog,
@@ -89,6 +90,24 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
   const followed = followServer(gradingDraft, serverGrading);
   if (followed !== gradingDraft) setGradingDraft(followed);
   const locked = offering?.locked ?? false;
+  // An instructor with no skills picked yet gets the system's pick: the AI
+  // reads the course and saves the skills it covers to their own list. The
+  // server runs it once per assignment, so a list cleared on purpose stays
+  // cleared.
+  const needsPick = !!detail && !locked && detail.skill_ids.length === 0;
+  const { loading: autoPicking } = usePageData(
+    needsPick ? `faculty:course-autopick:${offeringId}` : null,
+    async () => {
+      const result = await autoPickCourseSkills(offeringId);
+      const picked = result.data?.picked?.skill_ids.length ?? 0;
+      if (picked > 0) {
+        toast(`The AI picked ${picked} skill${picked === 1 ? "" : "s"} for ${detail?.offering.course.code ?? "this course"}`);
+        await refresh();
+      }
+      return result;
+    },
+    { freshFor: 24 * 60 * 60_000 },
+  );
   const names = requirementNames(requirements);
   const nameOf = (id: string) => names[requirements.findIndex((r) => r.id === id)] ?? "requirement";
 
@@ -231,14 +250,11 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
 
         {tab === "skills" && offering && (
           <SkillsTab
-            offeringId={offeringId}
             courseCode={offering.course.code}
             skillIds={detail?.skill_ids ?? []}
+            aiSkillIds={detail?.ai_skill_ids ?? []}
             catalog={catalog}
-            requirements={requirements}
-            signature={checklistSignature(requirements)}
-            locked={locked}
-            onAddRequirement={(skillId) => addRequirement("skill", skillId)}
+            picking={autoPicking}
             onEditSkills={() => setSkillsOpen(true)}
           />
         )}
@@ -280,6 +296,8 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
         <CourseSkillsModal
           course={offering.course}
           initial={detail?.skill_ids ?? []}
+          aiPicked={detail?.ai_skill_ids ?? []}
+          own
           onSuggest={() => suggestCourseSkills(offeringId)}
           onSave={(ids, aiIds) => saveCourseSkills(offeringId, ids, aiIds)}
           onClose={() => setSkillsOpen(false)}
