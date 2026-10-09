@@ -204,6 +204,64 @@ export async function loadOfferingSections(supabase: Supabase, offeringIds: stri
   return map;
 }
 
+/** A course a student is on the roster of, and who teaches it. */
+export interface StudentOffering extends OwnOffering {
+  instructor: string;
+}
+
+/**
+ * The courses a student is on the roster of, the other way round from
+ * loadOfferingRosters(): an offering counts when the instructor teaching it
+ * supervises one of the student's groups in one of its sections.
+ */
+export async function loadStudentOfferings(supabase: Supabase, studentId: string): Promise<StudentOffering[]> {
+  const membersRes = await supabase.from('team_members').select('team_id').eq('student_id', studentId);
+  if (membersRes.error) {
+    if (isMissingTeamTables(membersRes.error)) return [];
+    throw membersRes.error;
+  }
+  const teamIds = (membersRes.data ?? []).map((m) => m.team_id as string);
+  if (teamIds.length === 0) return [];
+  const teams = ((must(await supabase.from('teams').select('section_id, faculty_id').in('id', teamIds)) ?? []) as {
+    section_id: string;
+    faculty_id: string | null;
+  }[]).filter((t) => t.faculty_id);
+  if (teams.length === 0) return [];
+
+  const links = (must(
+    await supabase
+      .from('course_offering_sections')
+      .select('offering_id, section_id')
+      .in('section_id', [...new Set(teams.map((t) => t.section_id))]),
+  ) ?? []) as { offering_id: string; section_id: string }[];
+  if (links.length === 0) return [];
+  const rows = (must(
+    await supabase
+      .from('course_offerings')
+      .select('id, faculty_id, courses(id, code, title, description), academic_terms(id, name, starts_on, ends_on)')
+      .in('id', [...new Set(links.map((l) => l.offering_id))])
+      .in('faculty_id', [...new Set(teams.map((t) => t.faculty_id as string))]),
+  ) ?? []) as unknown as { id: string; faculty_id: string; courses: OwnOffering['course']; academic_terms: OwnOffering['term'] }[];
+
+  const mine = rows.filter((r) =>
+    teams.some((t) => t.faculty_id === r.faculty_id && links.some((l) => l.offering_id === r.id && l.section_id === t.section_id)),
+  );
+  if (mine.length === 0) return [];
+  const [sections, instructors] = await Promise.all([
+    loadOfferingSections(supabase, mine.map((r) => r.id)),
+    supabase.from('users').select('id, name').in('id', [...new Set(mine.map((r) => r.faculty_id))]).then(must),
+  ]);
+  const instructorName = new Map(((instructors ?? []) as { id: string; name: string | null }[]).map((u) => [u.id, u.name]));
+  return mine.map((r) => ({
+    id: r.id,
+    course: r.courses,
+    term: r.academic_terms,
+    faculty_id: r.faculty_id,
+    section_ids: sections.get(r.id) ?? [],
+    instructor: instructorName.get(r.faculty_id) || 'Your instructor',
+  }));
+}
+
 // ---------------------------------------------------------------------------
 // Course skills
 // ---------------------------------------------------------------------------

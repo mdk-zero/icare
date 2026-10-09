@@ -777,3 +777,56 @@ export function offeringSummary(
 export function summarize(row: Record<string, ItemProgress> | undefined, requirements: readonly RequirementRow[]) {
   return { done: requirements.filter((r) => row?.[r.id]?.done).length, total: requirements.length };
 }
+
+// ---------------------------------------------------------------------------
+// The student's own view
+// ---------------------------------------------------------------------------
+
+/**
+ * One checklist item as the student sees it on their phone: whether it is
+ * met and, if not, where they stand. Instructor notes, entered scores and the
+ * grade stay with the instructor.
+ */
+export interface StudentRequirement {
+  id: string;
+  /** "Quiz #1", numbered the way the instructor's pages number it. */
+  name: string;
+  /** What it asks for, as requirementDetail() words it. */
+  detail: string;
+  done: boolean;
+  /** Where the student stands on an item not met yet: "1 of 3 so far". Null once met. */
+  status: string | null;
+}
+
+/** A student's checklist for one course, in topic order, without items whose activity was deleted. */
+export function studentChecklist(
+  requirements: readonly (RequirementRow & { label: string })[],
+  row: Record<string, ItemProgress> | undefined,
+): StudentRequirement[] {
+  const sorted = inTopicOrder(requirements);
+  const names = requirementNames(sorted);
+  return sorted.flatMap((req, i) => {
+    if (isRemovedActivity(req)) return [];
+    const item = row?.[req.id];
+    const done = !!item?.done;
+    return [{ id: req.id, name: names[i], detail: requirementDetail(req), done, status: done ? null : missingStatus(req, item) }];
+  });
+}
+
+/** Where a student stands on an item they haven't met, in words. */
+function missingStatus(req: RequirementRow, item: ItemProgress | undefined): string {
+  switch (req.kind) {
+    case 'manual':
+      return 'Not scored yet';
+    case 'count':
+      return `${item?.current ?? 0} of ${req.target_count ?? 1} so far`;
+    case 'skill':
+      return item?.level ? `Best so far: ${item.level}` : 'No graded work yet';
+    case 'activity': {
+      // Any graded work meets an item with no minimum, so a best score here fell short of one.
+      const best = item?.best_score ?? null;
+      if (best !== null && req.min_score !== null) return `Best ${Math.round(best)}%, needs ${Number(req.min_score)}%`;
+      return req.activity_type === 'assessment' ? 'Not taken yet' : 'Not graded yet';
+    }
+  }
+}

@@ -12,11 +12,13 @@ import { SectionHeader, SkeletonBlock, SyncStatus } from "@/components/ui";
 import { useAuth } from "@/hooks/useAuth";
 import { useAvatarImage } from "@/hooks/useAvatar";
 import { useApiData, allCached } from "@/hooks/useApiData";
+import { CourseRequirements } from "@/components/CourseRequirements";
 import {
   fetchScenarioAssignments,
   fetchAssessments,
   fetchProgress,
   fetchPatients,
+  fetchOwnCourses,
   ScenarioAssignment,
 } from "@/lib/api";
 
@@ -189,6 +191,12 @@ export default function DashboardScreen() {
     allCached(fetchScenarioAssignments(), fetchAssessments(), fetchProgress(), fetchPatients()),
   );
   const [assignments, assessments, progress, patients] = data ?? [[], [], null, []];
+  // Loaded on its own, so a failure here leaves the rest of Home standing.
+  const courses = useApiData(fetchOwnCourses);
+  const refreshAll = () => {
+    refresh();
+    courses.refresh();
+  };
 
   // The greeting needs nothing fetched; everything below it holds its shape
   // with placeholders until the first load lands.
@@ -247,14 +255,14 @@ export default function DashboardScreen() {
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
-          onRefresh={refresh}
+          onRefresh={refreshAll}
           colors={[Palette.primary]}
           tintColor={Palette.primary}
         />
       }
     >
       {/* Offline / queued-write state; renders nothing when there is nothing to say. */}
-      <SyncStatus onSynced={refresh} />
+      <SyncStatus onSynced={refreshAll} />
 
       {/* Greeting — framed as a duty roster: who is on, what they walk into. */}
       <Animated.View entering={FadeInDown.duration(220)} style={styles.greetingRow}>
@@ -445,6 +453,13 @@ export default function DashboardScreen() {
           )}
         </View>
       </Animated.View>
+
+      {/* Course Requirements: what's still missing in each course this term */}
+      {courses.data && (
+        <Animated.View entering={FadeInDown.duration(220).delay(240)}>
+          <CourseRequirements courses={courses.data.courses} />
+        </Animated.View>
+      )}
     </ScrollView>
   );
 }

@@ -19,6 +19,7 @@ import {
   topicKey,
   scoreBlock,
   summarize,
+  studentChecklist,
   type ProgressFacts,
   type RequirementRow,
   type RequirementScoreRow,
@@ -280,6 +281,62 @@ const parsedSkill = parseRequirement({ kind: 'skill', skill_id: '1-1', manual_ty
 eq('non-manual forced to lab', parsedSkill.ok && parsedSkill.value.manual_type, 'lab');
 const parsedBad = parseRequirement({ kind: 'manual', title: 'x', manual_type: 'quiz' });
 eq('bad manual_type', parsedBad.ok ? null : parsedBad.error, 'Choose Lab Activity or Written Exam');
+
+console.log("student's own view");
+{
+  const pc1 = req({ kind: 'activity', activity_type: 'scenario', scenario_id: 'sc1', title: 'Admission case' });
+  const gone = req({ kind: 'activity', activity_type: 'scenario' });
+  const pc3 = req({ kind: 'activity', activity_type: 'scenario', scenario_id: 'sc2' });
+  const quizNever = req({ kind: 'activity', activity_type: 'assessment', assessment_id: 'q1' });
+  const quizLow = req({ kind: 'activity', activity_type: 'assessment', assessment_id: 'q2', min_score: 75 });
+  const cases3 = req({ kind: 'count', activity_type: 'scenario', target_count: 3 });
+  const attend = req({ kind: 'count', activity_type: 'shift', target_count: 2 });
+  const skillNp = req({ kind: 'skill', skill_id: '1-7', min_score: 50 });
+  const skillNone = req({ kind: 'skill', skill_id: '2-1', min_score: null });
+  const lab = req({ kind: 'manual', title: 'Bed bath check-off' });
+  const exam = req({ kind: 'manual', title: 'Midterm', manual_type: 'exam' });
+  // Checklist (position) order, topics mixed: the view groups them.
+  const checklist = [lab, pc1, attend, gone, quizLow, pc3, exam, cases3, skillNp, quizNever, skillNone];
+  const labelled = checklist.map((r) => ({ ...r, label: `label of ${r.id}` }));
+  const row = evaluate(
+    checklist,
+    [],
+    term,
+    [S],
+    facts({
+      cases: [
+        { student_id: S, scenario_id: 'sc1', score: 90, completed_at: '2026-09-01T00:00:00Z', skills: [{ skill_id: '1-7', credit: 1 / 3 }] },
+      ],
+      attempts: [{ student_id: S, assessment_id: 'q2', score: 60, submitted_at: '2026-09-02T00:00:00Z', skill_scores: {} }],
+      attended: [{ student_id: S, deadline: '2026-09-03T00:00:00Z' }],
+      checks: [{ requirement_id: exam.id, student_id: S, checked_by: 'f', checked_at: '2026-09-09T00:00:00Z', note: 'private note' }],
+    }),
+  )[S];
+  const view = studentChecklist(labelled, row);
+  const byId = Object.fromEntries(view.map((v) => [v.id, v]));
+
+  eq('topic order, removed activities dropped', view.map((v) => v.id), [pc1.id, pc3.id, cases3.id, quizLow.id, quizNever.id, exam.id, skillNp.id, skillNone.id, lab.id, attend.id]);
+  eq('names keep the instructor numbering past a removed item', [byId[pc1.id].name, byId[pc3.id].name], ['Patient Case #1', 'Patient Case #3']);
+  eq('detail is the instructor title and label', byId[pc1.id].detail, `Admission case — label of ${pc1.id}`);
+  eq('a met item has no status', [byId[pc1.id].done, byId[pc1.id].status], [true, null]);
+  eq('an ungraded Patient Case', byId[pc3.id].status, 'Not graded yet');
+  eq('a Quiz never taken', byId[quizNever.id].status, 'Not taken yet');
+  eq('a Quiz below its minimum', byId[quizLow.id].status, 'Best 60%, needs 75%');
+  eq('a count so far', byId[cases3.id].status, '1 of 3 so far');
+  eq('attendance so far', byId[attend.id].status, '1 of 2 so far');
+  eq('a skill below its band', byId[skillNp.id].status, 'Best so far: Needs Practice');
+  eq('a skill with no evidence', byId[skillNone.id].status, 'No graded work yet');
+  eq('a Lab Activity not scored', byId[lab.id].status, 'Not scored yet');
+  eq('a ticked exam is met', byId[exam.id].done, true);
+  eq('only the student-safe fields go out', Object.keys(byId[exam.id]).sort(), ['detail', 'done', 'id', 'name', 'status']);
+  eq('no row yet: everything missing', studentChecklist([labelled[0]], undefined)[0], {
+    id: lab.id,
+    name: 'Lab Activity #1',
+    detail: 'label of ' + lab.id,
+    done: false,
+    status: 'Not scored yet',
+  });
+}
 
 console.log('course tabs');
 eq('three tabs', COURSE_TABS, ['progress', 'grading', 'skills']);

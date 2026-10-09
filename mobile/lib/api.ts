@@ -1094,6 +1094,32 @@ export interface StudentRequirements {
   }[];
 }
 
+/** One checklist item as the student sees it: met or not, and where they stand. */
+export interface OwnRequirement {
+  id: string;
+  /** "Quiz #1", numbered as on the instructor's pages. */
+  name: string;
+  /** What it asks for: "3 Quizzes passed at 75%+". */
+  detail: string;
+  done: boolean;
+  /** Where the student stands on an item not met yet: "1 of 3 so far". Null once met. */
+  status: string | null;
+}
+
+/** A course of a running term the signed-in student is on the roster of. */
+export interface OwnCourse {
+  id: string;
+  course: { code: string; title: string };
+  term: { name: string; starts_on: string; ends_on: string };
+  instructor: string;
+  requirements: OwnRequirement[];
+}
+
+/** The signed-in student's own course checklists (Home). */
+export function fetchOwnCourses(): Promise<CachedResult<{ courses: OwnCourse[] }>> {
+  return cachedGet('/api/student/courses');
+}
+
 export function fetchMyCourses(): Promise<CachedResult<{ offerings: InstructorCourse[] }>> {
   return cachedGet('/api/faculty/courses');
 }

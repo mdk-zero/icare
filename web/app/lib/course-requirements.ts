@@ -1,8 +1,10 @@
 import type { getSupabaseAdmin } from './supabase/server';
 import {
   evaluate,
+  studentChecklist,
   summarize,
   termBounds,
+  termStatus,
   type GradedCaseFact,
   type ItemProgress,
   type ProgressFacts,
@@ -10,6 +12,7 @@ import {
   type RequirementCheckRow,
   type RequirementRow,
   type RequirementScoreRow,
+  type StudentRequirement,
   type TermWindow,
 } from './course-progress';
 import { fetchStepRatings, fetchTaskCompletions, fetchTaskSteps, stepGradesByTask } from './scenario-tasks';
@@ -17,7 +20,16 @@ import { taskCredit } from './task-ratings';
 import { isMissingSkillColumn, skillIdFromTitle } from './taylor-skills';
 import { isMissingCaseTables } from './cases';
 import { loadActivityAttendance } from './activity-attendance';
-import { labelRequirements, loadCourseSkillIds, loadOfferingRosters, loadRequirements, must, type OwnOffering, type RosterStudent } from './courses';
+import {
+  labelRequirements,
+  loadCourseSkillIds,
+  loadOfferingRosters,
+  loadRequirements,
+  loadStudentOfferings,
+  must,
+  type OwnOffering,
+  type RosterStudent,
+} from './courses';
 
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
 
@@ -361,4 +373,42 @@ export async function loadOfferingProgress(
     totals,
     sectionsWithoutGroup: roster.sectionsWithoutGroup,
   };
+}
+
+// ---------------------------------------------------------------------------
+// The student's own checklists
+// ---------------------------------------------------------------------------
+
+export interface StudentCourse {
+  id: string;
+  course: { code: string; title: string };
+  term: { name: string; starts_on: string; ends_on: string };
+  instructor: string;
+  requirements: StudentRequirement[];
+}
+
+/** The student's checklist in each course of a running term, judged from their own work only. */
+export async function loadStudentCourses(supabase: Supabase, studentId: string): Promise<StudentCourse[]> {
+  const offerings = (await loadStudentOfferings(supabase, studentId)).filter((o) => termStatus(o.term) === 'current');
+  if (offerings.length === 0) return [];
+  const [requirements, skills] = await Promise.all([
+    loadRequirements(supabase, offerings.map((o) => o.id)),
+    loadCourseSkillIds(supabase, [...new Set(offerings.map((o) => o.course.id))]),
+  ]);
+  const labelled = await labelRequirements(supabase, requirements);
+  const courses = await Promise.all(
+    offerings.map(async (o): Promise<StudentCourse> => {
+      const own = labelled.filter((r) => r.offering_id === o.id);
+      const facts = await loadProgressFacts(supabase, own, o.term, [studentId]);
+      const row = evaluate(own, skills.get(o.course.id) ?? [], o.term, [studentId], facts)[studentId];
+      return {
+        id: o.id,
+        course: { code: o.course.code, title: o.course.title },
+        term: { name: o.term.name, starts_on: o.term.starts_on, ends_on: o.term.ends_on },
+        instructor: o.instructor,
+        requirements: studentChecklist(own, row),
+      };
+    }),
+  );
+  return courses.sort((a, b) => a.course.code.localeCompare(b.course.code, undefined, { numeric: true }));
 }
