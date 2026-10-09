@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { canSeePatient, getPatientCourseScope } from '@/app/lib/patient-courses';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -45,6 +46,10 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unable to load patient' }, { status: 500 });
     }
     if (!patient) return NextResponse.json({ error: 'Patient not found' }, { status: 404 });
+    // An instructor opens only the patients of the courses they teach (069).
+    if (!canSeePatient(await getPatientCourseScope(supabase, session), id)) {
+      return NextResponse.json({ error: 'Patient not found' }, { status: 404 });
+    }
 
     const [vitals, tpr, ivf, notes, auditRows] = await Promise.all([
       supabase

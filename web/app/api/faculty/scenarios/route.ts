@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { activityCourse, activityOfferings, parseOfferingId } from '@/app/lib/activity-course';
+import { canSeePatient, getPatientCourseScope } from '@/app/lib/patient-courses';
 import { seedScenarioTasks } from '@/app/lib/scenario-default-tasks';
 import { ensureCategories } from '@/app/lib/scenario-categories';
 import { addSkillTasks, parseSkillSelections } from '@/app/lib/skill-tasks';
@@ -61,6 +63,9 @@ export async function GET() {
       );
     });
 
+    // The course each case was made for (070), for grouping by course.
+    const offeringOf = await activityOfferings(supabase, 'scenarios', visible.map((s) => s.id as string));
+
     const formatted = visible.map((s) => {
       const assigned = (s as unknown as { scenario_assignments: { student_id: string }[] })
         .scenario_assignments ?? [];
@@ -82,6 +87,7 @@ export async function GET() {
         created_at: s.created_at,
         updated_at: s.updated_at,
         patient_id: s.patient_id,
+        offering_id: offeringOf.get(s.id as string) ?? null,
         patient_name: (s as unknown as { patients: { name: string } | null }).patients?.name ?? null,
         student_count: ownAssigned.length,
         // Lets the page count distinct students across scenarios; one student
@@ -158,7 +164,7 @@ export async function POST(request: NextRequest) {
       .select('id')
       .eq('id', linkedPatientId)
       .maybeSingle();
-    if (!patient) {
+    if (!patient || !canSeePatient(await getPatientCourseScope(supabase, session), linkedPatientId)) {
       return NextResponse.json({ error: 'Patient not found' }, { status: 400 });
     }
 
@@ -175,10 +181,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: resolved.error }, { status: resolved.status });
     }
 
+    const course = await activityCourse(
+      supabase,
+      'scenarios',
+      session,
+      parseOfferingId((body ?? {}) as Record<string, unknown>),
+    );
+    if ('error' in course) return NextResponse.json({ error: course.error }, { status: 400 });
+
     const { data: scenario, error } = await supabase
       .from('scenarios')
       .insert({
         created_by: session.uid,
+        ...course.value,
         patient_id: linkedPatientId,
         title: title.trim(),
         description: typeof description === 'string' ? description.trim() : '',

@@ -16,6 +16,7 @@ import PageHeader from "../../components/PageHeader";
 import StatTile from "../../components/StatTile";
 import { SkeletonScenarioCard, SkeletonStatTile } from "../../components/skeletons";
 import { toast } from "../../components/Toast";
+import CoursePicker, { resolveCourse, useActivityCourses } from "../../components/CoursePicker";
 import { usePageData } from "../../lib/use-page-data";
 import {
   createCasePresentation,
@@ -194,9 +195,20 @@ function CreateModal({
   const [deadline, setDeadline] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set(sections.length === 1 ? [sections[0].id] : []));
   const [busy, setBusy] = useState(false);
+  // The course the presentation is made for (070); picking one selects its sections.
+  const { offerings } = useActivityCourses();
+  const [chosenCourse, setChosenCourse] = useState("");
+  const offeringId = resolveCourse(offerings, chosenCourse);
+  const pickCourse = (id: string) => {
+    setChosenCourse(id);
+    const own = new Set(sections.map((s) => s.id));
+    const its = (offerings.find((o) => o.id === id)?.sections ?? []).map((s) => s.id).filter((s) => own.has(s));
+    if (its.length) setSelected(new Set(its));
+  };
 
   const submit = async () => {
     if (!title.trim()) return toast("Give the presentation a title");
+    if (offerings.length > 0 && !offeringId) return toast("Choose the course this is for");
     if (selected.size === 0) return toast("Select at least one section");
     if (!deadline) return toast("Set a deadline");
     setBusy(true);
@@ -205,6 +217,7 @@ function CreateModal({
       instructions,
       deadline: deadlineFromInput(deadline),
       section_ids: [...selected],
+      ...(offeringId ? { offering_id: offeringId } : {}),
     });
     setBusy(false);
     if (res.error !== undefined) return toast(res.error);
@@ -222,6 +235,7 @@ function CreateModal({
             <FontAwesomeIcon icon={faTimes} className="w-4 h-4" />
           </button>
         </div>
+        <CoursePicker offerings={offerings} value={offeringId} onChange={pickCourse} what="case presentation" />
         <div>
           <label className={labelClassName} htmlFor="case-title">Title</label>
           <input id="case-title" value={title} maxLength={200} onChange={(e) => setTitle(e.target.value)} className={inputClassName} />

@@ -4,6 +4,7 @@ import { json, ndjson, notFound, route, type DemoContext } from "../router";
 import { newId } from "../store";
 import type { DemoAssignment, DemoScenario } from "../fixtures/school";
 import { audit } from "./shared";
+import { linkActivityCourses } from "./courses";
 import { parseDeadline } from "@/app/lib/deadline-input";
 import {
   DAY_MS,
@@ -836,6 +837,8 @@ function scenarioOut(ctx: Ctx, s: DemoScenario) {
 
 route("GET", "/api/faculty/scenarios", (ctx) => {
   if (!staffOnly(ctx)) return forbidden();
+  // Each case's course (070), for grouping the list by course.
+  linkActivityCourses(ctx.db);
   return {
     scenarios: ctx.db.scenarios
       .filter((s) => canSeeScenario(ctx, s.id))
@@ -906,6 +909,7 @@ route("POST", "/api/faculty/scenarios", async (ctx) => {
     patient_case: body?.patient_case && typeof body.patient_case === "object" ? body.patient_case : {},
     rubric: body?.rubric ?? null,
     difficulty: "beginner",
+    offering_id: typeof body?.offering_id === "string" && body.offering_id ? body.offering_id : null,
   };
   db.scenarios.push(scenario);
   await addSkillTasks(ctx, scenario.id, body?.skills);

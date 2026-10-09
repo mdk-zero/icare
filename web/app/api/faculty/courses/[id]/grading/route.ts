@@ -50,6 +50,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     const stored = await loadGrading(supabase, id);
     if (!stored.ready) return NextResponse.json({ error: GRADING_NEEDS_MIGRATION }, { status: 503 });
+    if (stored.grading?.auto) return NextResponse.json({ error: "This course's grading follows its Patient Cases, Quizzes and Case Presentations, so it can't be edited by hand." }, { status: 409 });
     const requirements = await loadRequirements(supabase, [id]);
     if (!baseMatches(body.base, stored.grading, requirements)) {
       return NextResponse.json({ error: GRADING_CHANGED }, { status: 409 });

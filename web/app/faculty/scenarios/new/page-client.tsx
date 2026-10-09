@@ -16,11 +16,13 @@ import {
   faHeartPulse,
   faUserInjured,
   faWandMagicSparkles,
+  faUserPlus,
 } from "@fortawesome/free-solid-svg-icons";
 import {
   createScenario,
   generateAIScenario,
-  fetchFacultyPatients,
+  fetchPatientRoster,
+  fetchMyCourses,
   fetchRooms,
   updateFacultyPatient,
   getCurrentFacultyUser,
@@ -35,6 +37,9 @@ import PageHeader from "../../../components/PageHeader";
 import { usePageData } from "../../../lib/use-page-data";
 import { EcgLoader } from "../../../components/EcgLoader";
 import { SkeletonPatientPickRows } from "../../../components/skeletons";
+import PatientFormModal from "../../../components/PatientFormModal";
+import { termStatus } from "../../../lib/course-progress";
+import { toast } from "../../../components/Toast";
 import { LessonPanel, useLessonImport } from "../../../components/LessonImport";
 import { ChapterTile, hueStyle } from "../library-plan";
 import { TAYLORS_CHAPTERS } from "../../../../scripts/taylors-chapters";
@@ -139,6 +144,7 @@ const emptyForm = {
   learningObjectives: "",
   patientId: "",
   roomId: "",
+  offeringId: "",
 };
 
 export default function NewScenarioClient() {
@@ -165,13 +171,45 @@ export default function NewScenarioClient() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const { data, loading: loadingData } = usePageData("faculty:scenario-form-refs", async () => {
-    const [patients, rooms] = await Promise.all([fetchFacultyPatients(), fetchRooms()]);
-    return { patients, rooms };
+  const {
+    data,
+    loading: loadingData,
+    refresh: reloadRefs,
+  } = usePageData("faculty:scenario-form-refs", async () => {
+    const [roster, rooms, mine] = await Promise.all([fetchPatientRoster(), fetchRooms(), fetchMyCourses()]);
+    // A case is made for one of the instructor's courses that hasn't ended.
+    const offerings = (mine.data?.offerings ?? []).filter((o) => termStatus(o.term) !== "ended");
+    return { patients: roster.patients, courses: roster.courses, coursesEnabled: roster.coursesEnabled, rooms, offerings };
   });
+  const [addingPatient, setAddingPatient] = useState(false);
 
-  const patients = data?.patients ?? NO_PATIENTS;
+  const offerings = useMemo(() => data?.offerings ?? [], [data?.offerings]);
+  // With a single course there is nothing to choose.
+  const offeringId = form.offeringId || (offerings.length === 1 ? offerings[0].id : "");
+  const offering = offerings.find((o) => o.id === offeringId) ?? null;
+  const allPatients = data?.patients ?? NO_PATIENTS;
+  // A course's cases are built on that course's patients.
+  const patients = useMemo(
+    () =>
+      offering && data?.coursesEnabled
+        ? allPatients.filter((p) => (p.course_ids ?? []).includes(offering.course.id))
+        : allPatients,
+    [allPatients, offering, data?.coursesEnabled],
+  );
   const rooms = data?.rooms ?? NO_ROOMS;
+  const courseCode = useMemo(
+    () => new Map((data?.courses ?? []).map((c) => [c.id, c.code])),
+    [data?.courses],
+  );
+
+  /** A patient added from here is picked for the case straight away. */
+  const handlePatientAdded = async (patient: FacultyPatient) => {
+    setAddingPatient(false);
+    await reloadRefs();
+    setPatientSearch("");
+    setForm((prev) => ({ ...prev, patientId: patient.id, roomId: patient.room_id ?? "" }));
+    toast(`${patient.name} added to your patients`);
+  };
 
   const occupancyByRoom = useMemo(() => {
     const tally = new Map<string, number>();
@@ -242,6 +280,10 @@ export default function NewScenarioClient() {
       setError("Title is required.");
       return;
     }
+    if (offerings.length > 0 && !offeringId) {
+      setError("Choose the course this patient case is for.");
+      return;
+    }
     if (!form.patientId) {
       setError("Select a patient for this patient case before saving.");
       return;
@@ -253,6 +295,7 @@ export default function NewScenarioClient() {
       title: form.title,
       description: form.description,
       patient_id: form.patientId || null,
+      ...(offeringId ? { offering_id: offeringId } : {}),
       learning_objectives: form.learningObjectives
         .split("\n")
         .map((o) => o.trim())
@@ -323,7 +366,7 @@ export default function NewScenarioClient() {
   const topicFocus = lesson ? lessonNewTopics : [];
   const canGenerate =
     !generating && !analyzing && !!form.patientId && (!!aiPrompt.trim() || !!lesson);
-  const ready = !!form.title.trim() && !!form.patientId;
+  const ready = !!form.title.trim() && !!form.patientId && (offerings.length === 0 || !!offeringId);
 
   return (
     <div className="pb-4">
@@ -355,6 +398,44 @@ export default function NewScenarioClient() {
             tag={<span className="text-xs font-medium text-red-600">Required</span>}
             hint="Every case is built around a patient's diagnosis and vital signs."
           >
+            {offerings.length > 0 && (
+              <div className="mb-3">
+                <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-gray-500">Course</p>
+                <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Course">
+                  {offerings.map((o) => {
+                    const on = o.id === offeringId;
+                    return (
+                      <button
+                        key={o.id}
+                        type="button"
+                        role="radio"
+                        aria-checked={on}
+                        onClick={() =>
+                          setForm((prev) => {
+                            // A patient from another course doesn't carry over.
+                            const keep = allPatients.find((p) => p.id === prev.patientId);
+                            const fits = !data?.coursesEnabled || (keep?.course_ids ?? []).includes(o.course.id);
+                            return { ...prev, offeringId: o.id, ...(fits ? {} : { patientId: "", roomId: "" }) };
+                          })
+                        }
+                        className={`inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-sm transition-colors ${
+                          on
+                            ? "border-brand-600 bg-brand-600 text-white"
+                            : "border-gray-300 bg-surface text-gray-700 hover:border-brand-600/50"
+                        }`}
+                      >
+                        {on && <FontAwesomeIcon icon={faCheck} className="h-3 w-3" />}
+                        <span className="font-semibold">{o.course.code}</span>
+                        <span className={on ? "text-white/80" : "text-gray-500"}>{o.course.title}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="mt-1.5 text-xs text-gray-500">
+                  The case counts toward this course&apos;s grading once you assign it.
+                </p>
+              </div>
+            )}
             {selectedPatient ? (
               <div className="relative overflow-hidden rounded-xl border border-brand-200 bg-brand-50/60 animate-rise">
                 <span aria-hidden className="absolute inset-y-0 left-0 w-1.5 bg-brand-600" />
@@ -400,18 +481,28 @@ export default function NewScenarioClient() {
               </div>
             ) : (
               <div className="rounded-xl border border-hairline overflow-hidden">
-                <div className="relative border-b border-hairline bg-subtle p-2">
-                  <FontAwesomeIcon
-                    icon={faSearch}
-                    className="absolute left-5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500"
-                  />
-                  <input
-                    type="text"
-                    value={patientSearch}
-                    onChange={(e) => setPatientSearch(e.target.value)}
-                    placeholder="Search name, diagnosis, or room..."
-                    className={inputClassName + " pl-9"}
-                  />
+                <div className="flex items-center gap-2 border-b border-hairline bg-subtle p-2">
+                  <div className="relative flex-1">
+                    <FontAwesomeIcon
+                      icon={faSearch}
+                      className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500"
+                    />
+                    <input
+                      type="text"
+                      value={patientSearch}
+                      onChange={(e) => setPatientSearch(e.target.value)}
+                      placeholder="Search name, diagnosis, or room..."
+                      className={inputClassName + " pl-9"}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setAddingPatient(true)}
+                    className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-brand-600 px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 transition-colors"
+                  >
+                    <FontAwesomeIcon icon={faUserPlus} className="h-3.5 w-3.5" />
+                    Add patient
+                  </button>
                 </div>
                 <div className="max-h-[300px] overflow-y-auto custom-scrollbar">
                   {loadingData ? (
@@ -419,7 +510,7 @@ export default function NewScenarioClient() {
                   ) : filteredPatients.length === 0 ? (
                     <div className="p-6 text-center text-sm text-gray-500">
                       {patients.length === 0
-                        ? "No patients in the roster yet — add one before creating a patient case."
+                        ? "No patients in your courses yet. Add one to build this case around."
                         : "No patients match."}
                     </div>
                   ) : (
@@ -442,6 +533,21 @@ export default function NewScenarioClient() {
                                 {patient.diagnosis}
                               </span>
                             </span>
+                            {(patient.course_ids ?? []).length > 0 && (
+                              <span className="hidden shrink-0 gap-1 sm:flex">
+                                {(patient.course_ids ?? [])
+                                  .map((id) => courseCode.get(id))
+                                  .filter(Boolean)
+                                  .map((code) => (
+                                    <span
+                                      key={code}
+                                      className="rounded-full bg-brand-600/10 px-2 py-0.5 text-[11px] font-semibold text-brand-700"
+                                    >
+                                      {code}
+                                    </span>
+                                  ))}
+                              </span>
+                            )}
                             <span className="shrink-0 text-xs tabular-nums text-gray-500">
                               {patient.room?.name ? `Room ${patient.room.room_number}` : "No room"}
                             </span>
@@ -838,6 +944,7 @@ export default function NewScenarioClient() {
           <div className="rounded-2xl border border-hairline bg-surface p-4 shadow-tile">
             <ul className="space-y-1.5 text-xs">
               {[
+                ...(offerings.length > 0 ? [{ ok: !!offeringId, label: "Course chosen" }] : []),
                 { ok: !!form.patientId, label: "Patient chosen" },
                 { ok: !!form.title.trim(), label: "Title written" },
               ].map((c) => (
@@ -876,6 +983,17 @@ export default function NewScenarioClient() {
           </div>
         </aside>
       </div>
+      {addingPatient && (
+        <PatientFormModal
+          patient={null}
+          rooms={rooms}
+          courses={data?.courses ?? []}
+          coursesEnabled={data?.coursesEnabled ?? false}
+          initialCourseIds={offering ? [offering.course.id] : undefined}
+          onClose={() => setAddingPatient(false)}
+          onSaved={(patient) => void handlePatientAdded(patient)}
+        />
+      )}
     </div>
   );
 }

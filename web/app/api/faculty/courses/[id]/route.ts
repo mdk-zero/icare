@@ -62,6 +62,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
       skill_ids: skills.get(offering.course.id) ?? [],
       grading: grading.grading,
       grading_ready: grading.ready,
+      grading_auto: !!grading.grading?.auto,
     });
   } catch (err) {
     return courseFailure(err, 'Unable to load the course');

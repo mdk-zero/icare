@@ -47,7 +47,10 @@ import {
   fetchFacultyPatients,
   assignPatientRooms,
   FacultyPatient,
+  fetchMyCourses,
 } from "../../lib/api";
+import { groupByCourse, numberWithinCourse } from "../../lib/course-groups";
+import CourseGroupHeading from "../../components/CourseGroupHeading";
 import { deadlineFromInput } from "../../lib/deadline-input";
 import { usePageData } from "../../lib/use-page-data";
 import { SkeletonStatTile, SkeletonScenarioCard } from "../../components/skeletons";
@@ -169,11 +172,12 @@ export default function FacultyScenariosClient() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const { data, loading, refresh, setData } = usePageData("faculty:scenarios", async () => {
-    const [scenarios, students] = await Promise.all([
+    const [scenarios, students, courses] = await Promise.all([
       fetchFacultyScenarios(),
       fetchFacultyStudents(),
+      fetchMyCourses(),
     ]);
-    return { scenarios, students };
+    return { scenarios, students, offerings: courses.data?.offerings ?? [] };
   });
 
   const scenarios = data?.scenarios ?? NO_SCENARIOS;
@@ -202,6 +206,14 @@ export default function FacultyScenariosClient() {
       return matchesSearch && matchesCategory;
     });
   }, [scenarios, searchQuery, categoryFilter]);
+
+  // Cases are grouped by the course they were made for, and numbered within
+  // it in the order they were made, as the course's Criteria tab numbers them.
+  const caseGroups = useMemo(
+    () => groupByCourse(filteredScenarios, data?.offerings ?? []),
+    [filteredScenarios, data?.offerings],
+  );
+  const caseNumber = useMemo(() => numberWithinCourse(scenarios), [scenarios]);
 
   const linkModalFilteredPatients = useMemo(() => {
     const q = linkPatientSearchQuery.toLowerCase();
@@ -551,6 +563,7 @@ export default function FacultyScenariosClient() {
     setData((previous) => ({
       scenarios: (previous?.scenarios ?? []).filter((s) => s.id !== deleteTarget.id),
       students: previous?.students ?? [],
+      offerings: previous?.offerings ?? [],
     }));
     const faculty = getCurrentFacultyUser();
     if (faculty) {
@@ -732,76 +745,94 @@ export default function FacultyScenariosClient() {
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredScenarios.map((scenario) => (
-            <div
-              key={scenario.id}
-              className="group bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200 overflow-hidden flex flex-col"
-            >
-              <div className="p-3 border-b border-hairline flex-1">
-                <div className="flex items-start justify-between mb-3">
-                  <h3 className="font-semibold text-gray-900 line-clamp-2 pr-2">
-                    {scenario.title}
-                  </h3>
-                  {scenario.is_ai_generated && (
-                    <span className="px-2 py-1 bg-brand-100 text-brand-700 text-xs font-medium rounded-full flex items-center gap-1 whitespace-nowrap">
-                      <FontAwesomeIcon icon={faRobot} className="w-3 h-3" />
-                      AI
-                    </span>
-                  )}
+        <div className="space-y-6">
+          {caseGroups.map((group) => (
+            <section key={group.key} aria-label={group.code ? `${group.code} ${group.title}` : group.title}>
+              <CourseGroupHeading code={group.code} title={group.title} term={group.term} count={group.items.length} />
+              {group.items.length === 0 ? (
+                <p className="rounded-xl border border-dashed border-gray-300 px-4 py-5 text-center text-sm text-gray-500">
+                  No patient cases for this course yet.
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {group.items.map((scenario) => (
+                <div
+                  key={scenario.id}
+                  className="group bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200 overflow-hidden flex flex-col"
+                >
+                  <div className="p-3 border-b border-hairline flex-1">
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="min-w-0 pr-2">
+                        {caseNumber.has(scenario.id) && (
+                          <p className="mb-0.5 text-[11px] font-semibold uppercase tracking-wider text-brand-700">
+                            Patient Case #{caseNumber.get(scenario.id)}
+                          </p>
+                        )}
+                        <h3 className="font-semibold text-gray-900 line-clamp-2">{scenario.title}</h3>
+                      </div>
+                      {scenario.is_ai_generated && (
+                        <span className="px-2 py-1 bg-brand-100 text-brand-700 text-xs font-medium rounded-full flex items-center gap-1 whitespace-nowrap">
+                          <FontAwesomeIcon icon={faRobot} className="w-3 h-3" />
+                          AI
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm text-gray-500 line-clamp-2 mb-4">{scenario.description}</p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="px-2.5 py-1 bg-gray-100 text-gray-700 text-xs font-medium rounded-full">
+                        {scenario.category}
+                      </span>
+                      {scenario.patient_name && (
+                        <span className="px-2.5 py-1 bg-teal-50 text-teal-700 text-xs font-medium rounded-full flex items-center gap-1">
+                          <FontAwesomeIcon icon={faUsers} className="w-3 h-3" />
+                          {scenario.patient_name}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="p-5 bg-subtle">
+                    <div className="flex items-center justify-between text-sm mb-4">
+                      <span className="text-gray-500 flex items-center gap-1.5">
+                        <FontAwesomeIcon icon={faUsers} className="w-3.5 h-3.5" />
+                        {scenario.student_count} students
+                      </span>
+                      <span className="text-gray-400 flex items-center gap-1.5">
+                        <FontAwesomeIcon icon={faCalendarDay} className="w-3.5 h-3.5" />
+                        {new Date(scenario.created_at).toLocaleDateString()}
+                      </span>
+                    </div>
+                    <ActionsMenu
+                      actions={[
+                        { label: "View", icon: faEye, onClick: () => handleViewDetails(scenario) },
+                        {
+                          label: "Edit",
+                          icon: faPenToSquare,
+                          onClick: () => router.push(`/faculty/scenarios/${scenario.id}/edit`),
+                        },
+                        {
+                          label: "Assign",
+                          icon: faUserPlus,
+                          onClick: () => handleOpenAssignModal(scenario),
+                        },
+                        {
+                          label: scenario.patient_name ? "Change patient" : "Link patient",
+                          icon: faHospitalUser,
+                          onClick: () => handleOpenLinkPatientModal(scenario),
+                        },
+                        {
+                          label: "Delete",
+                          icon: faTrash,
+                          danger: true,
+                          onClick: () => handleOpenDeleteModal(scenario),
+                        },
+                      ]}
+                    />
+                  </div>
                 </div>
-                <p className="text-sm text-gray-500 line-clamp-2 mb-4">{scenario.description}</p>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="px-2.5 py-1 bg-gray-100 text-gray-700 text-xs font-medium rounded-full">
-                    {scenario.category}
-                  </span>
-                  {scenario.patient_name && (
-                    <span className="px-2.5 py-1 bg-teal-50 text-teal-700 text-xs font-medium rounded-full flex items-center gap-1">
-                      <FontAwesomeIcon icon={faUsers} className="w-3 h-3" />
-                      {scenario.patient_name}
-                    </span>
-                  )}
+              ))}
                 </div>
-              </div>
-              <div className="p-5 bg-subtle">
-                <div className="flex items-center justify-between text-sm mb-4">
-                  <span className="text-gray-500 flex items-center gap-1.5">
-                    <FontAwesomeIcon icon={faUsers} className="w-3.5 h-3.5" />
-                    {scenario.student_count} students
-                  </span>
-                  <span className="text-gray-400 flex items-center gap-1.5">
-                    <FontAwesomeIcon icon={faCalendarDay} className="w-3.5 h-3.5" />
-                    {new Date(scenario.created_at).toLocaleDateString()}
-                  </span>
-                </div>
-                <ActionsMenu
-                  actions={[
-                    { label: "View", icon: faEye, onClick: () => handleViewDetails(scenario) },
-                    {
-                      label: "Edit",
-                      icon: faPenToSquare,
-                      onClick: () => router.push(`/faculty/scenarios/${scenario.id}/edit`),
-                    },
-                    {
-                      label: "Assign",
-                      icon: faUserPlus,
-                      onClick: () => handleOpenAssignModal(scenario),
-                    },
-                    {
-                      label: scenario.patient_name ? "Change patient" : "Link patient",
-                      icon: faHospitalUser,
-                      onClick: () => handleOpenLinkPatientModal(scenario),
-                    },
-                    {
-                      label: "Delete",
-                      icon: faTrash,
-                      danger: true,
-                      onClick: () => handleOpenDeleteModal(scenario),
-                    },
-                  ]}
-                />
-              </div>
-            </div>
+              )}
+            </section>
           ))}
         </div>
       )}

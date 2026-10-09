@@ -1,7 +1,14 @@
 /**
  * The grading split (migration 067): how an instructor divides a course's
- * grade into weighted parts ("Written Exams 30%") and, inside a part,
- * components ("Midterm 15%"), with checklist items filed under them. This
+ * grade into weighted parts ("Written Exams 30%"), with checklist items
+ * filed straight under a part. Each item takes a share of its part's
+ * percent: an even share by default, or one the instructor sets
+ * (item_weights), which must add up to the part.
+ *
+ * Splits saved before items had their own share used components
+ * ("Midterm 15%") inside a part. readStoredSplit turns those into item
+ * shares (a component's percent divided among its items), so the grade
+ * comes out the same and the next save stores the new shape. This
  * module is pure — no server imports — so the API routes, the course pages
  * and the in-browser demo all judge a split and work out grades the same
  * way.
@@ -25,10 +32,51 @@ export interface GradeComponent {
 /** A part holds items itself only while it has no components. */
 export interface GradePart extends GradeComponent {
   components: GradeComponent[];
+  /**
+   * Each item's share, as a percent of the final grade, adding up to the
+   * part's weight. Absent: the part's percent is shared evenly.
+   */
+  item_weights?: Record<string, number>;
 }
 
 export interface GradingSplit {
   parts: GradePart[];
+  /**
+   * Made by the system from the course's activities (070), not by the
+   * instructor: Patient Cases, Quizzes and Case Presentations, each the
+   * average of its items, and the final grade the average of every item.
+   * Part weights are then only each part's share of the items, for display.
+   */
+  auto?: boolean;
+}
+
+/** The parts of an automatic split, in order, and the activity each is made of. */
+export const AUTO_PARTS = [
+  { id: 'patient-cases', name: 'Patient Cases', type: 'scenario' },
+  { id: 'quizzes', name: 'Quizzes', type: 'assessment' },
+  { id: 'case-presentations', name: 'Case Presentations', type: 'case_presentation' },
+] as const;
+
+/**
+ * The automatic split for a course whose items are its activities (070):
+ * each item goes under its kind's part, and a part's weight is its share of
+ * all the items, since every item counts the same.
+ */
+export function autoSplit(requirements: readonly Pick<RequirementRow, 'id' | 'activity_type'>[]): GradingSplit {
+  const total = requirements.filter((r) => AUTO_PARTS.some((p) => p.type === r.activity_type)).length;
+  return {
+    auto: true,
+    parts: AUTO_PARTS.map((p) => {
+      const items = requirements.filter((r) => r.activity_type === p.type).map((r) => r.id);
+      return {
+        id: p.id,
+        name: p.name,
+        weight: total ? Math.round((items.length / total) * 10000) / 100 : 0,
+        items,
+        components: [],
+      };
+    }),
+  };
 }
 
 export interface StudentGrade {
@@ -76,6 +124,8 @@ const sum = (rows: { weight: number }[]) => rows.reduce((total, r) => total + r.
 
 /** The first rule a split breaks, or null. Checks the split alone, not which items exist. */
 export function splitProblem(split: GradingSplit): string | null {
+  // The system made it, so there is nothing for the instructor to get wrong.
+  if (split.auto) return null;
   const { parts } = split;
   if (parts.length > GRADING_LIMITS.parts) return `A split can have at most ${GRADING_LIMITS.parts} parts`;
   for (const p of parts) {
@@ -121,6 +171,22 @@ export function splitProblem(split: GradingSplit): string | null {
     }
   }
 
+  for (const p of parts) {
+    if (!p.item_weights) continue;
+    const name = p.name.trim();
+    if (p.components.length) return `"${name}" has components, so its items can't have their own percents`;
+    const shares = p.item_weights;
+    if (Object.keys(shares).length !== p.items.length || p.items.some((id) => !(id in shares))) {
+      return `Every item in "${name}" needs a percent`;
+    }
+    const bad = p.items.find((id) => !(Number.isFinite(shares[id]) && shares[id] > 0 && shares[id] <= 100));
+    if (bad !== undefined) return `Each item in "${name}" needs a percent above 0`;
+    const inside = sum(p.items.map((id) => ({ weight: shares[id] })));
+    if (hundredths(inside) !== hundredths(p.weight)) {
+      return `The items in "${name}" add up to ${percent(inside)}, not ${percent(p.weight)}`;
+    }
+  }
+
   const split_ = parts.find((p) => p.components.length && p.items.length);
   if (split_) return `"${split_.name.trim()}" has components, so its items go in one of them`;
   const filed = leavesOf(split).flatMap((l) => l.items);
@@ -146,6 +212,62 @@ function readNode(value: unknown): GradeComponent | null {
   };
 }
 
+/** A part's item_weights from a request or the database, or undefined when absent. */
+function readItemWeights(raw: Record<string, unknown>): Record<string, number> | undefined {
+  const value = raw.item_weights;
+  if (!isObject(value)) return undefined;
+  const out: Record<string, number> = {};
+  for (const [id, w] of Object.entries(value)) {
+    const n = typeof w === 'number' ? w : Number(w);
+    out[id] = Number.isFinite(n) ? Math.round(n * 100) / 100 : NaN;
+  }
+  return out;
+}
+
+/** A part with its item shares set, or with the key left out for an even split. */
+export function withItemWeights(part: GradePart, weights: Record<string, number> | null | undefined): GradePart {
+  const rest: GradePart = { id: part.id, name: part.name, weight: part.weight, items: part.items, components: part.components };
+  return weights ? { ...rest, item_weights: weights } : rest;
+}
+
+/**
+ * The part's percent divided evenly among its items, to the hundredth, with
+ * the last item taking the rounding so the shares still add up.
+ */
+export function evenShares(items: string[], weight: number): Record<string, number> {
+  const out: Record<string, number> = {};
+  if (!items.length || !Number.isFinite(weight)) return out;
+  const each = Math.floor((weight / items.length) * 100) / 100;
+  items.forEach((id, i) => {
+    out[id] = i === items.length - 1 ? Math.round((weight - each * (items.length - 1)) * 100) / 100 : each;
+  });
+  return out;
+}
+
+/** Each item's share of the final grade in a part: the shares set, or an even split. */
+export function itemShares(part: GradePart): Record<string, number> {
+  return part.item_weights ?? evenShares(part.items, part.weight);
+}
+
+/**
+ * A split with components turned into item shares: each component's
+ * percent is divided evenly among its items, and the items move up into the
+ * part. A component with no items has nothing to share its percent with, so
+ * that part falls back to an even split of its whole percent.
+ */
+export function flattenSplit(split: GradingSplit): GradingSplit {
+  return {
+    parts: split.parts.map((p) => {
+      if (!p.components.length) return p;
+      const base: GradePart = { id: p.id, name: p.name, weight: p.weight, items: p.components.flatMap((c) => c.items), components: [] };
+      if (p.components.some((c) => !c.items.length)) return base;
+      const weights: Record<string, number> = {};
+      for (const c of p.components) Object.assign(weights, evenShares(c.items, c.weight));
+      return withItemWeights(base, weights);
+    }),
+  };
+}
+
 /**
  * Check a split sent by the Grading tab against the offering's checklist.
  * `{ parts: [] }` clears the split (null).
@@ -163,7 +285,7 @@ export function parseGrading(body: unknown, requirements: readonly RequirementRo
       if (!component) return invalid;
       components.push(component);
     }
-    parts.push({ ...part, components });
+    parts.push(withItemWeights({ ...part, components }, readItemWeights(raw)));
   }
   if (parts.length === 0) return { ok: true, value: null };
 
@@ -189,9 +311,9 @@ export function readStoredSplit(value: unknown): GradingSplit | null {
     if (!part || !isObject(raw) || !Array.isArray(raw.components)) return null;
     const components = raw.components.map(readNode);
     if (components.some((c) => c === null)) return null;
-    parts.push({ ...part, components: components as GradeComponent[] });
+    parts.push(withItemWeights({ ...part, components: components as GradeComponent[] }, readItemWeights(raw)));
   }
-  return parts.length ? { parts } : null;
+  return parts.length ? flattenSplit({ parts }) : null;
 }
 
 const mean = (scores: (number | null)[]) => {
@@ -220,6 +342,7 @@ export function computeGrades(
   if (!split) return { invalid: false, grades: {} };
   if (splitProblem(split)) return { invalid: true, grades: {} };
   const byId = new Map(requirements.map((r) => [r.id, r]));
+  if (split.auto) return autoGrades(split, byId, progress);
 
   const grades: Record<string, StudentGrade> = {};
   for (const [studentId, row] of Object.entries(progress)) {
@@ -235,6 +358,14 @@ export function computeGrades(
           if (components[c.id] !== null) scoredWeight += c.weight;
         }
         parts[p.id] = weighted(p.components.map((c) => ({ weight: c.weight, score: components[c.id] })));
+      } else if (p.item_weights) {
+        const shares = p.item_weights;
+        const rows = p.items
+          .map((id) => byId.get(id))
+          .filter((r): r is RequirementRow => !!r)
+          .map((r) => ({ weight: shares[r.id] ?? 0, score: itemScore(r, row[r.id]) }));
+        parts[p.id] = weighted(rows);
+        for (const r of rows) if (r.score !== null) scoredWeight += r.weight;
       } else {
         parts[p.id] = leaf(p.items);
         if (parts[p.id] !== null) scoredWeight += p.weight;
@@ -245,6 +376,36 @@ export function computeGrades(
       scored_weight: Math.round(scoredWeight * 100) / 100,
       parts,
       components,
+    };
+  }
+  return { invalid: false, grades };
+}
+
+/**
+ * Grades under an automatic split: each part is the plain average of its
+ * scored items, and the final grade the average of every scored item, so a
+ * part with more items counts for more. Unscored items are left out, so a
+ * grade reads as the grade so far; scored_weight is the share of items with
+ * a score.
+ */
+function autoGrades(
+  split: GradingSplit,
+  byId: Map<string, RequirementRow>,
+  progress: Record<string, Record<string, ItemProgress>>,
+): GradeResult {
+  const ids = split.parts.flatMap((p) => p.items).filter((id) => byId.has(id));
+  const grades: Record<string, StudentGrade> = {};
+  for (const [studentId, row] of Object.entries(progress)) {
+    const score = (id: string) => itemScore(byId.get(id)!, row[id]);
+    const parts: Record<string, number | null> = {};
+    for (const p of split.parts) parts[p.id] = mean(p.items.filter((id) => byId.has(id)).map(score));
+    const scores = ids.map(score);
+    const scored = scores.filter((s) => s !== null).length;
+    grades[studentId] = {
+      grade: mean(scores),
+      scored_weight: ids.length ? Math.round((scored / ids.length) * 10000) / 100 : 0,
+      parts,
+      components: {},
     };
   }
   return { invalid: false, grades };
@@ -280,9 +441,20 @@ export function gradeLeafProblem(split: GradingSplit | null, leafId: string): st
 export function dropUnknown(split: GradingSplit | null, requirements: readonly RequirementRow[]): GradingSplit | null {
   if (!split) return null;
   const known = new Set(requirements.map((r) => r.id));
-  const keep = (items: string[]) => items.filter((id) => known.has(id));
+  return keepItems(split, (id) => known.has(id));
+}
+
+/**
+ * The split with only the items `keep` accepts. A part that lost an item
+ * goes back to an even split, since its set shares no longer add up.
+ */
+function keepItems(split: GradingSplit, keep: (id: string) => boolean): GradingSplit {
   return {
-    parts: split.parts.map((p) => ({ ...p, items: keep(p.items), components: p.components.map((c) => ({ ...c, items: keep(c.items) })) })),
+    parts: split.parts.map((p) => {
+      const items = p.items.filter(keep);
+      const next = { ...p, items, components: p.components.map((c) => ({ ...c, items: c.items.filter(keep) })) };
+      return items.length === p.items.length ? next : withItemWeights(next, null);
+    }),
   };
 }
 
@@ -294,10 +466,7 @@ export function dropUnknown(split: GradingSplit | null, requirements: readonly R
 export function settle(split: GradingSplit | null, requirements: readonly RequirementRow[]): GradingSplit | null {
   if (!split) return null;
   const counts = new Set(requirements.filter(isGradeable).map((r) => r.id));
-  const keep = (items: string[]) => items.filter((id) => counts.has(id));
-  return {
-    parts: split.parts.map((p) => ({ ...p, items: keep(p.items), components: p.components.map((c) => ({ ...c, items: keep(c.items) })) })),
-  };
+  return keepItems(split, (id) => counts.has(id));
 }
 
 /**
@@ -320,11 +489,13 @@ export function fileItem(split: GradingSplit, requirementId: string, leafId: str
     return node.id === leafId ? [...items, requirementId] : items;
   };
   return {
-    parts: split.parts.map((p) => ({
-      ...p,
-      items: p.components.length ? p.items.filter((id) => id !== requirementId) : place(p),
-      components: p.components.map((c) => ({ ...c, items: place(c) })),
-    })),
+    parts: split.parts.map((p) => {
+      const items = p.components.length ? p.items.filter((id) => id !== requirementId) : place(p);
+      const next = { ...p, items, components: p.components.map((c) => ({ ...c, items: place(c) })) };
+      // A part that gained or lost an item goes back to an even split of its percent.
+      const changed = items.length !== p.items.length || items.some((id, i) => id !== p.items[i]);
+      return changed ? withItemWeights(next, null) : next;
+    }),
   };
 }
 

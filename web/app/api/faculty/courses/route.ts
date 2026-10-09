@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
-import { courseFailure, loadOfferingRosters, loadOfferingSections, must, requireRole } from '@/app/lib/courses';
+import { courseFailure, loadOfferingRosters, loadOfferingSections, loadRequirements, must, requireRole } from '@/app/lib/courses';
 import { loadOfferingProgress } from '@/app/lib/course-requirements';
 import { offeringSummary, termStatus, type OfferingSummary } from '@/app/lib/course-progress';
 
@@ -30,9 +30,7 @@ export async function GET() {
 
     const [sectionsByOffering, requirementRows] = await Promise.all([
       loadOfferingSections(supabase, ids),
-      ids.length
-        ? supabase.from('course_requirements').select('offering_id').in('offering_id', ids).then(must)
-        : Promise.resolve([] as { offering_id: string }[]),
+      loadRequirements(supabase, ids),
     ]);
     const sectionIds = [...new Set([...sectionsByOffering.values()].flat())];
     const [sectionRows, rosters] = await Promise.all([

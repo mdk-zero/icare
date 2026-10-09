@@ -47,6 +47,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     if (!offering) return notFound('Course');
     if (termStatus(offering.term) === 'ended') return NextResponse.json({ error: TERM_ENDED_LOCK }, { status: 409 });
 
+    // Since 070 a course's items are its activities; there are no hand-made items.
+    if ((await loadGrading(supabase, id)).grading?.auto) {
+      return NextResponse.json(
+        { error: 'Items are added automatically: make a Patient Case, Quiz or Case Presentation for this course.' },
+        { status: 409 },
+      );
+    }
     const existing = await loadRequirements(supabase, [id]);
     if (existing.length >= MAX_REQUIREMENTS) return badRequest(`A checklist can have at most ${MAX_REQUIREMENTS} items`);
     const problem = await checkRequirementLinks(supabase, session.uid, offering, parsed.value);

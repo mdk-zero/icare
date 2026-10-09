@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { activityCourse, parseOfferingId } from '@/app/lib/activity-course';
 import { logAudit } from '@/app/lib/audit';
 import {
   assignCasePresentation,
@@ -125,6 +126,14 @@ export async function POST(request: NextRequest) {
   try {
     const supabase = getSupabaseAdmin();
 
+    const course = await activityCourse(
+      supabase,
+      'case_presentations',
+      session,
+      parseOfferingId((body ?? {}) as Record<string, unknown>),
+    );
+    if ('error' in course) return NextResponse.json({ error: course.error }, { status: 400 });
+
     const { data: presentation, error } = await supabase
       .from('case_presentations')
       .insert({
@@ -133,6 +142,7 @@ export async function POST(request: NextRequest) {
         deadline: deadlineCheck.value,
         section_ids: sectionIds,
         created_by: session.uid,
+        ...course.value,
       })
       .select(PRESENTATION_COLUMNS)
       .single();

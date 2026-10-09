@@ -16,7 +16,7 @@ import {
   type RequirementRow,
 } from './course-progress';
 import { canFacultySeeScenario } from './scenario-visibility';
-import { gradingSignature, readStoredSplit, type GradingSplit } from './course-grading';
+import { autoSplit, gradingSignature, readStoredSplit, type GradingSplit } from './course-grading';
 import { MigrationNeeded, isMissingGradingSchema, normaliseRequirement, requirementQuery } from './course-schema';
 
 export { parseCourse, parseTerm, type CourseInput, type TermInput } from './course-progress';
@@ -518,9 +518,57 @@ export async function countInstructorEntries(supabase: Supabase, requirementIds:
 
 export const TERM_ENDED_LOCK = 'This term has ended, so its checklist is locked. Scores and ticks can still be changed.';
 
-/** Requirements of the given offerings, in checklist order. Before 067 every manual item reads as a Lab Activity. */
+/** Before 070 the activity tables have no offering_id column. */
+function isMissingActivityCourse(error: { code?: string } | null): boolean {
+  return !!error && (error.code === '42703' || error.code === 'PGRST204');
+}
+
+/**
+ * The items of the given offerings (070): every Patient Case, Quiz and Case
+ * Presentation made for one of them, as automatic checklist items, Patient
+ * Cases first, then Quizzes, then Case Presentations, each oldest first. An
+ * item's id is its activity's id. Null before 070 is applied.
+ */
+export async function loadActivityItems(supabase: Supabase, offeringIds: string[]): Promise<RequirementRow[] | null> {
+  if (offeringIds.length === 0) return [];
+  const read = (table: 'scenarios' | 'assessments' | 'case_presentations') =>
+    supabase.from(table).select('id, offering_id, created_at').in('offering_id', offeringIds).order('created_at');
+  const [scenarios, assessments, presentations] = await Promise.all([read('scenarios'), read('assessments'), read('case_presentations')]);
+  if ([scenarios, assessments, presentations].some((r) => isMissingActivityCourse(r.error))) return null;
+  const rows = (res: typeof scenarios) => (must(res) ?? []) as { id: string; offering_id: string }[];
+  let position = 0;
+  const item = (row: { id: string; offering_id: string }, type: 'scenario' | 'assessment' | 'case_presentation'): RequirementRow => ({
+    id: row.id,
+    offering_id: row.offering_id,
+    position: position++,
+    kind: 'activity',
+    title: '',
+    activity_type: type,
+    scenario_id: type === 'scenario' ? row.id : null,
+    assessment_id: type === 'assessment' ? row.id : null,
+    presentation_id: type === 'case_presentation' ? row.id : null,
+    target_count: null,
+    skill_id: null,
+    min_score: null,
+    skills_only: false,
+    manual_type: 'lab',
+  });
+  return [
+    ...rows(scenarios).map((r) => item(r, 'scenario')),
+    ...rows(assessments).map((r) => item(r, 'assessment')),
+    ...rows(presentations).map((r) => item(r, 'case_presentation')),
+  ];
+}
+
+/**
+ * Requirements of the given offerings: since 070 the activities made for
+ * them (loadActivityItems); before it, the hand-made checklist, in its
+ * order (before 067 every manual item reads as a Lab Activity).
+ */
 export async function loadRequirements(supabase: Supabase, offeringIds: string[]): Promise<RequirementRow[]> {
   if (offeringIds.length === 0) return [];
+  const activities = await loadActivityItems(supabase, offeringIds);
+  if (activities) return activities;
   const rows = await requirementQuery((columns) =>
     supabase
       .from('course_requirements')
@@ -548,13 +596,20 @@ export async function refileRequirement(
   stored: { grading: GradingSplit | null; ready: boolean },
   next: (split: GradingSplit) => GradingSplit,
 ): Promise<void> {
-  if (!stored.ready || !stored.grading) return;
+  // An automatic split (070) is never stored; it follows the activities.
+  if (!stored.ready || !stored.grading || stored.grading.auto) return;
   const updated = next(stored.grading);
   if (gradingSignature(updated) !== gradingSignature(stored.grading)) await writeGrading(supabase, offeringId, updated);
 }
 
-/** The offering's grading split (067), and whether the column exists yet (ready). */
+/**
+ * The offering's grading split. Since 070 the system makes it from the
+ * course's activities (autoSplit); before, it is the one the instructor
+ * stored (067), and ready says whether that column exists yet.
+ */
 export async function loadGrading(supabase: Supabase, offeringId: string): Promise<{ grading: GradingSplit | null; ready: boolean }> {
+  const activities = await loadActivityItems(supabase, [offeringId]);
+  if (activities) return { grading: autoSplit(activities), ready: true };
   const res = await supabase.from('course_offerings').select('grading').eq('id', offeringId).maybeSingle();
   if (res.error) {
     if (isMissingGradingSchema(res.error)) return { grading: null, ready: false };

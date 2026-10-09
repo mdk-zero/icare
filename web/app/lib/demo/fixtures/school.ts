@@ -71,6 +71,8 @@ export interface DemoPatient {
   medical_history: string | null;
   created_by: string;
   created_at: string;
+  /** The courses this patient belongs to (069); a demo saved before it has none, see coursesOf. */
+  course_ids?: string[];
 }
 
 export interface DemoScenario {
@@ -87,6 +89,8 @@ export interface DemoScenario {
   patient_case: Record<string, unknown>;
   rubric: Record<string, string> | null;
   difficulty: string;
+  /** The course offering it was made for (070); null for none, absent in demos saved before. */
+  offering_id?: string | null;
 }
 
 export interface DemoTask {
@@ -159,6 +163,8 @@ export interface DemoQuiz {
   created_at: string;
   updated_at: string;
   scenario_id: string | null;
+  /** The course offering it was made for (070); null for none, absent in demos saved before. */
+  offering_id?: string | null;
 }
 
 export interface DemoCriterion {

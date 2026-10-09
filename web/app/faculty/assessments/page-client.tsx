@@ -20,7 +20,9 @@ import {
 import PageHeader from "../../components/PageHeader";
 import { SkeletonAssessmentCard, SkeletonStatTile } from "../../components/skeletons";
 import StatTile from "../../components/StatTile";
-import { fetchFacultySections, getCurrentUser, type Section, apiFetch } from "../../lib/api";
+import { fetchFacultySections, fetchMyCourses, getCurrentUser, type Section, apiFetch } from "../../lib/api";
+import { groupByCourse, numberWithinCourse } from "../../lib/course-groups";
+import CourseGroupHeading from "../../components/CourseGroupHeading";
 import { toast } from "../../components/Toast";
 import ConfirmModal from "../../components/ConfirmModal";
 import { usePageData } from "../../lib/use-page-data";
@@ -63,6 +65,8 @@ interface Assessment {
   max_attempts: number | null;
   student_count: number;
   created_at: string;
+  /** The course offering it was made for (migration 070); null for none. */
+  offering_id?: string | null;
 }
 
 interface Student {
@@ -90,12 +94,13 @@ export default function FacultyAssessmentsClient() {
     loading,
     refresh: loadAssessments,
   } = usePageData("faculty:assessments", async () => {
-    const [assessmentsRes, studentsRes, sections] = await Promise.all([
+    const [assessmentsRes, studentsRes, sections, courses] = await Promise.all([
       apiFetch("/api/faculty/assessments", { credentials: "include" }),
       apiFetch("/api/faculty/students", { credentials: "include" }),
       // Own sections only: a faculty member can assign to the sections they
       // handle (admin gets all of them).
       fetchFacultySections(),
+      fetchMyCourses(),
     ]);
     const assessments = assessmentsRes.ok
       ? (((await assessmentsRes.json()) as { assessments?: Assessment[] }).assessments ?? [])
@@ -103,7 +108,7 @@ export default function FacultyAssessmentsClient() {
     const students = studentsRes.ok
       ? (((await studentsRes.json()) as { students?: Student[] }).students ?? [])
       : [];
-    return { assessments, students, sections };
+    return { assessments, students, sections, offerings: courses.data?.offerings ?? [] };
   });
 
   const assessments = data?.assessments ?? NO_ASSESSMENTS;
@@ -124,6 +129,10 @@ export default function FacultyAssessmentsClient() {
     () => [...new Set(assessments.map((a) => a.category))].sort((a, b) => a.localeCompare(b)),
     [assessments],
   );
+
+  // Quizzes are grouped by the course they were made for, and numbered within
+  // it in the order they were made, as the course's Criteria tab numbers them.
+  const quizNumber = useMemo(() => numberWithinCourse(assessments), [assessments]);
 
   const filteredAssessments = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -150,6 +159,10 @@ export default function FacultyAssessmentsClient() {
       return true;
     });
   }, [assessments, searchQuery, statusFilter, categoryFilter, sectionFilter]);
+  const quizGroups = useMemo(
+    () => groupByCourse(filteredAssessments, data?.offerings ?? []),
+    [filteredAssessments, data?.offerings],
+  );
 
   const filtersActive =
     searchQuery.trim() !== "" ||
@@ -420,112 +433,130 @@ export default function FacultyAssessmentsClient() {
             : "No quizzes yet. Create your first quiz to start building the question bank."}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredAssessments.map((a) => (
-            <div
-              key={a.id}
-              className="bg-surface rounded-xl border border-hairline shadow-tile overflow-hidden flex flex-col"
-            >
-              <div className="p-4 flex-1">
-                <div className="flex items-center gap-2 flex-wrap mb-1">
-                  <h3 className="font-semibold text-gray-800 truncate">{a.title}</h3>
-                  <span
-                    className={`px-2 py-0.5 text-xs rounded-full shrink-0 ${
-                      a.is_published ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"
-                    }`}
-                  >
-                    {a.is_published ? "Published" : "Draft"}
-                  </span>
-                </div>
-                {a.description && (
-                  <p className="text-sm text-gray-500 mb-3 line-clamp-2">{a.description}</p>
-                )}
-                <div className="flex items-center gap-2 text-sm text-gray-400 flex-wrap">
-                  <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">
-                    {a.category}
-                  </span>
-                  {/* Bank size, and the paper drawn from it when they differ —
-                        the surplus is held back for later attempts. */}
-                  <span className="text-xs">
-                    {a.question_count} question{a.question_count === 1 ? "" : "s"}
-                    {a.total_questions !== null && a.total_questions < a.question_count && (
-                      <span className="text-gray-500"> · serves {a.total_questions}</span>
+        <div className="space-y-6">
+          {quizGroups.map((group) => (
+            <section key={group.key} aria-label={group.code ? `${group.code} ${group.title}` : group.title}>
+              <CourseGroupHeading code={group.code} title={group.title} term={group.term} count={group.items.length} />
+              {group.items.length === 0 ? (
+                <p className="rounded-xl border border-dashed border-gray-300 px-4 py-5 text-center text-sm text-gray-500">
+                  No quizzes for this course yet.
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {group.items.map((a) => (
+                <div
+                  key={a.id}
+                  className="bg-surface rounded-xl border border-hairline shadow-tile overflow-hidden flex flex-col"
+                >
+                  <div className="p-4 flex-1">
+                    {quizNumber.has(a.id) && (
+                      <p className="mb-0.5 text-[11px] font-semibold uppercase tracking-wider text-brand-700">
+                        Quiz #{quizNumber.get(a.id)}
+                      </p>
                     )}
-                  </span>
-                  <span className="text-xs">{a.student_count} assigned</span>
-                  {a.time_limit_seconds && (
-                    <span className="text-xs">{Math.round(a.time_limit_seconds / 60)} min</span>
-                  )}
-                  <span className="text-xs">
-                    {a.max_attempts === null
-                      ? "Unlimited tries"
-                      : `${a.max_attempts} ${a.max_attempts === 1 ? "try" : "tries"}`}
-                  </span>
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                      <h3 className="font-semibold text-gray-800 truncate">{a.title}</h3>
+                      <span
+                        className={`px-2 py-0.5 text-xs rounded-full shrink-0 ${
+                          a.is_published ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"
+                        }`}
+                      >
+                        {a.is_published ? "Published" : "Draft"}
+                      </span>
+                    </div>
+                    {a.description && (
+                      <p className="text-sm text-gray-500 mb-3 line-clamp-2">{a.description}</p>
+                    )}
+                    <div className="flex items-center gap-2 text-sm text-gray-400 flex-wrap">
+                      <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">
+                        {a.category}
+                      </span>
+                      {/* Bank size, and the paper drawn from it when they differ —
+                            the surplus is held back for later attempts. */}
+                      <span className="text-xs">
+                        {a.question_count} question{a.question_count === 1 ? "" : "s"}
+                        {a.total_questions !== null && a.total_questions < a.question_count && (
+                          <span className="text-gray-500"> · serves {a.total_questions}</span>
+                        )}
+                      </span>
+                      <span className="text-xs">{a.student_count} assigned</span>
+                      {a.time_limit_seconds && (
+                        <span className="text-xs">{Math.round(a.time_limit_seconds / 60)} min</span>
+                      )}
+                      <span className="text-xs">
+                        {a.max_attempts === null
+                          ? "Unlimited tries"
+                          : `${a.max_attempts} ${a.max_attempts === 1 ? "try" : "tries"}`}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="px-4 py-3 bg-subtle border-t border-hairline">
+                    <div className="text-xs text-gray-500 mb-2 truncate">
+                      {a.target_sections && a.target_sections.length > 0
+                        ? `Published to ${a.target_sections.map((s) => `Section ${s}`).join(", ")}`
+                        : "Published to all sections"}
+                    </div>
+                    <div className="flex items-center justify-end gap-1.5">
+                      <button
+                        onClick={() => openAssignModal(a)}
+                        disabled={!a.is_published}
+                        title={a.is_published ? "Assign to students" : "Publish first to assign"}
+                        className="p-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+                      >
+                        <FontAwesomeIcon icon={faUserPlus} className="w-3.5 h-3.5" />
+                      </button>
+                      {canChange(a) && (
+                        <button
+                          onClick={() => togglePublish(a)}
+                          disabled={busy}
+                          title={a.is_published ? "Unpublish" : "Publish"}
+                          className="p-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"
+                        >
+                          <FontAwesomeIcon
+                            icon={a.is_published ? faEyeSlash : faGlobe}
+                            className="w-3.5 h-3.5"
+                          />
+                        </button>
+                      )}
+                      <button
+                        onClick={() => router.push(`/faculty/assessments/${a.id}`)}
+                        title={canChange(a) ? "Edit details" : "View"}
+                        className="p-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"
+                      >
+                        <FontAwesomeIcon icon={faPen} className="w-3.5 h-3.5" />
+                      </button>
+                      {canChange(a) && (
+                        <button
+                          onClick={() => setConfirmDelete(a)}
+                          title="Delete"
+                          className="p-2 rounded-lg border border-red-200 text-red-600 hover:bg-red-50"
+                        >
+                          <FontAwesomeIcon icon={faTrash} className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                      <button
+                        onClick={() => router.push(`/faculty/assessments/${a.id}/results`)}
+                        title="View student results"
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 text-sm font-medium"
+                      >
+                        <FontAwesomeIcon icon={faChartSimple} className="w-3.5 h-3.5" />
+                        Results
+                      </button>
+                      <button
+                        onClick={() => router.push(`/faculty/assessments/${a.id}`)}
+                        title="Manage questions"
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-brand-600/10 dark:bg-brand-600/25 text-brand-700 dark:text-white hover:bg-brand-600/20 dark:hover:bg-brand-600/35 text-sm font-medium"
+                      >
+                        <FontAwesomeIcon icon={faListCheck} className="w-3.5 h-3.5" />
+                        Questions
+                      </button>
+                    </div>
+                  </div>
                 </div>
-              </div>
-              <div className="px-4 py-3 bg-subtle border-t border-hairline">
-                <div className="text-xs text-gray-500 mb-2 truncate">
-                  {a.target_sections && a.target_sections.length > 0
-                    ? `Published to ${a.target_sections.map((s) => `Section ${s}`).join(", ")}`
-                    : "Published to all sections"}
+              ))}
                 </div>
-                <div className="flex items-center justify-end gap-1.5">
-                  <button
-                    onClick={() => openAssignModal(a)}
-                    disabled={!a.is_published}
-                    title={a.is_published ? "Assign to students" : "Publish first to assign"}
-                    className="p-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40"
-                  >
-                    <FontAwesomeIcon icon={faUserPlus} className="w-3.5 h-3.5" />
-                  </button>
-                  {canChange(a) && (
-                    <button
-                      onClick={() => togglePublish(a)}
-                      disabled={busy}
-                      title={a.is_published ? "Unpublish" : "Publish"}
-                      className="p-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"
-                    >
-                      <FontAwesomeIcon
-                        icon={a.is_published ? faEyeSlash : faGlobe}
-                        className="w-3.5 h-3.5"
-                      />
-                    </button>
-                  )}
-                  <button
-                    onClick={() => router.push(`/faculty/assessments/${a.id}`)}
-                    title={canChange(a) ? "Edit details" : "View"}
-                    className="p-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"
-                  >
-                    <FontAwesomeIcon icon={faPen} className="w-3.5 h-3.5" />
-                  </button>
-                  {canChange(a) && (
-                    <button
-                      onClick={() => setConfirmDelete(a)}
-                      title="Delete"
-                      className="p-2 rounded-lg border border-red-200 text-red-600 hover:bg-red-50"
-                    >
-                      <FontAwesomeIcon icon={faTrash} className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                  <button
-                    onClick={() => router.push(`/faculty/assessments/${a.id}/results`)}
-                    title="View student results"
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 text-sm font-medium"
-                  >
-                    <FontAwesomeIcon icon={faChartSimple} className="w-3.5 h-3.5" />
-                    Results
-                  </button>
-                  <button
-                    onClick={() => router.push(`/faculty/assessments/${a.id}`)}
-                    title="Manage questions"
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-brand-600/10 dark:bg-brand-600/25 text-brand-700 dark:text-white hover:bg-brand-600/20 dark:hover:bg-brand-600/35 text-sm font-medium"
-                  >
-                    <FontAwesomeIcon icon={faListCheck} className="w-3.5 h-3.5" />
-                    Questions
-                  </button>
-                </div>
-              </div>
-            </div>
+              )}
+            </section>
           ))}
         </div>
       )}
