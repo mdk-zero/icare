@@ -7,11 +7,15 @@ import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import {
   faArrowUpRightFromSquare,
   faBookOpen,
+  faChevronLeft,
+  faChevronRight,
   faEye,
   faFilePdf,
   faFilePowerpoint,
   faLink,
+  faListCheck,
   faPen,
+  faPhotoFilm,
   faPlay,
   faPlus,
   faSearch,
@@ -21,7 +25,7 @@ import {
   faWandMagicSparkles,
 } from "@fortawesome/free-solid-svg-icons";
 import PageHeader from "../../components/PageHeader";
-import { SkeletonLibraryMaterials, SkeletonLibrarySkillList } from "../../components/skeletons";
+import { SkeletonLibraryChecklist, SkeletonLibraryMaterials, SkeletonLibrarySkillList } from "../../components/skeletons";
 import ConfirmModal, { type ConfirmConfig } from "../../components/ConfirmModal";
 import { toast } from "../../components/Toast";
 import { usePageData } from "../../lib/use-page-data";
@@ -31,6 +35,7 @@ import {
   fetchLibrary,
   fetchLibraryMaterial,
   fetchLibrarySuggestions,
+  fetchSkillDetails,
   publishLibrarySuggestion,
   setLibraryMaterialStatus,
   updateLibraryMaterial,
@@ -57,6 +62,13 @@ const NO_SKILLS: LibrarySkill[] = [];
 const NO_SECTIONS: Section[] = [];
 const NO_MATERIALS: LibraryMaterial[] = [];
 const NO_SUGGESTIONS: LibrarySuggestion[] = [];
+
+type View = "materials" | "checklists";
+
+const VIEWS: { id: View; label: string; icon: IconDefinition }[] = [
+  { id: "materials", label: "Study materials", icon: faPhotoFilm },
+  { id: "checklists", label: "Skill checklists", icon: faListCheck },
+];
 
 /** The id of a YouTube link, for the live preview; the server checks it properly. */
 function youTubeIdOf(value: string): string | null {
@@ -94,6 +106,7 @@ export default function LibraryClient() {
   const suggestions = data?.suggestions ?? NO_SUGGESTIONS;
   const sections = data?.sections ?? NO_SECTIONS;
 
+  const [view, setView] = useState<View>("materials");
   const [search, setSearch] = useState("");
   const [picked, setPicked] = useState<string | null>(null);
   const [editing, setEditing] = useState<{ material: LibraryMaterial | null; kind: LibraryKind } | null>(null);
@@ -121,6 +134,9 @@ export default function LibraryClient() {
     }
     return groups;
   }, [skills, search]);
+
+  const skillIndex = skills.findIndex((s) => s.id === skillId);
+  const chapterCount = new Set(skills.map((s) => s.chapter)).size;
 
   const skillMaterials = materials.filter((m) => m.skill_id === skillId);
   const skillSuggestions = suggestions.filter((s) => s.skill_id === skillId);
@@ -153,7 +169,11 @@ export default function LibraryClient() {
       <PageHeader
         badge={{ icon: <FontAwesomeIcon icon={faBookOpen} className="h-4 w-4" />, label: "Library" }}
         title="Library"
-        subtitle="Study materials for each Taylor's skill — demo videos, notes, handouts and slides your students open in the app"
+        subtitle={
+          view === "checklists"
+            ? "Every skill checklist from Skill Checklists for Taylor's Clinical Nursing Skills (Lynn & LeBon, 3rd ed.), word for word — for instructors, not shown to students"
+            : "Study materials for each Taylor's skill — demo videos, notes, handouts and slides your students open in the app"
+        }
       />
 
       {data && !data.enabled && (
@@ -164,6 +184,29 @@ export default function LibraryClient() {
       {data?.error && (
         <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{data.error}</p>
       )}
+
+      <div role="tablist" aria-label="Library views" className="flex gap-1 overflow-x-auto overflow-y-hidden shadow-[inset_0_-1px_0_var(--color-hairline)]">
+        {VIEWS.map((v) => {
+          const active = view === v.id;
+          return (
+            <button
+              key={v.id}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => setView(v.id)}
+              className={`flex shrink-0 items-center gap-2 border-b-2 px-3.5 py-2.5 text-sm font-medium transition-colors ${
+                active
+                  ? "border-brand-600 text-brand-700"
+                  : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-800"
+              }`}
+            >
+              <FontAwesomeIcon icon={v.icon} className="h-3.5 w-3.5" />
+              {v.label}
+            </button>
+          );
+        })}
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)] gap-4 items-start">
         {/* Skill browser */}
@@ -181,6 +224,10 @@ export default function LibraryClient() {
             </div>
             {firstLoad ? (
               <div className="mt-2.5 h-3 w-36 animate-pulse rounded bg-gray-100" aria-hidden />
+            ) : view === "checklists" ? (
+              <p className="mt-2 text-xs text-gray-500 tabular-nums">
+                {skills.length} skill checklists · {chapterCount} chapters
+              </p>
             ) : (
               <p className="mt-2 text-xs text-gray-500 tabular-nums">
                 {materials.length} material{materials.length === 1 ? "" : "s"} · {published} published
@@ -207,7 +254,7 @@ export default function LibraryClient() {
                     >
                       <span className="font-mono text-xs mt-0.5 w-10 shrink-0 text-gray-500">{s.id}</span>
                       <span className="flex-1 leading-snug">{s.title}</span>
-                      {n > 0 && (
+                      {view === "materials" && n > 0 && (
                         <span className="shrink-0 rounded-full bg-brand-600/15 text-brand-700 text-[11px] px-1.5 py-0.5 tabular-nums">{n}</span>
                       )}
                     </button>
@@ -218,96 +265,115 @@ export default function LibraryClient() {
           </div>
         </aside>
 
-        {/* The skill's materials */}
-        <section className="space-y-4 min-w-0" aria-busy={firstLoad}>
-          {firstLoad && <SkeletonLibraryMaterials />}
-          {skill && (
-            <div className="bg-surface rounded-xl border border-hairline shadow-tile p-4 flex flex-wrap items-center justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-xs text-gray-500">Chapter {skill.chapter} · {skill.area}</p>
-                <h2 className="font-semibold text-gray-900">
-                  Skill {skill.id} · {skill.title}
-                </h2>
+        {view === "checklists" ? (
+          <section className="min-w-0" aria-busy={firstLoad}>
+            {firstLoad && (
+              <div className="bg-surface rounded-xl border border-hairline shadow-tile overflow-hidden">
+                <SkeletonLibraryChecklist />
               </div>
-              <div className="flex flex-wrap gap-2">
-                {KINDS.map((k) => (
-                  <button
-                    key={k.kind}
-                    onClick={() => setEditing({ material: null, kind: k.kind })}
-                    disabled={data?.enabled === false}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-medium text-gray-700 hover:border-brand-600/40 hover:bg-brand-600/5 disabled:opacity-50"
-                  >
-                    <FontAwesomeIcon icon={faPlus} className="w-3 h-3" />
-                    {k.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {skillMaterials.length === 0 && !loading && (
-            <div className="bg-surface p-10 rounded-xl border border-hairline shadow-tile text-center text-sm text-gray-500">
-              Nothing for this skill yet. Add a video, a note, a handout or slides above
-              {skillSuggestions.length > 0 ? ", or publish one of the suggested demos below." : "."}
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
-            {skillMaterials.map((m) => (
-              <MaterialCard
-                key={m.id}
-                material={m}
-                busy={busyId === m.id}
-                onPreview={() => setPreviewing(m)}
-                onEdit={() => setEditing({ material: m, kind: m.kind })}
-                onToggle={() =>
-                  act(
-                    m.id,
-                    () => setLibraryMaterialStatus(m.id, m.status === "published" ? "unpublish" : "publish"),
-                    m.status === "published" ? "Moved back to drafts" : "Published to students",
-                  )
-                }
-                onDelete={() => askDelete(m)}
+            )}
+            {skill && (
+              <ChecklistPanel
+                key={skill.id}
+                skill={skill}
+                prev={skills[skillIndex - 1] ?? null}
+                next={skills[skillIndex + 1] ?? null}
+                onPick={setPicked}
               />
-            ))}
-          </div>
-
-          {skillSuggestions.length > 0 && (
-            <div className="bg-surface rounded-xl border border-hairline shadow-tile p-4 space-y-3">
-              <div className="flex items-center gap-2">
-                <FontAwesomeIcon icon={faWandMagicSparkles} className="w-4 h-4 text-brand-600" />
-                <h3 className="font-semibold text-gray-800 text-sm">Suggested demo videos</h3>
-                <span className="text-xs text-gray-500">Curated for this skill — students see them only once you publish</span>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-                {skillSuggestions.map((s) => (
-                  <div key={s.id} className="rounded-lg border border-hairline overflow-hidden flex flex-col">
-                    <button onClick={() => setPreviewing(s)} className="relative aspect-video bg-gray-100 group" aria-label={`Preview ${s.title}`}>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={thumbUrl(s.youtube_id)} alt="" className="w-full h-full object-cover" loading="lazy" />
-                      <span className="absolute inset-0 flex items-center justify-center bg-black/10 group-hover:bg-black/25 transition-colors">
-                        <span className="w-10 h-10 rounded-full bg-white/90 flex items-center justify-center">
-                          <FontAwesomeIcon icon={faPlay} className="w-3.5 h-3.5 text-rose-600 ml-0.5" />
-                        </span>
-                      </span>
+            )}
+          </section>
+        ) : (
+          // The skill's materials
+          <section className="space-y-4 min-w-0" aria-busy={firstLoad}>
+            {firstLoad && <SkeletonLibraryMaterials />}
+            {skill && (
+              <div className="bg-surface rounded-xl border border-hairline shadow-tile p-4 flex flex-wrap items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-xs text-gray-500">Chapter {skill.chapter} · {skill.area}</p>
+                  <h2 className="font-semibold text-gray-900">
+                    Skill {skill.id} · {skill.title}
+                  </h2>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {KINDS.map((k) => (
+                    <button
+                      key={k.kind}
+                      onClick={() => setEditing({ material: null, kind: k.kind })}
+                      disabled={data?.enabled === false}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-medium text-gray-700 hover:border-brand-600/40 hover:bg-brand-600/5 disabled:opacity-50"
+                    >
+                      <FontAwesomeIcon icon={faPlus} className="w-3 h-3" />
+                      {k.label}
                     </button>
-                    <div className="p-2.5 flex-1 flex flex-col gap-2">
-                      <p className="text-sm text-gray-800 leading-snug line-clamp-2">{s.title}</p>
-                      <p className="text-xs text-gray-500">{s.channel}</p>
-                      <button
-                        onClick={() => act(s.id, () => publishLibrarySuggestion(s.id, sections.map((x) => x.name)), "Published to your sections")}
-                        disabled={busyId === s.id || data?.enabled === false}
-                        className="mt-auto px-3 py-1.5 bg-brand-600 text-white rounded-lg text-xs font-medium hover:bg-brand-700 disabled:opacity-60"
-                      >
-                        {busyId === s.id ? "Publishing…" : "Publish to my sections"}
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
+            )}
+
+            {skillMaterials.length === 0 && !loading && (
+              <div className="bg-surface p-10 rounded-xl border border-hairline shadow-tile text-center text-sm text-gray-500">
+                Nothing for this skill yet. Add a video, a note, a handout or slides above
+                {skillSuggestions.length > 0 ? ", or publish one of the suggested demos below." : "."}
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+              {skillMaterials.map((m) => (
+                <MaterialCard
+                  key={m.id}
+                  material={m}
+                  busy={busyId === m.id}
+                  onPreview={() => setPreviewing(m)}
+                  onEdit={() => setEditing({ material: m, kind: m.kind })}
+                  onToggle={() =>
+                    act(
+                      m.id,
+                      () => setLibraryMaterialStatus(m.id, m.status === "published" ? "unpublish" : "publish"),
+                      m.status === "published" ? "Moved back to drafts" : "Published to students",
+                    )
+                  }
+                  onDelete={() => askDelete(m)}
+                />
+              ))}
             </div>
-          )}
-        </section>
+
+            {skillSuggestions.length > 0 && (
+              <div className="bg-surface rounded-xl border border-hairline shadow-tile p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <FontAwesomeIcon icon={faWandMagicSparkles} className="w-4 h-4 text-brand-600" />
+                  <h3 className="font-semibold text-gray-800 text-sm">Suggested demo videos</h3>
+                  <span className="text-xs text-gray-500">Curated for this skill — students see them only once you publish</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                  {skillSuggestions.map((s) => (
+                    <div key={s.id} className="rounded-lg border border-hairline overflow-hidden flex flex-col">
+                      <button onClick={() => setPreviewing(s)} className="relative aspect-video bg-gray-100 group" aria-label={`Preview ${s.title}`}>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={thumbUrl(s.youtube_id)} alt="" className="w-full h-full object-cover" loading="lazy" />
+                        <span className="absolute inset-0 flex items-center justify-center bg-black/10 group-hover:bg-black/25 transition-colors">
+                          <span className="w-10 h-10 rounded-full bg-white/90 flex items-center justify-center">
+                            <FontAwesomeIcon icon={faPlay} className="w-3.5 h-3.5 text-rose-600 ml-0.5" />
+                          </span>
+                        </span>
+                      </button>
+                      <div className="p-2.5 flex-1 flex flex-col gap-2">
+                        <p className="text-sm text-gray-800 leading-snug line-clamp-2">{s.title}</p>
+                        <p className="text-xs text-gray-500">{s.channel}</p>
+                        <button
+                          onClick={() => act(s.id, () => publishLibrarySuggestion(s.id, sections.map((x) => x.name)), "Published to your sections")}
+                          disabled={busyId === s.id || data?.enabled === false}
+                          className="mt-auto px-3 py-1.5 bg-brand-600 text-white rounded-lg text-xs font-medium hover:bg-brand-700 disabled:opacity-60"
+                        >
+                          {busyId === s.id ? "Publishing…" : "Publish to my sections"}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </section>
+        )}
       </div>
 
       {editing && skill && (
@@ -411,6 +477,112 @@ function MaterialCard({
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * One skill's checklist as the book prints it: the goal, then every step word
+ * for word under the variant heading it falls in. The book restarts its
+ * numbering inside alternatives (oral, rectal, axillary temperature), so the
+ * printed number is shown rather than a running count.
+ */
+function ChecklistPanel({
+  skill,
+  prev,
+  next,
+  onPick,
+}: {
+  skill: LibrarySkill;
+  prev: LibrarySkill | null;
+  next: LibrarySkill | null;
+  onPick: (skillId: string) => void;
+}) {
+  const { data: details } = usePageData(`skills:details:${skill.id}`, () => fetchSkillDetails([skill.id]), {
+    freshFor: 10 * 60_000,
+  });
+  const detail = details?.[0];
+  const top = useRef<HTMLElement>(null);
+
+  // Consecutive steps under the same variant heading, in book order.
+  const groups = useMemo(() => {
+    const out: { section: string | null; steps: NonNullable<typeof detail>["steps"] }[] = [];
+    for (const st of detail?.steps ?? []) {
+      const last = out[out.length - 1];
+      if (last && last.section === st.section) last.steps.push(st);
+      else out.push({ section: st.section, steps: [st] });
+    }
+    return out;
+  }, [detail]);
+
+  // Paging from the bottom of a long checklist lands on the next one's heading.
+  const go = (id: string) => {
+    onPick(id);
+    if ((top.current?.getBoundingClientRect().top ?? 0) < 0) top.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+  };
+
+  return (
+    <article ref={top} className="scroll-mt-3 bg-surface rounded-xl border border-hairline shadow-tile overflow-hidden" aria-labelledby={`checklist-${skill.id}`}>
+      <header className="p-4 border-b border-hairline flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
+        <div className="min-w-0">
+          <p className="text-xs text-gray-500">Chapter {skill.chapter} · {skill.area}</p>
+          <h2 id={`checklist-${skill.id}`} className="font-semibold text-gray-900">
+            Skill {skill.id} · {skill.title}
+          </h2>
+        </div>
+        {detail && (
+          <span className="shrink-0 text-xs text-gray-500 tabular-nums mt-0.5">
+            {detail.steps.length} step{detail.steps.length === 1 ? "" : "s"}
+          </span>
+        )}
+      </header>
+
+      {details === undefined ? (
+        <SkeletonLibraryChecklist header={false} />
+      ) : !detail ? (
+        <p className="p-6 text-sm text-gray-500">This checklist couldn&rsquo;t be loaded. Try another skill, or reload the page.</p>
+      ) : (
+        <div className="p-4 space-y-5">
+          {detail.goal && (
+            <p className="rounded-lg bg-subtle px-3.5 py-2.5 text-sm text-gray-700 leading-relaxed">
+              <span className="font-semibold text-gray-900">Goal: </span>
+              {detail.goal}
+            </p>
+          )}
+          {groups.map((g, i) => (
+            <div key={i}>
+              {g.section && <h3 className="mb-1 text-sm font-semibold text-brand-700">{g.section}</h3>}
+              <ol className="divide-y divide-hairline">
+                {g.steps.map((st) => (
+                  <li key={st.position} className="flex gap-3 py-2 text-sm">
+                    <span className="w-7 shrink-0 pt-px text-right font-mono text-xs text-gray-400 tabular-nums">{st.stepNo}.</span>
+                    <span className="flex-1 text-gray-800 leading-relaxed">{st.text}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {(prev || next) && (
+        <footer className="px-4 py-2.5 bg-subtle border-t border-hairline flex items-center justify-between gap-4 text-xs">
+          {prev ? (
+            <button onClick={() => go(prev.id)} className="flex min-w-0 items-center gap-1.5 font-medium text-brand-700 hover:underline">
+              <FontAwesomeIcon icon={faChevronLeft} className="w-3 h-3 shrink-0" />
+              <span className="truncate">Skill {prev.id} · {prev.title}</span>
+            </button>
+          ) : (
+            <span />
+          )}
+          {next && (
+            <button onClick={() => go(next.id)} className="flex min-w-0 items-center gap-1.5 font-medium text-brand-700 hover:underline text-right">
+              <span className="truncate">Skill {next.id} · {next.title}</span>
+              <FontAwesomeIcon icon={faChevronRight} className="w-3 h-3 shrink-0" />
+            </button>
+          )}
+        </footer>
+      )}
+    </article>
   );
 }
 

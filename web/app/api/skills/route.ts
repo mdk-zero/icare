@@ -7,13 +7,15 @@ import { getSkills, listSkills, skillVariants } from '@/app/lib/taylor-skills';
 const MAX_DETAIL = 20;
 
 /**
- * The Taylor's skills catalog.
+ * The Taylor's skills catalog, for staff: the checklists are the instructors'
+ * reference, so students are refused.
  *   GET /api/skills             every skill, without steps
  *   GET /api/skills?ids=1-1,14-3 those skills with their checklist steps and variants
  */
 export async function GET(request: NextRequest) {
   const session = await readSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (session.role === 'student') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const supabase = getSupabaseAdmin();
   const ids = request.nextUrl.searchParams.get('ids');

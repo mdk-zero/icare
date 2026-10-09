@@ -606,6 +606,31 @@ export function SkeletonLibraryMaterials({ cards = 2 }: { cards?: number }) {
   );
 }
 
+/** Mirrors a Library checklist: the skill heading, its goal, then numbered steps. */
+export function SkeletonLibraryChecklist({ steps = 8, header = true }: { steps?: number; header?: boolean }) {
+  return (
+    <div className="animate-pulse" aria-hidden>
+      {header && (
+        <div className="space-y-2 border-b border-hairline p-4">
+          <div className="h-3 w-40 rounded bg-gray-100" />
+          <div className="h-4 w-72 max-w-full rounded bg-gray-100" />
+        </div>
+      )}
+      <div className="space-y-4 p-4">
+        <div className="h-12 w-full rounded-lg bg-gray-100" />
+        <div className="space-y-3">
+          {Array.from({ length: steps }).map((_, i) => (
+            <div key={i} className="flex gap-3">
+              <div className="h-3 w-6 shrink-0 rounded bg-gray-100" />
+              <div className={`h-3 rounded bg-gray-100 ${i % 3 === 1 ? "w-1/2" : i % 3 === 2 ? "w-3/4" : "w-full"}`} />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** Mirrors a term heading over its course cards: name, status pill, dates. */
 export function SkeletonTermHeading() {
   return (

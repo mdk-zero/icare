@@ -269,11 +269,10 @@ function youtubeId(input: string): string | null {
 
 route("GET", "/api/faculty/library", async (ctx) => {
   if (!staffOnly(ctx)) return forbidden();
-  const { ACTIVE_CHAPTERS } = await import("@/scripts/taylors-chapters");
-  const skills = (await listSkillSummaries()).filter((s) => ACTIVE_CHAPTERS.includes(s.chapter));
   const mine = new Set([ctx.viewer.id, ...ctx.db.users.filter((u) => u.admin_id === ctx.viewer.id).map((u) => u.id)]);
   return {
-    skills,
+    // Every chapter, as the real route lists them: the Skill checklists view reads the whole book.
+    skills: await listSkillSummaries(),
     sections: visibleSections(ctx.db, ctx.role, ctx.viewer.id).map((s) => ({ id: s.id, name: s.name })),
     materials: ctx.db.materials
       .filter((m) => m.status === "published" || m.created_by === ctx.viewer.id || (ctx.role === "admin" && mine.has(m.created_by)))
