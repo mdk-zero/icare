@@ -96,7 +96,12 @@ export function ItemStatus({ requirement, item }: { requirement: CourseRequireme
       <span className={`${PILL} bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-600/20`}>{scoreText ?? count}</span>
     );
   }
-  return <span className="inline-block h-7 w-7 rounded-full border-2 border-dashed border-gray-200" />;
+  // No grade yet: a dash, as the Performance tab shows it.
+  return (
+    <span className="inline-flex h-7 w-7 items-center justify-center text-sm text-gray-300" aria-label="No grade yet">
+      —
+    </span>
+  );
 }
 
 /**
