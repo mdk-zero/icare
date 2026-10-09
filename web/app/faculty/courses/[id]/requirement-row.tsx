@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faTriangleExclamation } from "@fortawesome/free-solid-svg-icons";
 import ActionsMenu, { type MenuAction } from "../../../components/ActionsMenu";
@@ -13,12 +14,15 @@ export default function ItemRow({
   requirement: r,
   name,
   note,
+  trailing,
   actions,
 }: {
   requirement: CourseRequirement;
   name: string;
   /** A muted line under the detail, e.g. why attendance can't count. */
   note?: string;
+  /** Shown before the actions, e.g. the item's share of the grade. */
+  trailing?: ReactNode;
   actions: MenuAction[] | null;
 }) {
   return (
@@ -35,6 +39,7 @@ export default function ItemRow({
           </span>
         )}
       </div>
+      {trailing}
       {actions && <ActionsMenu variant="compact" label={`Actions for ${name}`} actions={actions} />}
     </li>
   );

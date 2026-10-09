@@ -3,6 +3,13 @@ import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { resolveRoom, roomCapacityError } from '@/app/lib/patient-rooms';
 import { logAudit } from '@/app/lib/audit';
+import {
+  courseIdsError,
+  coursesByPatient,
+  getPatientCourseScope,
+  parseCourseIds,
+  savePatientCourses,
+} from '@/app/lib/patient-courses';
 
 function isFacultyOrAdmin(role: string | undefined): boolean {
   return role === 'faculty' || role === 'admin';
@@ -97,6 +104,11 @@ export async function GET(request: NextRequest) {
 
   try {
     const supabase = getSupabaseAdmin();
+    // An instructor sees only the patients of the courses they teach (069).
+    const scope = await getPatientCourseScope(supabase, session);
+    if (scope.patientIds !== null && scope.patientIds.length === 0) {
+      return NextResponse.json({ patients: [], courses: scope.courses, courses_enabled: scope.enabled });
+    }
     // vital_signs and labs are read back by the edit form, which writes whatever
     // it holds — omitting them here made saving a patient blank both columns.
     let query = supabase
@@ -104,6 +116,10 @@ export async function GET(request: NextRequest) {
       .select('id, subject_id, hadm_id, name, age, gender, room_number, room_id, room:rooms(id, name, room_number), diagnosis, admission_date, status, discharged_at, mimic_id, medical_history, vital_signs, labs, created_at')
       .order('admission_date', { ascending: false })
       .limit(500);
+
+    if (scope.patientIds !== null) {
+      query = query.in('id', scope.patientIds);
+    }
 
     if (search) {
       query = query.or(`name.ilike.%${search}%,diagnosis.ilike.%${search}%,mimic_id.ilike.%${search}%`);
@@ -116,7 +132,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unable to fetch patients' }, { status: 500 });
     }
 
-    return NextResponse.json({ patients: patients || [] });
+    const links = await coursesByPatient(supabase, (patients ?? []).map((p) => p.id as string));
+    return NextResponse.json({
+      patients: (patients ?? []).map((p) => ({ ...p, course_ids: links.get(p.id as string) ?? [] })),
+      courses: scope.courses,
+      courses_enabled: scope.enabled,
+    });
   } catch (err) {
     console.error('Fetch patients failed', err);
     return NextResponse.json({ error: 'Unable to fetch patients' }, { status: 500 });
@@ -141,8 +162,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: validationError }, { status: 400 });
   }
 
+  const courseIds = parseCourseIds(body) ?? [];
+
   try {
     const supabase = getSupabaseAdmin();
+    const scope = await getPatientCourseScope(supabase, session);
+    const courseError = courseIdsError(scope, courseIds);
+    if (courseError) return NextResponse.json({ error: courseError }, { status: 400 });
 
     // Generate a synthetic subject_id/hadm_id for manually created patients.
     // Use a negative subject_id space so they never collide with MIMIC IDs.
@@ -182,6 +208,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unable to create patient' }, { status: 500 });
     }
 
+    await savePatientCourses(supabase, scope, patient.id, courseIds, session.uid);
+
     // Creating a patient is their first check-in; the admission route logs
     // every later transition, so the trail starts here.
     await logAudit(
@@ -195,7 +223,7 @@ export async function POST(request: NextRequest) {
       request,
     );
 
-    return NextResponse.json({ patient }, { status: 201 });
+    return NextResponse.json({ patient: { ...patient, course_ids: courseIds } }, { status: 201 });
   } catch (err) {
     console.error('Create patient failed', err);
     return NextResponse.json({ error: 'Unable to create patient' }, { status: 500 });
@@ -225,8 +253,12 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: validationError }, { status: 400 });
   }
 
+  // Absent when the caller only edits the record (e.g. moving rooms from a case).
+  const courseIds = parseCourseIds(body);
+
   try {
     const supabase = getSupabaseAdmin();
+    const scope = await getPatientCourseScope(supabase, session);
 
     const { data: existing } = await supabase
       .from('patients')
@@ -234,8 +266,12 @@ export async function PUT(request: NextRequest) {
       .eq('id', id)
       .maybeSingle();
 
-    if (!existing) {
+    if (!existing || (scope.patientIds !== null && !scope.patientIds.includes(id))) {
       return NextResponse.json({ error: 'Patient not found' }, { status: 404 });
+    }
+    if (courseIds !== null) {
+      const courseError = courseIdsError(scope, courseIds);
+      if (courseError) return NextResponse.json({ error: courseError }, { status: 400 });
     }
 
     // A discharged patient holds no bed; check-in is the only door back into
@@ -273,7 +309,10 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Unable to update patient' }, { status: 500 });
     }
 
-    return NextResponse.json({ patient });
+    if (courseIds !== null) await savePatientCourses(supabase, scope, id, courseIds, session.uid);
+    const links = await coursesByPatient(supabase, [id]);
+
+    return NextResponse.json({ patient: { ...patient, course_ids: links.get(id) ?? [] } });
   } catch (err) {
     console.error('Update patient failed', err);
     return NextResponse.json({ error: 'Unable to update patient' }, { status: 500 });
@@ -299,6 +338,10 @@ export async function DELETE(request: NextRequest) {
 
   try {
     const supabase = getSupabaseAdmin();
+    const scope = await getPatientCourseScope(supabase, session);
+    if (scope.patientIds !== null && !scope.patientIds.includes(id)) {
+      return NextResponse.json({ error: 'Patient not found' }, { status: 404 });
+    }
 
     const { error: deleteError } = await supabase
       .from('patients')

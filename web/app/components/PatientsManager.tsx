@@ -32,9 +32,7 @@ import {
   faUserPlus,
 } from "@fortawesome/free-solid-svg-icons";
 import {
-  fetchFacultyPatients,
-  createFacultyPatient,
-  updateFacultyPatient,
+  fetchPatientRoster,
   deleteFacultyPatient,
   setPatientAdmission,
   fetchRooms,
@@ -57,13 +55,12 @@ import type { ConfirmConfig } from "./ConfirmModal";
 import { toast } from "./Toast";
 import { usePageData } from "../lib/use-page-data";
 import { EcgLoader } from "./EcgLoader";
+import PatientFormModal from "./PatientFormModal";
 
 const inputClassName =
   "w-full px-4 py-3 bg-surface border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 focus:bg-surface transition-all text-sm shadow-sm";
 
 const labelClassName = "block text-sm font-bold text-gray-800 mb-2";
-
-const vitalLabelClassName = "block text-xs font-bold text-gray-700 mb-1.5";
 
 /** Patients not linked to any room. */
 const UNASSIGNED_KEY = "__unassigned__";
@@ -332,40 +329,6 @@ interface RoomGroup {
   total: number;
 }
 
-interface PatientForm {
-  name: string;
-  age: string;
-  gender: string;
-  room_id: string;
-  diagnosis: string;
-  admission_date: string;
-  vital_signs: {
-    heart_rate: string;
-    blood_pressure: string;
-    temperature: string;
-    respiratory_rate: string;
-    oxygen_saturation: string;
-  };
-  labs: Record<string, string | number | null>;
-}
-
-const emptyPatient: PatientForm = {
-  name: "",
-  age: "",
-  gender: "",
-  room_id: "",
-  diagnosis: "",
-  admission_date: new Date().toISOString().slice(0, 16),
-  vital_signs: {
-    heart_rate: "",
-    blood_pressure: "",
-    temperature: "",
-    respiratory_rate: "",
-    oxygen_saturation: "",
-  },
-  labs: {},
-};
-
 /** Compact readings, replacing the five numeric columns the table used to carry. */
 function VitalChips({ patient }: { patient: FacultyPatient }) {
   const v = patient.vital_signs;
@@ -447,11 +410,8 @@ export default function PatientsManager({
   const [view, setView] = useState<"plan" | "cards">("plan");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingPatient, setEditingPatient] = useState<FacultyPatient | null>(null);
-  const [form, setForm] = useState<PatientForm>(emptyPatient);
-  const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<ConfirmConfig | null>(null);
-  const [error, setError] = useState<string | null>(null);
   // Check-in needs a room choice, so it gets a small modal of its own;
   // check-out only needs the shared confirm dialog.
   const [checkInPatient, setCheckInPatient] = useState<FacultyPatient | null>(null);
@@ -476,12 +436,19 @@ export default function PatientsManager({
     refresh: loadPatients,
   } = usePageData(showFloorPlan ? "patients-manager:plan" : "patients-manager", async () => {
     // The plan's corridors and stations only matter where the plan is drawn.
-    const [patients, rooms, plan] = await Promise.all([
-      fetchFacultyPatients(),
+    const [roster, rooms, plan] = await Promise.all([
+      fetchPatientRoster(),
       fetchRooms(),
       showFloorPlan ? fetchWardFixtures() : Promise.resolve({ fixtures: NO_FIXTURES, enabled: false }),
     ]);
-    return { patients, rooms, fixtures: plan.fixtures, fixturesEnabled: plan.enabled };
+    return {
+      patients: roster.patients,
+      courses: roster.courses,
+      coursesEnabled: roster.coursesEnabled,
+      rooms,
+      fixtures: plan.fixtures,
+      fixturesEnabled: plan.enabled,
+    };
   });
 
   const patients = data?.patients ?? NO_PATIENTS;
@@ -690,90 +657,29 @@ export default function PatientsManager({
     setRoomSearch("");
   };
 
+  const [newRoomId, setNewRoomId] = useState("");
+
   const openAddModal = () => {
     setEditingPatient(null);
     // Drilled into a real room, a new patient almost certainly belongs to it.
-    const room_id = selectedGroup && selectedGroup.key !== UNASSIGNED_KEY ? selectedGroup.key : "";
-    setForm({ ...emptyPatient, room_id });
-    setError(null);
+    setNewRoomId(selectedGroup && selectedGroup.key !== UNASSIGNED_KEY ? selectedGroup.key : "");
     setIsModalOpen(true);
   };
 
   const openEditModal = (patient: FacultyPatient) => {
     setEditingPatient(patient);
-    setForm({
-      name: patient.name,
-      age: String(patient.age ?? ""),
-      gender: patient.gender,
-      room_id: patient.room_id ?? "",
-      diagnosis: patient.diagnosis,
-      admission_date: patient.admission_date
-        ? new Date(patient.admission_date).toISOString().slice(0, 16)
-        : new Date().toISOString().slice(0, 16),
-      vital_signs: {
-        heart_rate: patient.vital_signs?.heart_rate?.toString() ?? "",
-        blood_pressure: patient.vital_signs?.blood_pressure ?? "",
-        temperature: patient.vital_signs?.temperature?.toString() ?? "",
-        respiratory_rate: patient.vital_signs?.respiratory_rate?.toString() ?? "",
-        oxygen_saturation: patient.vital_signs?.oxygen_saturation?.toString() ?? "",
-      },
-      labs: patient.labs || {},
-    });
-    setError(null);
     setIsModalOpen(true);
   };
 
   const closeModal = () => {
     setIsModalOpen(false);
     setEditingPatient(null);
-    setForm(emptyPatient);
-    setError(null);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-    setError(null);
-
-    const payload = {
-      name: form.name,
-      age: parseInt(form.age, 10),
-      gender: form.gender,
-      // The server derives and stores the room_number label from this link.
-      room_id: form.room_id || null,
-      diagnosis: form.diagnosis,
-      admission_date: form.admission_date,
-      vital_signs: {
-        heart_rate: form.vital_signs.heart_rate ? Number(form.vital_signs.heart_rate) : null,
-        blood_pressure: form.vital_signs.blood_pressure || null,
-        temperature: form.vital_signs.temperature ? Number(form.vital_signs.temperature) : null,
-        respiratory_rate: form.vital_signs.respiratory_rate
-          ? Number(form.vital_signs.respiratory_rate)
-          : null,
-        oxygen_saturation: form.vital_signs.oxygen_saturation
-          ? Number(form.vital_signs.oxygen_saturation)
-          : null,
-      },
-      labs: form.labs,
-    };
-
-    let result;
-    if (editingPatient) {
-      result = await updateFacultyPatient(editingPatient.id, payload);
-    } else {
-      result = await createFacultyPatient(payload);
-    }
-
-    if (result.error) {
-      setError(result.error);
-      setSaving(false);
-      return;
-    }
-
+  const handlePatientSaved = async (_patient: FacultyPatient, created: boolean) => {
     await loadPatients();
-    setSaving(false);
     closeModal();
-    toast(editingPatient ? "Patient record updated successfully" : "Patient created successfully");
+    toast(created ? "Patient created successfully" : "Patient record updated successfully");
   };
 
   const handleDelete = async (id: string) => {
@@ -850,19 +756,6 @@ export default function PatientsManager({
     setCheckInPatient(null);
   };
 
-  const updateFormField = (field: keyof PatientForm, value: string) => {
-    setForm((prev) => ({ ...prev, [field]: value }));
-  };
-
-  const updateVitalField = (field: keyof PatientForm["vital_signs"], value: string) => {
-    setForm((prev) => ({
-      ...prev,
-      vital_signs: {
-        ...prev.vital_signs,
-        [field]: value,
-      },
-    }));
-  };
 
   return (
     <div>
@@ -1476,214 +1369,15 @@ export default function PatientsManager({
       )}
 
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-          <div className="bg-surface rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col border border-hairline">
-            <div className="flex items-center justify-between p-4 border-b border-hairline bg-subtle">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-brand-600/10 rounded-lg flex items-center justify-center">
-                  <FontAwesomeIcon
-                    icon={editingPatient ? faPen : faPlus}
-                    className="text-brand-600 w-5 h-5"
-                  />
-                </div>
-                <div>
-                  <h2 className="text-lg font-bold text-gray-900">
-                    {editingPatient ? "Edit Patient" : "Add Patient"}
-                  </h2>
-                  <p className="text-sm text-gray-500">
-                    {editingPatient ? "Update patient record" : "Create a new patient record"}
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={closeModal}
-                className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
-              >
-                <FontAwesomeIcon icon={faTimes} className="w-5 h-5 text-gray-500" />
-              </button>
-            </div>
-            <div className="overflow-y-auto flex-1 custom-scrollbar">
-              <form onSubmit={handleSubmit} className="p-4 space-y-4">
-                {error && (
-                  <div className="p-3 bg-red-50 text-red-700 text-sm rounded-lg">{error}</div>
-                )}
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className={labelClassName}>Full Name</label>
-                    <input
-                      required
-                      type="text"
-                      placeholder="e.g. Juan Dela Cruz"
-                      value={form.name || ""}
-                      onChange={(e) => updateFormField("name", e.target.value)}
-                      className={inputClassName}
-                    />
-                  </div>
-                  <div>
-                    <label className={labelClassName}>Gender</label>
-                    <select
-                      required
-                      value={form.gender || ""}
-                      onChange={(e) => updateFormField("gender", e.target.value)}
-                      className={inputClassName}
-                    >
-                      <option value="">Select gender</option>
-                      <option value="M">Male</option>
-                      <option value="F">Female</option>
-                      <option value="U">Unknown</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className={labelClassName}>Age</label>
-                    <input
-                      required
-                      type="number"
-                      min={0}
-                      max={150}
-                      placeholder="e.g. 35"
-                      value={form.age ?? ""}
-                      onChange={(e) => updateFormField("age", e.target.value)}
-                      className={inputClassName}
-                    />
-                  </div>
-                  <div>
-                    <label className={labelClassName}>Room</label>
-                    <select
-                      value={form.room_id || ""}
-                      onChange={(e) => updateFormField("room_id", e.target.value)}
-                      className={inputClassName}
-                      // The server refuses a room on a discharged patient anyway;
-                      // disabling here says why instead of failing the save.
-                      disabled={!!editingPatient && isDischarged(editingPatient)}
-                    >
-                      <option value="">No room assigned</option>
-                      {rooms.map((room) => {
-                        const occ = occupancyByRoom.get(room.id) ?? 0;
-                        const isCurrent = editingPatient?.room_id === room.id;
-                        const full = roomStatus(occ, room.capacity) === "full";
-                        return (
-                          <option key={room.id} value={room.id} disabled={full && !isCurrent}>
-                            {`${room.name} · Room ${room.room_number} (${occ}/${room.capacity})${full ? " — Full" : ""}`}
-                          </option>
-                        );
-                      })}
-                    </select>
-                    <p className="mt-1.5 text-xs text-gray-500">
-                      {editingPatient && isDischarged(editingPatient)
-                        ? "Discharged — check the patient in to assign a room."
-                        : "Links the patient to a room in the system. Full rooms can't be selected."}
-                    </p>
-                  </div>
-                  <div className="sm:col-span-2">
-                    <label className={labelClassName}>Diagnosis</label>
-                    <input
-                      required
-                      type="text"
-                      placeholder="e.g. Community-acquired pneumonia"
-                      value={form.diagnosis || ""}
-                      onChange={(e) => updateFormField("diagnosis", e.target.value)}
-                      className={inputClassName}
-                    />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <label className={labelClassName}>Admission Date</label>
-                    <input
-                      required
-                      type="datetime-local"
-                      value={form.admission_date || ""}
-                      onChange={(e) => updateFormField("admission_date", e.target.value)}
-                      className={inputClassName}
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <h3 className="text-base font-bold text-gray-900 mb-4 flex items-center gap-2">
-                    <FontAwesomeIcon icon={faHeartPulse} className="w-4 h-4 text-red-500" />
-                    Vital Signs
-                  </h3>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                    <div>
-                      <label className={vitalLabelClassName}>Heart Rate (bpm)</label>
-                      <input
-                        type="number"
-                        placeholder="e.g. 72"
-                        value={form.vital_signs?.heart_rate ?? ""}
-                        onChange={(e) => updateVitalField("heart_rate", e.target.value)}
-                        className={inputClassName}
-                      />
-                    </div>
-                    <div>
-                      <label className={vitalLabelClassName}>Blood Pressure</label>
-                      <input
-                        type="text"
-                        placeholder="e.g. 120/80"
-                        value={form.vital_signs?.blood_pressure || ""}
-                        onChange={(e) => updateVitalField("blood_pressure", e.target.value)}
-                        className={inputClassName}
-                      />
-                    </div>
-                    <div>
-                      <label className={vitalLabelClassName}>Temperature (°C)</label>
-                      <input
-                        type="number"
-                        step="0.1"
-                        placeholder="e.g. 37.0"
-                        value={form.vital_signs?.temperature ?? ""}
-                        onChange={(e) => updateVitalField("temperature", e.target.value)}
-                        className={inputClassName}
-                      />
-                    </div>
-                    <div>
-                      <label className={vitalLabelClassName}>Respiratory Rate</label>
-                      <input
-                        type="number"
-                        placeholder="e.g. 16"
-                        value={form.vital_signs?.respiratory_rate ?? ""}
-                        onChange={(e) => updateVitalField("respiratory_rate", e.target.value)}
-                        className={inputClassName}
-                      />
-                    </div>
-                    <div>
-                      <label className={vitalLabelClassName}>SpO2 (%)</label>
-                      <input
-                        type="number"
-                        min={0}
-                        max={100}
-                        placeholder="e.g. 98"
-                        value={form.vital_signs?.oxygen_saturation ?? ""}
-                        onChange={(e) => updateVitalField("oxygen_saturation", e.target.value)}
-                        className={inputClassName}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-end gap-3 pt-4 border-t border-hairline">
-                  <button
-                    type="button"
-                    onClick={closeModal}
-                    className="px-5 py-2.5 bg-surface border border-gray-200 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-all"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={saving}
-                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-brand-600 hover:bg-[#145a68] disabled:opacity-60 text-white font-medium rounded-lg transition-colors shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
-                  >
-                    {saving && (
-                      <EcgLoader />
-                    )}
-                    <FontAwesomeIcon icon={faSave} className="w-4 h-4" />
-                    {saving ? "Admitting..." : "Admit Patient"}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
+        <PatientFormModal
+          patient={editingPatient}
+          rooms={rooms}
+          courses={data?.courses ?? []}
+          coursesEnabled={data?.coursesEnabled ?? false}
+          initialRoomId={newRoomId}
+          onClose={closeModal}
+          onSaved={handlePatientSaved}
+        />
       )}
       {checkInPatient && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">

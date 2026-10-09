@@ -8,6 +8,7 @@ import {
   faArrowRight,
   faBookMedical,
   faChartColumn,
+  faChartLine,
   faPercent,
   faChevronRight,
   faPenToSquare,
@@ -85,7 +86,7 @@ export default function FacultyCoursesClient() {
       {loading ? (
         <section aria-busy="true" aria-label="Loading courses">
           <SkeletonTermHeading />
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             {Array.from({ length: 3 }).map((_, i) => (
               <SkeletonCourseCard key={i} />
             ))}
@@ -160,7 +161,8 @@ function TermSection({
         </span>
         <span className="text-sm text-gray-500">{formatTermDates(term)}</span>
       </div>
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+      {/* Two to a row at most, so a card is wide enough for its four tab links on one line. */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {offerings.map((o) => (
           <CourseCard key={o.id} offering={o} />
         ))}
@@ -171,13 +173,15 @@ function TermSection({
 
 const TAB_ICON: Record<(typeof COURSE_TABS)[number], IconDefinition> = {
   progress: faChartColumn,
+  performance: faChartLine,
   grading: faPercent,
   skills: faBookMedical,
 };
 
 const TAB_LABEL: Record<(typeof COURSE_TABS)[number], string> = {
   progress: "Progress",
-  grading: "Grading",
+  performance: "Performance",
+  grading: "Criteria",
   skills: "Skills",
 };
 
@@ -281,13 +285,14 @@ function CourseCard({ offering: o }: { offering: FacultyCourseSummary }) {
 
       <nav
         aria-label={`${o.course.code} tabs`}
-        className="relative z-10 grid grid-cols-3 border-t border-hairline"
+        className="relative z-10 grid border-t border-hairline"
+        style={{ gridTemplateColumns: `repeat(${COURSE_TABS.length}, minmax(0, 1fr))` }}
       >
         {COURSE_TABS.map((t, i) => (
           <Link
             key={t}
             href={courseTabHref(o.id, t)}
-            className={`flex items-center justify-center gap-1.5 px-2 py-2.5 text-xs font-medium text-gray-500 transition-colors hover:bg-subtle hover:text-brand-700 ${
+            className={`flex items-center justify-center gap-1.5 whitespace-nowrap px-2 py-2.5 text-xs font-medium text-gray-500 transition-colors hover:bg-subtle hover:text-brand-700 ${
               i > 0 ? "border-l border-hairline" : ""
             } ${i === 0 ? "rounded-bl-2xl" : i === COURSE_TABS.length - 1 ? "rounded-br-2xl" : ""}`}
           >

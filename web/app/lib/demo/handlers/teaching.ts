@@ -115,6 +115,7 @@ route("POST", "/api/faculty/cases", (ctx) => {
     created_by: viewer.id,
     created_at: now,
     updated_at: now,
+    offering_id: typeof body?.offering_id === "string" && body.offering_id ? body.offering_id : null,
   };
   db.casePresentations.push(p);
   const roster = rosterFor(ctx, sectionIds);

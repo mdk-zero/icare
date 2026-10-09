@@ -121,6 +121,7 @@ route("POST", "/api/faculty/assessments", (ctx) => {
     created_at: now,
     updated_at: now,
     scenario_id: null,
+    offering_id: typeof body?.offering_id === "string" && body.offering_id ? body.offering_id : null,
   };
   db.quizzes.push(quiz);
   audit(db, viewer, "assessment.create", "assessments", { message: `Created quiz “${title}”` }, quiz.id);

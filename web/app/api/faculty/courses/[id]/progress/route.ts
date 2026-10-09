@@ -38,6 +38,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
       totals: result.totals,
       grading: grading.grading,
       grading_ready: grading.ready,
+      grading_auto: !!grading.grading?.auto,
     });
   } catch (err) {
     return courseFailure(err, 'Unable to load progress');

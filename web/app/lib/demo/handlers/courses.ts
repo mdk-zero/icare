@@ -23,18 +23,16 @@ import {
 } from "../../course-progress";
 import { listSkillSummaries } from "../fixtures/skills";
 import {
-  GRADING_CHANGED,
   GRADING_ENDED_LOCK,
-  baseMatches,
   fileItem,
   gradeLeafProblem,
-  gradingSummary,
+  readStoredSplit,
+  autoSplit,
   parseGradeLeaf,
-  parseGrading,
   refile,
   type GradingSplit,
 } from "../../course-grading";
-import { seedCourses, type DemoCourseTables, type DemoOffering } from "../fixtures/courses";
+import { seedCourses, type DemoCourseTables, type DemoOffering, type DemoRequirement } from "../fixtures/courses";
 import { audit } from "./shared";
 import { demoAttendanceRows } from "./derive";
 import { byName, sectionName, teamLabel } from "./scope";
@@ -88,7 +86,8 @@ function offeringRow(db: DemoDb, o: DemoOffering) {
       .map((id) => ({ id, name: sectionName(db, id) ?? "Section", has_group: !without.has(id) }))
       .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true })),
     student_count: roster.students.length,
-    requirement_count: db.requirements.filter((r) => r.offering_id === o.id).length,
+    // The course's items (070): its patient cases, quizzes and case presentations.
+    requirement_count: checklist(db, o.id).length,
   };
 }
 
@@ -461,8 +460,76 @@ function strip(r: RequirementRow & { created_at?: string }): RequirementRow {
   return row;
 }
 
-const checklist = (db: DemoDb, offeringId: string) =>
-  db.requirements.filter((r) => r.offering_id === offeringId).sort((a, b) => a.position - b.position);
+/**
+ * Gives every activity its course once (070), the way the migration links
+ * a database: from a checklist item that linked it, or else from its maker
+ * when they teach exactly one course in the term it was made in.
+ */
+export function linkActivityCourses(db: DemoDb) {
+  courseDb(db);
+  type Activity = { id: string; created_by: string | null; created_at: string; offering_id?: string | null };
+  const link = (list: Activity[], key: "scenario_id" | "assessment_id" | "presentation_id") => {
+    for (const a of list) {
+      if (a.offering_id !== undefined) continue;
+      const fromChecklist = db.requirements.find((r) => r[key] === a.id)?.offering_id;
+      if (fromChecklist) {
+        a.offering_id = fromChecklist;
+        continue;
+      }
+      const day = a.created_at.slice(0, 10);
+      const inTerm = (o: DemoOffering) => {
+        const t = db.terms.find((x) => x.id === o.term_id);
+        return !!t && t.starts_on <= day && day <= t.ends_on;
+      };
+      const mine = db.offerings.filter((o) => o.faculty_id === a.created_by && inTerm(o));
+      // The demo's seeded work predates courses, and its instructor teaches
+      // two, so it is shared out between the courses of its term in turn
+      // (the database backfill only links what is unambiguous).
+      const pool = mine.length ? mine : db.offerings.filter((o) => o.faculty_id && inTerm(o));
+      a.offering_id = pool.length ? pool[(turn++) % pool.length].id : null;
+    }
+  };
+  let turn = 0;
+  link(db.scenarios, "scenario_id");
+  link(db.quizzes, "assessment_id");
+  link(db.casePresentations, "presentation_id");
+}
+
+/**
+ * A course's items (070): its Patient Cases, then Quizzes, then Case
+ * Presentations, each oldest first, as automatic checklist items whose id
+ * is the activity's id.
+ */
+const checklist = (db: DemoDb, offeringId: string): DemoRequirement[] => {
+  linkActivityCourses(db);
+  let position = 0;
+  const item = (
+    a: { id: string; created_at: string },
+    type: "scenario" | "assessment" | "case_presentation",
+  ): DemoRequirement => ({
+    id: a.id,
+    offering_id: offeringId,
+    position: position++,
+    kind: "activity",
+    title: "",
+    activity_type: type,
+    scenario_id: type === "scenario" ? a.id : null,
+    assessment_id: type === "assessment" ? a.id : null,
+    presentation_id: type === "case_presentation" ? a.id : null,
+    target_count: null,
+    skill_id: null,
+    min_score: null,
+    skills_only: false,
+    manual_type: "lab",
+    created_at: a.created_at,
+  });
+  const oldest = <T extends { created_at: string }>(list: T[]) => [...list].sort((a, b) => a.created_at.localeCompare(b.created_at));
+  return [
+    ...oldest(db.scenarios.filter((s) => s.offering_id === offeringId)).map((s) => item(s, "scenario")),
+    ...oldest(db.quizzes.filter((q) => q.offering_id === offeringId)).map((q) => item(q, "assessment")),
+    ...oldest(db.casePresentations.filter((p) => p.offering_id === offeringId)).map((p) => item(p, "case_presentation")),
+  ];
+};
 
 const locked = (db: DemoDb, o: DemoOffering) => termStatus(termOf(db, o)) === "ended";
 
@@ -518,14 +585,26 @@ route("GET", "/api/faculty/courses/:id", async (ctx) => {
     },
     requirements: await labelled(db, checklist(db, o.id)),
     skill_ids: db.courseSkills.filter((s) => s.course_id === course.id).map((s) => s.skill_id),
-    grading: o.grading ?? null,
+    grading: autoSplit(checklist(db, o.id)),
     grading_ready: true,
+    grading_auto: true,
   };
 });
 
+/**
+ * The offering's split in the current shape. A demo split saved with
+ * components is turned into item shares once, as readStoredSplit does for
+ * the database, and kept that way.
+ */
+function gradingOf(o: DemoOffering): GradingSplit | null {
+  o.grading = o.grading ? readStoredSplit(o.grading) : null;
+  return o.grading;
+}
+
 /** File a just-saved item in the offering's split, the way the real routes do. */
 function refileDemo(o: DemoOffering, next: (split: GradingSplit) => GradingSplit) {
-  if (o.grading) o.grading = next(o.grading);
+  const split = gradingOf(o);
+  if (split) o.grading = next(split);
 }
 
 route("PUT", "/api/faculty/courses/:id/grading", (ctx) => {
@@ -534,13 +613,8 @@ route("PUT", "/api/faculty/courses/:id/grading", (ctx) => {
   const o = ownFacultyOffering(ctx, ctx.params.id);
   if (!o) return notFound("Course not found");
   if (locked(db, o)) return json({ error: GRADING_ENDED_LOCK }, 409);
-  const items = checklist(db, o.id);
-  if (!baseMatches(ctx.body?.base, o.grading ?? null, items)) return json({ error: GRADING_CHANGED }, 409);
-  const parsed = parseGrading(ctx.body ?? {}, items);
-  if (!parsed.ok) return json({ error: parsed.error }, 400);
-  o.grading = parsed.value;
-  audit(db, ctx.viewer, "course.grading.update", "course_offerings", { split: gradingSummary(parsed.value) }, o.id);
-  return { grading: parsed.value };
+  // A course's grading follows its activities (070); there is no split to save.
+  return json({ error: "This course's grading follows its Patient Cases, Quizzes and Case Presentations, so it can't be edited by hand." }, 409);
 });
 
 route("GET", "/api/faculty/courses/:id/activities", (ctx) => {
@@ -591,26 +665,7 @@ route("POST", "/api/faculty/courses/:id/requirements", async (ctx) => {
   const o = ownFacultyOffering(ctx, ctx.params.id);
   if (!o) return notFound("Course not found");
   if (locked(db, o)) return json({ error: LOCKED }, 409);
-  const parsed = parseRequirement(ctx.body ?? {});
-  if (!parsed.ok) return json({ error: parsed.error }, 400);
-  const leaf = parseGradeLeaf(ctx.body?.grade_leaf_id);
-  if (!leaf.ok) return json({ error: leaf.error }, 400);
-  const problem =
-    linkProblem(db, o, parsed.value) ?? (typeof leaf.value === "string" ? gradeLeafProblem(o.grading ?? null, leaf.value) : null);
-  if (problem) return json({ error: problem }, 400);
-  const items = checklist(db, o.id);
-  const row = {
-    ...parsed.value,
-    id: newId(),
-    offering_id: o.id,
-    position: items.reduce((max, r) => Math.max(max, r.position + 1), 0),
-    created_at: new Date().toISOString(),
-  };
-  db.requirements.push(row);
-  refileDemo(o, (split) => refile(split, row, leaf.value));
-  const [requirement] = await labelled(db, [row]);
-  audit(db, ctx.viewer, "course.requirement.create", "course_requirements", { label: requirement.label }, row.id);
-  return json({ requirement }, 201);
+  return json({ error: "Items are added automatically: make a Patient Case, Quiz or Case Presentation for this course." }, 409);
 });
 
 route("PUT", "/api/faculty/courses/:id/requirements/order", (ctx) => {
@@ -641,7 +696,7 @@ route("PATCH", "/api/faculty/courses/:id/requirements/:requirementId", async (ct
   const leaf = parseGradeLeaf(ctx.body?.grade_leaf_id);
   if (!leaf.ok) return json({ error: leaf.error }, 400);
   const problem =
-    linkProblem(db, o, parsed.value) ?? (typeof leaf.value === "string" ? gradeLeafProblem(o.grading ?? null, leaf.value) : null);
+    linkProblem(db, o, parsed.value) ?? (typeof leaf.value === "string" ? gradeLeafProblem(gradingOf(o), leaf.value) : null);
   if (problem) return json({ error: problem }, 400);
   Object.assign(current, parsed.value);
   refileDemo(o, (split) => refile(split, current, leaf.value));
@@ -774,7 +829,13 @@ route("GET", "/api/faculty/courses/:id/progress", async (ctx) => {
   const db = courseDb(ctx.db);
   const o = ownFacultyOffering(ctx, ctx.params.id);
   if (!o) return notFound("Course not found");
-  return { offering: offeringHeader(db, o), ...(await demoProgress(db, o)), grading: o.grading ?? null, grading_ready: true };
+  return {
+    offering: offeringHeader(db, o),
+    ...(await demoProgress(db, o)),
+    grading: autoSplit(checklist(db, o.id)),
+    grading_ready: true,
+    grading_auto: true,
+  };
 });
 
 route("POST", "/api/faculty/courses/:id/requirements/:requirementId/checks", async (ctx) => {

@@ -47,7 +47,9 @@ import {
   fetchFacultyPatients,
   assignPatientRooms,
   FacultyPatient,
+  fetchMyCourses,
 } from "../../lib/api";
+import { termStatus } from "../../lib/course-progress";
 import { deadlineFromInput } from "../../lib/deadline-input";
 import { usePageData } from "../../lib/use-page-data";
 import { SkeletonStatTile, SkeletonScenarioCard } from "../../components/skeletons";
@@ -169,11 +171,12 @@ export default function FacultyScenariosClient() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const { data, loading, refresh, setData } = usePageData("faculty:scenarios", async () => {
-    const [scenarios, students] = await Promise.all([
+    const [scenarios, students, courses] = await Promise.all([
       fetchFacultyScenarios(),
       fetchFacultyStudents(),
+      fetchMyCourses(),
     ]);
-    return { scenarios, students };
+    return { scenarios, students, offerings: courses.data?.offerings ?? [] };
   });
 
   const scenarios = data?.scenarios ?? NO_SCENARIOS;
@@ -202,6 +205,54 @@ export default function FacultyScenariosClient() {
       return matchesSearch && matchesCategory;
     });
   }, [scenarios, searchQuery, categoryFilter]);
+
+  // Cases are grouped by the course they were made for: the running term's
+  // courses first, then upcoming and past ones, then any made for no course.
+  const caseGroups = useMemo(() => {
+    const order = { current: 0, upcoming: 1, ended: 2 } as const;
+    const offerings = [...(data?.offerings ?? [])].sort(
+      (a, b) =>
+        order[termStatus(a.term)] - order[termStatus(b.term)] ||
+        a.course.code.localeCompare(b.course.code, undefined, { numeric: true }),
+    );
+    const multipleTerms = new Set(offerings.map((o) => o.term.id)).size > 1;
+    const known = new Set(offerings.map((o) => o.id));
+    const groups = offerings.map((o) => ({
+      key: o.id,
+      code: o.course.code,
+      title: o.course.title,
+      term: multipleTerms ? o.term.name : null,
+      ended: termStatus(o.term) === "ended",
+      // In case-number order: Patient Case #1 first.
+      items: filteredScenarios
+        .filter((sc) => sc.offering_id === o.id)
+        .sort((a, b) => a.created_at.localeCompare(b.created_at)),
+    }));
+    const loose = filteredScenarios.filter((sc) => !sc.offering_id || !known.has(sc.offering_id));
+    if (loose.length) {
+      groups.push({ key: "none", code: "", title: "Not in a course", term: null, ended: false, items: loose });
+    }
+    // An ended course with nothing in it is noise; a running one stays, to show it is empty.
+    return groups.filter((g) => g.items.length > 0 || (!g.ended && g.key !== "none"));
+  }, [data?.offerings, filteredScenarios]);
+
+  // A case's number in its course, counted in the order the cases were made,
+  // as the course's Criteria tab numbers them: "Patient Case #3". Counted over
+  // every case of the course, so a search or filter doesn't renumber them.
+  const caseNumber = useMemo(() => {
+    const byCourse = new Map<string, SimulationScenario[]>();
+    for (const sc of scenarios) {
+      if (!sc.offering_id) continue;
+      byCourse.set(sc.offering_id, [...(byCourse.get(sc.offering_id) ?? []), sc]);
+    }
+    const numbers = new Map<string, number>();
+    for (const list of byCourse.values()) {
+      [...list]
+        .sort((a, b) => a.created_at.localeCompare(b.created_at))
+        .forEach((sc, i) => numbers.set(sc.id, i + 1));
+    }
+    return numbers;
+  }, [scenarios]);
 
   const linkModalFilteredPatients = useMemo(() => {
     const q = linkPatientSearchQuery.toLowerCase();
@@ -551,6 +602,7 @@ export default function FacultyScenariosClient() {
     setData((previous) => ({
       scenarios: (previous?.scenarios ?? []).filter((s) => s.id !== deleteTarget.id),
       students: previous?.students ?? [],
+      offerings: previous?.offerings ?? [],
     }));
     const faculty = getCurrentFacultyUser();
     if (faculty) {
@@ -732,76 +784,103 @@ export default function FacultyScenariosClient() {
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredScenarios.map((scenario) => (
-            <div
-              key={scenario.id}
-              className="group bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200 overflow-hidden flex flex-col"
-            >
-              <div className="p-3 border-b border-hairline flex-1">
-                <div className="flex items-start justify-between mb-3">
-                  <h3 className="font-semibold text-gray-900 line-clamp-2 pr-2">
-                    {scenario.title}
-                  </h3>
-                  {scenario.is_ai_generated && (
-                    <span className="px-2 py-1 bg-brand-100 text-brand-700 text-xs font-medium rounded-full flex items-center gap-1 whitespace-nowrap">
-                      <FontAwesomeIcon icon={faRobot} className="w-3 h-3" />
-                      AI
-                    </span>
-                  )}
-                </div>
-                <p className="text-sm text-gray-500 line-clamp-2 mb-4">{scenario.description}</p>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="px-2.5 py-1 bg-gray-100 text-gray-700 text-xs font-medium rounded-full">
-                    {scenario.category}
-                  </span>
-                  {scenario.patient_name && (
-                    <span className="px-2.5 py-1 bg-teal-50 text-teal-700 text-xs font-medium rounded-full flex items-center gap-1">
-                      <FontAwesomeIcon icon={faUsers} className="w-3 h-3" />
-                      {scenario.patient_name}
-                    </span>
-                  )}
-                </div>
+        <div className="space-y-6">
+          {caseGroups.map((group) => (
+            <section key={group.key} aria-label={group.code ? `${group.code} ${group.title}` : group.title}>
+              <div className="mb-3 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                {group.code && <h2 className="font-display text-base font-semibold text-gray-900">{group.code}</h2>}
+                <span className={group.code ? "text-sm text-gray-600" : "font-display text-base font-semibold text-gray-500"}>
+                  {group.title}
+                </span>
+                {group.term && <span className="text-xs text-gray-400">· {group.term}</span>}
+                <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold tabular-nums text-gray-600">
+                  {group.items.length}
+                </span>
               </div>
-              <div className="p-5 bg-subtle">
-                <div className="flex items-center justify-between text-sm mb-4">
-                  <span className="text-gray-500 flex items-center gap-1.5">
-                    <FontAwesomeIcon icon={faUsers} className="w-3.5 h-3.5" />
-                    {scenario.student_count} students
-                  </span>
-                  <span className="text-gray-400 flex items-center gap-1.5">
-                    <FontAwesomeIcon icon={faCalendarDay} className="w-3.5 h-3.5" />
-                    {new Date(scenario.created_at).toLocaleDateString()}
-                  </span>
+              {group.items.length === 0 ? (
+                <p className="rounded-xl border border-dashed border-gray-300 px-4 py-5 text-center text-sm text-gray-500">
+                  No patient cases for this course yet.
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {group.items.map((scenario) => (
+                <div
+                  key={scenario.id}
+                  className="group bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200 overflow-hidden flex flex-col"
+                >
+                  <div className="p-3 border-b border-hairline flex-1">
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="min-w-0 pr-2">
+                        {caseNumber.has(scenario.id) && (
+                          <p className="mb-0.5 text-[11px] font-semibold uppercase tracking-wider text-brand-700">
+                            Patient Case #{caseNumber.get(scenario.id)}
+                          </p>
+                        )}
+                        <h3 className="font-semibold text-gray-900 line-clamp-2">{scenario.title}</h3>
+                      </div>
+                      {scenario.is_ai_generated && (
+                        <span className="px-2 py-1 bg-brand-100 text-brand-700 text-xs font-medium rounded-full flex items-center gap-1 whitespace-nowrap">
+                          <FontAwesomeIcon icon={faRobot} className="w-3 h-3" />
+                          AI
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm text-gray-500 line-clamp-2 mb-4">{scenario.description}</p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="px-2.5 py-1 bg-gray-100 text-gray-700 text-xs font-medium rounded-full">
+                        {scenario.category}
+                      </span>
+                      {scenario.patient_name && (
+                        <span className="px-2.5 py-1 bg-teal-50 text-teal-700 text-xs font-medium rounded-full flex items-center gap-1">
+                          <FontAwesomeIcon icon={faUsers} className="w-3 h-3" />
+                          {scenario.patient_name}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="p-5 bg-subtle">
+                    <div className="flex items-center justify-between text-sm mb-4">
+                      <span className="text-gray-500 flex items-center gap-1.5">
+                        <FontAwesomeIcon icon={faUsers} className="w-3.5 h-3.5" />
+                        {scenario.student_count} students
+                      </span>
+                      <span className="text-gray-400 flex items-center gap-1.5">
+                        <FontAwesomeIcon icon={faCalendarDay} className="w-3.5 h-3.5" />
+                        {new Date(scenario.created_at).toLocaleDateString()}
+                      </span>
+                    </div>
+                    <ActionsMenu
+                      actions={[
+                        { label: "View", icon: faEye, onClick: () => handleViewDetails(scenario) },
+                        {
+                          label: "Edit",
+                          icon: faPenToSquare,
+                          onClick: () => router.push(`/faculty/scenarios/${scenario.id}/edit`),
+                        },
+                        {
+                          label: "Assign",
+                          icon: faUserPlus,
+                          onClick: () => handleOpenAssignModal(scenario),
+                        },
+                        {
+                          label: scenario.patient_name ? "Change patient" : "Link patient",
+                          icon: faHospitalUser,
+                          onClick: () => handleOpenLinkPatientModal(scenario),
+                        },
+                        {
+                          label: "Delete",
+                          icon: faTrash,
+                          danger: true,
+                          onClick: () => handleOpenDeleteModal(scenario),
+                        },
+                      ]}
+                    />
+                  </div>
                 </div>
-                <ActionsMenu
-                  actions={[
-                    { label: "View", icon: faEye, onClick: () => handleViewDetails(scenario) },
-                    {
-                      label: "Edit",
-                      icon: faPenToSquare,
-                      onClick: () => router.push(`/faculty/scenarios/${scenario.id}/edit`),
-                    },
-                    {
-                      label: "Assign",
-                      icon: faUserPlus,
-                      onClick: () => handleOpenAssignModal(scenario),
-                    },
-                    {
-                      label: scenario.patient_name ? "Change patient" : "Link patient",
-                      icon: faHospitalUser,
-                      onClick: () => handleOpenLinkPatientModal(scenario),
-                    },
-                    {
-                      label: "Delete",
-                      icon: faTrash,
-                      danger: true,
-                      onClick: () => handleOpenDeleteModal(scenario),
-                    },
-                  ]}
-                />
-              </div>
-            </div>
+              ))}
+                </div>
+              )}
+            </section>
           ))}
         </div>
       )}

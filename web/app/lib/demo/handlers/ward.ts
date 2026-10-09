@@ -150,9 +150,57 @@ route("DELETE", "/api/admin/rooms/:id/assignments", (ctx) => {
 // Patients
 // ---------------------------------------------------------------------------
 
+/**
+ * A patient's courses (069). Demos saved before every patient carried a
+ * list share the ward out between the two courses, every third patient
+ * in both, so a colleague who teaches only one course sees a smaller ward.
+ */
+function coursesOf(ctx: Ctx, p: DemoPatient): string[] {
+  if (p.course_ids) return p.course_ids;
+  const all = [...ctx.db.courses].sort((a, b) => a.code.localeCompare(b.code)).map((c) => c.id);
+  if (all.length < 2) return all;
+  const n = ctx.db.patients.indexOf(p);
+  return n % 3 === 2 ? all.slice(0, 2) : [all[n % 2]];
+}
+
+/** The courses a viewer can file patients under: the ones they teach, or own as Dean. */
+function viewerCourses(ctx: Ctx) {
+  const ids = ctx.role === "admin"
+    ? new Set(ctx.db.courses.filter((c) => c.admin_id === ctx.viewer.id).map((c) => c.id))
+    : new Set(ctx.db.offerings.filter((o) => o.faculty_id === ctx.viewer.id).map((o) => o.course_id));
+  return ctx.db.courses
+    .filter((c) => ids.has(c.id))
+    .map((c) => ({ id: c.id, code: c.code, title: c.title }))
+    .sort((a, b) => a.code.localeCompare(b.code));
+}
+
+/** An instructor sees only the patients of the courses they teach; a Dean sees all. */
+function canSee(ctx: Ctx, p: DemoPatient): boolean {
+  if (ctx.role === "admin") return true;
+  const mine = new Set(viewerCourses(ctx).map((c) => c.id));
+  return coursesOf(ctx, p).some((id) => mine.has(id));
+}
+
+function courseIdsError(ctx: Ctx, ids: string[]): string | null {
+  const mine = viewerCourses(ctx);
+  if (mine.length === 0) return "You have no assigned courses yet, so you cannot add patients. Ask your Dean to assign you a course.";
+  if (ids.length === 0) return "Choose at least one course for this patient.";
+  const allowed = new Set(mine.map((c) => c.id));
+  return ids.some((id) => !allowed.has(id)) ? "You can only add patients to courses you handle." : null;
+}
+
+function parseCourseIds(body: Record<string, unknown> | null | undefined): string[] | null {
+  if (!body || !("course_ids" in body)) return null;
+  return Array.isArray(body.course_ids) ? [...new Set(body.course_ids.filter((v): v is string => typeof v === "string"))] : [];
+}
+
 function patientOut(ctx: Ctx, p: DemoPatient) {
   const room = ctx.db.rooms.find((r) => r.id === p.room_id);
-  return { ...p, room: room ? { id: room.id, name: room.name, room_number: room.room_number } : null };
+  return {
+    ...p,
+    course_ids: coursesOf(ctx, p),
+    room: room ? { id: room.id, name: room.name, room_number: room.room_number } : null,
+  };
 }
 
 route("GET", "/api/faculty/patients", (ctx) => {
@@ -160,9 +208,12 @@ route("GET", "/api/faculty/patients", (ctx) => {
   const search = ctx.query.get("search")?.toLowerCase() ?? "";
   return {
     patients: ctx.db.patients
+      .filter((p) => canSee(ctx, p))
       .filter((p) => !search || p.name.toLowerCase().includes(search) || p.diagnosis.toLowerCase().includes(search))
       .sort((a, b) => a.name.localeCompare(b.name))
       .map((p) => patientOut(ctx, p)),
+    courses: viewerCourses(ctx),
+    courses_enabled: true,
   };
 });
 
@@ -174,6 +225,9 @@ route("POST", "/api/faculty/patients", (ctx) => {
   const { db, body, viewer } = ctx;
   const name = typeof body?.name === "string" ? body.name.trim() : "";
   if (!name) return json({ error: "Patient name is required" }, 400);
+  const courseIds = parseCourseIds(body) ?? [];
+  const courseError = courseIdsError(ctx, courseIds);
+  if (courseError) return json({ error: courseError }, 400);
   const room = db.rooms.find((r) => r.id === body?.room_id);
   const n = db.patients.length + 1;
   const patient: DemoPatient = {
@@ -195,6 +249,7 @@ route("POST", "/api/faculty/patients", (ctx) => {
     medical_history: body?.medical_history ?? null,
     created_by: viewer.id,
     created_at: new Date().toISOString(),
+    course_ids: courseIds,
   };
   db.patients.push(patient);
   audit(db, viewer, "patient.create", "patients", { message: `Admitted ${name}` }, patient.id);
@@ -205,7 +260,15 @@ route("PUT", "/api/faculty/patients", (ctx) => {
   if (!staffOnly(ctx)) return forbidden();
   const { db, body, viewer } = ctx;
   const patient = db.patients.find((p) => p.id === body?.id);
-  if (!patient) return notFound("Patient not found");
+  if (!patient || !canSee(ctx, patient)) return notFound("Patient not found");
+  const courseIds = parseCourseIds(body);
+  if (courseIds) {
+    const courseError = courseIdsError(ctx, courseIds);
+    if (courseError) return json({ error: courseError }, 400);
+    // Links to a colleague's courses stay; only the viewer's own are replaced.
+    const mine = new Set(viewerCourses(ctx).map((c) => c.id));
+    patient.course_ids = [...coursesOf(ctx, patient).filter((id) => !mine.has(id)), ...courseIds];
+  }
   for (const key of ["name", "age", "gender", "diagnosis", "medical_history", "vital_signs", "labs"] as const) {
     if (body && key in body) (patient as unknown as Record<string, unknown>)[key] = body[key];
   }
@@ -221,7 +284,7 @@ route("PUT", "/api/faculty/patients", (ctx) => {
 route("DELETE", "/api/faculty/patients", (ctx) => {
   if (!staffOnly(ctx)) return forbidden();
   const patient = ctx.db.patients.find((p) => p.id === ctx.body?.id);
-  if (!patient) return notFound("Patient not found");
+  if (!patient || !canSee(ctx, patient)) return notFound("Patient not found");
   if (ctx.db.scenarios.some((s) => s.patient_id === patient.id)) {
     return json({ error: "This patient is linked to a patient case; unlink it first" }, 409);
   }
@@ -310,7 +373,7 @@ route("GET", "/api/faculty/patients/:id", (ctx) => {
   if (!staffOnly(ctx)) return forbidden();
   const { db } = ctx;
   const patient = db.patients.find((p) => p.id === ctx.params.id);
-  if (!patient) return notFound("Patient not found");
+  if (!patient || !canSee(ctx, patient)) return notFound("Patient not found");
   return {
     patient: patientOut(ctx, patient),
     vitals: db.vitals

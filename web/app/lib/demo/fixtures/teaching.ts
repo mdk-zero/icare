@@ -26,6 +26,8 @@ export interface DemoCasePresentation {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+  /** The course offering it was made for (070); null for none, absent in demos saved before. */
+  offering_id?: string | null;
 }
 
 export interface DemoCaseSubmission {

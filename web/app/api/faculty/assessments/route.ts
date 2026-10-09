@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { DEFAULT_ATTEMPTS, isValidAttempts, MIN_ATTEMPTS } from '@/app/lib/quiz-attempts';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { activityCourse, parseOfferingId } from '@/app/lib/activity-course';
 import { getScopedStudentIds } from '@/app/lib/admin-scope';
 import { logAudit } from '@/app/lib/audit';
 
@@ -167,10 +168,19 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const course = await activityCourse(
+      supabase,
+      'assessments',
+      session,
+      parseOfferingId((body ?? {}) as Record<string, unknown>),
+    );
+    if ('error' in course) return NextResponse.json({ error: course.error }, { status: 400 });
+
     const { data: assessment, error } = await supabase
       .from('assessments')
       .insert({
         created_by: session.uid,
+        ...course.value,
         title: title.trim(),
         description: typeof description === 'string' ? description.trim() : '',
         category: quizCategory as (typeof validCategories)[number],

@@ -30,6 +30,7 @@ import { stashDrafts, type DraftQuestion } from "../draft-handoff";
 import { toast } from "../../../components/Toast";
 import { EcgLoader } from "../../../components/EcgLoader";
 import PageHeader from "../../../components/PageHeader";
+import CoursePicker, { resolveCourse, useActivityCourses } from "../../../components/CoursePicker";
 
 const inputClassName =
   "w-full px-4 py-3 bg-surface border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 focus:bg-surface transition-all text-sm shadow-sm";
@@ -108,11 +109,19 @@ export default function AssessmentNewClient() {
     time_limit_minutes: "",
     max_attempts: String(DEFAULT_ATTEMPTS),
   });
+  // The course the quiz is made for (070); it then counts toward that course's grading.
+  const { offerings } = useActivityCourses();
+  const [chosenCourse, setChosenCourse] = useState("");
+  const offeringId = resolveCourse(offerings, chosenCourse);
 
   const handleCreate = async () => {
     if (busy) return;
     if (!form.title.trim()) {
       setError("Title is required");
+      return;
+    }
+    if (offerings.length > 0 && !offeringId) {
+      setError("Choose the course this quiz is for");
       return;
     }
     const attempts = Number(form.max_attempts);
@@ -154,6 +163,7 @@ export default function AssessmentNewClient() {
               ? Number(form.time_limit_minutes) * 60
               : null,
             max_attempts: Number(form.max_attempts),
+            ...(offeringId ? { offering_id: offeringId } : {}),
           }),
         });
 
@@ -269,6 +279,7 @@ export default function AssessmentNewClient() {
   const writeIn = useLesson && lessonTypes.has("short_answer");
   const bubbles = !useLesson || lessonTypes.has("multiple_choice");
   const checklist = [
+    ...(offerings.length > 0 ? [{ ok: !!offeringId, label: "Course chosen" }] : []),
     { ok: !!form.title.trim(), label: "Title written" },
     ...(useLesson ? [{ ok: !!form.description.trim(), label: "Description written (the lesson needs it)" }] : []),
     ...(source === "lesson" ? [{ ok: !!lessonFile, label: "Lesson attached" }] : []),
@@ -319,6 +330,7 @@ export default function AssessmentNewClient() {
         <div className="relative rounded-2xl border border-hairline bg-surface p-4 shadow-tile sm:p-6">
           <SheetStep n={1} title="Details" hint="What students see when they open the quiz." done={!!form.title.trim()}>
             <div className="space-y-4">
+              <CoursePicker offerings={offerings} value={offeringId} onChange={setChosenCourse} what="quiz" />
               <div>
                 <label className={labelClassName} htmlFor="quiz-title">Title</label>
                 <input

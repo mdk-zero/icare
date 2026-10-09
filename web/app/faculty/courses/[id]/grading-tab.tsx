@@ -4,6 +4,7 @@ import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faCircleCheck,
+  faCircleInfo,
   faLock,
   faPenToSquare,
   faPercent,
@@ -23,14 +24,14 @@ import {
   GRADING_ENDED_LOCK,
   GRADING_LIMITS,
   GRADING_NEEDS_MIGRATION,
-  addComponent,
   settle,
   fileItem,
   isGradeable,
+  itemShares,
   leafOf,
   parseGrading,
   presetSplit,
-  type GradeComponent,
+  withItemWeights,
   type GradePart,
   type GradingSplit,
 } from "../../../lib/course-grading";
@@ -47,14 +48,11 @@ const finite = (n: number) => (Number.isFinite(n) ? n : 0);
 
 /** Part k's colour: the categorical slots the group charts use, led by the brand teal. */
 const partColor = (k: number) => `var(--color-group-${(k % 6) + 1})`;
-/** Component j of a part: steps of the part's colour toward the surface, so they read as its pieces. */
-const SHADES = [100, 66, 44, 30, 20];
-const shade = (color: string, j: number) => `color-mix(in oklab, ${color} ${SHADES[j % SHADES.length]}%, var(--color-surface))`;
 const HATCH = "repeating-linear-gradient(135deg, var(--color-hairline) 0 4px, transparent 4px 8px)";
 
 /**
- * The whole grade as one bar: a segment per part, cut into its components,
- * with any share not yet assigned hatched at the end (or within the part).
+ * The whole grade as one bar: a segment per part, in the part's colour as in
+ * the legend below it, with any share not yet assigned hatched at the end.
  */
 function SplitBar({ parts }: { parts: GradePart[] }) {
   const sum = total(parts);
@@ -64,22 +62,7 @@ function SplitBar({ parts }: { parts: GradePart[] }) {
       {parts.map((p, k) => {
         const weight = Math.max(0, finite(p.weight));
         if (!weight) return null;
-        const color = partColor(k);
-        const left = round(weight - total(p.components));
-        return (
-          <div key={p.id} className="flex h-full gap-px" style={{ flex: `${weight} 0 0` }}>
-            {p.components.length === 0 ? (
-              <div className="h-full flex-1" style={{ background: color }} />
-            ) : (
-              <>
-                {p.components.map((c, j) =>
-                  finite(c.weight) > 0 ? <div key={c.id} className="h-full" style={{ flex: `${c.weight} 0 0`, background: shade(color, j) }} /> : null,
-                )}
-                {left > 0 && <div className="h-full" style={{ flex: `${left} 0 0`, background: HATCH }} />}
-              </>
-            )}
-          </div>
-        );
+        return <div key={p.id} className="h-full" style={{ flex: `${weight} 0 0`, background: partColor(k) }} />;
       })}
       {sum < 100 && <div className="h-full" style={{ flex: `${round(100 - sum)} 0 0`, background: HATCH }} />}
     </div>
@@ -90,9 +73,10 @@ const inputClass =
   "rounded-lg border border-gray-300 bg-surface px-2.5 py-1.5 text-sm text-gray-900 transition-all placeholder:text-gray-400 focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30 disabled:border-transparent disabled:bg-transparent disabled:px-0";
 
 /**
- * The course's grading split: weighted parts ("Written Exams 30%") and,
- * inside a part, components ("Midterm 15%"), with the checklist's items
- * listed under them and the rest below as not counted. Items are added,
+ * The course's grading split: weighted parts ("Written Exams 30%") with the
+ * checklist's items straight under them, each taking a share of its part's
+ * percent (even by default, or set per item), and the rest below as not
+ * counted. Items are added,
  * edited and removed here, through the page's item form; the split's own
  * edits stay in a draft until saved; the page holds the draft
  * (grading-draft.ts), so it survives a look at another tab. The draft
@@ -171,6 +155,11 @@ export default function GradingTab({
     />
   );
 
+  // Since 070 the parts are the course's activities, and there is nothing to edit.
+  if (grading?.auto) {
+    return <AutoGrading split={grading} requirements={ordered} names={names} />;
+  }
+
   if (!gradingReady) {
     return (
       <div className="space-y-4">
@@ -221,7 +210,7 @@ export default function GradingTab({
           <p className="mx-auto mt-1 max-w-md text-sm text-gray-500">
             {locked
               ? GRADING_ENDED_LOCK
-              : "Divide the grade into parts that add up to 100%, split them further if you like, and choose which checklist items count toward each."}
+              : "Divide the grade into parts that add up to 100%, then add the items that count toward each. A part's percent is shared among its items."}
           </p>
           {!locked && (
             <div className="mt-5 flex flex-wrap justify-center gap-2">
@@ -255,29 +244,18 @@ export default function GradingTab({
 
   const setPart = (partId: string, patch: Partial<GradePart>) =>
     edit({ parts: draft.parts.map((p) => (p.id === partId ? { ...p, ...patch } : p)) });
-  const setComponent = (partId: string, componentId: string, patch: Partial<GradeComponent>) =>
+  /** Set one item's share; the others keep what they had (their even share, the first time). */
+  const setItemWeight = (part: GradePart, itemId: string, weight: number) =>
     edit({
-      parts: draft.parts.map((p) =>
-        p.id === partId ? { ...p, components: p.components.map((c) => (c.id === componentId ? { ...c, ...patch } : c)) } : p,
-      ),
+      parts: draft.parts.map((p) => (p.id === part.id ? withItemWeights(p, { ...itemShares(p), [itemId]: weight }) : p)),
     });
+  const splitEvenly = (partId: string) =>
+    edit({ parts: draft.parts.map((p) => (p.id === partId ? withItemWeights(p, null) : p)) });
   const removePart = (partId: string) => edit({ parts: draft.parts.filter((p) => p.id !== partId) });
-  const removeComponent = (partId: string, componentId: string) =>
-    edit({ parts: draft.parts.map((p) => (p.id === partId ? { ...p, components: p.components.filter((c) => c.id !== componentId) } : p)) });
   const addPart = () =>
     edit({
       parts: [...draft.parts, { id: newId(), name: "", weight: Math.max(0, round(100 - partsTotal)), items: [], components: [] }],
     });
-  // A new component takes what is left of its part's share: all of it for the first.
-  const addComponentTo = (part: GradePart) =>
-    edit(
-      addComponent(draft, part.id, {
-        id: newId(),
-        name: "",
-        weight: Math.max(0, round(part.weight - total(part.components))),
-        items: [],
-      }),
-    );
 
   const unfiled = ordered.filter((r) => isGradeable(r) && leafOf(draft, r.id) === null);
   const attendance = ordered.filter((r) => !isGradeable(r));
@@ -288,16 +266,23 @@ export default function GradingTab({
     { label: "Remove", icon: faTrashCan, danger: true, onClick: () => onRemoveItem(r) },
   ];
 
-  // A leaf's items as rows, by kind and then checklist order, with its add buttons.
-  const leafItems = (leaf: GradeComponent, label: string) => {
+  // A part's items as rows, by kind and then checklist order, each with its share, and the add buttons.
+  const leafItems = (leaf: GradePart, label: string) => {
     const filed = new Set(leaf.items);
     const rows = ordered.filter((r) => filed.has(r.id));
+    const shares = itemShares(leaf);
     return (
       <div className="min-w-0">
         {rows.length > 0 && (
           <ul className="divide-y divide-hairline">
             {rows.map((r) => (
-              <ItemRow key={r.id} requirement={r} name={names.get(r.id) ?? ""} actions={readOnly ? null : rowActions(r)} />
+              <ItemRow
+                key={r.id}
+                requirement={r}
+                name={names.get(r.id) ?? ""}
+                trailing={weightField(shares[r.id] ?? NaN, (w) => setItemWeight(leaf, r.id, w), names.get(r.id) ?? "Item", "sm")}
+                actions={readOnly ? null : rowActions(r)}
+              />
             ))}
           </ul>
         )}
@@ -330,11 +315,15 @@ export default function GradingTab({
   };
 
   // A percent is a few digits, so its box is sized for "33.33", with the sign inside.
-  const weightField = (value: number, onChange: (n: number) => void, label: string) =>
+  const weightField = (value: number, onChange: (n: number) => void, label: string, size: "md" | "sm" = "md") =>
     readOnly ? (
-      <span className="text-sm font-semibold tabular-nums text-gray-900">{finite(value)}%</span>
+      <span className={`font-semibold tabular-nums text-gray-900 ${size === "sm" ? "text-xs" : "text-sm"}`}>{finite(value)}%</span>
     ) : (
-      <label className="inline-flex shrink-0 items-center rounded-lg border border-gray-300 bg-surface transition-all focus-within:border-brand-600 focus-within:ring-2 focus-within:ring-brand-600/30">
+      <label
+        className={`inline-flex shrink-0 items-center rounded-lg border bg-surface transition-all focus-within:border-brand-600 focus-within:ring-2 focus-within:ring-brand-600/30 ${
+          size === "sm" ? "border-gray-200" : "border-gray-300"
+        }`}
+      >
         <input
           type="number"
           inputMode="decimal"
@@ -397,15 +386,17 @@ export default function GradingTab({
           ))}
         </ul>
         <p className="mt-3 border-t border-hairline pt-3 text-xs leading-relaxed text-gray-500">
-          Percents are of the final grade, and a part&apos;s components add up to the part. Each component averages the items in
-          it; work with no score yet is left out, so a grade reads as the grade so far.
+          Percents are of the final grade. A part&apos;s percent is shared among its items, evenly unless you set an item&apos;s
+          percent yourself, and the items must add up to the part. Work with no score yet is left out, so a grade reads as
+          the grade so far.
         </p>
       </section>
 
       {draft.parts.map((part, k) => {
-        const inside = total(part.components);
         const partLabel = part.name.trim() || `Part ${k + 1}`;
         const color = partColor(k);
+        const shares = itemShares(part);
+        const inside = total(part.items.map((id) => ({ weight: shares[id] ?? NaN })));
         const balanced = inside === round(finite(part.weight));
         return (
           <section key={part.id} className="rounded-xl border border-hairline bg-surface">
@@ -426,64 +417,34 @@ export default function GradingTab({
               </div>
             </header>
 
-            <div className="border-t border-hairline">
-              {part.components.length === 0 ? (
-                <div className="px-4 py-2">{leafItems(part, partLabel)}</div>
-              ) : (
-                <ul className="divide-y divide-hairline">
-                  {part.components.map((c, j) => {
-                    const label = `${partLabel} › ${c.name.trim() || `Component ${j + 1}`}`;
-                    return (
-                      <li key={c.id} className="py-2.5 pl-6 pr-4 sm:pl-9">
-                        <div className="flex items-center gap-3">
-                          <div className="flex min-w-0 flex-1 items-center gap-2">
-                            <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: shade(color, j) }} aria-hidden />
-                            <input
-                              value={c.name}
-                              onChange={(e) => setComponent(part.id, c.id, { name: e.target.value })}
-                              maxLength={GRADING_LIMITS.name}
-                              disabled={readOnly}
-                              placeholder="e.g. Midterm"
-                              aria-label="Component name"
-                              className={`${inputClass} w-full min-w-0 font-medium sm:max-w-56`}
-                            />
-                          </div>
-                          <div className="flex shrink-0 items-center gap-1">
-                            {weightField(c.weight, (weight) => setComponent(part.id, c.id, { weight }), label)}
-                            {!readOnly && removeButton(() => removeComponent(part.id, c.id), `Remove ${label}`)}
-                          </div>
-                        </div>
-                        <div className="pl-4">{leafItems(c, label)}</div>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-              {!readOnly && (
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-hairline px-4 py-2.5">
-                  {part.components.length < GRADING_LIMITS.components && (
-                    <button
-                      type="button"
-                      onClick={() => addComponentTo(part)}
-                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-700 hover:underline"
-                    >
-                      <FontAwesomeIcon icon={faPlus} className="h-2.5 w-2.5" />
-                      {part.components.length === 0 ? "Split into components" : "Add component"}
-                    </button>
-                  )}
-                  {part.components.length > 0 && (
-                    <span
-                      className={`ml-auto inline-flex items-center gap-1.5 text-xs tabular-nums ${
-                        balanced ? "text-gray-500" : "font-medium text-amber-700"
-                      } sm:mr-9`}
-                    >
-                      {balanced && <FontAwesomeIcon icon={faCircleCheck} className="h-3 w-3 text-emerald-600" />}
-                      Components add up to {inside}% of {finite(part.weight)}%
-                    </span>
-                  )}
-                </div>
-              )}
-            </div>
+            <div className="border-t border-hairline px-4 py-2 sm:pl-9 sm:pr-[3.25rem]">{leafItems(part, partLabel)}</div>
+
+            {part.items.length > 0 && (
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-hairline px-4 py-2.5 sm:pr-[3.25rem]">
+                <span className="text-xs text-gray-500">
+                  {part.item_weights
+                    ? "Percents set per item"
+                    : `${finite(part.weight)}% shared evenly by ${part.items.length} item${part.items.length === 1 ? "" : "s"}`}
+                </span>
+                {part.item_weights && !readOnly && (
+                  <button
+                    type="button"
+                    onClick={() => splitEvenly(part.id)}
+                    className="text-xs font-semibold text-brand-700 hover:underline"
+                  >
+                    Split evenly
+                  </button>
+                )}
+                <span
+                  className={`ml-auto inline-flex items-center gap-1.5 text-xs tabular-nums ${
+                    balanced ? "text-gray-500" : "font-medium text-amber-700"
+                  }`}
+                >
+                  {balanced && <FontAwesomeIcon icon={faCircleCheck} className="h-3 w-3 text-emerald-600" />}
+                  Items add up to {inside}% of {finite(part.weight)}%
+                </span>
+              </div>
+            )}
           </section>
         );
       })}
@@ -580,7 +541,7 @@ export default function GradingTab({
         <ConfirmModal
           config={{
             title: "Clear the grading split?",
-            message: "Every part and component goes, and no grade is shown until you set up a new split. Scores and the checklist are not touched.",
+            message: "Every part goes, and no grade is shown until you set up a new split. Scores and the checklist are not touched.",
             confirmLabel: "Clear split",
             danger: true,
             loading: saving,
@@ -593,5 +554,111 @@ export default function GradingTab({
         />
       )}
     </div>
+  );
+}
+
+/** Where each automatic part's items come from, for its empty state. */
+const AUTO_SOURCE: Record<string, { href: string; make: string }> = {
+  "patient-cases": { href: "/faculty/scenarios/new", make: "Create a patient case" },
+  quizzes: { href: "/faculty/assessments/new", make: "Create a quiz" },
+  "case-presentations": { href: "/faculty/cases", make: "Create a case presentation" },
+};
+
+/**
+ * The automatic split (migration 070): the course's Patient Cases, Quizzes
+ * and Case Presentations, filed by kind as the instructor makes them for
+ * the course. A part's grade is the average of its items and the final
+ * grade the average of every item, so nothing here is set by hand.
+ */
+function AutoGrading({
+  split,
+  requirements,
+  names,
+}: {
+  split: GradingSplit;
+  requirements: CourseRequirement[];
+  names: Map<string, string>;
+}) {
+  const total = split.parts.reduce((n, p) => n + p.items.length, 0);
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border border-hairline bg-surface px-4 py-3 text-sm">
+        <span className="text-gray-700">
+          <span className="font-semibold text-gray-900">Final grade</span> = average of all{" "}
+          <span className="font-semibold tabular-nums text-gray-900">{total}</span>
+          {total === 1 ? " item" : " items"}
+        </span>
+        <ul className="flex flex-wrap gap-x-5 gap-y-1.5">
+          {split.parts.map((p, k) => (
+            <li key={p.id} className="flex min-w-0 items-center gap-2">
+              <span className="h-2.5 w-2.5 shrink-0 rounded-[3px]" style={{ background: partColor(k) }} aria-hidden />
+              <span className="truncate text-gray-700">{p.name}</span>
+              <span className="font-semibold tabular-nums text-gray-900">{p.items.length}</span>
+            </li>
+          ))}
+        </ul>
+        <InfoTip label="How the grade is computed">
+          {`The final grade is the average of every item below. Each part's grade is the average of its own items, so a part with more items counts for more. Items are added on their own: every patient case, quiz and case presentation you make for this course lands in its part. Work with no score yet is left out, so a grade reads as the grade so far.`}
+        </InfoTip>
+      </div>
+
+      {split.parts.map((p, k) => {
+        const filed = new Set(p.items);
+        const rows = requirements.filter((r) => filed.has(r.id));
+        const source = AUTO_SOURCE[p.id];
+        return (
+          <section key={p.id} className="rounded-xl border border-hairline bg-surface">
+            <header className="flex items-center gap-2.5 px-4 py-3">
+              <span className="h-3 w-3 shrink-0 rounded-[4px]" style={{ background: partColor(k) }} aria-hidden />
+              <h3 className="font-display text-base font-semibold text-gray-900">{p.name}</h3>
+              <span className="ml-auto text-xs tabular-nums text-gray-500">
+                average of {rows.length} item{rows.length === 1 ? "" : "s"}
+              </span>
+            </header>
+            <div className="border-t border-hairline px-4 py-2 sm:pl-9">
+              {rows.length > 0 ? (
+                <ul className="divide-y divide-hairline">
+                  {rows.map((r) => (
+                    <ItemRow key={r.id} requirement={r} name={names.get(r.id) ?? ""} actions={null} />
+                  ))}
+                </ul>
+              ) : (
+                <p className="py-2 text-sm text-gray-500">
+                  None yet.{" "}
+                  {source && (
+                    <a href={source.href} className="font-semibold text-brand-700 hover:underline">
+                      {source.make}
+                    </a>
+                  )}{" "}
+                  for this course and it shows up here.
+                </p>
+              )}
+            </div>
+          </section>
+        );
+      })}
+    </div>
+  );
+}
+
+/** A small info button whose explanation shows on hover or focus. */
+function InfoTip({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <span className="group relative ml-auto inline-flex">
+      <button
+        type="button"
+        aria-label={label}
+        className="inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-xs font-medium text-gray-500 transition-colors hover:bg-subtle hover:text-brand-700 focus-visible:bg-subtle focus-visible:outline-none"
+      >
+        <FontAwesomeIcon icon={faCircleInfo} className="h-3.5 w-3.5" />
+        {label}
+      </button>
+      <span
+        role="tooltip"
+        className="pointer-events-none absolute right-0 top-full z-20 mt-1.5 w-80 max-w-[80vw] rounded-lg bg-gray-900 px-3 py-2.5 text-xs leading-relaxed text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+      >
+        {children}
+      </span>
+    </span>
   );
 }

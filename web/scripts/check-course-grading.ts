@@ -12,6 +12,10 @@
 import { NO_FACTS, evaluate, type ItemProgress, type RequirementRow } from '../app/lib/course-progress';
 import {
   addComponent,
+  evenShares,
+  flattenSplit,
+  itemShares,
+  withItemWeights,
   computeGrades,
   dropUnknown,
   fileItem,
@@ -411,6 +415,62 @@ async function fallbackChecks() {
   );
   const migration = new MigrationNeeded('needs 067');
   check('MigrationNeeded is an Error with its message', migration instanceof Error && migration.message === 'needs 067');
+}
+
+console.log('item shares (a part holds items straight away)');
+{
+  // The old Midterm 15 / Final 15 components become item shares, and grade the same.
+  const flat = flattenSplit(split());
+  eq('components move up into the part', flat.parts[0].items, [quizA.id, quizB.id]);
+  eq('no components left', flat.parts.map((p) => p.components.length), [0, 0]);
+  eq('each item takes its component percent', flat.parts[0].item_weights, { [quizA.id]: 15, [quizB.id]: 15 });
+  const progressS = { S: { [quizA.id]: item({ best_score: 76 }), [quizB.id]: item(), [lab.id]: item({ best_score: 85 }) } };
+  const before = computeGrades(split(), reqs, progressS).grades.S;
+  const after = computeGrades(flat, reqs, progressS).grades.S;
+  check('flattening keeps the grade', Math.abs((before?.grade ?? 0) - (after?.grade ?? 1)) < 1e-9, `got ${after?.grade}`);
+  eq('flattening keeps the scored weight', after?.scored_weight, before?.scored_weight);
+  eq('readStoredSplit flattens', readStoredSplit(split()), flat);
+
+  // A component with no items: the part shares its whole percent evenly.
+  const empty = split();
+  empty.parts[0].components[1].items = [];
+  eq('empty component falls back to an even split', flattenSplit(empty).parts[0].item_weights, undefined);
+
+  eq('even shares add up', evenShares(['a', 'b', 'c'], 30), { a: 10, b: 10, c: 10 });
+  eq('even shares carry the rounding', evenShares(['a', 'b', 'c'], 10), { a: 3.33, b: 3.33, c: 3.34 });
+  eq('itemShares without set shares is even', itemShares({ id: 'P', name: 'P', weight: 30, items: ['a', 'b'], components: [] }), { a: 15, b: 15 });
+
+  // Set shares must cover every item and add up to the part.
+  const set = (weights: Record<string, number>): GradingSplit => ({
+    parts: [
+      withItemWeights({ id: 'W', name: 'Written Exams', weight: 30, items: [quizA.id, quizB.id], components: [] }, weights),
+      { id: 'L', name: 'Laboratory & Skills', weight: 70, items: [lab.id], components: [] },
+    ],
+  });
+  check('shares adding up are fine', parseGrading(set({ [quizA.id]: 10, [quizB.id]: 20 }), reqs).ok);
+  const short = parseGrading(set({ [quizA.id]: 10, [quizB.id]: 10 }), reqs);
+  eq('shares must add up to the part', short.ok ? null : short.error, 'The items in "Written Exams" add up to 20%, not 30%');
+  const missing = parseGrading(set({ [quizA.id]: 30 }), reqs);
+  eq('every item needs a share', missing.ok ? null : missing.error, 'Every item in "Written Exams" needs a percent');
+  const zero = parseGrading(set({ [quizA.id]: 30, [quizB.id]: 0 }), reqs);
+  eq('a share must be above 0', zero.ok ? null : zero.error, 'Each item in "Written Exams" needs a percent above 0');
+
+  // Set shares weight the part grade: 10% at 50 and 20% at 80 is 70, not the plain mean 65.
+  const weightedGrade = computeGrades(set({ [quizA.id]: 10, [quizB.id]: 20 }), reqs, {
+    S: { [quizA.id]: item({ best_score: 50 }), [quizB.id]: item({ best_score: 80 }) },
+  }).grades.S;
+  eq('set shares weight the part', weightedGrade?.parts.W, 70);
+  eq('scored weight counts scored items only', computeGrades(set({ [quizA.id]: 10, [quizB.id]: 20 }), reqs, {
+    S: { [quizA.id]: item({ best_score: 50 }) },
+  }).grades.S?.scored_weight, 10);
+
+  // Filing or unfiling an item puts the part back on an even split.
+  const moved = fileItem(set({ [quizA.id]: 10, [quizB.id]: 20 }), quizB.id, 'L');
+  eq('losing an item resets the shares', moved.parts[0].item_weights, undefined);
+  eq('gaining an item resets the shares', moved.parts[1].item_weights, undefined);
+  const same = set({ [quizA.id]: 10, [quizB.id]: 20 });
+  eq('refiling in place keeps the shares', fileItem(same, quizA.id, 'W').parts[0].item_weights, { [quizA.id]: 10, [quizB.id]: 20 });
+  eq('settle resets a part that lost an item', settle(set({ [quizA.id]: 10, [quizB.id]: 20 }), [quizA, lab])?.parts[0]?.item_weights, undefined);
 }
 
 void fallbackChecks().then(() => {

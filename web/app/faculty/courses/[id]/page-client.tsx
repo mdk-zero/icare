@@ -6,10 +6,10 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faBookMedical,
   faChartColumn,
+  faChartLine,
   faLock,
   faPenToSquare,
   faPercent,
-  faPlus,
   faTriangleExclamation,
 } from "@fortawesome/free-solid-svg-icons";
 import PageHeader from "../../../components/PageHeader";
@@ -34,6 +34,7 @@ import {
 import RequirementModal from "./requirement-modal";
 import { SkeletonProgressGrid } from "../../../components/skeletons";
 import ProgressTab from "./progress-tab";
+import PerformanceTab from "./performance-tab";
 import CourseCrumbs from "./course-crumbs";
 import CourseTabBar, { COURSE_TAB_PANEL_ID, courseTabId } from "./course-tab-bar";
 import { ChecklistSkeleton } from "./checklist-section";
@@ -147,16 +148,22 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
         onChange={setTab}
         tabs={[
           {
+            id: "grading",
+            label: "Criteria for Assessment",
+            icon: faPercent,
+            count: requirements.length,
+          },
+          {
             id: "progress",
             label: "Progress",
             icon: faChartColumn,
             count: offering?.student_count ?? 0,
           },
           {
-            id: "grading",
-            label: "Grading",
-            icon: faPercent,
-            count: requirements.length,
+            id: "performance",
+            label: "Performance",
+            icon: faChartLine,
+            count: detail?.grading?.parts.length ?? 0,
           },
           {
             id: "skills",
@@ -166,25 +173,16 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
           },
         ]}
         action={
-          tab === "grading"
+          // Grading adds items inside each component ("New item"), so it needs no header button.
+          tab === "skills"
             ? {
-                icon: faPlus,
-                text: "Add item",
-                label: locked
-                  ? "The term has ended, so the checklist is locked"
-                  : "Add an item to the checklist",
-                onClick: () => addRequirement(),
-                disabled: !offering || locked,
+                icon: faPenToSquare,
+                text: "Edit Skills",
+                label: "Edit the course's skill list",
+                onClick: () => setSkillsOpen(true),
+                disabled: !offering,
               }
-            : tab === "skills"
-              ? {
-                  icon: faPenToSquare,
-                  text: "Edit Skills",
-                  label: "Edit the course's skill list",
-                  onClick: () => setSkillsOpen(true),
-                  disabled: !offering,
-                }
-              : undefined
+            : undefined
         }
       />
 
@@ -199,6 +197,15 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
         {tab === "progress" && !offering && loading && <SkeletonProgressGrid />}
         {tab === "progress" && offering && (
           <ProgressTab
+            offeringId={offeringId}
+            signature={checklistSignature(requirements)}
+            onOpenGrading={() => setTab("grading")}
+          />
+        )}
+
+        {tab === "performance" && !offering && loading && <SkeletonProgressGrid />}
+        {tab === "performance" && offering && (
+          <PerformanceTab
             offeringId={offeringId}
             signature={checklistSignature(requirements)}
             onOpenGrading={() => setTab("grading")}

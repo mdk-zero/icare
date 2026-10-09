@@ -1154,6 +1154,8 @@ export interface SimulationScenario {
   patient_case: any;
   patient_id?: string | null;
   patient_name?: string | null;
+  /** The course offering it was made for (migration 070); null for none. */
+  offering_id?: string | null;
   learning_objectives: string[];
   is_ai_generated: boolean;
   student_count: number;
@@ -1327,6 +1329,23 @@ export interface FacultyPatient {
   };
   labs?: Record<string, string | number | null>;
   mimic_id: string;
+  /** The courses the patient belongs to (migration 069). */
+  course_ids?: string[];
+}
+
+/** A course a patient can be filed under: one the viewer teaches, or owns as Dean. */
+export interface PatientCourseOption {
+  id: string;
+  code: string;
+  title: string;
+}
+
+/** The patients a viewer may work with, and the courses they can file new ones under. */
+export interface PatientRoster {
+  patients: FacultyPatient[];
+  courses: PatientCourseOption[];
+  /** False until migration 069 is applied; the form then leaves courses out. */
+  coursesEnabled: boolean;
 }
 
 export interface AuditLog {
@@ -2218,6 +2237,30 @@ export async function fetchFacultyPatients(search?: string): Promise<FacultyPati
   } catch (err) {
     console.error('fetchFacultyPatients() failed', err);
     return [];
+  }
+}
+
+/** Like fetchFacultyPatients, with the courses new patients can be filed under. */
+export async function fetchPatientRoster(): Promise<PatientRoster> {
+  try {
+    const res = await apiFetch('/api/faculty/patients', { credentials: 'include' });
+    if (!res.ok) {
+      console.error('fetchPatientRoster() failed', res.status);
+      return { patients: [], courses: [], coursesEnabled: false };
+    }
+    const json = (await res.json()) as {
+      patients?: FacultyPatient[];
+      courses?: PatientCourseOption[];
+      courses_enabled?: boolean;
+    };
+    return {
+      patients: json.patients ?? [],
+      courses: json.courses ?? [],
+      coursesEnabled: json.courses_enabled ?? false,
+    };
+  } catch (err) {
+    console.error('fetchPatientRoster() failed', err);
+    return { patients: [], courses: [], coursesEnabled: false };
   }
 }
 
@@ -3808,6 +3851,8 @@ export const createCasePresentation = (input: {
   instructions: string;
   deadline: string | null;
   section_ids: string[];
+  /** The course it is made for (migration 070). */
+  offering_id?: string;
 }) => caseRequest<{ presentation: CasePresentation; student_count: number }>('/api/faculty/cases', { method: 'POST', body: input });
 
 export const fetchCasePresentation = (id: string) =>
