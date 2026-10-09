@@ -5,6 +5,7 @@ import { newId } from "../store";
 import type { DemoQuiz } from "../fixtures/school";
 import { SKILL_QUESTIONS } from "@/scripts/data/skill-questions";
 import { audit } from "./shared";
+import { linkActivityCourses } from "./courses";
 import { parseDeadline } from "@/app/lib/deadline-input";
 import { byName, sectionName, teamLabel, visibleSections, visibleStudents } from "./scope";
 
@@ -84,6 +85,8 @@ function publishBlockers(ctx: Ctx, quiz: DemoQuiz, totalOverride?: number | null
 route("GET", "/api/faculty/assessments", (ctx) => {
   if (!staffOnly(ctx)) return forbidden();
   const ids = scopedIds(ctx);
+  // Each quiz's course (070), for grouping the list by course.
+  linkActivityCourses(ctx.db);
   return {
     assessments: ctx.db.quizzes
       .slice()

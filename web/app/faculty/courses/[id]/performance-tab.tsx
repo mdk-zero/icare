@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import Link from "next/link";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -92,13 +92,23 @@ export default function PerformanceTab({
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return [...(progress?.students ?? [])]
-      .filter(
-        (s) =>
-          (!group || s.group_label === group) &&
-          (!q || s.name.toLowerCase().includes(q)),
-      )
-      .sort((a, b) => a.name.localeCompare(b.name));
+    return (
+      [...(progress?.students ?? [])]
+        .filter(
+          (s) =>
+            (!group || s.group_label === group) &&
+            (!q || s.name.toLowerCase().includes(q)),
+        )
+        // By section, then group (the label reads "BSN 3101 · Group A"), then name A–Z.
+        .sort(
+          (a, b) =>
+            (a.group_label || "~").localeCompare(
+              b.group_label || "~",
+              undefined,
+              { numeric: true },
+            ) || a.name.localeCompare(b.name),
+        )
+    );
   }, [progress?.students, query, group]);
 
   if (loading) return <SkeletonProgressGrid />;
@@ -336,8 +346,11 @@ export default function PerformanceTab({
               </tr>
             </thead>
             <tbody>
-              {rows.map((s) => {
+              {rows.map((s, i) => {
                 const g = gradeOf(s.id);
+                // A heading row where a new section and group starts.
+                const startsGroup =
+                  i === 0 || rows[i - 1].group_label !== s.group_label;
                 const scored = parts.filter((p) => g?.parts[p.id] != null);
                 const formula = auto
                   ? `average of ${Math.round(((g?.scored_weight ?? 0) / 100) * itemCount)} of ${itemCount} items`
@@ -345,59 +358,80 @@ export default function PerformanceTab({
                       .map((p) => `${num(g!.parts[p.id]!)} × ${p.weight}%`)
                       .join(" + ");
                 return (
-                  <tr key={s.id} className="group">
-                    <td className="sticky left-0 z-10 border-b border-hairline bg-surface px-4 py-2.5 group-hover:bg-subtle">
-                      <div className="flex items-center gap-3">
-                        <Avatar
-                          name={s.name}
-                          src={s.picture_url}
-                          userId={s.id}
-                          sex={s.sex}
-                          size="sm"
-                        />
-                        <div className="min-w-0">
-                          <Link
-                            href={`/faculty/students/${s.id}`}
-                            className="block truncate font-medium text-gray-800 hover:underline"
-                          >
-                            {s.name}
-                          </Link>
-                          <p className="truncate text-xs text-gray-500">
-                            {s.group_label}
-                          </p>
+                  <Fragment key={s.id}>
+                    {startsGroup && (
+                      <tr>
+                        <th
+                          colSpan={parts.length + 2}
+                          scope="colgroup"
+                          className="sticky left-0 border-b border-hairline bg-subtle/60 px-4 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-500"
+                        >
+                          {s.group_label || "No group"}
+                          <span className="ml-2 font-medium normal-case tracking-normal text-gray-400">
+                            {
+                              rows.filter(
+                                (x) => x.group_label === s.group_label,
+                              ).length
+                            }{" "}
+                            students
+                          </span>
+                        </th>
+                      </tr>
+                    )}
+                    <tr className="group">
+                      <td className="sticky left-0 z-10 border-b border-hairline bg-surface px-4 py-2.5 group-hover:bg-subtle">
+                        <div className="flex items-center gap-3">
+                          <Avatar
+                            name={s.name}
+                            src={s.picture_url}
+                            userId={s.id}
+                            sex={s.sex}
+                            size="sm"
+                          />
+                          <div className="min-w-0">
+                            <Link
+                              href={`/faculty/students/${s.id}`}
+                              className="block truncate font-medium text-gray-800 hover:underline"
+                            >
+                              {s.name}
+                            </Link>
+                            <p className="truncate text-xs text-gray-500">
+                              {s.group_label}
+                            </p>
+                          </div>
                         </div>
-                      </div>
-                    </td>
-                    {parts.map((p) => {
-                      const v = g?.parts[p.id];
-                      return (
-                        <td
-                          key={p.id}
-                          className={`border-b border-hairline px-3 py-2.5 text-right font-semibold tabular-nums group-hover:bg-subtle ${tone(v)}`}
-                        >
-                          {v == null ? "—" : formatGrade(v)}
-                        </td>
-                      );
-                    })}
-                    <td className="border-b border-hairline px-4 py-2.5 text-right group-hover:bg-subtle">
-                      <span
-                        className={`font-display text-base font-semibold tabular-nums ${tone(g?.grade)}`}
-                      >
-                        {g?.grade == null ? "—" : formatGrade(g.grade)}
-                      </span>
-                      {g?.grade != null && (
+                      </td>
+                      {parts.map((p) => {
+                        const v = g?.parts[p.id];
+                        return (
+                          <td
+                            key={p.id}
+                            className={`border-b border-hairline px-3 py-2.5 text-right font-semibold tabular-nums group-hover:bg-subtle ${tone(v)}`}
+                          >
+                            {v == null ? "—" : formatGrade(v)}
+                          </td>
+                        );
+                      })}
+                      <td className="border-b border-hairline px-4 py-2.5 text-right group-hover:bg-subtle">
                         <span
-                          className="block text-[11px] tabular-nums text-gray-500"
-                          title="Each part's average times its percent"
+                          className={`font-display text-base font-semibold tabular-nums ${tone(g?.grade)}`}
                         >
-                          {formula}
-                          {(auto
-                            ? (g.scored_weight ?? 0) < 100
-                            : scored.length < parts.length) && " · so far"}
+                          {g?.grade == null ? "—" : formatGrade(g.grade)}
                         </span>
-                      )}
-                    </td>
-                  </tr>
+                        {g?.grade != null && (
+                          <span
+                            className="block text-[11px] tabular-nums text-gray-500"
+                            title="Each part's average times its percent"
+                          >
+                            {formula}
+                            {(auto
+                              ? (g.scored_weight ?? 0) < 100
+                              : scored.length < parts.length) && " · so far"}
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  </Fragment>
                 );
               })}
             </tbody>

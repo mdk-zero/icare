@@ -49,7 +49,8 @@ import {
   FacultyPatient,
   fetchMyCourses,
 } from "../../lib/api";
-import { termStatus } from "../../lib/course-progress";
+import { groupByCourse, numberWithinCourse } from "../../lib/course-groups";
+import CourseGroupHeading from "../../components/CourseGroupHeading";
 import { deadlineFromInput } from "../../lib/deadline-input";
 import { usePageData } from "../../lib/use-page-data";
 import { SkeletonStatTile, SkeletonScenarioCard } from "../../components/skeletons";
@@ -206,53 +207,13 @@ export default function FacultyScenariosClient() {
     });
   }, [scenarios, searchQuery, categoryFilter]);
 
-  // Cases are grouped by the course they were made for: the running term's
-  // courses first, then upcoming and past ones, then any made for no course.
-  const caseGroups = useMemo(() => {
-    const order = { current: 0, upcoming: 1, ended: 2 } as const;
-    const offerings = [...(data?.offerings ?? [])].sort(
-      (a, b) =>
-        order[termStatus(a.term)] - order[termStatus(b.term)] ||
-        a.course.code.localeCompare(b.course.code, undefined, { numeric: true }),
-    );
-    const multipleTerms = new Set(offerings.map((o) => o.term.id)).size > 1;
-    const known = new Set(offerings.map((o) => o.id));
-    const groups = offerings.map((o) => ({
-      key: o.id,
-      code: o.course.code,
-      title: o.course.title,
-      term: multipleTerms ? o.term.name : null,
-      ended: termStatus(o.term) === "ended",
-      // In case-number order: Patient Case #1 first.
-      items: filteredScenarios
-        .filter((sc) => sc.offering_id === o.id)
-        .sort((a, b) => a.created_at.localeCompare(b.created_at)),
-    }));
-    const loose = filteredScenarios.filter((sc) => !sc.offering_id || !known.has(sc.offering_id));
-    if (loose.length) {
-      groups.push({ key: "none", code: "", title: "Not in a course", term: null, ended: false, items: loose });
-    }
-    // An ended course with nothing in it is noise; a running one stays, to show it is empty.
-    return groups.filter((g) => g.items.length > 0 || (!g.ended && g.key !== "none"));
-  }, [data?.offerings, filteredScenarios]);
-
-  // A case's number in its course, counted in the order the cases were made,
-  // as the course's Criteria tab numbers them: "Patient Case #3". Counted over
-  // every case of the course, so a search or filter doesn't renumber them.
-  const caseNumber = useMemo(() => {
-    const byCourse = new Map<string, SimulationScenario[]>();
-    for (const sc of scenarios) {
-      if (!sc.offering_id) continue;
-      byCourse.set(sc.offering_id, [...(byCourse.get(sc.offering_id) ?? []), sc]);
-    }
-    const numbers = new Map<string, number>();
-    for (const list of byCourse.values()) {
-      [...list]
-        .sort((a, b) => a.created_at.localeCompare(b.created_at))
-        .forEach((sc, i) => numbers.set(sc.id, i + 1));
-    }
-    return numbers;
-  }, [scenarios]);
+  // Cases are grouped by the course they were made for, and numbered within
+  // it in the order they were made, as the course's Criteria tab numbers them.
+  const caseGroups = useMemo(
+    () => groupByCourse(filteredScenarios, data?.offerings ?? []),
+    [filteredScenarios, data?.offerings],
+  );
+  const caseNumber = useMemo(() => numberWithinCourse(scenarios), [scenarios]);
 
   const linkModalFilteredPatients = useMemo(() => {
     const q = linkPatientSearchQuery.toLowerCase();
@@ -787,16 +748,7 @@ export default function FacultyScenariosClient() {
         <div className="space-y-6">
           {caseGroups.map((group) => (
             <section key={group.key} aria-label={group.code ? `${group.code} ${group.title}` : group.title}>
-              <div className="mb-3 flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                {group.code && <h2 className="font-display text-base font-semibold text-gray-900">{group.code}</h2>}
-                <span className={group.code ? "text-sm text-gray-600" : "font-display text-base font-semibold text-gray-500"}>
-                  {group.title}
-                </span>
-                {group.term && <span className="text-xs text-gray-400">· {group.term}</span>}
-                <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold tabular-nums text-gray-600">
-                  {group.items.length}
-                </span>
-              </div>
+              <CourseGroupHeading code={group.code} title={group.title} term={group.term} count={group.items.length} />
               {group.items.length === 0 ? (
                 <p className="rounded-xl border border-dashed border-gray-300 px-4 py-5 text-center text-sm text-gray-500">
                   No patient cases for this course yet.

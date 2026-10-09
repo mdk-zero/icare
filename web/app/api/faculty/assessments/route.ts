@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { DEFAULT_ATTEMPTS, isValidAttempts, MIN_ATTEMPTS } from '@/app/lib/quiz-attempts';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
-import { activityCourse, parseOfferingId } from '@/app/lib/activity-course';
+import { activityCourse, activityOfferings, parseOfferingId } from '@/app/lib/activity-course';
 import { getScopedStudentIds } from '@/app/lib/admin-scope';
 import { logAudit } from '@/app/lib/audit';
 
@@ -67,6 +67,9 @@ export async function GET() {
       }
     }
 
+    // The course each quiz was made for (070), for grouping by course.
+    const offeringOf = await activityOfferings(supabase, 'assessments', (data ?? []).map((a) => a.id as string));
+
     const assessments = (data ?? []).map((a) => ({
       id: a.id,
       created_by: a.created_by,
@@ -87,6 +90,7 @@ export async function GET() {
         (a as unknown as { questions: [{ count: number }] }).questions?.[0]?.count ?? 0,
       ),
       student_count: assignedCounts.get(a.id) ?? 0,
+      offering_id: offeringOf.get(a.id as string) ?? null,
     }));
 
     return NextResponse.json({ assessments });
