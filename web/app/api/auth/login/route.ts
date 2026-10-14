@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { findUserByEmail, toPublicUser, touchLastLogin } from '@/app/lib/auth/user';
+import { findUserByEmail, sectionNameOf, toPublicUser, touchLastLogin } from '@/app/lib/auth/user';
 import { verifyPassword } from '@/app/lib/auth/password';
 import { setSessionCookie, signSession } from '@/app/lib/auth/session';
 import { clientIp, consumeRateLimit } from '@/app/lib/auth/rate-limit';
@@ -45,8 +45,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 });
     }
 
-    await touchLastLogin(row.id);
-    const publicUser = toPublicUser(row);
+    const [, section] = await Promise.all([touchLastLogin(row.id), sectionNameOf(row.id)]);
+    const publicUser = { ...toPublicUser(row), section };
     const token = await signSession({ uid: publicUser.id, role: publicUser.role, email: publicUser.email });
     await setSessionCookie(token);
     return NextResponse.json({ user: publicUser, sessionToken: token });

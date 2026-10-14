@@ -61,6 +61,21 @@ export function toPublicUser(
   };
 }
 
+/**
+ * The name of the user's section, or null. Mobile's profile shows it, so
+ * sign-in returns it as the session check does; without it the profile read
+ * "No section assigned" until the app's next start.
+ */
+export async function sectionNameOf(userId: string): Promise<string | null> {
+  const { data, error } = await getSupabaseAdmin()
+    .from('users')
+    .select('sections(name)')
+    .eq('id', userId)
+    .maybeSingle();
+  if (error) throw error;
+  return (data?.sections as unknown as { name?: string } | null)?.name ?? null;
+}
+
 export async function findUserByEmail(email: string) {
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase

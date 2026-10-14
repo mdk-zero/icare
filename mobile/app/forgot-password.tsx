@@ -315,7 +315,7 @@ export default function ForgotPasswordScreen() {
                         style={({ pressed }) => [styles.eyeButton, pressed && { opacity: 0.6 }]}
                       >
                         <FontAwesome6
-                          name={showPassword ? 'eye-slash' : 'eye'}
+                          name={showPassword ? 'eye' : 'eye-slash'}
                           size={17}
                           color={Palette.textMuted}
                         />

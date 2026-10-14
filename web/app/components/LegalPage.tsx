@@ -1,0 +1,84 @@
+import type { ReactNode } from "react";
+import Link from "next/link";
+import Image from "next/image";
+import { LEGAL } from "../lib/legal";
+
+export interface LegalSection {
+  id: string;
+  title: string;
+  body: ReactNode;
+}
+
+/**
+ * A public legal document (Terms of Use, Privacy Policy): readable line
+ * length, a contents list that jumps to each section, and a link to the
+ * other document. Open to everyone, signed in or not, so app store
+ * reviewers and students can read it before they have an account.
+ */
+export default function LegalPage({
+  title,
+  intro,
+  sections,
+  other,
+}: {
+  title: string;
+  intro: ReactNode;
+  sections: LegalSection[];
+  other: { href: string; label: string };
+}) {
+  return (
+    <div className="min-h-screen bg-canvas text-gray-800">
+      <header className="border-b border-hairline bg-surface">
+        <div className="mx-auto flex max-w-3xl items-center justify-between gap-4 px-5 py-4">
+          <Link href="/" className="flex items-center gap-2.5 font-display text-lg font-semibold text-gray-900">
+            <Image src="/icon.png" alt="" width={28} height={28} className="rounded-md" />
+            iCARE++
+          </Link>
+          <Link href={other.href} className="text-sm font-medium text-brand-700 hover:underline">
+            {other.label}
+          </Link>
+        </div>
+      </header>
+
+      <main className="mx-auto max-w-3xl px-5 py-10">
+        <h1 className="font-display text-3xl font-semibold tracking-tight text-gray-900 sm:text-4xl">{title}</h1>
+        <p className="mt-2 text-sm text-gray-500">Effective {LEGAL.effective}</p>
+        <div className="mt-6 max-w-[68ch] space-y-3 text-[15px] leading-7 text-gray-700">{intro}</div>
+
+        <nav aria-label="Contents" className="mt-8 rounded-xl border border-hairline bg-surface p-5">
+          <p className="text-sm font-semibold text-gray-900">Contents</p>
+          <ol className="mt-3 grid gap-x-6 gap-y-1.5 text-sm sm:grid-cols-2">
+            {sections.map((s, i) => (
+              <li key={s.id}>
+                <a href={`#${s.id}`} className="text-brand-700 hover:underline">
+                  {i + 1}. {s.title}
+                </a>
+              </li>
+            ))}
+          </ol>
+        </nav>
+
+        <div className="mt-10 space-y-10">
+          {sections.map((s, i) => (
+            <section key={s.id} id={s.id} className="scroll-mt-6">
+              <h2 className="font-display text-xl font-semibold text-gray-900">
+                {i + 1}. {s.title}
+              </h2>
+              <div className="mt-3 max-w-[68ch] space-y-3 text-[15px] leading-7 text-gray-700 [&_li]:ml-5 [&_li]:list-disc [&_li]:pl-1 [&_ul]:space-y-1.5">
+                {s.body}
+              </div>
+            </section>
+          ))}
+        </div>
+
+        <footer className="mt-14 border-t border-hairline pt-6 text-sm text-gray-500">
+          Questions about this document? Contact {LEGAL.school} at{" "}
+          <a href={`mailto:${LEGAL.contactEmail}`} className="text-brand-700 hover:underline">
+            {LEGAL.contactEmail}
+          </a>
+          .
+        </footer>
+      </main>
+    </div>
+  );
+}

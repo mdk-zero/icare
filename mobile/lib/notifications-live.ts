@@ -16,6 +16,7 @@
 import { AppState, AppStateStatus } from 'react-native';
 import { API_URL, getToken } from './client';
 import { AppNotification, fetchNotifications, markAllNotificationsRead, markNotificationRead } from './api';
+import { presentSystemNotification } from './system-notify';
 
 export interface NotificationsState {
   notifications: AppNotification[];
@@ -123,7 +124,11 @@ function handleEvent(event: string, data: string) {
   }
   if (event === 'insert' || event === 'update') {
     const { notification } = payload as { notification?: AppNotification };
-    if (notification?.id) applyUpsert(notification);
+    if (!notification?.id) return;
+    const isNew = event === 'insert' && !state.notifications.some((n) => n.id === notification.id);
+    applyUpsert(notification);
+    // A brand-new one also shows as a system banner, if the user allowed them.
+    if (isNew && !notification.read_at) void presentSystemNotification(notification);
     return;
   }
   if (event === 'delete') {
