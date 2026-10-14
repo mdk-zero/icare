@@ -1,5 +1,14 @@
 import React from "react";
-import { ScrollView, View, Text, StyleSheet, Pressable, RefreshControl } from "react-native";
+import {
+  ScrollView,
+  View,
+  Text,
+  StyleSheet,
+  Pressable,
+  RefreshControl,
+  LayoutAnimation,
+  type LayoutChangeEvent,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -15,6 +24,7 @@ import {
 } from "@/components/ui";
 import { useApiData } from "@/hooks/useApiData";
 import { FloorPlan, FloorPlanSkeleton } from "@/components/FloorPlan";
+import { useAppHeaderHeight } from "@/components/navigation/AppTabs";
 import {
   fetchWard,
   fetchAiTips,
@@ -29,8 +39,10 @@ import {
 /**
  * The Clinic tab: the ward's floor plan as the Dean laid it out first (rooms
  * not on the plan follow as cards, four to a page, as does the whole ward
- * before any room is placed), then the student's patient cases, open and
- * completed, and their hospital case write-ups. Students find the room with
+ * before any room is placed). Below it, Pending Tasks: open patient cases and
+ * unfinished write-ups; then Completed Patient Cases and Hospital Cases,
+ * each a dropdown whose heading stays pinned under the app header while its
+ * list scrolls, so long lists don't bury the screen. Students find the room with
  * their patient and walk into it to read the scenario brief and task
  * checklist. The ward arrives in one cached read (/api/student/ward), so the
  * rooms still show offline.
@@ -165,6 +177,64 @@ function TipCard({ tip }: { tip: AiTip }) {
   );
 }
 
+type DropdownKey = "pending" | "completed" | "hospital";
+
+/** Top to bottom, as they appear on the screen. */
+const DROPDOWN_ORDER: DropdownKey[] = ["pending", "completed", "hospital"];
+
+/** Room left for a dropdown's heading when deciding whether it should still be pinned. */
+const DROPDOWN_HEADING_H = 56;
+
+/** A section heading that opens and closes its list; the same one shows pinned below the app header. */
+function DropdownHeading({
+  title,
+  count,
+  open,
+  onToggle,
+  tone = "default",
+}: {
+  title: string;
+  count: number;
+  open: boolean;
+  onToggle: () => void;
+  /** "alert" when the count is work still to do. */
+  tone?: "default" | "alert";
+}) {
+  const { Palette, Accent, Shadow, Type } = useTheme();
+  const styles = React.useMemo(
+    () => createStyles(Palette, Accent, Shadow, Type),
+    [Palette, Accent, Shadow, Type],
+  );
+  const countColors =
+    tone === "alert" && count > 0
+      ? { backgroundColor: Accent.red.bg, color: Accent.red.fg }
+      : { backgroundColor: Palette.primaryTint, color: Palette.primary };
+  return (
+    <Pressable
+      onPress={onToggle}
+      style={({ pressed }) => [styles.dropdownHeading, pressed && { opacity: 0.7 }]}
+      accessibilityRole="button"
+      accessibilityState={{ expanded: open }}
+      accessibilityLabel={`${title}, ${count}`}
+      accessibilityHint={open ? "Collapses the list" : "Expands the list"}
+    >
+      <Text style={styles.dropdownTitle} numberOfLines={1}>
+        {title}
+      </Text>
+      <View style={[styles.dropdownCount, { backgroundColor: countColors.backgroundColor }]}>
+        <Text style={[styles.dropdownCountText, { color: countColors.color }]}>{count}</Text>
+      </View>
+      <View style={{ flex: 1 }} />
+      <Ionicons
+        name="chevron-down"
+        size={18}
+        color={Palette.textSecondary}
+        style={{ transform: [{ rotate: open ? "180deg" : "0deg" }] }}
+      />
+    </Pressable>
+  );
+}
+
 export default function ClinicScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -173,6 +243,7 @@ export default function ClinicScreen() {
     () => createStyles(Palette, Accent, Shadow, Type),
     [Palette, Accent, Shadow, Type],
   );
+  const headerHeight = useAppHeaderHeight();
 
   const { data, loading, refreshing, error, fromCache, refresh, reload } = useApiData(fetchWard);
   // Separate call: a slow LLM generation must never hold up the ward.
@@ -205,6 +276,54 @@ export default function ClinicScreen() {
     [router],
   );
 
+  // Pending work starts open, so it's the first thing a student sees; the
+  // long lists start closed so they don't bury the ward.
+  const [open, setOpen] = React.useState<Record<DropdownKey, boolean>>({
+    pending: true,
+    completed: false,
+    hospital: false,
+  });
+
+  // Where each dropdown sits in the scroll content, and which one's heading
+  // is pinned below the app header because its list is being scrolled.
+  const scrollRef = React.useRef<ScrollView>(null);
+  const layouts = React.useRef<Partial<Record<DropdownKey, { y: number; height: number }>>>({});
+  const scrollY = React.useRef(0);
+  const [pinned, setPinned] = React.useState<DropdownKey | null>(null);
+
+  const updatePinned = React.useCallback(
+    (y: number) => {
+      scrollY.current = y;
+      // The line just under the app header, in content coordinates.
+      const line = y + headerHeight;
+      let next: DropdownKey | null = null;
+      for (const key of DROPDOWN_ORDER) {
+        const box = layouts.current[key];
+        if (box && line > box.y && line < box.y + box.height - DROPDOWN_HEADING_H) next = key;
+      }
+      setPinned((current) => (current === next ? current : next));
+    },
+    [headerHeight],
+  );
+
+  const onSectionLayout = (key: DropdownKey, e: LayoutChangeEvent) => {
+    const { y, height } = e.nativeEvent.layout;
+    layouts.current[key] = { y, height };
+    updatePinned(scrollY.current);
+  };
+
+  const toggle = (key: DropdownKey) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    const closing = open[key];
+    setOpen((prev) => ({ ...prev, [key]: !prev[key] }));
+    // Closing a list from its pinned heading: bring its heading back into
+    // place instead of leaving the screen scrolled past where it was.
+    const box = layouts.current[key];
+    if (closing && pinned === key && box) {
+      scrollRef.current?.scrollTo({ y: Math.max(0, box.y - headerHeight), animated: false });
+    }
+  };
+
   // The header and section titles need nothing fetched; the plan and the
   // assignment hold their shape until the ward arrives.
   const pending = loading && !data;
@@ -233,175 +352,213 @@ export default function ClinicScreen() {
 
   const tipList = tips.data?.tips ?? [];
   const caseList = cases.data ?? [];
+  // Write-ups still in the student's hands: not started, or a draft.
+  const pendingCases = caseList.filter((c) => c.status === "not_started" || c.status === "draft");
+  const pendingCount = openAssignments.length + pendingCases.length;
   const showTips = tips.loading || tipList.length > 0 || Boolean(tips.error);
 
+  const headings: Record<DropdownKey, { title: string; count: number; tone?: "alert" }> = {
+    pending: { title: "Pending Tasks", count: pendingCount, tone: "alert" },
+    completed: { title: "Completed Patient Cases", count: completedAssignments.length },
+    hospital: { title: "Hospital Cases", count: caseList.length },
+  };
+
+  const caseCard = (item: CaseListItem) => (
+    <CaseCard key={item.id} item={item} onPress={() => router.push(`/cases/${item.id}`)} />
+  );
+
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={[styles.content, { paddingTop: insets.top + 88 }]}
-      showsVerticalScrollIndicator={false}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={handleRefresh}
-          colors={[Palette.primary]}
-          tintColor={Palette.primary}
-        />
-      }
-    >
-      <ScreenHeader eyebrow="Ward" title="Clinic" icon="medkit-outline" />
-
-      {fromCache ? (
-        <View
-          style={[
-            styles.notice,
-            { backgroundColor: Accent.amber.bg, borderColor: Accent.amber.border },
-          ]}
-        >
-          <Ionicons name="cloud-offline-outline" size={14} color={Accent.amber.fg} />
-          <Text style={[styles.noticeText, { color: Accent.amber.fg }]}>
-            Offline — showing the last synced ward
-          </Text>
-        </View>
-      ) : null}
-
-      {error && !data ? <EmptyState icon="cloud-offline-outline" message={error} /> : null}
-
-      <View style={styles.section}>
-        <SectionHeader title="Room Layout" subtitle="Tap a room to see who is in it" />
-        {pending ? <FloorPlanSkeleton /> : null}
-        {onPlan.length > 0 ? (
-          <FloorPlan
-            rooms={onPlan}
-            fixtures={fixtures}
-            highlightRoomId={myRoomId}
-            onPressRoom={(room) => router.push(`/clinic/room/${room.id}`)}
+    <View style={styles.container}>
+      <ScrollView
+        ref={scrollRef}
+        style={styles.container}
+        contentContainerStyle={[styles.content, { paddingTop: insets.top + 88 }]}
+        showsVerticalScrollIndicator={false}
+        onScroll={(e) => updatePinned(e.nativeEvent.contentOffset.y)}
+        scrollEventThrottle={16}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={[Palette.primary]}
+            tintColor={Palette.primary}
           />
+        }
+      >
+        <ScreenHeader eyebrow="Ward" title="Clinic" icon="medkit-outline" />
+
+        {fromCache ? (
+          <View
+            style={[
+              styles.notice,
+              { backgroundColor: Accent.amber.bg, borderColor: Accent.amber.border },
+            ]}
+          >
+            <Ionicons name="cloud-offline-outline" size={14} color={Accent.amber.fg} />
+            <Text style={[styles.noticeText, { color: Accent.amber.fg }]}>
+              Offline — showing the last synced ward
+            </Text>
+          </View>
         ) : null}
-        {offPlan.length > 0 ? (
-          <View style={onPlan.length > 0 ? styles.offPlan : undefined}>
-            {onPlan.length > 0 ? (
-              <Text style={styles.offPlanTitle}>Not on the plan yet</Text>
-            ) : null}
-            <RoomPages
-              rooms={offPlan}
+
+        {error && !data ? <EmptyState icon="cloud-offline-outline" message={error} /> : null}
+
+        <View style={styles.section}>
+          <SectionHeader title="Room Layout" subtitle="Tap a room to see who is in it" />
+          {pending ? <FloorPlanSkeleton /> : null}
+          {onPlan.length > 0 ? (
+            <FloorPlan
+              rooms={onPlan}
+              fixtures={fixtures}
               highlightRoomId={myRoomId}
               onPressRoom={(room) => router.push(`/clinic/room/${room.id}`)}
             />
-          </View>
-        ) : null}
-        {rooms.length === 0 && !pending ? (
-          <EmptyState icon="bed-outline" message="No rooms have been set up yet." />
-        ) : null}
-      </View>
-
-      {pending ? (
-        <View style={styles.banner} accessibilityLabel="Loading your assignment">
-          <View style={styles.bannerHeader}>
-            <View style={[styles.bannerIcon, { backgroundColor: Accent.teal.bg }]}>
-              <Ionicons name="pulse" size={17} color={Accent.teal.fg} />
-            </View>
-            <View style={styles.bannerHeaderText}>
-              <Text style={styles.bannerEyebrow}>Your assignment</Text>
-              <SkeletonBlock width="75%" height={15} style={{ marginTop: 4 }} />
-            </View>
-            <Ionicons name="chevron-forward" size={17} color={Palette.textFaint} />
-          </View>
-          <View style={styles.bannerRow}>
-            <SkeletonBlock width="65%" height={12} />
-          </View>
-          <View style={styles.progressWrap}>
-            <View style={[styles.progressTrack, { backgroundColor: Palette.borderLight }]} />
-            <SkeletonBlock width={52} height={11} />
-          </View>
-        </View>
-      ) : null}
-
-      {openAssignments.length > 0
-        ? openAssignments.map((assignment) => (
-            <AssignmentBanner
-              key={assignment.id}
-              assignment={assignment}
-              patient={
-                assignment.patient_id ? (patientsById.get(assignment.patient_id) ?? null) : null
-              }
-              room={
-                assignment.patient_id
-                  ? (roomsById.get(patientsById.get(assignment.patient_id)?.room_id ?? "") ?? null)
-                  : null
-              }
-              onPress={() => openAssignment(assignment)}
-            />
-          ))
-        : null}
-
-      {completedAssignments.length > 0 ? (
-        <View style={styles.section}>
-          <SectionHeader title="Completed Patient Cases" count={completedAssignments.length} />
-          {completedAssignments.map((assignment) => (
-            <CompletedCaseCard
-              key={assignment.id}
-              assignment={assignment}
-              patient={
-                assignment.patient_id ? (patientsById.get(assignment.patient_id) ?? null) : null
-              }
-              // The brief, not the patient: a patient's page follows their open case.
-              onPress={() => router.push(`/clinic/assignment/${assignment.id}`)}
-            />
-          ))}
-        </View>
-      ) : null}
-
-      {caseList.length > 0 || cases.loading ? (
-        <View style={styles.section}>
-          <SectionHeader
-            title="Hospital Cases"
-            subtitle="Write up a patient from your duty — initials only"
-          />
-          {cases.loading && caseList.length === 0 ? (
-            <View style={styles.tipCard}>
-              <View style={styles.tipBody}>
-                <SkeletonBlock width="60%" height={13} />
-                <SkeletonBlock width="35%" height={11} style={styles.tipSkeletonLine} />
-              </View>
-            </View>
-          ) : (
-            caseList.map((item) => (
-              <CaseCard
-                key={item.id}
-                item={item}
-                onPress={() => router.push(`/cases/${item.id}`)}
+          ) : null}
+          {offPlan.length > 0 ? (
+            <View style={onPlan.length > 0 ? styles.offPlan : undefined}>
+              {onPlan.length > 0 ? (
+                <Text style={styles.offPlanTitle}>Not on the plan yet</Text>
+              ) : null}
+              <RoomPages
+                rooms={offPlan}
+                highlightRoomId={myRoomId}
+                onPressRoom={(room) => router.push(`/clinic/room/${room.id}`)}
               />
-            ))
-          )}
-        </View>
-      ) : null}
-
-      {showTips ? (
-        <View style={styles.section}>
-          <SectionHeader
-            title="AI Study Tips"
-            subtitle="Generated from your assigned patient cases"
-          />
-          {tips.loading && tipList.length === 0 ? (
-            <View style={styles.tipCard}>
-              <View style={styles.tipBody}>
-                <SkeletonBlock width="55%" height={13} />
-                <SkeletonBlock width="100%" height={11} style={styles.tipSkeletonLine} />
-                <SkeletonBlock width="80%" height={11} style={styles.tipSkeletonLine} />
-              </View>
             </View>
-          ) : tipList.length > 0 ? (
-            tipList.map((tip, index) => <TipCard key={`${tip.title}-${index}`} tip={tip} />)
-          ) : (
-            <EmptyState
-              icon="cloud-offline-outline"
-              message={tips.error ?? "No tips available right now."}
+          ) : null}
+          {rooms.length === 0 && !pending ? (
+            <EmptyState icon="bed-outline" message="No rooms have been set up yet." />
+          ) : null}
+        </View>
+
+        {/* What the student still has to do, open from the start. */}
+        <View style={styles.section} onLayout={(e) => onSectionLayout("pending", e)}>
+          <DropdownHeading {...headings.pending} open={open.pending} onToggle={() => toggle("pending")} />
+          {open.pending ? (
+            <View style={styles.dropdownBody}>
+              {pending ? (
+                <View style={styles.banner} accessibilityLabel="Loading your assignment">
+                  <View style={styles.bannerHeader}>
+                    <View style={[styles.bannerIcon, { backgroundColor: Accent.teal.bg }]}>
+                      <Ionicons name="pulse" size={17} color={Accent.teal.fg} />
+                    </View>
+                    <View style={styles.bannerHeaderText}>
+                      <Text style={styles.bannerEyebrow}>Your assignment</Text>
+                      <SkeletonBlock width="75%" height={15} style={{ marginTop: 4 }} />
+                    </View>
+                    <Ionicons name="chevron-forward" size={17} color={Palette.textFaint} />
+                  </View>
+                  <View style={styles.bannerRow}>
+                    <SkeletonBlock width="65%" height={12} />
+                  </View>
+                  <View style={styles.progressWrap}>
+                    <View style={[styles.progressTrack, { backgroundColor: Palette.borderLight }]} />
+                    <SkeletonBlock width={52} height={11} />
+                  </View>
+                </View>
+              ) : null}
+              {openAssignments.map((assignment) => (
+                <AssignmentBanner
+                  key={assignment.id}
+                  assignment={assignment}
+                  patient={
+                    assignment.patient_id ? (patientsById.get(assignment.patient_id) ?? null) : null
+                  }
+                  room={
+                    assignment.patient_id
+                      ? (roomsById.get(patientsById.get(assignment.patient_id)?.room_id ?? "") ?? null)
+                      : null
+                  }
+                  onPress={() => openAssignment(assignment)}
+                />
+              ))}
+              {pendingCases.map(caseCard)}
+              {!pending && pendingCount === 0 ? (
+                <EmptyState icon="checkmark-done-outline" message="You're all caught up. Nothing to do right now." />
+              ) : null}
+            </View>
+          ) : null}
+        </View>
+
+        {completedAssignments.length > 0 ? (
+          <View style={styles.section} onLayout={(e) => onSectionLayout("completed", e)}>
+            <DropdownHeading
+              {...headings.completed}
+              open={open.completed}
+              onToggle={() => toggle("completed")}
             />
-          )}
+            {open.completed ? (
+              <View style={styles.dropdownBody}>
+                {completedAssignments.map((assignment) => (
+                  <CompletedCaseCard
+                    key={assignment.id}
+                    assignment={assignment}
+                    patient={
+                      assignment.patient_id ? (patientsById.get(assignment.patient_id) ?? null) : null
+                    }
+                    // The brief, not the patient: a patient's page follows their open case.
+                    onPress={() => router.push(`/clinic/assignment/${assignment.id}`)}
+                  />
+                ))}
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+
+        {caseList.length > 0 || cases.loading ? (
+          <View style={styles.section} onLayout={(e) => onSectionLayout("hospital", e)}>
+            <DropdownHeading {...headings.hospital} open={open.hospital} onToggle={() => toggle("hospital")} />
+            {open.hospital ? (
+              <View style={styles.dropdownBody}>
+                <Text style={styles.dropdownNote}>Write up a patient from your duty — initials only</Text>
+                {cases.loading && caseList.length === 0 ? (
+                  <View style={styles.tipCard}>
+                    <View style={styles.tipBody}>
+                      <SkeletonBlock width="60%" height={13} />
+                      <SkeletonBlock width="35%" height={11} style={styles.tipSkeletonLine} />
+                    </View>
+                  </View>
+                ) : (
+                  caseList.map(caseCard)
+                )}
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+
+        {showTips ? (
+          <View style={styles.section}>
+            <SectionHeader
+              title="AI Study Tips"
+              subtitle="Generated from your assigned patient cases"
+            />
+            {tips.loading && tipList.length === 0 ? (
+              <View style={styles.tipCard}>
+                <View style={styles.tipBody}>
+                  <SkeletonBlock width="55%" height={13} />
+                  <SkeletonBlock width="100%" height={11} style={styles.tipSkeletonLine} />
+                  <SkeletonBlock width="80%" height={11} style={styles.tipSkeletonLine} />
+                </View>
+              </View>
+            ) : tipList.length > 0 ? (
+              tipList.map((tip, index) => <TipCard key={`${tip.title}-${index}`} tip={tip} />)
+            ) : (
+              <EmptyState
+                icon="cloud-offline-outline"
+                message={tips.error ?? "No tips available right now."}
+              />
+            )}
+          </View>
+        ) : null}
+      </ScrollView>
+
+      {/* The heading of the list being scrolled, held just below the app header. */}
+      {pinned ? (
+        <View style={[styles.pinnedHeading, { top: headerHeight }]}>
+          <DropdownHeading {...headings[pinned]} open={open[pinned]} onToggle={() => toggle(pinned)} />
         </View>
       ) : null}
-    </ScrollView>
+    </View>
   );
 }
 
@@ -544,6 +701,47 @@ function createStyles(
     },
     section: {
       marginBottom: Spacing.xxl,
+    },
+    dropdownHeading: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.sm,
+      minHeight: 48,
+      paddingVertical: Spacing.sm,
+    },
+    dropdownTitle: {
+      ...Type.sectionTitle,
+      flexShrink: 1,
+    },
+    dropdownCount: {
+      minWidth: 24,
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      borderRadius: Radius.pill,
+      alignItems: "center",
+    },
+    dropdownCountText: {
+      fontSize: 12,
+      fontWeight: "700",
+      fontVariant: ["tabular-nums"],
+    },
+    dropdownBody: {
+      marginTop: Spacing.sm,
+    },
+    dropdownNote: {
+      ...Type.caption,
+      marginBottom: Spacing.md,
+    },
+    pinnedHeading: {
+      position: "absolute",
+      left: 0,
+      right: 0,
+      paddingHorizontal: Spacing.lg,
+      paddingTop: Spacing.sm,
+      backgroundColor: Palette.background,
+      borderBottomWidth: 1,
+      borderBottomColor: Palette.border,
+      zIndex: 5,
     },
     offPlan: { marginTop: Spacing.lg },
     offPlanTitle: {

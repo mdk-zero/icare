@@ -463,7 +463,14 @@ export default function LoginPage() {
 
           {/* Footer */}
           <p className="text-center text-xs text-white/30 mt-5">
-            &copy; 2026 iCARE++. All rights reserved.
+            &copy; 2026 iCARE++. All rights reserved.{" "}
+            <Link href="/terms" className="underline-offset-2 hover:text-white/70 hover:underline">
+              Terms of Use
+            </Link>
+            {" · "}
+            <Link href="/privacy" className="underline-offset-2 hover:text-white/70 hover:underline">
+              Privacy Policy
+            </Link>
           </p>
         </div>
       </div>

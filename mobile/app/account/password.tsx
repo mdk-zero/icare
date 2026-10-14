@@ -210,7 +210,7 @@ export default function ChangePasswordFlowScreen() {
               />
               <Pressable onPress={() => setVisible((v) => !v)} hitSlop={8}>
                 <Ionicons
-                  name={visible ? 'eye-off-outline' : 'eye-outline'}
+                  name={visible ? 'eye-outline' : 'eye-off-outline'}
                   size={18}
                   color={Palette.textMuted}
                 />

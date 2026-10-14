@@ -19,6 +19,7 @@ import {
   onUnauthorized,
 } from "@/lib/client";
 import { startNotificationStream, stopNotificationStream } from "@/lib/notifications-live";
+import { registerForPush, unregisterFromPush } from "@/lib/push";
 
 const USER_KEY = "@icare_user";
 
@@ -60,6 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Push any writes queued while offline now that we know we're online.
         flushOutbox().catch(() => {});
         startNotificationStream();
+        void registerForPush();
       } else {
         // Server reachable but the token is invalid/expired.
         await clearToken();
@@ -131,8 +133,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const loggedIn = await apiClient.login(email.trim().toLowerCase(), password, rememberMe);
       setUser(loggedIn);
       AsyncStorage.setItem(USER_KEY, JSON.stringify(loggedIn)).catch(() => {});
+      // The session check carries what the sign-in reply may not (the
+      // section, on a server older than this app), so read it once now
+      // instead of waiting for the next app start.
+      apiClient
+        .fetchSession()
+        .then((full) => {
+          if (!full) return;
+          setUser(full);
+          AsyncStorage.setItem(USER_KEY, JSON.stringify(full)).catch(() => {});
+        })
+        .catch(() => {});
       flushOutbox().catch(() => {});
       startNotificationStream();
+      void registerForPush();
       return { ok: true };
     } catch (error) {
       const message = isNetworkError(error)
@@ -150,6 +164,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Before the token goes away, so the live feed doesn't reconnect into a 401
     // and leak the previous account's notifications into the next session.
     stopNotificationStream();
+    // Still signed in here, so the server knows whose device to forget.
+    await unregisterFromPush();
     await apiClient.logout();
     await AsyncStorage.removeItem(USER_KEY);
     setUser(null);
