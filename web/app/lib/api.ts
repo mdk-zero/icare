@@ -3327,6 +3327,8 @@ export interface SkillDetail extends SkillSummary {
 export interface SkillSelection {
   id: string;
   sections?: string[];
+  /** Checklist steps left out, by position, when the setting doesn't call for them. */
+  skipped?: number[];
 }
 
 export interface SkillSuggestion {
