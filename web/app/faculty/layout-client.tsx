@@ -10,6 +10,7 @@ import {
   faClipboardList,
   faFileLines,
   faFilePrescription,
+  faHandHoldingMedical,
   faHouse,
   faListCheck,
   faNotesMedical,
@@ -52,6 +53,14 @@ const navItems: NavItem[] = [
     label: "Patient Cases",
     href: "/faculty/scenarios",
     icon: faNotesMedical,
+    section: "Teaching",
+  },
+  // Taylor's skill checklists with no patient, demonstrated step by step (072).
+  {
+    id: "return-demos",
+    label: "Return Demonstrations",
+    href: "/faculty/return-demos",
+    icon: faHandHoldingMedical,
     section: "Teaching",
   },
   {

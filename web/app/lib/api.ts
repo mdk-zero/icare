@@ -2208,6 +2208,150 @@ export async function deleteScenario(id: string): Promise<boolean> {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Return Demonstrations (migration 072): Taylor's skill checklists, no patient
+// ---------------------------------------------------------------------------
+
+export interface ReturnDemoSummary {
+  id: string;
+  title: string;
+  description: string;
+  created_by: string | null;
+  /** The course offering it was made for; null for none. */
+  offering_id: string | null;
+  created_at: string;
+  /** Its skills in checklist order: the skill number and the task's title. */
+  skills: { id: string; title: string }[];
+  /** Your students given it, and how many of them are graded. */
+  student_count: number;
+  graded_count: number;
+}
+
+export interface ReturnDemoTask {
+  id: string;
+  skill_id: string | null;
+  title: string;
+  steps: number;
+  /** A student has a grade on it, so it can't be removed. */
+  graded: boolean;
+}
+
+export interface ReturnDemoDetail extends ReturnDemoSummary {
+  tasks: ReturnDemoTask[];
+}
+
+export interface ReturnDemoInput {
+  title: string;
+  description: string;
+  offering_id: string | null;
+  skills: SkillSelection[];
+}
+
+/** An error message from a failed write, or a fallback. */
+async function errorOf(res: Response, fallback: string): Promise<string> {
+  try {
+    const json = (await res.json()) as { error?: string };
+    return json.error ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+/** Every Return Demonstration you can see; `enabled` is false before migration 072. */
+export async function fetchReturnDemos(): Promise<{ returnDemos: ReturnDemoSummary[]; enabled: boolean } | null> {
+  try {
+    const res = await apiFetch('/api/faculty/return-demos', { credentials: 'include' });
+    const json = (await res.json()) as { return_demos?: ReturnDemoSummary[]; enabled?: boolean; error?: string };
+    if (!res.ok) {
+      console.error('fetchReturnDemos() failed', json.error);
+      return null;
+    }
+    return { returnDemos: json.return_demos ?? [], enabled: json.enabled !== false };
+  } catch (err) {
+    console.error('fetchReturnDemos() failed', err);
+    return null;
+  }
+}
+
+export async function fetchReturnDemo(id: string): Promise<ReturnDemoDetail | null> {
+  try {
+    const res = await apiFetch(`/api/faculty/return-demos/${id}`, { credentials: 'include' });
+    const json = (await res.json()) as { return_demo?: ReturnDemoDetail; error?: string };
+    if (!res.ok || !json.return_demo) {
+      console.error('fetchReturnDemo() failed', json.error);
+      return null;
+    }
+    return json.return_demo;
+  } catch (err) {
+    console.error('fetchReturnDemo() failed', err);
+    return null;
+  }
+}
+
+export async function createReturnDemo(input: ReturnDemoInput): Promise<{ id?: string; error?: string }> {
+  try {
+    const res = await apiFetch('/api/faculty/return-demos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(input),
+    });
+    if (!res.ok) return { error: await errorOf(res, 'Unable to create the Return Demonstration') };
+    const json = (await res.json()) as { return_demo?: { id: string } };
+    return { id: json.return_demo?.id };
+  } catch (err) {
+    console.error('createReturnDemo() failed', err);
+    return { error: 'Unable to create the Return Demonstration' };
+  }
+}
+
+export async function updateReturnDemo(id: string, patch: Partial<ReturnDemoInput>): Promise<{ error?: string }> {
+  try {
+    const res = await apiFetch(`/api/faculty/return-demos/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(patch),
+    });
+    if (!res.ok) return { error: await errorOf(res, 'Unable to update the Return Demonstration') };
+    return {};
+  } catch (err) {
+    console.error('updateReturnDemo() failed', err);
+    return { error: 'Unable to update the Return Demonstration' };
+  }
+}
+
+export async function deleteReturnDemo(id: string): Promise<{ error?: string }> {
+  try {
+    const res = await apiFetch(`/api/faculty/return-demos/${id}`, { method: 'DELETE', credentials: 'include' });
+    if (!res.ok) return { error: await errorOf(res, 'Unable to delete the Return Demonstration') };
+    return {};
+  } catch (err) {
+    console.error('deleteReturnDemo() failed', err);
+    return { error: 'Unable to delete the Return Demonstration' };
+  }
+}
+
+export async function assignReturnDemo(
+  id: string,
+  input: { team_ids: string[]; student_ids: string[]; deadline: string; required: boolean },
+): Promise<{ assigned?: number; skipped?: number; error?: string }> {
+  try {
+    const res = await apiFetch(`/api/faculty/return-demos/${id}/assign`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(input),
+    });
+    if (!res.ok) return { error: await errorOf(res, 'Unable to assign the Return Demonstration') };
+    const json = (await res.json()) as { assigned?: number; skipped?: number };
+    return { assigned: json.assigned ?? 0, skipped: json.skipped ?? 0 };
+  } catch (err) {
+    console.error('assignReturnDemo() failed', err);
+    return { error: 'Unable to assign the Return Demonstration' };
+  }
+}
+
 export async function fetchScenarioById(id: string): Promise<SimulationScenario | null> {
   try {
     const res = await apiFetch(`/api/scenarios/${id}`, {
