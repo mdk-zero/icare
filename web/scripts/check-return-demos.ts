@@ -18,13 +18,15 @@ import {
   scenarioKindsReady,
   type ScenarioKind,
 } from '../app/lib/scenario-kind';
-import { assignableStudents, mergeAssignees, parseReturnDemoInput, skillDiff } from '../app/lib/return-demos';
+import { assignableStudents, mergeAssignees, parseReturnDemoInput, returnDemoVisibleTo, skillDiff } from '../app/lib/return-demos';
 import { existsSync, readFileSync } from 'node:fs';
 import { autoSplit } from '../app/lib/course-grading';
 import { requirementNames, skillCoverage } from '../app/lib/course-progress';
 import { loadActivityItems } from '../app/lib/courses';
 import { seed } from '../app/lib/demo/fixtures';
 import { studentTaskSteps } from '../app/lib/scenario-tasks';
+import { returnDemosReady } from '../app/lib/return-demos-server';
+import { editedSkills } from '../app/faculty/return-demos/edit-skills';
 import { join } from 'node:path';
 
 let failures = 0;
@@ -234,6 +236,34 @@ async function main() {
   eq('an ungraded skill lists its steps with no ratings, and never another assignment\'s', shown.get('k2'), [
     { id: 'p9', title: 'Identify the patient.', rating: null },
   ]);
+
+  console.log('\nfix pass');
+  // I1: a Return Demonstration needs 070 (its course) as well as 072 (its kind).
+  check(
+    'not ready when 072 is applied but 070 is not',
+    !(await returnDemosReady(tableStub({ scenarios: [{ data: [], error: null }, { data: null, error: { code: '42703' } }] }))),
+  );
+  check('ready with both applied', await returnDemosReady(tableStub({ scenarios: { data: [], error: null } })));
+
+  // I2: an unassigned Return Demonstration is its maker's, not every instructor's.
+  const mineOnly = new Set(['s1']);
+  const instructorA = { uid: 'fa', role: 'faculty' };
+  const instructorB = { uid: 'fb', role: 'faculty' };
+  check('the maker sees their own unassigned one', returnDemoVisibleTo({ created_by: 'fa' }, [], instructorA, new Set()));
+  check('another instructor does not see it', !returnDemoVisibleTo({ created_by: 'fa' }, [], instructorB, mineOnly));
+  check('an instructor whose students hold it sees it', returnDemoVisibleTo({ created_by: 'fa' }, ['s1'], instructorB, mineOnly));
+  check('…but not one held only by other students', !returnDemoVisibleTo({ created_by: 'fa' }, ['s9'], instructorB, mineOnly));
+  check('an admin sees every one', returnDemoVisibleTo({ created_by: 'fa' }, [], { uid: 'd1', role: 'admin' }, new Set()));
+
+  // I3: an edit can't quietly change a kept skill's variant.
+  eq(
+    'an edit keeps existing skills as they are and adds only new picks, with their variants',
+    editedSkills([{ skill_id: '1-1' }, { skill_id: '1-4' }], new Set(['1-4']), [
+      { id: '1-7', sections: ['Using a Manual Sphygmomanometer'] },
+      { id: '1-1', sections: ['Assessing Rectal Temperature'] },
+    ]),
+    [{ id: '1-1' }, { id: '1-7', sections: ['Using a Manual Sphygmomanometer'] }],
+  );
 
   console.log('\nroutes');
   const methods = (file: string) => {

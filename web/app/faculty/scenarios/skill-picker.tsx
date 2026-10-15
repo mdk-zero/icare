@@ -28,6 +28,8 @@ interface SkillPickerProps {
   detectInput?: () => SkillDetectInput;
   /** Skills the scenario already has, which can't be picked again. */
   existingIds?: readonly string[];
+  /** What a skill it already has says in the list. */
+  existingLabel?: string;
   disabled?: boolean;
   /** Chapters the case centres on; their skills are listed first. */
   focusChapters?: readonly number[];
@@ -47,6 +49,7 @@ export default function SkillPicker({
   onChange,
   detectInput,
   existingIds = [],
+  existingLabel = "In patient case",
   disabled,
   focusChapters = NO_CHAPTERS,
 }: SkillPickerProps) {
@@ -271,7 +274,7 @@ export default function SkillPicker({
                     />
                     <span className="w-11 shrink-0 font-mono text-xs text-gray-500">{s.id}</span>
                     <span className="text-gray-800">{s.title}</span>
-                    {already && <span className="ml-auto text-[11px] text-gray-500">In patient case</span>}
+                    {already && <span className="ml-auto text-[11px] text-gray-500">{existingLabel}</span>}
                   </label>
                 );
               })}

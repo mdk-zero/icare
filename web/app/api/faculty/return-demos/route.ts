@@ -4,9 +4,8 @@ import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { logAudit } from '@/app/lib/audit';
 import { activityCourse } from '@/app/lib/activity-course';
 import { addSkillTasks } from '@/app/lib/skill-tasks';
-import { scenarioKindsReady } from '@/app/lib/scenario-kind';
 import { parseReturnDemoInput, RETURN_DEMO_CATEGORY } from '@/app/lib/return-demos';
-import { listReturnDemos, needsMigration } from '@/app/lib/return-demos-server';
+import { listReturnDemos, needsMigration, returnDemosReady } from '@/app/lib/return-demos-server';
 
 // Difficulty is retired, but scenarios.difficulty is NOT NULL with no default.
 const RETIRED_DIFFICULTY = 'intermediate';
@@ -15,7 +14,7 @@ const RETIRED_DIFFICULTY = 'intermediate';
  * Return Demonstrations (072): Taylor's skill checklists with no patient.
  *
  * GET: every one the viewer may see, newest first, with `enabled: false`
- * (and none) before 072 so the page can say what is missing.
+ * (and none) before 070 and 072 so the page can say what is missing.
  * POST { title, description?, offering_id, skills }: make one. Its tasks are
  * the picked skills, each with the skill's checklist steps word for word.
  */
@@ -26,7 +25,7 @@ export async function GET() {
 
   try {
     const supabase = getSupabaseAdmin();
-    if (!(await scenarioKindsReady(supabase))) return NextResponse.json({ return_demos: [], enabled: false });
+    if (!(await returnDemosReady(supabase))) return NextResponse.json({ return_demos: [], enabled: false });
     return NextResponse.json({ return_demos: await listReturnDemos(supabase, session), enabled: true });
   } catch (err) {
     console.error('Fetch Return Demonstrations failed', err);

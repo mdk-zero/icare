@@ -25,7 +25,7 @@ export const SCENARIO_KIND_SHORT: Record<ScenarioKind, string> = {
   return_demo: 'Return Demo',
 };
 
-export const RETURN_DEMOS_NEED_MIGRATION = 'Return Demonstrations need database migration 072 applied first.';
+export const RETURN_DEMOS_NEED_MIGRATION = 'Return Demonstrations need database migrations 070 and 072 applied first.';
 
 /** A `?kind=` query value: Return Demonstrations, both, or (by default) Patient Cases. */
 export function kindParam(value: string | null): ScenarioKind | 'all' {

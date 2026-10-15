@@ -117,6 +117,22 @@ export function skillDiff(
 }
 
 /**
+ * Whether a viewer may see a Return Demonstration. Unlike a Patient Case, an
+ * unassigned one is not shared material: it belongs to its maker until it is
+ * given out, so another instructor can't take it over. An instructor whose
+ * students hold it sees it (they grade them); an admin sees every one.
+ */
+export function returnDemoVisibleTo(
+  demo: { created_by: string | null },
+  assignedStudentIds: readonly string[],
+  viewer: { uid: string; role: string },
+  roster: ReadonlySet<string>,
+): boolean {
+  if (viewer.role === 'admin' || demo.created_by === viewer.uid) return true;
+  return assignedStudentIds.some((id) => roster.has(id));
+}
+
+/**
  * Who an instructor can give one to: the groups they supervise and those
  * groups' members. Students in no group show on their Students page but are
  * not on their roster, so the assign route would refuse them.

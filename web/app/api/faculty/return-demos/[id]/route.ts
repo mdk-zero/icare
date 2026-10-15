@@ -43,15 +43,19 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
     const tasks = await loadTasks(supabase, [id]);
     const taskIds = tasks.map((t) => t.id);
     const [stepsRes, graded, assignmentsRes, mine] = await Promise.all([
-      taskIds.length ? supabase.from('scenario_task_steps').select('task_id').in('task_id', taskIds) : Promise.resolve({ data: [], error: null }),
+      taskIds.length
+        ? supabase.from('scenario_task_steps').select('task_id, title, sort_order').in('task_id', taskIds).order('sort_order')
+        : Promise.resolve({ data: [], error: null }),
       gradedTaskIds(supabase, taskIds),
       supabase.from('scenario_assignments').select('student_id, status').eq('scenario_id', id),
       session.role === 'admin' ? Promise.resolve(null) : getFacultyStudentIdSet(supabase, session.uid),
     ]);
     if (stepsRes.error || assignmentsRes.error) throw stepsRes.error ?? assignmentsRes.error;
 
-    const stepCount = new Map<string, number>();
-    for (const s of (stepsRes.data ?? []) as { task_id: string }[]) stepCount.set(s.task_id, (stepCount.get(s.task_id) ?? 0) + 1);
+    const stepTitles = new Map<string, string[]>();
+    for (const s of (stepsRes.data ?? []) as { task_id: string; title: string }[]) {
+      stepTitles.set(s.task_id, [...(stepTitles.get(s.task_id) ?? []), s.title]);
+    }
     const own = ((assignmentsRes.data ?? []) as { student_id: string; status: string }[]).filter((a) => mine === null || mine.has(a.student_id));
 
     const result: ReturnDemoSummary & { tasks: ReturnDemoTask[] } = {
@@ -59,7 +63,15 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
       skills: tasks.map((t) => ({ id: t.skill_id ?? '', title: t.title })),
       student_count: new Set(own.map((a) => a.student_id)).size,
       graded_count: new Set(own.filter((a) => a.status === 'completed').map((a) => a.student_id)).size,
-      tasks: tasks.map((t) => ({ id: t.id, skill_id: t.skill_id, title: t.title, steps: stepCount.get(t.id) ?? 0, graded: graded.has(t.id) })),
+      can_edit: canEdit(session, loaded.demo),
+      tasks: tasks.map((t) => ({
+        id: t.id,
+        skill_id: t.skill_id,
+        title: t.title,
+        steps: stepTitles.get(t.id)?.length ?? 0,
+        step_titles: stepTitles.get(t.id) ?? [],
+        graded: graded.has(t.id),
+      })),
     };
     return NextResponse.json({ return_demo: result });
   } catch (err) {

@@ -6,7 +6,7 @@ import { parseDeadline } from '@/app/lib/deadline-input';
 import { getFacultyStudentIdSet } from '@/app/lib/scenario-visibility';
 import { isMissingTeamTables, manageableTeam, TEAMS_NEED_MIGRATION } from '@/app/lib/teams';
 import { mergeAssignees } from '@/app/lib/return-demos';
-import { loadReturnDemo } from '@/app/lib/return-demos-server';
+import { canEdit, loadReturnDemo } from '@/app/lib/return-demos-server';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -47,6 +47,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const supabase = getSupabaseAdmin();
     const loaded = await loadReturnDemo(supabase, session, id);
     if ('response' in loaded) return loaded.response;
+    // Only its maker gives it out, so nobody else can take one over.
+    if (!canEdit(session, loaded.demo)) {
+      return NextResponse.json({ error: 'Only its maker can assign this Return Demonstration' }, { status: 403 });
+    }
 
     // The groups: an instructor's must be ones they supervise.
     const teamMembers = new Map<string, string[]>();

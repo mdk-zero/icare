@@ -4,9 +4,9 @@ import { json, notFound, route, type DemoContext } from "../router";
 import { newId } from "../store";
 import type { DemoScenario } from "../fixtures/school";
 import { audit } from "./shared";
-import { addSkillTasks, canSeeScenario, myStudentIds, newAssignment } from "./faculty";
+import { addSkillTasks, myStudentIds, newAssignment } from "./faculty";
 import { parseDeadline } from "@/app/lib/deadline-input";
-import { mergeAssignees, parseReturnDemoInput, RETURN_DEMO_CATEGORY, skillDiff } from "@/app/lib/return-demos";
+import { mergeAssignees, parseReturnDemoInput, RETURN_DEMO_CATEGORY, returnDemoVisibleTo, skillDiff } from "@/app/lib/return-demos";
 
 /**
  * Return Demonstrations (072) on the demo store, in the shapes the real
@@ -20,9 +20,18 @@ const staffOnly = (ctx: Ctx) => ctx.role === "faculty" || ctx.role === "admin";
 const forbidden = () => json({ error: "Forbidden" }, 403);
 const NOT_FOUND = "Return Demonstration not found";
 
+/** The real rule (returnDemoVisibleTo): its maker, admins, and instructors whose students hold it. */
+const visible = (ctx: Ctx, demo: DemoScenario) =>
+  returnDemoVisibleTo(
+    demo,
+    ctx.db.assignments.filter((a) => a.scenario_id === demo.id).map((a) => a.student_id),
+    { uid: ctx.viewer.id, role: ctx.role },
+    myStudentIds(ctx),
+  );
+
 function findDemo(ctx: Ctx, id: string): DemoScenario | null {
   const demo = ctx.db.scenarios.find((s) => s.id === id && s.kind === "return_demo");
-  return demo && canSeeScenario(ctx, demo.id) ? demo : null;
+  return demo && visible(ctx, demo) ? demo : null;
 }
 
 const canEdit = (ctx: Ctx, demo: DemoScenario) => ctx.role === "admin" || demo.created_by === ctx.viewer.id;
@@ -47,6 +56,7 @@ function summary(ctx: Ctx, demo: DemoScenario) {
     skills: tasksOf(ctx, demo.id).map((t) => ({ id: t.skill_id ?? "", title: t.title })),
     student_count: new Set(own.map((a) => a.student_id)).size,
     graded_count: new Set(own.filter((a) => a.status === "completed").map((a) => a.student_id)).size,
+    can_edit: canEdit(ctx, demo),
   };
 }
 
@@ -64,7 +74,7 @@ route("GET", "/api/faculty/return-demos", (ctx) => {
   return {
     enabled: true,
     return_demos: ctx.db.scenarios
-      .filter((s) => s.kind === "return_demo" && canSeeScenario(ctx, s.id))
+      .filter((s) => s.kind === "return_demo" && visible(ctx, s))
       .sort((a, b) => b.created_at.localeCompare(a.created_at))
       .map((s) => summary(ctx, s)),
   };
@@ -120,6 +130,10 @@ route("GET", "/api/faculty/return-demos/:id", (ctx) => {
         skill_id: t.skill_id,
         title: t.title,
         steps: ctx.db.steps.filter((st) => st.task_id === t.id).length,
+        step_titles: ctx.db.steps
+          .filter((st) => st.task_id === t.id)
+          .sort((a, b) => a.position - b.position)
+          .map((st) => st.title),
         graded: graded.has(t.id),
       })),
     },
@@ -190,6 +204,7 @@ route("POST", "/api/faculty/return-demos/:id/assign", (ctx) => {
   if (!deadline.ok) return json({ error: deadline.error }, 400);
   const demo = findDemo(ctx, ctx.params.id);
   if (!demo) return notFound(NOT_FOUND);
+  if (!canEdit(ctx, demo)) return json({ error: "Only its maker can assign this Return Demonstration" }, 403);
 
   const teamMembers = new Map<string, string[]>();
   for (const teamId of teamIds) {

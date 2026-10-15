@@ -2225,6 +2225,8 @@ export interface ReturnDemoSummary {
   /** Your students given it, and how many of them are graded. */
   student_count: number;
   graded_count: number;
+  /** You made it (or are an admin), so may assign, edit or delete it. */
+  can_edit?: boolean;
 }
 
 export interface ReturnDemoTask {
@@ -2232,6 +2234,8 @@ export interface ReturnDemoTask {
   skill_id: string | null;
   title: string;
   steps: number;
+  /** The stored checklist, in order; an edit can't change a kept skill's variant. */
+  step_titles?: string[];
   /** A student has a grade on it, so it can't be removed. */
   graded: boolean;
 }

@@ -204,28 +204,35 @@ export default function ReturnDemosClient() {
                                 {new Date(demo.created_at).toLocaleDateString()}
                               </span>
                             </div>
+                            {/* Only its maker assigns, edits or deletes one; others who hold it can grade. */}
                             <ActionsMenu
                               actions={[
-                                { label: "Assign", icon: faUserPlus, onClick: () => setAssignTarget(demo) },
+                                ...(demo.can_edit
+                                  ? [{ label: "Assign", icon: faUserPlus, onClick: () => setAssignTarget(demo) }]
+                                  : []),
                                 {
                                   label: "Grade",
                                   icon: faClipboardCheck,
                                   onClick: () => router.push(`/faculty/return-demos/review?scenario=${demo.id}`),
                                 },
-                                {
-                                  label: "Edit",
-                                  icon: faPenToSquare,
-                                  onClick: () => router.push(`/faculty/return-demos/${demo.id}/edit`),
-                                },
-                                {
-                                  label: "Delete",
-                                  icon: faTrash,
-                                  danger: true,
-                                  onClick: () => {
-                                    setDeleteError(null);
-                                    setDeleteTarget(demo);
-                                  },
-                                },
+                                ...(demo.can_edit
+                                  ? [
+                                      {
+                                        label: "Edit",
+                                        icon: faPenToSquare,
+                                        onClick: () => router.push(`/faculty/return-demos/${demo.id}/edit`),
+                                      },
+                                      {
+                                        label: "Delete",
+                                        icon: faTrash,
+                                        danger: true,
+                                        onClick: () => {
+                                          setDeleteError(null);
+                                          setDeleteTarget(demo);
+                                        },
+                                      },
+                                    ]
+                                  : []),
                               ]}
                             />
                           </div>
