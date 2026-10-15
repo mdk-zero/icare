@@ -16,6 +16,7 @@ import {
 import { ClinicalTaskList, ClinicalTaskListSkeleton } from '@/components/ClinicalTaskList';
 import { AssistanceButton } from '@/components/AssistanceButton';
 import { ReflectionCard } from '@/components/ReflectionCard';
+import { CaseStartGate } from '@/components/CaseStartGate';
 
 /** How often an open scenario re-checks for the instructor's grades. */
 const GRADE_POLL_MS = 8000;
@@ -103,8 +104,9 @@ export default function ScenarioBriefScreen() {
   const isCompleted = status === 'completed';
   const isSubmitted = !isCompleted && Boolean(submittedAt);
   const isActive = !isCompleted && !isSubmitted;
-  // Asks whether the student is ready, then times the demonstration.
-  const elapsed = useCaseClock(taskAssignment, isActive);
+  // Opens on the case's instructions until Start, then times the demonstration.
+  const clock = useCaseClock(taskAssignment, isActive);
+  const elapsed = clock.elapsed;
 
   // Grades land the moment the instructor saves them: while the screen is open
   // and the scenario isn't final, keep checking.
@@ -158,6 +160,18 @@ export default function ScenarioBriefScreen() {
       <View style={styles.errorContainer}>
         <EmptyState icon="alert-circle-outline" message={error ?? 'Assignment not found'} />
       </View>
+    );
+  }
+
+  if (clock.needsStart) {
+    return (
+      <CaseStartGate
+        title={assignment.scenario_title}
+        deadline={assignment.deadline}
+        taskCount={totalCount}
+        starting={clock.starting}
+        onStart={clock.start}
+      />
     );
   }
 

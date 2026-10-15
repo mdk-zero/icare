@@ -21,6 +21,7 @@ import {
 } from '@/lib/api';
 import { ClinicalTaskList, ClinicalTaskListSkeleton } from '@/components/ClinicalTaskList';
 import { AssistanceButton } from '@/components/AssistanceButton';
+import { CaseStartGate } from '@/components/CaseStartGate';
 
 /** How often an open scenario re-checks for the instructor's grades. */
 const GRADE_POLL_MS = 8000;
@@ -134,8 +135,9 @@ export default function PatientHubScreen() {
   const isFinalized = status === 'completed';
   const isSubmitted = !isFinalized && Boolean(submittedAt);
   const isActive = isAssigned && !isFinalized && !isSubmitted;
-  // Asks whether the student is ready, then times the demonstration.
-  const elapsed = useCaseClock(taskResult?.assignment ?? null, isActive);
+  // Opens on the case's instructions until Start, then times the demonstration.
+  const clock = useCaseClock(taskResult?.assignment ?? null, isActive);
+  const elapsed = clock.elapsed;
 
   // Grades land the moment the instructor saves them: while the screen is open
   // and the scenario isn't final, keep checking.
@@ -193,6 +195,20 @@ export default function PatientHubScreen() {
       <View style={styles.errorContainer}>
         <EmptyState icon="alert-circle-outline" message={error ?? 'Patient not found'} />
       </View>
+    );
+  }
+
+  if (isAssigned && clock.needsStart && taskResult) {
+    return (
+      <CaseStartGate
+        title={assignment?.scenario_title ?? 'Patient case'}
+        patientName={patient.name}
+        room={patient.room_number}
+        deadline={assignment?.deadline}
+        taskCount={tasks.length}
+        starting={clock.starting}
+        onStart={clock.start}
+      />
     );
   }
 
