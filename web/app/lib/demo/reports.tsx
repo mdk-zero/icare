@@ -220,7 +220,7 @@ function attendanceReport(ctx: Ctx, id: string): Built {
         })} />
         <H>By activity</H>
         <Table head={["Activity", "Due", "Present", "Late", "Absent", "Excused"]} widths={[3, 1.6, 1, 1, 1, 1]} rows={activities.map((a) => [
-          activityLabel(a.kind, a.title), date(a.deadline), a.tally.present, a.tally.late, a.tally.absent, a.tally.excused,
+          activityLabel(a.kind, a.title, a.scenario_kind), date(a.deadline), a.tally.present, a.tally.late, a.tally.absent, a.tally.excused,
         ])} />
         <Text style={note}>Rate counts present and late as attended. Excused and upcoming activities are left out of the rate.</Text>
       </Shell>

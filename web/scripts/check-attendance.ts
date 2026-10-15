@@ -12,6 +12,7 @@
 import {
   attendanceRows,
   attendanceStatus,
+  activityKindLabel,
   activityLabel,
   attendedCount,
   byActivity,
@@ -176,7 +177,22 @@ eq('the same case with another deadline is another row', byActivity([
 ]).length, 2);
 
 eq('a report row names the kind of activity', activityLabel('assessment', 'Vital Signs'), 'Quiz · Vital Signs');
-eq('a RetDem row', activityLabel('scenario', 'Asthma'), 'RetDem · Asthma');
+eq('a Patient Case row', activityLabel('scenario', 'Asthma'), 'Patient Case · Asthma');
+eq('a Return Demo row', activityLabel('scenario', 'Vital Signs', 'return_demo'), 'Return Demo · Vital Signs');
+const rd = collectActivities({
+  scenarioAssignments: [{ id: 'ra', student_id: 'u', scenario_id: 'r1', title: 'VS', deadline: '2026-10-10T00:00:00Z', kind: 'return_demo' }],
+  completions: [{ assignment_id: 'ra', completed_at: '2026-10-09T00:00:00Z' }],
+  quizAssignments: [],
+  attempts: [],
+  caseSubmissions: [],
+});
+eq('a Return Demo is done at its first graded step, stored as a scenario', [rd[0].kind, rd[0].scenario_kind, rd[0].done_at], ['scenario', 'return_demo', '2026-10-09T00:00:00Z']);
+eq('a Return Demo row is labelled by its kind', activityKindLabel(rd[0]), 'Return Demo');
+eq('a scenario with no kind reads as a Patient Case', activityKindLabel({ kind: 'scenario' }), 'Patient Case');
+eq('a Return Demo and a Patient Case with one deadline stay apart in a report', byActivity([
+  { ...sectionRow('s1', 'scenario', 'asthma', D1, 'present'), scenario_kind: 'patient_case' },
+  { ...sectionRow('s2', 'scenario', 'vs', D1, 'present'), scenario_kind: 'return_demo' },
+]).map((g) => g.scenario_kind), ['patient_case', 'return_demo']);
 eq('a case presentation row', activityLabel('case_presentation', 'Fluid balance'), 'Case Presentation · Fluid balance');
 
 console.log('excuse requests');
@@ -248,7 +264,14 @@ async function rowCapChecks() {
   const students = Array.from({ length: 50 }, (_, i) => `st${i}`);
   // 250 RetDems, six graded tasks each: 200 assignments a chunk is 1200 completions, past the cap.
   const scenarioAssignments = students.flatMap((st, i) =>
-    Array.from({ length: 5 }, (_, k) => ({ id: `sa${i}-${k}`, student_id: st, scenario_id: `sc${k}`, deadline: due, scenarios: { title: `Case ${k}` } })),
+    Array.from({ length: 5 }, (_, k) => ({
+      id: `sa${i}-${k}`,
+      student_id: st,
+      scenario_id: `sc${k}`,
+      deadline: due,
+      // The last of each student's five is a Return Demonstration (072).
+      scenarios: { title: `Case ${k}`, kind: k === 4 ? 'return_demo' : 'patient_case' },
+    })),
   );
   const completions = scenarioAssignments.flatMap((a) => Array.from({ length: 6 }, (_, t) => ({ assignment_id: a.id, task_id: `t${t}`, completed_at: early })));
   // 1200 attempts on other quizzes come before the one on the assigned quiz.
@@ -275,6 +298,8 @@ async function rowCapChecks() {
   eq('a RetDem whose grades come after row 1000 is still present', status('scenario', 'sa39-4'), 'present');
   eq('a quiz whose attempt comes after row 1000 is still present', status('assessment', 'qa1'), 'present');
   eq('no excuses table: excuses not ready', excusesReady, false);
+  eq('a Return Demonstration is read as one', rows.find((r) => r.activity_id === 'sa0-4')?.scenario_kind, 'return_demo');
+  eq('a Patient Case is read as one', rows.find((r) => r.activity_id === 'sa0-0')?.scenario_kind, 'patient_case');
 }
 
 rowCapChecks().then(() => {

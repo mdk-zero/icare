@@ -484,7 +484,7 @@ export interface GradedPresentationFact {
 }
 
 /**
- * An activity (RetDem, Quiz, Case Presentation) the student did by its
+ * An activity (Patient Case, Return Demonstration, Quiz, Case Presentation) the student did by its
  * deadline or late (lib/attendance.ts). It falls in the term by its deadline.
  */
 export interface AttendedActivityFact {

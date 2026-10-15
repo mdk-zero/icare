@@ -4,6 +4,7 @@ import type { SessionPayload } from './auth/session';
 import { getFacultySectionIds } from './roster';
 import { getScopedStudentIds } from './admin-scope';
 import { fetchAll } from './fetch-all';
+import { kindOf, scenarioKinds, SCENARIO_KIND_NOUN } from './scenario-kind';
 
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
 
@@ -332,7 +333,8 @@ export interface ReviewItem {
 }
 
 export interface DueItem {
-  kind: 'scenario' | 'quiz';
+  /** scenario: a Patient Case; return_demo: a Return Demonstration (072). */
+  kind: 'scenario' | 'return_demo' | 'quiz';
   id: string;
   title: string;
   deadline: string;
@@ -477,11 +479,19 @@ export async function buildFacultyOverview(
     dueSoon.set(key, item);
   };
 
+  const kinds = await scenarioKinds(supabase, [...new Set(scenarioRows.map((row) => row.scenario_id))]);
   for (const row of scenarioRows) {
     // The review page's rule: handed in but not yet finalized.
     const done = row.status === 'completed' || Boolean(row.submitted_at);
     tally(row.student_id, row.deadline, done);
-    noteDueSoon('scenario', row.scenario_id, row.scenarios?.title ?? 'Patient Case', row.deadline, done);
+    const kind = kindOf(kinds, row.scenario_id);
+    noteDueSoon(
+      kind === 'return_demo' ? 'return_demo' : 'scenario',
+      row.scenario_id,
+      row.scenarios?.title ?? SCENARIO_KIND_NOUN[kind],
+      row.deadline,
+      done,
+    );
     if (row.submitted_at && row.status !== 'completed') {
       reviewItems.push({
         assignment_id: row.id,

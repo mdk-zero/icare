@@ -11,7 +11,7 @@ interface RouteParams {
 }
 
 /**
- * GET: one student's attendance, from the deadlines of every RetDem, Quiz and
+ * GET: one student's attendance, from the deadlines of every Patient Case, Return Demonstration, Quiz and
  * Case Presentation they were given (lib/attendance.ts). The instructor who
  * supervises the student's group can excuse absences; the Dean only reads.
  */

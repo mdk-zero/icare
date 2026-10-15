@@ -1111,7 +1111,7 @@ export interface FacultyOverview {
     total: number;
     items: { assignment_id: string; student_id: string; student_name: string; scenario_title: string; submitted_at: string }[];
   };
-  due_soon: { kind: 'scenario' | 'quiz'; id: string; title: string; deadline: string; open: number }[];
+  due_soon: { kind: 'scenario' | 'return_demo' | 'quiz'; id: string; title: string; deadline: string; open: number }[];
   overdue_assignments: number;
   students_behind: number;
   cohort_avg_recent: number | null;

@@ -7,7 +7,7 @@ export type DemoExcuse = ExcuseFact & { id: string };
 
 /**
  * One excused absence, so the profile's Attendance tab has one to show: the
- * latest RetDem a member of the demo instructor's first group never did by
+ * latest Patient Case a member of the demo instructor's first group never did by
  * its deadline.
  */
 export function seedExcuses(

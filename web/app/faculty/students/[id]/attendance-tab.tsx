@@ -5,6 +5,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faCalendarCheck,
   faFilePrescription,
+  faHandHoldingMedical,
   faListCheck,
   faStethoscope,
   faXmark,
@@ -15,6 +16,7 @@ import { excuseAbsence, fetchStudentAttendance, undoExcuse } from "../../../lib/
 import {
   ATTENDANCE_LABEL,
   EXCUSES_NEED_MIGRATION,
+  activityKindLabel,
   MAX_EXCUSE_REASON,
   tallyAttendance,
   type ActivityKind,
@@ -29,10 +31,10 @@ export function useStudentAttendance(studentId: string) {
   return usePageData(`faculty:student-attendance:${studentId}`, () => fetchStudentAttendance(studentId));
 }
 
-const KIND: Record<ActivityKind, { label: string; icon: IconDefinition }> = {
-  scenario: { label: "RetDem", icon: faStethoscope },
-  assessment: { label: "Quiz", icon: faListCheck },
-  case_presentation: { label: "Case Presentation", icon: faFilePrescription },
+const KIND_ICON: Record<ActivityKind, IconDefinition> = {
+  scenario: faStethoscope,
+  assessment: faListCheck,
+  case_presentation: faFilePrescription,
 };
 
 const CHIP: Record<AttendanceStatus, string> = {
@@ -53,7 +55,7 @@ const inputClass =
   "w-full rounded-xl border border-gray-300 bg-surface px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30";
 
 /**
- * Attendance from deadlines: every RetDem, Quiz and Case Presentation the
+ * Attendance from deadlines: every Patient Case, Return Demonstration, Quiz and Case Presentation the
  * student was given, Present when done by its deadline, Late after it, Absent
  * when it passed with nothing done. The instructor of the student's group can
  * excuse an absence, with a reason.
@@ -88,7 +90,7 @@ export default function AttendanceTab({ studentId, studentName }: { studentId: s
     return (
       <div className="py-8 text-center">
         <FontAwesomeIcon icon={faCalendarCheck} className="mb-3 h-7 w-7 text-gray-300" />
-        <p className="text-gray-500">No RetDems, quizzes or case presentations yet.</p>
+        <p className="text-gray-500">No patient cases, return demos, quizzes or case presentations yet.</p>
       </div>
     );
   }
@@ -113,7 +115,10 @@ export default function AttendanceTab({ studentId, studentName }: { studentId: s
 
       <ul className="divide-y divide-hairline overflow-hidden rounded-xl border border-hairline">
         {rows.map((r) => {
-          const kind = KIND[r.kind];
+          const kind = {
+            label: activityKindLabel(r),
+            icon: r.scenario_kind === "return_demo" ? faHandHoldingMedical : KIND_ICON[r.kind],
+          };
           return (
             <li key={`${r.kind}:${r.activity_id}`} className="flex flex-wrap items-center gap-3 px-4 py-3 sm:flex-nowrap">
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-600/10 text-brand-600">

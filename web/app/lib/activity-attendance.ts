@@ -10,6 +10,7 @@ import {
 } from './attendance';
 import { isMissingCaseTables } from './cases';
 import { fetchAll } from './fetch-all';
+import { isMissingKindColumn, type ScenarioKind } from './scenario-kind';
 
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
 
@@ -26,7 +27,7 @@ type Title = { title: string } | null;
 
 /**
  * Students' activities with their attendance (lib/attendance.ts): every
- * RetDem, Quiz and Case Presentation they were given, when they did it, and
+ * Patient Case, Return Demonstration, Quiz and Case Presentation they were given, when they did it, and
  * any excuse. With a window, only activities due inside it [from, to) are
  * kept, and those with no deadline are left out. Before migration 068 there
  * are no excuses, and excusesReady says so.
@@ -41,24 +42,37 @@ export async function loadActivityAttendance(
   // Each chunk of students is read a page at a time: one response holds at
   // most 1000 rows, and a section's history passes that quickly.
   const [scenarioAssignments, quizAssignments, caseSubmissions, excuses] = await Promise.all([
-    chunked(studentIds, async (part) =>
-      (
-        await fetchAll<{ id: string; student_id: string; scenario_id: string; deadline: string | null; scenarios: Title }>((from, to) =>
+    chunked(studentIds, async (part) => {
+      type Row = { id: string; student_id: string; scenario_id: string; deadline: string | null; scenarios: (Title & { kind?: string }) | null };
+      const read = (embed: string) =>
+        fetchAll<Row>((from, to) =>
           supabase
             .from('scenario_assignments')
-            .select('id, student_id, scenario_id, deadline, scenarios(title)')
+            .select(`id, student_id, scenario_id, deadline, ${embed}`)
             .in('student_id', part)
             .order('id')
             .range(from, to),
-        )
-      ).map((a) => ({
-        id: a.id,
-        student_id: a.student_id,
-        scenario_id: a.scenario_id,
-        title: a.scenarios?.title ?? 'Patient case',
-        deadline: a.deadline,
-      })),
-    ),
+        );
+      let rows: Row[];
+      try {
+        rows = await read('scenarios(title, kind)');
+      } catch (err) {
+        // Before 072 there is no kind: every scenario is a Patient Case.
+        if (!isMissingKindColumn(err as { code?: string })) throw err;
+        rows = await read('scenarios(title)');
+      }
+      return rows.map((a) => {
+        const kind: ScenarioKind = a.scenarios?.kind === 'return_demo' ? 'return_demo' : 'patient_case';
+        return {
+          id: a.id,
+          student_id: a.student_id,
+          scenario_id: a.scenario_id,
+          title: a.scenarios?.title ?? (kind === 'return_demo' ? 'Return Demonstration' : 'Patient case'),
+          deadline: a.deadline,
+          kind,
+        };
+      });
+    }),
     chunked(studentIds, async (part) =>
       (
         await fetchAll<{
@@ -117,7 +131,7 @@ export async function loadActivityAttendance(
   ]);
 
   // Only the attempts on quizzes these students were given, and only the
-  // graded tasks of their RetDems.
+  // graded tasks of their Patient Cases and Return Demonstrations.
   const quizIds = [...new Set(quizAssignments.map((a) => a.assessment_id))];
   const [attempts, completions] = await Promise.all([
     quizIds.length === 0

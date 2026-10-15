@@ -19,6 +19,7 @@ export const DAY_MS = 86_400_000;
 export function demoAttendanceRows(db: DemoDb, studentIds: readonly string[], now = Date.now()): AttendanceRow[] {
   const ids = new Set(studentIds);
   const scenarioTitle = new Map(db.scenarios.map((s) => [s.id, s.title]));
+  const scenarioKind = new Map(db.scenarios.map((s) => [s.id, s.kind ?? "patient_case"]));
   const quizTitle = new Map(db.quizzes.map((q) => [q.id, q.title]));
   const presentation = new Map(db.casePresentations.map((p) => [p.id, p]));
   const scenarioAssignments = db.assignments.filter((a) => ids.has(a.student_id));
@@ -29,6 +30,7 @@ export function demoAttendanceRows(db: DemoDb, studentIds: readonly string[], no
       student_id: a.student_id,
       scenario_id: a.scenario_id,
       title: scenarioTitle.get(a.scenario_id) ?? "Patient case",
+      kind: scenarioKind.get(a.scenario_id) ?? "patient_case",
       deadline: a.deadline,
     })),
     completions: db.completions.filter((c) => assignmentIds.has(c.assignment_id)),
