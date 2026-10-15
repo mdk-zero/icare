@@ -4221,12 +4221,54 @@ export interface StudentProgressRow {
   picture_url: string | null;
   sex: 'male' | 'female' | null;
   section_id: string;
-  team_id: string;
+  /** Null for a student in no clinical group. */
+  team_id: string | null;
   /** "BSN 1101 · Group A" */
   group_label: string;
+  /** In the instructor's group, in a section they supervise no group in, or added by hand. */
+  source?: 'group' | 'section' | 'added';
   done: number;
   total: number;
 }
+
+/** A student the instructor could add to a course by hand. */
+export interface AddableStudent {
+  id: string;
+  name: string;
+  email: string;
+  section: string | null;
+  on_roster: boolean;
+}
+
+/** A student on a course's roster, with the section and group they're handled in. */
+export interface CourseRosterStudent {
+  id: string;
+  name: string;
+  email: string;
+  picture_url: string | null;
+  section: string;
+  /** The group's name, or "No group". */
+  group: string;
+  source: 'group' | 'section' | 'added';
+}
+
+/** The instructor's students for one course, by section then group. */
+export const fetchCourseRoster = (offeringId: string) =>
+  courseRequest<{ students: CourseRosterStudent[] }>(`/api/faculty/courses/${offeringId}/roster`);
+
+export const searchCourseStudents = (offeringId: string, q: string) =>
+  courseRequest<{ students: AddableStudent[] }>(
+    `/api/faculty/courses/${offeringId}/students?q=${encodeURIComponent(q)}`,
+  );
+
+export const addCourseStudent = (offeringId: string, studentId: string) =>
+  courseRequest<{ success: true }>(`/api/faculty/courses/${offeringId}/students`, {
+    method: 'POST',
+    body: { student_id: studentId },
+  });
+
+export const removeCourseStudent = (offeringId: string, studentId: string) =>
+  courseRequest<{ success: true }>(`/api/faculty/courses/${offeringId}/students/${studentId}`, { method: 'DELETE' });
 
 export interface CourseProgress {
   offering: {

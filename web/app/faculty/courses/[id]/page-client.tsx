@@ -7,10 +7,10 @@ import {
   faBookMedical,
   faChartColumn,
   faChartLine,
+  faCircleInfo,
   faLock,
   faPenToSquare,
   faPercent,
-  faTriangleExclamation,
 } from "@fortawesome/free-solid-svg-icons";
 import PageHeader from "../../../components/PageHeader";
 import ConfirmModal from "../../../components/ConfirmModal";
@@ -137,9 +137,9 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
         </div>
       )}
       {noGroup.length > 0 && (
-        <div className="mb-4 flex items-start gap-2.5 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          <FontAwesomeIcon icon={faTriangleExclamation} className="mt-0.5 h-4 w-4 shrink-0" />
-          {`You supervise no group in ${noGroup.map((s) => s.name).join(", ")}, so no students come from ${noGroup.length === 1 ? "that section" : "those sections"}. Ask your Dean to assign you a group there.`}
+        <div className="mb-4 flex items-start gap-2.5 rounded-xl border border-hairline bg-subtle px-4 py-3 text-sm text-gray-600">
+          <FontAwesomeIcon icon={faCircleInfo} className="mt-0.5 h-4 w-4 shrink-0 text-gray-400" />
+          {`You supervise no group in ${noGroup.map((s) => s.name).join(", ")}, so every student of ${noGroup.length === 1 ? "that section" : "those sections"} is on your roster.`}
         </div>
       )}
 
@@ -198,6 +198,8 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
         {tab === "progress" && offering && (
           <ProgressTab
             offeringId={offeringId}
+            courseCode={offering.course.code}
+            locked={locked}
             signature={checklistSignature(requirements)}
             onOpenGrading={() => setTab("grading")}
           />
