@@ -11,6 +11,8 @@ import { useUpdatePrompt } from '@/hooks/useUpdatePrompt';
 import { BootLoader } from '@/components/ui/BootLoader';
 import { ConnectionToast } from '@/components/ui/ConnectionToast';
 import { startConnectivityMonitor } from '@/lib/client';
+import { hasOnboarded } from '@/lib/permissions';
+import { configureSystemNotifications, onSystemNotificationTap } from '@/lib/system-notify';
 
 function AuthStack() {
   const { Palette } = useTheme();
@@ -30,7 +32,8 @@ function AuthStack() {
       <Stack.Screen name="web-portal" options={{ headerShown: false }} />
       <Stack.Screen name="course/[id]" options={{ title: "Course" }} />
       <Stack.Screen name="student/[id]" options={{ title: "Student" }} />
-      <Stack.Screen name="login" options={{ headerShown: false }} />
+      <Stack.Screen name="welcome" options={{ headerShown: false, animation: 'fade' }} />
+      <Stack.Screen name="login" options={{ headerShown: false, animation: 'fade' }} />
       <Stack.Screen name="forgot-password" options={{ headerShown: false }} />
       <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
       <Stack.Screen name="clinic/room/[id]" options={{ title: 'Room' }} />
@@ -66,13 +69,19 @@ function AuthNavigator() {
   const { isAuthenticated, isBootstrapping, user } = useAuth();
   const router = useRouter();
   const [minDisplayElapsed, setMinDisplayElapsed] = useState(false);
+  // Whether this device has seen the welcome screen; null until read.
+  const [onboarded, setOnboarded] = useState<boolean | null>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => setMinDisplayElapsed(true), MIN_BOOT_DISPLAY_MS);
+    void hasOnboarded().then(setOnboarded);
     return () => clearTimeout(timer);
   }, []);
 
-  const showBootLoader = isBootstrapping || !minDisplayElapsed;
+  // A tapped notification banner opens the feed.
+  useEffect(() => onSystemNotificationTap(() => router.push('/notifications')), [router]);
+
+  const showBootLoader = isBootstrapping || !minDisplayElapsed || onboarded === null;
   // Accounts an admin provisioned carry a temporary password. The web app
   // forces the change before anything else; mobile used to let them straight
   // in and keep the temp password indefinitely.
@@ -81,12 +90,13 @@ function AuthNavigator() {
   useEffect(() => {
     if (!showBootLoader) {
       if (!isAuthenticated) {
-        router.replace('/login');
+        // First launch: the welcome screen asks for permissions, then hands over to sign-in.
+        router.replace(onboarded ? '/login' : '/welcome');
       } else if (mustChangePassword) {
         router.replace('/change-password');
       }
     }
-  }, [showBootLoader, isAuthenticated, mustChangePassword, router]);
+  }, [showBootLoader, isAuthenticated, mustChangePassword, onboarded, router]);
 
   // Only gate on the initial session restore; a login attempt in progress
   // must not unmount the login screen (it would wipe form and error state).
@@ -105,6 +115,7 @@ function ThemedApp() {
   // App-lifetime reachability heartbeat: without it the app only learns it is
   // offline when a request the student made happens to fail.
   useEffect(() => startConnectivityMonitor(), []);
+  useEffect(() => configureSystemNotifications(), []);
   useUpdatePrompt();
 
   return (

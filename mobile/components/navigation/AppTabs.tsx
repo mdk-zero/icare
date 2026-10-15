@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useSyncExternalStore } from "react";
 import { View, Text, StyleSheet, Image, Pressable, useWindowDimensions } from "react-native";
 import Animated, {
   useAnimatedStyle,
@@ -254,6 +254,31 @@ function useWallClock(): string {
   return time;
 }
 
+// The floating header's height, measured, for screens that pin things just
+// below it (a section heading that stays in view while its list scrolls).
+let headerHeight = 0;
+const headerListeners = new Set<() => void>();
+
+function setHeaderHeight(height: number) {
+  if (Math.abs(height - headerHeight) < 0.5) return;
+  headerHeight = height;
+  for (const listener of headerListeners) listener();
+}
+
+function subscribeHeaderHeight(listener: () => void) {
+  headerListeners.add(listener);
+  return () => {
+    headerListeners.delete(listener);
+  };
+}
+
+/** How far down the floating AppHeader reaches; an estimate until it has been laid out. */
+export function useAppHeaderHeight() {
+  const insets = useSafeAreaInsets();
+  const measured = useSyncExternalStore(subscribeHeaderHeight, () => headerHeight, () => headerHeight);
+  return measured > 0 ? measured : insets.top + 76;
+}
+
 export function AppHeader({
   notificationCount,
   tagline = "CLINICAL COMPANION",
@@ -265,7 +290,7 @@ export function AppHeader({
   const { width } = useWindowDimensions();
   const time = useWallClock();
   return (
-    <View style={styles.headerShadowWrap}>
+    <View style={styles.headerShadowWrap} onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}>
       <LinearGradient
         colors={[Teal.deepest, Teal.deep, Teal.primary]}
         start={{ x: 0, y: 0 }}

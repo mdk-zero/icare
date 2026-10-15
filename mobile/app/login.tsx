@@ -30,6 +30,8 @@ import { Radius, Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/hooks/useAuth";
 import { API_URL } from "@/lib/client";
+import { openPrivacy, openTerms } from "@/lib/legal";
+import { resetOnboarding } from "@/lib/permissions";
 import logoImg from "@/assets/images/logo-pill.png";
 
 /** Gradient stops sampled from the pill logo's teal cap. */
@@ -348,7 +350,7 @@ export default function LoginScreen() {
                       style={({ pressed }) => [styles.eyeButton, pressed && { opacity: 0.6 }]}
                     >
                       <FontAwesome6
-                        name={showPassword ? "eye-slash" : "eye"}
+                        name={showPassword ? "eye" : "eye-slash"}
                         size={17}
                         color={Palette.textMuted}
                       />
@@ -422,11 +424,36 @@ export default function LoginScreen() {
               </Pressable>
             </View>
 
+            {__DEV__ && (
+              <Pressable
+                onPress={async () => {
+                  await resetOnboarding();
+                  router.replace("/welcome");
+                }}
+                style={({ pressed }) => [styles.devReset, pressed && { opacity: 0.6 }]}
+              >
+                <Text style={styles.devResetText}>Dev: show the welcome screen again</Text>
+              </Pressable>
+            )}
+
             <View style={styles.footer}>
-              <FontAwesome6 name="shield-halved" size={12} solid color={Palette.textFaint} />
-              <Text style={styles.footerText}>
-                Protected by Philippine Data Privacy Act of 2012
+              <Text style={styles.agreeText}>
+                By signing in, you agree to the{" "}
+                <Text style={styles.agreeLink} onPress={openTerms} accessibilityRole="link">
+                  Terms of Use
+                </Text>{" "}
+                and{" "}
+                <Text style={styles.agreeLink} onPress={openPrivacy} accessibilityRole="link">
+                  Privacy Policy
+                </Text>
+                .
               </Text>
+              <View style={styles.footerRow}>
+                <FontAwesome6 name="shield-halved" size={12} solid color={Palette.textFaint} />
+                <Text style={styles.footerText}>
+                  Protected by Philippine Data Privacy Act of 2012
+                </Text>
+              </View>
             </View>
           </View>
         </ScrollView>
@@ -679,13 +706,43 @@ function createStyles(
       color: Teal.primary,
     },
     footer: {
+      alignItems: "center",
+      gap: Spacing.md,
+      marginTop: "auto",
+      marginBottom: 12,
+      paddingTop: 32,
+    },
+    devReset: {
+      alignSelf: "center",
+      marginTop: Spacing.xl,
+      paddingVertical: Spacing.sm,
+      paddingHorizontal: Spacing.md,
+      borderRadius: Radius.md,
+      borderWidth: 1,
+      borderStyle: "dashed",
+      borderColor: Palette.border,
+    },
+    devResetText: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: Palette.textMuted,
+    },
+    footerRow: {
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "center",
       gap: 6,
-      marginTop: "auto",
-      marginBottom: 12,
-      paddingTop: 32,
+    },
+    agreeText: {
+      fontSize: 12,
+      lineHeight: 18,
+      color: Palette.textSecondary,
+      textAlign: "center",
+    },
+    agreeLink: {
+      fontWeight: "700",
+      color: Teal.primary,
+      textDecorationLine: "underline",
     },
     footerText: {
       fontSize: 11,

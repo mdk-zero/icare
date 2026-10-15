@@ -25,6 +25,8 @@ import { fetchProgress, fetchRecommendations } from "@/lib/api";
 import { clearCache } from "@/lib/client";
 import { ThemePreference, useThemePreference } from "@/hooks/useThemePreference";
 import { roleLabel } from "@/lib/roles";
+import { openPrivacy, openTerms } from "@/lib/legal";
+import PermissionSwitches from "@/components/PermissionSwitches";
 
 /** Teal ramp sampled from the pill logo's cap (same as login/header/tab bar/dashboard). */
 const Teal = {
@@ -297,6 +299,10 @@ export default function ProfileScreen() {
             </View>
           </View>
 
+          <View style={styles.rowBorder}>
+            <PermissionSwitches />
+          </View>
+
           <Pressable
             style={({ pressed }) => [
               styles.linkItem,
@@ -313,6 +319,40 @@ export default function ProfileScreen() {
               <Text style={styles.settingSubtext}>Remove offline copies stored on this device</Text>
             </View>
             <Ionicons name="chevron-forward" size={17} color={Palette.textFaint} />
+          </Pressable>
+        </View>
+      </View>
+
+      <View style={styles.section}>
+        <SectionHeader title="Legal" />
+        <View style={styles.listCard}>
+          <Pressable
+            style={({ pressed }) => [styles.linkItem, pressed && styles.pressedDim]}
+            onPress={openTerms}
+            accessibilityRole="link"
+          >
+            <View style={[styles.linkIconContainer, { backgroundColor: Accent.slate.bg }]}>
+              <Ionicons name="document-text-outline" size={17} color={Accent.slate.fg} />
+            </View>
+            <View style={styles.settingTextWrap}>
+              <Text style={styles.linkText}>Terms of Use</Text>
+              <Text style={styles.settingSubtext}>The rules for using iCARE++</Text>
+            </View>
+            <Ionicons name="open-outline" size={16} color={Palette.textFaint} />
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [styles.linkItem, styles.rowBorder, pressed && styles.pressedDim]}
+            onPress={openPrivacy}
+            accessibilityRole="link"
+          >
+            <View style={[styles.linkIconContainer, { backgroundColor: Accent.slate.bg }]}>
+              <Ionicons name="shield-checkmark-outline" size={17} color={Accent.slate.fg} />
+            </View>
+            <View style={styles.settingTextWrap}>
+              <Text style={styles.linkText}>Privacy Policy</Text>
+              <Text style={styles.settingSubtext}>What data is collected and your rights</Text>
+            </View>
+            <Ionicons name="open-outline" size={16} color={Palette.textFaint} />
           </Pressable>
         </View>
       </View>

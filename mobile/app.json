@@ -54,6 +54,12 @@
       "expo-status-bar",
       "expo-web-browser",
       [
+        "expo-notifications",
+        {
+          "color": "#1B6B7B"
+        }
+      ],
+      [
         "expo-image-picker",
         {
           "photosPermission": "iCARE++ needs access to your photos so you can set a profile picture.",

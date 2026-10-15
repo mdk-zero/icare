@@ -13,6 +13,8 @@ import { ThemePreference, useThemePreference } from "@/hooks/useThemePreference"
 import { SectionHeader } from "@/components/ui";
 import { API_URL } from "@/lib/client";
 import { roleLabel } from "@/lib/roles";
+import { openPrivacy, openTerms } from "@/lib/legal";
+import PermissionSwitches from "@/components/PermissionSwitches";
 
 const Teal = { deepest: "#082E38", deep: "#0D4550", primary: "#1B6B7B", light: "#35859B" };
 
@@ -59,6 +61,23 @@ export default function InstructorMeScreen() {
       icon: "open-outline" as const,
       accent: Accent.blue,
       onPress: () => void Linking.openURL(`${API_URL}/faculty/courses`),
+    },
+  ];
+
+  const legal = [
+    {
+      label: "Terms of Use",
+      detail: "The rules for using iCARE++",
+      icon: "document-text-outline" as const,
+      accent: Accent.slate,
+      onPress: openTerms,
+    },
+    {
+      label: "Privacy Policy",
+      detail: "What data is collected and your rights",
+      icon: "shield-checkmark-outline" as const,
+      accent: Accent.slate,
+      onPress: openPrivacy,
     },
   ];
 
@@ -112,6 +131,9 @@ export default function InstructorMeScreen() {
             <Ionicons name="chevron-forward" size={17} color={Palette.textFaint} />
           </Pressable>
         ))}
+        <View style={styles.rowBorder}>
+          <PermissionSwitches inset={Spacing.md} />
+        </View>
         <View style={[styles.settingBlock, styles.rowBorder]}>
           <Text style={styles.linkText}>Appearance</Text>
           <View style={styles.segment}>
@@ -132,6 +154,27 @@ export default function InstructorMeScreen() {
             })}
           </View>
         </View>
+      </View>
+
+      <SectionHeader title="Legal" />
+      <View style={styles.listCard}>
+        {legal.map((link, i) => (
+          <Pressable
+            key={link.label}
+            onPress={link.onPress}
+            accessibilityRole="link"
+            style={({ pressed }) => [styles.linkItem, i > 0 && styles.rowBorder, pressed && { opacity: 0.7 }]}
+          >
+            <View style={[styles.iconBox, { backgroundColor: link.accent.bg }]}>
+              <Ionicons name={link.icon} size={17} color={link.accent.fg} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.linkText}>{link.label}</Text>
+              <Text style={styles.linkDetail}>{link.detail}</Text>
+            </View>
+            <Ionicons name="open-outline" size={16} color={Palette.textFaint} />
+          </Pressable>
+        ))}
       </View>
 
       <Pressable onPress={handleLogout} style={({ pressed }) => [styles.logout, pressed && { opacity: 0.7 }]}>
