@@ -29,7 +29,6 @@ export default function AssignCasesModal({
   const [chosen, setChosen] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [deadline, setDeadline] = useState("");
-  const [required, setRequired] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -50,7 +49,7 @@ export default function AssignCasesModal({
     if (!chosen || !deadline) return;
     setBusy(true);
     // A date means the end of that day, here: deadlines decide attendance.
-    const result = await assignGroupCase(group.id, { scenario_id: chosen, deadline: deadlineFromInput(deadline) ?? "", required });
+    const result = await assignGroupCase(group.id, { scenario_id: chosen, deadline: deadlineFromInput(deadline) ?? "", required: true });
     setBusy(false);
     if ("error" in result) {
       setError(result.error);
@@ -83,7 +82,7 @@ export default function AssignCasesModal({
         </header>
 
         <div className="flex-1 space-y-4 overflow-y-auto p-4">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3">
             <label className="text-sm font-semibold text-gray-700">
               Deadline
               <input
@@ -92,15 +91,6 @@ export default function AssignCasesModal({
                 onChange={(e) => setDeadline(e.target.value)}
                 className={inputClass + " mt-1"}
               />
-            </label>
-            <label className="flex items-center gap-3 self-end rounded-xl border border-gray-200 p-2.5 text-sm font-semibold text-gray-700">
-              <input
-                type="checkbox"
-                checked={required}
-                onChange={(e) => setRequired(e.target.checked)}
-                className="h-4 w-4 rounded text-brand-600"
-              />
-              Required
             </label>
           </div>
 
