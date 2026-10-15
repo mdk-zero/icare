@@ -3,6 +3,7 @@
 import {
   apiFetch,
   autoSplitTeams,
+  createFacultyStudent,
   createTeam,
   fetchFacultyTeams,
   moveStudentToTeam,
@@ -24,8 +25,8 @@ export interface EnrollStudent {
 export interface BulkEnrollJob {
   sectionId: string;
   sectionName: string;
-  /** The section's groups when the job started, matched by name. */
-  groups: { id: string; name: string }[];
+  /** The section's groups when the job started, matched by name, with their sizes. */
+  groups: { id: string; name: string; size?: number }[];
   students: EnrollStudent[];
   /** Group the students the list leaves without one. */
   autoGroup: boolean;
@@ -33,6 +34,11 @@ export interface BulkEnrollJob {
   groupSize: number;
   /** Called when the job is over, to reload the roster and the groups. */
   onDone: () => void;
+  /**
+   * An instructor's batch: `groups` are theirs and every student goes into
+   * one of them — the one the list names, else the smallest. No group is made.
+   */
+  asInstructor?: boolean;
 }
 
 async function enrollOne(sectionId: string, s: EnrollStudent) {
@@ -69,6 +75,11 @@ export function runBulkEnroll(job: BulkEnrollJob) {
     `Enrolling ${students.length} student${students.length === 1 ? "" : "s"} into ${sectionName}`,
     students.map((s) => ({ id: s.email.trim().toLowerCase(), label: `${s.fname} ${s.lname}`.trim() })),
   );
+
+  if (job.asInstructor) {
+    void enrollIntoOwnGroups(job, task);
+    return;
+  }
 
   void (async () => {
     // Groups named in the list but not yet in the section are made first.
@@ -153,4 +164,52 @@ async function groupLeftOver(job: BulkEnrollJob, studentIds: string[]): Promise<
     if (!("error" in moved)) sizes.set(teamId, (sizes.get(teamId) ?? 0) + 1);
   }
   return "";
+}
+
+/**
+ * An instructor's batch: each student is registered straight into one of the
+ * instructor's groups, the named one or else whichever is smallest so far, so
+ * every newcomer lands on their roster.
+ */
+async function enrollIntoOwnGroups(job: BulkEnrollJob, task: ReturnType<typeof startTask>) {
+  const { sectionName, students } = job;
+  const byName = new Map(job.groups.map((g) => [g.name.trim().toLowerCase(), g.id]));
+  const sizes = new Map(job.groups.map((g) => [g.id, g.size ?? 0]));
+  const names = new Map(job.groups.map((g) => [g.id, g.name]));
+
+  let enrolled = 0;
+  for (const s of students) {
+    const itemId = s.email.trim().toLowerCase();
+    task.item(itemId, { status: "working" });
+    const named = s.group.trim() ? byName.get(s.group.trim().toLowerCase()) : undefined;
+    const teamId = named ?? [...sizes.entries()].sort((a, b) => a[1] - b[1])[0]?.[0];
+    if (!teamId) {
+      task.item(itemId, { status: "failed", message: `${s.group.trim() || "No group"} isn't one of your groups` });
+      continue;
+    }
+    const created = await createFacultyStudent(`${s.fname.trim()} ${s.lname.trim()}`, s.email.trim(), teamId, s.sex);
+    if (created.error || !created.data) {
+      task.item(itemId, { status: "failed", message: created.error ?? "Failed to enroll" });
+      continue;
+    }
+    enrolled++;
+    sizes.set(teamId, (sizes.get(teamId) ?? 0) + 1);
+    const notes = [`In ${names.get(teamId)}.`];
+    if (created.data.warning) notes.push("The invitation email didn't go out; hand them this password.");
+    task.item(itemId, {
+      status: created.data.warning ? "warning" : "done",
+      message: notes.join(" "),
+      secret: created.data.warning ? created.data.password : undefined,
+    });
+  }
+
+  const failed = students.length - enrolled;
+  task.finish(
+    enrolled === 0
+      ? `No one was enrolled into ${sectionName}`
+      : failed > 0
+        ? `Enrolled ${enrolled} of ${students.length} into ${sectionName}`
+        : `Enrolled ${enrolled} into ${sectionName}`,
+  );
+  job.onDone();
 }

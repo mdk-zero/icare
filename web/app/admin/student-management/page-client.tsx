@@ -43,8 +43,8 @@ import MlRunProgress, {
 } from "../../components/MlRunProgress";
 import { loadingToast, toast } from "../../components/Toast";
 import SectionGroups from "./SectionGroups";
-import RegisterStudentModal from "./RegisterStudentModal";
-import BulkEnrollModal from "./BulkEnrollModal";
+import RegisterStudentModal from "../../components/enroll/RegisterStudentModal";
+import BulkEnrollModal from "../../components/enroll/BulkEnrollModal";
 import { isStudentDrag, leftTarget, readStudentDrag, startStudentDrag } from "./drag";
 
 /** The run summary is a couple of sentences; the default toast is gone before it can be read. */

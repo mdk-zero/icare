@@ -1124,6 +1124,8 @@ export interface CreateStudentResponse {
     email: string;
     name: string;
     role: string;
+    section_id?: string | null;
+    team_id?: string | null;
   };
   password?: string;
   warning?: string;
@@ -3075,17 +3077,23 @@ export async function submitScenarioForReview(
 /** "" means unrecorded — the API stores null and mobile drops the honorific. */
 export type StudentSex = 'male' | 'female' | '';
 
+/**
+ * An instructor registers a student into one of the groups they supervise; the
+ * account goes into that group's section. The temporary password comes back
+ * too, with a `warning` when the invitation email didn't go out.
+ */
 export async function createFacultyStudent(
   name: string,
   email: string,
-  sectionId: string,
+  teamId: string,
   sex: StudentSex = '',
 ): Promise<{ data?: CreateStudentResponse; error?: string }> {
   try {
     const res = await apiFetch('/api/faculty/students', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, email, section_id: sectionId, sex }),
+      credentials: 'include',
+      body: JSON.stringify({ name, email, team_id: teamId, sex }),
     });
 
     const json = await res.json() as { student?: CreateStudentResponse['student']; password?: string; warning?: string; error?: string };

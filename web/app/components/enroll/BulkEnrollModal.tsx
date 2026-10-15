@@ -10,8 +10,8 @@ import {
   faFileArrowUp,
   faDownload,
 } from "@fortawesome/free-solid-svg-icons";
-import { EcgLoader } from "../../components/EcgLoader";
-import { loadingToast } from "../../components/Toast";
+import { EcgLoader } from "../EcgLoader";
+import { loadingToast } from "../Toast";
 import { runBulkEnroll } from "./bulk-enroll-runner";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -146,18 +146,23 @@ const inputClass =
  * the template's format, or type them in. Each account gets a temporary
  * password emailed to the student; any that can't be mailed are listed with
  * their password so it can be handed over.
+ *
+ * An instructor enrolls into their own groups only: a named group must be one
+ * of `groups`, and a student without one joins the smallest. No group is made.
  */
 export default function BulkEnrollModal({
   sectionId,
   sectionName,
   groups,
+  asInstructor = false,
   onClose,
   onFinished,
 }: {
   sectionId: string;
   sectionName: string;
-  /** The section's existing groups, matched by name (any letter case). */
-  groups: { id: string; name: string }[];
+  /** The section's existing groups (an instructor's: theirs), matched by name (any letter case). */
+  groups: { id: string; name: string; size?: number }[];
+  asInstructor?: boolean;
   onClose: () => void;
   onFinished: (created: number) => void;
 }) {
@@ -224,6 +229,10 @@ export default function BulkEnrollModal({
       const email = row.email.trim().toLowerCase();
       if (seen.has(email)) return `${email} appears twice in this batch.`;
       seen.add(email);
+      const group = row.group.trim().toLowerCase();
+      if (asInstructor && group && !groups.some((g) => g.name.trim().toLowerCase() === group)) {
+        return `"${row.group.trim()}" isn't one of your groups in ${sectionName}.`;
+      }
     }
     return null;
   };
@@ -243,6 +252,7 @@ export default function BulkEnrollModal({
       autoGroup,
       groupSize: Math.max(1, Math.floor(Number(groupSize)) || 1),
       onDone: () => onFinished(filled.length),
+      asInstructor,
     });
     onClose();
   };
@@ -333,7 +343,9 @@ export default function BulkEnrollModal({
                 <div>
                   <p className="text-sm font-semibold text-gray-800">File format</p>
                   <p className="text-sm text-gray-500">
-                    A header row, then one student per row. Sex (male or female) and group are optional; a group that doesn&apos;t exist yet is created.
+                    {asInstructor
+                      ? `A header row, then one student per row. Sex (male or female) and group are optional; a group must be one of yours (${groups.map((g) => g.name).join(", ")}).`
+                      : "A header row, then one student per row. Sex (male or female) and group are optional; a group that doesn't exist yet is created."}
                   </p>
                 </div>
                 <div className="flex gap-2">
@@ -481,7 +493,15 @@ export default function BulkEnrollModal({
             </button>
           </section>
 
-          {filled.some((r) => !r.group.trim()) && (
+          {asInstructor && filled.some((r) => !r.group.trim()) && (
+            <p className="rounded-xl border border-hairline bg-subtle/50 p-4 text-sm text-gray-500">
+              {groups.length === 1
+                ? `Students with no group go into ${groups[0].name}.`
+                : `Students with no group join the smallest of your ${groups.length} groups, keeping them even.`}
+            </p>
+          )}
+
+          {!asInstructor && filled.some((r) => !r.group.trim()) && (
             <label className="flex items-start gap-3 rounded-xl border border-hairline bg-subtle/50 p-4">
               <input
                 type="checkbox"

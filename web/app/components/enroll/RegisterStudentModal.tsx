@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faUserPlus, faCircleCheck, faTriangleExclamation } from "@fortawesome/free-solid-svg-icons";
-import { apiFetch, moveStudentToTeam } from "../../lib/api";
-import { loadingToast } from "../../components/Toast";
+import { apiFetch, createFacultyStudent, moveStudentToTeam, type StudentSex } from "../../lib/api";
+import { loadingToast } from "../Toast";
 
 const inputClass =
   "mt-1.5 block w-full rounded-lg border border-gray-200 bg-surface px-3 py-2 text-gray-800 focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30";
@@ -13,24 +13,29 @@ const inputClass =
  * Registers one late enrollee straight into a section, and into one of its
  * groups when picked. The account gets a temporary password that is emailed
  * to the student; it is also shown here once, in case the email doesn't land.
+ *
+ * An instructor registers into one of their own groups (`groups` are theirs),
+ * and must pick one: a student in no group of theirs isn't on their roster.
  */
 export default function RegisterStudentModal({
   sectionId,
   sectionName,
   groups,
+  asInstructor = false,
   onClose,
   onRegistered,
 }: {
   sectionId: string;
   sectionName: string;
   groups: { id: string; name: string }[];
+  asInstructor?: boolean;
   onClose: () => void;
   onRegistered: () => void;
 }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [sex, setSex] = useState("");
-  const [groupId, setGroupId] = useState("");
+  const [groupId, setGroupId] = useState(asInstructor && groups.length === 1 ? groups[0].id : "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<{ email: string; password: string; warning?: string } | null>(null);
@@ -40,6 +45,22 @@ export default function RegisterStudentModal({
     setError(null);
     setSaving(true);
     const progress = loadingToast(`Registering ${name.trim()}…`);
+
+    // An instructor's registration lands in the group in the same request.
+    if (asInstructor) {
+      const created = await createFacultyStudent(name.trim(), email.trim(), groupId, sex as StudentSex);
+      setSaving(false);
+      if (created.error || !created.data) {
+        progress.error(created.error ?? "Unable to register the student.");
+        setError(created.error ?? "Unable to register the student.");
+        return;
+      }
+      progress.success(`Registered ${name.trim()}`);
+      setDone({ email: created.data.student.email, password: created.data.password ?? "", warning: created.data.warning });
+      onRegistered();
+      return;
+    }
+
     const res = await apiFetch("/api/admin/users", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -133,7 +154,10 @@ export default function RegisterStudentModal({
               Register a student
             </h3>
             <p className="mt-1 text-sm text-gray-500">
-              Adds a late enrollee to {sectionName}. They get their sign-in details by email.
+              {asInstructor
+                ? `Adds a late enrollee to one of your groups in ${sectionName}.`
+                : `Adds a late enrollee to ${sectionName}.`}{" "}
+              They get their sign-in details by email.
             </p>
 
             {error && (
@@ -177,9 +201,20 @@ export default function RegisterStudentModal({
               </label>
               {groups.length > 0 && (
                 <label className="block text-sm font-medium text-gray-700">
-                  Group <span className="font-normal text-gray-400">(optional)</span>
-                  <select value={groupId} onChange={(e) => setGroupId(e.target.value)} className={inputClass}>
-                    <option value="">Not in a group</option>
+                  Group {!asInstructor && <span className="font-normal text-gray-400">(optional)</span>}
+                  <select
+                    value={groupId}
+                    required={asInstructor}
+                    onChange={(e) => setGroupId(e.target.value)}
+                    className={inputClass}
+                  >
+                    {asInstructor ? (
+                      <option value="" disabled>
+                        Choose a group
+                      </option>
+                    ) : (
+                      <option value="">Not in a group</option>
+                    )}
                     {groups.map((g) => (
                       <option key={g.id} value={g.id}>
                         {g.name}
