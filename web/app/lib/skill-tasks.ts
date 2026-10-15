@@ -9,6 +9,7 @@ import {
   type SkillStep,
 } from '@/app/lib/taylor-skills';
 import type { ScenarioTaskCategory } from '@/app/lib/scenario-default-tasks';
+import type { SkillSelection } from '@/app/lib/return-demos';
 
 /**
  * Scenario tasks built from Taylor's skills: one task per skill, whose
@@ -18,11 +19,8 @@ import type { ScenarioTaskCategory } from '@/app/lib/scenario-default-tasks';
  * student isn't marked down for the routes they were never asked to use.
  */
 
-export interface SkillSelection {
-  skillId: string;
-  /** Variant headings to include; omitted means the skill's defaults. */
-  sections?: string[];
-}
+// Selections are parsed in return-demos.ts, which the browser can import.
+export { parseSkillSelections, type SkillSelection } from '@/app/lib/return-demos';
 
 const POINTS_PER_SKILL = 10;
 
@@ -59,23 +57,6 @@ export function skillTaskSteps<T extends Pick<SkillStep, 'stepNo' | 'section' | 
 /** "Assessing Body Temperature (Skill 1-1)" */
 export function skillTaskTitle(skill: Pick<SkillDetail, 'id' | 'title'>): string {
   return `${skill.title} (Skill ${skill.id})`;
-}
-
-/** Selections from a request body; unknown shapes are dropped. */
-export function parseSkillSelections(value: unknown): SkillSelection[] {
-  if (!Array.isArray(value)) return [];
-  const out: SkillSelection[] = [];
-  for (const item of value) {
-    if (typeof item === 'string') out.push({ skillId: item });
-    else if (item && typeof item === 'object' && typeof (item as { id?: unknown }).id === 'string') {
-      const sections = (item as { sections?: unknown }).sections;
-      out.push({
-        skillId: (item as { id: string }).id,
-        sections: Array.isArray(sections) ? sections.filter((x): x is string => typeof x === 'string') : undefined,
-      });
-    }
-  }
-  return out;
 }
 
 /** A row minus one column, for writing before the migration that adds it. */

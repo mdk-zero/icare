@@ -17,6 +17,7 @@ import {
   scenarioKindsReady,
   type ScenarioKind,
 } from '../app/lib/scenario-kind';
+import { assignableStudents, mergeAssignees, parseReturnDemoInput, skillDiff } from '../app/lib/return-demos';
 
 let failures = 0;
 function check(label: string, ok: boolean, detail = '') {
@@ -60,6 +61,54 @@ async function main() {
     threw = true;
   }
   check('any other read error is thrown, not read as Patient Cases', threw);
+
+  console.log('\nreturn-demo rules');
+  eq('title is required', parseReturnDemoInput({ skills: ['1-1'] }), { ok: false, error: 'Title is required' });
+  eq('a skill is required', parseReturnDemoInput({ title: 'VS', skills: [] }), { ok: false, error: 'Pick at least one skill' });
+  eq('skills are required on create', parseReturnDemoInput({ title: 'VS' }), { ok: false, error: 'Pick at least one skill' });
+  eq('long titles refused', parseReturnDemoInput({ title: 'x'.repeat(201), skills: ['1-1'] }), { ok: false, error: 'Keep the title under 200 characters' });
+  const ok = parseReturnDemoInput({ title: '  Vital Signs ', skills: ['1-1', { id: '1-1' }, '1-4'], offering_id: 'o1' });
+  eq('title trimmed, skills de-duplicated in order', ok.ok && [ok.value.title, ok.value.skills!.map((s) => s.skillId)], ['Vital Signs', ['1-1', '1-4']]);
+  eq('a created one has a description and course', ok.ok && [ok.value.description, ok.value.offering_id], ['', 'o1']);
+  eq('a partial edit carries only what it names', parseReturnDemoInput({ description: 'x' }, { partial: true }), { ok: true, value: { description: 'x' } });
+  eq('a partial edit cannot empty the skills', parseReturnDemoInput({ skills: [] }, { partial: true }), { ok: false, error: 'Pick at least one skill' });
+  eq('a partial edit cannot blank the title', parseReturnDemoInput({ title: '  ' }, { partial: true }), { ok: false, error: 'Title is required' });
+
+  const merged = mergeAssignees({
+    teamMembers: new Map([['t1', ['s1', 's2']]]),
+    studentIds: ['s2', 's3', 's4'],
+    teamOf: new Map([['s3', 't2']]),
+    already: new Set(['s1']),
+  });
+  eq('group members tagged with the group, picks with their own group, nobody twice', merged.rows, [
+    { student_id: 's2', team_id: 't1' },
+    { student_id: 's3', team_id: 't2' },
+    { student_id: 's4', team_id: null },
+  ]);
+  eq('students who already have it are skipped once', merged.skipped, 1);
+
+  const diff = skillDiff(
+    [
+      { id: 'k1', skill_id: '1-1', title: 'Assessing Body Temperature (Skill 1-1)' },
+      { id: 'k2', skill_id: '1-4', title: 'Pulse (Skill 1-4)' },
+      { id: 'k3', skill_id: '1-6', title: 'Respiration (Skill 1-6)' },
+    ],
+    [{ skillId: '1-4' }, { skillId: '1-7' }],
+    new Set(['k3']),
+  );
+  eq('adds new skills, removes ungraded dropped ones, blocks graded ones', diff, {
+    add: [{ skillId: '1-7' }],
+    remove: ['k1'],
+    blocked: ['Respiration (Skill 1-6)'],
+  });
+
+  const overview = {
+    viewer_id: 'f1',
+    teams: [{ id: 't1', faculty_id: 'f1' }, { id: 't9', faculty_id: 'f2' }],
+    students: [{ id: 's1', team_id: 't1' }, { id: 's2', team_id: null }, { id: 's3', team_id: 't9' }],
+  } as never;
+  const assignable = assignableStudents(overview);
+  eq('only own groups and their members are assignable', [assignable.teams.map((t) => t.id), assignable.students.map((s) => s.id)], [['t1'], ['s1']]);
 
   console.log(failures ? `\n${failures} check(s) failed` : '\nAll checks passed');
   process.exit(failures ? 1 : 0);
