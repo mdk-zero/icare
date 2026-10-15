@@ -1,4 +1,4 @@
-import React from "react";
+claimport React from "react";
 import {
   ScrollView,
   View,
