@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { courseFailure, loadOfferingRosters, loadOwnOffering, must, notFound, requireRole } from '@/app/lib/courses';
 import { termBounds } from '@/app/lib/course-progress';
 import { getFacultyStudentIdSet, scenarioVisibleToFaculty } from '@/app/lib/scenario-visibility';
+import { ofKind, scenarioKinds } from '@/app/lib/scenario-kind';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -51,7 +52,10 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
       loadOfferingRosters(supabase, [{ id, faculty_id: offering.faculty_id, section_ids: offering.section_ids }]),
     ]);
 
-    const scenarios = ((scenarioRows ?? []) as unknown as { id: string; title: string; scenario_assignments: { student_id: string }[] }[])
+    const allScenarios = (scenarioRows ?? []) as unknown as { id: string; title: string; scenario_assignments: { student_id: string }[] }[];
+    // Patient Cases only: a Return Demonstration (072) is never linked by hand.
+    const kinds = await scenarioKinds(supabase, allScenarios.map((s) => s.id));
+    const scenarios = ofKind(allScenarios, kinds, 'patient_case', (s) => s.id)
       .filter((s) => scenarioVisibleToFaculty((s.scenario_assignments ?? []).map((a) => a.student_id), mine));
 
     const rosterIds = (rosters.get(id)?.students ?? []).map((s) => s.id);

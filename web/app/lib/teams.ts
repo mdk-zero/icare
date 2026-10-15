@@ -1,6 +1,7 @@
 import type { getSupabaseAdmin } from './supabase/server';
 import { getFacultySectionIds } from './roster';
 import { getAdminScope } from './admin-scope';
+import { ofKind, scenarioKinds } from './scenario-kind';
 
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
 
@@ -198,14 +199,17 @@ export async function groupSummaries(
 
   const sectionName = new Map((sectionsRes.data ?? []).map((s) => [s.id as string, s.name as string]));
 
-  const scenarioWork = new Map<string, { student_id: string; scenario_id: string; status: string; score: number | null }[]>();
-  for (const a of (scenariosRes.data ?? []) as {
+  // A group's case average is over Patient Cases; Return Demonstrations (072) are left out.
+  const scenarioRows = (scenariosRes.data ?? []) as {
     student_id: string;
     scenario_id: string;
     team_id: string | null;
     status: string;
     score: number | null;
-  }[]) {
+  }[];
+  const kinds = await scenarioKinds(supabase, [...new Set(scenarioRows.map((a) => a.scenario_id))]);
+  const scenarioWork = new Map<string, { student_id: string; scenario_id: string; status: string; score: number | null }[]>();
+  for (const a of ofKind(scenarioRows, kinds, 'patient_case', (row) => row.scenario_id)) {
     const team = a.team_id && teamIds.has(a.team_id) ? a.team_id : teamOf.get(a.student_id);
     if (!team) continue;
     scenarioWork.set(team, [...(scenarioWork.get(team) ?? []), a]);

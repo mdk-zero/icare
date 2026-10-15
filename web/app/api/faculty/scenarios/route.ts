@@ -4,6 +4,7 @@ import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { activityCourse, activityOfferings, parseOfferingId } from '@/app/lib/activity-course';
 import { canSeePatient, getPatientCourseScope } from '@/app/lib/patient-courses';
 import { seedScenarioTasks } from '@/app/lib/scenario-default-tasks';
+import { ofKind, scenarioKinds } from '@/app/lib/scenario-kind';
 import { ensureCategories } from '@/app/lib/scenario-categories';
 import { addSkillTasks, parseSkillSelections } from '@/app/lib/skill-tasks';
 import {
@@ -53,7 +54,9 @@ export async function GET() {
         ? null
         : await getFacultyStudentIdSet(supabase, session.uid);
 
-    const visible = scenarios.filter((s) => {
+    // Return Demonstrations (072) have their own page.
+    const kinds = await scenarioKinds(supabase, scenarios.map((s) => s.id as string));
+    const visible = ofKind(scenarios, kinds, 'patient_case', (s) => s.id as string).filter((s) => {
       if (facultyStudentIds === null) return true;
       const assigned = (s as unknown as { scenario_assignments: { student_id: string }[] })
         .scenario_assignments ?? [];

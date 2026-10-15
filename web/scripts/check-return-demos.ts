@@ -11,6 +11,7 @@
  */
 import {
   kindOf,
+  isReturnDemo,
   kindParam,
   ofKind,
   scenarioKinds,
@@ -61,6 +62,15 @@ async function main() {
     threw = true;
   }
   check('any other read error is thrown, not read as Patient Cases', threw);
+
+  check('isReturnDemo reads the kind', await isReturnDemo(after072, 's2'));
+  check('…a Patient Case is not one', !(await isReturnDemo(after072, 's1')));
+  check('…and before 072 nothing is', !(await isReturnDemo(before072, 's2')));
+
+  console.log('\nreaders');
+  const allPatientCases = new Map(rows.map((r) => [r.scenario_id, 'patient_case' as const]));
+  eq('a kind map from before 072 keeps every assignment as a Patient Case', ofKind(rows, allPatientCases, 'patient_case', (r) => r.scenario_id).length, 3);
+  eq('…and shows no Return Demonstrations', ofKind(rows, allPatientCases, 'return_demo', (r) => r.scenario_id).length, 0);
 
   console.log('\nreturn-demo rules');
   eq('title is required', parseReturnDemoInput({ skills: ['1-1'] }), { ok: false, error: 'Title is required' });

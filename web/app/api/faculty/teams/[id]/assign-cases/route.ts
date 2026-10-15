@@ -3,6 +3,7 @@ import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { getFacultyStudentIdSet, scenarioVisibleToFaculty } from '@/app/lib/scenario-visibility';
 import { isMissingTeamTables, manageableTeam, TEAMS_NEED_MIGRATION } from '@/app/lib/teams';
+import { isReturnDemo } from '@/app/lib/scenario-kind';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -76,7 +77,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       console.error('Failed to read patient case', scenarioError);
       return NextResponse.json({ error: 'Unable to assign the case' }, { status: 500 });
     }
-    if (!scenario) return NextResponse.json({ error: 'That case no longer exists' }, { status: 404 });
+    // A Return Demonstration (072) is not a group's case.
+    if (!scenario || (await isReturnDemo(supabase, scenario_id))) {
+      return NextResponse.json({ error: 'That case no longer exists' }, { status: 404 });
+    }
 
     // Everyone's existing assignments of this case: to skip members who have
     // it, and for the faculty visibility rule (a case in another faculty's

@@ -3,6 +3,7 @@ import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { ensureCategories } from '@/app/lib/scenario-categories';
 import { MAX_RUBRIC_LENGTH, TASK_RATINGS } from '@/app/lib/task-ratings';
+import { isReturnDemo } from '@/app/lib/scenario-kind';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -111,7 +112,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       .eq('id', id)
       .maybeSingle();
 
-    if (!existing) {
+    // A Return Demonstration (072) is edited on its own page.
+    if (!existing || (await isReturnDemo(supabase, id))) {
       return NextResponse.json({ error: 'Patient case not found' }, { status: 404 });
     }
 
@@ -188,7 +190,8 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       .eq('id', id)
       .maybeSingle();
 
-    if (!existing) {
+    // A Return Demonstration (072) is edited on its own page.
+    if (!existing || (await isReturnDemo(supabase, id))) {
       return NextResponse.json({ error: 'Patient case not found' }, { status: 404 });
     }
 

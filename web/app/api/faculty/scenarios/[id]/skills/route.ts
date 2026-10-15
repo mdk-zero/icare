@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { isReturnDemo } from '@/app/lib/scenario-kind';
 import { addSkillTasks, parseSkillSelections } from '@/app/lib/skill-tasks';
 import { skillsIn } from '@/scripts/taylors-chapters';
 
@@ -13,7 +14,8 @@ type Supabase = ReturnType<typeof getSupabaseAdmin>;
 /** The caller may change this scenario's tasks: its creator, or an admin. */
 async function authorize(supabase: Supabase, role: string, uid: string, id: string): Promise<NextResponse | null> {
   const { data } = await supabase.from('scenarios').select('created_by').eq('id', id).maybeSingle();
-  if (!data) return NextResponse.json({ error: 'Patient case not found' }, { status: 404 });
+  // A Return Demonstration's skills change through its own edit (072).
+  if (!data || (await isReturnDemo(supabase, id))) return NextResponse.json({ error: 'Patient case not found' }, { status: 404 });
   if (role !== 'admin' && data.created_by !== uid) {
     return NextResponse.json({ error: 'You can only change patient cases you created' }, { status: 403 });
   }

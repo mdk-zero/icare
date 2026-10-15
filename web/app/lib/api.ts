@@ -8,6 +8,7 @@ import { endDemo, isDemo } from './demo/session';
 import type { ItemProgress, OfferingSummary, RequirementInput, RequirementRow, TermStatus } from './course-progress';
 import type { GradingSplit } from './course-grading';
 import type { ActivityKind, AttendanceRow, AttendanceTally } from './attendance';
+import type { ScenarioKind } from './scenario-kind';
 
 export interface User {
   id: string;
@@ -1170,6 +1171,8 @@ export interface ScenarioAssignment {
   id: string;
   scenario_id: string;
   scenario_title: string;
+  /** Patient Case or Return Demonstration (migration 072). */
+  kind?: ScenarioKind;
   student_id: string;
   student_name: string;
   student_picture_url?: string | null;
@@ -2791,11 +2794,15 @@ export async function getClinicalDecisionSupport(patientCase: any): Promise<any 
   };
 }
 
-export async function fetchScenarioAssignments(scenarioId?: string): Promise<ScenarioAssignment[]> {
+/** Patient Cases by default; `kind` asks for Return Demonstrations, or both. */
+export async function fetchScenarioAssignments(
+  scenarioId?: string,
+  kind: ScenarioKind | 'all' = 'patient_case',
+): Promise<ScenarioAssignment[]> {
   try {
-    const url = scenarioId
-      ? `/api/faculty/scenarios/assignments?scenario_id=${encodeURIComponent(scenarioId)}`
-      : '/api/faculty/scenarios/assignments';
+    const params = new URLSearchParams({ kind });
+    if (scenarioId) params.set('scenario_id', scenarioId);
+    const url = `/api/faculty/scenarios/assignments?${params}`;
     const res = await apiFetch(url, { credentials: 'include' });
     const json = (await res.json()) as { assignments?: ScenarioAssignment[]; error?: string };
     if (!res.ok) {

@@ -71,6 +71,11 @@ export function kindOf(kinds: ReadonlyMap<string, ScenarioKind>, scenarioId: str
   return kinds.get(scenarioId) ?? 'patient_case';
 }
 
+/** Whether one scenario is a Return Demonstration; Patient Case routes refuse those. */
+export async function isReturnDemo(supabase: Supabase, scenarioId: string): Promise<boolean> {
+  return kindOf(await scenarioKinds(supabase, [scenarioId]), scenarioId) === 'return_demo';
+}
+
 /** The rows whose scenario is of the given kind ('all' keeps every row). */
 export function ofKind<T>(
   rows: readonly T[],

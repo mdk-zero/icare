@@ -4,6 +4,7 @@ import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { getFacultyStudentIds } from '@/app/lib/roster';
 import { isMissingTeamTables } from '@/app/lib/teams';
 import { parseDeadline } from '@/app/lib/deadline-input';
+import { isReturnDemo } from '@/app/lib/scenario-kind';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -65,7 +66,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       .eq('id', scenarioId)
       .maybeSingle();
 
-    if (!scenario) {
+    // A Return Demonstration (072) is assigned from its own page.
+    if (!scenario || (await isReturnDemo(supabase, scenarioId))) {
       return NextResponse.json({ error: 'Patient case not found' }, { status: 404 });
     }
 
