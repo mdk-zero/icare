@@ -6,6 +6,7 @@ import {
   fetchTaskCompletions,
   fetchTaskSteps,
   stepGradesByTask,
+  studentTaskSteps,
 } from '@/app/lib/scenario-tasks';
 import { isPerformed, taskCredit, type StepGrades } from '@/app/lib/task-ratings';
 
@@ -70,22 +71,29 @@ export async function GET(_request: Request, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unable to fetch tasks' }, { status: 500 });
     }
     const stepsByTask: Map<string, StepGrades> = stepGradesByTask(steps.steps, stepRatings.rows);
+    // A saved rating means the instructor has graded the task; drafts never
+    // reach the database, so there is nothing half-done to leak.
+    const released = new Set(
+      (tasksRes.data ?? []).filter((t) => completed || Boolean(completionByTask.get(t.id)?.rating)).map((t) => t.id as string),
+    );
+    // Each task's checklist steps, so a Return Demonstration (072) can be
+    // prepared from them; a step's rating shows once its task's grade does.
+    const shownSteps = studentTaskSteps(steps.steps, stepRatings.rows, assignmentId, released);
 
     const tasks = (tasksRes.data ?? []).map((t) => {
       const completion = completionByTask.get(t.id);
       // Null for a task rated N/A: out of the score, so no share to show.
       const credit = taskCredit(completion, stepsByTask.get(t.id));
-      // A saved rating means the instructor has graded this task; drafts never
-      // reach the database, so there is nothing half-done to leak.
-      const released = completed || Boolean(completion?.rating);
+      const isReleased = released.has(t.id as string);
       return {
         ...t,
         is_completed: isPerformed(completion),
         completed_via: completion?.completed_via ?? null,
         completed_at: completion?.completed_at ?? null,
-        rating: released ? (completion?.rating ?? null) : null,
-        remarks: released ? (completion?.remarks ?? null) : null,
-        percent: released && credit !== null ? Math.round(credit * 100) : null,
+        rating: isReleased ? (completion?.rating ?? null) : null,
+        remarks: isReleased ? (completion?.remarks ?? null) : null,
+        percent: isReleased && credit !== null ? Math.round(credit * 100) : null,
+        steps: shownSteps.get(t.id as string) ?? [],
       };
     });
 

@@ -24,6 +24,7 @@ import { autoSplit } from '../app/lib/course-grading';
 import { requirementNames, skillCoverage } from '../app/lib/course-progress';
 import { loadActivityItems } from '../app/lib/courses';
 import { seed } from '../app/lib/demo/fixtures';
+import { studentTaskSteps } from '../app/lib/scenario-tasks';
 import { join } from 'node:path';
 
 let failures = 0;
@@ -213,6 +214,26 @@ async function main() {
   check('it is finalized for a whole group, each with a score', vitalsWork.length > 0 && vitalsWork.every((a) => a.status === 'completed' && typeof a.score === 'number'));
   const oxygen = rds.find((sc) => sc.title.startsWith('Oxygen'));
   check('the oxygen one is upcoming', db.assignments.some((a) => a.scenario_id === oxygen?.id) && db.assignments.filter((a) => a.scenario_id === oxygen?.id).every((a) => a.status === 'pending' && Date.parse(a.deadline) > Date.now()));
+
+  console.log('\nstudent steps');
+  const stepRows = [
+    { id: 'p1', task_id: 'k1', title: 'Perform hand hygiene.', source: 'Skill 1-7, step 2', sort_order: 2 },
+    { id: 'p0', task_id: 'k1', title: 'Check the order.', source: 'Skill 1-7, step 1', sort_order: 1 },
+    { id: 'p9', task_id: 'k2', title: 'Identify the patient.', source: 'Skill 1-4, step 3', sort_order: 1 },
+  ];
+  const ratingRows = [
+    { assignment_id: 'a1', step_id: 'p0', rating: 'not_applicable' as const },
+    { assignment_id: 'a1', step_id: 'p1', rating: 'excellent' as const },
+    { assignment_id: 'a2', step_id: 'p9', rating: 'needs_practice' as const },
+  ];
+  const shown = studentTaskSteps(stepRows, ratingRows, 'a1', new Set(['k1']));
+  eq('a graded skill lists its steps in order with their ratings', shown.get('k1'), [
+    { id: 'p0', title: 'Check the order.', rating: 'not_applicable' },
+    { id: 'p1', title: 'Perform hand hygiene.', rating: 'excellent' },
+  ]);
+  eq('an ungraded skill lists its steps with no ratings, and never another assignment\'s', shown.get('k2'), [
+    { id: 'p9', title: 'Identify the patient.', rating: null },
+  ]);
 
   console.log('\nroutes');
   const methods = (file: string) => {

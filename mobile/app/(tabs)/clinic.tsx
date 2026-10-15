@@ -15,10 +15,14 @@ import {
 } from "@/components/ui";
 import { useApiData } from "@/hooks/useApiData";
 import { FloorPlan, FloorPlanSkeleton } from "@/components/FloorPlan";
+import { returnDemoStatus } from "@/lib/return-demos";
 import {
   fetchWard,
   fetchAiTips,
   fetchMyCases,
+  fetchScenarioAssignments,
+  isReturnDemo,
+  ScenarioAssignment,
   AiTip,
   WardRoom,
   WardPatient,
@@ -178,6 +182,8 @@ export default function ClinicScreen() {
   // Separate call: a slow LLM generation must never hold up the ward.
   const tips = useApiData(fetchAiTips);
   const cases = useApiData(fetchMyCases);
+  // Return Demonstrations have no patient, so they aren't on the ward.
+  const demos = useApiData(fetchScenarioAssignments);
 
   // Faculty check tasks off in the meantime, so the counters are stale on return.
   useFocusEffect(
@@ -185,17 +191,20 @@ export default function ClinicScreen() {
       if (data) reload();
       // A case edited or handed in comes back with a new status.
       cases.reload();
+      demos.reload();
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [reload]),
   );
 
   const refreshTips = tips.refresh;
   const refreshCases = cases.refresh;
+  const refreshDemos = demos.refresh;
   const handleRefresh = React.useCallback(() => {
     refresh();
     refreshTips();
     refreshCases();
-  }, [refresh, refreshTips, refreshCases]);
+    refreshDemos();
+  }, [refresh, refreshTips, refreshCases, refreshDemos]);
 
   const openAssignment = React.useCallback(
     (assignment: WardAssignment) => {
@@ -233,6 +242,15 @@ export default function ClinicScreen() {
 
   const tipList = tips.data?.tips ?? [];
   const caseList = cases.data ?? [];
+  // Open ones first, soonest due; then graded ones, newest first.
+  const demoList = (demos.data ?? [])
+    .filter(isReturnDemo)
+    .sort((a, b) =>
+      (a.status === "completed" ? 1 : 0) - (b.status === "completed" ? 1 : 0) ||
+      (a.status === "completed"
+        ? (b.completed_at ?? "").localeCompare(a.completed_at ?? "")
+        : (a.deadline ?? "").localeCompare(b.deadline ?? "")),
+    );
   const showTips = tips.loading || tipList.length > 0 || Boolean(tips.error);
 
   return (
@@ -352,6 +370,23 @@ export default function ClinicScreen() {
         </View>
       ) : null}
 
+      {demoList.length > 0 ? (
+        <View style={styles.section}>
+          <SectionHeader
+            title="Return Demonstrations"
+            subtitle="Skills you'll demonstrate to your instructor"
+            count={demoList.length}
+          />
+          {demoList.map((assignment) => (
+            <ReturnDemoCard
+              key={assignment.id}
+              assignment={assignment}
+              onPress={() => router.push(`/retdem/${assignment.id}`)}
+            />
+          ))}
+        </View>
+      ) : null}
+
       {caseList.length > 0 || cases.loading ? (
         <View style={styles.section}>
           <SectionHeader
@@ -460,6 +495,41 @@ function CompletedCaseCard({
             {patient.name}
           </Text>
         ) : null}
+      </View>
+      <Ionicons name="chevron-forward" size={17} color={Palette.textFaint} />
+    </Pressable>
+  );
+}
+
+/** A Return Demonstration: its title, when it's due, and where it stands. Opens its skills and steps. */
+function ReturnDemoCard({ assignment, onPress }: { assignment: ScenarioAssignment; onPress: () => void }) {
+  const { Palette, Accent, Shadow, Type } = useTheme();
+  const styles = React.useMemo(
+    () => createStyles(Palette, Accent, Shadow, Type),
+    [Palette, Accent, Shadow, Type],
+  );
+  const status = returnDemoStatus(assignment);
+  const due = assignment.deadline
+    ? new Date(assignment.deadline).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+    : null;
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.tipCard, styles.caseCard, pressed && styles.pressedCard]}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${assignment.scenario_title}, ${status.label}`}
+    >
+      <View style={[styles.bannerIcon, { backgroundColor: Accent.blue.bg }]}>
+        <Ionicons name="hand-left-outline" size={17} color={Accent.blue.fg} />
+      </View>
+      <View style={styles.tipBody}>
+        <Text style={Type.itemTitle} numberOfLines={1}>
+          {assignment.scenario_title}
+        </Text>
+        <View style={styles.caseMeta}>
+          <Badge label={status.label} variant={status.variant} size="sm" />
+          {due && assignment.status !== "completed" ? <Text style={Type.caption}>Due {due}</Text> : null}
+        </View>
       </View>
       <Ionicons name="chevron-forward" size={17} color={Palette.textFaint} />
     </Pressable>

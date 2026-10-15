@@ -367,6 +367,13 @@ export interface ScenarioAssignment {
   time_taken: number | null;
   /** The student's team, when faculty have put them in one. */
   team_name?: string | null;
+  /** A Patient Case, or a Return Demonstration (skill checklists, no patient); absent from older servers. */
+  kind?: 'patient_case' | 'return_demo';
+}
+
+/** A Return Demonstration opens its own screen, not the ward. */
+export function isReturnDemo(assignment: Pick<ScenarioAssignment, 'kind'>): boolean {
+  return assignment.kind === 'return_demo';
 }
 
 export async function fetchScenarioAssignments(): Promise<CachedResult<ScenarioAssignment[]>> {
@@ -407,6 +414,8 @@ export interface ScenarioTask {
   remarks?: string | null;
   /** The share of this task's points earned (0–100), sent with the rating. */
   percent?: number | null;
+  /** The skill's checklist steps, each with its rating once the task's grade is released. */
+  steps?: { id: string; title: string; rating: ChecklistRating | null }[];
 }
 
 export interface ScenarioTasksResult {

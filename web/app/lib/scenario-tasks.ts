@@ -183,6 +183,26 @@ export interface StepRatingRow {
 }
 
 /**
+ * Each task's checklist steps as a student sees them, in order: the step's
+ * words, and its rating only on a task whose grade is released (the
+ * `released` task ids, the same rule the task's own rating follows).
+ */
+export function studentTaskSteps(
+  steps: readonly TaskStepRow[],
+  ratings: readonly StepRatingRow[],
+  assignmentId: string,
+  released: ReadonlySet<string>,
+): Map<string, { id: string; title: string; rating: ChecklistRating | null }[]> {
+  const ratingOf = new Map(ratings.filter((r) => r.assignment_id === assignmentId).map((r) => [r.step_id, r.rating]));
+  const byTask = new Map<string, { id: string; title: string; rating: ChecklistRating | null }[]>();
+  for (const step of [...steps].sort((a, b) => a.sort_order - b.sort_order)) {
+    const rating = released.has(step.task_id) ? ratingOf.get(step.id) ?? null : null;
+    byTask.set(step.task_id, [...(byTask.get(step.task_id) ?? []), { id: step.id, title: step.title, rating }]);
+  }
+  return byTask;
+}
+
+/**
  * Before migration 044 the sub-task tables don't exist. Postgres reports an
  * unknown table as 42P01; PostgREST, whose schema cache has never seen it, as
  * PGRST205.
