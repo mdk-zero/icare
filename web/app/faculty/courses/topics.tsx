@@ -1,6 +1,7 @@
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faCalendarCheck,
+  faClipboardCheck,
   faFilePen,
   faFilePrescription,
   faFlask,
@@ -66,10 +67,21 @@ export const TOPICS: Record<RequirementTopicKey, TopicStyle> = {
     bar: "bg-rose-500",
     text: "text-rose-700",
   },
-  skill: {
-    key: "skill",
+  return_demo: {
+    key: "return_demo",
     label: "Return Demonstrations",
     icon: faHandHoldingMedical,
+    blurb: "Met by graded Return Demonstrations",
+    tile: "bg-indigo-50 text-indigo-700",
+    bar: "bg-indigo-500",
+    text: "text-indigo-700",
+  },
+  // Pre-070 checklist items naming one skill. Since 070 they never show beside
+  // Return Demonstrations, so the shared indigo can't be confused.
+  skill: {
+    key: "skill",
+    label: "Skills",
+    icon: faClipboardCheck,
     blurb: "Met by graded Patient Case tasks or Quizzes on the skill",
     tile: "bg-indigo-50 text-indigo-700",
     bar: "bg-indigo-500",

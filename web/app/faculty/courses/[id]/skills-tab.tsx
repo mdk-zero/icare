@@ -5,10 +5,10 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faChevronDown, faPenToSquare, faPlus, faWandMagicSparkles } from "@fortawesome/free-solid-svg-icons";
 import { usePageData } from "../../../lib/use-page-data";
 import { fetchCourseProgress, fetchSkillDetails, type CourseRequirement, type SkillSummary } from "../../../lib/api";
-import { requirementNames } from "../../../lib/course-progress";
+import { skillCoverage } from "../../../lib/course-progress";
 import { TOPICS, TopicIcon } from "../topics";
 
-const SKILLS = TOPICS.skill;
+const SKILLS = TOPICS.return_demo;
 
 interface ChapterGroup {
   chapter: number;
@@ -62,16 +62,8 @@ export default function SkillsTab({
     return [...map.values()].sort((a, b) => a.chapter - b.chapter);
   }, [catalog, skillIds]);
 
-  // Which Return Demonstration covers each skill, named as the checklist names it.
-  const coverage = useMemo(() => {
-    const names = requirementNames(requirements);
-    const map = new Map<string, { id: string; name: string }[]>();
-    requirements.forEach((r, i) => {
-      if (r.kind !== "skill" || !r.skill_id) return;
-      map.set(r.skill_id, [...(map.get(r.skill_id) ?? []), { id: r.id, name: names[i] }]);
-    });
-    return map;
-  }, [requirements]);
+  // Which Return Demonstrations (072) cover each skill, named as the checklist names them.
+  const coverage = useMemo(() => skillCoverage(requirements), [requirements]);
 
   const { data: progress } = usePageData(coverage.size > 0 ? `faculty:course-progress:${offeringId}:${signature}` : null, () =>
     fetchCourseProgress(offeringId),
@@ -149,7 +141,7 @@ export default function SkillsTab({
               )}
             </div>
             <p className="mt-2 text-xs text-gray-500">
-              Shared with your Dean and every instructor teaching {courseCode}; Return Demonstrations choose from this list.
+              Shared with your Dean and every instructor teaching {courseCode}; Return Demonstrations made for this course cover these skills.
             </p>
           </div>
         </div>

@@ -16,6 +16,7 @@ import {
   type RequirementRow,
 } from './course-progress';
 import { canFacultySeeScenario } from './scenario-visibility';
+import { isMissingKindColumn } from './scenario-kind';
 import { autoSplit, gradingSignature, readStoredSplit, type GradingSplit } from './course-grading';
 import { MigrationNeeded, isMissingGradingSchema, normaliseRequirement, requirementQuery } from './course-schema';
 
@@ -524,27 +525,32 @@ function isMissingActivityCourse(error: { code?: string } | null): boolean {
 }
 
 /**
- * The items of the given offerings (070): every Patient Case, Quiz and Case
- * Presentation made for one of them, as automatic checklist items, Patient
- * Cases first, then Quizzes, then Case Presentations, each oldest first. An
- * item's id is its activity's id. Null before 070 is applied.
+ * The items of the given offerings (070): every Patient Case, Return
+ * Demonstration (072), Quiz and Case Presentation made for one of them, as
+ * automatic checklist items, in that order, each oldest first. An item's id
+ * is its activity's id. Null before 070 is applied; before 072 every
+ * scenario is a Patient Case.
  */
 export async function loadActivityItems(supabase: Supabase, offeringIds: string[]): Promise<RequirementRow[] | null> {
   if (offeringIds.length === 0) return [];
-  const read = (table: 'scenarios' | 'assessments' | 'case_presentations') =>
-    supabase.from(table).select('id, offering_id, created_at').in('offering_id', offeringIds).order('created_at');
-  const [scenarios, assessments, presentations] = await Promise.all([read('scenarios'), read('assessments'), read('case_presentations')]);
+  const read = (table: 'scenarios' | 'assessments' | 'case_presentations', columns = 'id, offering_id, created_at') =>
+    supabase.from(table).select(columns).in('offering_id', offeringIds).order('created_at');
+  const readScenarios = async () => {
+    const withKind = await read('scenarios', 'id, offering_id, created_at, kind');
+    return isMissingKindColumn(withKind.error) ? read('scenarios') : withKind;
+  };
+  const [scenarios, assessments, presentations] = await Promise.all([readScenarios(), read('assessments'), read('case_presentations')]);
   if ([scenarios, assessments, presentations].some((r) => isMissingActivityCourse(r.error))) return null;
-  const rows = (res: typeof scenarios) => (must(res) ?? []) as { id: string; offering_id: string }[];
+  const rows = (res: typeof assessments) => (must(res) ?? []) as unknown as { id: string; offering_id: string; kind?: string }[];
   let position = 0;
-  const item = (row: { id: string; offering_id: string }, type: 'scenario' | 'assessment' | 'case_presentation'): RequirementRow => ({
+  const item = (row: { id: string; offering_id: string }, type: 'scenario' | 'return_demo' | 'assessment' | 'case_presentation'): RequirementRow => ({
     id: row.id,
     offering_id: row.offering_id,
     position: position++,
     kind: 'activity',
     title: '',
     activity_type: type,
-    scenario_id: type === 'scenario' ? row.id : null,
+    scenario_id: type === 'scenario' || type === 'return_demo' ? row.id : null,
     assessment_id: type === 'assessment' ? row.id : null,
     presentation_id: type === 'case_presentation' ? row.id : null,
     target_count: null,
@@ -553,8 +559,10 @@ export async function loadActivityItems(supabase: Supabase, offeringIds: string[
     skills_only: false,
     manual_type: 'lab',
   });
+  const scenarioRows = rows(scenarios);
   return [
-    ...rows(scenarios).map((r) => item(r, 'scenario')),
+    ...scenarioRows.filter((r) => r.kind !== 'return_demo').map((r) => item(r, 'scenario')),
+    ...scenarioRows.filter((r) => r.kind === 'return_demo').map((r) => item(r, 'return_demo')),
     ...rows(assessments).map((r) => item(r, 'assessment')),
     ...rows(presentations).map((r) => item(r, 'case_presentation')),
   ];
@@ -639,8 +647,24 @@ export async function loadRequirementNames(supabase: Supabase, requirements: Req
 
 /** Requirements with the text the checklist shows. */
 export async function labelRequirements(supabase: Supabase, requirements: RequirementRow[]) {
-  const names = await loadRequirementNames(supabase, requirements);
-  return requirements.map((r) => ({ ...r, label: requirementLabel(r, names), removed: isRemovedActivity(r) }));
+  // The skills each Return Demonstration (072) is made of, for the Skills tab's coverage.
+  const demoIds = requirements.filter((r) => r.activity_type === 'return_demo' && r.scenario_id).map((r) => r.scenario_id as string);
+  const [names, demoTasks] = await Promise.all([
+    loadRequirementNames(supabase, requirements),
+    demoIds.length
+      ? supabase.from('scenario_tasks').select('scenario_id, skill_id, sort_order').in('scenario_id', demoIds).order('sort_order').then(must)
+      : Promise.resolve([]),
+  ]);
+  const skillsOf = new Map<string, string[]>();
+  for (const t of (demoTasks ?? []) as { scenario_id: string; skill_id: string | null }[]) {
+    if (t.skill_id) skillsOf.set(t.scenario_id, [...(skillsOf.get(t.scenario_id) ?? []), t.skill_id]);
+  }
+  return requirements.map((r) => ({
+    ...r,
+    label: requirementLabel(r, names),
+    removed: isRemovedActivity(r),
+    skill_ids: r.activity_type === 'return_demo' && r.scenario_id ? skillsOf.get(r.scenario_id) ?? [] : [],
+  }));
 }
 
 /**

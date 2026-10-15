@@ -91,6 +91,8 @@ export interface DemoScenario {
   difficulty: string;
   /** The course offering it was made for (070); null for none, absent in demos saved before. */
   offering_id?: string | null;
+  /** A Return Demonstration (072) has no patient; absent means a Patient Case. */
+  kind?: "patient_case" | "return_demo";
 }
 
 export interface DemoTask {

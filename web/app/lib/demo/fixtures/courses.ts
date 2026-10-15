@@ -290,7 +290,7 @@ export function seedCourses(input: { users: DemoUser[]; casePresentations: DemoC
           items: [],
           components: [
             { id: sid(), name: "Lab check-offs", weight: 30, items: itemIds(OFFERING_MAIN, lab) },
-            { id: sid(), name: "Return demonstrations", weight: 40, items: itemIds(OFFERING_MAIN, (r) => r.kind === "skill") },
+            { id: sid(), name: "Skill check-offs", weight: 40, items: itemIds(OFFERING_MAIN, (r) => r.kind === "skill") },
           ],
         },
       ],

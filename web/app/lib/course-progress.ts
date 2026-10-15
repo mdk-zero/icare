@@ -108,8 +108,13 @@ export const COURSE_LIMITS = {
 // ---------------------------------------------------------------------------
 
 export type RequirementKind = 'activity' | 'count' | 'skill' | 'manual';
-/** scenario = Patient Case, assessment = Quiz; shift (Attendance: activities attended) only for count items. */
-export type ActivityType = 'scenario' | 'assessment' | 'case_presentation' | 'shift';
+/**
+ * scenario = Patient Case, assessment = Quiz, return_demo = Return
+ * Demonstration (a scenario of kind 'return_demo', 072: only ever an
+ * automatic item, scored like a Patient Case); shift (Attendance:
+ * activities attended) only for count items.
+ */
+export type ActivityType = 'scenario' | 'assessment' | 'case_presentation' | 'return_demo' | 'shift';
 /** A manual item scored by hand: hands-on lab work, or a written (paper) exam (067). */
 export type ManualType = 'lab' | 'exam';
 
@@ -322,6 +327,7 @@ const COUNT_NOUN: Record<ActivityType, [string, string]> = {
   scenario: ['Patient Case', 'Patient Cases'],
   assessment: ['Quiz', 'Quizzes'],
   case_presentation: ['Case Presentation', 'Case Presentations'],
+  return_demo: ['Return Demonstration', 'Return Demonstrations'],
   shift: ['activity', 'activities'],
 };
 
@@ -381,14 +387,16 @@ export type RequirementTopicKey = ActivityType | 'skill' | 'manual' | 'exam';
 export type TopicFields = Pick<RequirementRow, 'kind' | 'activity_type'> & Partial<Pick<RequirementRow, 'manual_type'>>;
 
 /** The order the checklist is shown in: graded app work, written exams, skills, hands-on lab work, attendance. */
-export const TOPIC_ORDER: readonly RequirementTopicKey[] = ['scenario', 'assessment', 'exam', 'case_presentation', 'skill', 'manual', 'shift'];
+export const TOPIC_ORDER: readonly RequirementTopicKey[] = ['scenario', 'assessment', 'exam', 'case_presentation', 'return_demo', 'skill', 'manual', 'shift'];
 
 const TOPIC: Record<RequirementTopicKey, string> = {
   scenario: 'Patient Case',
   assessment: 'Quiz',
   exam: 'Written Exam',
   case_presentation: 'Case Presentation',
-  skill: 'Return Demonstration',
+  return_demo: 'Return Demonstration',
+  // Pre-070 checklist items naming one skill; "Return Demonstration" is the activity now (072).
+  skill: 'Skill',
   manual: 'Lab Activity',
   shift: 'Attendance',
 };
@@ -422,6 +430,23 @@ export function requirementNames(requirements: readonly TopicFields[]): string[]
     seen.set(topic, n);
     return `${topic} #${n}`;
   });
+}
+
+/**
+ * Which items cover each skill, named as requirementNames names them: a
+ * Return Demonstration covers every skill it is made of (skill_ids), and a
+ * pre-070 skill item covers its one skill.
+ */
+export function skillCoverage(
+  requirements: readonly (TopicFields & { id: string; skill_id: string | null; skill_ids?: readonly string[] })[],
+): Map<string, { id: string; name: string }[]> {
+  const names = requirementNames(requirements);
+  const coverage = new Map<string, { id: string; name: string }[]>();
+  requirements.forEach((r, i) => {
+    const skills = r.kind === 'skill' ? (r.skill_id ? [r.skill_id] : []) : r.activity_type === 'return_demo' ? r.skill_ids ?? [] : [];
+    for (const skill of new Set(skills)) coverage.set(skill, [...(coverage.get(skill) ?? []), { id: r.id, name: names[i] }]);
+  });
+  return coverage;
 }
 
 /** What an item asks for: the instructor's own label, if any, then requirementLabel(). */
@@ -674,7 +699,8 @@ function judge(
       // Every graded score of the kind, met or not, for the average.
       let scores: (number | null)[] = [];
       switch (req.activity_type) {
-        case 'scenario': {
+        case 'scenario':
+        case 'return_demo': {
           const mine = own.cases.filter((c) => covers(c.skills.map((s) => s.skill_id)));
           dates = mine.filter((c) => meets(c.score, min)).map((c) => c.completed_at);
           scores = mine.map((c) => c.score);

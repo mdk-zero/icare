@@ -4280,6 +4280,8 @@ export interface CourseRequirement extends RequirementRow {
   label: string;
   /** The linked activity was deleted after the item was made. */
   removed: boolean;
+  /** A Return Demonstration's skills (072), for the Skills tab; empty on other items. */
+  skill_ids?: string[];
 }
 
 export interface CourseTermRef {

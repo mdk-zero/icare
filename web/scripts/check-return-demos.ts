@@ -20,6 +20,9 @@ import {
 } from '../app/lib/scenario-kind';
 import { assignableStudents, mergeAssignees, parseReturnDemoInput, skillDiff } from '../app/lib/return-demos';
 import { existsSync, readFileSync } from 'node:fs';
+import { autoSplit } from '../app/lib/course-grading';
+import { requirementNames, skillCoverage } from '../app/lib/course-progress';
+import { loadActivityItems } from '../app/lib/courses';
 import { join } from 'node:path';
 
 let failures = 0;
@@ -37,6 +40,27 @@ function stubClient(result: unknown): never {
     apply: () => proxy,
   });
   return proxy as never;
+}
+
+/** A Supabase client whose query chain resolves to the result given for the table it reads. */
+function tableStub(byTable: Record<string, unknown>): never {
+  const chain = (result: unknown): unknown => {
+    const proxy: unknown = new Proxy(() => undefined, {
+      get: (_t, prop) => (prop === 'then' ? (resolve: (v: unknown) => void) => resolve(result) : proxy),
+      apply: () => proxy,
+    });
+    return proxy;
+  };
+  // A table given a list answers its reads in turn (the last one repeats).
+  const calls = new Map<string, number>();
+  const next = (table: string) => {
+    const given = byTable[table] ?? { data: [], error: null };
+    if (!Array.isArray(given)) return given;
+    const n = calls.get(table) ?? 0;
+    calls.set(table, n + 1);
+    return given[Math.min(n, given.length - 1)];
+  };
+  return { from: (table: string) => chain(next(table)) } as never;
 }
 
 async function main() {
@@ -121,6 +145,56 @@ async function main() {
   } as never;
   const assignable = assignableStudents(overview);
   eq('only own groups and their members are assignable', [assignable.teams.map((t) => t.id), assignable.students.map((s) => s.id)], [['t1'], ['s1']]);
+
+  console.log('\ncourses');
+  eq(
+    'Return Demonstrations are their own automatic part, last',
+    autoSplit([
+      { id: 'c1', activity_type: 'scenario' },
+      { id: 'r1', activity_type: 'return_demo' },
+      { id: 'q1', activity_type: 'assessment' },
+    ]).parts.map((p) => [p.name, p.items]),
+    [['Patient Cases', ['c1']], ['Quizzes', ['q1']], ['Case Presentations', []], ['Return Demonstrations', ['r1']]],
+  );
+  eq(
+    'items are named Return Demonstration #N',
+    requirementNames([{ kind: 'activity', activity_type: 'return_demo' }, { kind: 'activity', activity_type: 'return_demo' }]),
+    ['Return Demonstration #1', 'Return Demonstration #2'],
+  );
+  eq('old skill items are Skills now', requirementNames([{ kind: 'skill', activity_type: null }]), ['Skill #1']);
+  const cov = skillCoverage([
+    { id: 'r1', kind: 'activity', activity_type: 'return_demo', skill_id: null, skill_ids: ['1-1', '1-4'] },
+    { id: 'k1', kind: 'skill', activity_type: null, skill_id: '1-4' },
+  ]);
+  eq('a Return Demonstration covers each of its skills', cov.get('1-1'), [{ id: 'r1', name: 'Return Demonstration #1' }]);
+  eq('coverage merges both kinds of item', cov.get('1-4')?.map((c) => c.id), ['r1', 'k1']);
+  const items = await loadActivityItems(
+    tableStub({
+      scenarios: {
+        data: [
+          { id: 'c1', offering_id: 'o1', created_at: '2026-10-01', kind: 'patient_case' },
+          { id: 'r1', offering_id: 'o1', created_at: '2026-10-02', kind: 'return_demo' },
+        ],
+        error: null,
+      },
+      assessments: { data: [], error: null },
+      case_presentations: { data: [], error: null },
+    }),
+    ['o1'],
+  );
+  const before072Items = await loadActivityItems(
+    tableStub({
+      scenarios: [
+        { data: null, error: { code: '42703', message: 'column scenarios.kind does not exist' } },
+        { data: [{ id: 'c1', offering_id: 'o1', created_at: '2026-10-01' }], error: null },
+      ],
+      assessments: { data: [], error: null },
+      case_presentations: { data: [], error: null },
+    }),
+    ['o1'],
+  );
+  eq('before 072 every scenario is a Patient Case item', before072Items?.map((i) => [i.id, i.activity_type]), [['c1', 'scenario']]);
+  eq('loadActivityItems files by kind', items?.map((i) => [i.id, i.activity_type, i.scenario_id]), [['c1', 'scenario', 'c1'], ['r1', 'return_demo', 'r1']]);
 
   console.log('\nroutes');
   const methods = (file: string) => {

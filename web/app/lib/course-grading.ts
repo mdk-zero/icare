@@ -55,6 +55,7 @@ export const AUTO_PARTS = [
   { id: 'patient-cases', name: 'Patient Cases', type: 'scenario' },
   { id: 'quizzes', name: 'Quizzes', type: 'assessment' },
   { id: 'case-presentations', name: 'Case Presentations', type: 'case_presentation' },
+  { id: 'return-demos', name: 'Return Demonstrations', type: 'return_demo' },
 ] as const;
 
 /**

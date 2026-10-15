@@ -59,7 +59,10 @@ export async function loadProgressFacts(
 ): Promise<ProgressFacts> {
   const has = (test: (r: RequirementRow) => boolean) => requirements.some(test);
   const skillItems = has((r) => r.kind === 'skill');
-  const wantsCases = skillItems || has((r) => (r.kind === 'activity' || r.kind === 'count') && r.activity_type === 'scenario');
+  // A Return Demonstration (072) is scored from its assignment like a Patient Case.
+  const wantsCases =
+    skillItems ||
+    has((r) => (r.kind === 'activity' || r.kind === 'count') && (r.activity_type === 'scenario' || r.activity_type === 'return_demo'));
   const wantsCaseSkills = skillItems || has((r) => r.kind === 'count' && r.activity_type === 'scenario' && r.skills_only);
   const wantsAttempts = skillItems || has((r) => (r.kind === 'activity' || r.kind === 'count') && r.activity_type === 'assessment');
   const wantsQuizSkills = skillItems || has((r) => r.kind === 'count' && r.activity_type === 'assessment' && r.skills_only);

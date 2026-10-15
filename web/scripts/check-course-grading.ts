@@ -347,11 +347,12 @@ check('demo exams have entered scores', demo.requirementScores.some((sc) => exam
 const handScored = demo.requirements.filter((r) => r.kind === 'manual' && r.manual_type === 'lab').map((r) => r.title);
 eq('no hand-scored demo item is called a return demonstration', handScored.filter((t) => /return demonstration/i.test(t)), []);
 const demoComponents = demoSplits.flatMap((o) => o.grading!.parts.flatMap((p) => p.components));
-const returnDemos = demoComponents.filter((c) => /return demonstration/i.test(c.name));
-check('a demo component is named Return demonstrations', returnDemos.length > 0);
+// "Return Demonstration" is its own activity since 072; the hand-made skill items are check-offs.
+const skillCheckOffs = demoComponents.filter((c) => /skill check-offs/i.test(c.name));
+check('a demo component is named Skill check-offs', skillCheckOffs.length > 0);
 check(
-  '…and holds only Return Demonstrations (skill items)',
-  returnDemos.every((c) => c.items.length > 0 && c.items.every((id) => demo.requirements.find((r) => r.id === id)?.kind === 'skill')),
+  '…and holds only skill items',
+  skillCheckOffs.every((c) => c.items.length > 0 && c.items.every((id) => demo.requirements.find((r) => r.id === id)?.kind === 'skill')),
 );
 // The ended term is a finished semester: every student's grade is complete, not "so far".
 const today = new Date().toISOString().slice(0, 10);

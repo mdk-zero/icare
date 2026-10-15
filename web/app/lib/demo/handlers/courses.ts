@@ -505,7 +505,7 @@ const checklist = (db: DemoDb, offeringId: string): DemoRequirement[] => {
   let position = 0;
   const item = (
     a: { id: string; created_at: string },
-    type: "scenario" | "assessment" | "case_presentation",
+    type: "scenario" | "return_demo" | "assessment" | "case_presentation",
   ): DemoRequirement => ({
     id: a.id,
     offering_id: offeringId,
@@ -513,7 +513,7 @@ const checklist = (db: DemoDb, offeringId: string): DemoRequirement[] => {
     kind: "activity",
     title: "",
     activity_type: type,
-    scenario_id: type === "scenario" ? a.id : null,
+    scenario_id: type === "scenario" || type === "return_demo" ? a.id : null,
     assessment_id: type === "assessment" ? a.id : null,
     presentation_id: type === "case_presentation" ? a.id : null,
     target_count: null,
@@ -525,7 +525,8 @@ const checklist = (db: DemoDb, offeringId: string): DemoRequirement[] => {
   });
   const oldest = <T extends { created_at: string }>(list: T[]) => [...list].sort((a, b) => a.created_at.localeCompare(b.created_at));
   return [
-    ...oldest(db.scenarios.filter((s) => s.offering_id === offeringId)).map((s) => item(s, "scenario")),
+    ...oldest(db.scenarios.filter((s) => s.offering_id === offeringId && s.kind !== "return_demo")).map((s) => item(s, "scenario")),
+    ...oldest(db.scenarios.filter((s) => s.offering_id === offeringId && s.kind === "return_demo")).map((s) => item(s, "return_demo")),
     ...oldest(db.quizzes.filter((q) => q.offering_id === offeringId)).map((q) => item(q, "assessment")),
     ...oldest(db.casePresentations.filter((p) => p.offering_id === offeringId)).map((p) => item(p, "case_presentation")),
   ];
