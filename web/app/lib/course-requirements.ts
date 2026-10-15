@@ -155,7 +155,8 @@ async function loadCases(
       const stepsByTask = stepGradesByTask(steps, ratings.filter((x) => x.assignment_id === r.id));
       for (const t of skillTasks) {
         if (t.scenario_id !== r.scenario_id) continue;
-        credit.set(`${r.id}:${t.id}`, taskCredit(completion.get(`${r.id}:${t.id}`), stepsByTask.get(t.id)));
+        // A task rated N/A shows nothing of the skill: no credit, so no evidence.
+        credit.set(`${r.id}:${t.id}`, taskCredit(completion.get(`${r.id}:${t.id}`), stepsByTask.get(t.id)) ?? 0);
       }
     }
   }

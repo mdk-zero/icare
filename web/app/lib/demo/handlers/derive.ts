@@ -1,7 +1,7 @@
 import type { DemoDb } from "../store";
 import type { DemoUser } from "../fixtures/people";
 import type { DemoAssignment } from "../fixtures/school";
-import type { TaskRating } from "@/app/lib/task-ratings";
+import { NOT_APPLICABLE, type ChecklistRating, type TaskRating } from "@/app/lib/task-ratings";
 import { sectionName, teamLabel } from "./scope";
 import { attendanceRows, collectActivities, tallyAttendance, type AttendanceRow } from "@/app/lib/attendance";
 
@@ -75,29 +75,43 @@ export function scoredAt(): string {
 
 const CREDIT: Record<TaskRating, number> = { excellent: 1, satisfactory: 2 / 3, needs_practice: 1 / 3 };
 
-export function levelForCredit(credit: number): TaskRating {
+/** A mark's credit; null for N/A, which isn't scored. */
+const creditOf = (rating: ChecklistRating): number | null => (rating === NOT_APPLICABLE ? null : CREDIT[rating]);
+
+/** The level a task sums up to; N/A when it's out of the score. */
+export function levelForCredit(credit: number | null): ChecklistRating {
+  if (credit === null) return NOT_APPLICABLE;
   const score = Math.round(credit * 100);
   if (score >= 90) return "excellent";
   if (score >= 60) return "satisfactory";
   return "needs_practice";
 }
 
-/** A task's credit: its rated sub-tasks' share, or its whole-task rating. */
-export function taskCredit(db: DemoDb, assignmentId: string, taskId: string): { credit: number; rated: number; total: number } {
+/**
+ * A task's credit: its rated sub-tasks' share of the applicable ones, or its
+ * whole-task rating. Null when nothing on it applies (all N/A).
+ */
+export function taskCredit(db: DemoDb, assignmentId: string, taskId: string): { credit: number | null; rated: number; total: number } {
   const steps = db.steps.filter((s) => s.task_id === taskId);
   const completion = db.completions.find((c) => c.assignment_id === assignmentId && c.task_id === taskId);
   if (steps.length > 0) {
     const ids = new Set(steps.map((s) => s.id));
     const ratings = db.stepRatings.filter((r) => r.assignment_id === assignmentId && ids.has(r.step_id));
     if (ratings.length > 0) {
-      const earned = ratings.reduce((sum, r) => sum + CREDIT[r.rating], 0);
-      return { credit: Math.min(1, earned / steps.length), rated: ratings.length, total: steps.length };
+      let earned = 0;
+      let applicable = steps.length;
+      for (const r of ratings) {
+        const credit = creditOf(r.rating);
+        if (credit === null) applicable -= 1;
+        else earned += credit;
+      }
+      return { credit: applicable > 0 ? Math.min(1, earned / applicable) : null, rated: ratings.length, total: steps.length };
     }
-    if (completion) return { credit: completion.rating ? CREDIT[completion.rating] : 1, rated: steps.length, total: steps.length };
+    if (completion) return { credit: completion.rating ? creditOf(completion.rating) : 1, rated: steps.length, total: steps.length };
     return { credit: 0, rated: 0, total: steps.length };
   }
   if (!completion) return { credit: 0, rated: 0, total: 1 };
-  return { credit: completion.rating ? CREDIT[completion.rating] : 1, rated: 1, total: 1 };
+  return { credit: completion.rating ? creditOf(completion.rating) : 1, rated: 1, total: 1 };
 }
 
 export function scoreAssignment(db: DemoDb, a: DemoAssignment): { score: number; remaining: number } {
@@ -106,9 +120,10 @@ export function scoreAssignment(db: DemoDb, a: DemoAssignment): { score: number;
   let remaining = 0;
   for (const task of db.tasks.filter((t) => t.scenario_id === a.scenario_id)) {
     const c = taskCredit(db, a.id, task.id);
+    remaining += c.total - c.rated;
+    if (c.credit === null) continue;
     earned += task.points * c.credit;
     total += task.points;
-    remaining += c.total - c.rated;
   }
   return { score: total > 0 ? Math.round((earned / total) * 100) : 0, remaining };
 }

@@ -2,11 +2,11 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   gradedScore,
   isPerformed,
-  ratingForCredit,
   storedRating,
   taskCredit,
+  taskLevelForCredit,
+  type ChecklistRating,
   type StepGrades,
-  type TaskRating,
 } from '@/app/lib/task-ratings';
 
 export type ScenarioTaskTrigger = 'vitals' | 'charting';
@@ -16,7 +16,7 @@ export interface TaskCompletionRow {
   task_id: string;
   completed_via: 'system' | 'faculty';
   completed_at: string;
-  rating: TaskRating | null;
+  rating: ChecklistRating | null;
   remarks: string | null;
 }
 
@@ -41,6 +41,9 @@ export function isOldRatingScale(error: { code?: string } | null): boolean {
 
 export const SCALE_NEEDS_MIGRATION =
   'The Excellent / Satisfactory / Needs Practice scale needs database migration 046 applied first.';
+
+/** Before migration 071 the same check constraints refuse an N/A. */
+export const NOT_APPLICABLE_NEEDS_MIGRATION = 'N/A needs database migration 071 applied first.';
 
 const BASE_COLUMNS = 'assignment_id, task_id, completed_via, completed_at';
 
@@ -176,7 +179,7 @@ export interface TaskStepRow {
 export interface StepRatingRow {
   assignment_id: string;
   step_id: string;
-  rating: TaskRating;
+  rating: ChecklistRating;
 }
 
 /**
@@ -240,7 +243,7 @@ export function stepGradesByTask(
   ratings: readonly StepRatingRow[],
 ): Map<string, StepGrades> {
   const ratingByStep = new Map(ratings.map((r) => [r.step_id, r.rating]));
-  const byTask = new Map<string, { total: number; ratings: TaskRating[] }>();
+  const byTask = new Map<string, { total: number; ratings: ChecklistRating[] }>();
   for (const step of steps) {
     const entry = byTask.get(step.task_id) ?? { total: 0, ratings: [] };
     entry.total += 1;
@@ -312,7 +315,7 @@ export async function syncStepGradedLevels(
   for (const [taskId, steps] of stepsByTask) {
     if (steps.ratings.length === 0) continue;
     const completion = completionByTask.get(taskId);
-    const level = ratingForCredit(taskCredit(completion, steps));
+    const level = taskLevelForCredit(taskCredit(completion, steps));
     if (!completion) {
       writes.push(
         supabase.from('scenario_task_completions').insert({

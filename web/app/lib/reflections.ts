@@ -100,16 +100,20 @@ export async function loadGradedWork(
     const byTask = new Map(completions.rows.map((c) => [c.task_id, c]));
     const stepsByTask = stepGradesByTask(steps.steps, stepRatings.rows);
 
-    const items = (tasks ?? []).map((t) => {
+    // A task rated N/A isn't in the grade, so it's neither a strength nor a gap.
+    const items = (tasks ?? []).flatMap((t) => {
       const completion = byTask.get(t.id as string);
       const credit = taskCredit(completion, stepsByTask.get(t.id as string));
-      return {
-        title: t.title as string,
-        skill_id: skillIdFromTitle(t.title as string),
-        score: Math.round(credit * 100),
-        level: credit > 0 ? ratingLabel(ratingForCredit(credit)) : 'Not performed',
-        remarks: completion?.remarks ?? null,
-      };
+      if (credit === null) return [];
+      return [
+        {
+          title: t.title as string,
+          skill_id: skillIdFromTitle(t.title as string),
+          score: Math.round(credit * 100),
+          level: credit > 0 ? ratingLabel(ratingForCredit(credit)) : 'Not performed',
+          remarks: completion?.remarks ?? null,
+        },
+      ];
     });
     return {
       source_type: 'scenario',

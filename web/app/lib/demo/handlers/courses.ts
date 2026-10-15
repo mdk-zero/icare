@@ -773,7 +773,8 @@ function demoFacts(db: DemoDb, studentIds: string[], requirementIds: string[]): 
           const stepIds = new Set(steps.map((s) => s.id));
           const ratings = db.stepRatings.filter((r) => r.assignment_id === a.id && stepIds.has(r.step_id)).map((r) => r.rating);
           const completion = db.completions.find((c) => c.assignment_id === a.id && c.task_id === t.id);
-          return { skill_id: t.skill_id!, credit: taskCredit(completion, { total: steps.length, ratings }) };
+          // A task rated N/A shows nothing of the skill: no credit, so no evidence.
+          return { skill_id: t.skill_id!, credit: taskCredit(completion, { total: steps.length, ratings }) ?? 0 };
         }),
     }));
   const attempts = db.attempts

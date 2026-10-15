@@ -19,7 +19,7 @@ import {
   setToken,
 } from './client';
 import type { AnomalyReason } from './vitals-rules';
-import type { TaskRating } from './task-ratings';
+import type { ChecklistRating, TaskRating } from './task-ratings';
 
 // ---------------------------------------------------------------
 // Auth (5.1)
@@ -403,7 +403,7 @@ export interface ScenarioTask {
   completed_via: 'system' | 'faculty' | null;
   completed_at: string | null;
   /** Instructor's verbal rating and note — sent only once the scenario is finalized. */
-  rating?: TaskRating | null;
+  rating?: ChecklistRating | null;
   remarks?: string | null;
   /** The share of this task's points earned (0–100), sent with the rating. */
   percent?: number | null;

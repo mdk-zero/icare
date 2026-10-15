@@ -21,7 +21,7 @@ import {
   type DemoTeam,
   type DemoUser,
 } from "./people";
-import type { TaskRating } from "@/app/lib/task-ratings";
+import type { ChecklistRating, TaskRating } from "@/app/lib/task-ratings";
 
 // ---------------------------------------------------------------------------
 // Row types
@@ -135,7 +135,7 @@ export interface DemoAssignment {
 export interface DemoCompletion {
   assignment_id: string;
   task_id: string;
-  rating: TaskRating | null;
+  rating: ChecklistRating | null;
   remarks: string | null;
   completed_via: "system" | "faculty";
   completed_at: string;
@@ -144,7 +144,7 @@ export interface DemoCompletion {
 export interface DemoStepRating {
   assignment_id: string;
   step_id: string;
-  rating: TaskRating;
+  rating: ChecklistRating;
 }
 
 export interface DemoQuiz {

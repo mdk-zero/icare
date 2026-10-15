@@ -5,16 +5,25 @@
  */
 export type TaskRating = 'excellent' | 'satisfactory' | 'needs_practice';
 
-export const TASK_RATING_LABEL: Record<TaskRating, string> = {
+/**
+ * A scenario task can also be marked N/A — a Taylor's step not done in
+ * Philippine practice — which leaves it out of the score. Case presentations
+ * use the three levels alone.
+ */
+export type ChecklistRating = TaskRating | 'not_applicable';
+
+export const TASK_RATING_LABEL: Record<ChecklistRating, string> = {
   excellent: 'Excellent',
   satisfactory: 'Satisfactory',
   needs_practice: 'Needs Practice',
+  not_applicable: 'N/A',
 };
 
-export const TASK_RATING_BADGE: Record<TaskRating, 'success' | 'info' | 'warning' | 'danger' | 'default'> = {
+export const TASK_RATING_BADGE: Record<ChecklistRating, 'success' | 'info' | 'warning' | 'danger' | 'default'> = {
   excellent: 'success',
   satisfactory: 'info',
   needs_practice: 'warning',
+  not_applicable: 'default',
 };
 
 /** The verbal reading of a 0–100 scenario score, on the web's bands. */

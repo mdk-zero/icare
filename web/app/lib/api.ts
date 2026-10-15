@@ -2,7 +2,7 @@ import type { MlEvent } from './ml';
 import { NDJSON, readNdjson } from './ndjson';
 import { cachedFetch, clearRequestCache } from './request-cache';
 import { recordRequest } from './telemetry';
-import { resolveRubric, type Rubric, type TaskRating } from './task-ratings';
+import { resolveRubric, type ChecklistRating, type Rubric, type TaskRating } from './task-ratings';
 import { reportNetworkFailure, reportNetworkSuccess } from './connectivity';
 import { endDemo, isDemo } from './demo/session';
 import type { ItemProgress, OfferingSummary, RequirementInput, RequirementRow, TermStatus } from './course-progress';
@@ -2821,8 +2821,8 @@ export interface FacultyScenarioTask {
   is_completed: boolean;
   completed_via: 'system' | 'faculty' | null;
   completed_at: string | null;
-  /** Faculty's verbal rating; null when unrated. Students get it once finalized. */
-  rating: TaskRating | null;
+  /** Faculty's verbal rating, or N/A; null when unrated. Students get it once finalized. */
+  rating: ChecklistRating | null;
   remarks: string | null;
 }
 
@@ -2832,7 +2832,7 @@ export interface GradingTaskStep {
   title: string;
   /** The Taylor's checklist steps it condenses, e.g. "Skill 1-7, steps 12–15". */
   source: string;
-  rating: TaskRating | null;
+  rating: ChecklistRating | null;
 }
 
 /** A task on the faculty grading sheet: its completion state plus its sub-tasks. */
@@ -2880,7 +2880,7 @@ export async function fetchFacultyAssignmentTasks(assignmentId: string): Promise
 }
 
 type GradeSaveResult =
-  | { ok: true; score?: number; rating: TaskRating | null }
+  | { ok: true; score?: number; rating: ChecklistRating | null }
   | { ok: false; error: string };
 
 async function putTaskGrade(assignmentId: string, body: object, label: string): Promise<GradeSaveResult> {
@@ -2894,7 +2894,7 @@ async function putTaskGrade(assignmentId: string, body: object, label: string): 
     const json = (await res.json().catch(() => ({}))) as {
       error?: string;
       score?: number;
-      rating?: TaskRating | null;
+      rating?: ChecklistRating | null;
     };
     if (!res.ok) {
       console.error(`${label}() failed`, json.error);
@@ -2919,7 +2919,7 @@ async function putTaskGrade(assignmentId: string, body: object, label: string): 
 export async function saveTaskRating(
   assignmentId: string,
   taskId: string,
-  grade: { rating?: TaskRating | null; remarks?: string | null },
+  grade: { rating?: ChecklistRating | null; remarks?: string | null },
 ): Promise<GradeSaveResult> {
   return putTaskGrade(assignmentId, { task_id: taskId, ...grade }, 'saveTaskRating');
 }
@@ -2931,7 +2931,7 @@ export async function saveTaskRating(
 export async function saveStepRatings(
   assignmentId: string,
   taskId: string,
-  steps: { step_id: string; rating: TaskRating | null }[],
+  steps: { step_id: string; rating: ChecklistRating | null }[],
 ): Promise<GradeSaveResult> {
   return putTaskGrade(assignmentId, { task_id: taskId, steps }, 'saveStepRatings');
 }

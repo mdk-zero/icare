@@ -33,7 +33,7 @@ import {
   visibleSections,
   visibleStudents,
 } from "./scope";
-import { isTaskRating, resolveRubric, type TaskRating } from "@/app/lib/task-ratings";
+import { isChecklistRating, resolveRubric, type ChecklistRating } from "@/app/lib/task-ratings";
 import { formatAuditDetails } from "@/app/lib/audit-details";
 
 /**
@@ -1096,7 +1096,7 @@ route("PUT", "/api/faculty/scenarios/assignments/:id/tasks", (ctx) => {
   const taskSteps = db.steps.filter((s) => s.task_id === task.id);
   const now = new Date().toISOString();
   let completion = db.completions.find((c) => c.assignment_id === a.id && c.task_id === task.id);
-  let level: TaskRating | null = null;
+  let level: ChecklistRating | null = null;
 
   if (Array.isArray(body?.steps)) {
     if (taskSteps.length === 0) return json({ error: "This task has no sub-tasks" }, 409);
@@ -1106,10 +1106,10 @@ route("PUT", "/api/faculty/scenarios/assignments/:id/tasks", (ctx) => {
     if (current.length === 0 && completion?.rating) {
       for (const st of taskSteps) db.stepRatings.push({ assignment_id: a.id, step_id: st.id, rating: completion.rating });
     }
-    for (const change of body.steps as { step_id: string; rating: TaskRating | null }[]) {
+    for (const change of body.steps as { step_id: string; rating: ChecklistRating | null }[]) {
       if (!known.has(change.step_id)) return notFound("Sub-task not found for this task");
       db.stepRatings = db.stepRatings.filter((r) => !(r.assignment_id === a.id && r.step_id === change.step_id));
-      if (change.rating && isTaskRating(change.rating)) db.stepRatings.push({ assignment_id: a.id, step_id: change.step_id, rating: change.rating });
+      if (change.rating && isChecklistRating(change.rating)) db.stepRatings.push({ assignment_id: a.id, step_id: change.step_id, rating: change.rating });
     }
     const rated = db.stepRatings.filter((r) => r.assignment_id === a.id && known.has(r.step_id));
     if (rated.length === 0) {
@@ -1122,8 +1122,8 @@ route("PUT", "/api/faculty/scenarios/assignments/:id/tasks", (ctx) => {
       } else completion.rating = level;
     }
   } else {
-    if (body?.rating !== undefined && body.rating !== null && !isTaskRating(body.rating)) {
-      return json({ error: "rating must be a rating level or null" }, 400);
+    if (body?.rating !== undefined && body.rating !== null && !isChecklistRating(body.rating)) {
+      return json({ error: "rating must be a rating level, N/A, or null" }, 400);
     }
     if (body?.rating !== undefined && taskSteps.length > 0) {
       return json({ error: "This task is graded by its sub-tasks — rate those instead" }, 409);

@@ -26,17 +26,18 @@ import {
 } from "../../../lib/api";
 import {
   DEFAULT_RUBRIC,
-  TASK_RATINGS,
   gradedScore,
   ratingLabel,
   scoreDescriptor,
-  type TaskRating,
+  type ChecklistRating,
 } from "../../../lib/task-ratings";
 import GradingTable from "./grading-table";
 import {
+  CHECKLIST_COLUMNS,
   RATING_STYLE,
   checklistRows,
   hasCompletion,
+  outOfGrade,
   stepGrades,
   taskLevel,
   withRating,
@@ -372,7 +373,9 @@ export default function AssignmentGrader({
   useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
 
   // --- The grade, as it stands ------------------------------------------------
-  const totalPoints = tasks.reduce((sum, t) => sum + t.points, 0);
+  // A task marked N/A throughout is out of the grade; the rest share its weight.
+  const gradedTasks = tasks.filter((t) => !outOfGrade(t));
+  const totalPoints = gradedTasks.reduce((sum, t) => sum + t.points, 0);
   const projectedScore = gradedScore(
     tasks,
     new Map(
@@ -392,7 +395,7 @@ export default function AssignmentGrader({
   const ratedCount = rows.filter((r) => r.level !== null && !r.implied).length;
   const unratedMissing = rows.filter((r) => r.level === null).length;
   // Unrated rows that still count at their task's whole-task level, by level.
-  const impliedByLevel = TASK_RATINGS.flatMap((level) => {
+  const impliedByLevel = CHECKLIST_COLUMNS.flatMap((level) => {
     const count = rows.filter((r) => r.implied && r.level === level.key).length;
     return count > 0 ? [{ level: level.key, count }] : [];
   });
@@ -400,7 +403,7 @@ export default function AssignmentGrader({
   const rowNoun = (n: number) => (n === 1 ? "row" : "rows");
 
   // Clicks only change the sheet; Save sends them.
-  const handleRateTask = (task: GradingTask, rating: TaskRating | null) => {
+  const handleRateTask = (task: GradingTask, rating: ChecklistRating | null) => {
     if (locked || finalizing) return;
     setTasks((prev) =>
       prev.map((t) => (t.id === task.id ? withRating(t, rating) : t)),
@@ -409,7 +412,7 @@ export default function AssignmentGrader({
 
   const handleRateSteps = (
     task: GradingTask,
-    changes: Map<string, TaskRating | null>,
+    changes: Map<string, ChecklistRating | null>,
   ) => {
     if (locked || finalizing || changes.size === 0) return;
     setTasks((prev) =>
@@ -441,7 +444,7 @@ export default function AssignmentGrader({
         if (note !== undefined)
           requests.push(saveTaskRating(assignmentId, t.id, { remarks: note }));
       } else {
-        const grade: { rating?: TaskRating | null; remarks?: string | null } =
+        const grade: { rating?: ChecklistRating | null; remarks?: string | null } =
           {};
         if (gradeChanged(t, saved)) grade.rating = t.rating;
         if (note !== undefined) grade.remarks = note;
@@ -688,7 +691,7 @@ export default function AssignmentGrader({
           )}
 
           {/* How the grade is composed: one segment per task, as wide as its weight */}
-          {!tasksLoading && tasks.length > 0 && (
+          {!tasksLoading && gradedTasks.length > 0 && (
             <div className="border-b border-hairline px-5 py-4 sm:px-6">
               <div className="mb-2 flex items-center justify-between gap-3 text-xs">
                 <span className="font-semibold text-gray-700">
@@ -699,7 +702,7 @@ export default function AssignmentGrader({
                 <span className="text-gray-400">Bar width = task weight</span>
               </div>
               <div className="flex h-2.5 gap-0.5 overflow-hidden rounded-full">
-                {tasks.map((t) => {
+                {gradedTasks.map((t) => {
                   const { level, implied } = taskLevel(t);
                   return (
                     <span

@@ -73,6 +73,8 @@ export async function GET(_request: Request, { params }: RouteParams) {
 
     const tasks = (tasksRes.data ?? []).map((t) => {
       const completion = completionByTask.get(t.id);
+      // Null for a task rated N/A: out of the score, so no share to show.
+      const credit = taskCredit(completion, stepsByTask.get(t.id));
       // A saved rating means the instructor has graded this task; drafts never
       // reach the database, so there is nothing half-done to leak.
       const released = completed || Boolean(completion?.rating);
@@ -83,7 +85,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
         completed_at: completion?.completed_at ?? null,
         rating: released ? (completion?.rating ?? null) : null,
         remarks: released ? (completion?.remarks ?? null) : null,
-        percent: released ? Math.round(taskCredit(completion, stepsByTask.get(t.id)) * 100) : null,
+        percent: released && credit !== null ? Math.round(credit * 100) : null,
       };
     });
 
