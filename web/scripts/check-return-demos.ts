@@ -19,6 +19,8 @@ import {
   type ScenarioKind,
 } from '../app/lib/scenario-kind';
 import { assignableStudents, mergeAssignees, parseReturnDemoInput, skillDiff } from '../app/lib/return-demos';
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 let failures = 0;
 function check(label: string, ok: boolean, detail = '') {
@@ -119,6 +121,16 @@ async function main() {
   } as never;
   const assignable = assignableStudents(overview);
   eq('only own groups and their members are assignable', [assignable.teams.map((t) => t.id), assignable.students.map((s) => s.id)], [['t1'], ['s1']]);
+
+  console.log('\nroutes');
+  const methods = (file: string) => {
+    const path = join(__dirname, '../app/api/faculty/return-demos', file);
+    if (!existsSync(path)) return 'missing';
+    return [...readFileSync(path, 'utf8').matchAll(/export async function (GET|POST|PATCH|DELETE)\b/g)].map((m) => m[1]);
+  };
+  eq('list and create', methods('route.ts'), ['GET', 'POST']);
+  eq('read, edit and delete one', methods('[id]/route.ts'), ['GET', 'PATCH', 'DELETE']);
+  eq('assign one', methods('[id]/assign/route.ts'), ['POST']);
 
   console.log(failures ? `\n${failures} check(s) failed` : '\nAll checks passed');
   process.exit(failures ? 1 : 0);
