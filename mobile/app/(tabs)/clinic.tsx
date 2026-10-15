@@ -1,4 +1,4 @@
-claimport React from "react";
+import React from "react";
 import {
   ScrollView,
   View,
@@ -23,6 +23,7 @@ import {
   Badge,
 } from "@/components/ui";
 import { useApiData } from "@/hooks/useApiData";
+import { useLiveRefresh } from "@/hooks/useLiveRefresh";
 import { FloorPlan, FloorPlanSkeleton } from "@/components/FloorPlan";
 import { useAppHeaderHeight } from "@/components/navigation/AppTabs";
 import {
@@ -249,6 +250,14 @@ export default function ClinicScreen() {
   // Separate call: a slow LLM generation must never hold up the ward.
   const tips = useApiData(fetchAiTips);
   const cases = useApiData(fetchMyCases);
+  // A case assigned or graded shows up at once: its notification arrives live.
+  const reloadCases = cases.reload;
+  useLiveRefresh(
+    React.useCallback(() => {
+      reload();
+      reloadCases();
+    }, [reload, reloadCases]),
+  );
 
   // Faculty check tasks off in the meantime, so the counters are stale on return.
   useFocusEffect(

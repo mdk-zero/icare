@@ -5,6 +5,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { ScreenHeader, SkeletonBlock, EmptyState } from '@/components/ui';
 import { useApiData } from '@/hooks/useApiData';
+import { useLiveRefresh } from '@/hooks/useLiveRefresh';
 import { fetchAssessments, StudentAssessment } from '@/lib/api';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
@@ -87,6 +88,9 @@ export default function QuizScreen() {
   const { Palette, Accent, Shadow, Type } = useTheme();
   const styles = React.useMemo(() => createStyles(Palette, Accent, Shadow, Type), [Palette, Accent, Shadow, Type]);
   const { data, loading, refreshing, error, refresh, reload } = useApiData(fetchAssessments);
+  // A quiz assigned or published shows up here at once (its notification
+  // arrives live); the 30-second check covers changes that send none.
+  useLiveRefresh(reload, { pollMs: 30_000 });
   const [tab, setTab] = React.useState<Tab>('ongoing');
 
   // Refresh scores/attempt counts when returning from a quiz.
