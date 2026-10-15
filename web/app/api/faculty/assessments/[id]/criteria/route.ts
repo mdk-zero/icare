@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { guardAssessmentEdit } from '@/app/lib/assessment-access';
+import { isSkillId } from '@/app/lib/taylor-skills';
 
 export async function GET(
   _request: NextRequest,
@@ -19,7 +20,7 @@ export async function GET(
     const supabase = getSupabaseAdmin();
     const { data, error } = await supabase
       .from('assessment_criteria')
-      .select('id, assessment_id, name, weight, competency_id, sort_order, min_questions, created_at')
+      .select('id, assessment_id, name, weight, competency_id, skill_id, sort_order, min_questions, created_at')
       .eq('assessment_id', id)
       .order('sort_order', { ascending: true });
 
@@ -54,8 +55,10 @@ export async function POST(
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { name, weight, competency_id, sort_order, min_questions } = body as {
+  const { name, weight, competency_id, skill_id, sort_order, min_questions } = body as {
     name?: unknown;
+    /** The skill area under the chapter (049); none scores the whole chapter. */
+    skill_id?: unknown;
     weight?: unknown;
     competency_id?: unknown;
     sort_order?: unknown;
@@ -87,7 +90,18 @@ export async function POST(
     const denied = await guardAssessmentEdit(supabase, session, { assessmentId: id });
     if (denied) return denied;
 
-    const sortOrder = typeof sort_order === 'number' ? sort_order : 0;
+    // After the last criterion. The client's count collides with an existing
+    // position once a criterion has been removed, and (assessment_id,
+    // sort_order) is unique, so the server picks the position itself.
+    void sort_order;
+    const { data: last } = await supabase
+      .from('assessment_criteria')
+      .select('sort_order')
+      .eq('assessment_id', id)
+      .order('sort_order', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const sortOrder = last ? Number(last.sort_order) + 1 : 0;
 
     const { data, error } = await supabase
       .from('assessment_criteria')
@@ -96,10 +110,11 @@ export async function POST(
         name: name.trim(),
         weight,
         competency_id,
+        skill_id: isSkillId(skill_id) ? skill_id : null,
         sort_order: sortOrder,
         min_questions: minQuestions,
       })
-      .select('id, assessment_id, name, weight, competency_id, sort_order, min_questions, created_at')
+      .select('id, assessment_id, name, weight, competency_id, skill_id, sort_order, min_questions, created_at')
       .single();
 
     if (error) {

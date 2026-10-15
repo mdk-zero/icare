@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { DEFAULT_ATTEMPTS, isValidAttempts, MIN_ATTEMPTS } from '@/app/lib/quiz-attempts';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
-import { activityCourse, activityOfferings, parseOfferingId } from '@/app/lib/activity-course';
+import { activityCourse, activityCoursesReady, activityOfferings, parseOfferingId } from '@/app/lib/activity-course';
 import { getScopedStudentIds } from '@/app/lib/admin-scope';
 import { logAudit } from '@/app/lib/audit';
 
@@ -93,7 +93,10 @@ export async function GET() {
       offering_id: offeringOf.get(a.id as string) ?? null,
     }));
 
-    return NextResponse.json({ assessments });
+    // False until migration 070: a quiz's course can't be stored, so every
+    // quiz lands under "Not in a course" whatever course was chosen.
+    const course_links_ready = await activityCoursesReady(supabase, 'assessments');
+    return NextResponse.json({ assessments, course_links_ready });
   } catch (err) {
     console.error('Fetch assessments failed', err);
     return NextResponse.json({ error: 'Unable to fetch assessments' }, { status: 500 });
@@ -180,6 +183,23 @@ export async function POST(request: NextRequest) {
     );
     if ('error' in course) return NextResponse.json({ error: course.error }, { status: 400 });
 
+    // A quiz made for a course is seen by that course's sections, not every
+    // section, unless sections were chosen.
+    let visibleTo = targetSectionNames;
+    if (visibleTo.length === 0 && course.value.offering_id) {
+      const { data: links } = await supabase
+        .from('course_offering_sections')
+        .select('sections(name)')
+        .eq('offering_id', course.value.offering_id);
+      visibleTo = [
+        ...new Set(
+          ((links ?? []) as unknown as { sections: { name?: string } | null }[])
+            .map((l) => l.sections?.name)
+            .filter((n): n is string => !!n),
+        ),
+      ];
+    }
+
     const { data: assessment, error } = await supabase
       .from('assessments')
       .insert({
@@ -190,7 +210,7 @@ export async function POST(request: NextRequest) {
         category: quizCategory as (typeof validCategories)[number],
         time_limit_seconds: timeLimit,
         max_attempts: maxAttempts,
-        target_sections: targetSectionNames.length > 0 ? targetSectionNames : null,
+        target_sections: visibleTo.length > 0 ? visibleTo : null,
       })
       .select()
       .single();

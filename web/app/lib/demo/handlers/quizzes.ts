@@ -5,7 +5,8 @@ import { newId } from "../store";
 import type { DemoQuiz } from "../fixtures/school";
 import { SKILL_QUESTIONS } from "@/scripts/data/skill-questions";
 import { audit } from "./shared";
-import { linkActivityCourses } from "./courses";
+import { courseDb, linkActivityCourses } from "./courses";
+import { listSkillSummaries } from "../fixtures/skills";
 import { parseDeadline } from "@/app/lib/deadline-input";
 import { byName, sectionName, teamLabel, visibleSections, visibleStudents } from "./scope";
 
@@ -118,7 +119,14 @@ route("POST", "/api/faculty/assessments", (ctx) => {
     time_limit_seconds: limit,
     is_published: false,
     is_ai_generated: false,
-    target_sections: Array.isArray(body?.target_sections) ? body.target_sections : [],
+    // Chosen sections, else the course's sections, as the server does.
+    target_sections:
+      Array.isArray(body?.target_sections) && body.target_sections.length > 0
+        ? body.target_sections
+        : (() => {
+            const offering = courseDb(db).offerings.find((o) => o.id === body?.offering_id);
+            return offering ? offering.section_ids.map((id) => sectionName(db, id)).filter((n): n is string => Boolean(n)) : [];
+          })(),
     total_questions: null,
     max_attempts: attempts,
     created_at: now,
@@ -162,6 +170,12 @@ route("PATCH", "/api/faculty/assessments/:id", (ctx) => {
   if (body?.is_published !== undefined) {
     if (typeof body.is_published !== "boolean") return json({ error: "Invalid is_published" }, 400);
     updates.is_published = body.is_published;
+  }
+  if (body?.offering_id !== undefined) {
+    const offeringId = typeof body.offering_id === "string" ? body.offering_id : "";
+    const own = courseDb(db).offerings.find((o) => o.id === offeringId && o.faculty_id === viewer.id);
+    if (viewer.role === "faculty" && !own) return json({ error: "You can only make this for a course you teach." }, 400);
+    updates.offering_id = offeringId || null;
   }
   if (body?.target_sections !== undefined) {
     if (!Array.isArray(body.target_sections)) return json({ error: "Invalid target_sections" }, 400);
@@ -211,6 +225,30 @@ route("DELETE", "/api/faculty/assessments/:id", (ctx) => {
 
 // --- Criteria ------------------------------------------------------------------
 
+// The chapters a quiz's criteria can be, as /api/faculty/assessments/:id/chapters:
+// those on its course's skill list, or every chapter for a quiz with no course.
+route("GET", "/api/faculty/assessments/:id/chapters", async (ctx) => {
+  const quiz = ctx.db.quizzes.find((q) => q.id === ctx.params.id);
+  if (!quiz) return notFound("Assessment not found");
+  const catalog = await listSkillSummaries();
+  const db = courseDb(ctx.db);
+  const offering = quiz.offering_id ? db.offerings.find((o) => o.id === quiz.offering_id) : undefined;
+  const courseSkills = offering ? db.courseSkills.filter((s) => s.course_id === offering.course_id).map((s) => s.skill_id) : [];
+  const allowed = courseSkills.length ? new Set(courseSkills) : null;
+  const course = allowed && offering ? db.courses.find((c) => c.id === offering.course_id) : undefined;
+  const byChapter = new Map<string, { id: string; chapter: number; name: string; skills: { id: string; title: string }[] }>();
+  for (const sk of catalog) {
+    if (allowed && !allowed.has(sk.id)) continue;
+    const ch = byChapter.get(sk.chapterId) ?? { id: sk.chapterId, chapter: sk.chapter, name: sk.area, skills: [] };
+    ch.skills.push({ id: sk.id, title: sk.title });
+    byChapter.set(sk.chapterId, ch);
+  }
+  return {
+    chapters: [...byChapter.values()].sort((a, b) => a.chapter - b.chapter),
+    course: course ? { code: course.code, title: course.title } : null,
+  };
+});
+
 route("GET", "/api/faculty/assessments/:id/criteria", (ctx) => ({
   criteria: ctx.db.criteria.filter((c) => c.assessment_id === ctx.params.id).sort((a, b) => a.sort_order - b.sort_order),
 }));
@@ -236,7 +274,9 @@ route("POST", "/api/faculty/assessments/:id/criteria", (ctx) => {
     name,
     weight: body.weight,
     competency_id: body.competency_id,
-    sort_order: typeof body?.sort_order === "number" ? body.sort_order : 0,
+    skill_id: typeof body?.skill_id === "string" && body.skill_id ? body.skill_id : null,
+    // After the last one, as the server does.
+    sort_order: Math.max(-1, ...db.criteria.filter((c) => c.assessment_id === quiz.id).map((c) => c.sort_order)) + 1,
     min_questions: Number.isInteger(min) && min >= 0 ? min : 1,
     created_at: new Date().toISOString(),
   };
@@ -295,6 +335,7 @@ function parseQuestion(body: Record<string, unknown> | undefined) {
       explanation: typeof body?.explanation === "string" ? body.explanation.trim() : "",
       criteria_id: typeof body?.criteria_id === "string" && body.criteria_id ? body.criteria_id : null,
       competency_ids: Array.isArray(body?.competency_ids) ? (body.competency_ids as string[]) : [],
+      skill_id: typeof body?.skill_id === "string" && body.skill_id ? body.skill_id : null,
     },
   };
 }
@@ -324,7 +365,7 @@ route("PATCH", "/api/faculty/questions/:id", (ctx) => {
   if (!q) return notFound("Question not found");
   const quiz = db.quizzes.find((x) => x.id === q.assessment_id);
   if (quiz && !canEdit(ctx, quiz)) return NOT_YOURS();
-  for (const key of ["content", "options", "correct_index", "question_type", "points", "explanation", "criteria_id", "competency_ids", "position"] as const) {
+  for (const key of ["content", "options", "correct_index", "question_type", "points", "explanation", "criteria_id", "competency_ids", "skill_id", "position"] as const) {
     if (body && key in body) (q as unknown as Record<string, unknown>)[key] = body[key];
   }
   return { ok: true };
@@ -396,6 +437,11 @@ route("POST", "/api/faculty/assessments/:id/assign", (ctx) => {
   const { db, body, viewer } = ctx;
   const quiz = db.quizzes.find((q) => q.id === ctx.params.id);
   if (!quiz) return notFound("Assessment not found");
+  // Assigning publishes it, so a draft must pass the publish checks first.
+  if (!quiz.is_published) {
+    const blockers = publishBlockers(ctx, quiz);
+    if (blockers.length > 0) return json({ error: blockers[0].message, blockers }, 400);
+  }
   const sectionIds: string[] = Array.isArray(body?.section_ids) ? body.section_ids : [];
   const studentIds: string[] = Array.isArray(body?.student_ids) ? body.student_ids : [];
   if (sectionIds.length === 0 && studentIds.length === 0) return json({ error: "Select at least one section" }, 400);
@@ -428,6 +474,8 @@ route("POST", "/api/faculty/assessments/:id/assign", (ctx) => {
   const names = sectionIds.map((id) => sectionName(db, id)).filter((n): n is string => Boolean(n));
   const added = names.filter((n) => !quiz.target_sections.includes(n));
   quiz.target_sections = [...quiz.target_sections, ...added];
+  // Assigning publishes it, as the server does.
+  quiz.is_published = true;
   if (body?.max_attempts) quiz.max_attempts = Number(body.max_attempts);
   audit(db, viewer, "assessment.assign", "assessments", { message: `Assigned “${quiz.title}” to ${names.join(", ") || `${targets.size} student(s)`}` }, quiz.id);
   return { success: true, student_count: targets.size, added_sections: added };

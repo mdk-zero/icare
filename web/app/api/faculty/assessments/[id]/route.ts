@@ -5,6 +5,7 @@ import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { logAudit } from '@/app/lib/audit';
 import { assessmentPublishBlockers } from '@/app/lib/assessment-validation';
 import { guardAssessmentEdit } from '@/app/lib/assessment-access';
+import { activityCourse, activityOfferings, parseOfferingId } from '@/app/lib/activity-course';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -24,7 +25,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
     const { data: assessment, error } = await supabase
       .from('assessments')
       .select(
-        'id, created_by, title, description, category, time_limit_seconds, is_published, is_ai_generated, target_sections, total_questions, max_attempts, created_at, updated_at, questions(id, position, content, options, correct_index, question_type, points, explanation, criteria_id, question_competencies(competency_id))',
+        'id, created_by, title, description, category, time_limit_seconds, is_published, is_ai_generated, target_sections, total_questions, max_attempts, created_at, updated_at, questions(id, position, content, options, correct_index, question_type, points, explanation, criteria_id, skill_id, question_competencies(competency_id))',
       )
       .eq('id', id)
       .single();
@@ -44,6 +45,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
         points: q.points ?? 1,
         explanation: q.explanation,
         criteria_id: q.criteria_id ?? null,
+        skill_id: (q as unknown as { skill_id?: string | null }).skill_id ?? null,
         competency_ids: (
           (q as unknown as { question_competencies: { competency_id: string }[] })
             .question_competencies ?? []
@@ -54,15 +56,58 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
     // Sent with every load so the editor can show what is standing between
     // this assessment and being publishable, instead of only finding out when
     // the publish button is pressed.
-    const blockers = await assessmentPublishBlockers(supabase, id);
+    const [blockers, offerings] = await Promise.all([
+      assessmentPublishBlockers(supabase, id),
+      activityOfferings(supabase, 'assessments', [id]),
+    ]);
 
     return NextResponse.json({
-      assessment: { ...assessment, questions },
+      // The course it is for (070), so the editor can show and change it.
+      assessment: { ...assessment, questions, offering_id: offerings.get(id) ?? null },
       blockers,
     });
   } catch (err) {
     console.error('Fetch assessment failed', err);
     return NextResponse.json({ error: 'Unable to fetch assessment' }, { status: 500 });
+  }
+}
+
+/**
+ * A quiz just published appears on its target sections' phones; the
+ * notification is what tells their app (live feed and push) to show it now
+ * instead of on the next refresh. Students already assigned it were told by
+ * the assign route. A quiz with no target sections is open to everyone and
+ * notifies no one. A failure never fails the publish.
+ */
+async function notifyPublished(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  assessment: { id: string; title: string; target_sections: string[] | null },
+) {
+  const targets = assessment.target_sections ?? [];
+  if (targets.length === 0) return;
+  try {
+    const { data: sections } = await supabase.from('sections').select('id').in('name', targets);
+    const sectionIds = (sections ?? []).map((s) => s.id as string);
+    if (sectionIds.length === 0) return;
+    const [{ data: students }, { data: assigned }] = await Promise.all([
+      supabase.from('users').select('id').eq('role', 'student').in('section_id', sectionIds),
+      supabase.from('assessment_assignments').select('student_id').eq('assessment_id', assessment.id),
+    ]);
+    const already = new Set((assigned ?? []).map((a) => a.student_id as string));
+    const recipients = (students ?? []).map((u) => u.id as string).filter((uid) => !already.has(uid));
+    if (recipients.length === 0) return;
+    const { error } = await supabase.from('notifications').insert(
+      recipients.map((user_id) => ({
+        user_id,
+        type: 'assignment_created',
+        title: 'New quiz available',
+        body: `"${assessment.title}" is now open in Quizzes.`,
+        data: { assessment_id: assessment.id },
+      })),
+    );
+    if (error) console.error('Failed to notify students of a published quiz', error);
+  } catch (err) {
+    console.error('Failed to notify students of a published quiz', err);
   }
 }
 
@@ -158,7 +203,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     updates.max_attempts = n;
   }
 
-  if (Object.keys(updates).length === 0) {
+  if (Object.keys(updates).length === 0 && !('offering_id' in ((body ?? {}) as Record<string, unknown>))) {
     return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 });
   }
 
@@ -166,6 +211,13 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const supabase = getSupabaseAdmin();
     const denied = await guardAssessmentEdit(supabase, session, { assessmentId: id });
     if (denied) return denied;
+
+    // Moving it to another course: one the instructor teaches, as on create.
+    if ('offering_id' in ((body ?? {}) as Record<string, unknown>)) {
+      const course = await activityCourse(supabase, 'assessments', session, parseOfferingId(body as Record<string, unknown>));
+      if ('error' in course) return NextResponse.json({ error: course.error }, { status: 400 });
+      Object.assign(updates, course.value);
+    }
 
     if (targetSectionNames) {
       const { data: known } = await supabase
@@ -200,6 +252,10 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       }
     }
 
+    // Whether this update is what publishes it, so students are told once.
+    const { data: before } = await supabase.from('assessments').select('is_published').eq('id', id).single();
+    const publishing = updates.is_published === true && before?.is_published !== true;
+
     const { data: assessment, error } = await supabase
       .from('assessments')
       .update(updates)
@@ -211,6 +267,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       console.error('Failed to update assessment', error);
       return NextResponse.json({ error: 'Unable to update assessment' }, { status: 500 });
     }
+
+    if (publishing) await notifyPublished(supabase, assessment);
 
     await logAudit(
       session,

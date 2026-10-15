@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
-import { citedSkillId, isMissingSkillColumn } from '@/app/lib/taylor-skills';
+import { citedSkillId, isMissingSkillColumn, isSkillId } from '@/app/lib/taylor-skills';
 import { logAudit } from '@/app/lib/audit';
 import { guardAssessmentEdit } from '@/app/lib/assessment-access';
 
@@ -35,6 +35,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     question_type,
     points,
     criteria_id,
+    skill_id,
   } = body as {
     content?: unknown;
     options?: unknown;
@@ -45,6 +46,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     question_type?: unknown;
     points?: unknown;
     criteria_id?: unknown;
+    /** The question's skill area: a Taylor's skill id, or null for none. */
+    skill_id?: unknown;
   };
 
   const updates: Record<string, unknown> = {};
@@ -134,7 +137,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       updates.criteria_id = criteriaId;
     }
 
-    if (Object.keys(updates).length > 0) {
+    if (Object.keys(updates).length > 0 || skill_id !== undefined) {
       // Keep correct_index within the (possibly updated) options bounds.
       const existing = current;
       const finalOptions =
@@ -149,8 +152,13 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         );
       }
 
-      // Re-link the question to the Taylor's skill its explanation now cites (049).
-      const skillUpdates = explanation !== undefined ? { ...updates, skill_id: citedSkillId(updates.explanation) } : updates;
+      // The skill area chosen for it; otherwise the Taylor's skill its explanation now cites (049).
+      const skillUpdates =
+        skill_id !== undefined
+          ? { ...updates, skill_id: isSkillId(skill_id) ? skill_id : null }
+          : explanation !== undefined
+            ? { ...updates, skill_id: citedSkillId(updates.explanation) }
+            : updates;
       let { error } = await supabase.from('questions').update(skillUpdates).eq('id', id);
       if (error && skillUpdates !== updates && isMissingSkillColumn(error)) {
         ({ error } = await supabase.from('questions').update(updates).eq('id', id));
