@@ -103,6 +103,18 @@ export default function QuizInfoScreen() {
   const score = quiz.best_score;
   const passed = score !== null && score >= PASSING_SCORE;
 
+  // Said before the quiz starts, because the quiz enforces it (app/quiz/[id].tsx).
+  const strictRules = (
+    <View style={styles.strictRow}>
+      <Ionicons name="lock-closed-outline" size={18} color={Accent.red.fg} />
+      <Text style={styles.strictText}>
+        <Text style={styles.strictLead}>Strict mode. </Text>
+        The quiz opens full screen. Stay in iCARE++ until you submit: leaving the app once gives a warning,
+        and leaving it a second time submits your quiz with the answers you have.
+      </Text>
+    </View>
+  );
+
   const stats = [
     { label: 'Questions', value: String(quiz.question_count) },
     { label: 'Time limit', value: formatTimeLimit(quiz.time_limit_seconds) },
@@ -185,6 +197,7 @@ export default function QuizInfoScreen() {
             <Ionicons name="chevron-forward" size={18} color={Palette.textFaint} />
           </Pressable>
 
+          {strictRules}
           <PrimaryButton
             title={exhausted ? 'No tries left' : 'Take it again'}
             onPress={() => router.push(`/quiz/${quiz.id}`)}
@@ -206,6 +219,7 @@ export default function QuizInfoScreen() {
               You can skip a question and come back to it.
             </Text>
           </View>
+          {strictRules}
           <PrimaryButton
             title={exhausted ? 'No tries left' : 'Start quiz'}
             onPress={() => router.push(`/quiz/${quiz.id}`)}
@@ -296,5 +310,17 @@ function createStyles(
     note: { fontSize: 12, color: Accent.red.fg, textAlign: 'center' },
     readyRow: { flexDirection: 'row', gap: Spacing.sm, alignItems: 'flex-start' },
     readyText: { flex: 1, fontSize: 13, color: Palette.textSecondary, lineHeight: 19 },
+    strictRow: {
+      flexDirection: 'row',
+      gap: Spacing.sm,
+      alignItems: 'flex-start',
+      padding: Spacing.md,
+      borderRadius: Radius.md,
+      backgroundColor: Accent.red.bg,
+      borderWidth: 1,
+      borderColor: Accent.red.border,
+    },
+    strictText: { flex: 1, fontSize: 13, color: Palette.text, lineHeight: 19 },
+    strictLead: { fontWeight: '800', color: Accent.red.fg },
   });
 }
