@@ -23,6 +23,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { autoSplit } from '../app/lib/course-grading';
 import { requirementNames, skillCoverage } from '../app/lib/course-progress';
 import { loadActivityItems } from '../app/lib/courses';
+import { seed } from '../app/lib/demo/fixtures';
 import { join } from 'node:path';
 
 let failures = 0;
@@ -195,6 +196,23 @@ async function main() {
   );
   eq('before 072 every scenario is a Patient Case item', before072Items?.map((i) => [i.id, i.activity_type]), [['c1', 'scenario']]);
   eq('loadActivityItems files by kind', items?.map((i) => [i.id, i.activity_type, i.scenario_id]), [['c1', 'scenario', 'c1'], ['r1', 'return_demo', 'r1']]);
+
+  console.log('\ndemo');
+  const db = seed();
+  const rds = db.scenarios.filter((sc) => sc.kind === 'return_demo');
+  eq('the demo has two Return Demonstrations', rds.map((sc) => sc.title).sort(), ['Oxygen Therapy Return Demonstration', 'Vital Signs Return Demonstration']);
+  check('neither has a patient', rds.length > 0 && rds.every((sc) => sc.patient_id === null));
+  const vitals = rds.find((sc) => sc.title.startsWith('Vital'));
+  eq('the vital signs one is made of Skills 1-1, 1-4, 1-6, 1-7', db.tasks.filter((t) => t.scenario_id === vitals?.id).map((t) => t.skill_id), ['1-1', '1-4', '1-6', '1-7']);
+  check('every skill has its checklist steps', db.tasks.filter((t) => rds.some((sc) => sc.id === t.scenario_id)).every((t) => db.steps.some((st) => st.task_id === t.id)));
+  check(
+    'the graded one has N/A steps',
+    db.stepRatings.some((r) => r.rating === 'not_applicable' && db.assignments.find((a) => a.id === r.assignment_id)?.scenario_id === vitals?.id),
+  );
+  const vitalsWork = db.assignments.filter((a) => a.scenario_id === vitals?.id);
+  check('it is finalized for a whole group, each with a score', vitalsWork.length > 0 && vitalsWork.every((a) => a.status === 'completed' && typeof a.score === 'number'));
+  const oxygen = rds.find((sc) => sc.title.startsWith('Oxygen'));
+  check('the oxygen one is upcoming', db.assignments.some((a) => a.scenario_id === oxygen?.id) && db.assignments.filter((a) => a.scenario_id === oxygen?.id).every((a) => a.status === 'pending' && Date.parse(a.deadline) > Date.now()));
 
   console.log('\nroutes');
   const methods = (file: string) => {

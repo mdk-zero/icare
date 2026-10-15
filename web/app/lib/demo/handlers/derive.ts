@@ -147,6 +147,7 @@ export function assignmentRow(db: DemoDb, a: DemoAssignment) {
     id: a.id,
     scenario_id: a.scenario_id,
     scenario_title: db.scenarios.find((s) => s.id === a.scenario_id)?.title ?? "Unknown Patient Case",
+    kind: db.scenarios.find((s) => s.id === a.scenario_id)?.kind ?? "patient_case",
     student_id: a.student_id,
     student_name: student?.name ?? "Unknown Student",
     student_picture_url: student?.picture_url ?? null,
@@ -215,9 +216,13 @@ export function quizAverage(db: DemoDb, studentId: string): number | null {
   return mean(submittedAttempts(db, studentId).map((a) => a.score ?? 0));
 }
 
+/** Over Patient Cases only: Return Demonstrations (072) are reported on their own. */
 export function caseAverage(db: DemoDb, studentId: string): number | null {
+  const demos = new Set(db.scenarios.filter((s) => s.kind === "return_demo").map((s) => s.id));
   return mean(
-    db.assignments.filter((a) => a.student_id === studentId && a.status === "completed").map((a) => a.score ?? 0),
+    db.assignments
+      .filter((a) => a.student_id === studentId && a.status === "completed" && !demos.has(a.scenario_id))
+      .map((a) => a.score ?? 0),
   );
 }
 

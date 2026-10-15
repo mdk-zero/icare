@@ -6,6 +6,7 @@ import type { DemoAssignment, DemoScenario } from "../fixtures/school";
 import { audit } from "./shared";
 import { linkActivityCourses } from "./courses";
 import { parseDeadline } from "@/app/lib/deadline-input";
+import { kindParam } from "@/app/lib/scenario-kind";
 import {
   DAY_MS,
   assignmentRow,
@@ -50,7 +51,7 @@ function myStudents(ctx: Ctx) {
   return visibleStudents(ctx.db, ctx.role, ctx.viewer.id);
 }
 
-function myStudentIds(ctx: Ctx) {
+export function myStudentIds(ctx: Ctx) {
   return new Set(myStudents(ctx).map((s) => s.id));
 }
 
@@ -109,7 +110,7 @@ function overview(ctx: Ctx) {
   const overdueBy = new Map<string, number>();
   const dueBySection = new Map<string, { due: number; done: number }>();
   const reviewItems: { assignment_id: string; student_id: string; student_name: string; scenario_title: string; submitted_at: string }[] = [];
-  const dueSoon = new Map<string, { kind: "scenario" | "quiz"; id: string; title: string; deadline: string; open: number }>();
+  const dueSoon = new Map<string, { kind: "scenario" | "return_demo" | "quiz"; id: string; title: string; deadline: string; open: number }>();
 
   const tally = (studentId: string, deadline: string | null, done: boolean) => {
     if (!deadline || Date.parse(deadline) >= now) return;
@@ -122,7 +123,7 @@ function overview(ctx: Ctx) {
     }
     if (!done) overdueBy.set(studentId, (overdueBy.get(studentId) ?? 0) + 1);
   };
-  const noteDueSoon = (kind: "scenario" | "quiz", itemId: string, title: string, deadline: string | null, done: boolean) => {
+  const noteDueSoon = (kind: "scenario" | "return_demo" | "quiz", itemId: string, title: string, deadline: string | null, done: boolean) => {
     if (!deadline || done) return;
     const at = Date.parse(deadline);
     if (at < now || at > now + DUE_SOON_DAYS * DAY_MS) return;
@@ -133,10 +134,11 @@ function overview(ctx: Ctx) {
   };
 
   for (const a of db.assignments.filter((x) => ids.has(x.student_id))) {
-    const title = db.scenarios.find((s) => s.id === a.scenario_id)?.title ?? "Patient Case";
+    const scenario = db.scenarios.find((s) => s.id === a.scenario_id);
+    const title = scenario?.title ?? "Patient Case";
     const done = a.status === "completed" || Boolean(a.submitted_at);
     tally(a.student_id, a.deadline, done);
-    noteDueSoon("scenario", a.scenario_id, title, a.deadline, done);
+    noteDueSoon(scenario?.kind === "return_demo" ? "return_demo" : "scenario", a.scenario_id, title, a.deadline, done);
     if (a.submitted_at && a.status !== "completed") {
       reviewItems.push({
         assignment_id: a.id,
@@ -610,7 +612,10 @@ route("GET", "/api/faculty/teams/summary", (ctx) => {
     groups: teams.map((t) => {
       const members = db.users.filter((u) => u.role === "student" && u.team_id === t.id);
       const ids = new Set(members.map((m) => m.id));
-      const assigned = db.assignments.filter((a) => ids.has(a.student_id));
+      // A group's case figures are over Patient Cases; Return Demonstrations (072) are left out.
+      const assigned = db.assignments.filter(
+        (a) => ids.has(a.student_id) && db.scenarios.find((s) => s.id === a.scenario_id)?.kind !== "return_demo",
+      );
       const graded = assigned.filter((a) => a.status === "completed");
       const attempts = db.attempts.filter((a) => ids.has(a.student_id) && a.status === "submitted");
       return {
@@ -770,7 +775,7 @@ route("POST", "/api/faculty/teams/:id/assign-cases", (ctx) => {
   return { scenario_title: scenario.title, assigned, skipped };
 });
 
-function newAssignment(
+export function newAssignment(
   scenario: DemoScenario,
   studentId: string,
   deadline: string,
@@ -816,7 +821,7 @@ export function mlRun(ctx: Ctx, students: ReturnType<typeof myStudents>) {
 // Patient cases
 // ---------------------------------------------------------------------------
 
-function canSeeScenario(ctx: Ctx, scenarioId: string) {
+export function canSeeScenario(ctx: Ctx, scenarioId: string) {
   if (ctx.role === "admin") return true;
   const mine = myStudentIds(ctx);
   const assigned = ctx.db.assignments.filter((a) => a.scenario_id === scenarioId);
@@ -841,7 +846,7 @@ route("GET", "/api/faculty/scenarios", (ctx) => {
   linkActivityCourses(ctx.db);
   return {
     scenarios: ctx.db.scenarios
-      .filter((s) => canSeeScenario(ctx, s.id))
+      .filter((s) => s.kind !== "return_demo" && canSeeScenario(ctx, s.id))
       .sort((a, b) => b.created_at.localeCompare(a.created_at))
       .map((s) => scenarioOut(ctx, s)),
   };
@@ -854,7 +859,7 @@ route("GET", "/api/scenarios/:id", (ctx) => {
   return { scenario: s };
 });
 
-async function addSkillTasks(ctx: Ctx, scenarioId: string, skills: unknown): Promise<number> {
+export async function addSkillTasks(ctx: Ctx, scenarioId: string, skills: unknown): Promise<number> {
   if (!Array.isArray(skills) || skills.length === 0) return 0;
   const [{ getSkills, skillVariants, stepSource, stepsForSections }, { skillTaskFields }] = await Promise.all([
     import("@/app/lib/taylor-skills"),
@@ -920,7 +925,7 @@ route("POST", "/api/faculty/scenarios", async (ctx) => {
 route("PATCH", "/api/faculty/scenarios/:id", (ctx) => {
   if (!staffOnly(ctx)) return forbidden();
   const { db, body, params, viewer } = ctx;
-  const scenario = db.scenarios.find((s) => s.id === params.id);
+  const scenario = db.scenarios.find((s) => s.id === params.id && s.kind !== "return_demo");
   if (!scenario) return notFound("Patient case not found");
   if (!canSeeScenario(ctx, scenario.id)) return forbidden();
   for (const key of ["title", "description", "category", "learning_objectives", "patient_id", "patient_case", "rubric", "is_ai_generated"] as const) {
@@ -934,7 +939,7 @@ route("PATCH", "/api/faculty/scenarios/:id", (ctx) => {
 route("DELETE", "/api/faculty/scenarios/:id", (ctx) => {
   if (!staffOnly(ctx)) return forbidden();
   const { db, params, viewer } = ctx;
-  const scenario = db.scenarios.find((s) => s.id === params.id);
+  const scenario = db.scenarios.find((s) => s.id === params.id && s.kind !== "return_demo");
   if (!scenario) return notFound("Patient case not found");
   const taskIds = new Set(db.tasks.filter((t) => t.scenario_id === scenario.id).map((t) => t.id));
   const assignmentIds = new Set(db.assignments.filter((a) => a.scenario_id === scenario.id).map((a) => a.id));
@@ -951,7 +956,7 @@ route("DELETE", "/api/faculty/scenarios/:id", (ctx) => {
 route("POST", "/api/faculty/scenarios/:id/assign", (ctx) => {
   if (!staffOnly(ctx)) return forbidden();
   const { db, body, params, viewer } = ctx;
-  const scenario = db.scenarios.find((s) => s.id === params.id);
+  const scenario = db.scenarios.find((s) => s.id === params.id && s.kind !== "return_demo");
   if (!scenario) return notFound("Patient case not found");
   const ids: string[] = Array.isArray(body?.student_ids) ? body.student_ids : [];
   const mine = myStudentIds(ctx);
@@ -1011,10 +1016,14 @@ route("GET", "/api/faculty/scenarios/assignments", (ctx) => {
   const studentId = query.get("student_id");
   if (studentId && !mine.has(studentId)) return forbidden();
   const scenarioId = query.get("scenario_id");
+  // Patient Cases unless asked for Return Demonstrations (072) or both.
+  const kind = kindParam(query.get("kind"));
+  const kindOfScenario = new Map(db.scenarios.map((s) => [s.id, s.kind ?? "patient_case"]));
   return {
     assignments: db.assignments
       .filter((a) => (studentId ? a.student_id === studentId : mine.has(a.student_id)))
       .filter((a) => !scenarioId || a.scenario_id === scenarioId)
+      .filter((a) => kind === "all" || (kindOfScenario.get(a.scenario_id) ?? "patient_case") === kind)
       .sort((a, b) => b.assigned_at.localeCompare(a.assigned_at))
       .map((a) => assignmentRow(db, a)),
   };
