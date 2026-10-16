@@ -42,6 +42,35 @@ from training.train_baseline_oulad import evaluate  # noqa: E402
 SEED = 42
 
 
+def outcome_labels(db: Db, pass_threshold: float) -> dict[str, int]:
+    """Each graded student's outcome: 1 (at risk) when the mean of their
+    finalized case grades and faculty validations is below pass_threshold.
+    Students with neither are left out. Shared with eval/icare_eval.py.
+
+    Faculty judgements only. Assessment-derived competency scores are
+    computed from the same attempts that produce the features, so folding
+    them in here would train the model on its own inputs.
+    """
+    finalized = db.select(
+        "scenario_assignments",
+        "student_id,score",
+        [("finalized_by", "not.is", "null"), ("score", "not.is", "null")],
+    )
+    validated = db.select(
+        "competency_scores",
+        "student_id,score",
+        [("source", "eq", "faculty_validation")],
+    )
+    print(f"  {len(finalized)} finalized case grades, {len(validated)} faculty validations")
+    scores_by_student: dict[str, list[float]] = {}
+    for row in [*finalized, *validated]:
+        scores_by_student.setdefault(row["student_id"], []).append(float(row["score"]))
+    return {
+        sid: int(np.mean(scores) < pass_threshold)
+        for sid, scores in scores_by_student.items()
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--pass-threshold", type=float, default=75.0)
@@ -55,31 +84,15 @@ def main() -> None:
         print("building live feature frame...")
         features = build_student_features(db)
 
-        # Faculty judgements only. Assessment-derived competency scores are
-        # computed from the same attempts that produce the features, so folding
-        # them in here would train the model on its own inputs.
-        finalized = db.select(
-            "scenario_assignments",
-            "student_id,score",
-            [("finalized_by", "not.is", "null"), ("score", "not.is", "null")],
-        )
-        validated = db.select(
-            "competency_scores",
-            "student_id,score",
-            [("source", "eq", "faculty_validation")],
-        )
-        print(f"  {len(finalized)} finalized case grades, {len(validated)} faculty validations")
-        scores_by_student: dict[str, list[float]] = {}
-        for row in [*finalized, *validated]:
-            scores_by_student.setdefault(row["student_id"], []).append(float(row["score"]))
+        labels = outcome_labels(db, args.pass_threshold)
 
         student_ids, X_rows, y = [], [], []
         for sid, bundle in features.items():
-            if sid not in scores_by_student:
+            if sid not in labels:
                 continue
             student_ids.append(sid)
             X_rows.append([bundle.features[name] for name in EXTENDED_FEATURES])
-            y.append(1 if np.mean(scores_by_student[sid]) < args.pass_threshold else 0)
+            y.append(labels[sid])
 
         X = np.array(X_rows, dtype=float)
         y = np.array(y, dtype=int)
