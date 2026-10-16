@@ -33,10 +33,12 @@ export interface BulkEnrollJob {
   groupSize: number;
   /** Called when the job is over, to reload the roster and the groups. */
   onDone: () => void;
+  /** Where accounts are made: the dean's users API, or an instructor's students API. */
+  endpoint?: string;
 }
 
-async function enrollOne(sectionId: string, s: EnrollStudent) {
-  const res = await apiFetch("/api/admin/users", {
+async function enrollOne(sectionId: string, s: EnrollStudent, endpoint = "/api/admin/users") {
+  const res = await apiFetch(endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
@@ -91,7 +93,7 @@ export function runBulkEnroll(job: BulkEnrollJob) {
     for (const s of students) {
       const itemId = s.email.trim().toLowerCase();
       task.item(itemId, { status: "working" });
-      const outcome = await enrollOne(sectionId, s);
+      const outcome = await enrollOne(sectionId, s, job.endpoint);
       if (!outcome.ok) {
         task.item(itemId, { status: "failed", message: outcome.error });
         continue;

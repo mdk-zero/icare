@@ -21,8 +21,8 @@ import { nextGroupName } from '@/app/lib/group-label';
 export async function POST(request: NextRequest) {
   const session = await readSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  // Groups are built by admins; faculty only see the ones assigned to them.
-  if (session.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  // A dean regroups their sections; an instructor their course sections.
+  if (!['admin', 'faculty'].includes(session.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   let body: { section_id?: unknown; count?: unknown };
   try {
@@ -42,7 +42,8 @@ export async function POST(request: NextRequest) {
 
   const [{ data: students }, { data: existing, error: teamsError }] = await Promise.all([
     supabase.from('users').select('id').eq('role', 'student').eq('section_id', sectionId).limit(5000),
-    supabase.from('teams').select('id, name').eq('section_id', sectionId),
+    // '*' so a database without teams.faculty_id (before 051) still answers.
+    supabase.from('teams').select('*').eq('section_id', sectionId),
   ]);
   if (teamsError) {
     if (isMissingTeamTables(teamsError)) return NextResponse.json({ error: TEAMS_NEED_MIGRATION }, { status: 503 });
@@ -53,13 +54,30 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: `The section has only ${studentIds.length} students` }, { status: 400 });
   }
 
+  // Regrouping reshuffles the whole section, so an instructor can't do it
+  // while another instructor supervises a group there.
+  if (
+    session.role === 'faculty' &&
+    (existing ?? []).some((t) => (t as { faculty_id?: string | null }).faculty_id !== session.uid)
+  ) {
+    return NextResponse.json(
+      { error: 'Another instructor has groups in this section, so it can only be regrouped by your dean' },
+      { status: 403 },
+    );
+  }
+
   const teams = [...(existing ?? [])].sort((a, b) => compareTeamNames(a.name, b.name)) as { id: string; name: string }[];
   const names = new Set(teams.map((t) => t.name));
   while (teams.length < count) {
     const name = nextGroupName(names);
     const { data, error } = await supabase
       .from('teams')
-      .insert({ section_id: sectionId, name, created_by: session.uid })
+      .insert({
+        section_id: sectionId,
+        name,
+        created_by: session.uid,
+        ...(session.role === 'faculty' ? { faculty_id: session.uid } : {}),
+      })
       .select('id, name')
       .single();
     if (error || !data) {

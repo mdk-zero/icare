@@ -54,13 +54,16 @@ export async function GET() {
       : Promise.resolve({ data: [] }),
     supabase.from('teams').select('faculty_id', { head: true, count: 'exact' }).limit(1),
   ]);
-  // A faculty member sees only the groups they supervise and those groups'
-  // members; students in no group, or in another's group, are not theirs.
+  // An instructor sees the groups they supervise, with their members, and the
+  // students of their sections who are in no group yet (theirs to place).
+  // Students in another instructor's group are not theirs.
   const ownTeams =
     session.role === 'faculty' ? loaded.teams.filter((t) => t.faculty_id === session.uid) : loaded.teams;
   const ownStudentIds = new Set(ownTeams.flatMap((t) => t.members.map((m) => m.id)));
   const visibleStudents =
-    session.role === 'faculty' ? (students ?? []).filter((s) => ownStudentIds.has(s.id as string)) : students ?? [];
+    session.role === 'faculty'
+      ? (students ?? []).filter((s) => ownStudentIds.has(s.id as string) || !loaded.teamOf.get(s.id as string))
+      : students ?? [];
 
   return NextResponse.json({
     enabled: !loaded.error,
@@ -77,8 +80,9 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   const session = await readSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  // Groups are built by admins; faculty only see the ones assigned to them.
-  if (session.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  // A dean builds groups in their sections; an instructor in their course
+  // sections, and supervises the groups they make.
+  if (!['admin', 'faculty'].includes(session.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   let body: { section_id?: unknown; name?: unknown };
   try {
@@ -103,7 +107,12 @@ export async function POST(request: NextRequest) {
 
   const { data, error } = await supabase
     .from('teams')
-    .insert({ section_id: sectionId, name, created_by: session.uid })
+    .insert({
+      section_id: sectionId,
+      name,
+      created_by: session.uid,
+      ...(session.role === 'faculty' ? { faculty_id: session.uid } : {}),
+    })
     .select('id, section_id, name')
     .single();
   if (error) {

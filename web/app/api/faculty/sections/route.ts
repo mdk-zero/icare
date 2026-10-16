@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
-import { getFacultySectionIds } from '@/app/lib/roster';
+import { manageableSectionIds } from '@/app/lib/teams';
 import { getAdminScope } from '@/app/lib/admin-scope';
 
 /** The requesting faculty member's assigned sections (admin: all sections). */
@@ -28,8 +28,8 @@ export async function GET() {
       return NextResponse.json({ sections: sections ?? [] });
     }
 
-    // The sections of the groups they supervise.
-    const sectionIds = await getFacultySectionIds(supabase, session.uid);
+    // The sections of their courses, and of the groups they supervise.
+    const sectionIds = await manageableSectionIds(supabase, session.role, session.uid);
     const { data: rows, error } = sectionIds.length
       ? await supabase.from('sections').select('id, name').in('id', sectionIds)
       : { data: [] as { id: string; name: string }[], error: null };

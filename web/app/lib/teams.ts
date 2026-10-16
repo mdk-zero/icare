@@ -31,7 +31,24 @@ export async function manageableSectionIds(supabase: Supabase, role: string, uid
     const { data } = await supabase.from('sections').select('id');
     return (data ?? []).map((s) => s.id as string);
   }
-  return getFacultySectionIds(supabase, uid);
+  // An instructor manages the sections of the courses they teach, and any
+  // section where they supervise a group.
+  const [groupSections, courseSections] = await Promise.all([
+    getFacultySectionIds(supabase, uid),
+    offeringSectionIds(supabase, uid),
+  ]);
+  return [...new Set([...groupSections, ...courseSections])];
+}
+
+/** The sections of an instructor's course offerings; none before the course tables exist. */
+async function offeringSectionIds(supabase: Supabase, uid: string): Promise<string[]> {
+  const offerings = await supabase.from('course_offerings').select('id').eq('faculty_id', uid);
+  if (offerings.error || !offerings.data?.length) return [];
+  const links = await supabase
+    .from('course_offering_sections')
+    .select('section_id')
+    .in('offering_id', offerings.data.map((o) => o.id as string));
+  return links.error ? [] : [...new Set((links.data ?? []).map((l) => l.section_id as string))];
 }
 
 export interface TeamMember {
@@ -129,10 +146,15 @@ export async function manageableTeam(
   uid: string,
   teamId: string,
 ): Promise<{ id: string; section_id: string; name: string } | null> {
-  const { data } = await supabase.from('teams').select('id, section_id, name').eq('id', teamId).maybeSingle();
+  // '*' so a database without teams.faculty_id (before 051) still answers.
+  const { data } = await supabase.from('teams').select('*').eq('id', teamId).maybeSingle();
   if (!data) return null;
+  // An instructor manages only the groups they supervise.
+  if (role === 'faculty' && (data as { faculty_id?: string | null }).faculty_id !== uid) return null;
   const allowed = await manageableSectionIds(supabase, role, uid);
-  return allowed.includes(data.section_id as string) ? (data as { id: string; section_id: string; name: string }) : null;
+  return allowed.includes(data.section_id as string)
+    ? { id: data.id as string, section_id: data.section_id as string, name: data.name as string }
+    : null;
 }
 
 /** How one group is doing, averaged over its members' individual grades. */

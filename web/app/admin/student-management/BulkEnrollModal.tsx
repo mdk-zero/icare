@@ -153,6 +153,7 @@ export default function BulkEnrollModal({
   groups,
   onClose,
   onFinished,
+  endpoint,
 }: {
   sectionId: string;
   sectionName: string;
@@ -160,6 +161,8 @@ export default function BulkEnrollModal({
   groups: { id: string; name: string }[];
   onClose: () => void;
   onFinished: (created: number) => void;
+  /** Where accounts are made; the dean's users API by default. */
+  endpoint?: string;
 }) {
   const fileInput = useRef<HTMLInputElement>(null);
   const [rows, setRows] = useState<DraftRow[]>([]);
@@ -243,6 +246,7 @@ export default function BulkEnrollModal({
       autoGroup,
       groupSize: Math.max(1, Math.floor(Number(groupSize)) || 1),
       onDone: () => onFinished(filled.length),
+      endpoint,
     });
     onClose();
   };

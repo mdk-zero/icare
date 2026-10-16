@@ -17,8 +17,8 @@ interface RouteParams {
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   const session = await readSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  // Groups are built by admins; faculty only see the ones assigned to them.
-  if (session.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  // A dean manages their sections' groups; an instructor only the groups they supervise.
+  if (!['admin', 'faculty'].includes(session.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const { id } = await params;
   let body: { name?: unknown; faculty_id?: unknown };
@@ -37,6 +37,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     update.name = name;
   }
   if (body.faculty_id !== undefined) {
+    // Who supervises a group is the dean's call.
+    if (session.role !== 'admin') return NextResponse.json({ error: 'Only your dean can change who supervises a group' }, { status: 403 });
     if (body.faculty_id !== null && typeof body.faculty_id !== 'string') {
       return NextResponse.json({ error: 'Invalid faculty_id' }, { status: 400 });
     }
@@ -91,8 +93,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 export async function DELETE(_request: NextRequest, { params }: RouteParams) {
   const session = await readSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  // Groups are built by admins; faculty only see the ones assigned to them.
-  if (session.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  // A dean manages their sections' groups; an instructor only the groups they supervise.
+  if (!['admin', 'faculty'].includes(session.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const { id } = await params;
   const supabase = getSupabaseAdmin();

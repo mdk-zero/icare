@@ -19,6 +19,20 @@ export function visibleSections(db: DemoDb, role: DemoRole, viewerId: string) {
   return db.sections.filter((s) => ids.has(s.id)).sort((a, b) => a.name.localeCompare(b.name));
 }
 
+/**
+ * The sections a viewer manages students and groups in, as lib/teams.ts
+ * manageableSectionIds: an Instructor's course sections and group sections.
+ */
+export function manageableSections(db: DemoDb, role: DemoRole, viewerId: string) {
+  if (role !== "faculty") return visibleSections(db, role, viewerId);
+  const course = db as { offerings?: { faculty_id: string | null; section_ids: string[] }[] };
+  const ids = new Set([
+    ...ownTeams(db, role, viewerId).map((t) => t.section_id),
+    ...(course.offerings ?? []).filter((o) => o.faculty_id === viewerId).flatMap((o) => o.section_ids),
+  ]);
+  return db.sections.filter((s) => ids.has(s.id)).sort((a, b) => a.name.localeCompare(b.name));
+}
+
 export function students(db: DemoDb): DemoUser[] {
   return db.users.filter((u) => u.role === "student");
 }

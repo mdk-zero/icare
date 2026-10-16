@@ -35,9 +35,11 @@ export async function PUT(request: NextRequest) {
   if (!studentId) return NextResponse.json({ error: 'student_id is required' }, { status: 400 });
 
   const supabase = getSupabaseAdmin();
-  if (session.role === 'faculty') {
-    const reason = typeof body.reason === 'string' ? body.reason.trim() : '';
-    return moveBetweenOwnGroups(supabase, session, request, studentId, teamId, reason);
+  // A move with a reason is the instructor's logged transfer between their
+  // groups. Without one, an instructor places students like a dean does,
+  // within their course sections and their own groups (checked below).
+  if (session.role === 'faculty' && typeof body.reason === 'string') {
+    return moveBetweenOwnGroups(supabase, session, request, studentId, teamId, body.reason.trim());
   }
   const { data: student } = await supabase
     .from('users')
@@ -47,6 +49,14 @@ export async function PUT(request: NextRequest) {
   const allowed = await manageableSectionIds(supabase, session.role, session.uid);
   if (!student || student.role !== 'student' || !allowed.includes(student.section_id as string)) {
     return NextResponse.json({ error: 'Student not in your sections' }, { status: 403 });
+  }
+
+  // A student in another instructor's group isn't theirs to move.
+  if (session.role === 'faculty') {
+    const { data: membership } = await supabase.from('team_members').select('team_id').eq('student_id', studentId).maybeSingle();
+    if (membership && !(await manageableTeam(supabase, session.role, session.uid, membership.team_id as string))) {
+      return NextResponse.json({ error: "That student is in another instructor's group" }, { status: 403 });
+    }
   }
 
   if (teamId) {

@@ -2,7 +2,12 @@
 
 import { useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faUserPlus, faCircleCheck, faTriangleExclamation } from "@fortawesome/free-solid-svg-icons";
+import {
+  faUserPlus,
+  faCheck,
+  faTriangleExclamation,
+  faEnvelope,
+} from "@fortawesome/free-solid-svg-icons";
 import { apiFetch, moveStudentToTeam } from "../../lib/api";
 import { loadingToast } from "../../components/Toast";
 
@@ -20,12 +25,15 @@ export default function RegisterStudentModal({
   groups,
   onClose,
   onRegistered,
+  endpoint = "/api/admin/users",
 }: {
   sectionId: string;
   sectionName: string;
   groups: { id: string; name: string }[];
   onClose: () => void;
   onRegistered: () => void;
+  /** Where the account is made: the dean's users API, or an instructor's students API. */
+  endpoint?: string;
 }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -33,14 +41,21 @@ export default function RegisterStudentModal({
   const [groupId, setGroupId] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState<{ email: string; password: string; warning?: string } | null>(null);
+  const [done, setDone] = useState<{
+    name: string;
+    email: string;
+    group: string | null;
+    password: string;
+    warning?: string;
+    emailFailed: boolean;
+  } | null>(null);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setSaving(true);
     const progress = loadingToast(`Registering ${name.trim()}…`);
-    const res = await apiFetch("/api/admin/users", {
+    const res = await apiFetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
@@ -74,7 +89,15 @@ export default function RegisterStudentModal({
     }
     setSaving(false);
     progress.success(`Registered ${name.trim()}`);
-    setDone({ email: json.user.email, password: json.password ?? "", warning });
+    // The server warns only when the invitation email didn't go out.
+    setDone({
+      name: name.trim(),
+      email: json.user.email,
+      group: groups.find((g) => g.id === groupId)?.name ?? null,
+      password: json.password ?? "",
+      warning,
+      emailFailed: Boolean(json.warning),
+    });
     onRegistered();
   };
 
@@ -93,35 +116,71 @@ export default function RegisterStudentModal({
         {done ? (
           <div className="p-5">
             <div className="flex items-start gap-3">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
-                <FontAwesomeIcon icon={faCircleCheck} className="h-5 w-5" />
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
+                <FontAwesomeIcon icon={faCheck} className="h-4 w-4" />
               </span>
               <div className="min-w-0">
                 <h3 id="register-title" className="font-display text-lg font-semibold text-gray-900">
                   Student registered
                 </h3>
-                <p className="mt-1 text-sm text-gray-500">
-                  {done.warning ? "The account was created." : `An invitation was emailed to ${done.email}.`}
+                <p className="text-sm text-gray-600 break-words">
+                  {done.name} is now in {sectionName}
+                  {done.group ? `, ${done.group}` : ""}.
                 </p>
               </div>
             </div>
-            {done.warning && (
-              <p className="mt-4 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+
+            <p className="mt-4 flex items-start gap-2 rounded-lg bg-subtle px-3 py-2.5 text-sm text-gray-600">
+              <FontAwesomeIcon icon={faEnvelope} className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gray-400" />
+              <span className="min-w-0 [overflow-wrap:anywhere]">
+                {done.emailFailed ? (
+                  <>
+                    The invitation to <span className="font-medium text-gray-900">{done.email}</span>
+                    {" didn't send. Share the password below."}
+                  </>
+                ) : (
+                  <>
+                    Invitation sent to <span className="font-medium text-gray-900">{done.email}</span>.
+                  </>
+                )}
+              </span>
+            </p>
+
+            {done.warning && !done.emailFailed && (
+              <p className="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
                 <FontAwesomeIcon icon={faTriangleExclamation} className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 {done.warning}
               </p>
             )}
-            {done.password && (
-              <div className="mt-4 rounded-lg border border-hairline bg-subtle px-3 py-2.5 text-sm">
-                <p className="text-gray-500">Temporary password (shown once)</p>
-                <code className="mt-1 block font-mono text-base font-semibold text-gray-900">{done.password}</code>
-                <p className="mt-1 text-xs text-gray-400">They are asked to change it the first time they sign in.</p>
+            {/* The emailed invitation carries the password; it's shown here only
+                when that email couldn't be sent, to pass on by hand. */}
+            {done.emailFailed && done.password && (
+              <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5">
+                <p className="text-xs text-amber-800">Temporary password, shown once</p>
+                <code className="mt-0.5 block select-all font-mono text-base font-semibold text-gray-900">{done.password}</code>
               </div>
             )}
-            <div className="mt-5 flex justify-end">
+
+            <div className="mt-5 flex justify-end gap-2">
               <button
+                type="button"
+                onClick={() => {
+                  setName("");
+                  setEmail("");
+                  setSex("");
+                  setGroupId("");
+                  setError(null);
+                  setDone(null);
+                }}
+                className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-subtle hover:text-gray-900"
+              >
+                Register another
+              </button>
+              <button
+                type="button"
+                autoFocus
                 onClick={onClose}
-                className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+                className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-700"
               >
                 Done
               </button>

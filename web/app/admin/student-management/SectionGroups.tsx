@@ -49,7 +49,10 @@ export default function SectionGroups({
   onChanged,
   pendingIds,
   onMove,
+  canAssignInstructor = true,
 }: {
+  /** Only a dean picks who supervises a group; an instructor's groups are their own. */
+  canAssignInstructor?: boolean;
   sectionId: string;
   studentCount: number;
   overview: TeamsOverview | null;
@@ -149,7 +152,9 @@ export default function SectionGroups({
           </h3>
           <p className="text-sm text-gray-500">
             {groups.length === 0
-              ? "Split the section into groups, then give each one an instructor."
+              ? canAssignInstructor
+                ? "Split the section into groups, then give each one an instructor."
+                : "Split the section into groups, or add them one at a time."
               : `${groups.length} group${groups.length === 1 ? "" : "s"} · ${grouped} of ${studentCount} students grouped`}
           </p>
         </div>
@@ -173,7 +178,7 @@ export default function SectionGroups({
         </div>
       </div>
 
-      {overview && !overview.faculty_enabled && groups.length > 0 && (
+      {canAssignInstructor && overview && !overview.faculty_enabled && groups.length > 0 && (
         <p className="mb-4 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
           <FontAwesomeIcon icon={faTriangleExclamation} className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           Assigning faculty to groups needs database migration 051 (team_faculty) applied first.
@@ -276,6 +281,7 @@ export default function SectionGroups({
                 )}
               </div>
 
+              {canAssignInstructor && (
               <label className="mb-3 block">
                 <span className="mb-1 flex items-center gap-1.5 text-xs font-medium text-gray-500">
                   <FontAwesomeIcon icon={faUserTie} className="h-3 w-3" />
@@ -304,6 +310,7 @@ export default function SectionGroups({
                   ))}
                 </select>
               </label>
+              )}
 
               {group.members.length === 0 ? (
                 <p className="rounded-lg border border-dashed border-gray-200 py-4 text-center text-xs text-gray-400">
