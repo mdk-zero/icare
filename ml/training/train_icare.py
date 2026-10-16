@@ -1,10 +1,15 @@
 """Retrain the at-risk models on accumulated iCARE++ data (Phase 3.4).
 
-Labels come from faculty-validated competency scores: a student is labeled
-at_risk when their mean validated score falls below --pass-threshold
-(default 75, the College's passing mark). Students without any validated
-score are excluded — this job only becomes meaningful after the soft
-launch has produced real outcomes.
+Labels come from faculty judgements of the student: finalized patient-case
+grades (the RetDem score faculty lock in at finalize) and any
+faculty-validated competency scores. A student is labeled at_risk when the
+mean of those falls below --pass-threshold (default 75, the College's
+passing mark). Students with neither are excluded — this job only becomes
+meaningful after the soft launch has produced real outcomes.
+
+Case grades are safe as labels because the features never read them: they
+take scores from quiz attempts, and from a case only its status and
+deadline.
 
 New artifacts are written to ml/models/ and registered in ml_models with
 status 'staging'; promote via POST /models/{id}/promote once the metrics
@@ -50,16 +55,22 @@ def main() -> None:
         print("building live feature frame...")
         features = build_student_features(db)
 
-        # Faculty validations only. Assessment-derived competency scores are
+        # Faculty judgements only. Assessment-derived competency scores are
         # computed from the same attempts that produce the features, so folding
         # them in here would train the model on its own inputs.
+        finalized = db.select(
+            "scenario_assignments",
+            "student_id,score",
+            [("finalized_by", "not.is", "null"), ("score", "not.is", "null")],
+        )
         validated = db.select(
             "competency_scores",
             "student_id,score",
             [("source", "eq", "faculty_validation")],
         )
+        print(f"  {len(finalized)} finalized case grades, {len(validated)} faculty validations")
         scores_by_student: dict[str, list[float]] = {}
-        for row in validated:
+        for row in [*finalized, *validated]:
             scores_by_student.setdefault(row["student_id"], []).append(float(row["score"]))
 
         student_ids, X_rows, y = [], [], []
@@ -77,7 +88,7 @@ def main() -> None:
         if len(y) < args.min_samples or len(set(y)) < 2:
             print(
                 f"aborting: need >= {args.min_samples} labeled students with both outcomes "
-                "(run again after more faculty validations accumulate)"
+                "(run again after more case grades are finalized)"
             )
             sys.exit(1)
 

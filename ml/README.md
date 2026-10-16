@@ -89,9 +89,11 @@ app asks for the stream to show a percentage; the nightly workflow doesn't.
   `model_probability`, `evidence_weight`, `work_due` and `work_missed` in its
   feature snapshot, and leads its explanations with `missed_deadlines`
   while the evidence is partial.
-- **Retraining (Phase 3.4)** — once faculty validations accumulate:
-  `python -m training.train_icare` labels students by mean validated
-  competency score vs the 75 passing mark, trains on `EXTENDED_FEATURES`,
+- **Retraining (Phase 3.4)** — once finalized case grades accumulate:
+  `python -m training.train_icare` labels students by the mean of their
+  finalized patient-case grades and any faculty-validated competency scores
+  vs the 75 passing mark (it needs 30 labeled students with both outcomes),
+  trains on `EXTENDED_FEATURES`,
   and registers artifacts as `staging`; promote via the API after review.
 - **Recommender (Phase 3.6)** — TF-IDF over each published assessment's
   question-competency tags, matched against a per-student weakness profile
