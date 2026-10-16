@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { activityOfferings } from '@/app/lib/activity-course';
 
 export async function GET() {
   const session = await readSession();
@@ -51,8 +52,15 @@ export async function GET() {
       return NextResponse.json({ error: 'Unable to fetch assessments' }, { status: 500 });
     }
 
-    // Filter by section: null/empty target_sections = visible to all
+    // A course quiz (070) reaches exactly the students it is assigned to: a
+    // group, a section, or a student added to the course by hand. A quiz in
+    // no course keeps the section rule (null/empty target_sections = everyone),
+    // and an assignment shows it either way.
+    const assignedIds = new Set((assignments ?? []).map((a) => a.assessment_id as string));
+    const offeringOf = await activityOfferings(supabase, 'assessments', (published ?? []).map((a) => a.id as string));
     const filteredPublished = (published ?? []).filter((a) => {
+      if (assignedIds.has(a.id as string)) return true;
+      if (offeringOf.get(a.id as string)) return false;
       const target = a.target_sections as string[] | null | undefined;
       if (!target || target.length === 0) return true;
       if (!studentSection) return false;

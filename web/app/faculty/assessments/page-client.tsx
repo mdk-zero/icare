@@ -29,6 +29,8 @@ import ConfirmModal from "../../components/ConfirmModal";
 import { usePageData } from "../../lib/use-page-data";
 import { describeTimeLimit } from "@/app/lib/time-limit";
 import { deadlineFromInput } from "../../lib/deadline-input";
+import AudiencePicker, { audiencePayload, useCourseAudience } from "../../components/AudiencePicker";
+import { fetchQuizAssignments } from "../../lib/api";
 
 const inputClassName =
   "w-full px-4 py-3 bg-surface border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 focus:bg-surface transition-all text-sm shadow-sm";
@@ -66,6 +68,14 @@ interface Assessment {
   /** Tries a student gets; null is unlimited. */
   max_attempts: number | null;
   student_count: number;
+  /** Who has it, by group, with their deadline. */
+  assigned_groups?: {
+    key: string;
+    label: string;
+    count: number;
+    student_ids: string[];
+    deadline: string | null | "mixed";
+  }[];
   created_at: string;
   /** The course offering it was made for (migration 070); null for none. */
   offering_id?: string | null;
@@ -187,6 +197,47 @@ export default function FacultyAssessmentsClient() {
   const [selectedSections, setSelectedSections] = useState<Set<string>>(new Set());
   const [assignDeadline, setAssignDeadline] = useState("");
   const [assignMaxAttempts, setAssignMaxAttempts] = useState("");
+  // A course quiz goes to the course's students by section and group.
+  const [assignAudience, setAssignAudience] = useState<string[]>([]);
+  // The "Who has it" list for one quiz, with a deadline change per group.
+  const [whoHas, setWhoHas] = useState<Assessment | null>(null);
+  const [newDeadline, setNewDeadline] = useState<Record<string, string>>({});
+  const [movingDeadline, setMovingDeadline] = useState<string | null>(null);
+  const changeDeadline = async (quiz: Assessment, group: NonNullable<Assessment["assigned_groups"]>[number]) => {
+    const value = newDeadline[group.key];
+    if (!value) return toast("Pick the new deadline first");
+    setMovingDeadline(group.key);
+    const progress = loadingToast(`Moving ${group.label}'s deadline…`);
+    const res = await apiFetch(`/api/faculty/assessments/${quiz.id}/assign`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      // Assigning the same students again is how their deadline moves.
+      body: JSON.stringify({ student_ids: group.student_ids, deadline: deadlineFromInput(value) }),
+    });
+    setMovingDeadline(null);
+    if (!res.ok) {
+      const j = (await res.json().catch(() => null)) as { error?: string } | null;
+      return progress.error(j?.error ?? "Couldn't change the deadline");
+    }
+    progress.success(`${group.label} is now due ${new Date(value).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`);
+    setNewDeadline((prev) => ({ ...prev, [group.key]: "" }));
+    setWhoHas(null);
+    loadAssessments();
+  };
+  const assignCourse = assignTarget?.offering_id ?? null;
+  const { roster: assignRoster } = useCourseAudience(assignCourse);
+  const audience = audiencePayload(assignRoster, assignAudience);
+  // Who already has it, and by when, shown on each group in the picker.
+  const { data: assignedData, refresh: refreshAssigned } = usePageData(
+    assignTarget && assignCourse ? `faculty:quiz-assigned:${assignTarget.id}` : null,
+    () => fetchQuizAssignments(assignTarget!.id),
+  );
+  const assignedMap = useMemo(
+    () => new Map((assignedData?.data?.assignments ?? []).map((a) => [a.student_id, a.deadline] as const)),
+    [assignedData],
+  );
+  const reassigning = audience.reached.some((id) => assignedMap.has(id));
 
   /** Roster headcount per section, for a preview of who an assign would reach. */
   const studentCountBySection = students.reduce<Record<string, number>>((acc, s) => {
@@ -261,11 +312,13 @@ export default function FacultyAssessmentsClient() {
     );
     setAssignDeadline("");
     setAssignMaxAttempts("");
+    setAssignAudience([]);
   };
 
   const submitAssign = async () => {
-    if (!assignTarget || selectedSections.size === 0) {
-      toast("Select at least one section");
+    if (!assignTarget) return;
+    if (assignCourse ? audience.count === 0 : selectedSections.size === 0) {
+      toast(assignCourse ? "Choose who gets this quiz" : "Select at least one section");
       return;
     }
     setBusy(true);
@@ -275,7 +328,9 @@ export default function FacultyAssessmentsClient() {
       headers: { "Content-Type": "application/json" },
       credentials: "include",
       body: JSON.stringify({
-        section_ids: Array.from(selectedSections),
+        ...(assignCourse
+          ? { section_ids: audience.section_ids, team_ids: audience.team_ids, student_ids: audience.student_ids }
+          : { section_ids: Array.from(selectedSections) }),
         deadline: deadlineFromInput(assignDeadline),
         max_attempts: assignMaxAttempts ? Number(assignMaxAttempts) : null,
       }),
@@ -291,11 +346,14 @@ export default function FacultyAssessmentsClient() {
       return;
     }
     setAssignTarget(null);
-    const count = json?.student_count ?? selectedStudentCount;
+    void refreshAssigned();
+    const count = json?.student_count ?? (assignCourse ? audience.count : selectedStudentCount);
     const added = json?.added_sections ?? [];
     progress.success(
-      `Assigned to ${count} student${count === 1 ? "" : "s"} in ${selectedSections.size} section${selectedSections.size === 1 ? "" : "s"}` +
-        (added.length > 0 ? ` · now visible to ${added.map((s) => `Section ${s}`).join(", ")}` : ""),
+      assignCourse
+        ? `Assigned to ${count} student${count === 1 ? "" : "s"}`
+        : `Assigned to ${count} student${count === 1 ? "" : "s"} in ${selectedSections.size} section${selectedSections.size === 1 ? "" : "s"}` +
+            (added.length > 0 ? ` · now visible to ${added.map((s) => `Section ${s}`).join(", ")}` : ""),
     );
     loadAssessments();
   };
@@ -504,10 +562,13 @@ export default function FacultyAssessmentsClient() {
                   <div className="px-4 py-3 bg-subtle border-t border-hairline space-y-2">
                     {/* Where it stands with students. Assigning is what shows a quiz to them. */}
                     {(() => {
+                      const groups = a.assigned_groups ?? [];
                       const audience =
-                        a.target_sections && a.target_sections.length > 0
-                          ? a.target_sections.map((s) => `Section ${s}`).join(", ")
-                          : "all sections";
+                        groups.length > 0
+                          ? `${groups.length} group${groups.length === 1 ? "" : "s"}`
+                          : a.target_sections && a.target_sections.length > 0
+                            ? a.target_sections.map((s) => `Section ${s}`).join(", ")
+                            : "all sections";
                       const label = !a.is_published
                         ? a.student_count > 0
                           ? "Hidden from students · assign again to show it"
@@ -522,22 +583,55 @@ export default function FacultyAssessmentsClient() {
                         </p>
                       );
                     })()}
-                    <div className="flex flex-wrap items-center justify-end gap-1.5">
+                    {/* One row: the two assign actions, then icon buttons. */}
+                    <div className="flex flex-nowrap items-center justify-end gap-1.5 overflow-x-auto">
                       <button
                         onClick={() => openAssignModal(a)}
                         title={a.is_published ? "Assign to more sections, or hide it" : "Assign it to sections: that shows it to them"}
-                        className="flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-xs font-semibold text-white hover:bg-brand-700"
+                        className="flex shrink-0 items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-xs font-semibold text-white hover:bg-brand-700"
                       >
                         <FontAwesomeIcon icon={faUserPlus} className="w-3.5 h-3.5" />
                         Assign
                       </button>
-                      <button
-                        onClick={() => router.push(`/faculty/assessments/${a.id}`)}
-                        title={canChange(a) ? "Edit details" : "View"}
-                        className="p-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"
-                      >
-                        <FontAwesomeIcon icon={faPen} className="w-3.5 h-3.5" />
-                      </button>
+                      {(a.assigned_groups ?? []).length > 0 && (
+                        <button
+                          onClick={() => setWhoHas(a)}
+                          title="Who has it: the groups and sections, and their deadlines"
+                          aria-label={`Who has it: ${(a.assigned_groups ?? []).length} groups`}
+                          className="flex shrink-0 items-center gap-1.5 rounded-lg border border-brand-600/40 bg-surface px-2.5 py-2 text-xs font-semibold tabular-nums text-brand-700 hover:bg-brand-600/5"
+                        >
+                          <FontAwesomeIcon icon={faUsers} className="w-3.5 h-3.5" />
+                          {(a.assigned_groups ?? []).length}
+                        </button>
+                      )}
+                      {canChange(a) && a.student_count > 0 ? (
+                        // Assigned: what students were given stays what they are graded on.
+                        <span className="group relative">
+                          <button
+                            type="button"
+                            aria-disabled
+                            aria-label="Edit (not available)"
+                            className="p-2 rounded-lg border border-gray-200 text-gray-300 cursor-not-allowed"
+                          >
+                            <FontAwesomeIcon icon={faPen} className="w-3.5 h-3.5" />
+                          </button>
+                          <span
+                            role="tooltip"
+                            className="pointer-events-none absolute bottom-full right-0 z-20 mb-2 w-60 rounded-lg bg-gray-900 px-3 py-2 text-xs font-medium leading-snug text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100"
+                          >
+                            You can&apos;t edit this quiz because it&apos;s already assigned to {a.student_count} student
+                            {a.student_count === 1 ? "" : "s"}. Make a new quiz to change it.
+                          </span>
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => router.push(`/faculty/assessments/${a.id}`)}
+                          title={canChange(a) ? "Edit details" : "View"}
+                          className="p-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"
+                        >
+                          <FontAwesomeIcon icon={faPen} className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                       {canChange(a) && (
                         <button
                           onClick={() => setConfirmDelete(a)}
@@ -549,19 +643,19 @@ export default function FacultyAssessmentsClient() {
                       )}
                       <button
                         onClick={() => router.push(`/faculty/assessments/${a.id}/results`)}
-                        title="View student results"
-                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 text-sm font-medium"
+                        title="Results"
+                        aria-label="Results"
+                        className="p-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"
                       >
                         <FontAwesomeIcon icon={faChartSimple} className="w-3.5 h-3.5" />
-                        Results
                       </button>
                       <button
                         onClick={() => router.push(`/faculty/assessments/${a.id}`)}
-                        title="Manage questions"
-                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-brand-600/10 dark:bg-brand-600/25 text-brand-700 dark:text-white hover:bg-brand-600/20 dark:hover:bg-brand-600/35 text-sm font-medium"
+                        title="Questions"
+                        aria-label="Questions"
+                        className="p-2 rounded-lg bg-brand-600/10 dark:bg-brand-600/25 text-brand-700 dark:text-white hover:bg-brand-600/20 dark:hover:bg-brand-600/35"
                       >
                         <FontAwesomeIcon icon={faListCheck} className="w-3.5 h-3.5" />
-                        Questions
                       </button>
                     </div>
                   </div>
@@ -571,6 +665,73 @@ export default function FacultyAssessmentsClient() {
               )}
             </section>
           ))}
+        </div>
+      )}
+
+      {/* ---------- who has it ---------- */}
+      {whoHas && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setWhoHas(null)}>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="who-has-title"
+            onClick={(e) => e.stopPropagation()}
+            className="bg-surface rounded-xl shadow-overlay w-full max-w-lg p-4 space-y-3 max-h-[90vh] overflow-y-auto border border-hairline"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 id="who-has-title" className="font-semibold text-gray-800">Who has &ldquo;{whoHas.title}&rdquo;</h3>
+                <p className="text-sm text-gray-500">
+                  {whoHas.student_count} student{whoHas.student_count === 1 ? "" : "s"} in {(whoHas.assigned_groups ?? []).length} group
+                  {(whoHas.assigned_groups ?? []).length === 1 ? "" : "s"}. Change a group&apos;s deadline below.
+                </p>
+              </div>
+              <button onClick={() => setWhoHas(null)} aria-label="Close" className="text-gray-400 hover:text-gray-600">
+                <FontAwesomeIcon icon={faTimes} className="w-4 h-4" />
+              </button>
+            </div>
+            <ul className="divide-y divide-hairline rounded-xl border border-hairline">
+              {(whoHas.assigned_groups ?? []).map((g) => (
+                <li key={g.key} className="space-y-2 px-4 py-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-gray-900">{g.label}</p>
+                      <p className="text-xs text-gray-500">
+                        {g.count} student{g.count === 1 ? "" : "s"} ·{" "}
+                        {g.deadline === "mixed"
+                          ? "different deadlines"
+                          : g.deadline
+                            ? `due ${new Date(g.deadline).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`
+                            : "no deadline"}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="datetime-local"
+                      aria-label={`New deadline for ${g.label}`}
+                      value={newDeadline[g.key] ?? ""}
+                      onChange={(e) => setNewDeadline((prev) => ({ ...prev, [g.key]: e.target.value }))}
+                      className={inputClassName + " py-1.5 text-xs"}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void changeDeadline(whoHas, g)}
+                      disabled={!newDeadline[g.key] || movingDeadline !== null}
+                      className="shrink-0 rounded-lg border border-brand-600/40 px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-600/5 disabled:opacity-50"
+                    >
+                      {movingDeadline === g.key ? "Saving…" : "Change deadline"}
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <div className="flex justify-end">
+              <button onClick={() => setWhoHas(null)} className="px-5 py-2 rounded-lg bg-brand-600 text-white text-sm hover:bg-brand-700">
+                Done
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -601,7 +762,7 @@ export default function FacultyAssessmentsClient() {
                 />
               </div>
               <div>
-                <label className={labelClassName}>Attempts for these sections</label>
+                <label className={labelClassName}>Attempts for these students</label>
                 <input
                   type="number"
                   min={1}
@@ -611,11 +772,32 @@ export default function FacultyAssessmentsClient() {
                   className={inputClassName}
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  Overrides the quiz&apos;s own limit for the students in the sections below. Leave
+                  Overrides the quiz&apos;s own limit for the students below. Leave
                   blank to use it. Re-assigning without a value clears any override.
                 </p>
               </div>
             </div>
+            {assignCourse ? (
+              <div>
+                <label className={labelClassName}>Who gets it</label>
+                <AudiencePicker
+                  offeringId={assignCourse}
+                  value={assignAudience}
+                  onChange={setAssignAudience}
+                  assigned={assignedMap}
+                  hideAssigned
+                />
+                <p className="text-xs text-gray-500 mt-1.5">
+                  Only the students you pick see this quiz. Groups that already have it are left out; see and change
+                  their deadlines with the group button beside Assign on the quiz card.
+                </p>
+                {reassigning && (
+                  <p className="text-xs text-amber-700 mt-1">
+                    Some of the students you picked already have it — their deadline changes to the one above.
+                  </p>
+                )}
+              </div>
+            ) : (
             <div>
               <label className={labelClassName}>Sections ({selectedSections.size} selected)</label>
               <div className="border border-hairline rounded-xl divide-y divide-hairline max-h-64 overflow-y-auto">
@@ -677,6 +859,7 @@ export default function FacultyAssessmentsClient() {
                 </p>
               )}
             </div>
+            )}
             {assignTarget.is_published && canChange(assignTarget) && (
               <div className="flex items-center justify-between gap-3 rounded-lg border border-hairline bg-subtle px-3 py-2.5">
                 <p className="text-xs text-gray-600">
@@ -698,7 +881,11 @@ export default function FacultyAssessmentsClient() {
             )}
             <div className="flex items-center justify-between gap-2 pt-2">
               <p className="text-sm text-gray-500">
-                {selectedSections.size === 0
+                {assignCourse
+                  ? audience.count === 0
+                    ? "No one picked yet"
+                    : `${audience.count} student${audience.count === 1 ? "" : "s"}`
+                  : selectedSections.size === 0
                   ? "No sections selected"
                   : `${selectedStudentCount} student${selectedStudentCount === 1 ? "" : "s"} in ${selectedSections.size} section${selectedSections.size === 1 ? "" : "s"}`}
               </p>
@@ -711,7 +898,7 @@ export default function FacultyAssessmentsClient() {
                 </button>
                 <button
                   onClick={submitAssign}
-                  disabled={busy || selectedSections.size === 0 || !assignDeadline}
+                  disabled={busy || (assignCourse ? audience.count === 0 : selectedSections.size === 0) || !assignDeadline}
                   title={assignDeadline ? undefined : "Set a deadline first"}
                   className="px-6 py-2 bg-brand-600 text-white rounded-lg text-sm hover:bg-brand-700 disabled:opacity-60"
                 >

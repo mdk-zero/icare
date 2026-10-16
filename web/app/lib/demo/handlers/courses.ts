@@ -484,10 +484,10 @@ function strip(r: RequirementRow & { created_at?: string }): RequirementRow {
 export function linkActivityCourses(db: DemoDb) {
   courseDb(db);
   type Activity = { id: string; created_by: string | null; created_at: string; offering_id?: string | null };
-  const link = (list: Activity[], key: "scenario_id" | "assessment_id" | "presentation_id") => {
+  const link = (list: Activity[], key: "scenario_id" | "assessment_id" | "presentation_id" | null) => {
     for (const a of list) {
       if (a.offering_id !== undefined) continue;
-      const fromChecklist = db.requirements.find((r) => r[key] === a.id)?.offering_id;
+      const fromChecklist = key ? db.requirements.find((r) => r[key] === a.id)?.offering_id : undefined;
       if (fromChecklist) {
         a.offering_id = fromChecklist;
         continue;
@@ -509,6 +509,8 @@ export function linkActivityCourses(db: DemoDb) {
   link(db.scenarios, "scenario_id");
   link(db.quizzes, "assessment_id");
   link(db.casePresentations, "presentation_id");
+  // Library materials (074) have no checklist item; they follow their author.
+  link(db.materials as Activity[], null);
 }
 
 /**
@@ -856,7 +858,9 @@ route("GET", "/api/faculty/courses/:id/roster", (ctx) => {
       email: s.email,
       picture_url: s.picture_url,
       section,
+      section_id: s.section_id ?? "",
       group: group.join(" · ") || "No group",
+      team_id: s.team_id ?? null,
       source: roster.source.get(s.id),
     };
   });

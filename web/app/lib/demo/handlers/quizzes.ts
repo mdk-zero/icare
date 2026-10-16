@@ -8,7 +8,7 @@ import { audit } from "./shared";
 import { courseDb, linkActivityCourses } from "./courses";
 import { listSkillSummaries } from "../fixtures/skills";
 import { parseDeadline } from "@/app/lib/deadline-input";
-import { byName, sectionName, teamLabel, visibleSections, visibleStudents } from "./scope";
+import { byName, manageableSections, sectionName, teamLabel, visibleSections, visibleStudents } from "./scope";
 
 /** Quizzes (skill assessments): the builder, publishing, assigning and results. */
 
@@ -83,6 +83,25 @@ function publishBlockers(ctx: Ctx, quiz: DemoQuiz, totalOverride?: number | null
   return blockers;
 }
 
+/** Who has a quiz, by group, as lib/assigned-groups.ts reports it. */
+function assignedGroupsOf(ctx: Ctx, quizId: string, ids: Set<string>) {
+  const groups = new Map<string, { key: string; label: string; count: number; student_ids: string[]; deadline: string | null | "mixed" }>();
+  for (const a of ctx.db.quizAssignments) {
+    if (a.assessment_id !== quizId || !ids.has(a.student_id)) continue;
+    const u = ctx.db.users.find((x) => x.id === a.student_id);
+    const team = ctx.db.teams.find((t) => t.id === u?.team_id);
+    const key = team ? `team:${team.id}` : `section:${u?.section_id ?? "none"}`;
+    const label = team ? (teamLabel(ctx.db, team.id) ?? team.name) : (sectionName(ctx.db, u?.section_id) ?? "No section");
+    const g = groups.get(key);
+    if (g) {
+      g.count += 1;
+      g.student_ids.push(a.student_id);
+      if (g.deadline !== a.deadline) g.deadline = "mixed";
+    } else groups.set(key, { key, label, count: 1, student_ids: [a.student_id], deadline: a.deadline });
+  }
+  return [...groups.values()].sort((x, y) => x.label.localeCompare(y.label, undefined, { numeric: true }));
+}
+
 route("GET", "/api/faculty/assessments", (ctx) => {
   if (!staffOnly(ctx)) return forbidden();
   const ids = scopedIds(ctx);
@@ -96,6 +115,7 @@ route("GET", "/api/faculty/assessments", (ctx) => {
         ...q,
         question_count: ctx.db.questions.filter((x) => x.assessment_id === q.id).length,
         student_count: ctx.db.quizAssignments.filter((a) => a.assessment_id === q.id && ids.has(a.student_id)).length,
+        assigned_groups: assignedGroupsOf(ctx, q.id, ids),
       })),
   };
 });
@@ -144,7 +164,11 @@ route("GET", "/api/faculty/assessments/:id", (ctx) => {
   const quiz = ctx.db.quizzes.find((q) => q.id === ctx.params.id);
   if (!quiz) return notFound("Assessment not found");
   return {
-    assessment: { ...quiz, questions: questionsOf(ctx, quiz.id) },
+    assessment: {
+      ...quiz,
+      questions: questionsOf(ctx, quiz.id),
+      assigned_count: ctx.db.quizAssignments.filter((a) => a.assessment_id === quiz.id).length,
+    },
     blockers: publishBlockers(ctx, quiz),
   };
 });
@@ -432,6 +456,16 @@ route("POST", "/api/faculty/assessments/:id/questions/generate-from-lesson", asy
 
 // --- Assigning and results -----------------------------------------------------------
 
+route("GET", "/api/faculty/assessments/:id/assign", (ctx) => {
+  if (!staffOnly(ctx)) return forbidden();
+  const scope = scopedIds(ctx);
+  return {
+    assignments: ctx.db.quizAssignments
+      .filter((a) => a.assessment_id === ctx.params.id && scope.has(a.student_id))
+      .map((a) => ({ student_id: a.student_id, deadline: a.deadline })),
+  };
+});
+
 route("POST", "/api/faculty/assessments/:id/assign", (ctx) => {
   if (!staffOnly(ctx)) return forbidden();
   const { db, body, viewer } = ctx;
@@ -444,14 +478,22 @@ route("POST", "/api/faculty/assessments/:id/assign", (ctx) => {
   }
   const sectionIds: string[] = Array.isArray(body?.section_ids) ? body.section_ids : [];
   const studentIds: string[] = Array.isArray(body?.student_ids) ? body.student_ids : [];
-  if (sectionIds.length === 0 && studentIds.length === 0) return json({ error: "Select at least one section" }, 400);
-  const own = new Set(visibleSections(db, ctx.role, viewer.id).map((s) => s.id));
+  const teamIds: string[] = Array.isArray(body?.team_ids) ? body.team_ids : [];
+  if (sectionIds.length === 0 && studentIds.length === 0 && teamIds.length === 0) {
+    return json({ error: "Choose who gets this quiz" }, 400);
+  }
+  const teams = db.teams.filter((t) => teamIds.includes(t.id));
+  if (ctx.role === "faculty" && teams.some((t) => t.faculty_id !== viewer.id)) {
+    return json({ error: "You can only assign to groups you supervise" }, 403);
+  }
+  const own = new Set(manageableSections(db, ctx.role, viewer.id).map((s) => s.id));
   const outside = sectionIds.filter((id) => !own.has(id));
   if (outside.length > 0) return json({ error: "You can only assign to sections you handle", invalid: outside }, 403);
   const scope = scopedIds(ctx);
   const targets = new Set([
     ...studentIds.filter((id) => scope.has(id)),
     ...db.users.filter((u) => u.role === "student" && u.section_id && sectionIds.includes(u.section_id) && scope.has(u.id)).map((u) => u.id),
+    ...db.users.filter((u) => u.role === "student" && u.team_id && teamIds.includes(u.team_id)).map((u) => u.id),
   ]);
   // Demo quizzes have no deadline of their own to inherit, so one is required.
   const deadlineCheck = parseDeadline(body?.deadline);
@@ -459,7 +501,11 @@ route("POST", "/api/faculty/assessments/:id/assign", (ctx) => {
   const deadline = deadlineCheck.value;
   const already = new Set(db.quizAssignments.filter((a) => a.assessment_id === quiz.id).map((a) => a.student_id));
   for (const id of targets) {
-    if (already.has(id)) continue;
+    // Assigning again is how a group's deadline moves, as on the server.
+    if (already.has(id)) {
+      for (const a of db.quizAssignments) if (a.assessment_id === quiz.id && a.student_id === id) a.deadline = deadline;
+      continue;
+    }
     db.quizAssignments.push({
       id: newId(),
       assessment_id: quiz.id,
@@ -471,7 +517,9 @@ route("POST", "/api/faculty/assessments/:id/assign", (ctx) => {
       required: body?.required !== false,
     });
   }
-  const names = sectionIds.map((id) => sectionName(db, id)).filter((n): n is string => Boolean(n));
+  const names = [...new Set([...sectionIds, ...teams.map((t) => t.section_id)])]
+    .map((id) => sectionName(db, id))
+    .filter((n): n is string => Boolean(n));
   const added = names.filter((n) => !quiz.target_sections.includes(n));
   quiz.target_sections = [...quiz.target_sections, ...added];
   // Assigning publishes it, as the server does.

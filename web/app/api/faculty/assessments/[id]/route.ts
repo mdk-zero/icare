@@ -56,14 +56,16 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
     // Sent with every load so the editor can show what is standing between
     // this assessment and being publishable, instead of only finding out when
     // the publish button is pressed.
-    const [blockers, offerings] = await Promise.all([
+    const [blockers, offerings, assigned] = await Promise.all([
       assessmentPublishBlockers(supabase, id),
       activityOfferings(supabase, 'assessments', [id]),
+      // Once assigned it can't be edited (guardAssessmentEdit), so the editor locks.
+      supabase.from('assessment_assignments').select('id', { count: 'exact', head: true }).eq('assessment_id', id),
     ]);
 
     return NextResponse.json({
       // The course it is for (070), so the editor can show and change it.
-      assessment: { ...assessment, questions, offering_id: offerings.get(id) ?? null },
+      assessment: { ...assessment, questions, offering_id: offerings.get(id) ?? null, assigned_count: assigned.count ?? 0 },
       blockers,
     });
   } catch (err) {
@@ -102,7 +104,7 @@ async function notifyPublished(
         type: 'assignment_created',
         title: 'New quiz available',
         body: `"${assessment.title}" is now open in Quizzes.`,
-        data: { assessment_id: assessment.id },
+        data: { kind: 'quiz', assessment_id: assessment.id },
       })),
     );
     if (error) console.error('Failed to notify students of a published quiz', error);
@@ -209,7 +211,10 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
   try {
     const supabase = getSupabaseAdmin();
-    const denied = await guardAssessmentEdit(supabase, session, { assessmentId: id });
+    // Showing or hiding it, and filing it under a course, stay open once it is
+    // assigned; anything else changes what students were given.
+    const onlyVisibility = Object.keys(updates).every((k) => k === 'is_published');
+    const denied = await guardAssessmentEdit(supabase, session, { assessmentId: id }, { content: !onlyVisibility });
     if (denied) return denied;
 
     // Moving it to another course: one the instructor teaches, as on create.
@@ -304,7 +309,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
   try {
     const supabase = getSupabaseAdmin();
-    const denied = await guardAssessmentEdit(supabase, session, { assessmentId: id });
+    const denied = await guardAssessmentEdit(supabase, session, { assessmentId: id }, { content: false });
     if (denied) return denied;
     const { error } = await supabase.from('assessments').delete().eq('id', id);
 
