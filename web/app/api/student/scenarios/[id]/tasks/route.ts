@@ -7,7 +7,7 @@ import {
   fetchTaskSteps,
   stepGradesByTask,
 } from '@/app/lib/scenario-tasks';
-import { isPerformed, taskCredit, type StepGrades } from '@/app/lib/task-ratings';
+import { isPerformed, scaledGrade, taskRawPoints, type StepGrades } from '@/app/lib/task-ratings';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -76,6 +76,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
       // A saved rating means the instructor has graded this task; drafts never
       // reach the database, so there is nothing half-done to leak.
       const released = completed || Boolean(completion?.rating);
+      const raw = taskRawPoints(completion, stepsByTask.get(t.id));
       return {
         ...t,
         is_completed: isPerformed(completion),
@@ -83,7 +84,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
         completed_at: completion?.completed_at ?? null,
         rating: released ? (completion?.rating ?? null) : null,
         remarks: released ? (completion?.remarks ?? null) : null,
-        percent: released ? Math.round(taskCredit(completion, stepsByTask.get(t.id)) * 100) : null,
+        percent: released ? scaledGrade(raw.earned, raw.max) : null,
       };
     });
 

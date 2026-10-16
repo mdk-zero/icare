@@ -27,8 +27,8 @@ import {
 import {
   DEFAULT_RUBRIC,
   TASK_RATINGS,
-  gradedScore,
   ratingLabel,
+  scenarioScore,
   scoreDescriptor,
   type TaskRating,
 } from "../../../lib/task-ratings";
@@ -373,7 +373,7 @@ export default function AssignmentGrader({
 
   // --- The grade, as it stands ------------------------------------------------
   const totalPoints = tasks.reduce((sum, t) => sum + t.points, 0);
-  const projectedScore = gradedScore(
+  const projectedScore = scenarioScore(
     tasks,
     new Map(
       tasks.filter(hasCompletion).map((t) => [t.id, { rating: t.rating }]),

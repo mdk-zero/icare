@@ -167,6 +167,58 @@ export function gradedScore(
   return total > 0 ? Math.round((earned / total) * 100) : 0;
 }
 
+/**
+ * The patient case grade scale: the checklist is worth 37.5% at its floor, so
+ * a raw share becomes a percentage between 37.5 and 100.
+ */
+export const GRADE_FLOOR = 37.5;
+export const GRADE_SCALE = 62.5;
+
+/**
+ * A raw score as a percentage: `raw / total * 62.5 + 37.5`, read left to
+ * right, not simplified into any other grouping, kept to one decimal (never
+ * rounded off to a whole number). Zero with nothing on offer.
+ */
+export function scaledGrade(raw: number, total: number): number {
+  if (total <= 0) return 0;
+  return Math.round(((raw / total) * GRADE_SCALE + GRADE_FLOOR) * 10) / 10;
+}
+
+/**
+ * One skill's checklist points: every row scores its level's points out of
+ * MAX_RATING_POINTS, so a skill's maximum is its number of rows times three.
+ * A task with no sub-tasks counts as a single row.
+ */
+export function taskRawPoints(
+  completion: GradedCompletion | undefined,
+  steps?: StepGrades,
+): { earned: number; max: number } {
+  const rows = steps && steps.total > 0 ? steps.total : 1;
+  const max = rows * MAX_RATING_POINTS;
+  return { earned: taskCredit(completion, steps) * max, max };
+}
+
+/**
+ * The whole patient case's grade: every checklist row counts the same, whatever
+ * its skill's `points` weight is, so it is the overall checklist raw score over
+ * every row on offer, scaled to a percentage. Shared by the server that locks the
+ * grade in and the sheet that projects it, so the two can never disagree.
+ */
+export function scenarioScore(
+  tasks: readonly { id: string }[],
+  completionByTask: ReadonlyMap<string, GradedCompletion>,
+  stepsByTask?: ReadonlyMap<string, StepGrades>,
+): number {
+  let earned = 0;
+  let total = 0;
+  for (const task of tasks) {
+    const raw = taskRawPoints(completionByTask.get(task.id), stepsByTask?.get(task.id));
+    earned += raw.earned;
+    total += raw.max;
+  }
+  return scaledGrade(earned, total);
+}
+
 /** Each band starts halfway between two levels' credits (3 / 2 / 1 points: 100 / 67 / 33). */
 const EXCELLENT_MIN = 83;
 const SATISFACTORY_MIN = 50;

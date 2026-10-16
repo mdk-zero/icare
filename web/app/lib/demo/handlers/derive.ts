@@ -1,7 +1,7 @@
 import type { DemoDb } from "../store";
 import type { DemoUser } from "../fixtures/people";
 import type { DemoAssignment } from "../fixtures/school";
-import type { TaskRating } from "@/app/lib/task-ratings";
+import { MAX_RATING_POINTS, type TaskRating } from "@/app/lib/task-ratings";
 import { sectionName, teamLabel } from "./scope";
 import { attendanceRows, collectActivities, tallyAttendance, type AttendanceRow } from "@/app/lib/attendance";
 
@@ -106,11 +106,15 @@ export function scoreAssignment(db: DemoDb, a: DemoAssignment): { score: number;
   let remaining = 0;
   for (const task of db.tasks.filter((t) => t.scenario_id === a.scenario_id)) {
     const c = taskCredit(db, a.id, task.id);
-    earned += task.points * c.credit;
-    total += task.points;
+    // Every checklist row is worth MAX_RATING_POINTS, whatever the task's own
+    // points say; a task with no sub-tasks counts as a single row. The whole
+    // case is the raw score over every row on offer, scaled to a percentage.
+    const max = (c.total > 0 ? c.total : 1) * MAX_RATING_POINTS;
+    earned += max * c.credit;
+    total += max;
     remaining += c.total - c.rated;
   }
-  return { score: total > 0 ? Math.round((earned / total) * 100) : 0, remaining };
+  return { score: total > 0 ? Math.round(((earned / total) * 62.5 + 37.5) * 10) / 10 : 0, remaining };
 }
 
 /** How many of the case's tasks the student performed (has any grade on). */
