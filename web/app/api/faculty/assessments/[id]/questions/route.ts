@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
-import { citedSkillId, isMissingSkillColumn } from '@/app/lib/taylor-skills';
+import { citedSkillId, isMissingSkillColumn, isSkillId } from '@/app/lib/taylor-skills';
 import { logAudit } from '@/app/lib/audit';
 import { guardAssessmentEdit } from '@/app/lib/assessment-access';
 
@@ -34,6 +34,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     question_type,
     points,
     criteria_id,
+    skill_id,
   } = body as {
     content?: unknown;
     options?: unknown;
@@ -43,6 +44,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     question_type?: unknown;
     points?: unknown;
     criteria_id?: unknown;
+    /** The question's skill area: a Taylor's skill id. */
+    skill_id?: unknown;
   };
 
   if (typeof content !== 'string' || content.trim().length === 0) {
@@ -114,8 +117,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       explanation: typeof explanation === 'string' ? explanation.trim() : '',
       criteria_id: criteriaId,
     };
-    // A question citing a Taylor's skill is linked to it (migration 049).
-    const skillId = citedSkillId(row.explanation);
+    // Linked to the skill area chosen for it, or to the Taylor's skill its explanation cites (049).
+    const skillId = isSkillId(skill_id) ? skill_id : citedSkillId(row.explanation);
     let inserted = await supabase
       .from('questions')
       .insert(skillId ? { ...row, skill_id: skillId } : row)

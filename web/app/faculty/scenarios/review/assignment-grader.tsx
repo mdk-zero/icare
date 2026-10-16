@@ -26,8 +26,8 @@ import {
 } from "../../../lib/api";
 import {
   DEFAULT_RUBRIC,
-  gradedScore,
   ratingLabel,
+  scenarioScore,
   scoreDescriptor,
   type ChecklistRating,
 } from "../../../lib/task-ratings";
@@ -376,7 +376,7 @@ export default function AssignmentGrader({
   // A task marked N/A throughout is out of the grade; the rest share its weight.
   const gradedTasks = tasks.filter((t) => !outOfGrade(t));
   const totalPoints = gradedTasks.reduce((sum, t) => sum + t.points, 0);
-  const projectedScore = gradedScore(
+  const projectedScore = scenarioScore(
     tasks,
     new Map(
       tasks.filter(hasCompletion).map((t) => [t.id, { rating: t.rating }]),

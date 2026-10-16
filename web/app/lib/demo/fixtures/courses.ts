@@ -74,6 +74,8 @@ export interface DemoCourseTables {
   requirements: DemoRequirement[];
   requirementChecks: DemoRequirementCheck[];
   requirementScores: DemoRequirementScore[];
+  /** Students an instructor added to a course by hand (073). */
+  offeringStudents: { offering_id: string; student_id: string }[];
 }
 
 const range = (chapter: number, from: number, to: number) =>
@@ -343,5 +345,5 @@ export function seedCourses(input: { users: DemoUser[]; casePresentations: DemoC
   };
   for (const o of offerings) o.grading = grading[o.id] ?? null;
 
-  return { terms, courses, courseSkills, offerings, requirements, requirementChecks: [], requirementScores };
+  return { terms, courses, courseSkills, offerings, requirements, requirementChecks: [], requirementScores, offeringStudents: [] };
 }

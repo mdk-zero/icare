@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
-  gradedScore,
   isPerformed,
+  scenarioScore,
   storedRating,
   taskCredit,
   taskLevelForCredit,
@@ -275,9 +275,10 @@ export function stepGradesByTask(
 }
 
 /**
- * Everything that decides one assignment's grade, and the grade itself: each
- * task's points scaled by its rating, or by its sub-tasks' ratings once any
- * are rated. Shared by finalize and by edits to a finalized grade.
+ * Everything that decides one assignment's grade, and the grade itself: every
+ * checklist row's rating points over every row on offer, scaled to a
+ * percentage (scenarioScore). Shared by finalize and by edits to a finalized
+ * grade.
  */
 export async function scoreAssignment(
   supabase: SupabaseClient,
@@ -307,7 +308,7 @@ export async function scoreAssignment(
   if (error) return { error };
 
   const stepsByTask = stepGradesByTask(steps.steps, stepRatings.rows);
-  const score = gradedScore(
+  const score = scenarioScore(
     tasks ?? [],
     new Map(completions.rows.map((c) => [c.task_id, c])),
     stepsByTask,

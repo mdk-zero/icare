@@ -17,6 +17,8 @@ export interface SkillSelection {
   skillId: string;
   /** Variant headings to include; omitted means the skill's defaults. */
   sections?: string[];
+  /** Checklist steps left out (their positions), when the setting doesn't call for them. */
+  skipped?: number[];
 }
 
 /** Selections from a request body; unknown shapes are dropped. */
@@ -27,9 +29,11 @@ export function parseSkillSelections(value: unknown): SkillSelection[] {
     if (typeof item === 'string') out.push({ skillId: item });
     else if (item && typeof item === 'object' && typeof (item as { id?: unknown }).id === 'string') {
       const sections = (item as { sections?: unknown }).sections;
+      const skipped = (item as { skipped?: unknown }).skipped;
       out.push({
         skillId: (item as { id: string }).id,
         sections: Array.isArray(sections) ? sections.filter((x): x is string => typeof x === 'string') : undefined,
+        skipped: Array.isArray(skipped) ? skipped.filter((x): x is number => Number.isInteger(x)) : undefined,
       });
     }
   }

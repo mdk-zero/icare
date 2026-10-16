@@ -1,7 +1,7 @@
 import type { DemoDb } from "../store";
 import type { DemoUser } from "../fixtures/people";
 import type { DemoAssignment } from "../fixtures/school";
-import { NOT_APPLICABLE, type ChecklistRating, type TaskRating } from "@/app/lib/task-ratings";
+import { MAX_RATING_POINTS, NOT_APPLICABLE, type ChecklistRating, type TaskRating } from "@/app/lib/task-ratings";
 import { sectionName, teamLabel } from "./scope";
 import { attendanceRows, collectActivities, tallyAttendance, type AttendanceRow } from "@/app/lib/attendance";
 
@@ -91,9 +91,14 @@ export function levelForCredit(credit: number | null): ChecklistRating {
 
 /**
  * A task's credit: its rated sub-tasks' share of the applicable ones, or its
- * whole-task rating. Null when nothing on it applies (all N/A).
+ * whole-task rating. Null when nothing on it applies (all N/A). `applicable`
+ * is how many of its rows are on offer.
  */
-export function taskCredit(db: DemoDb, assignmentId: string, taskId: string): { credit: number | null; rated: number; total: number } {
+export function taskCredit(
+  db: DemoDb,
+  assignmentId: string,
+  taskId: string,
+): { credit: number | null; rated: number; total: number; applicable: number } {
   const steps = db.steps.filter((s) => s.task_id === taskId);
   const completion = db.completions.find((c) => c.assignment_id === assignmentId && c.task_id === taskId);
   if (steps.length > 0) {
@@ -107,13 +112,13 @@ export function taskCredit(db: DemoDb, assignmentId: string, taskId: string): { 
         if (credit === null) applicable -= 1;
         else earned += credit;
       }
-      return { credit: applicable > 0 ? Math.min(1, earned / applicable) : null, rated: ratings.length, total: steps.length };
+      return { credit: applicable > 0 ? Math.min(1, earned / applicable) : null, rated: ratings.length, total: steps.length, applicable };
     }
-    if (completion) return { credit: completion.rating ? creditOf(completion.rating) : 1, rated: steps.length, total: steps.length };
-    return { credit: 0, rated: 0, total: steps.length };
+    if (completion) return { credit: completion.rating ? creditOf(completion.rating) : 1, rated: steps.length, total: steps.length, applicable: steps.length };
+    return { credit: 0, rated: 0, total: steps.length, applicable: steps.length };
   }
-  if (!completion) return { credit: 0, rated: 0, total: 1 };
-  return { credit: completion.rating ? creditOf(completion.rating) : 1, rated: 1, total: 1 };
+  if (!completion) return { credit: 0, rated: 0, total: 1, applicable: 1 };
+  return { credit: completion.rating ? creditOf(completion.rating) : 1, rated: 1, total: 1, applicable: 1 };
 }
 
 export function scoreAssignment(db: DemoDb, a: DemoAssignment): { score: number; remaining: number } {
@@ -124,10 +129,15 @@ export function scoreAssignment(db: DemoDb, a: DemoAssignment): { score: number;
     const c = taskCredit(db, a.id, task.id);
     remaining += c.total - c.rated;
     if (c.credit === null) continue;
-    earned += task.points * c.credit;
-    total += task.points;
+    // Every applicable checklist row is worth MAX_RATING_POINTS, whatever the
+    // task's own points say; a task with no sub-tasks counts as a single row.
+    // The whole case is the raw score over every row on offer, scaled to a
+    // percentage.
+    const max = c.applicable * MAX_RATING_POINTS;
+    earned += max * c.credit;
+    total += max;
   }
-  return { score: total > 0 ? Math.round((earned / total) * 100) : 0, remaining };
+  return { score: total > 0 ? Math.round(((earned / total) * 62.5 + 37.5) * 10) / 10 : 0, remaining };
 }
 
 /** How many of the case's tasks the student performed (has any grade on). */

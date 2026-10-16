@@ -1,6 +1,14 @@
 "use client";
 
 import { DEFAULT_ATTEMPTS, MIN_ATTEMPTS } from "@/app/lib/quiz-attempts";
+import { describeTimeLimit, formatTimeLimit, parseTimeLimit } from "@/app/lib/time-limit";
+import TimeLimitInput from "../time-limit-input";
+import CoursePicker, { useActivityCourses } from "../../../components/CoursePicker";
+
+/** "Chapter 1 · Vital Signs": a criterion is one of Taylor's chapters. */
+function chapterLabel(chapter: { chapter: number; name: string }) {
+  return `Chapter ${chapter.chapter} · ${chapter.name}`;
+}
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -19,8 +27,9 @@ import {
   faClock,
   faRotateRight,
   faUsers,
+  faBookMedical,
 } from "@fortawesome/free-solid-svg-icons";
-import { toast } from "../../../components/Toast";
+import { loadingToast, toast } from "../../../components/Toast";
 import ConfirmModal from "../../../components/ConfirmModal";
 import { fetchSections, getCurrentUser, type Section, apiFetch } from "../../../lib/api";
 import { takeDrafts } from "../draft-handoff";
@@ -75,6 +84,8 @@ interface AssessmentDetail {
   max_attempts: number | null;
   /** Section names this is published to; null/empty reaches every section. */
   target_sections: string[] | null;
+  /** The course it is for (070); null files it under "Not in a course". */
+  offering_id: string | null;
 }
 
 interface AssessmentQuestion {
@@ -89,6 +100,8 @@ interface AssessmentQuestion {
   competency_ids: string[];
   /** The criterion that owns this question. Unassigned questions are never served. */
   criteria_id: string | null;
+  /** The question's skill area: a Taylor's skill under its chapter ("1-4"). */
+  skill_id?: string | null;
 }
 
 type QuestionFormData = {
@@ -100,7 +113,16 @@ type QuestionFormData = {
   explanation: string;
   competency_ids: string[];
   criteria_id: string | null;
+  skill_id?: string | null;
 };
+
+/** A Taylor's chapter a criterion can be, with its skills (GET .../chapters). */
+interface QuizChapter {
+  id: string;
+  chapter: number;
+  name: string;
+  skills: { id: string; title: string }[];
+}
 
 interface AssessmentCriteria {
   id: string;
@@ -111,6 +133,8 @@ interface AssessmentCriteria {
   sort_order: number;
   /** Questions from this criterion that every attempt must include. */
   min_questions: number;
+  /** The skill area under its chapter (049); null scores the whole chapter. */
+  skill_id?: string | null;
 }
 
 /** Mirrors PublishBlocker in app/lib/assessment-validation.ts. */
@@ -134,6 +158,7 @@ const emptyQuestionForm: QuestionFormData = {
   explanation: "",
   competency_ids: [],
   criteria_id: null,
+  skill_id: null,
 };
 
 export default function AssessmentQuestionsClient({
@@ -172,15 +197,22 @@ export default function AssessmentQuestionsClient({
   const [criteria, setCriteria] = useState<AssessmentCriteria[]>([]);
   const [competencyAreas, setCompetencyAreas] = useState<CompetencyArea[]>([]);
   const [showCriteriaEditor, setShowCriteriaEditor] = useState(false);
-  const [newCriterionName, setNewCriterionName] = useState("");
   const [newCriterionWeight, setNewCriterionWeight] = useState("");
+  /** The chapter the new criterion scores (its competency area id). */
   const [newCriterionCompetency, setNewCriterionCompetency] = useState("");
+  /** Its skill area: a skill of that chapter, or "" for the whole chapter. */
+  const [newCriterionSkill, setNewCriterionSkill] = useState("");
+  // The chapters a criterion can be: those on the quiz's course skill list.
+  const [chapters, setChapters] = useState<QuizChapter[]>([]);
+  const [chapterCourse, setChapterCourse] = useState<{ code: string; title: string } | null>(null);
   const [newCriterionMin, setNewCriterionMin] = useState("1");
   const [blockers, setBlockers] = useState<PublishBlocker[]>([]);
 
   // inline detail editing
   const [editingDetails, setEditingDetails] = useState(false);
-  const [detailForm, setDetailForm] = useState({ title: "", description: "", category: "General", time_limit_minutes: "", max_attempts: "", target_sections: [] as string[] });
+  const [detailForm, setDetailForm] = useState({ title: "", description: "", category: "General", time_limit: "", max_attempts: "", target_sections: [] as string[], offering_id: "" });
+  // The instructor's current courses, to file the quiz under one.
+  const { offerings: courseOfferings } = useActivityCourses();
   const [savingDetails, setSavingDetails] = useState(false);
   const [sections, setSections] = useState<Section[]>([]);
 
@@ -208,8 +240,14 @@ export default function AssessmentQuestionsClient({
     // quiz was left with from before this control was removed).
     const totalQuestions = null;
     const maxAttempts = detailForm.max_attempts ? Number(detailForm.max_attempts) : null;
+    const timeLimit = parseTimeLimit(detailForm.time_limit);
+    if (timeLimit === "invalid") {
+      toast("Enter the time limit as minutes and seconds, like 15:00");
+      return;
+    }
 
     setSavingDetails(true);
+    const progress = loadingToast("Saving quiz details…");
     const res = await apiFetch(`/api/faculty/assessments/${assessmentId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -218,18 +256,19 @@ export default function AssessmentQuestionsClient({
         title: detailForm.title.trim(),
         description: detailForm.description,
         category: detailForm.category,
-        time_limit_seconds: detailForm.time_limit_minutes ? Number(detailForm.time_limit_minutes) * 60 : null,
+        time_limit_seconds: timeLimit,
         total_questions: totalQuestions,
         max_attempts: maxAttempts,
         // Sent every save, so unchecking every section puts the quiz back in
         // front of all of them.
         target_sections: detailForm.target_sections,
+        ...(detailForm.offering_id ? { offering_id: detailForm.offering_id } : {}),
       }),
     });
     setSavingDetails(false);
     if (!res.ok) {
       const j = (await res.json().catch(() => null)) as { error?: string } | null;
-      toast(j?.error ?? "Failed to save details");
+      progress.error(j?.error ?? "Failed to save details");
       return;
     }
     setAssessment((prev) =>
@@ -238,14 +277,15 @@ export default function AssessmentQuestionsClient({
         title: detailForm.title.trim(),
         description: detailForm.description,
         category: detailForm.category,
-        time_limit_seconds: detailForm.time_limit_minutes ? Number(detailForm.time_limit_minutes) * 60 : null,
+        time_limit_seconds: timeLimit,
         total_questions: totalQuestions,
         max_attempts: maxAttempts,
         target_sections: detailForm.target_sections.length > 0 ? detailForm.target_sections : null,
+        offering_id: detailForm.offering_id || prev.offering_id,
       } : prev
     );
     setEditingDetails(false);
-    toast("Quiz details updated");
+    progress.success("Quiz details updated");
     // The paper size feeds publish validation, so re-read what still blocks it.
     loadData();
   };
@@ -253,7 +293,7 @@ export default function AssessmentQuestionsClient({
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [assessRes, criteriaRes, compRes] = await Promise.all([
+      const [assessRes, criteriaRes, compRes, chaptersRes] = await Promise.all([
         apiFetch(`/api/faculty/assessments/${assessmentId}`, {
           credentials: "include",
         }),
@@ -261,11 +301,12 @@ export default function AssessmentQuestionsClient({
           credentials: "include",
         }),
         apiFetch("/api/competencies", { credentials: "include" }),
+        apiFetch(`/api/faculty/assessments/${assessmentId}/chapters`, { credentials: "include" }),
       ]);
 
       if (assessRes.ok) {
         const json = (await assessRes.json()) as {
-          assessment: { questions: AssessmentQuestion[]; created_by: string | null; title: string; description: string; category: string; time_limit_seconds: number | null; question_count: number; total_questions: number | null; max_attempts: number | null; target_sections: string[] | null };
+          assessment: { questions: AssessmentQuestion[]; created_by: string | null; title: string; description: string; category: string; time_limit_seconds: number | null; question_count: number; total_questions: number | null; max_attempts: number | null; target_sections: string[] | null; offering_id?: string | null };
           blockers?: PublishBlocker[];
 
         };
@@ -281,15 +322,17 @@ export default function AssessmentQuestionsClient({
           total_questions: a.total_questions ?? null,
           max_attempts: a.max_attempts ?? null,
           target_sections: a.target_sections ?? null,
+          offering_id: a.offering_id ?? null,
         });
         setDetailForm({
           title: a.title,
           description: a.description ?? "",
           category: a.category,
-          time_limit_minutes: a.time_limit_seconds ? String(Math.round(a.time_limit_seconds / 60)) : "",
+          time_limit: formatTimeLimit(a.time_limit_seconds),
           // Older quizzes may still be unlimited (null); editing gives them the standard.
           max_attempts: String(a.max_attempts ?? DEFAULT_ATTEMPTS),
           target_sections: a.target_sections ?? [],
+          offering_id: a.offering_id ?? "",
         });
         setBlockers(json.blockers ?? []);
         const loaded = json.assessment.questions ?? [];
@@ -305,6 +348,7 @@ export default function AssessmentQuestionsClient({
             explanation: q.explanation,
             competency_ids: [...q.competency_ids],
             criteria_id: q.criteria_id ?? null,
+            skill_id: q.skill_id ?? null,
           };
         }
         setQuestionBuilders(builders);
@@ -318,6 +362,12 @@ export default function AssessmentQuestionsClient({
       if (compRes.ok) {
         const j = (await compRes.json()) as { competencies: CompetencyArea[] };
         setCompetencyAreas(j.competencies ?? []);
+      }
+
+      if (chaptersRes.ok) {
+        const j = (await chaptersRes.json()) as { chapters: QuizChapter[]; course: { code: string; title: string } | null };
+        setChapters(j.chapters ?? []);
+        setChapterCourse(j.course ?? null);
       }
     } catch (err) {
       console.error("Failed to load assessment", err);
@@ -404,21 +454,24 @@ export default function AssessmentQuestionsClient({
     markDirty(qId);
   };
 
-  const handleSaveQuestion = async (qId: string) => {
+  /** Saves one question; true once it is saved. `quiet` leaves the toast to the caller (Save quiz). */
+  const handleSaveQuestion = async (qId: string, quiet = false): Promise<boolean> => {
     const form = questionBuilders[qId];
-    if (!form) return;
+    if (!form) return false;
 
     const filledOptions = form.options.filter((o) => o.trim().length > 0);
     if (!form.content.trim() || filledOptions.length < 2) {
       toast("Question needs content and at least two options");
-      return;
+      return false;
     }
     if (form.correct_index >= filledOptions.length) {
       toast("Mark one of the filled options as correct");
-      return;
+      return false;
     }
 
     setSavingQuestions((prev) => ({ ...prev, [qId]: true }));
+    const isNewQuestion = qId.startsWith("new_");
+    const progress = quiet ? null : loadingToast(isNewQuestion ? "Adding the question…" : "Saving the question…");
 
     const payload = {
       content: form.content,
@@ -429,6 +482,7 @@ export default function AssessmentQuestionsClient({
       explanation: form.explanation,
       competency_ids: form.competency_ids,
       criteria_id: form.criteria_id,
+      skill_id: form.skill_id ?? null,
     };
 
     const isNew = qId.startsWith("new_");
@@ -450,8 +504,9 @@ export default function AssessmentQuestionsClient({
 
     if (!res.ok) {
       const j = (await res.json()) as { error?: string };
-      toast(j.error ?? "Failed to save question");
-      return;
+      if (progress) progress.error(j.error ?? "Failed to save question");
+      else toast(j.error ?? "Failed to save question");
+      return false;
     }
 
     if (isNew) {
@@ -478,9 +533,33 @@ export default function AssessmentQuestionsClient({
     }
     markClean(qId);
     setEditingQuestions((prev) => { const next = new Set(prev); next.delete(qId); return next; });
-    toast(isNew ? "Question added" : "Question updated");
+    progress?.success(isNew ? "Question added" : "Question updated");
     // Assigning or unassigning a question changes what a criterion can cover.
     refreshBlockers();
+    return true;
+  };
+
+  /**
+   * The end of building a quiz: every new or changed question is saved, then
+   * back to the quiz list, where the quiz now shows. Stays put if a question
+   * couldn't be saved, so it can be fixed.
+   */
+  const handleSaveQuiz = async () => {
+    const pending = questions.filter((q) => q.id.startsWith("new_") || dirtyQuestions.has(q.id));
+    setSavingAll(true);
+    const progress = loadingToast(pending.length ? `Saving question 1 of ${pending.length}…` : "Saving the quiz…");
+    let failed = 0;
+    for (const [i, q] of pending.entries()) {
+      if (i > 0) progress.update(`Saving question ${i + 1} of ${pending.length}…`, i / pending.length);
+      if (!(await handleSaveQuestion(q.id, true))) failed += 1;
+    }
+    setSavingAll(false);
+    if (failed > 0) {
+      progress.error(`${failed} question${failed === 1 ? "" : "s"} couldn't be saved; fix ${failed === 1 ? "it" : "them"} first`);
+      return;
+    }
+    progress.success("Quiz saved");
+    router.push("/faculty/assessments");
   };
 
   const handleDeleteQuestion = async (qId: string) => {
@@ -497,12 +576,14 @@ export default function AssessmentQuestionsClient({
       message: "Delete this question permanently? This can't be undone.",
       action: async () => {
         setConfirmAction((prev) => prev ? { ...prev, loading: true, error: null } : null);
+        const progress = loadingToast("Deleting the question…");
         const res = await apiFetch(`/api/faculty/questions/${qId}`, {
           method: "DELETE",
           credentials: "include",
         });
         if (!res.ok) {
           setConfirmAction((prev) => prev ? { ...prev, loading: false, error: "Failed to delete question. Please try again." } : null);
+          progress.error("Couldn't delete the question");
           return;
         }
         setQuestions((prev) => prev.filter((q) => q.id !== qId));
@@ -511,7 +592,7 @@ export default function AssessmentQuestionsClient({
           return rest;
         });
         setConfirmAction(null);
-        toast("Question deleted");
+        progress.success("Question deleted");
       },
     });
   };
@@ -534,6 +615,7 @@ export default function AssessmentQuestionsClient({
         explanation: form.explanation,
         competency_ids: [...form.competency_ids],
         criteria_id: form.criteria_id,
+        skill_id: form.skill_id ?? null,
       };
       const copy = [...prev];
       copy.splice(idx + 1, 0, newQ);
@@ -545,7 +627,11 @@ export default function AssessmentQuestionsClient({
     }));
   };
 
-  const handleAddQuestion = () => {
+  /**
+   * A new question under one criterion (chapter), so it is never unassigned.
+   * It opens ready to type in, with Save question showing.
+   */
+  const handleAddQuestion = (criterion: AssessmentCriteria) => {
     const newId = `new_${newQuestionOrder}`;
     setNewQuestionOrder((prev) => prev + 1);
     const newQ: AssessmentQuestion = {
@@ -557,14 +643,28 @@ export default function AssessmentQuestionsClient({
       question_type: "multiple_choice",
       points: 1,
       explanation: "",
-      competency_ids: [],
-      criteria_id: null,
+      competency_ids: [criterion.competency_id],
+      criteria_id: criterion.id,
+      skill_id: criterion.skill_id ?? null,
     };
     setQuestions((prev) => [...prev, newQ]);
     setQuestionBuilders((prev) => ({
       ...prev,
-      [newId]: { ...emptyQuestionForm, options: ["", ""] },
+      [newId]: {
+        ...emptyQuestionForm,
+        options: ["", ""],
+        competency_ids: [criterion.competency_id],
+        criteria_id: criterion.id,
+        skill_id: criterion.skill_id ?? null,
+      },
     }));
+    setEditingQuestions((prev) => new Set(prev).add(newId));
+    // An open section, so the new question is seen.
+    setCollapsedSections((prev) => {
+      const next = new Set(prev);
+      next.delete(`h_${criterion.id}`);
+      return next;
+    });
   };
 
   /**
@@ -633,27 +733,17 @@ export default function AssessmentQuestionsClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, assessmentId, criterionForCompetency]);
 
-  // ---------- save all ----------
-
-  const handleSaveAll = async () => {
-    const unsaved = questions.filter((q) => q.id.startsWith("new_"));
-    if (unsaved.length === 0) {
-      toast("No unsaved questions");
-      return;
-    }
-    setSavingAll(true);
-    for (const q of unsaved) {
-      await handleSaveQuestion(q.id);
-    }
-    setSavingAll(false);
-    toast("All questions saved");
-  };
-
   // ---------- criteria CRUD ----------
 
   const addCriteria = async () => {
-    if (!newCriterionName.trim() || !newCriterionWeight || !newCriterionCompetency) {
-      toast("Fill in all criteria fields");
+    const chapter = chapters.find((c) => c.id === newCriterionCompetency);
+    if (!chapter || !newCriterionWeight) {
+      toast("Choose a chapter and its weight");
+      return;
+    }
+    const skill = chapter.skills.find((sk) => sk.id === newCriterionSkill) ?? null;
+    if (criteria.some((c) => c.competency_id === chapter.id && (c.skill_id ?? null) === (skill?.id ?? null))) {
+      toast(skill ? `Skill ${skill.id} already has a criterion` : "This chapter already has a whole-chapter criterion");
       return;
     }
     const weight = Number(newCriterionWeight);
@@ -661,27 +751,30 @@ export default function AssessmentQuestionsClient({
       toast("Weight must be between 1 and 100");
       return;
     }
+    const progress = loadingToast("Adding the criterion…");
     const res = await apiFetch(`/api/faculty/assessments/${assessmentId}/criteria`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
       body: JSON.stringify({
-        name: newCriterionName.trim(),
+        name: skill ? `${chapterLabel(chapter)} · Skill ${skill.id}` : chapterLabel(chapter),
         weight,
-        competency_id: newCriterionCompetency,
+        competency_id: chapter.id,
+        skill_id: skill?.id ?? null,
         sort_order: criteria.length,
         min_questions: Number(newCriterionMin) || 0,
       }),
     });
     if (!res.ok) {
       const j = (await res.json()) as { error?: string };
-      toast(j.error ?? "Failed to add criteria");
+      progress.error(j.error ?? "Failed to add criteria");
       return;
     }
     const j = (await res.json()) as { criteria: AssessmentCriteria };
+    progress.success(`${j.criteria.name} added`);
     setCriteria((prev) => [...prev, j.criteria]);
-    setNewCriterionName("");
     setNewCriterionWeight("");
+    setNewCriterionSkill("");
     setNewCriterionCompetency("");
     setNewCriterionMin("1");
     refreshBlockers();
@@ -693,6 +786,7 @@ export default function AssessmentQuestionsClient({
     setCriteria((prev) =>
       prev.map((c) => (c.id === id ? { ...c, min_questions: value } : c)),
     );
+    const progress = loadingToast("Saving the minimum…");
     const res = await apiFetch(`/api/faculty/assessment-criteria/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -704,9 +798,10 @@ export default function AssessmentQuestionsClient({
         prev.map((c) => (c.id === id ? { ...c, min_questions: previous } : c)),
       );
       const j = (await res.json().catch(() => null)) as { error?: string } | null;
-      toast(j?.error ?? "Failed to update minimum");
+      progress.error(j?.error ?? "Failed to update minimum");
       return;
     }
+    progress.success(`Minimum set to ${value} question${value === 1 ? "" : "s"}`, 2500);
     refreshBlockers();
   };
 
@@ -722,17 +817,19 @@ export default function AssessmentQuestionsClient({
           : "Remove this criteria permanently? This can't be undone.",
       action: async () => {
         setConfirmAction((prev) => prev ? { ...prev, loading: true, error: null } : null);
+        const progress = loadingToast("Removing the criterion…");
         const res = await apiFetch(`/api/faculty/assessment-criteria/${id}`, {
           method: "DELETE",
           credentials: "include",
         });
         if (!res.ok) {
           setConfirmAction((prev) => prev ? { ...prev, loading: false, error: "Failed to remove criteria. Please try again." } : null);
+          progress.error("Couldn't remove the criterion");
           return;
         }
         setCriteria((prev) => prev.filter((c) => c.id !== id));
         setConfirmAction(null);
-        toast("Criteria removed");
+        progress.success("Criterion removed");
         // The server nulled criteria_id on its questions; re-read rather than
         // guess which ones.
         loadData();
@@ -942,7 +1039,7 @@ export default function AssessmentQuestionsClient({
                 <option value="short_answer">Short answer</option>
               </select>
             </div>
-            {isEditing && dirtyQuestions.has(q.id) && (
+            {isEditing && (dirtyQuestions.has(q.id) || q.id.startsWith("new_")) && (
               <button
                 onClick={() => {
                   setSavingQuestions((prev) => ({ ...prev, [q.id]: true }));
@@ -958,7 +1055,7 @@ export default function AssessmentQuestionsClient({
                 ) : (
                   <FontAwesomeIcon icon={faCheck} className="w-3 h-3" />
                 )}
-                Save
+                Save question
               </button>
             )}
           </div>
@@ -1075,14 +1172,16 @@ export default function AssessmentQuestionsClient({
                   if (!isEditing) return;
                   const next = e.target.value || null;
                   updateBuilderField(q.id, "criteria_id", next);
-                  // Keep the competency tag in step with the criteria
-                  // that now owns the question — it is what the ML
-                  // recommender reads.
+                  // Keep the chapter tag in step with the criterion that now
+                  // owns the question (the ML recommender reads it), and drop
+                  // a skill area from another chapter.
+                  // The question takes its chapter and skill from the criterion.
                   const owner = criteria.find((c) => c.id === next);
                   if (owner) updateBuilderField(q.id, "competency_ids", [owner.competency_id]);
+                  updateBuilderField(q.id, "skill_id", owner?.skill_id ?? null);
                 }}
                 disabled={!isEditing}
-                className={`px-2 py-1 border rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-brand-600/30 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-50 ${
+                className={`max-w-[22rem] px-2 py-1 border rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-brand-600/30 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-50 ${
                   form.criteria_id
                     ? "border-gray-300 text-gray-700"
                     : "border-amber-200 text-amber-800 bg-amber-50"
@@ -1091,22 +1190,6 @@ export default function AssessmentQuestionsClient({
                 <option value="">Unassigned</option>
                 {criteria.map((c) => (
                   <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <label className={`text-xs font-medium ${isEditing ? "text-gray-600" : "text-gray-400"}`}>Comp.</label>
-              <select
-                value={form.competency_ids[0] ?? ""}
-                onChange={(e) =>
-                  isEditing && updateBuilderField(q.id, "competency_ids", e.target.value ? [e.target.value] : [])
-                }
-                disabled={!isEditing}
-                className="px-2 py-1 border border-gray-300 rounded-lg text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-600/30 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-50"
-              >
-                <option value="">None</option>
-                {competencyAreas.map((ca) => (
-                  <option key={ca.id} value={ca.id}>{ca.name}</option>
                 ))}
               </select>
             </div>
@@ -1124,6 +1207,7 @@ export default function AssessmentQuestionsClient({
             </button>
             <button
               onClick={() => toggleEdit(q.id)}
+              hidden={q.id.startsWith("new_")}
               title={isEditing ? "Done editing" : "Edit question"}
               className={`p-1.5 rounded-lg border transition-colors ${
                 isEditing
@@ -1201,16 +1285,29 @@ export default function AssessmentQuestionsClient({
                   className={`${underlineInput} resize-y text-[15px] leading-relaxed`}
                 />
               </div>
+              {courseOfferings.length > 0 && (
+                <div>
+                  <p className={underlineLabel}>Course</p>
+                  <CoursePicker
+                    offerings={courseOfferings}
+                    value={detailForm.offering_id}
+                    onChange={(offering_id) => setDetailForm((f) => ({ ...f, offering_id }))}
+                    what="quiz"
+                  />
+                  {!detailForm.offering_id && (
+                    <p className="mt-1.5 text-xs text-amber-700">
+                      Not in a course yet: choose one so the quiz counts toward its grading.
+                    </p>
+                  )}
+                </div>
+              )}
               <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
                 <div>
-                  <label htmlFor="quiz-time" className={underlineLabel}>Time limit, in minutes</label>
-                  <input
+                  <label htmlFor="quiz-time" className={underlineLabel}>Time limit</label>
+                  <TimeLimitInput
                     id="quiz-time"
-                    type="number"
-                    min={1}
-                    value={detailForm.time_limit_minutes}
-                    onChange={(e) => setDetailForm((f) => ({ ...f, time_limit_minutes: e.target.value }))}
-                    placeholder="No limit"
+                    value={detailForm.time_limit}
+                    onChange={(time_limit) => setDetailForm((f) => ({ ...f, time_limit }))}
                     className={`${underlineInput} text-sm`}
                   />
                 </div>
@@ -1231,7 +1328,7 @@ export default function AssessmentQuestionsClient({
                 </div>
               </div>
               <p className="text-xs text-gray-500">
-                Every attempt serves the whole quiz. Students get {DEFAULT_ATTEMPTS} attempts as standard; allow more if the quiz calls for it.
+                {`Every attempt serves the whole quiz. Students get ${DEFAULT_ATTEMPTS} attempt${DEFAULT_ATTEMPTS === 1 ? "" : "s"} as standard; allow more if the quiz calls for it.`}
               </p>
                 <div>
                   <p className={underlineLabel}>Published to sections</p>
@@ -1328,21 +1425,32 @@ export default function AssessmentQuestionsClient({
                 <p className="mt-3 max-w-[75ch] text-[15px] leading-relaxed text-gray-700">{assessment.description}</p>
               )}
               <div className="mt-5 flex flex-wrap gap-x-5 gap-y-2 border-t border-hairline pt-3 text-xs text-gray-500">
+                {(() => {
+                  const course = courseOfferings.find((o) => o.id === assessment.offering_id);
+                  return (
+                    <span className={`inline-flex items-center gap-1.5 ${course ? "" : "text-amber-700"}`}>
+                      <FontAwesomeIcon icon={faBookMedical} className="h-3 w-3 text-gray-400" />
+                      {course ? `${course.course.code} · ${course.course.title}` : "Not in a course"}
+                    </span>
+                  );
+                })()}
                 <span className="inline-flex items-center gap-1.5">
                   <FontAwesomeIcon icon={faListCheck} className="h-3 w-3 text-gray-400" />
                   {assessment.question_count} question{assessment.question_count !== 1 ? "s" : ""}
                   {blockers.length === 0 &&
-                    `, ${servedTotal ?? questions.length - questionsByCriterion.unassigned.length} served per attempt across ${criteria.length} criteria`}
+                    `, ${servedTotal ?? questions.length - questionsByCriterion.unassigned.length} served per attempt across ${criteria.length} ${criteria.length === 1 ? "criterion" : "criteria"}`}
                 </span>
                 <span className="inline-flex items-center gap-1.5">
                   <FontAwesomeIcon icon={faClock} className="h-3 w-3 text-gray-400" />
-                  {assessment.time_limit_seconds
-                    ? `${Math.round(assessment.time_limit_seconds / 60)} min limit`
-                    : "No time limit"}
+                  {assessment.time_limit_seconds ? `${describeTimeLimit(assessment.time_limit_seconds)} limit` : "No time limit"}
                 </span>
                 <span className="inline-flex items-center gap-1.5">
                   <FontAwesomeIcon icon={faRotateRight} className="h-3 w-3 text-gray-400" />
-                  {assessment.max_attempts ? `Up to ${assessment.max_attempts} attempts per student` : "Unlimited retakes"}
+                  {assessment.max_attempts
+                    ? assessment.max_attempts === 1
+                      ? "1 attempt per student"
+                      : `Up to ${assessment.max_attempts} attempts per student`
+                    : "Unlimited retakes"}
                 </span>
                 <span className="inline-flex items-center gap-1.5">
                   <FontAwesomeIcon icon={faUsers} className="h-3 w-3 text-gray-400" />
@@ -1393,6 +1501,9 @@ export default function AssessmentQuestionsClient({
             <span className="font-semibold text-gray-800">
               Scoring Criteria ({criteria.length})
             </span>
+            <span className="text-xs text-gray-500">
+              {chapterCourse ? `chapters and skill areas of ${chapterCourse.code}` : "chapters and skill areas"}
+            </span>
           </div>
           <FontAwesomeIcon
             icon={faChevronDown}
@@ -1408,15 +1519,17 @@ export default function AssessmentQuestionsClient({
               <div className="space-y-2">
                 <div className="flex items-center gap-3 px-3 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
                   <span className="w-6" />
-                  <span className="flex-1">Criteria</span>
-                  <span className="w-44">Skill Area</span>
-                  <span className="w-16 text-right" title="Questions assigned to this criteria">Pool</span>
-                  <span className="w-16 text-right" title="Questions from this criteria every attempt must include">Min</span>
+                  <span className="flex-1">Chapter</span>
+                  <span className="w-64">Skill area</span>
+                  <span className="w-20 text-right" title="Questions written for this criterion so far">Written</span>
+                  <span className="w-24 text-right" title="Questions from this criterion every attempt must include">Min. questions</span>
                   <span className="w-16 text-right">Weight</span>
                   <span className="w-6" />
                 </div>
                 {criteria.map((c, i) => {
                   const comp = competencyAreas.find((x) => x.id === c.competency_id);
+                  const chapter = chapters.find((ch) => ch.id === c.competency_id);
+                  const skill = chapter?.skills.find((sk) => sk.id === c.skill_id);
                   const pool = questionsByCriterion.map.get(c.id)?.length ?? 0;
                   const starved = pool < c.min_questions;
                   return (
@@ -1425,12 +1538,14 @@ export default function AssessmentQuestionsClient({
                       className={`flex items-center gap-3 p-3 rounded-lg ${starved ? "bg-red-50 ring-1 ring-red-200" : "bg-gray-50"}`}
                     >
                       <span className="text-sm font-medium text-gray-500 w-6">{i + 1}.</span>
-                      <span className="text-sm text-gray-800 flex-1">{c.name}</span>
-                      <span className="text-xs text-gray-500 w-44">
-                        {comp?.name ?? c.competency_id.slice(0, 8)}
+                      <span className="text-sm text-gray-800 flex-1">
+                        {chapter ? chapterLabel(chapter) : comp?.name ?? c.name}
+                      </span>
+                      <span className="w-64 truncate text-sm text-gray-600" title={skill ? `Skill ${skill.id} · ${skill.title}` : undefined}>
+                        {c.skill_id ? (skill ? `Skill ${skill.id} · ${skill.title}` : `Skill ${c.skill_id}`) : "Whole chapter"}
                       </span>
                       <span
-                        className={`text-sm w-16 text-right font-semibold ${starved ? "text-red-600" : "text-gray-700"}`}
+                        className={`text-sm w-20 text-right font-semibold ${starved ? "text-red-600" : "text-gray-700"}`}
                         title={starved ? `Only ${pool} question(s) for a minimum of ${c.min_questions}` : undefined}
                       >
                         {pool}
@@ -1441,7 +1556,8 @@ export default function AssessmentQuestionsClient({
                         value={c.min_questions}
                         onChange={(e) => updateCriterionMin(c.id, Math.max(0, Number(e.target.value) || 0))}
                         title="Minimum questions per attempt"
-                        className="w-16 px-2 py-1 text-sm text-right border border-gray-300 rounded-lg text-gray-800 focus:outline-none focus:ring-2 focus:ring-brand-600/30"
+                        aria-label={`Minimum questions per attempt from ${c.name}`}
+                        className="w-24 px-2 py-1 text-sm text-right border border-gray-300 rounded-lg text-gray-800 focus:outline-none focus:ring-2 focus:ring-brand-600/30"
                       />
                       <span className="text-sm font-semibold text-brand-600 w-16 text-right">
                         {c.weight}%
@@ -1458,9 +1574,9 @@ export default function AssessmentQuestionsClient({
                 <div className="flex items-center gap-3 p-3 text-sm font-semibold text-gray-700">
                   <span className="w-6" />
                   <span className="flex-1">Total</span>
-                  <span className="w-44" />
-                  <span className="w-16 text-right">{questions.length - questionsByCriterion.unassigned.length}</span>
-                  <span className={`w-16 text-right ${servedTotal !== null && criteria.reduce((s, c) => s + Math.min(c.min_questions, questionsByCriterion.map.get(c.id)?.length ?? 0), 0) > servedTotal ? "text-red-600" : ""}`}>
+                  <span className="w-64" />
+                  <span className="w-20 text-right">{questions.length - questionsByCriterion.unassigned.length}</span>
+                  <span className={`w-24 text-right ${servedTotal !== null && criteria.reduce((s, c) => s + Math.min(c.min_questions, questionsByCriterion.map.get(c.id)?.length ?? 0), 0) > servedTotal ? "text-red-600" : ""}`}>
                     {criteria.reduce((s, c) => s + Math.min(c.min_questions, questionsByCriterion.map.get(c.id)?.length ?? 0), 0)}
                   </span>
                   <span className={`w-16 text-right ${totalWeight === 100 ? "text-green-600" : "text-red-600"}`}>
@@ -1471,50 +1587,92 @@ export default function AssessmentQuestionsClient({
               </div>
             )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
-              <input
-                value={newCriterionName}
-                onChange={(e) => setNewCriterionName(e.target.value)}
-                placeholder="Criteria name"
-                className={inputClassName}
-              />
-              <input
-                type="number"
-                min={1}
-                max={100}
-                value={newCriterionWeight}
-                onChange={(e) => setNewCriterionWeight(e.target.value)}
-                placeholder="Weight %"
-                className={inputClassName}
-              />
-              <select
-                value={newCriterionCompetency}
-                onChange={(e) => setNewCriterionCompetency(e.target.value)}
-                className={inputClassName}
-              >
-                <option value="">Select skill area</option>
-                {competencyAreas.map((ca) => (
-                  <option key={ca.id} value={ca.id}>
-                    {ca.name}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1.8fr)_minmax(0,0.8fr)_minmax(0,1fr)_auto] sm:items-end">
+              <label className="block min-w-0">
+                <span className="mb-1 block text-xs font-medium text-gray-600">Chapter</span>
+                <select
+                  value={newCriterionCompetency}
+                  onChange={(e) => {
+                    setNewCriterionCompetency(e.target.value);
+                    setNewCriterionSkill("");
+                  }}
+                  className={inputClassName}
+                >
+                  <option value="">
+                    {chapters.length === 0 ? "No chapters on this course's skill list" : "Choose a chapter"}
                   </option>
-                ))}
-              </select>
-              <input
-                type="number"
-                min={0}
-                value={newCriterionMin}
-                onChange={(e) => setNewCriterionMin(e.target.value)}
-                placeholder="Min questions"
-                title="Minimum questions per attempt"
-                className={inputClassName}
-              />
+                  {chapters.map((ch) => (
+                    <option key={ch.id} value={ch.id}>
+                      {chapterLabel(ch)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block min-w-0">
+                <span className="mb-1 block text-xs font-medium text-gray-600">Skill area</span>
+                <select
+                  value={newCriterionSkill}
+                  onChange={(e) => setNewCriterionSkill(e.target.value)}
+                  disabled={!newCriterionCompetency}
+                  className={`${inputClassName} disabled:opacity-50`}
+                >
+                  {(() => {
+                    const chapter = chapters.find((ch) => ch.id === newCriterionCompetency);
+                    const taken = (skillId: string | null) =>
+                      criteria.some((c) => c.competency_id === newCriterionCompetency && (c.skill_id ?? null) === skillId);
+                    if (!chapter) return <option value="">Choose the chapter first</option>;
+                    return (
+                      <>
+                        <option value="" disabled={taken(null)}>
+                          Whole chapter (any of its skills)
+                        </option>
+                        {chapter.skills.map((sk) => (
+                          <option key={sk.id} value={sk.id} disabled={taken(sk.id)}>
+                            {`Skill ${sk.id} · ${sk.title}`}
+                          </option>
+                        ))}
+                      </>
+                    );
+                  })()}
+                </select>
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-xs font-medium text-gray-600">Weight</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={100}
+                  value={newCriterionWeight}
+                  onChange={(e) => setNewCriterionWeight(e.target.value)}
+                  placeholder="Weight %"
+                  className={inputClassName}
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-xs font-medium text-gray-600">Min. questions per criterion</span>
+                <input
+                  type="number"
+                  min={0}
+                  value={newCriterionMin}
+                  onChange={(e) => setNewCriterionMin(e.target.value)}
+                  placeholder="1"
+                  title="How many of this chapter's questions every attempt must include"
+                  className={inputClassName}
+                />
+              </label>
               <button
                 onClick={addCriteria}
                 className="px-4 py-3 bg-brand-600 text-white rounded-xl text-sm font-medium hover:bg-brand-700 transition-colors"
               >
-                Add Criteria
+                Add criterion
               </button>
             </div>
+            <p className="text-xs text-gray-500">
+              Each criterion is a chapter and one of its skill areas, or the whole chapter.{" "}
+              <span className="font-medium text-gray-600">Written</span> is how many questions you have made for it;{" "}
+              <span className="font-medium text-gray-600">Min. questions</span> is how many of them every student gets
+              in one attempt.
+            </p>
 
             {totalWeight !== 100 && criteria.length > 0 && (
               <p className="text-xs text-red-600">
@@ -1534,13 +1692,13 @@ export default function AssessmentQuestionsClient({
             Questions ({questions.length})
           </h2>
           <p className="mt-0.5 text-xs text-gray-500">
-            {sectionTotal} {sectionTotal === 1 ? "section" : "sections"}, one per skill. Each attempt draws from every section.
+            {`${sectionTotal} ${sectionTotal === 1 ? "criterion" : "criteria"}. Add questions under each one; every attempt draws from all of them.`}
           </p>
         </header>
 
-        {questions.length === 0 ? (
+        {questions.length === 0 && criteria.length === 0 ? (
           <div className="bg-surface p-8 rounded-xl border border-dashed border-gray-300 text-center text-gray-400 text-sm">
-            No questions yet. Click &quot;Add Question&quot; to start building.
+            Add a chapter in Scoring Criteria first, then add its questions here.
           </div>
         ) : (
           <div className="flex flex-col gap-4">
@@ -1599,6 +1757,16 @@ export default function AssessmentQuestionsClient({
                   {!collapsed && (
                     <div id={panelId} className="mt-3 flex flex-col gap-3">
                       {items.map(renderQuestion)}
+                      {c && canEdit && (
+                        <button
+                          type="button"
+                          onClick={() => handleAddQuestion(c)}
+                          className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-brand-600/40 bg-brand-600/5 px-4 py-3 text-sm font-semibold text-brand-700 transition-colors hover:bg-brand-600/10"
+                        >
+                          <FontAwesomeIcon icon={faPlus} className="h-3.5 w-3.5" />
+                          {`Add a question to ${c.name}`}
+                        </button>
+                      )}
                     </div>
                   )}
                 </section>
@@ -1607,28 +1775,34 @@ export default function AssessmentQuestionsClient({
           </div>
         )}
 
-        <div className={`flex items-center justify-center gap-3 pt-2 flex-wrap ${canEdit ? "" : "hidden"}`}>
-          <button
-            onClick={handleAddQuestion}
-            className="flex items-center gap-2 px-6 py-3 bg-brand-600 text-white rounded-xl text-sm font-medium hover:bg-brand-700 transition-colors"
-          >
-            <FontAwesomeIcon icon={faPlus} className="w-4 h-4" />
-            Add Question
-          </button>
-          {questions.filter((q) => q.id.startsWith("new_")).length > 0 && (
+        {canEdit && (
+          <div className="mt-6 flex flex-col items-center gap-3 border-t border-hairline pt-6 sm:flex-row sm:justify-between">
+            <p className="text-sm text-gray-500">
+              {(() => {
+                const pending = questions.filter((q) => q.id.startsWith("new_") || dirtyQuestions.has(q.id)).length;
+                return pending > 0
+                  ? `${pending} unsaved question${pending === 1 ? "" : "s"} will be saved with the quiz.`
+                  : "Everything is saved.";
+              })()}
+            </p>
             <button
-              onClick={handleSaveAll}
+              type="button"
+              onClick={() => void handleSaveQuiz()}
               disabled={savingAll}
-              className="flex items-center gap-2 px-6 py-3 bg-brand-600 text-white rounded-xl text-sm font-medium hover:bg-brand-700 disabled:opacity-60 transition-colors"
+              className="flex items-center gap-2 rounded-xl bg-brand-600 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-brand-700 disabled:opacity-60"
             >
               {savingAll ? (
-                <><EcgLoader /> Saving All…</>
+                <>
+                  <EcgLoader /> Saving quiz…
+                </>
               ) : (
-                <><FontAwesomeIcon icon={faCheck} className="w-4 h-4" /> Save All</>
+                <>
+                  <FontAwesomeIcon icon={faCheck} className="h-4 w-4" /> Save quiz
+                </>
               )}
             </button>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {confirmAction && (

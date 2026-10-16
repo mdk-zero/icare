@@ -16,6 +16,7 @@ import {
   faHeartPulse,
   faUserInjured,
   faWandMagicSparkles,
+  faXmark,
   faUserPlus,
 } from "@fortawesome/free-solid-svg-icons";
 import {
@@ -39,7 +40,8 @@ import { EcgLoader } from "../../../components/EcgLoader";
 import { SkeletonPatientPickRows } from "../../../components/skeletons";
 import PatientFormModal from "../../../components/PatientFormModal";
 import { termStatus } from "../../../lib/course-progress";
-import { toast } from "../../../components/Toast";
+import { loadingToast, toast } from "../../../components/Toast";
+import { forgetPage } from "../../../lib/request-cache";
 import { LessonPanel, useLessonImport } from "../../../components/LessonImport";
 import { ChapterTile, hueStyle } from "../library-plan";
 import { TAYLORS_CHAPTERS } from "../../../../scripts/taylors-chapters";
@@ -103,14 +105,6 @@ function SheetStep({
   );
 }
 
-function OptionalTag() {
-  return (
-    <span className="rounded-full border border-hairline bg-subtle px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-gray-500">
-      Optional
-    </span>
-  );
-}
-
 /** Beds as dots: filled for patients already in the room, hollow for free beds. */
 function BedDots({ occupied, capacity }: { occupied: number; capacity: number }) {
   const shown = Math.min(capacity, 12);
@@ -157,6 +151,8 @@ export default function NewScenarioClient() {
   const [aiError, setAiError] = useState<string | null>(null);
   const [aiPatientCase, setAiPatientCase] = useState<Record<string, unknown> | null>(null);
   const [aiGenerated, setAiGenerated] = useState(false);
+  // Drafting with AI is optional, so it opens on its own rather than as a step.
+  const [showAi, setShowAi] = useState(false);
   // The skill chapters the AI centres the case on; none lets it pick a core one.
   const [chapters, setChapters] = useState<number[]>([]);
   // An imported lesson grounds the AI draft (the prompt then just steers it),
@@ -271,6 +267,8 @@ export default function NewScenarioClient() {
       if (preview.skills && preview.skills.length > 0)
         setSkills(preview.skills.map((id) => ({ id })));
       setAiGenerated(true);
+      setShowAi(false);
+      toast("Draft filled in. Review the details and skills before saving.");
     }
     setGenerating(false);
   };
@@ -288,8 +286,13 @@ export default function NewScenarioClient() {
       setError("Select a patient for this patient case before saving.");
       return;
     }
+    if (!form.roomId) {
+      setError("Choose the room the patient is in.");
+      return;
+    }
     setSaving(true);
     setError(null);
+    const progress = loadingToast(`Saving ${form.title.trim()}…`);
 
     const newScenario = await createScenario({
       title: form.title,
@@ -306,6 +309,7 @@ export default function NewScenarioClient() {
 
     if (!newScenario) {
       setError("Unable to create patient case. Please try again.");
+      progress.error("Unable to create the patient case");
       setSaving(false);
       return;
     }
@@ -344,7 +348,11 @@ export default function NewScenarioClient() {
       if (res.error) console.error("Room assignment failed:", res.error);
     }
 
-    router.push("/faculty/scenarios");
+    progress.success(`${newScenario.title} saved`);
+    // Back to the list, loaded fresh so the new case is there from the first
+    // frame; Back won't reopen the form.
+    forgetPage("faculty:scenarios");
+    router.replace("/faculty/scenarios");
   };
 
   const vitals = selectedPatient?.vital_signs;
@@ -363,10 +371,11 @@ export default function NewScenarioClient() {
     .map((o) => o.trim())
     .filter(Boolean);
   const chapterFocus = lesson ? lessonChapters : chapters;
-  const topicFocus = lesson ? lessonNewTopics : [];
+  // The chapters the case's skills come from ("1-6" is Chapter 1), for the summary.
+  const skillChapters = [...new Set(skills.map((s) => Number(s.id.split("-")[0])))].sort((a, b) => a - b);
   const canGenerate =
     !generating && !analyzing && !!form.patientId && (!!aiPrompt.trim() || !!lesson);
-  const ready = !!form.title.trim() && !!form.patientId && (offerings.length === 0 || !!offeringId);
+  const ready = !!form.title.trim() && !!form.patientId && !!form.roomId && (offerings.length === 0 || !!offeringId);
 
   return (
     <div className="pb-4">
@@ -566,7 +575,7 @@ export default function NewScenarioClient() {
             n={2}
             title="Room"
             done={!!form.roomId}
-            tag={<OptionalTag />}
+            tag={<span className="text-xs font-semibold text-red-600">Required</span>}
             hint={
               form.patientId
                 ? "Defaults to where the patient already is. Full rooms can't take another patient."
@@ -643,22 +652,259 @@ export default function NewScenarioClient() {
             )}
           </SheetStep>
 
-          {/* 03 — AI draft */}
+          {/* 03 — Details */}
           <SheetStep
             n={3}
-            title="Draft with AI"
-            done={aiGenerated}
-            tag={
-              aiGenerated ? (
-                <span className="rounded-full bg-brand-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-brand-700">
-                  Draft filled in
-                </span>
-              ) : (
-                <OptionalTag />
-              )
-            }
-            hint="Describe the case, import a lesson to build it from, or both. AI fills the details and picks the skills — everything stays editable."
+            title="Case details"
+            done={!!form.title.trim()}
+            hint={aiGenerated ? "Filled in by AI — review and edit before saving." : "Write the case yourself, or use Draft with AI on the right."}
           >
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="case-title" className={labelClassName}>
+                  Title <span className="text-red-600">*</span>
+                </label>
+                <input
+                  id="case-title"
+                  type="text"
+                  value={form.title}
+                  onChange={(e) => setForm({ ...form, title: e.target.value })}
+                  placeholder="e.g. Hypoxia After Abdominal Surgery"
+                  className={inputClassName + " font-display text-base font-medium"}
+                />
+              </div>
+              <div>
+                <label htmlFor="case-description" className={labelClassName}>
+                  Description
+                </label>
+                <textarea
+                  id="case-description"
+                  value={form.description}
+                  onChange={(e) => setForm({ ...form, description: e.target.value })}
+                  rows={3}
+                  placeholder="Brief overview of the patient case..."
+                  className={inputClassName + " resize-none"}
+                />
+              </div>
+              <div>
+                <div className="flex items-baseline justify-between">
+                  <label htmlFor="case-objectives" className={labelClassName}>
+                    Learning objectives
+                  </label>
+                  <span className="text-[11px] tabular-nums text-gray-500">
+                    {objectives.length} objective{objectives.length === 1 ? "" : "s"}
+                  </span>
+                </div>
+                <textarea
+                  id="case-objectives"
+                  value={form.learningObjectives}
+                  onChange={(e) => setForm({ ...form, learningObjectives: e.target.value })}
+                  rows={4}
+                  placeholder="One objective per line&#10;e.g. Measure SpO₂ with a pulse oximeter"
+                  className={inputClassName + " resize-none leading-relaxed"}
+                />
+                <p className="text-xs text-gray-500 mt-1.5">Enter one objective per line.</p>
+              </div>
+            </div>
+          </SheetStep>
+
+          {/* 04 — Skills */}
+          <SheetStep
+            n={4}
+            title="Skills"
+            done={skills.length > 0}
+            last
+            hint={
+              skills.length === 0
+                ? "Without skills, the patient case gets the general starter task list."
+                : undefined
+            }
+          >
+            <SkillPicker
+              focusChapters={chapterFocus}
+              value={skills}
+              onChange={setSkills}
+              disabled={saving}
+              detectInput={() => ({
+                title: form.title,
+                description: form.description,
+                learning_objectives: objectives,
+                patient_id: form.patientId || null,
+                lesson_text: lessonText ?? null,
+              })}
+            />
+          </SheetStep>
+        </div>
+
+        {/* The case at a glance, with save — pinned beside the sheet on wide screens. */}
+        <aside className="xl:sticky xl:top-0 space-y-3">
+          <div className="overflow-hidden rounded-2xl border border-hairline bg-surface shadow-tile">
+            <div className="relative bg-brand-600 px-4 pb-4 pt-3.5 text-white">
+              <span
+                aria-hidden
+                className="absolute inset-0 opacity-[0.12] bg-[repeating-linear-gradient(90deg,#fff_0,#fff_1px,transparent_1px,transparent_14px),repeating-linear-gradient(0deg,#fff_0,#fff_1px,transparent_1px,transparent_14px)]"
+              />
+              <p className="relative text-[10px] font-semibold uppercase tracking-[0.12em] text-white/75">
+                {aiGenerated ? "AI draft · patient case" : "Patient case"}
+              </p>
+              <p
+                className={`relative mt-1 font-display text-lg font-semibold leading-snug ${
+                  form.title.trim() ? "text-white" : "text-white/55"
+                }`}
+              >
+                {form.title.trim() || "Untitled case"}
+              </p>
+            </div>
+            <dl className="divide-y divide-hairline text-sm">
+              <div className="flex items-center gap-3 px-4 py-2.5">
+                <FontAwesomeIcon icon={faUserInjured} className="h-3.5 w-3.5 text-gray-400" />
+                <dt className="sr-only">Patient</dt>
+                <dd className="min-w-0 flex-1 truncate">
+                  {selectedPatient ? (
+                    <span className="font-medium text-gray-900">{selectedPatient.name}</span>
+                  ) : (
+                    <span className="text-gray-400">No patient yet</span>
+                  )}
+                </dd>
+              </div>
+              <div className="flex items-center gap-3 px-4 py-2.5">
+                <FontAwesomeIcon icon={faDoorOpen} className="h-3.5 w-3.5 text-gray-400" />
+                <dt className="sr-only">Room</dt>
+                <dd className="min-w-0 flex-1 truncate">
+                  {selectedRoom ? (
+                    <span className="text-gray-800">
+                      {selectedRoom.name}{" "}
+                      <span className="text-gray-500">· Room {selectedRoom.room_number}</span>
+                    </span>
+                  ) : (
+                    <span className="text-gray-400">No room</span>
+                  )}
+                </dd>
+              </div>
+              <div className="grid grid-cols-3 divide-x divide-hairline">
+                {[
+                  { label: "Chapters", value: skillChapters.length },
+                  { label: "Objectives", value: objectives.length },
+                  { label: "Skills", value: skills.length },
+                ].map((m) => (
+                  <div key={m.label} className="px-3 py-2.5 text-center">
+                    <dt className="text-[10px] font-semibold uppercase tracking-[0.08em] text-gray-500">
+                      {m.label}
+                    </dt>
+                    <dd className="font-display text-lg font-semibold tabular-nums text-gray-900">
+                      {m.value}
+                    </dd>
+                  </div>
+                ))}
+              </div>
+              {skillChapters.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 px-4 py-2.5">
+                  {skillChapters.map((c) => (
+                    <span
+                      key={c}
+                      style={hueStyle(c)}
+                      title={TAYLORS_CHAPTERS.find((x) => x.chapter === c)?.name}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-[color-mix(in_srgb,var(--hue)_35%,transparent)] bg-[color-mix(in_srgb,var(--hue)_8%,transparent)] px-2 py-0.5 text-[11px] font-medium text-gray-700"
+                    >
+                      <span className="h-2 w-2 rounded-sm bg-[var(--hue)]" />
+                      Ch. {c} · {skills.filter((s) => s.id.startsWith(`${c}-`)).length}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </dl>
+          </div>
+
+          <div className="rounded-2xl border border-brand-200 bg-[linear-gradient(160deg,var(--color-brand-50),transparent_75%)] p-4 shadow-tile">
+            <p className="text-sm font-semibold text-gray-900">Draft with AI</p>
+            <p className="mt-0.5 text-xs text-gray-600">
+              Optional. Describe the case or import a lesson, and AI fills in the details and skills for you to edit.
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowAi(true)}
+              className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-brand-600/40 bg-surface px-4 py-2 text-sm font-semibold text-brand-700 transition-colors hover:bg-brand-600/5"
+            >
+              <FontAwesomeIcon icon={faWandMagicSparkles} className="h-4 w-4" />
+              {aiGenerated ? "Draft again with AI" : "Draft with AI"}
+            </button>
+          </div>
+
+          <div className="rounded-2xl border border-hairline bg-surface p-4 shadow-tile">
+            <ul className="space-y-1.5 text-xs">
+              {[
+                ...(offerings.length > 0 ? [{ ok: !!offeringId, label: "Course chosen" }] : []),
+                { ok: !!form.patientId, label: "Patient chosen" },
+                { ok: !!form.roomId, label: "Room chosen" },
+                { ok: !!form.title.trim(), label: "Title written" },
+              ].map((c) => (
+                <li key={c.label} className="flex items-center gap-2">
+                  <span
+                    className={`flex h-4 w-4 items-center justify-center rounded-full border ${
+                      c.ok ? "border-brand-600 bg-brand-600 text-white" : "border-gray-300"
+                    }`}
+                  >
+                    {c.ok && <FontAwesomeIcon icon={faCheck} className="h-2 w-2" />}
+                  </span>
+                  <span className={c.ok ? "text-gray-800" : "text-gray-500"}>{c.label}</span>
+                </li>
+              ))}
+            </ul>
+            {error && (
+              <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-2.5 text-xs text-red-700">
+                {error}
+              </div>
+            )}
+            <button
+              onClick={handleSave}
+              disabled={saving || !ready}
+              title={!form.patientId ? "Select a patient first" : !form.roomId ? "Choose a room first" : undefined}
+              className="mt-4 inline-flex w-full items-center justify-center gap-2 px-5 py-2.5 bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white text-sm font-semibold rounded-lg transition-colors shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
+            >
+              {saving ? <EcgLoader /> : <FontAwesomeIcon icon={faSave} className="w-4 h-4" />}
+              {saving ? "Saving…" : "Save Patient Case"}
+            </button>
+            <button
+              onClick={() => router.push("/faculty/scenarios")}
+              className="mt-2 w-full px-5 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-subtle transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </aside>
+      </div>
+      {showAi && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+          onClick={generating ? undefined : () => setShowAi(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="ai-draft-title"
+            className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-hairline bg-surface shadow-[0_8px_30px_rgba(0,0,0,0.12)]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-hairline bg-subtle px-5 py-3">
+              <div>
+                <h2 id="ai-draft-title" className="font-display text-lg font-semibold text-gray-900">
+                  Draft with AI
+                </h2>
+                <p className="text-sm text-gray-500">
+                  AI fills the details and picks the skills; everything stays editable.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAi(false)}
+                disabled={generating}
+                aria-label="Close"
+                className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 disabled:opacity-40"
+              >
+                <FontAwesomeIcon icon={faXmark} className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto p-5">
             <div
               className={`space-y-4 rounded-xl border border-brand-200 bg-[linear-gradient(160deg,var(--color-brand-50),transparent_70%)] p-4 transition-opacity ${
                 form.patientId ? "" : "opacity-60"
@@ -768,221 +1014,10 @@ export default function NewScenarioClient() {
                 </p>
               )}
             </div>
-          </SheetStep>
-
-          {/* 04 — Details */}
-          <SheetStep
-            n={4}
-            title="Case details"
-            done={!!form.title.trim()}
-            hint={aiGenerated ? "Filled in by AI — review and edit before saving." : "Write the case yourself, or let AI draft it above."}
-          >
-            <div className="space-y-4">
-              <div>
-                <label htmlFor="case-title" className={labelClassName}>
-                  Title <span className="text-red-600">*</span>
-                </label>
-                <input
-                  id="case-title"
-                  type="text"
-                  value={form.title}
-                  onChange={(e) => setForm({ ...form, title: e.target.value })}
-                  placeholder="e.g. Hypoxia After Abdominal Surgery"
-                  className={inputClassName + " font-display text-base font-medium"}
-                />
-              </div>
-              <div>
-                <label htmlFor="case-description" className={labelClassName}>
-                  Description
-                </label>
-                <textarea
-                  id="case-description"
-                  value={form.description}
-                  onChange={(e) => setForm({ ...form, description: e.target.value })}
-                  rows={3}
-                  placeholder="Brief overview of the patient case..."
-                  className={inputClassName + " resize-none"}
-                />
-              </div>
-              <div>
-                <div className="flex items-baseline justify-between">
-                  <label htmlFor="case-objectives" className={labelClassName}>
-                    Learning objectives
-                  </label>
-                  <span className="text-[11px] tabular-nums text-gray-500">
-                    {objectives.length} objective{objectives.length === 1 ? "" : "s"}
-                  </span>
-                </div>
-                <textarea
-                  id="case-objectives"
-                  value={form.learningObjectives}
-                  onChange={(e) => setForm({ ...form, learningObjectives: e.target.value })}
-                  rows={4}
-                  placeholder="One objective per line&#10;e.g. Measure SpO₂ with a pulse oximeter"
-                  className={inputClassName + " resize-none leading-relaxed"}
-                />
-                <p className="text-xs text-gray-500 mt-1.5">Enter one objective per line.</p>
-              </div>
             </div>
-          </SheetStep>
-
-          {/* 05 — Skills */}
-          <SheetStep
-            n={5}
-            title="Skills"
-            done={skills.length > 0}
-            last
-            hint={
-              skills.length === 0
-                ? "Without skills, the patient case gets the general starter task list."
-                : undefined
-            }
-          >
-            <SkillPicker
-              focusChapters={chapterFocus}
-              value={skills}
-              onChange={setSkills}
-              disabled={saving}
-              detectInput={() => ({
-                title: form.title,
-                description: form.description,
-                learning_objectives: objectives,
-                patient_id: form.patientId || null,
-                lesson_text: lessonText ?? null,
-              })}
-            />
-          </SheetStep>
+          </div>
         </div>
-
-        {/* The case at a glance, with save — pinned beside the sheet on wide screens. */}
-        <aside className="xl:sticky xl:top-0 space-y-3">
-          <div className="overflow-hidden rounded-2xl border border-hairline bg-surface shadow-tile">
-            <div className="relative bg-brand-600 px-4 pb-4 pt-3.5 text-white">
-              <span
-                aria-hidden
-                className="absolute inset-0 opacity-[0.12] bg-[repeating-linear-gradient(90deg,#fff_0,#fff_1px,transparent_1px,transparent_14px),repeating-linear-gradient(0deg,#fff_0,#fff_1px,transparent_1px,transparent_14px)]"
-              />
-              <p className="relative text-[10px] font-semibold uppercase tracking-[0.12em] text-white/75">
-                {aiGenerated ? "AI draft · patient case" : "Patient case"}
-              </p>
-              <p
-                className={`relative mt-1 font-display text-lg font-semibold leading-snug ${
-                  form.title.trim() ? "text-white" : "text-white/55"
-                }`}
-              >
-                {form.title.trim() || "Untitled case"}
-              </p>
-            </div>
-            <dl className="divide-y divide-hairline text-sm">
-              <div className="flex items-center gap-3 px-4 py-2.5">
-                <FontAwesomeIcon icon={faUserInjured} className="h-3.5 w-3.5 text-gray-400" />
-                <dt className="sr-only">Patient</dt>
-                <dd className="min-w-0 flex-1 truncate">
-                  {selectedPatient ? (
-                    <span className="font-medium text-gray-900">{selectedPatient.name}</span>
-                  ) : (
-                    <span className="text-gray-400">No patient yet</span>
-                  )}
-                </dd>
-              </div>
-              <div className="flex items-center gap-3 px-4 py-2.5">
-                <FontAwesomeIcon icon={faDoorOpen} className="h-3.5 w-3.5 text-gray-400" />
-                <dt className="sr-only">Room</dt>
-                <dd className="min-w-0 flex-1 truncate">
-                  {selectedRoom ? (
-                    <span className="text-gray-800">
-                      {selectedRoom.name}{" "}
-                      <span className="text-gray-500">· Room {selectedRoom.room_number}</span>
-                    </span>
-                  ) : (
-                    <span className="text-gray-400">No room</span>
-                  )}
-                </dd>
-              </div>
-              <div className="grid grid-cols-3 divide-x divide-hairline">
-                {[
-                  { label: "Chapters", value: chapterFocus.length || (topicFocus.length ? 0 : "Any") },
-                  { label: "Objectives", value: objectives.length },
-                  { label: "Skills", value: skills.length },
-                ].map((m) => (
-                  <div key={m.label} className="px-3 py-2.5 text-center">
-                    <dt className="text-[10px] font-semibold uppercase tracking-[0.08em] text-gray-500">
-                      {m.label}
-                    </dt>
-                    <dd className="font-display text-lg font-semibold tabular-nums text-gray-900">
-                      {m.value}
-                    </dd>
-                  </div>
-                ))}
-              </div>
-              {chapterFocus.length + topicFocus.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 px-4 py-2.5">
-                  {topicFocus.map((t) => (
-                    <span
-                      key={t}
-                      title="New topic, outside the taught chapters"
-                      className="order-last inline-flex items-center gap-1.5 rounded-full border border-dashed border-brand-400 px-2 py-0.5 text-[11px] font-medium text-gray-700"
-                    >
-                      {t}
-                    </span>
-                  ))}
-                  {chapterFocus.map((c) => (
-                    <span
-                      key={c}
-                      style={hueStyle(c)}
-                      className="inline-flex items-center gap-1.5 rounded-full border border-[color-mix(in_srgb,var(--hue)_35%,transparent)] bg-[color-mix(in_srgb,var(--hue)_8%,transparent)] px-2 py-0.5 text-[11px] font-medium text-gray-700"
-                    >
-                      <span className="h-2 w-2 rounded-sm bg-[var(--hue)]" />
-                      Ch. {c}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </dl>
-          </div>
-
-          <div className="rounded-2xl border border-hairline bg-surface p-4 shadow-tile">
-            <ul className="space-y-1.5 text-xs">
-              {[
-                ...(offerings.length > 0 ? [{ ok: !!offeringId, label: "Course chosen" }] : []),
-                { ok: !!form.patientId, label: "Patient chosen" },
-                { ok: !!form.title.trim(), label: "Title written" },
-              ].map((c) => (
-                <li key={c.label} className="flex items-center gap-2">
-                  <span
-                    className={`flex h-4 w-4 items-center justify-center rounded-full border ${
-                      c.ok ? "border-brand-600 bg-brand-600 text-white" : "border-gray-300"
-                    }`}
-                  >
-                    {c.ok && <FontAwesomeIcon icon={faCheck} className="h-2 w-2" />}
-                  </span>
-                  <span className={c.ok ? "text-gray-800" : "text-gray-500"}>{c.label}</span>
-                </li>
-              ))}
-            </ul>
-            {error && (
-              <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-2.5 text-xs text-red-700">
-                {error}
-              </div>
-            )}
-            <button
-              onClick={handleSave}
-              disabled={saving || !ready}
-              title={!form.patientId ? "Select a patient first" : undefined}
-              className="mt-4 inline-flex w-full items-center justify-center gap-2 px-5 py-2.5 bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white text-sm font-semibold rounded-lg transition-colors shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
-            >
-              {saving ? <EcgLoader /> : <FontAwesomeIcon icon={faSave} className="w-4 h-4" />}
-              {saving ? "Saving…" : "Save Patient Case"}
-            </button>
-            <button
-              onClick={() => router.push("/faculty/scenarios")}
-              className="mt-2 w-full px-5 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-subtle transition-colors"
-            >
-              Cancel
-            </button>
-          </div>
-        </aside>
-      </div>
+      )}
       {addingPatient && (
         <PatientFormModal
           patient={null}

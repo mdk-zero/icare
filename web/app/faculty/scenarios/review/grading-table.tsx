@@ -16,6 +16,7 @@ import {
   TASK_RATINGS,
   ratingLabel,
   ratingPoints,
+  scaledGrade,
   type ChecklistRating,
   type Rubric,
 } from "../../../lib/task-ratings";
@@ -520,7 +521,7 @@ function TaskGroup({
                 {formatPoints(earned)}
                 <span className="text-xs font-semibold text-gray-400">/{formatPoints(max)}</span>
               </span>
-              <span className="text-[11px] tabular-nums text-gray-400">{max > 0 ? Math.round((earned / max) * 100) : 0}%</span>
+              <span className="text-[11px] tabular-nums text-gray-400">{scaledGrade(earned, max)}%</span>
             </>
           )}
         </td>

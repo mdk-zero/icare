@@ -861,13 +861,11 @@ route("GET", "/api/scenarios/:id", (ctx) => {
 
 export async function addSkillTasks(ctx: Ctx, scenarioId: string, skills: unknown): Promise<number> {
   if (!Array.isArray(skills) || skills.length === 0) return 0;
-  const [{ getSkills, skillVariants, stepSource, stepsForSections }, { skillTaskFields }] = await Promise.all([
+  const [{ getSkills }, { parseSkillSelections, skillTaskFields, skillTaskSteps }] = await Promise.all([
     import("@/app/lib/taylor-skills"),
     import("@/app/lib/skill-tasks"),
   ]);
-  const picks = skills
-    .map((s) => (typeof s === "string" ? { skillId: s } : (s as { skillId?: string; sections?: string[] })))
-    .filter((s): s is { skillId: string; sections?: string[] } => typeof s?.skillId === "string");
+  const picks = parseSkillSelections(skills);
   const existing = new Set(ctx.db.tasks.filter((t) => t.scenario_id === scenarioId).map((t) => t.skill_id));
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- the catalog falls back to its bundled JSON on a failing client
   const details = await getSkills(failingClient as any, picks.map((p) => p.skillId));
@@ -879,9 +877,8 @@ export async function addSkillTasks(ctx: Ctx, scenarioId: string, skills: unknow
     const fields = skillTaskFields(skill);
     const taskId = newId();
     ctx.db.tasks.push({ id: taskId, scenario_id: scenarioId, ...fields, sort_order: order++, skill_id: skill.id });
-    const chosen = pick?.sections ?? skillVariants(skill.id, skill.steps).defaults;
-    stepsForSections(skill.steps, chosen).forEach((st, i) => {
-      ctx.db.steps.push({ id: newId(), task_id: taskId, title: st.text, source: stepSource(skill.id, st), position: i + 1 });
+    skillTaskSteps(skill.id, skill.steps, pick?.sections, pick?.skipped).forEach((st, i) => {
+      ctx.db.steps.push({ id: newId(), task_id: taskId, title: st.title, source: st.source, position: i + 1 });
     });
     added += 1;
   }

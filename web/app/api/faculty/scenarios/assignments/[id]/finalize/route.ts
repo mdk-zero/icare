@@ -16,9 +16,9 @@ interface RouteParams {
 }
 
 // POST /api/faculty/scenarios/assignments/:id/finalize
-// Saves the grade: score = each task's points scaled by its verbal rating, or
-// by its sub-tasks' ratings once any are rated (an unrated completion keeps
-// full credit). The scenario completes only once every checklist row is
+// Saves the grade: every checklist row's rating points over every row on
+// offer, scaled to a percentage (an unrated completion keeps full credit).
+// The scenario completes only once every checklist row is
 // graded; until then a save is progress — the student sees each graded task
 // straight away and keeps the scenario (and their patient) open. Saving again
 // after an edit re-scores it and keeps the date it was first completed.

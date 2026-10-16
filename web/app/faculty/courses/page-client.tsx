@@ -247,11 +247,8 @@ function CourseCard({ offering: o }: { offering: FacultyCourseSummary }) {
           {o.sections.map((s) => (
             <span
               key={s.id}
-              className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                s.has_group
-                  ? "bg-brand-600/10 text-brand-700"
-                  : "bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-600/20"
-              }`}
+              title={s.has_group ? "Students of your groups here" : "You supervise no group here, so the whole section is on your roster"}
+              className="rounded-full bg-brand-600/10 px-2 py-0.5 text-xs font-medium text-brand-700"
             >
               {s.name}
             </span>
@@ -276,9 +273,8 @@ function CourseCard({ offering: o }: { offering: FacultyCourseSummary }) {
           </Link>
         )}
         {noGroup.length > 0 && (
-          <p className="mt-2.5 flex items-center gap-1.5 text-xs text-amber-700">
-            <FontAwesomeIcon icon={faTriangleExclamation} className="h-3 w-3" />
-            You have no group in {noGroup.map((s) => s.name).join(", ")}
+          <p className="mt-2.5 text-xs text-gray-500">
+            {`No group of yours in ${noGroup.map((s) => s.name).join(", ")}: the whole section is on your roster`}
           </p>
         )}
       </div>

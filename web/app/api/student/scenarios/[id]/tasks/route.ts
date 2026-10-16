@@ -8,7 +8,7 @@ import {
   stepGradesByTask,
   studentTaskSteps,
 } from '@/app/lib/scenario-tasks';
-import { isPerformed, taskCredit, type StepGrades } from '@/app/lib/task-ratings';
+import { isPerformed, scaledGrade, taskRawPoints, type StepGrades } from '@/app/lib/task-ratings';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -82,9 +82,9 @@ export async function GET(_request: Request, { params }: RouteParams) {
 
     const tasks = (tasksRes.data ?? []).map((t) => {
       const completion = completionByTask.get(t.id);
-      // Null for a task rated N/A: out of the score, so no share to show.
-      const credit = taskCredit(completion, stepsByTask.get(t.id));
       const isReleased = released.has(t.id as string);
+      // Zero rows on offer for a task rated N/A: out of the score, so no grade to show.
+      const raw = taskRawPoints(completion, stepsByTask.get(t.id));
       return {
         ...t,
         is_completed: isPerformed(completion),
@@ -92,7 +92,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
         completed_at: completion?.completed_at ?? null,
         rating: isReleased ? (completion?.rating ?? null) : null,
         remarks: isReleased ? (completion?.remarks ?? null) : null,
-        percent: isReleased && credit !== null ? Math.round(credit * 100) : null,
+        percent: isReleased && raw.max > 0 ? scaledGrade(raw.earned, raw.max) : null,
         steps: shownSteps.get(t.id as string) ?? [],
       };
     });

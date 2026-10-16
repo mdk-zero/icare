@@ -5,6 +5,7 @@ import { getScopedStudentIds } from '@/app/lib/admin-scope';
 import { logAudit } from '@/app/lib/audit';
 import { getFacultySectionIds, getFacultyStudentIds } from '@/app/lib/roster';
 import { parseDeadline } from '@/app/lib/deadline-input';
+import { assessmentPublishBlockers } from '@/app/lib/assessment-validation';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -69,11 +70,19 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     const { data: assessment } = await supabase
       .from('assessments')
-      .select('id, title, target_sections, deadline')
+      .select('id, title, target_sections, deadline, is_published')
       .eq('id', assessmentId)
       .single();
     if (!assessment) {
       return NextResponse.json({ error: 'Assessment not found' }, { status: 404 });
+    }
+    // Assigning is what puts a quiz in front of students, so a draft is
+    // published here, under the same checks as publishing it any other way.
+    if (!assessment.is_published) {
+      const blockers = await assessmentPublishBlockers(supabase, assessmentId);
+      if (blockers.length > 0) {
+        return NextResponse.json({ error: blockers[0].message, blockers }, { status: 400 });
+      }
     }
     if (!deadlineValue && !assessment.deadline) {
       return NextResponse.json({ error: 'Set a deadline' }, { status: 400 });
@@ -179,18 +188,18 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     // Students only ever see assessments their section is targeted by, so
     // assigning to a section it was not published to would hand out a quiz
-    // that never appears. Widen the visibility to match the assignment.
+    // that never appears. Widen the visibility to match the assignment. A
+    // quiz still open to every section is narrowed to the sections it is
+    // assigned to: assigning says who it is for.
     const currentTargets = (assessment.target_sections as string[] | null) ?? [];
     let targetSections = currentTargets;
-    const addedSections = sections
-      .map((s) => s.name)
-      .filter((name) => !currentTargets.includes(name));
-    // An empty target_sections already means "every section"; nothing to widen.
-    if (currentTargets.length > 0 && addedSections.length > 0) {
+    const assignedNames = sections.map((s) => s.name);
+    const addedSections = assignedNames.filter((name) => !currentTargets.includes(name));
+    if (addedSections.length > 0 || !assessment.is_published) {
       targetSections = [...currentTargets, ...addedSections];
       const { error: visibilityError } = await supabase
         .from('assessments')
-        .update({ target_sections: targetSections })
+        .update({ target_sections: targetSections, is_published: true })
         .eq('id', assessmentId);
       if (visibilityError) {
         console.error('Failed to widen assessment visibility', visibilityError);
@@ -236,7 +245,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         target_sections: currentTargets.length > 0 ? targetSections : null,
         // Named so the caller can tell the faculty member their quiz just
         // became visible to a section they had not published it to.
-        added_sections: currentTargets.length > 0 ? addedSections : [],
+        added_sections: addedSections,
       },
       { status: 201 },
     );

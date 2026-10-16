@@ -1,31 +1,22 @@
-import type { ReactNode } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { LEGAL } from "../lib/legal";
+import { LEGAL_CONTACT, LEGAL_EFFECTIVE, type LegalDoc, type LegalItem } from "../lib/legal-content";
 
-export interface LegalSection {
-  id: string;
-  title: string;
-  body: ReactNode;
+function Item({ item }: { item: LegalItem }) {
+  if (typeof item === "string") return <li>{item}</li>;
+  return (
+    <li>
+      <strong>{item.lead}:</strong> {item.text}
+    </li>
+  );
 }
 
 /**
- * A public legal document (Terms of Use, Privacy Policy): readable line
- * length, a contents list that jumps to each section, and a link to the
- * other document. Open to everyone, signed in or not, so app store
- * reviewers and students can read it before they have an account.
+ * A public legal document (Terms of Use, Privacy Policy), from the same text
+ * the mobile app shows on its own screens (lib/legal-content). Open to
+ * everyone, signed in or not, so App Store reviewers can read it too.
  */
-export default function LegalPage({
-  title,
-  intro,
-  sections,
-  other,
-}: {
-  title: string;
-  intro: ReactNode;
-  sections: LegalSection[];
-  other: { href: string; label: string };
-}) {
+export default function LegalPage({ doc, other }: { doc: LegalDoc; other: { href: string; label: string } }) {
   return (
     <div className="min-h-screen bg-canvas text-gray-800">
       <header className="border-b border-hairline bg-surface">
@@ -41,14 +32,18 @@ export default function LegalPage({
       </header>
 
       <main className="mx-auto max-w-3xl px-5 py-10">
-        <h1 className="font-display text-3xl font-semibold tracking-tight text-gray-900 sm:text-4xl">{title}</h1>
-        <p className="mt-2 text-sm text-gray-500">Effective {LEGAL.effective}</p>
-        <div className="mt-6 max-w-[68ch] space-y-3 text-[15px] leading-7 text-gray-700">{intro}</div>
+        <h1 className="font-display text-3xl font-semibold tracking-tight text-gray-900 sm:text-4xl">{doc.title}</h1>
+        <p className="mt-2 text-sm text-gray-500">Effective {LEGAL_EFFECTIVE}</p>
+        <div className="mt-6 max-w-[68ch] space-y-3 text-[15px] leading-7 text-gray-700">
+          {doc.intro.map((p) => (
+            <p key={p}>{p}</p>
+          ))}
+        </div>
 
         <nav aria-label="Contents" className="mt-8 rounded-xl border border-hairline bg-surface p-5">
           <p className="text-sm font-semibold text-gray-900">Contents</p>
           <ol className="mt-3 grid gap-x-6 gap-y-1.5 text-sm sm:grid-cols-2">
-            {sections.map((s, i) => (
+            {doc.sections.map((s, i) => (
               <li key={s.id}>
                 <a href={`#${s.id}`} className="text-brand-700 hover:underline">
                   {i + 1}. {s.title}
@@ -59,24 +54,30 @@ export default function LegalPage({
         </nav>
 
         <div className="mt-10 space-y-10">
-          {sections.map((s, i) => (
+          {doc.sections.map((s, i) => (
             <section key={s.id} id={s.id} className="scroll-mt-6">
               <h2 className="font-display text-xl font-semibold text-gray-900">
                 {i + 1}. {s.title}
               </h2>
-              <div className="mt-3 max-w-[68ch] space-y-3 text-[15px] leading-7 text-gray-700 [&_li]:ml-5 [&_li]:list-disc [&_li]:pl-1 [&_ul]:space-y-1.5">
-                {s.body}
+              <div className="mt-3 max-w-[68ch] space-y-3 text-[15px] leading-7 text-gray-700">
+                {s.blocks.map((b, j) =>
+                  "p" in b ? (
+                    <p key={j}>{b.p}</p>
+                  ) : (
+                    <ul key={j} className="space-y-1.5 [&_li]:ml-5 [&_li]:list-disc [&_li]:pl-1">
+                      {b.list.map((item, k) => (
+                        <Item key={k} item={item} />
+                      ))}
+                    </ul>
+                  ),
+                )}
               </div>
             </section>
           ))}
         </div>
 
         <footer className="mt-14 border-t border-hairline pt-6 text-sm text-gray-500">
-          Questions about this document? Contact {LEGAL.school} at{" "}
-          <a href={`mailto:${LEGAL.contactEmail}`} className="text-brand-700 hover:underline">
-            {LEGAL.contactEmail}
-          </a>
-          .
+          Questions about this document? Contact {LEGAL_CONTACT}.
         </footer>
       </main>
     </div>

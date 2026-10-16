@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { DEFAULT_ATTEMPTS, MIN_ATTEMPTS } from "@/app/lib/quiz-attempts";
+import { describeTimeLimit, parseTimeLimit } from "@/app/lib/time-limit";
+import TimeLimitInput from "../time-limit-input";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faListCheck,
@@ -106,7 +108,8 @@ export default function AssessmentNewClient() {
   const [form, setForm] = useState({
     title: "",
     description: "",
-    time_limit_minutes: "",
+    /** "MM:SS"; empty is no limit. */
+    time_limit: "",
     max_attempts: String(DEFAULT_ATTEMPTS),
   });
   // The course the quiz is made for (070); it then counts toward that course's grading.
@@ -122,6 +125,11 @@ export default function AssessmentNewClient() {
     }
     if (offerings.length > 0 && !offeringId) {
       setError("Choose the course this quiz is for");
+      return;
+    }
+    const limit = parseTimeLimit(form.time_limit);
+    if (limit === "invalid") {
+      setError("Enter the time limit as minutes and seconds, like 15:00");
       return;
     }
     const attempts = Number(form.max_attempts);
@@ -159,9 +167,7 @@ export default function AssessmentNewClient() {
           body: JSON.stringify({
             title: form.title.trim(),
             description: form.description,
-            time_limit_seconds: form.time_limit_minutes
-              ? Number(form.time_limit_minutes) * 60
-              : null,
+            time_limit_seconds: limit,
             max_attempts: Number(form.max_attempts),
             ...(offeringId ? { offering_id: offeringId } : {}),
           }),
@@ -274,7 +280,7 @@ export default function AssessmentNewClient() {
 
   const generating = useLesson || useAi;
   const count = Number.isFinite(lessonCount) ? lessonCount : 0;
-  const timeLimit = Number(form.time_limit_minutes);
+  const timeLimit = parseTimeLimit(form.time_limit);
   // Identification rows appear only when the lesson asks for them alone or mixed in.
   const writeIn = useLesson && lessonTypes.has("short_answer");
   const bubbles = !useLesson || lessonTypes.has("multiple_choice");
@@ -363,17 +369,14 @@ export default function AssessmentNewClient() {
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <label className={labelClassName} htmlFor="quiz-time">
-                  Time limit <span className="font-normal text-gray-500">(minutes, optional)</span>
+                  Time limit <span className="font-normal text-gray-500">(optional)</span>
                 </label>
                 <div className="relative">
-                  <FontAwesomeIcon icon={faClock} className="pointer-events-none absolute left-4 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
-                  <input
+                  <FontAwesomeIcon icon={faClock} className="pointer-events-none absolute left-4 top-[1.35rem] h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+                  <TimeLimitInput
                     id="quiz-time"
-                    type="number"
-                    min={1}
-                    value={form.time_limit_minutes}
-                    onChange={(e) => setForm((f) => ({ ...f, time_limit_minutes: e.target.value }))}
-                    placeholder="No limit"
+                    value={form.time_limit}
+                    onChange={(time_limit) => setForm((f) => ({ ...f, time_limit }))}
                     disabled={busy}
                     className={`${inputClassName} pl-10`}
                   />
@@ -730,11 +733,11 @@ export default function AssessmentNewClient() {
             <div className="flex flex-wrap gap-1.5 border-b border-hairline px-4 py-3 text-xs text-gray-600">
               <span className="inline-flex items-center gap-1.5 rounded-full border border-hairline bg-subtle px-2 py-0.5">
                 <FontAwesomeIcon icon={faClock} className="h-3 w-3 text-brand-600" />
-                {timeLimit > 0 ? `${timeLimit} min` : "No time limit"}
+                {describeTimeLimit(timeLimit === "invalid" ? null : timeLimit)}
               </span>
               <span className="inline-flex items-center gap-1.5 rounded-full border border-hairline bg-subtle px-2 py-0.5">
                 <FontAwesomeIcon icon={faRotateRight} className="h-3 w-3 text-brand-600" />
-                {form.max_attempts || DEFAULT_ATTEMPTS} attempts
+                {`${form.max_attempts || DEFAULT_ATTEMPTS} ${Number(form.max_attempts || DEFAULT_ATTEMPTS) === 1 ? "attempt" : "attempts"}`}
               </span>
             </div>
 

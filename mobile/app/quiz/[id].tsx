@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ScrollView, View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { ScrollView, View, Text, StyleSheet, TouchableOpacity, Alert, AppState } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import { setStatusBarHidden } from 'expo-status-bar';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Card, PrimaryButton, SkeletonBlock, EmptyState } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
@@ -19,6 +21,13 @@ function formatClock(seconds: number) {
 
 /** The College's passing mark for Skill Assessments, as a percentage. */
 const PASSING_SCORE = 75;
+
+/**
+ * Strict mode: leaving the app while a quiz is open is counted. The first
+ * time is a warning; this many times submits the quiz with the answers so far.
+ * (No app can stop a phone's Home button or app switcher; it can only notice.)
+ */
+const LEAVE_LIMIT = 2;
 
 type Palette = ReturnType<typeof useTheme>['Palette'];
 
@@ -74,6 +83,39 @@ function ScoreGauge({
       </View>
       <Text style={{ position: 'absolute', bottom: 0, left: 22, fontSize: 11, fontWeight: '700', color: Palette.textMuted }}>0</Text>
       <Text style={{ position: 'absolute', bottom: 0, right: 16, fontSize: 11, fontWeight: '700', color: Palette.textMuted }}>100</Text>
+    </View>
+  );
+}
+
+/** The screen's own top bar, outside the quiz itself: back, and what this is. */
+function QuizTopBar({ title, onBack, Palette }: { title: string; onBack: () => void; Palette: Palette }) {
+  const insets = useSafeAreaInsets();
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Spacing.sm,
+        paddingTop: insets.top + Spacing.sm,
+        paddingBottom: Spacing.sm,
+        paddingHorizontal: Spacing.sm,
+        backgroundColor: Palette.surface,
+        borderBottomWidth: 1,
+        borderBottomColor: Palette.border,
+      }}
+    >
+      <TouchableOpacity
+        onPress={onBack}
+        accessibilityRole="button"
+        accessibilityLabel="Back"
+        hitSlop={8}
+        style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
+      >
+        <Ionicons name="chevron-back" size={24} color={Palette.primary} />
+      </TouchableOpacity>
+      <Text style={{ flex: 1, fontSize: 17, fontWeight: '700', color: Palette.ink }} numberOfLines={1}>
+        {title}
+      </Text>
     </View>
   );
 }
@@ -154,6 +196,14 @@ export default function QuizInterfaceScreen() {
   // which times the attempt from started_at.
   const deadlineRef = useRef<number | null>(null);
   const autoSubmittedRef = useRef(false);
+  // Strict mode: how often the student left the app mid-quiz, and why a quiz
+  // submitted itself, to say so on the results.
+  const [leaves, setLeaves] = useState(0);
+  const leavesRef = useRef(0);
+  const [autoReason, setAutoReason] = useState<'time' | 'left' | null>(null);
+  const submittingRef = useRef(false);
+  const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     let cancelled = false;
@@ -203,7 +253,9 @@ export default function QuizInterfaceScreen() {
 
   const doSubmit = useCallback(
     async (answersToSend: Record<string, number>) => {
-      if (!started || submitting) return;
+      // A ref, not just state: the app-switch handler can fire twice before a re-render.
+      if (!started || submittingRef.current) return;
+      submittingRef.current = true;
       setSubmitting(true);
       try {
         const graded = await submitAttempt(
@@ -225,10 +277,11 @@ export default function QuizInterfaceScreen() {
               : 'Unable to submit',
         );
       } finally {
+        submittingRef.current = false;
         setSubmitting(false);
       }
     },
-    [started, submitting],
+    [started],
   );
 
   // Countdown for time-limited assessments; auto-submits at zero.
@@ -255,9 +308,75 @@ export default function QuizInterfaceScreen() {
     // not re-alert and re-submit in a loop. The submit button still works.
     if (autoSubmittedRef.current) return;
     autoSubmittedRef.current = true;
+    setAutoReason('time');
     Alert.alert("Time's up", 'Submitting your answers now.');
     doSubmit(answersRef.current);
   }, [remaining, result, doSubmit]);
+
+  // ------------------------------------------------------------
+  // Strict mode, while the quiz is being taken
+  // ------------------------------------------------------------
+  const taking = started !== null && result === null;
+  const doSubmitRef = useRef(doSubmit);
+  const resultRef = useRef(result);
+  useEffect(() => {
+    doSubmitRef.current = doSubmit;
+    resultRef.current = result;
+  });
+
+  // Full screen while the quiz is open: no back swipe and no status bar (the
+  // screen has no navigation header at all; QuizTopBar stands in outside the
+  // quiz). Both come back for the results.
+  useEffect(() => {
+    navigation.setOptions({ gestureEnabled: !taking });
+    setStatusBarHidden(taking, 'fade');
+  }, [navigation, taking]);
+  useEffect(() => () => setStatusBarHidden(false, 'fade'), []);
+
+  // Back button, back swipe or any other way off this screen: the quiz is
+  // submitted as it stands, or the student stays.
+  useEffect(() => {
+    if (!taking) return;
+    return navigation.addListener('beforeRemove', (e) => {
+      e.preventDefault();
+      Alert.alert(
+        'Leave the quiz?',
+        'Leaving submits your quiz with the answers you have now, and it counts as this attempt.',
+        [
+          { text: 'Stay', style: 'cancel' },
+          { text: 'Submit and leave', style: 'destructive', onPress: () => void doSubmitRef.current(answersRef.current) },
+        ],
+      );
+    });
+  }, [navigation, taking]);
+
+  // Home button or app switcher. Only 'background' counts: pulling down the
+  // notification shade or an incoming call only makes the app 'inactive'.
+  useEffect(() => {
+    if (!taking) return;
+    const sub = AppState.addEventListener('change', (status) => {
+      if (status === 'background') {
+        leavesRef.current += 1;
+        setLeaves(leavesRef.current);
+        if (leavesRef.current >= LEAVE_LIMIT) {
+          setAutoReason('left');
+          // May not get through while in the background; tried again on return.
+          void doSubmitRef.current(answersRef.current);
+        }
+        return;
+      }
+      if (status !== 'active' || leavesRef.current === 0 || resultRef.current) return;
+      if (leavesRef.current >= LEAVE_LIMIT) {
+        void doSubmitRef.current(answersRef.current);
+      } else {
+        Alert.alert(
+          'You left the quiz',
+          'Stay in iCARE++ until you submit. If you leave the app again, your quiz is submitted automatically with the answers you have.',
+        );
+      }
+    });
+    return () => sub.remove();
+  }, [taking]);
 
   const handleSelect = (index: number) => {
     if (!currentQuestion) return;
@@ -302,25 +421,32 @@ export default function QuizInterfaceScreen() {
     }
   };
 
+  const topBar = <QuizTopBar title={started?.assessment.title ?? 'Quiz'} onBack={() => router.back()} Palette={Palette} />;
+
   if (loadError) {
     return (
-      <View style={styles.errorContainer}>
-        <EmptyState
-          icon={loadBlocked ? 'lock-closed-outline' : 'cloud-offline-outline'}
-          message={loadError}
-        />
-        {loadBlocked && (
-          <View style={styles.blockedActions}>
-            <PrimaryButton title="Back to quizzes" onPress={() => router.back()} variant="outline" />
-          </View>
-        )}
+      <View style={styles.container}>
+        {topBar}
+        <View style={styles.errorContainer}>
+          <EmptyState
+            icon={loadBlocked ? 'lock-closed-outline' : 'cloud-offline-outline'}
+            message={loadError}
+          />
+          {loadBlocked && (
+            <View style={styles.blockedActions}>
+              <PrimaryButton title="Back to quizzes" onPress={() => router.back()} variant="outline" />
+            </View>
+          )}
+        </View>
       </View>
     );
   }
 
   if (!started) {
     return (
-      <View style={[styles.container, styles.content]} accessibilityLabel="Loading the quiz">
+      <View style={styles.container} accessibilityLabel="Loading the quiz">
+        {topBar}
+        <View style={styles.content}>
         <View style={styles.toolbar}>
           <SkeletonBlock width={96} height={38} radius={Radius.md} />
           <View style={styles.toolbarRight}>
@@ -345,6 +471,7 @@ export default function QuizInterfaceScreen() {
               <SkeletonBlock width={width as `${number}%`} height={14} />
             </View>
           ))}
+        </View>
         </View>
       </View>
     );
@@ -398,6 +525,8 @@ export default function QuizInterfaceScreen() {
     };
 
     return (
+      <View style={styles.container}>
+      {topBar}
       <ScrollView ref={scrollRef} style={styles.container} contentContainerStyle={styles.content}>
         <Card style={styles.scoreCard}>
           {user?.name ? <Text style={styles.scoreStudent}>{user.name}</Text> : null}
@@ -421,6 +550,15 @@ export default function QuizInterfaceScreen() {
               </View>
             ))}
           </View>
+
+          {autoReason === 'left' ? (
+            <View style={styles.lateNote}>
+              <Ionicons name="exit-outline" size={14} color={Accent.red.fg} />
+              <Text style={[styles.lateText, { color: Accent.red.fg }]}>
+                {`Submitted automatically because you left the app ${LEAVE_LIMIT} times during the quiz.`}
+              </Text>
+            </View>
+          ) : null}
 
           {result.late ? (
             <View style={styles.lateNote}>
@@ -484,6 +622,7 @@ export default function QuizInterfaceScreen() {
           </View>
         )}
       </ScrollView>
+      </View>
     );
   }
 
@@ -492,8 +631,11 @@ export default function QuizInterfaceScreen() {
   // ------------------------------------------------------------
   if (!currentQuestion) {
     return (
-      <View style={styles.errorContainer}>
-        <EmptyState icon="document-text-outline" message="This quiz has no questions yet." />
+      <View style={styles.container}>
+        {topBar}
+        <View style={styles.errorContainer}>
+          <EmptyState icon="document-text-outline" message="This quiz has no questions yet." />
+        </View>
       </View>
     );
   }
@@ -501,7 +643,23 @@ export default function QuizInterfaceScreen() {
   const selectedIndex = answers[currentQuestion.id] ?? null;
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={[styles.content, { paddingTop: insets.top + Spacing.md, paddingBottom: insets.bottom + 32 }]}
+    >
+
+      <View style={styles.strictBar}>
+        <Ionicons name="lock-closed" size={14} color={Palette.primary} />
+        <Text style={styles.strictTitle} numberOfLines={1}>
+          {started.assessment.title}
+        </Text>
+        <View style={[styles.strictChip, leaves > 0 && { backgroundColor: Accent.red.bg }]}>
+          <Text style={[styles.strictChipText, leaves > 0 && { color: Accent.red.fg }]}>
+            {leaves > 0 ? `Left the app ${leaves}/${LEAVE_LIMIT}` : 'Strict mode'}
+          </Text>
+        </View>
+      </View>
+
       {/* Exam toolbar: Previous on the left, Skip and Next on the right. */}
       <View style={styles.toolbar}>
         <ToolbarButton
@@ -622,6 +780,23 @@ function createStyles(
   optionSelected: { borderColor: Palette.primary, backgroundColor: Palette.primaryTint },
   optionText: { fontSize: 14, color: Palette.ink, flex: 1, lineHeight: 20 },
   answeredText: { fontSize: 12, color: Palette.textMuted, marginBottom: Spacing.xl },
+  strictBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    paddingBottom: Spacing.md,
+    marginBottom: Spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: Palette.border,
+  },
+  strictTitle: { ...Type.itemTitle, flex: 1 },
+  strictChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: Radius.pill,
+    backgroundColor: Palette.primaryTint,
+  },
+  strictChipText: { fontSize: 11, fontWeight: '700', color: Palette.primary },
   scoreCard: { marginBottom: Spacing.xl },
   scoreStudent: { fontSize: 13, fontWeight: '600', color: Palette.textSecondary },
   scoreTitle: { ...Type.title, marginTop: 2 },

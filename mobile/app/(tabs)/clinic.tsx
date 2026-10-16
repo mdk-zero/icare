@@ -23,6 +23,7 @@ import {
   Badge,
 } from "@/components/ui";
 import { useApiData } from "@/hooks/useApiData";
+import { useLiveRefresh } from "@/hooks/useLiveRefresh";
 import { FloorPlan, FloorPlanSkeleton } from "@/components/FloorPlan";
 import { returnDemoStatus } from "@/lib/return-demos";
 import { useAppHeaderHeight } from "@/components/navigation/AppTabs";
@@ -255,6 +256,16 @@ export default function ClinicScreen() {
   const cases = useApiData(fetchMyCases);
   // Return Demonstrations have no patient, so they aren't on the ward.
   const demos = useApiData(fetchScenarioAssignments);
+  // A case assigned or graded shows up at once: its notification arrives live.
+  const reloadCases = cases.reload;
+  const reloadDemos = demos.reload;
+  useLiveRefresh(
+    React.useCallback(() => {
+      reload();
+      reloadCases();
+      reloadDemos();
+    }, [reload, reloadCases, reloadDemos]),
+  );
 
   // Faculty check tasks off in the meantime, so the counters are stale on return.
   useFocusEffect(

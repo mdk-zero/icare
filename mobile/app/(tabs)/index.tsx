@@ -12,6 +12,7 @@ import { SectionHeader, SkeletonBlock, SyncStatus } from "@/components/ui";
 import { useAuth } from "@/hooks/useAuth";
 import { useAvatarImage } from "@/hooks/useAvatar";
 import { useApiData, allCached } from "@/hooks/useApiData";
+import { useLiveRefresh } from "@/hooks/useLiveRefresh";
 import { CourseRequirements } from "@/components/CourseRequirements";
 import {
   fetchScenarioAssignments,
@@ -190,12 +191,20 @@ export default function DashboardScreen() {
   );
   const STATUS_COLORS = React.useMemo(() => statusColors(Accent), [Accent]);
 
-  const { data, loading, refreshing, refresh } = useApiData(() =>
+  const { data, loading, refreshing, refresh, reload } = useApiData(() =>
     allCached(fetchScenarioAssignments(), fetchAssessments(), fetchProgress(), fetchPatients()),
   );
   const [assignments, assessments, progress, patients] = data ?? [[], [], null, []];
   // Loaded on its own, so a failure here leaves the rest of Home standing.
   const courses = useApiData(fetchOwnCourses);
+  // New assignments and grades show up at once: their notification arrives live.
+  const reloadCourses = courses.reload;
+  useLiveRefresh(
+    React.useCallback(() => {
+      reload();
+      reloadCourses();
+    }, [reload, reloadCourses]),
+  );
   const refreshAll = () => {
     refresh();
     courses.refresh();
