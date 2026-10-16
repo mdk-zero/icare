@@ -19,6 +19,7 @@ import {
   type SkillSelection,
 } from "../../lib/api";
 import { MAX_RETURN_DEMO_TITLE } from "../../lib/return-demos";
+import { forgetPage } from "../../lib/request-cache";
 import CoursePicker, { resolveCourse, useActivityCourses } from "../../components/CoursePicker";
 import PageHeader from "../../components/PageHeader";
 import { EcgLoader } from "../../components/EcgLoader";
@@ -109,7 +110,10 @@ export default function ReturnDemoForm({ id }: { id?: string }) {
       }
       toast("Return Demonstration created");
     }
-    router.push("/faculty/return-demos");
+    // Back to the list, loaded fresh so the new one is there from the first
+    // frame; replace so Back doesn't reopen the form.
+    forgetPage("faculty:return-demos");
+    router.replace("/faculty/return-demos");
   };
 
   if (loadError) {
