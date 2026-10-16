@@ -4,6 +4,7 @@ import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { logAudit } from '@/app/lib/audit';
 import { activityCourse } from '@/app/lib/activity-course';
 import { addSkillTasks } from '@/app/lib/skill-tasks';
+import { ensureCategories } from '@/app/lib/scenario-categories';
 import { parseReturnDemoInput, RETURN_DEMO_CATEGORY } from '@/app/lib/return-demos';
 import { listReturnDemos, needsMigration, returnDemosReady } from '@/app/lib/return-demos-server';
 
@@ -56,6 +57,11 @@ export async function POST(request: NextRequest) {
     const course = await activityCourse(supabase, 'scenarios', session, input.offering_id ?? null);
     if ('error' in course) return NextResponse.json({ error: course.error }, { status: 400 });
 
+    // scenarios.category has a foreign key into scenario_categories, so the
+    // Return Demonstration category has to exist before it can be filed under.
+    const resolved = await ensureCategories(supabase, [RETURN_DEMO_CATEGORY], 'faculty', session.uid);
+    if ('error' in resolved) return NextResponse.json({ error: resolved.error }, { status: resolved.status });
+
     const { data: demo, error } = await supabase
       .from('scenarios')
       .insert({
@@ -66,7 +72,7 @@ export async function POST(request: NextRequest) {
         title: input.title,
         description: input.description ?? '',
         difficulty: RETIRED_DIFFICULTY,
-        category: RETURN_DEMO_CATEGORY,
+        category: resolved.names[0],
         patient_case: {},
         learning_objectives: [],
         is_ai_generated: false,
