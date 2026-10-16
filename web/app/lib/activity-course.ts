@@ -11,7 +11,7 @@ type Supabase = ReturnType<typeof getSupabaseAdmin>;
  * Before 070 there is no offering_id column: nothing is checked or stored.
  */
 
-export type ActivityTable = 'scenarios' | 'assessments' | 'case_presentations';
+export type ActivityTable = 'scenarios' | 'assessments' | 'case_presentations' | 'library_materials';
 
 /** Whether 070 is applied, so offering_id can be written. */
 export async function activityCoursesReady(supabase: Supabase, table: ActivityTable): Promise<boolean> {

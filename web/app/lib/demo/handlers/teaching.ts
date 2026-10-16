@@ -9,7 +9,8 @@ import { audit } from "./shared";
 import { parseDeadline } from "@/app/lib/deadline-input";
 import { DAY_MS, hasWork, lastActivity, mean } from "./derive";
 import { listSkillSummaries } from "../fixtures/skills";
-import { byName, sectionName, userById, visibleSections, visibleStudents } from "./scope";
+import { byName, manageableSections, sectionName, userById, visibleSections, visibleStudents } from "./scope";
+import { linkActivityCourses } from "./courses";
 import { CASES } from "../fixtures/cases-data";
 import caseTasks from "../fixtures/case-tasks.json";
 
@@ -28,6 +29,28 @@ function presentationOut(ctx: Ctx, p: DemoCasePresentation) {
   return {
     ...p,
     sections: p.section_ids.map((id) => ({ id, name: sectionName(ctx.db, id) ?? "—" })),
+    groups: (p.team_ids ?? [])
+      .map((id) => ctx.db.teams.find((t) => t.id === id))
+      .filter((t): t is NonNullable<typeof t> => !!t)
+      .map((t) => ({ id: t.id, name: t.name, section_name: sectionName(ctx.db, t.section_id) ?? "" })),
+  };
+}
+
+/** Who a presentation goes to: whole sections, an instructor's groups, students named one by one. */
+function presentationAudience(ctx: Ctx, body: Record<string, unknown> | undefined) {
+  const list = (v: unknown) => (Array.isArray(v) ? (v as unknown[]).filter((x): x is string => typeof x === "string") : []);
+  const sectionIds = list(body?.section_ids);
+  const teams = ctx.db.teams.filter((t) => list(body?.team_ids).includes(t.id));
+  if (ctx.role === "faculty" && teams.some((t) => t.faculty_id !== ctx.viewer.id)) return { error: "You can only give it to groups you supervise" };
+  const studentIds = list(body?.student_ids);
+  const people = new Map<string, { id: string }>();
+  for (const s of rosterFor(ctx, sectionIds)) people.set(s.id, s);
+  for (const u of ctx.db.users) if (u.role === "student" && u.team_id && teams.some((t) => t.id === u.team_id)) people.set(u.id, u);
+  for (const id of studentIds) people.set(id, { id });
+  return {
+    sectionIds: [...new Set([...sectionIds, ...teams.map((t) => t.section_id)])],
+    teamIds: teams.map((t) => t.id),
+    students: [...people.values()],
   };
 }
 
@@ -37,7 +60,7 @@ function scopedSubmissions(ctx: Ctx, presentationId: string) {
 }
 
 function visiblePresentations(ctx: Ctx) {
-  const sections = new Set(visibleSections(ctx.db, ctx.role, ctx.viewer.id).map((s) => s.id));
+  const sections = new Set(manageableSections(ctx.db, ctx.role, ctx.viewer.id).map((s) => s.id));
   return ctx.db.casePresentations.filter((p) => ctx.role === "admin" || p.section_ids.some((id) => sections.has(id)));
 }
 
@@ -101,8 +124,9 @@ route("POST", "/api/faculty/cases", (ctx) => {
   const { db, body, viewer } = ctx;
   const title = typeof body?.title === "string" ? body.title.trim() : "";
   if (!title) return json({ error: "Give the case presentation a title" }, 400);
-  const sectionIds: string[] = Array.isArray(body?.section_ids) ? body.section_ids : [];
-  if (sectionIds.length === 0) return json({ error: "Choose at least one section" }, 400);
+  const audience = presentationAudience(ctx, body);
+  if ("error" in audience) return json({ error: audience.error }, 403);
+  if (audience.students.length === 0) return json({ error: "Choose who gets this case presentation" }, 400);
   const deadlineCheck = parseDeadline(body?.deadline);
   if (!deadlineCheck.ok) return json({ error: deadlineCheck.error }, 400);
   const now = new Date().toISOString();
@@ -111,14 +135,15 @@ route("POST", "/api/faculty/cases", (ctx) => {
     title,
     instructions: typeof body?.instructions === "string" ? body.instructions : "",
     deadline: deadlineCheck.value,
-    section_ids: sectionIds,
+    section_ids: audience.sectionIds,
+    team_ids: audience.teamIds,
     created_by: viewer.id,
     created_at: now,
     updated_at: now,
     offering_id: typeof body?.offering_id === "string" && body.offering_id ? body.offering_id : null,
   };
   db.casePresentations.push(p);
-  const roster = rosterFor(ctx, sectionIds);
+  const roster = audience.students;
   for (const s of roster) db.caseSubmissions.push(blankSubmission(p.id, s.id));
   audit(db, viewer, "case_presentation.create", "case_presentations", { message: `Assigned case presentation “${title}”` }, p.id);
   return json({ presentation: presentationOut(ctx, p), student_count: roster.length }, 201);
@@ -166,9 +191,12 @@ route("PATCH", "/api/faculty/cases/:id", (ctx) => {
     p.deadline = deadlineCheck.value;
   }
   let added = 0;
-  if (Array.isArray(body?.section_ids)) {
-    p.section_ids = body.section_ids;
-    for (const s of rosterFor(ctx, p.section_ids)) {
+  if (Array.isArray(body?.section_ids) || Array.isArray(body?.team_ids) || Array.isArray(body?.student_ids)) {
+    const audience = presentationAudience(ctx, body);
+    if ("error" in audience) return json({ error: audience.error }, 403);
+    p.section_ids = [...new Set([...p.section_ids, ...audience.sectionIds])];
+    p.team_ids = [...new Set([...(p.team_ids ?? []), ...audience.teamIds])];
+    for (const s of audience.students) {
       if (!db.caseSubmissions.some((x) => x.presentation_id === p.id && x.student_id === s.id)) {
         db.caseSubmissions.push(blankSubmission(p.id, s.id));
         added += 1;
@@ -270,16 +298,19 @@ function youtubeId(input: string): string | null {
 
 route("GET", "/api/faculty/library", async (ctx) => {
   if (!staffOnly(ctx)) return forbidden();
+  // Each material's course (074).
+  linkActivityCourses(ctx.db);
   const mine = new Set([ctx.viewer.id, ...ctx.db.users.filter((u) => u.admin_id === ctx.viewer.id).map((u) => u.id)]);
   return {
     // Every chapter, as the real route lists them: the Skill checklists view reads the whole book.
     skills: await listSkillSummaries(),
-    sections: visibleSections(ctx.db, ctx.role, ctx.viewer.id).map((s) => ({ id: s.id, name: s.name })),
+    sections: manageableSections(ctx.db, ctx.role, ctx.viewer.id).map((s) => ({ id: s.id, name: s.name })),
     materials: ctx.db.materials
       .filter((m) => m.status === "published" || m.created_by === ctx.viewer.id || (ctx.role === "admin" && mine.has(m.created_by)))
       .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
       .map((m) => materialOut(ctx, m)),
     enabled: true,
+    courses_ready: true,
   };
 });
 
@@ -288,6 +319,7 @@ function applyMaterialInput(m: DemoMaterial, body: Record<string, unknown>): str
   if (!m.title) return "Give the material a title";
   if (typeof body.description === "string") m.description = body.description;
   if (typeof body.skill_id === "string") m.skill_id = body.skill_id;
+  if ("offering_id" in body) m.offering_id = typeof body.offering_id === "string" && body.offering_id ? body.offering_id : null;
   if (Array.isArray(body.target_sections)) m.target_sections = (body.target_sections as string[]).length ? (body.target_sections as string[]) : null;
   if (m.kind === "video" && typeof body.youtube_url === "string") {
     const id = youtubeId(body.youtube_url);
@@ -408,6 +440,7 @@ route("POST", "/api/faculty/library/suggestions", async (ctx) => {
     file_size: null,
     mime_type: null,
     target_sections: Array.isArray(ctx.body?.target_sections) && ctx.body.target_sections.length ? ctx.body.target_sections : null,
+    offering_id: typeof ctx.body?.offering_id === "string" ? ctx.body.offering_id : null,
     status: "published",
     published_at: now,
     created_by: ctx.viewer.id,

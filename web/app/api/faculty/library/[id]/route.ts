@@ -4,15 +4,16 @@ import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { getAdminScope, ownsFaculty } from '@/app/lib/admin-scope';
 import { logAudit } from '@/app/lib/audit';
 import { isSkillId } from '@/app/lib/taylor-skills';
+import { activityCourse, activityOfferings, parseOfferingId } from '@/app/lib/activity-course';
 import {
   fileViewerUrls,
   isMissingLibrary,
   LIBRARY_BUCKET,
   LIBRARY_NEEDS_MIGRATION,
   MATERIAL_COLUMNS,
+  materialSections,
   notifyPublished,
   parseMaterialInput,
-  publishableSections,
   resolveTargetSections,
   signedFileUrl,
   type MaterialRow,
@@ -42,7 +43,9 @@ async function load(supabase: Supabase, session: Session, id: string) {
     const allowed = session.role === 'admin' && ownsFaculty(await getAdminScope(supabase, session.uid), material.created_by);
     if (!allowed) return { response: NextResponse.json({ error: 'You can only change materials you published' }, { status: 403 }) };
   }
-  return { material };
+  // Its course (074); null for none, or before 074.
+  const offeringId = (await activityOfferings(supabase, 'library_materials', [id])).get(id) ?? null;
+  return { material, offeringId };
 }
 
 /** GET: the material, with a short-lived link to its file for previewing. */
@@ -55,14 +58,14 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
   const supabase = getSupabaseAdmin();
   const found = await load(supabase, session, id);
   if ('response' in found) return found.response;
-  const { material } = found;
+  const { material, offeringId: currentOffering } = found;
 
   let file: { direct: string; embed: string } | null = null;
   if ((material.kind === 'pdf' || material.kind === 'slides') && material.file_path) {
     const signed = await signedFileUrl(supabase, material.file_path);
     if (signed) file = fileViewerUrls(material.kind, signed);
   }
-  return NextResponse.json({ material, file });
+  return NextResponse.json({ material: { ...material, offering_id: currentOffering }, file });
 }
 
 /**
@@ -87,6 +90,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   const found = await load(supabase, session, id);
   if ('response' in found) return found.response;
   const { material } = found;
+  let offeringId = found.offeringId;
 
   let update: Record<string, unknown>;
   let action: string;
@@ -108,9 +112,17 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     // The file's owner is the author, who may not be the admin editing it.
     const parsed = await parseMaterialInput(merged, merged.file_path === material.file_path ? material.created_by : session.uid, isSkillId);
     if ('error' in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 });
-    const target = resolveTargetSections(body.target_sections, await publishableSections(supabase, session));
+    // Moving it to another of the instructor's courses.
+    let course: { offering_id?: string | null } = {};
+    if ('offering_id' in body) {
+      const checked = await activityCourse(supabase, 'library_materials', session, parseOfferingId(body));
+      if ('error' in checked) return NextResponse.json({ error: checked.error }, { status: 400 });
+      course = checked.value;
+      if ('offering_id' in course) offeringId = course.offering_id ?? null;
+    }
+    const target = resolveTargetSections(body.target_sections, await materialSections(supabase, session, offeringId));
     if ('error' in target) return NextResponse.json({ error: target.error }, { status: 400 });
-    update = { ...parsed.value, target_sections: target.value };
+    update = { ...parsed.value, target_sections: target.value, ...course };
     action = 'library.update';
   }
 
@@ -125,10 +137,10 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   if (material.file_path && material.file_path !== saved.file_path) {
     await supabase.storage.from(LIBRARY_BUCKET).remove([material.file_path]);
   }
-  if (material.status !== 'published' && saved.status === 'published') await notifyPublished(supabase, saved);
+  if (material.status !== 'published' && saved.status === 'published') await notifyPublished(supabase, saved, offeringId);
 
   await logAudit(session, { action, entityType: 'library_materials', entityId: id, details: { title: saved.title } }, request);
-  return NextResponse.json({ material: saved });
+  return NextResponse.json({ material: { ...saved, offering_id: offeringId } });
 }
 
 /** DELETE: remove the material and its stored file. */

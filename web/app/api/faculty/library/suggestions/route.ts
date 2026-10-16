@@ -2,12 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { logAudit } from '@/app/lib/audit';
+import { activityCourse, parseOfferingId } from '@/app/lib/activity-course';
 import {
   isMissingLibrary,
   LIBRARY_NEEDS_MIGRATION,
   MATERIAL_COLUMNS,
   notifyPublished,
-  publishableSections,
+  materialSections,
   resolveTargetSections,
   type MaterialRow,
 } from '@/app/lib/library';
@@ -46,7 +47,7 @@ export async function POST(request: NextRequest) {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (!['faculty', 'admin'].includes(session.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-  let body: { suggestionId?: unknown; target_sections?: unknown };
+  let body: { suggestionId?: unknown; target_sections?: unknown; offering_id?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -66,7 +67,11 @@ export async function POST(request: NextRequest) {
   }
   if (!suggestion) return NextResponse.json({ error: 'Suggestion not found' }, { status: 404 });
 
-  const target = resolveTargetSections(body.target_sections, await publishableSections(supabase, session));
+  // Published for one of the instructor's courses (074), to its sections.
+  const course = await activityCourse(supabase, 'library_materials', session, parseOfferingId(body as Record<string, unknown>));
+  if ('error' in course) return NextResponse.json({ error: course.error }, { status: 400 });
+  const offeringId = course.value.offering_id ?? null;
+  const target = resolveTargetSections(body.target_sections, await materialSections(supabase, session, offeringId));
   if ('error' in target) return NextResponse.json({ error: target.error }, { status: 400 });
 
   const { data, error: insertError } = await supabase
@@ -81,6 +86,7 @@ export async function POST(request: NextRequest) {
       status: 'published',
       published_at: new Date().toISOString(),
       created_by: session.uid,
+      ...course.value,
     })
     .select(MATERIAL_COLUMNS)
     .single();
@@ -89,7 +95,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unable to publish the video' }, { status: 500 });
   }
   const material = data as unknown as MaterialRow;
-  await notifyPublished(supabase, material);
+  await notifyPublished(supabase, material, offeringId);
   await logAudit(
     session,
     { action: 'library.publish', entityType: 'library_materials', entityId: material.id, details: { title: material.title, suggestion: true } },

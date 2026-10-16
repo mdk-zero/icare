@@ -4,10 +4,12 @@ import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { getAdminScope } from '@/app/lib/admin-scope';
 import { logAudit } from '@/app/lib/audit';
 import { isSkillId, listSkills } from '@/app/lib/taylor-skills';
+import { activityCourse, activityCoursesReady, activityOfferings, parseOfferingId } from '@/app/lib/activity-course';
 import {
   isMissingLibrary,
   LIBRARY_NEEDS_MIGRATION,
   MATERIAL_COLUMNS,
+  materialSections,
   notifyPublished,
   parseMaterialInput,
   publishableSections,
@@ -54,6 +56,11 @@ export async function GET() {
 
     const ids = rows.map((r) => r.id);
     const authorIds = [...new Set(rows.map((r) => r.created_by))];
+    // Each material's course (074), and whether materials can carry one yet.
+    const [offeringOf, coursesReady] = await Promise.all([
+      activityOfferings(supabase, 'library_materials', ids),
+      activityCoursesReady(supabase, 'library_materials'),
+    ]);
     const [viewsRes, namesRes] = await Promise.all([
       ids.length ? supabase.from('library_views').select('material_id').in('material_id', ids).limit(50000) : Promise.resolve({ data: [] }),
       authorIds.length ? supabase.from('users').select('id, name').in('id', authorIds) : Promise.resolve({ data: [] }),
@@ -65,6 +72,7 @@ export async function GET() {
     const materials = rows.map((r) => ({
       ...r,
       author_name: names.get(r.created_by) ?? '',
+      offering_id: offeringOf.get(r.id) ?? null,
       mine: r.created_by === session.uid,
       views: views.get(r.id) ?? 0,
     }));
@@ -76,7 +84,7 @@ export async function GET() {
       sectionList = (data ?? []) as { id: string; name: string }[];
     }
 
-    return NextResponse.json({ skills, sections: sectionList, materials, enabled: true });
+    return NextResponse.json({ skills, sections: sectionList, materials, enabled: true, courses_ready: coursesReady });
   } catch (err) {
     console.error('Load library failed', err);
     return NextResponse.json({ error: 'Unable to load the Library' }, { status: 500 });
@@ -101,7 +109,12 @@ export async function POST(request: NextRequest) {
     const parsed = await parseMaterialInput(body, session.uid, isSkillId);
     if ('error' in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 });
 
-    const target = resolveTargetSections(body.target_sections, await publishableSections(supabase, session));
+    // The course it is for (074): an instructor picks one of theirs.
+    const course = await activityCourse(supabase, 'library_materials', session, parseOfferingId(body));
+    if ('error' in course) return NextResponse.json({ error: course.error }, { status: 400 });
+    const offeringId = course.value.offering_id ?? null;
+
+    const target = resolveTargetSections(body.target_sections, await materialSections(supabase, session, offeringId));
     if ('error' in target) return NextResponse.json({ error: target.error }, { status: 400 });
 
     const publish = body.publish === true;
@@ -113,6 +126,7 @@ export async function POST(request: NextRequest) {
         status: publish ? 'published' : 'draft',
         published_at: publish ? new Date().toISOString() : null,
         created_by: session.uid,
+        ...course.value,
       })
       .select(MATERIAL_COLUMNS)
       .single();
@@ -124,7 +138,7 @@ export async function POST(request: NextRequest) {
     }
     const material = data as unknown as MaterialRow;
 
-    if (publish) await notifyPublished(supabase, material);
+    if (publish) await notifyPublished(supabase, material, offeringId);
     await logAudit(
       session,
       {
@@ -136,7 +150,7 @@ export async function POST(request: NextRequest) {
       request,
     );
 
-    return NextResponse.json({ material }, { status: 201 });
+    return NextResponse.json({ material: { ...material, offering_id: offeringId } }, { status: 201 });
   } catch (err) {
     console.error('Create library material failed', err);
     return NextResponse.json({ error: 'Unable to save the material' }, { status: 500 });

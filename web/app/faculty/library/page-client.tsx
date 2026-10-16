@@ -29,12 +29,15 @@ import { SkeletonLibraryChecklist, SkeletonLibraryMaterials, SkeletonLibrarySkil
 import ConfirmModal, { type ConfirmConfig } from "../../components/ConfirmModal";
 import { toast } from "../../components/Toast";
 import { usePageData } from "../../lib/use-page-data";
+import { termStatus } from "../../lib/course-progress";
 import {
   createLibraryMaterial,
   deleteLibraryMaterial,
   fetchLibrary,
   fetchLibraryMaterial,
   fetchLibrarySuggestions,
+  fetchFacultyCourse,
+  fetchMyCourses,
   fetchSkillDetails,
   publishLibrarySuggestion,
   setLibraryMaterialStatus,
@@ -46,6 +49,7 @@ import {
   type LibrarySkill,
   type LibrarySuggestion,
   type Section,
+  type FacultyCourseSummary,
 } from "../../lib/api";
 import { inputClassName, labelClassName } from "../cases/case-ui";
 
@@ -62,6 +66,7 @@ const NO_SKILLS: LibrarySkill[] = [];
 const NO_SECTIONS: Section[] = [];
 const NO_MATERIALS: LibraryMaterial[] = [];
 const NO_SUGGESTIONS: LibrarySuggestion[] = [];
+const NO_OFFERINGS: FacultyCourseSummary[] = [];
 
 type View = "materials" | "checklists";
 
@@ -91,8 +96,11 @@ function formatSize(bytes: number | null) {
 
 export default function LibraryClient() {
   const { data, loading, refresh } = usePageData("faculty:library", async () => {
-    const [lib, sug] = await Promise.all([fetchLibrary(), fetchLibrarySuggestions()]);
+    const [lib, sug, mine] = await Promise.all([fetchLibrary(), fetchLibrarySuggestions(), fetchMyCourses()]);
     return {
+      // An instructor's courses (a Dean has none): the Library is kept per course.
+      offerings: (mine.data?.offerings ?? []).filter((o) => termStatus(o.term) !== "ended"),
+      coursesReady: lib.data?.courses_ready ?? false,
       skills: lib.data?.skills ?? NO_SKILLS,
       sections: lib.data?.sections ?? NO_SECTIONS,
       materials: lib.data?.materials ?? NO_MATERIALS,
@@ -101,12 +109,40 @@ export default function LibraryClient() {
       error: lib.error ?? null,
     };
   });
-  const skills = data?.skills ?? NO_SKILLS;
-  const materials = data?.materials ?? NO_MATERIALS;
+  const allSkills = data?.skills ?? NO_SKILLS;
+  const allMaterials = data?.materials ?? NO_MATERIALS;
   const suggestions = data?.suggestions ?? NO_SUGGESTIONS;
   const sections = data?.sections ?? NO_SECTIONS;
+  const offerings = data?.offerings ?? NO_OFFERINGS;
+
+  // The course the Library is showing: one of the instructor's, or "none" for
+  // materials made for no course. A Dean, with no courses, sees everything.
+  const [pickedCourse, setPickedCourse] = useState<string | null>(null);
+  const looseCount = (data?.materials ?? NO_MATERIALS).filter((m) => !m.offering_id).length;
+  const courseKey = offerings.length === 0 ? null : (pickedCourse ?? offerings[0].id);
+  const course = offerings.find((o) => o.id === courseKey) ?? null;
+  // A course's own skill list, when it has one, narrows the skills shown.
+  const { data: courseDetail } = usePageData(course ? `faculty:course:${course.id}` : null, () => fetchFacultyCourse(course!.id));
+  const courseSkillIds = useMemo(() => (course ? (courseDetail?.data?.skill_ids ?? []) : []), [course, courseDetail]);
 
   const [view, setView] = useState<View>("materials");
+  const skills = useMemo(
+    () => (courseSkillIds.length > 0 ? allSkills.filter((x) => courseSkillIds.includes(x.id)) : allSkills),
+    [allSkills, courseSkillIds],
+  );
+  const materials = useMemo(
+    () =>
+      courseKey === null
+        ? allMaterials
+        : courseKey === "none"
+          ? allMaterials.filter((m) => !m.offering_id)
+          : allMaterials.filter((m) => m.offering_id === courseKey),
+    [allMaterials, courseKey],
+  );
+  // Where a new material goes: the course's sections, or the instructor's own.
+  const courseSections: Section[] = course ? course.sections.map((x) => ({ id: x.id, name: x.name })) : sections;
+  // Once materials carry a course (074), an instructor adds them to one.
+  const canAdd = data?.enabled !== false && !(courseKey === "none" && data?.coursesReady);
   const [search, setSearch] = useState("");
   const [picked, setPicked] = useState<string | null>(null);
   const [editing, setEditing] = useState<{ material: LibraryMaterial | null; kind: LibraryKind } | null>(null);
@@ -208,6 +244,43 @@ export default function LibraryClient() {
         })}
       </div>
 
+      {view === "materials" && offerings.length > 0 && (
+        <div role="radiogroup" aria-label="Course" className="flex flex-wrap items-center gap-2">
+          <span className="mr-1 text-sm font-medium text-gray-600">Course</span>
+          {[
+            ...offerings.map((o) => ({
+              key: o.id,
+              label: `${o.course.code} · ${o.course.title}`,
+              n: allMaterials.filter((m) => m.offering_id === o.id).length,
+            })),
+            ...(looseCount > 0 ? [{ key: "none", label: "Not in a course", n: looseCount }] : []),
+          ].map((c) => {
+            const on = c.key === courseKey;
+            return (
+              <button
+                key={c.key}
+                type="button"
+                role="radio"
+                aria-checked={on}
+                onClick={() => setPickedCourse(c.key)}
+                className={`inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-sm transition-colors ${
+                  on ? "border-brand-600 bg-brand-600 text-white" : "border-gray-300 bg-surface text-gray-700 hover:border-brand-600/50"
+                }`}
+              >
+                {c.label}
+                <span className={`rounded-full px-1.5 text-xs tabular-nums ${on ? "bg-white/20" : "bg-gray-100 text-gray-500"}`}>{c.n}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+      {view === "materials" && courseKey === "none" && (
+        <p className="rounded-xl border border-hairline bg-subtle px-4 py-3 text-sm text-gray-600">
+          Materials from before the Library was kept per course. Students see them as before. To file one under a course,
+          open it with Edit and pick the course.
+        </p>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)] gap-4 items-start">
         {/* Skill browser */}
         <aside className="bg-surface rounded-xl border border-hairline shadow-tile overflow-hidden lg:sticky lg:top-3">
@@ -299,7 +372,8 @@ export default function LibraryClient() {
                     <button
                       key={k.kind}
                       onClick={() => setEditing({ material: null, kind: k.kind })}
-                      disabled={data?.enabled === false}
+                      disabled={!canAdd}
+                      title={canAdd ? undefined : "Pick a course above to add materials to it"}
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-medium text-gray-700 hover:border-brand-600/40 hover:bg-brand-600/5 disabled:opacity-50"
                     >
                       <FontAwesomeIcon icon={faPlus} className="w-3 h-3" />
@@ -360,11 +434,17 @@ export default function LibraryClient() {
                         <p className="text-sm text-gray-800 leading-snug line-clamp-2">{s.title}</p>
                         <p className="text-xs text-gray-500">{s.channel}</p>
                         <button
-                          onClick={() => act(s.id, () => publishLibrarySuggestion(s.id, sections.map((x) => x.name)), "Published to your sections")}
-                          disabled={busyId === s.id || data?.enabled === false}
+                          onClick={() =>
+                            act(
+                              s.id,
+                              () => publishLibrarySuggestion(s.id, courseSections.map((x) => x.name), course?.id ?? null),
+                              course ? `Published to ${course.course.code}` : "Published to your sections",
+                            )
+                          }
+                          disabled={busyId === s.id || !canAdd}
                           className="mt-auto px-3 py-1.5 bg-brand-600 text-white rounded-lg text-xs font-medium hover:bg-brand-700 disabled:opacity-60"
                         >
-                          {busyId === s.id ? "Publishing…" : "Publish to my sections"}
+                          {busyId === s.id ? "Publishing…" : course ? `Publish to ${course.course.code}` : "Publish to my sections"}
                         </button>
                       </div>
                     </div>
@@ -378,8 +458,10 @@ export default function LibraryClient() {
 
       {editing && skill && (
         <MaterialEditor
-          skills={skills}
+          skills={allSkills}
           sections={sections}
+          offerings={offerings}
+          initialCourse={editing.material ? (editing.material.offering_id ?? "") : (course?.id ?? "")}
           initialSkill={editing.material?.skill_id ?? skill.id}
           kind={editing.kind}
           material={editing.material}
@@ -588,7 +670,9 @@ function ChecklistPanel({
 
 function MaterialEditor({
   skills,
-  sections,
+  sections: ownSections,
+  offerings,
+  initialCourse,
   initialSkill,
   kind: initialKind,
   material,
@@ -596,13 +680,21 @@ function MaterialEditor({
   onSaved,
 }: {
   skills: LibrarySkill[];
+  /** The instructor's own sections, for a material in no course. */
   sections: Section[];
+  /** The instructor's courses; a material is for one of them. */
+  offerings: FacultyCourseSummary[];
+  initialCourse: string;
   initialSkill: string;
   kind: LibraryKind;
   material: LibraryMaterial | null;
   onClose: () => void;
   onSaved: (skillId: string) => void;
 }) {
+  const [offeringId, setOfferingId] = useState(initialCourse);
+  const offering = offerings.find((o) => o.id === offeringId) ?? null;
+  // A course material goes to that course's sections.
+  const sections: Section[] = offering ? offering.sections.map((s) => ({ id: s.id, name: s.name })) : ownSections;
   const [kind, setKind] = useState<LibraryKind>(initialKind);
   const [skillId, setSkillId] = useState(initialSkill);
   const [title, setTitle] = useState(material?.title ?? "");
@@ -634,13 +726,17 @@ function MaterialEditor({
   };
 
   const save = async (publish: boolean) => {
-    if (chosen.size === 0 && sections.length > 0) return toast("Choose at least one section", "error");
+    if (offerings.length > 0 && !offeringId) return toast("Choose the course this is for", "error");
+    // Only sections of the chosen course count.
+    const picked = sections.map((s) => s.name).filter((n) => chosen.has(n));
+    if (picked.length === 0 && sections.length > 0) return toast("Choose at least one section", "error");
     const input: LibraryMaterialInput = {
+      ...(offerings.length > 0 ? { offering_id: offeringId } : {}),
       skill_id: skillId,
       kind,
       title: title.trim(),
       description,
-      target_sections: [...chosen],
+      target_sections: picked,
       ...(kind === "video" ? { youtube_url: youtube } : {}),
       ...(kind === "note" ? { body_md: body } : {}),
       ...(kind === "link" ? { url } : {}),
@@ -685,6 +781,36 @@ function MaterialEditor({
             </button>
           ))}
         </div>
+
+        {offerings.length > 0 && (
+          <div>
+            <span className={labelClassName}>Course</span>
+            <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Course">
+              {offerings.map((o) => {
+                const on = o.id === offeringId;
+                return (
+                  <button
+                    key={o.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={on}
+                    onClick={() => {
+                      setOfferingId(o.id);
+                      // Every section of the new course, to start with.
+                      setChosen(new Set(o.sections.map((s) => s.name)));
+                    }}
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                      on ? "bg-brand-600 text-white border-brand-600" : "border-gray-300 text-gray-600 hover:border-brand-600/50"
+                    }`}
+                  >
+                    {o.course.code} · {o.course.title}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-1.5 text-xs text-gray-500">The course&apos;s students see it once it&apos;s published.</p>
+          </div>
+        )}
 
         <div>
           <label className={labelClassName} htmlFor="lib-skill">Skill</label>
@@ -818,7 +944,9 @@ function MaterialEditor({
         <div>
           <span className={labelClassName}>Sections ({chosen.size} selected)</span>
           {sections.length === 0 ? (
-            <p className="text-sm text-gray-500">You don&apos;t supervise a group in any section yet — ask your dean to assign you one.</p>
+            <p className="text-sm text-gray-500">
+              {offering ? "This course has no sections yet — your dean adds them." : "Pick a course above to choose its sections."}
+            </p>
           ) : (
             <div className="flex flex-wrap gap-2">
               {sections.map((s) => {

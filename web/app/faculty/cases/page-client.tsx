@@ -22,22 +22,27 @@ import {
   createCasePresentation,
   fetchCasePresentations,
   fetchFacultySections,
+  fetchMyCourses,
   type CasePresentationSummary,
   type Section,
 } from "../../lib/api";
 import { formatDue, inputClassName, labelClassName } from "./case-ui";
 import { deadlineFromInput } from "../../lib/deadline-input";
+import { groupByCourse } from "../../lib/course-groups";
+import CourseGroupHeading from "../../components/CourseGroupHeading";
+import AudiencePicker, { audiencePayload, useCourseAudience } from "../../components/AudiencePicker";
 
 const NO_PRESENTATIONS: CasePresentationSummary[] = [];
 const NO_SECTIONS: Section[] = [];
 
 export default function FacultyCasesClient() {
   const { data, loading, refresh } = usePageData("faculty:cases", async () => {
-    const [list, sections] = await Promise.all([fetchCasePresentations(), fetchFacultySections()]);
+    const [list, sections, courses] = await Promise.all([fetchCasePresentations(), fetchFacultySections(), fetchMyCourses()]);
     return {
       presentations: list.data?.presentations ?? NO_PRESENTATIONS,
       error: list.error ?? null,
       sections,
+      offerings: courses.data?.offerings ?? [],
     };
   });
   const presentations = data?.presentations ?? NO_PRESENTATIONS;
@@ -50,9 +55,15 @@ export default function FacultyCasesClient() {
     const q = search.trim().toLowerCase();
     if (!q) return presentations;
     return presentations.filter(
-      (p) => p.title.toLowerCase().includes(q) || p.sections.some((s) => s.name.toLowerCase().includes(q)),
+      (p) =>
+        p.title.toLowerCase().includes(q) ||
+        p.sections.some((s) => s.name.toLowerCase().includes(q)) ||
+        (p.groups ?? []).some((g) => `${g.section_name} ${g.name}`.toLowerCase().includes(q)),
     );
   }, [presentations, search]);
+
+  // By the course each was made for, like Patient Cases and Quizzes.
+  const groups = useMemo(() => groupByCourse(filtered, data?.offerings ?? []), [filtered, data?.offerings]);
 
   const toGrade = presentations.reduce((n, p) => n + p.counts.submitted, 0);
   const graded = presentations.reduce((n, p) => n + p.counts.graded, 0);
@@ -106,7 +117,7 @@ export default function FacultyCasesClient() {
           <FontAwesomeIcon icon={faSearch} className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
             type="text"
-            placeholder="Search by title or section..."
+            placeholder="Search by title, section or group..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full pl-10 pr-4 py-2.5 bg-surface border border-gray-400 rounded-xl text-sm text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 transition-all"
@@ -138,8 +149,17 @@ export default function FacultyCasesClient() {
             : "No case presentations yet. Create one to have your students write up a case from their hospital duty."}
         </div>
       ) : (
+        <div className="space-y-6">
+          {groups.map((group) => (
+            <section key={group.key} aria-label={group.code ? `${group.code} ${group.title}` : group.title}>
+              <CourseGroupHeading code={group.code} title={group.title} term={group.term} count={group.items.length} />
+              {group.items.length === 0 ? (
+                <p className="rounded-xl border border-dashed border-gray-300 px-4 py-5 text-center text-sm text-gray-500">
+                  No case presentations for this course yet.
+                </p>
+              ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map((p) => (
+          {group.items.map((p) => (
             <Link
               key={p.id}
               href={`/faculty/cases/${p.id}`}
@@ -149,9 +169,9 @@ export default function FacultyCasesClient() {
                 <h3 className="font-semibold text-gray-800">{p.title}</h3>
                 <p className="text-sm text-gray-500">Due {formatDue(p.deadline)}</p>
                 <div className="flex flex-wrap gap-1.5">
-                  {p.sections.map((s) => (
-                    <span key={s.id} className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">
-                      Section {s.name}
+                  {(p.groups?.length ? p.groups.map((g) => ({ id: g.id, label: `${g.section_name} · ${g.name}` })) : p.sections.map((x) => ({ id: x.id, label: `Section ${x.name}` }))).map((c) => (
+                    <span key={c.id} className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">
+                      {c.label}
                     </span>
                   ))}
                 </div>
@@ -163,6 +183,10 @@ export default function FacultyCasesClient() {
                 {p.counts.late > 0 && <span className="text-rose-700">{p.counts.late} late</span>}
               </div>
             </Link>
+          ))}
+        </div>
+              )}
+            </section>
           ))}
         </div>
       )}
@@ -194,6 +218,8 @@ function CreateModal({
   const [instructions, setInstructions] = useState("");
   const [deadline, setDeadline] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set(sections.length === 1 ? [sections[0].id] : []));
+  // With a course, it goes to its groups (and whole sections where you have none).
+  const [audience, setAudience] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   // The course the presentation is made for (070); picking one selects its sections.
   const { offerings } = useActivityCourses();
@@ -204,19 +230,27 @@ function CreateModal({
     const own = new Set(sections.map((s) => s.id));
     const its = (offerings.find((o) => o.id === id)?.sections ?? []).map((s) => s.id).filter((s) => own.has(s));
     if (its.length) setSelected(new Set(its));
+    setAudience([]);
   };
+
+  const { roster } = useCourseAudience(offeringId || null);
+  const picked = audiencePayload(roster, audience);
 
   const submit = async () => {
     if (!title.trim()) return toast("Give the presentation a title");
     if (offerings.length > 0 && !offeringId) return toast("Choose the course this is for");
-    if (selected.size === 0) return toast("Select at least one section");
+    if (offeringId ? picked.count === 0 : selected.size === 0) {
+      return toast(offeringId ? "Choose the groups this goes to" : "Select at least one section");
+    }
     if (!deadline) return toast("Set a deadline");
     setBusy(true);
     const res = await createCasePresentation({
       title: title.trim(),
       instructions,
       deadline: deadlineFromInput(deadline),
-      section_ids: [...selected],
+      ...(offeringId
+        ? { section_ids: picked.section_ids, team_ids: picked.team_ids, student_ids: picked.student_ids }
+        : { section_ids: [...selected] }),
       ...(offeringId ? { offering_id: offeringId } : {}),
     });
     setBusy(false);
@@ -264,6 +298,16 @@ function CreateModal({
           />
           <p className="text-xs text-gray-500 mt-1">Late cases are still accepted, and marked Late.</p>
         </div>
+        {offeringId ? (
+          <div>
+            <span className={labelClassName}>Groups ({picked.count} student{picked.count === 1 ? "" : "s"})</span>
+            <AudiencePicker offeringId={offeringId} value={audience} onChange={setAudience} />
+            <p className="text-xs text-gray-500 mt-1.5 flex items-start gap-1.5">
+              <FontAwesomeIcon icon={faShieldHalved} className="w-3 h-3 mt-0.5 shrink-0" />
+              <span>Each student in the groups you pick gets one case to write. The app only accepts the patient&apos;s initials.</span>
+            </p>
+          </div>
+        ) : (
         <div>
           <span className={labelClassName}>Sections ({selected.size} selected)</span>
           <div className="border border-hairline rounded-xl divide-y divide-hairline max-h-56 overflow-y-auto">
@@ -302,13 +346,14 @@ function CreateModal({
             </span>
           </p>
         </div>
+        )}
         <div className="flex justify-end gap-2 pt-1">
           <button onClick={onClose} className="px-5 py-2 rounded-lg border border-gray-200 text-gray-600 text-sm hover:bg-gray-50">
             Cancel
           </button>
           <button
             onClick={submit}
-            disabled={busy || selected.size === 0 || !deadline}
+            disabled={busy || (offeringId ? picked.count === 0 : selected.size === 0) || !deadline}
             className="px-6 py-2 bg-brand-600 text-white rounded-lg text-sm hover:bg-brand-700 disabled:opacity-60"
           >
             {busy ? "Creating…" : "Create & assign"}
