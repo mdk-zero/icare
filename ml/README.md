@@ -94,7 +94,11 @@ app asks for the stream to show a percentage; the nightly workflow doesn't.
   finalized patient-case grades and any faculty-validated competency scores
   vs the 75 passing mark (it needs 30 labeled students with both outcomes),
   trains on `EXTENDED_FEATURES`, and registers artifacts as `staging`;
-  promote via the API after review.
+  promote via the API after review. A class is too small to spare a
+  holdout, so its metrics are stratified k-fold cross-validated (up to 5
+  folds, out-of-fold predictions, `f1_fold_std` for the spread) and the
+  shipped model is fit on every labeled student. Prefer the logistic
+  regression unless the forest's scores clearly beat it.
 - **iCARE evaluation** — `python -m eval.icare_eval` scores the models
   against those same outcomes: raw, as deployed (participation-weighted),
   and the latest stored predictions faculty saw. Until real grades replace

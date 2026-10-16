@@ -28,18 +28,51 @@ from pathlib import Path
 
 import joblib
 import numpy as np
+from sklearn.base import clone
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
-from sklearn.model_selection import train_test_split
+from sklearn.metrics import (
+    accuracy_score,
+    f1_score,
+    precision_score,
+    recall_score,
+    roc_auc_score,
+)
+from sklearn.model_selection import StratifiedKFold
+from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from app.db import Db  # noqa: E402
 from app.features import build_student_features  # noqa: E402
 from app.schema import EXTENDED_FEATURES  # noqa: E402
-from training.train_baseline_oulad import evaluate  # noqa: E402
 
 SEED = 42
+MAX_FOLDS = 5
+
+
+def cross_validated(estimator, X: np.ndarray, y: np.ndarray, cv: StratifiedKFold) -> dict:
+    """Scores from out-of-fold predictions: every student is scored by a
+    model that never saw them, and the per-fold F1 spread shows how much a
+    single split would have swung."""
+    probabilities = np.zeros(len(y))
+    fold_f1 = []
+    for train, test in cv.split(X, y):
+        fitted = clone(estimator).fit(X[train], y[train])
+        probabilities[test] = fitted.predict_proba(X[test])[:, 1]
+        fold_f1.append(f1_score(y[test], probabilities[test] >= 0.5, zero_division=0))
+    predicted = (probabilities >= 0.5).astype(int)
+    return {
+        "accuracy": round(float(accuracy_score(y, predicted)), 4),
+        "precision": round(float(precision_score(y, predicted, zero_division=0)), 4),
+        "recall": round(float(recall_score(y, predicted, zero_division=0)), 4),
+        "f1": round(float(f1_score(y, predicted, zero_division=0)), 4),
+        "roc_auc": round(float(roc_auc_score(y, probabilities)), 4),
+        "f1_fold_std": round(float(np.std(fold_f1)), 4),
+        "cv_folds": cv.get_n_splits(),
+        "samples": int(len(y)),
+        "at_risk_rate": round(float(y.mean()), 4),
+    }
 
 
 def outcome_labels(db: Db, pass_threshold: float) -> dict[str, int]:
@@ -105,40 +138,41 @@ def main() -> None:
             )
             sys.exit(1)
 
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=0.25, stratify=y, random_state=SEED
-        )
-        feature_means = {n: float(X_train[:, i].mean()) for i, n in enumerate(EXTENDED_FEATURES)}
-        feature_stds = {n: float(X_train[:, i].std()) for i, n in enumerate(EXTENDED_FEATURES)}
+        # Too few students to spare a holdout: score by stratified k-fold
+        # cross-validation, then fit the shipped model on every student.
+        folds = min(MAX_FOLDS, int(np.bincount(y).min()))
+        if folds < 2:
+            print("aborting: need at least 2 students of each outcome to cross-validate")
+            sys.exit(1)
+        cv = StratifiedKFold(n_splits=folds, shuffle=True, random_state=SEED)
+
+        feature_means = {n: float(X[:, i].mean()) for i, n in enumerate(EXTENDED_FEATURES)}
+        feature_stds = {n: float(X[:, i].std()) for i, n in enumerate(EXTENDED_FEATURES)}
         risk_directions = {
-            n: float(np.sign(np.corrcoef(X_train[:, i], y_train)[0, 1]) or 1.0)
-            if X_train[:, i].std() > 0 else 1.0
+            n: float(np.sign(np.corrcoef(X[:, i], y)[0, 1]) or 1.0)
+            if X[:, i].std() > 0 else 1.0
             for i, n in enumerate(EXTENDED_FEATURES)
         }
         trained_at = datetime.now(timezone.utc).isoformat()
         ml_root = Path(__file__).resolve().parent.parent
 
-        for kind in ("random_forest", "logistic_regression"):
+        # Logistic regression first: with a class-sized sample its few
+        # coefficients are the steadier fit, and the one to promote unless
+        # the forest's cross-validated scores clearly beat it.
+        for kind in ("logistic_regression", "random_forest"):
             if kind == "random_forest":
-                model = RandomForestClassifier(
+                estimator = RandomForestClassifier(
                     n_estimators=200, min_samples_leaf=3,
                     class_weight="balanced_subsample", n_jobs=-1, random_state=SEED,
                 )
-                model.fit(X_train, y_train)
+                metrics = cross_validated(estimator, X, y, cv)
+                model = estimator.fit(X, y)
                 scaler = None
-                metrics = evaluate(model, X_test, y_test)
             else:
-                scaler = StandardScaler().fit(X_train)
-                model = LogisticRegression(max_iter=1000, class_weight="balanced", random_state=SEED)
-                model.fit(scaler.transform(X_train), y_train)
-
-                class _Scaled:
-                    def predict(self, X):
-                        return model.predict(scaler.transform(X))
-                    def predict_proba(self, X):
-                        return model.predict_proba(scaler.transform(X))
-
-                metrics = evaluate(_Scaled(), X_test, y_test)
+                estimator = LogisticRegression(max_iter=1000, class_weight="balanced", random_state=SEED)
+                metrics = cross_validated(make_pipeline(StandardScaler(), estimator), X, y, cv)
+                scaler = StandardScaler().fit(X)
+                model = estimator.fit(scaler.transform(X), y)
 
             print(f"{kind}: {metrics}")
             filename = f"{kind}-{version}-icare.joblib"
