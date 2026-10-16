@@ -2,10 +2,9 @@
 
 import { useMemo, useRef, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faChevronDown, faPenToSquare, faPlus, faWandMagicSparkles } from "@fortawesome/free-solid-svg-icons";
+import { faChevronDown, faPenToSquare, faWandMagicSparkles } from "@fortawesome/free-solid-svg-icons";
 import { usePageData } from "../../../lib/use-page-data";
-import { fetchCourseProgress, fetchSkillDetails, type CourseRequirement, type SkillSummary } from "../../../lib/api";
-import { requirementNames } from "../../../lib/course-progress";
+import { fetchSkillDetails, type SkillSummary } from "../../../lib/api";
 import { TOPICS, TopicIcon } from "../topics";
 
 const SKILLS = TOPICS.skill;
@@ -17,31 +16,19 @@ interface ChapterGroup {
 }
 
 /**
- * The course's skill list, read against its checklist: each chapter as a
- * card, each skill showing whether a Return Demonstration covers it and how
- * many students have met it, or offering to add one. A skill opens to show
- * its goal and how many steps its checklist has.
+ * The skills chosen for the course, chapter by chapter. Edit Skills changes
+ * the list. A skill opens to show its goal and how many steps its checklist
+ * has.
  */
 export default function SkillsTab({
-  offeringId,
   courseCode,
   skillIds,
   catalog,
-  requirements,
-  signature,
-  locked,
-  onAddRequirement,
   onEditSkills,
 }: {
-  offeringId: string;
   courseCode: string;
   skillIds: string[];
   catalog: SkillSummary[];
-  requirements: CourseRequirement[];
-  /** The checklist's signature, so the progress shared with the Progress tab is the same cache entry. */
-  signature: string;
-  locked: boolean;
-  onAddRequirement: (skillId: string) => void;
   onEditSkills: () => void;
 }) {
   const [open, setOpen] = useState<Set<string>>(() => new Set());
@@ -62,23 +49,6 @@ export default function SkillsTab({
     return [...map.values()].sort((a, b) => a.chapter - b.chapter);
   }, [catalog, skillIds]);
 
-  // Which Return Demonstration covers each skill, named as the checklist names it.
-  const coverage = useMemo(() => {
-    const names = requirementNames(requirements);
-    const map = new Map<string, { id: string; name: string }[]>();
-    requirements.forEach((r, i) => {
-      if (r.kind !== "skill" || !r.skill_id) return;
-      map.set(r.skill_id, [...(map.get(r.skill_id) ?? []), { id: r.id, name: names[i] }]);
-    });
-    return map;
-  }, [requirements]);
-
-  const { data: progress } = usePageData(coverage.size > 0 ? `faculty:course-progress:${offeringId}:${signature}` : null, () =>
-    fetchCourseProgress(offeringId),
-  );
-  const totals = progress?.data?.totals ?? {};
-  const roster = progress?.data?.students.length ?? 0;
-
   const shown = groups.flatMap((g) => g.skills.map((s) => s.id));
   const { data: details } = usePageData(shown.length ? `skills:details:${shown.join(",")}` : null, () => fetchSkillDetails(shown), {
     freshFor: 10 * 60_000,
@@ -86,7 +56,6 @@ export default function SkillsTab({
   const detailById = useMemo(() => new Map((details ?? []).map((d) => [d.id, d])), [details]);
 
   const total = shown.length;
-  const onChecklist = shown.filter((id) => coverage.has(id)).length;
 
   if (total === 0) {
     return (
@@ -134,24 +103,10 @@ export default function SkillsTab({
               </p>
             </div>
           </div>
-          <div className="min-w-[14rem] flex-1">
-            <div className="flex items-baseline justify-between gap-3 text-sm">
-              <span className="font-medium text-gray-700">On the checklist</span>
-              <span className="tabular-nums text-gray-500">
-                <span className="font-semibold text-gray-900">{onChecklist}</span> of {total}
-              </span>
-            </div>
-            <div className="mt-2 flex gap-[3px]" role="img" aria-label={`${onChecklist} of ${total} skills are on the checklist`}>
-              {groups.flatMap((g) =>
-                g.skills.map((s) => (
-                  <span key={s.id} className={`h-2 min-w-[3px] flex-1 rounded-full ${coverage.has(s.id) ? SKILLS.bar : "bg-gray-100"}`} />
-                )),
-              )}
-            </div>
-            <p className="mt-2 text-xs text-gray-500">
-              Shared with your Dean and every instructor teaching {courseCode}; Return Demonstrations choose from this list.
-            </p>
-          </div>
+          <p className="min-w-[14rem] flex-1 text-sm text-gray-500">
+            The skills {courseCode} covers, shared with your Dean and every instructor teaching it. Patient cases,
+            quizzes and the Library use this list. Use Edit Skills to change it.
+          </p>
         </div>
         {groups.length > 1 && (
           <nav aria-label="Chapters" className="flex flex-wrap gap-1.5 border-t border-hairline bg-subtle/50 py-2.5 pl-6 pr-5">
@@ -172,7 +127,6 @@ export default function SkillsTab({
       </section>
 
       {groups.map((g) => {
-        const covered = g.skills.filter((s) => coverage.has(s.id)).length;
         return (
           <section
             key={g.chapter}
@@ -192,16 +146,14 @@ export default function SkillsTab({
                   {g.area}
                 </h3>
               </div>
-              <span className="shrink-0 text-xs text-gray-500">
-                <span className="font-semibold tabular-nums text-gray-700">{covered}</span> of {g.skills.length} on the checklist
+              <span className="shrink-0 text-xs tabular-nums text-gray-500">
+                {g.skills.length} skill{g.skills.length === 1 ? "" : "s"}
               </span>
             </header>
             <ul className="divide-y divide-hairline">
               {g.skills.map((s) => {
-                const items = coverage.get(s.id) ?? [];
                 const expanded = open.has(s.id);
                 const detail = detailById.get(s.id);
-                const met = items.length ? Math.max(...items.map((it) => totals[it.id] ?? 0)) : 0;
                 return (
                   <li key={s.id}>
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-5 py-3">
@@ -219,37 +171,6 @@ export default function SkillsTab({
                           className={`h-3 w-3 shrink-0 text-gray-300 transition-transform group-hover:text-gray-500 ${expanded ? "rotate-180" : ""}`}
                         />
                       </button>
-                      <div className="flex w-full shrink-0 items-center justify-end gap-2 sm:w-60">
-                        {items.length > 0 ? (
-                          <>
-                            <span className={`text-xs font-semibold ${SKILLS.text}`}>
-                              {items[0].name}
-                              {items.length > 1 ? ` +${items.length - 1}` : ""}
-                            </span>
-                            {roster > 0 && (
-                              <>
-                                <span className="h-1.5 w-14 overflow-hidden rounded-full bg-gray-100" aria-hidden>
-                                  <span className={`block h-full rounded-full ${SKILLS.bar}`} style={{ width: `${(met / roster) * 100}%` }} />
-                                </span>
-                                <span className="w-[4.5rem] whitespace-nowrap text-right text-xs tabular-nums text-gray-500">
-                                  {met}/{roster} met
-                                </span>
-                              </>
-                            )}
-                          </>
-                        ) : locked ? (
-                          <span className="text-xs text-gray-400">Not on the checklist</span>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => onAddRequirement(s.id)}
-                            className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors hover:bg-indigo-50 ${SKILLS.text}`}
-                          >
-                            <FontAwesomeIcon icon={faPlus} className="h-3 w-3" />
-                            Add to checklist
-                          </button>
-                        )}
-                      </div>
                     </div>
                     {expanded && (
                       <div id={`skill-${s.id}`} className="animate-fade-in pb-4 pl-[5.25rem] pr-5 text-sm">

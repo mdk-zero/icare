@@ -9,7 +9,8 @@ export interface CourseTabDef {
   id: CourseTab;
   label: string;
   icon: IconDefinition;
-  count: number;
+  /** Left out where no number fits the tab's name. */
+  count?: number;
 }
 
 export interface CourseTabAction {
@@ -99,13 +100,15 @@ export default function CourseTabBar({
                 <FontAwesomeIcon icon={t.icon} className="h-3.5 w-3.5" />
               </span>
               {t.label}
-              <span
-                className={`hidden rounded-full px-1.5 text-[11px] font-semibold tabular-nums transition-colors sm:inline ${
-                  on ? "bg-brand-600/10 text-brand-700" : "bg-gray-100 text-gray-500"
-                }`}
-              >
-                {t.count}
-              </span>
+              {t.count !== undefined && (
+                <span
+                  className={`hidden rounded-full px-1.5 text-[11px] font-semibold tabular-nums transition-colors sm:inline ${
+                    on ? "bg-brand-600/10 text-brand-700" : "bg-gray-100 text-gray-500"
+                  }`}
+                >
+                  {t.count}
+                </span>
+              )}
             </button>
           );
         })}
