@@ -336,6 +336,16 @@ export function subscribePage(key: string, listener: () => void): () => void {
   };
 }
 
+/**
+ * Drops what a page holds, so its next visit loads fresh behind a skeleton
+ * instead of first showing rows a write just made out of date — e.g. the list
+ * a "create" form returns to.
+ */
+export function forgetPage(key: string) {
+  if (!pages.delete(key)) return;
+  notify(key);
+}
+
 /** Replaces a page's data directly, for an optimistic edit after a mutation. */
 export function writePage<T>(key: string, data: T) {
   commit(key, { data, settledAt: Date.now(), revalidating: false });

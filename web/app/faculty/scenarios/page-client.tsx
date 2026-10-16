@@ -48,6 +48,8 @@ import {
   assignPatientRooms,
   FacultyPatient,
   fetchMyCourses,
+  fetchCourseRoster,
+  type CourseRosterStudent,
 } from "../../lib/api";
 import { groupByCourse, numberWithinCourse } from "../../lib/course-groups";
 import CourseGroupHeading from "../../components/CourseGroupHeading";
@@ -156,9 +158,13 @@ export default function FacultyScenariosClient() {
   // Teams picked in the assign modal; each member is assigned on their own.
   const [assignHasTeams, setAssignHasTeams] = useState(false);
   const [assignDeadline, setAssignDeadline] = useState("");
-  const [assignRequired, setAssignRequired] = useState(false);
   const [studentSearchQuery, setStudentSearchQuery] = useState("");
   const [assigning, setAssigning] = useState(false);
+  // Who the open case can go to: the students the instructor handles in its
+  // course (in all their courses for a case in none). Null while loading.
+  const [assignRoster, setAssignRoster] = useState<CourseRosterStudent[] | null>(null);
+  const [assignRosterError, setAssignRosterError] = useState<string | null>(null);
+  const assignFor = useRef<string | null>(null);
 
   const [showLinkPatientModal, setShowLinkPatientModal] = useState(false);
   const [linkPatientTarget, setLinkPatientTarget] = useState<SimulationScenario | null>(null);
@@ -433,8 +439,19 @@ export default function FacultyScenariosClient() {
       ),
     );
     setAssignDeadline("");
-    setAssignRequired(false);
     setStudentSearchQuery("");
+    setAssignRoster(null);
+    setAssignRosterError(null);
+    assignFor.current = scenario.id;
+    const offeringIds = scenario.offering_id ? [scenario.offering_id] : (data?.offerings ?? []).map((o) => o.id);
+    void Promise.all(offeringIds.map((id) => fetchCourseRoster(id))).then((results) => {
+      if (assignFor.current !== scenario.id) return;
+      const byId = new Map<string, CourseRosterStudent>();
+      for (const res of results) for (const st of res.data?.students ?? []) if (!byId.has(st.id)) byId.set(st.id, st);
+      const failed = results.find((res) => res.error);
+      setAssignRosterError(failed && byId.size === 0 ? (failed.error ?? "Unable to load your students") : null);
+      setAssignRoster([...byId.values()]);
+    });
     setShowAssignModal(true);
   };
 
@@ -453,7 +470,8 @@ export default function FacultyScenariosClient() {
       selectedStudents,
       // A date means the end of that day, here: deadlines decide attendance.
       deadlineFromInput(assignDeadline) ?? "",
-      assignRequired,
+      // An assigned patient case is always required.
+      true,
     );
 
     if (assignments.length > 0) {
@@ -471,7 +489,7 @@ export default function FacultyScenariosClient() {
           metadata: {
             scenario_title: selectedScenario.title,
             student_count: assignments.length,
-            required: assignRequired,
+            required: true,
           },
         });
       }
@@ -587,11 +605,34 @@ export default function FacultyScenariosClient() {
 
   const assignCount = selectedStudents.length;
 
-  const filteredStudents = students.filter(
-    (student) =>
-      student.name.toLowerCase().includes(studentSearchQuery.toLowerCase()) ||
-      student.email.toLowerCase().includes(studentSearchQuery.toLowerCase()),
+  const studentById = new Map(students.map((st) => [st.id, st]));
+  const studentQuery = studentSearchQuery.trim().toLowerCase();
+  const filteredStudents = (assignRoster ?? []).filter(
+    (st) => !studentQuery || `${st.name} ${st.email} ${st.section} ${st.group}`.toLowerCase().includes(studentQuery),
   );
+  // Section, then group, then name: one block per section with a row per group.
+  const assignSections = (() => {
+    const out = new Map<string, Map<string, CourseRosterStudent[]>>();
+    const sorted = [...filteredStudents].sort(
+      (a, b) =>
+        a.section.localeCompare(b.section, undefined, { numeric: true }) ||
+        Number(a.group === "No group") - Number(b.group === "No group") ||
+        a.group.localeCompare(b.group, undefined, { numeric: true }) ||
+        a.name.localeCompare(b.name),
+    );
+    for (const st of sorted) {
+      const groups = out.get(st.section) ?? new Map<string, CourseRosterStudent[]>();
+      groups.set(st.group, [...(groups.get(st.group) ?? []), st]);
+      out.set(st.section, groups);
+    }
+    return [...out.entries()].map(([section, groups]) => ({ section, groups: [...groups.entries()] }));
+  })();
+  /** Ticks or clears a whole block of students at once. */
+  const toggleMany = (ids: string[]) =>
+    setSelectedStudents((prev) => {
+      const all = ids.every((id) => prev.includes(id));
+      return all ? prev.filter((id) => !ids.includes(id)) : [...new Set([...prev, ...ids])];
+    });
 
   const selectClassName =
     "w-full px-4 py-3 bg-surface border border-gray-400 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 focus:bg-surface transition-all text-sm appearance-none shadow-sm cursor-pointer";
@@ -1592,7 +1633,7 @@ export default function FacultyScenariosClient() {
                   <FontAwesomeIcon icon={faCalendarDay} className="text-brand-600" />
                   Assignment Settings
                 </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-3">
                   <div>
                     <label className={labelClassName}>Deadline</label>
                     <div className="relative">
@@ -1607,19 +1648,6 @@ export default function FacultyScenariosClient() {
                         className={inputClassName + " pl-10"}
                       />
                     </div>
-                  </div>
-                  <div className="flex items-center pt-7">
-                    <label className="flex items-center gap-3 cursor-pointer p-3 rounded-xl border border-gray-200 bg-surface hover:bg-gray-50 transition-colors w-full">
-                      <input
-                        type="checkbox"
-                        checked={assignRequired}
-                        onChange={(e) => setAssignRequired(e.target.checked)}
-                        className="w-5 h-5 text-brand-600 rounded focus:ring-brand-600"
-                      />
-                      <span className="text-sm font-semibold text-gray-700">
-                        Required for all students
-                      </span>
-                    </label>
                   </div>
                 </div>
               </div>
@@ -1641,10 +1669,13 @@ export default function FacultyScenariosClient() {
                     Select Students
                   </h3>
                   <button
-                    onClick={() => setSelectedStudents(filteredStudents.map((s) => s.id))}
-                    className="text-sm text-brand-600 hover:text-brand-700 font-semibold"
+                    onClick={() => toggleMany(filteredStudents.map((s) => s.id))}
+                    disabled={filteredStudents.length === 0}
+                    className="text-sm text-brand-600 hover:text-brand-700 font-semibold disabled:opacity-40"
                   >
-                    Select All
+                    {filteredStudents.length > 0 && filteredStudents.every((st) => selectedStudents.includes(st.id))
+                      ? "Clear All"
+                      : "Select All"}
                   </button>
                 </div>
                 <div className="mb-3">
@@ -1657,23 +1688,35 @@ export default function FacultyScenariosClient() {
                       type="text"
                       value={studentSearchQuery}
                       onChange={(e) => setStudentSearchQuery(e.target.value)}
-                      placeholder="Search by name or email..."
+                      placeholder="Search by name, email, section or group..."
                       className={inputClassName + " pl-10"}
                     />
                   </div>
                 </div>
-                <div className="border border-gray-200 rounded-xl max-h-[280px] overflow-y-auto custom-scrollbar">
-                  {filteredStudents.length === 0 ? (
+                <p className="mb-2 text-xs text-gray-500">
+                  {selectedScenario.offering_id
+                    ? "Only the students you handle in this patient case's course are listed."
+                    : "This patient case isn't in a course, so the students you handle in all your courses are listed."}
+                </p>
+                <div className="border border-gray-200 rounded-xl max-h-[320px] overflow-y-auto custom-scrollbar">
+                  {assignRoster === null ? (
+                    <div className="flex items-center justify-center gap-2 p-6 text-sm text-gray-500">
+                      <EcgLoader className="text-brand-600" />
+                      Loading your students…
+                    </div>
+                  ) : assignRosterError ? (
+                    <div className="p-4 text-center text-sm text-red-600">{assignRosterError}</div>
+                  ) : filteredStudents.length === 0 ? (
                     <div className="p-4 text-center text-gray-500 text-sm">
                       {studentSearchQuery
                         ? "No students match your search"
-                        : "No students available"}
+                        : "No students in this course yet. Students join a course through their section or group."}
                     </div>
                   ) : (
                     <table className="w-full">
-                      <thead className="bg-gray-50 sticky top-0">
+                      <thead className="bg-gray-50 sticky top-0 z-10">
                         <tr>
-                          <th className="text-left py-2.5 px-4 text-xs font-semibold text-gray-600">
+                          <th className="text-left py-2.5 px-4 text-xs font-semibold text-gray-600 w-16">
                             Select
                           </th>
                           <th className="text-left py-2.5 px-4 text-xs font-semibold text-gray-600">
@@ -1682,63 +1725,91 @@ export default function FacultyScenariosClient() {
                           <th className="text-left py-2.5 px-4 text-xs font-semibold text-gray-600">
                             Email
                           </th>
-                          <th className="text-left py-2.5 px-4 text-xs font-semibold text-gray-600">
-                            Risk
-                          </th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-gray-100">
-                        {filteredStudents.map((student) => (
-                          <tr
-                            key={student.id}
-                            className={`transition-colors cursor-pointer ${
-                              selectedStudents.includes(student.id)
-                                ? "bg-brand-600/5 hover:bg-brand-600/10"
-                                : "hover:bg-gray-50"
-                            }`}
-                            onClick={() => toggleStudentSelection(student.id)}
-                          >
-                            <td className="py-2.5 px-4" onClick={(e) => e.stopPropagation()}>
-                              <input
-                                type="checkbox"
-                                checked={selectedStudents.includes(student.id)}
-                                onChange={() => toggleStudentSelection(student.id)}
-                                className="w-4 h-4 text-brand-600 rounded focus:ring-brand-600"
-                              />
-                            </td>
-                            <td className="py-2.5 px-4 text-sm text-gray-800">
-                              <div className="flex items-center gap-2">
-                                <Avatar
-                                  name={student.name}
-                                  src={student.picture_url}
-                                  userId={student.id}
-                                  sex={student.sex}
-                                  size="xs"
-                                />
-                                {student.name}
-                              </div>
-                            </td>
-                            <td className="py-2.5 px-4 text-sm text-gray-500">{student.email}</td>
-                            <td className="py-2.5 px-4">
-                              <span
-                                className={`px-2 py-0.5 text-xs font-bold rounded-full ${
-                                  student.risk_level === "at_risk"
-                                    ? "bg-red-100 text-red-700"
-                                    : student.risk_level === "safe"
-                                      ? "bg-emerald-100 text-emerald-700"
-                                      : "bg-gray-100 text-gray-700"
-                                }`}
-                              >
-                                {student.risk_level === "at_risk"
-                                  ? "Low performing"
-                                  : student.risk_level === "safe"
-                                    ? "On track"
-                                    : "Not scored yet"}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
+                      {assignSections.map(({ section, groups }) => {
+                        return (
+                          <tbody key={section} className="border-t-2 border-gray-200 first:border-t-0">
+                            {groups.map(([group, list]) => {
+                              const groupIds = list.map((st) => st.id);
+                              const groupPicked = groupIds.filter((id) => selectedStudents.includes(id)).length;
+                              return [
+                                <tr
+                                  key={`${group}-head`}
+                                  // Stays under the column headings while its students scroll by.
+                                  className="sticky top-[37px] z-[5] bg-[color-mix(in_srgb,var(--color-brand-600)_8%,var(--color-surface))] shadow-[0_1px_0_var(--color-gray-200)]"
+                                >
+                                  <td className="py-2 px-4">
+                                    <input
+                                      type="checkbox"
+                                      aria-label={`Select all of ${section} ${group}`}
+                                      checked={groupPicked === groupIds.length}
+                                      ref={(el) => {
+                                        if (el) el.indeterminate = groupPicked > 0 && groupPicked < groupIds.length;
+                                      }}
+                                      onChange={() => toggleMany(groupIds)}
+                                      className="w-4 h-4 text-brand-600 rounded focus:ring-brand-600"
+                                    />
+                                  </td>
+                                  <td colSpan={2} className="py-2 px-4">
+                                    <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm">
+                                      <FontAwesomeIcon icon={faUsers} className="h-3.5 w-3.5 text-brand-600" />
+                                      <span className="font-bold text-gray-900">{section}</span>
+                                      <span className="text-gray-300">·</span>
+                                      <span className="font-semibold text-gray-700">{group}</span>
+                                      <span className="text-xs text-gray-500">
+                                        {groupIds.length} student{groupIds.length === 1 ? "" : "s"}
+                                        {groupPicked > 0 ? ` · ${groupPicked} selected` : ""}
+                                      </span>
+                                    </span>
+                                  </td>
+                                </tr>,
+                                ...list.map((student) => {
+                                  const info = studentById.get(student.id);
+                                  return (
+                                    <tr
+                                      key={student.id}
+                                      className={`border-t border-gray-100 transition-colors cursor-pointer ${
+                                        selectedStudents.includes(student.id)
+                                          ? "bg-brand-600/5 hover:bg-brand-600/10"
+                                          : "hover:bg-gray-50"
+                                      }`}
+                                      onClick={() => toggleStudentSelection(student.id)}
+                                    >
+                                      <td className="py-2.5 px-4" onClick={(e) => e.stopPropagation()}>
+                                        <input
+                                          type="checkbox"
+                                          checked={selectedStudents.includes(student.id)}
+                                          onChange={() => toggleStudentSelection(student.id)}
+                                          className="w-4 h-4 text-brand-600 rounded focus:ring-brand-600"
+                                        />
+                                      </td>
+                                      <td className="py-2.5 px-4 text-sm text-gray-800">
+                                        <div className="flex items-center gap-2">
+                                          <Avatar
+                                            name={student.name}
+                                            src={student.picture_url}
+                                            userId={student.id}
+                                            sex={info?.sex}
+                                            size="xs"
+                                          />
+                                          {student.name}
+                                          {student.source === "added" && (
+                                            <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-600">
+                                              Added by you
+                                            </span>
+                                          )}
+                                        </div>
+                                      </td>
+                                      <td className="py-2.5 px-4 text-sm text-gray-500">{student.email}</td>
+                                    </tr>
+                                  );
+                                }),
+                              ];
+                            })}
+                          </tbody>
+                        );
+                      })}
                     </table>
                   )}
                 </div>

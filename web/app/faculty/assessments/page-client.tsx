@@ -11,6 +11,7 @@ import {
   faTrash,
   faPen,
   faGlobe,
+  faTriangleExclamation,
   faEyeSlash,
   faSearch,
   faUsers,
@@ -23,9 +24,10 @@ import StatTile from "../../components/StatTile";
 import { fetchFacultySections, fetchMyCourses, getCurrentUser, type Section, apiFetch } from "../../lib/api";
 import { groupByCourse, numberWithinCourse } from "../../lib/course-groups";
 import CourseGroupHeading from "../../components/CourseGroupHeading";
-import { toast } from "../../components/Toast";
+import { loadingToast, toast } from "../../components/Toast";
 import ConfirmModal from "../../components/ConfirmModal";
 import { usePageData } from "../../lib/use-page-data";
+import { describeTimeLimit } from "@/app/lib/time-limit";
 import { deadlineFromInput } from "../../lib/deadline-input";
 
 const inputClassName =
@@ -102,13 +104,15 @@ export default function FacultyAssessmentsClient() {
       fetchFacultySections(),
       fetchMyCourses(),
     ]);
-    const assessments = assessmentsRes.ok
-      ? (((await assessmentsRes.json()) as { assessments?: Assessment[] }).assessments ?? [])
-      : [];
+    const listed = assessmentsRes.ok
+      ? ((await assessmentsRes.json()) as { assessments?: Assessment[]; course_links_ready?: boolean })
+      : null;
+    const assessments = listed?.assessments ?? [];
+    const courseLinksReady = listed?.course_links_ready !== false;
     const students = studentsRes.ok
       ? (((await studentsRes.json()) as { students?: Student[] }).students ?? [])
       : [];
-    return { assessments, students, sections, offerings: courses.data?.offerings ?? [] };
+    return { assessments, students, sections, offerings: courses.data?.offerings ?? [], courseLinksReady };
   });
 
   const assessments = data?.assessments ?? NO_ASSESSMENTS;
@@ -206,6 +210,7 @@ export default function FacultyAssessmentsClient() {
 
   const togglePublish = async (a: Assessment) => {
     setBusy(true);
+    const progress = loadingToast(a.is_published ? `Hiding ${a.title}…` : `Showing ${a.title} to students…`);
     const res = await apiFetch(`/api/faculty/assessments/${a.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -215,16 +220,17 @@ export default function FacultyAssessmentsClient() {
     setBusy(false);
     if (!res.ok) {
       const j = (await res.json()) as { error?: string };
-      toast(j.error ?? "Failed to update");
+      progress.error(j.error ?? "Failed to update");
       return;
     }
-    toast(a.is_published ? "Quiz unpublished" : "Quiz published");
+    progress.success(a.is_published ? `${a.title} is hidden from students` : `${a.title} is now visible to students`);
     loadAssessments();
   };
 
   const confirmAndDelete = async (a: Assessment) => {
     setBusy(true);
     setDeleteError(null);
+    const progress = loadingToast(`Deleting ${a.title}…`);
     const res = await apiFetch(`/api/faculty/assessments/${a.id}`, {
       method: "DELETE",
       credentials: "include",
@@ -232,9 +238,10 @@ export default function FacultyAssessmentsClient() {
     setBusy(false);
     if (!res.ok) {
       setDeleteError("Failed to delete assessment. Please try again.");
+      progress.error("Couldn't delete the quiz");
       return;
     }
-    toast("Quiz deleted");
+    progress.success(`${a.title} deleted`);
     setConfirmDelete(null);
     loadAssessments();
   };
@@ -262,6 +269,7 @@ export default function FacultyAssessmentsClient() {
       return;
     }
     setBusy(true);
+    const progress = loadingToast(`Assigning ${assignTarget.title}…`);
     const res = await apiFetch(`/api/faculty/assessments/${assignTarget.id}/assign`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -279,15 +287,15 @@ export default function FacultyAssessmentsClient() {
       added_sections?: string[];
     } | null;
     if (!res.ok) {
-      toast(json?.error ?? "Failed to assign");
+      progress.error(json?.error ?? "Failed to assign");
       return;
     }
     setAssignTarget(null);
     const count = json?.student_count ?? selectedStudentCount;
     const added = json?.added_sections ?? [];
-    toast(
+    progress.success(
       `Assigned to ${count} student${count === 1 ? "" : "s"} in ${selectedSections.size} section${selectedSections.size === 1 ? "" : "s"}` +
-        (added.length > 0 ? ` · now also published to ${added.join(", ")}` : ""),
+        (added.length > 0 ? ` · now visible to ${added.map((s) => `Section ${s}`).join(", ")}` : ""),
     );
     loadAssessments();
   };
@@ -420,6 +428,16 @@ export default function FacultyAssessmentsClient() {
         )}
       </div>
 
+      {data && !data.courseLinksReady && (
+        <div className="mb-4 flex items-start gap-2.5 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <FontAwesomeIcon icon={faTriangleExclamation} className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>
+            Quizzes can&rsquo;t be filed under a course yet, so every quiz shows under &ldquo;Not in a course&rdquo; even
+            when you choose one. Run database migration 070 (activity courses) in Supabase to fix it.
+          </span>
+        </div>
+      )}
+
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {Array.from({ length: 6 }).map((_, i) => (
@@ -456,13 +474,6 @@ export default function FacultyAssessmentsClient() {
                     )}
                     <div className="flex items-center gap-2 flex-wrap mb-1">
                       <h3 className="font-semibold text-gray-800 truncate">{a.title}</h3>
-                      <span
-                        className={`px-2 py-0.5 text-xs rounded-full shrink-0 ${
-                          a.is_published ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"
-                        }`}
-                      >
-                        {a.is_published ? "Published" : "Draft"}
-                      </span>
                     </div>
                     {a.description && (
                       <p className="text-sm text-gray-500 mb-3 line-clamp-2">{a.description}</p>
@@ -481,7 +492,7 @@ export default function FacultyAssessmentsClient() {
                       </span>
                       <span className="text-xs">{a.student_count} assigned</span>
                       {a.time_limit_seconds && (
-                        <span className="text-xs">{Math.round(a.time_limit_seconds / 60)} min</span>
+                        <span className="text-xs">{describeTimeLimit(a.time_limit_seconds)}</span>
                       )}
                       <span className="text-xs">
                         {a.max_attempts === null
@@ -490,34 +501,36 @@ export default function FacultyAssessmentsClient() {
                       </span>
                     </div>
                   </div>
-                  <div className="px-4 py-3 bg-subtle border-t border-hairline">
-                    <div className="text-xs text-gray-500 mb-2 truncate">
-                      {a.target_sections && a.target_sections.length > 0
-                        ? `Published to ${a.target_sections.map((s) => `Section ${s}`).join(", ")}`
-                        : "Published to all sections"}
-                    </div>
-                    <div className="flex items-center justify-end gap-1.5">
+                  <div className="px-4 py-3 bg-subtle border-t border-hairline space-y-2">
+                    {/* Where it stands with students. Assigning is what shows a quiz to them. */}
+                    {(() => {
+                      const audience =
+                        a.target_sections && a.target_sections.length > 0
+                          ? a.target_sections.map((s) => `Section ${s}`).join(", ")
+                          : "all sections";
+                      const label = !a.is_published
+                        ? a.student_count > 0
+                          ? "Hidden from students · assign again to show it"
+                          : "Not assigned yet · hidden from students"
+                        : a.student_count > 0
+                          ? `Assigned to ${audience}`
+                          : `Visible to ${audience} · not assigned`;
+                      return (
+                        <p className={`flex min-w-0 items-center gap-2 text-xs font-medium ${a.is_published ? "text-green-700" : "text-gray-500"}`}>
+                          <span aria-hidden className={`h-2 w-2 shrink-0 rounded-full ${a.is_published ? "bg-green-600" : "bg-gray-300"}`} />
+                          <span className="truncate" title={label}>{label}</span>
+                        </p>
+                      );
+                    })()}
+                    <div className="flex flex-wrap items-center justify-end gap-1.5">
                       <button
                         onClick={() => openAssignModal(a)}
-                        disabled={!a.is_published}
-                        title={a.is_published ? "Assign to students" : "Publish first to assign"}
-                        className="p-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+                        title={a.is_published ? "Assign to more sections, or hide it" : "Assign it to sections: that shows it to them"}
+                        className="flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-xs font-semibold text-white hover:bg-brand-700"
                       >
                         <FontAwesomeIcon icon={faUserPlus} className="w-3.5 h-3.5" />
+                        Assign
                       </button>
-                      {canChange(a) && (
-                        <button
-                          onClick={() => togglePublish(a)}
-                          disabled={busy}
-                          title={a.is_published ? "Unpublish" : "Publish"}
-                          className="p-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"
-                        >
-                          <FontAwesomeIcon
-                            icon={a.is_published ? faEyeSlash : faGlobe}
-                            className="w-3.5 h-3.5"
-                          />
-                        </button>
-                      )}
                       <button
                         onClick={() => router.push(`/faculty/assessments/${a.id}`)}
                         title={canChange(a) ? "Edit details" : "View"}
@@ -664,6 +677,25 @@ export default function FacultyAssessmentsClient() {
                 </p>
               )}
             </div>
+            {assignTarget.is_published && canChange(assignTarget) && (
+              <div className="flex items-center justify-between gap-3 rounded-lg border border-hairline bg-subtle px-3 py-2.5">
+                <p className="text-xs text-gray-600">
+                  Students can see this quiz now. Hiding it takes it off their list; their attempts stay saved.
+                </p>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const quiz = assignTarget;
+                    setAssignTarget(null);
+                    await togglePublish(quiz);
+                  }}
+                  disabled={busy}
+                  className="shrink-0 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-60"
+                >
+                  Hide from students
+                </button>
+              </div>
+            )}
             <div className="flex items-center justify-between gap-2 pt-2">
               <p className="text-sm text-gray-500">
                 {selectedSections.size === 0

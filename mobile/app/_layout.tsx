@@ -33,6 +33,7 @@ function AuthStack() {
       <Stack.Screen name="course/[id]" options={{ title: "Course" }} />
       <Stack.Screen name="student/[id]" options={{ title: "Student" }} />
       <Stack.Screen name="welcome" options={{ headerShown: false, animation: 'fade' }} />
+      <Stack.Screen name="legal/[doc]" options={{ title: '' }} />
       <Stack.Screen name="login" options={{ headerShown: false, animation: 'fade' }} />
       <Stack.Screen name="forgot-password" options={{ headerShown: false }} />
       <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
@@ -40,7 +41,8 @@ function AuthStack() {
       <Stack.Screen name="clinic/patient/[id]" options={{ title: 'Patient' }} />
       <Stack.Screen name="clinic/assignment/[id]" options={{ title: 'Patient Case' }} />
       <Stack.Screen name="cases/[id]" options={{ title: 'Case Write-up' }} />
-      <Stack.Screen name="quiz/[id]" options={{ title: 'Quiz' }} />
+      {/* Draws its own top bar: none at all while a quiz is open (strict mode). */}
+      <Stack.Screen name="quiz/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="quiz-info/[id]" options={{ title: 'Quiz' }} />
       <Stack.Screen name="flashcards/[id]" options={{ title: 'Flashcards' }} />
       <Stack.Screen name="notifications" options={{ title: 'Notifications' }} />

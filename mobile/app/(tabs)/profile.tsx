@@ -329,7 +329,7 @@ export default function ProfileScreen() {
           <Pressable
             style={({ pressed }) => [styles.linkItem, pressed && styles.pressedDim]}
             onPress={openTerms}
-            accessibilityRole="link"
+            accessibilityRole="button"
           >
             <View style={[styles.linkIconContainer, { backgroundColor: Accent.slate.bg }]}>
               <Ionicons name="document-text-outline" size={17} color={Accent.slate.fg} />
@@ -338,12 +338,12 @@ export default function ProfileScreen() {
               <Text style={styles.linkText}>Terms of Use</Text>
               <Text style={styles.settingSubtext}>The rules for using iCARE++</Text>
             </View>
-            <Ionicons name="open-outline" size={16} color={Palette.textFaint} />
+            <Ionicons name="chevron-forward" size={17} color={Palette.textFaint} />
           </Pressable>
           <Pressable
             style={({ pressed }) => [styles.linkItem, styles.rowBorder, pressed && styles.pressedDim]}
             onPress={openPrivacy}
-            accessibilityRole="link"
+            accessibilityRole="button"
           >
             <View style={[styles.linkIconContainer, { backgroundColor: Accent.slate.bg }]}>
               <Ionicons name="shield-checkmark-outline" size={17} color={Accent.slate.fg} />
@@ -352,7 +352,7 @@ export default function ProfileScreen() {
               <Text style={styles.linkText}>Privacy Policy</Text>
               <Text style={styles.settingSubtext}>What data is collected and your rights</Text>
             </View>
-            <Ionicons name="open-outline" size={16} color={Palette.textFaint} />
+            <Ionicons name="chevron-forward" size={17} color={Palette.textFaint} />
           </Pressable>
         </View>
       </View>

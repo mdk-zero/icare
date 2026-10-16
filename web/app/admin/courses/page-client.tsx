@@ -299,13 +299,15 @@ export default function CoursesClient() {
                               {o.sections.map((s) => (
                                 <span
                                   key={s.id}
-                                  title={s.has_group ? undefined : "The instructor supervises no group here, so no students come from it"}
-                                  className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
-                                    s.has_group ? "bg-brand-600/10 text-brand-700" : "bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-600/20"
-                                  }`}
+                                  title={
+                                    s.has_group
+                                      ? "Students of the instructor's groups here"
+                                      : "The instructor supervises no group here, so the whole section is on the roster"
+                                  }
+                                  className="inline-flex items-center gap-1 rounded-full bg-brand-600/10 px-2 py-0.5 text-xs font-medium text-brand-700"
                                 >
-                                  {!s.has_group && <FontAwesomeIcon icon={faTriangleExclamation} className="h-2.5 w-2.5" />}
                                   {s.name}
+                                  {!s.has_group && <span className="text-[10px] font-semibold opacity-70">whole section</span>}
                                 </span>
                               ))}
                             </div>

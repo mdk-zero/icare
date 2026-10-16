@@ -55,6 +55,8 @@ export function courseDb(db: DemoDb): DemoDb {
   }
   // A demo saved before entered scores existed.
   db.requirementScores ??= [];
+  // A demo saved before instructors could add students by hand (073).
+  db.offeringStudents ??= [];
   // A demo saved before Written Exams (067): every manual item was a Lab Activity.
   for (const r of db.requirements) r.manual_type ??= "lab";
   return db;
@@ -62,14 +64,28 @@ export function courseDb(db: DemoDb): DemoDb {
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
-/** The offering's students: the instructor's own group members in its sections. */
+/**
+ * The offering's students, as loadOfferingRosters() works them out: the
+ * instructor's own group members where they supervise a group; the whole
+ * section where they supervise none; and the students they added by hand.
+ */
 export function offeringRoster(db: DemoDb, o: DemoOffering) {
   const teams = db.teams.filter((t) => t.faculty_id && t.faculty_id === o.faculty_id && o.section_ids.includes(t.section_id));
   const teamIds = new Set(teams.map((t) => t.id));
   const covered = new Set(teams.map((t) => t.section_id));
+  const whole = new Set(o.faculty_id ? o.section_ids.filter((id) => !covered.has(id)) : []);
+  const added = new Set(courseDb(db).offeringStudents.filter((r) => r.offering_id === o.id).map((r) => r.student_id));
+  const source = new Map<string, "group" | "section" | "added">();
+  for (const u of db.users) {
+    if (u.role !== "student") continue;
+    if (u.team_id && teamIds.has(u.team_id)) source.set(u.id, "group");
+    else if (u.section_id && whole.has(u.section_id)) source.set(u.id, "section");
+    else if (added.has(u.id)) source.set(u.id, "added");
+  }
   return {
-    students: db.users.filter((u) => u.role === "student" && u.team_id && teamIds.has(u.team_id)).sort(byName),
-    sectionsWithoutGroup: o.section_ids.filter((id) => !covered.has(id)),
+    students: db.users.filter((u) => source.has(u.id)).sort(byName),
+    source,
+    sectionsWithoutGroup: [...whole],
   };
 }
 
@@ -94,7 +110,7 @@ function offeringRow(db: DemoDb, o: DemoOffering) {
 function warningsFor(db: DemoDb, o: DemoOffering) {
   const name = db.users.find((u) => u.id === o.faculty_id)?.name ?? "The instructor";
   return offeringRoster(db, o).sectionsWithoutGroup.map(
-    (id) => `${name} supervises no group in ${sectionName(db, id) ?? "that section"}, so no students come from it yet.`,
+    (id) => `${name} supervises no group in ${sectionName(db, id) ?? "that section"}, so the whole section is on the roster.`,
   );
 }
 
@@ -792,7 +808,8 @@ function demoFacts(db: DemoDb, studentIds: string[], requirementIds: string[]): 
 
 async function demoProgress(db: DemoDb, o: DemoOffering, onlyStudentId?: string) {
   const items = checklist(db, o.id);
-  const roster = offeringRoster(db, o).students.filter((s) => !onlyStudentId || s.id === onlyStudentId);
+  const full = offeringRoster(db, o);
+  const roster = full.students.filter((s) => !onlyStudentId || s.id === onlyStudentId);
   const ids = roster.map((s) => s.id);
   const term = termOf(db, o);
   const skills = db.courseSkills.filter((s) => s.course_id === o.course_id).map((s) => s.skill_id);
@@ -805,8 +822,9 @@ async function demoProgress(db: DemoDb, o: DemoOffering, onlyStudentId?: string)
       picture_url: s.picture_url,
       sex: s.sex,
       section_id: s.section_id ?? "",
-      team_id: s.team_id ?? "",
-      group_label: teamLabel(db, s.team_id) ?? "",
+      team_id: s.team_id ?? null,
+      group_label: teamLabel(db, s.team_id) ?? `${sectionName(db, s.section_id) ?? "No section"} · No group`,
+      source: full.source.get(s.id),
       ...summarize(progress[s.id], items),
     })),
     progress,
@@ -823,6 +841,71 @@ const offeringHeader = (db: DemoDb, o: DemoOffering) => {
     status: termStatus(termOf(db, o)),
   };
 };
+
+route("GET", "/api/faculty/courses/:id/roster", (ctx) => {
+  if (!instructorOnly(ctx)) return forbidden();
+  const db = courseDb(ctx.db);
+  const o = ownFacultyOffering(ctx, ctx.params.id);
+  if (!o) return notFound("Course not found");
+  const roster = offeringRoster(db, o);
+  const students = roster.students.map((s) => {
+    const [section, ...group] = (teamLabel(db, s.team_id) ?? `${sectionName(db, s.section_id) ?? "No section"} · No group`).split(" · ");
+    return {
+      id: s.id,
+      name: s.name,
+      email: s.email,
+      picture_url: s.picture_url,
+      section,
+      group: group.join(" · ") || "No group",
+      source: roster.source.get(s.id),
+    };
+  });
+  const order = (x: { section: string; group: string; name: string }) => `${x.section} ${x.group} ${x.name}`;
+  return { students: students.sort((a, b) => order(a).localeCompare(order(b), undefined, { numeric: true })) };
+});
+
+route("GET", "/api/faculty/courses/:id/students", (ctx) => {
+  if (!instructorOnly(ctx)) return forbidden();
+  const db = courseDb(ctx.db);
+  const o = ownFacultyOffering(ctx, ctx.params.id);
+  if (!o) return notFound("Course not found");
+  const q = (ctx.query.get("q") ?? "").trim().toLowerCase();
+  if (q.length < 2) return { students: [] };
+  const roster = offeringRoster(db, o).source;
+  const students = db.users
+    .filter((u) => u.role === "student" && `${u.name} ${u.email}`.toLowerCase().includes(q))
+    .sort(byName)
+    .slice(0, 15)
+    .map((u) => ({ id: u.id, name: u.name, email: u.email, section: sectionName(db, u.section_id), on_roster: roster.has(u.id) }));
+  return { students };
+});
+
+route("POST", "/api/faculty/courses/:id/students", (ctx) => {
+  if (!instructorOnly(ctx)) return forbidden();
+  const db = courseDb(ctx.db);
+  const o = ownFacultyOffering(ctx, ctx.params.id);
+  if (!o) return notFound("Course not found");
+  if (termStatus(termOf(db, o)) === "ended") return json({ error: "This term has ended, so its roster is locked" }, 400);
+  const studentId: unknown = ctx.body?.student_id;
+  const student = db.users.find((u) => u.id === studentId && u.role === "student");
+  if (!student) return notFound("Student not found");
+  if (!db.offeringStudents.some((r) => r.offering_id === o.id && r.student_id === student.id)) {
+    db.offeringStudents.push({ offering_id: o.id, student_id: student.id });
+  }
+  audit(db, ctx.viewer, "course.student.add", "course_offerings", { student_id: student.id, student: student.name }, o.id);
+  return { success: true };
+});
+
+route("DELETE", "/api/faculty/courses/:id/students/:studentId", (ctx) => {
+  if (!instructorOnly(ctx)) return forbidden();
+  const db = courseDb(ctx.db);
+  const o = ownFacultyOffering(ctx, ctx.params.id);
+  if (!o) return notFound("Course not found");
+  if (termStatus(termOf(db, o)) === "ended") return json({ error: "This term has ended, so its roster is locked" }, 400);
+  db.offeringStudents = db.offeringStudents.filter((r) => !(r.offering_id === o.id && r.student_id === ctx.params.studentId));
+  audit(db, ctx.viewer, "course.student.remove", "course_offerings", { student_id: ctx.params.studentId }, o.id);
+  return { success: true };
+});
 
 route("GET", "/api/faculty/courses/:id/progress", async (ctx) => {
   if (!instructorOnly(ctx)) return forbidden();

@@ -162,7 +162,7 @@ export default function InstructorMeScreen() {
           <Pressable
             key={link.label}
             onPress={link.onPress}
-            accessibilityRole="link"
+            accessibilityRole="button"
             style={({ pressed }) => [styles.linkItem, i > 0 && styles.rowBorder, pressed && { opacity: 0.7 }]}
           >
             <View style={[styles.iconBox, { backgroundColor: link.accent.bg }]}>
@@ -172,7 +172,7 @@ export default function InstructorMeScreen() {
               <Text style={styles.linkText}>{link.label}</Text>
               <Text style={styles.linkDetail}>{link.detail}</Text>
             </View>
-            <Ionicons name="open-outline" size={16} color={Palette.textFaint} />
+            <Ionicons name="chevron-forward" size={17} color={Palette.textFaint} />
           </Pressable>
         ))}
       </View>

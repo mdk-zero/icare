@@ -45,6 +45,8 @@ const EMPTY: NotificationsState = {
 
 let state: NotificationsState = EMPTY;
 const listeners = new Set<() => void>();
+/** Screens that reload when something new arrives (a quiz assigned, a grade given). */
+const arrivalListeners = new Set<(notification: AppNotification) => void>();
 
 let request: XMLHttpRequest | null = null;
 /** Offset of `responseText` already parsed on the current request. */
@@ -93,6 +95,18 @@ export function getNotificationsSnapshot() {
   return state;
 }
 
+/**
+ * Called with each notification that arrives on the live feed while the app
+ * is open: the cue for a screen to reload what it shows. Returns the
+ * unsubscribe.
+ */
+export function onNotificationArrived(listener: (notification: AppNotification) => void) {
+  arrivalListeners.add(listener);
+  return () => {
+    arrivalListeners.delete(listener);
+  };
+}
+
 // ---------------------------------------------------------------
 // Event handling
 // ---------------------------------------------------------------
@@ -127,8 +141,10 @@ function handleEvent(event: string, data: string) {
     if (!notification?.id) return;
     const isNew = event === 'insert' && !state.notifications.some((n) => n.id === notification.id);
     applyUpsert(notification);
-    // A brand-new one also shows as a system banner, if the user allowed them.
+    // A brand-new one also shows as a system banner, if the user allowed them,
+    // and tells open screens their data just changed.
     if (isNew && !notification.read_at) void presentSystemNotification(notification);
+    if (isNew) for (const listener of arrivalListeners) listener(notification);
     return;
   }
   if (event === 'delete') {

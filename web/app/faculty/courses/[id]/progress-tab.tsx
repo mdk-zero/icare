@@ -9,13 +9,17 @@ import {
   faMagnifyingGlass,
   faPercent,
   faTriangleExclamation,
+  faUserPlus,
   faUsers,
   faXmark,
 } from "@fortawesome/free-solid-svg-icons";
 import Avatar from "../../../components/Avatar";
 import { SkeletonProgressGrid } from "../../../components/skeletons";
 import { usePageData } from "../../../lib/use-page-data";
-import { fetchCourseProgress, type CourseProgress } from "../../../lib/api";
+import { fetchCourseProgress, removeCourseStudent, type CourseProgress } from "../../../lib/api";
+import ConfirmModal from "../../../components/ConfirmModal";
+import { toast } from "../../../components/Toast";
+import AddStudentModal from "./add-student-modal";
 import {
   requirementDetail,
   type ItemProgress,
@@ -39,10 +43,15 @@ type Filter = "all" | "incomplete" | "complete";
  */
 export default function ProgressTab({
   offeringId,
+  courseCode,
+  locked,
   signature,
   onOpenGrading,
 }: {
   offeringId: string;
+  courseCode: string;
+  /** The term has ended: the roster can't change. */
+  locked: boolean;
   signature: string;
   onOpenGrading: () => void;
 }) {
@@ -51,7 +60,11 @@ export default function ProgressTab({
   const [group, setGroup] = useState("");
   const [focus, setFocus] = useState<string | null>(null);
   const [gradeFocus, setGradeFocus] = useState<string | null>(null);
-  const { data, loading, setData } = usePageData(
+  // Adding a student by hand, and taking one off again.
+  const [adding, setAdding] = useState(false);
+  const [removing, setRemoving] = useState<{ id: string; name: string } | null>(null);
+  const [removeBusy, setRemoveBusy] = useState(false);
+  const { data, loading, setData, refresh } = usePageData(
     `faculty:course-progress:${offeringId}:${signature}`,
     () => fetchCourseProgress(offeringId),
   );
@@ -165,14 +178,51 @@ export default function ProgressTab({
       </EmptyState>
     );
   }
+  const addDialog = adding && (
+    <AddStudentModal
+      offeringId={offeringId}
+      courseCode={courseCode}
+      onClose={() => setAdding(false)}
+      onAdded={() => void refresh()}
+    />
+  );
+  const addButton = !locked && (
+    <button
+      type="button"
+      onClick={() => setAdding(true)}
+      className="inline-flex items-center gap-2 rounded-lg border border-brand-600/40 bg-brand-600/5 px-3 py-1.5 text-sm font-semibold text-brand-700 transition-colors hover:bg-brand-600/10"
+    >
+      <FontAwesomeIcon icon={faUserPlus} className="h-3.5 w-3.5" />
+      Add student
+    </button>
+  );
+
   if (progress.students.length === 0) {
     return (
-      <EmptyState icon={faUsers} title="No students yet">
-        Students come from the groups you supervise in this course&rsquo;s
-        sections.
-      </EmptyState>
+      <>
+        <EmptyState icon={faUsers} title="No students yet" action={<div className="mt-4">{addButton}</div>}>
+          Students come from your groups in this course&rsquo;s sections, or the
+          whole section where you supervise no group. You can also add a student
+          yourself.
+        </EmptyState>
+        {addDialog}
+      </>
     );
   }
+
+  const confirmRemove = async () => {
+    if (!removing) return;
+    setRemoveBusy(true);
+    const result = await removeCourseStudent(offeringId, removing.id);
+    setRemoveBusy(false);
+    if (result.error !== undefined) {
+      toast(result.error, "error");
+      return;
+    }
+    toast(`${removing.name} removed from ${courseCode}`);
+    setRemoving(null);
+    await refresh();
+  };
 
   const complete = scoped.filter(isComplete).length;
   // Columns run section by section (Patient Cases, Quizzes, ...), each
@@ -261,11 +311,12 @@ export default function ProgressTab({
             </button>
           ))}
         </div>
+        <div className="sm:ml-auto">{addButton}</div>
         {progress.grading_ready && !progress.grading && (
           <button
             type="button"
             onClick={onOpenGrading}
-            className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-700 hover:underline sm:ml-auto"
+            className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-700 hover:underline"
           >
             <FontAwesomeIcon icon={faPercent} className="h-3 w-3" />
             Set up grading
@@ -275,7 +326,7 @@ export default function ProgressTab({
           <button
             type="button"
             onClick={onOpenGrading}
-            className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 ring-1 ring-inset ring-amber-600/20 sm:ml-auto"
+            className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 ring-1 ring-inset ring-amber-600/20"
           >
             <FontAwesomeIcon icon={faTriangleExclamation} className="h-3 w-3" />
             Grading split needs fixing
@@ -539,6 +590,24 @@ export default function ProgressTab({
                             <p className="truncate text-xs text-gray-500">
                               {s.group_label}
                             </p>
+                            {s.source === "added" && (
+                              <p className="mt-0.5">
+                                <span className="inline-flex items-center gap-1 rounded-full bg-brand-600/10 px-1.5 py-px text-[10px] font-semibold text-brand-700">
+                                  Added by you
+                                  {!locked && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setRemoving({ id: s.id, name: s.name })}
+                                      aria-label={`Remove ${s.name} from ${courseCode}`}
+                                      title="Remove from this course"
+                                      className="-mr-0.5 rounded-full p-0.5 text-brand-700/70 hover:bg-brand-600/15 hover:text-brand-700"
+                                    >
+                                      <FontAwesomeIcon icon={faXmark} className="h-2.5 w-2.5" />
+                                    </button>
+                                  )}
+                                </span>
+                              </p>
+                            )}
                           </div>
                           <span
                             title={`${s.done} of ${s.total} items completed`}
@@ -629,6 +698,19 @@ export default function ProgressTab({
         )}
       </p>
       {dialog}
+      {addDialog}
+      {removing && (
+        <ConfirmModal
+          config={{
+            title: `Remove ${removing.name}?`,
+            message: `${removing.name} comes off ${courseCode}'s roster. Their work stays saved, and adding them again brings it back.`,
+            confirmLabel: "Remove",
+            loading: removeBusy,
+            onConfirm: () => void confirmRemove(),
+          }}
+          onClose={() => setRemoving(null)}
+        />
+      )}
     </div>
   );
 }

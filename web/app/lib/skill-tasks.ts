@@ -22,6 +22,8 @@ export interface SkillSelection {
   skillId: string;
   /** Variant headings to include; omitted means the skill's defaults. */
   sections?: string[];
+  /** Checklist steps left out (their positions), when the setting doesn't call for them. */
+  skipped?: number[];
 }
 
 const POINTS_PER_SKILL = 10;
@@ -46,14 +48,20 @@ export function skillTaskFields(skill: Pick<SkillDetail, 'id' | 'title' | 'goal'
   };
 }
 
-/** The sub-tasks a skill becomes: its checklist steps for the chosen sections, word for word. */
-export function skillTaskSteps<T extends Pick<SkillStep, 'stepNo' | 'section' | 'text'>>(
+/**
+ * The sub-tasks a skill becomes: its checklist steps for the chosen sections,
+ * word for word, minus any steps faculty left out. Leaving out every step
+ * keeps them all, so a task never ends up empty.
+ */
+export function skillTaskSteps<T extends Pick<SkillStep, 'stepNo' | 'section' | 'text' | 'position'>>(
   skillId: string,
   steps: readonly T[],
   sections?: readonly string[],
+  skipped?: readonly number[],
 ): (T & { title: string; source: string })[] {
-  const chosen = sections ?? skillVariants(skillId, steps).defaults;
-  return stepsForSections(steps, chosen).map((step) => ({ ...step, title: step.text, source: stepSource(skillId, step) }));
+  const chosen = stepsForSections(steps, sections ?? skillVariants(skillId, steps).defaults);
+  const kept = skipped?.length ? chosen.filter((step) => !skipped.includes(step.position)) : chosen;
+  return (kept.length > 0 ? kept : chosen).map((step) => ({ ...step, title: step.text, source: stepSource(skillId, step) }));
 }
 
 /** "Assessing Body Temperature (Skill 1-1)" */
@@ -69,9 +77,11 @@ export function parseSkillSelections(value: unknown): SkillSelection[] {
     if (typeof item === 'string') out.push({ skillId: item });
     else if (item && typeof item === 'object' && typeof (item as { id?: unknown }).id === 'string') {
       const sections = (item as { sections?: unknown }).sections;
+      const skipped = (item as { skipped?: unknown }).skipped;
       out.push({
         skillId: (item as { id: string }).id,
         sections: Array.isArray(sections) ? sections.filter((x): x is string => typeof x === 'string') : undefined,
+        skipped: Array.isArray(skipped) ? skipped.filter((x): x is number => Number.isInteger(x)) : undefined,
       });
     }
   }
@@ -107,7 +117,7 @@ export async function addSkillTasks(
 ): Promise<{ tasks: number; steps: number; error: { message?: string } | null }> {
   const skills = await getSkills(supabase, selections.map((s) => s.skillId));
   if (skills.length === 0) return { tasks: 0, steps: 0, error: null };
-  const sectionsFor = new Map(selections.map((s) => [s.skillId, s.sections]));
+  const pickFor = new Map(selections.map((s) => [s.skillId, s]));
 
   const taskRows = skills.map((skill, i) => ({
     scenario_id: scenarioId,
@@ -132,7 +142,8 @@ export async function addSkillTasks(
   const stepRows = skills.flatMap((skill, i) => {
     const taskId = taskIdBySort.get(afterSortOrder + i + 1);
     if (!taskId) return [];
-    return skillTaskSteps(skill.id, skill.steps, sectionsFor.get(skill.id)).map((step, j) => ({
+    const pick = pickFor.get(skill.id);
+    return skillTaskSteps(skill.id, skill.steps, pick?.sections, pick?.skipped).map((step, j) => ({
       task_id: taskId,
       title: step.title,
       source: step.source,
