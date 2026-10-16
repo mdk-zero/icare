@@ -79,6 +79,10 @@ app asks for the stream to show a percentage; the nightly workflow doesn't.
 
   Reproduce: download OULAD, then
   `python -m training.train_baseline_oulad --raw-dir <dir>`.
+- **The flag is a hybrid** — what faculty see is not the OULAD model alone:
+  it is the model's probability weighted by how much graded work backs it,
+  topped up by a participation rule, as below. Describe it that way in
+  reports, and attribute early-term flags to missed deadlines.
 - **Participation weighting** — OULAD labels empty activity as a withdrawal,
   so on its own the baseline flags every student who simply hasn't started
   (80-99%). The batch run therefore weights the model's probability by
