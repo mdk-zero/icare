@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faChevronLeft,
@@ -10,7 +10,7 @@ import {
   faMagnifyingGlass,
   faUserGraduate,
 } from "@fortawesome/free-solid-svg-icons";
-import { ScenarioAssignment, fetchScenarioAssignments } from "../../../lib/api";
+import { ScenarioAssignment, fetchScenarioAssignments, fetchScenarioById } from "../../../lib/api";
 import AssignmentGrader from "./assignment-grader";
 import AssignmentList, { EmptyPanel, isSubmitted } from "./assignment-list";
 import Avatar from "../../../components/Avatar";
@@ -58,7 +58,15 @@ export default function FacultyScenarioReviewClient() {
     "faculty:scenario-review",
     fetchScenarioAssignments,
   );
-  const assignments = assignmentsData ?? NO_ASSIGNMENTS;
+  // Opened from a case's Review button (?case=), the queue holds that case only.
+  const caseId = useSearchParams().get("case");
+  const assignments = useMemo(() => {
+    const all = assignmentsData ?? NO_ASSIGNMENTS;
+    return caseId ? all.filter((a) => a.scenario_id === caseId) : all;
+  }, [assignmentsData, caseId]);
+  // The case itself, for the page's title and description.
+  const { data: caseData } = usePageData(caseId ? `scenario:${caseId}` : null, () => fetchScenarioById(caseId!));
+  const caseTitle = caseData?.title ?? assignments[0]?.scenario_title ?? null;
 
   /** One row per student, so the queue can be searched/picked before any
    * submissions are shown — grouping happens client-side since the API
@@ -138,9 +146,14 @@ export default function FacultyScenarioReviewClient() {
   const confirmDiscard = () => !dirty || window.confirm("Discard your unsaved ratings and notes?");
 
   const selectStudent = (studentId: string) => {
-    if (!confirmDiscard()) return;
+    if (studentId === selectedStudentId || !confirmDiscard()) return;
     setSelectedStudentId(studentId);
-    setSelectedId(null);
+    // Reviewing one patient case, a student has just the one: open its checklist at once.
+    const only = caseId ? assignments.find((a) => a.student_id === studentId) : undefined;
+    setSelectedId(only?.id ?? null);
+    if (only && !window.matchMedia("(min-width: 1024px)").matches) {
+      requestAnimationFrame(() => gradingRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+    }
   };
 
   const backToStudents = () => {
@@ -176,8 +189,12 @@ export default function FacultyScenarioReviewClient() {
           icon: <FontAwesomeIcon icon={faClipboardCheck} className="h-3.5 w-3.5" />,
           label: "Patient Case Management",
         }}
-        title="Review Submissions"
-        subtitle="Rate each criterion of a student's patient case on a verbal scale, add notes where it helps, then save the grade — you can edit it later."
+        title={caseId ? (caseTitle ?? "Patient case") : "Review Submissions"}
+        subtitle={
+          caseId
+            ? (caseData?.description || "Rate each student's demonstration of this patient case, then save the grade.")
+            : "Rate each criterion of a student's patient case on a verbal scale, add notes where it helps, then save the grade — you can edit it later."
+        }
       />
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
@@ -200,7 +217,8 @@ export default function FacultyScenarioReviewClient() {
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-[280px_minmax(0,1fr)] 2xl:grid-cols-[340px_minmax(0,1fr)]">
         {/* Queue */}
         <aside className="lg:sticky lg:top-0 lg:self-start">
-          {!selectedStudentId ? (
+          {/* One patient case: the students stay listed beside the checklist. */}
+          {!selectedStudentId || caseId ? (
             <>
               {/* Step 1: find the student before any submission renders */}
               <div className="relative mb-3">
@@ -298,7 +316,12 @@ export default function FacultyScenarioReviewClient() {
                     <button
                       onClick={() => selectStudent(g.student_id)}
                       style={{ animationDelay: `${Math.min(i, 8) * 35}ms` }}
-                      className="flex w-full animate-rise items-center gap-3 rounded-xl border border-hairline bg-surface p-3 text-left shadow-tile transition-all hover:border-brand-300 hover:shadow-tile-hover"
+                      aria-current={g.student_id === selectedStudentId ? "true" : undefined}
+                      className={`flex w-full animate-rise items-center gap-3 rounded-xl border p-3 text-left shadow-tile transition-all hover:border-brand-300 hover:shadow-tile-hover ${
+                        g.student_id === selectedStudentId
+                          ? "border-brand-600/50 bg-brand-600/10 shadow-[inset_3px_0_0_0_var(--color-brand-600)]"
+                          : "border-hairline bg-surface"
+                      }`}
                     >
                       <Avatar
                         name={g.student_name}
@@ -377,7 +400,9 @@ export default function FacultyScenarioReviewClient() {
               <p className="mt-1 max-w-xs text-sm text-gray-500">
                 {selectedStudentId
                   ? "Choose a patient case from the list to rate each criterion and lock in a grade."
-                  : "Search or select a student to see the patient cases they've submitted for review."}
+                  : caseId
+                    ? "Pick a student to open their checklist for this patient case."
+                    : "Search or select a student to see the patient cases they've submitted for review."}
               </p>
             </div>
           ) : (

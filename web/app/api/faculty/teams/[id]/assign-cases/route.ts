@@ -3,6 +3,7 @@ import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { getFacultyStudentIdSet, scenarioVisibleToFaculty } from '@/app/lib/scenario-visibility';
 import { isMissingTeamTables, manageableTeam, TEAMS_NEED_MIGRATION } from '@/app/lib/teams';
+import { notifyCaseAssigned } from '@/app/lib/notify-case-assigned';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -69,7 +70,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     const { data: scenario, error: scenarioError } = await supabase
       .from('scenarios')
-      .select('id, title')
+      .select('id, title, patient_id')
       .eq('id', scenario_id)
       .maybeSingle();
     if (scenarioError) {
@@ -108,7 +109,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Every member of this group already has this case' }, { status: 409 });
     }
 
-    const { error: insertError } = await supabase.from('scenario_assignments').insert(
+    const { data: inserted, error: insertError } = await supabase.from('scenario_assignments').insert(
       toAssign.map((m) => ({
         scenario_id,
         student_id: m.id,
@@ -118,11 +119,17 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         required: typeof required === 'boolean' ? required : true,
         status: 'pending' as const,
       })),
-    );
+    ).select('id, student_id');
     if (insertError) {
       console.error('Failed to assign group case', insertError);
       return NextResponse.json({ error: 'Unable to assign the case' }, { status: 500 });
     }
+    await notifyCaseAssigned(
+      supabase,
+      { id: scenario.id as string, title: scenario.title as string, patient_id: (scenario.patient_id as string | null) ?? null },
+      (inserted ?? []).map((a) => ({ id: a.id as string, student_id: a.student_id as string })),
+      parsedDeadline,
+    );
     return NextResponse.json(
       {
         scenario_title: scenario.title as string,

@@ -157,15 +157,14 @@ export function ScenarioInfo({
             Due {formatDay(assignment.deadline)}
           </span>
         )}
-        <span className="flex items-center gap-1.5 rounded-full bg-gray-100 px-2.5 py-1">
-          <FontAwesomeIcon
-            icon={faCalendarCheck}
-            className="h-3 w-3 text-gray-400"
-          />
-          {assignment.submitted_at
-            ? `Submitted ${formatWhen(assignment.submitted_at)}`
-            : "Not submitted yet"}
-        </span>
+        {/* Students perform a patient case in person, so there is nothing to
+            hand in; only an older, submitted one says when. */}
+        {assignment.submitted_at && (
+          <span className="flex items-center gap-1.5 rounded-full bg-gray-100 px-2.5 py-1">
+            <FontAwesomeIcon icon={faCalendarCheck} className="h-3 w-3 text-gray-400" />
+            Submitted {formatWhen(assignment.submitted_at)}
+          </span>
+        )}
         {Boolean(assignment.time_taken) && (
           <span className="flex items-center gap-1.5 rounded-full bg-gray-100 px-2.5 py-1 tabular-nums">
             <FontAwesomeIcon
@@ -601,15 +600,12 @@ export default function AssignmentGrader({
                     {selected.scenario_title}
                   </p>
                   <div className="mt-2.5 flex flex-wrap items-center gap-1.5 text-xs font-medium text-gray-600">
-                    <span className="flex items-center gap-1.5 rounded-full bg-gray-100 px-2.5 py-1">
-                      <FontAwesomeIcon
-                        icon={faCalendarCheck}
-                        className="h-3 w-3 text-gray-400"
-                      />
-                      {selected.submitted_at
-                        ? `Submitted ${formatWhen(selected.submitted_at)}`
-                        : "Not submitted yet"}
-                    </span>
+                    {selected.submitted_at && (
+                      <span className="flex items-center gap-1.5 rounded-full bg-gray-100 px-2.5 py-1">
+                        <FontAwesomeIcon icon={faCalendarCheck} className="h-3 w-3 text-gray-400" />
+                        Submitted {formatWhen(selected.submitted_at)}
+                      </span>
+                    )}
                     {Boolean(selected.time_taken) && (
                       <span className="flex items-center gap-1.5 rounded-full bg-gray-100 px-2.5 py-1 tabular-nums">
                         <FontAwesomeIcon
@@ -830,9 +826,7 @@ export default function AssignmentGrader({
                   )}
                   {unratedMissing > 0
                     ? `${unratedMissing} unrated ${rowNoun(unratedMissing)} ${unratedMissing === 1 ? "earns" : "earn"} no points`
-                    : !selected.submitted_at
-                      ? "Not submitted yet — you can still grade it now"
-                      : unratedImplied > 0
+                    : unratedImplied > 0
                         ? `${unratedImplied} auto-completed ${rowNoun(unratedImplied)} count as their task's level until rated`
                         : "Every row has a grade"}
                 </p>

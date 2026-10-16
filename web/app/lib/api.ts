@@ -1137,6 +1137,8 @@ export interface FacultyStudent {
   sex?: 'male' | 'female' | null;
   section_id?: string | null;
   section?: string | null;
+  /** When the account was made, i.e. when they were enrolled. */
+  created_at?: string;
   /** Latest ML classification; null when the model has never scored them. */
   risk_level?: 'safe' | 'at_risk' | null;
   /** ISO timestamp of their most recent recorded activity, or null. */
@@ -1159,6 +1161,22 @@ export interface SimulationScenario {
   learning_objectives: string[];
   is_ai_generated: boolean;
   student_count: number;
+  /** The students it is assigned to (the viewer's own). */
+  student_ids?: string[];
+  /** Assignments not graded yet. */
+  to_grade?: number;
+  /** Who has it, by group, with their date of performance. */
+  assigned_groups?: {
+    key: string;
+    label: string;
+    count: number;
+    student_ids: string[];
+    deadline: string | null | "mixed";
+    /** Graded already. */
+    done: number;
+  }[];
+  /** The Taylor's chapters its skills come from. */
+  chapters?: number[];
   created_at: string;
   /** Faculty's own wording per grading level; missing levels use the book's. Null before migration 046. */
   rubric?: Partial<Rubric> | null;
@@ -3736,12 +3754,18 @@ export interface CasePresentation {
   deadline: string | null;
   section_ids: string[];
   sections: { id: string; name: string }[];
+  /** The groups it was given to (074); empty for one given to whole sections. */
+  groups?: { id: string; name: string; section_name: string }[];
+  /** The course it is for (070). */
+  offering_id?: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
 }
 
 export interface CasePresentationSummary extends CasePresentation {
+  /** The course it was made for (070); null for none. */
+  offering_id?: string | null;
   counts: {
     total: number;
     not_started: number;
@@ -3852,7 +3876,12 @@ export const createCasePresentation = (input: {
   title: string;
   instructions: string;
   deadline: string | null;
+  /** Whole sections; with a course, those where the instructor has no group. */
   section_ids: string[];
+  /** Groups it goes to (074). */
+  team_ids?: string[];
+  /** Students added to the course by hand. */
+  student_ids?: string[];
   /** The course it is made for (migration 070). */
   offering_id?: string;
 }) => caseRequest<{ presentation: CasePresentation; student_count: number }>('/api/faculty/cases', { method: 'POST', body: input });
@@ -3862,7 +3891,14 @@ export const fetchCasePresentation = (id: string) =>
 
 export const updateCasePresentation = (
   id: string,
-  patch: Partial<{ title: string; instructions: string; deadline: string | null; section_ids: string[] }>,
+  patch: Partial<{
+    title: string;
+    instructions: string;
+    deadline: string | null;
+    section_ids: string[];
+    team_ids: string[];
+    student_ids: string[];
+  }>,
 ) => caseRequest<{ ok: true; students_added: number }>(`/api/faculty/cases/${id}`, { method: 'PATCH', body: patch });
 
 export const deleteCasePresentation = (id: string) =>
@@ -3904,6 +3940,8 @@ export interface LibraryMaterial {
   file_name: string | null;
   file_size: number | null;
   mime_type: string | null;
+  /** The course it is for (074); null for none. */
+  offering_id?: string | null;
   target_sections: string[] | null;
   status: 'draft' | 'published';
   published_at: string | null;
@@ -3933,6 +3971,8 @@ export interface LibrarySuggestion {
 
 /** What the add/edit form sends; the content field is the one its kind needs. */
 export interface LibraryMaterialInput {
+  /** The course it is for (074); an instructor picks one of theirs. */
+  offering_id?: string | null;
   skill_id: string;
   kind: LibraryKind;
   title: string;
@@ -3949,9 +3989,14 @@ export interface LibraryMaterialInput {
 }
 
 export const fetchLibrary = () =>
-  caseRequest<{ skills: LibrarySkill[]; sections: Section[]; materials: LibraryMaterial[]; enabled: boolean }>(
-    '/api/faculty/library',
-  );
+  caseRequest<{
+    skills: LibrarySkill[];
+    sections: Section[];
+    materials: LibraryMaterial[];
+    enabled: boolean;
+    /** False until migration 074 lets materials belong to a course. */
+    courses_ready?: boolean;
+  }>('/api/faculty/library');
 
 export const fetchLibraryMaterial = (id: string) =>
   caseRequest<{ material: LibraryMaterial; file: { direct: string; embed: string } | null }>(`/api/faculty/library/${id}`);
@@ -3971,10 +4016,10 @@ export const deleteLibraryMaterial = (id: string) =>
 export const fetchLibrarySuggestions = () =>
   caseRequest<{ suggestions: LibrarySuggestion[] }>('/api/faculty/library/suggestions');
 
-export const publishLibrarySuggestion = (suggestionId: string, target_sections: string[]) =>
+export const publishLibrarySuggestion = (suggestionId: string, target_sections: string[], offeringId?: string | null) =>
   caseRequest<{ material: LibraryMaterial }>('/api/faculty/library/suggestions', {
     method: 'POST',
-    body: { suggestionId, target_sections },
+    body: { suggestionId, target_sections, ...(offeringId ? { offering_id: offeringId } : {}) },
   });
 
 /**
@@ -4249,10 +4294,18 @@ export interface CourseRosterStudent {
   email: string;
   picture_url: string | null;
   section: string;
+  section_id: string;
   /** The group's name, or "No group". */
   group: string;
+  team_id: string | null;
   source: 'group' | 'section' | 'added';
 }
+
+/** Who already has a quiz, and by when (the Assign dialog shows it per group). */
+export const fetchQuizAssignments = (assessmentId: string) =>
+  courseRequest<{ assignments: { student_id: string; deadline: string | null }[] }>(
+    `/api/faculty/assessments/${assessmentId}/assign`,
+  );
 
 /** The instructor's students for one course, by section then group. */
 export const fetchCourseRoster = (offeringId: string) =>

@@ -28,12 +28,12 @@ import {
   faCheck,
   faMinus,
   faClock,
+  faBookMedical,
 } from "@fortawesome/free-solid-svg-icons";
-import { toast } from "../../components/Toast";
+import { toast, loadingToast } from "../../components/Toast";
 import {
   fetchFacultyScenarios,
   createScenario,
-  updateScenario,
   deleteScenario,
   generateScenarioBatch,
   ScenarioDraft,
@@ -50,6 +50,7 @@ import {
   fetchMyCourses,
   fetchCourseRoster,
   type CourseRosterStudent,
+  apiFetch,
 } from "../../lib/api";
 import { groupByCourse, numberWithinCourse } from "../../lib/course-groups";
 import CourseGroupHeading from "../../components/CourseGroupHeading";
@@ -95,10 +96,11 @@ export default function FacultyScenariosClient() {
   const router = useRouter();
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("all");
+  // The Taylor's chapter a case's skills come from, and whether it is assigned.
+  const [chapterFilter, setChapterFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "to_grade" | "assigned" | "unassigned">("all");
 
   const [patients, setPatients] = useState<FacultyPatient[]>([]);
-  const [loadingPatients, setLoadingPatients] = useState(false);
 
   const [showBatchModal, setShowBatchModal] = useState(false);
   // The committed numeric count that generation uses, plus the raw field text so
@@ -158,6 +160,10 @@ export default function FacultyScenariosClient() {
   // Teams picked in the assign modal; each member is assigned on their own.
   const [assignHasTeams, setAssignHasTeams] = useState(false);
   const [assignDeadline, setAssignDeadline] = useState("");
+  // The "Who has it" list for one case, with a date change per group.
+  const [whoHas, setWhoHas] = useState<SimulationScenario | null>(null);
+  const [newDate, setNewDate] = useState<Record<string, string>>({});
+  const [movingDate, setMovingDate] = useState<string | null>(null);
   const [studentSearchQuery, setStudentSearchQuery] = useState("");
   const [assigning, setAssigning] = useState(false);
   // Who the open case can go to: the students the instructor handles in its
@@ -166,11 +172,7 @@ export default function FacultyScenariosClient() {
   const [assignRosterError, setAssignRosterError] = useState<string | null>(null);
   const assignFor = useRef<string | null>(null);
 
-  const [showLinkPatientModal, setShowLinkPatientModal] = useState(false);
-  const [linkPatientTarget, setLinkPatientTarget] = useState<SimulationScenario | null>(null);
-  const [linkPatientId, setLinkPatientId] = useState("");
-  const [linkPatientSearchQuery, setLinkPatientSearchQuery] = useState("");
-  const [savingPatientLink, setSavingPatientLink] = useState(false);
+
 
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<SimulationScenario | null>(null);
@@ -191,27 +193,34 @@ export default function FacultyScenariosClient() {
   const loadScenarios = refresh;
 
   const loadPatientsForSelector = async () => {
-    setLoadingPatients(true);
     const data = await fetchFacultyPatients();
     setPatients(data);
-    setLoadingPatients(false);
   };
 
-  const categories = useMemo(
-    () => Array.from(new Set(scenarios.map((s) => s.category).filter(Boolean))),
+  // Every chapter some case draws skills from, in book order.
+  const chapterOptions = useMemo(
+    () => [...new Set(scenarios.flatMap((s) => s.chapters ?? []))].sort((a, b) => a - b),
     [scenarios],
   );
 
   const filteredScenarios = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
     return scenarios.filter((scenario) => {
       const matchesSearch =
-        scenario.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        scenario.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        scenario.category.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesCategory = categoryFilter === "all" || scenario.category === categoryFilter;
-      return matchesSearch && matchesCategory;
+        !q ||
+        scenario.title.toLowerCase().includes(q) ||
+        scenario.description.toLowerCase().includes(q) ||
+        (scenario.patient_name ?? "").toLowerCase().includes(q);
+      const matchesChapter = chapterFilter === "all" || (scenario.chapters ?? []).includes(Number(chapterFilter));
+      const matchesStatus =
+        statusFilter === "all" ||
+        (statusFilter === "to_grade" && (scenario.to_grade ?? 0) > 0) ||
+        (statusFilter === "assigned" && scenario.student_count > 0) ||
+        (statusFilter === "unassigned" && scenario.student_count === 0);
+      return matchesSearch && matchesChapter && matchesStatus;
     });
-  }, [scenarios, searchQuery, categoryFilter]);
+  }, [scenarios, searchQuery, chapterFilter, statusFilter]);
+  const filtering = Boolean(searchQuery) || chapterFilter !== "all" || statusFilter !== "all";
 
   // Cases are grouped by the course they were made for, and numbered within
   // it in the order they were made, as the course's Criteria tab numbers them.
@@ -220,22 +229,6 @@ export default function FacultyScenariosClient() {
     [filteredScenarios, data?.offerings],
   );
   const caseNumber = useMemo(() => numberWithinCourse(scenarios), [scenarios]);
-
-  const linkModalFilteredPatients = useMemo(() => {
-    const q = linkPatientSearchQuery.toLowerCase();
-    return patients.filter(
-      (p) =>
-        p.name.toLowerCase().includes(q) ||
-        p.diagnosis.toLowerCase().includes(q) ||
-        (p.mimic_id || "").toLowerCase().includes(q) ||
-        p.room_number.toLowerCase().includes(q),
-    );
-  }, [patients, linkPatientSearchQuery]);
-
-  const linkPatientSelected = useMemo(
-    () => patients.find((p) => p.id === linkPatientId) || null,
-    [patients, linkPatientId],
-  );
 
   const openBatchModal = () => {
     setBatchDrafts(null);
@@ -461,6 +454,29 @@ export default function FacultyScenariosClient() {
     );
   };
 
+  type CaseGroup = NonNullable<SimulationScenario["assigned_groups"]>[number];
+  const changeDate = async (scenario: SimulationScenario, group: CaseGroup) => {
+    const value = newDate[group.key];
+    if (!value) return toast("Pick the new date first");
+    setMovingDate(group.key);
+    const progress = loadingToast(`Moving ${group.label}'s date…`);
+    const res = await apiFetch(`/api/faculty/scenarios/${scenario.id}/assign`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ student_ids: group.student_ids, deadline: deadlineFromInput(value) }),
+    });
+    setMovingDate(null);
+    if (!res.ok) {
+      const j = (await res.json().catch(() => null)) as { error?: string } | null;
+      return progress.error(j?.error ?? "Couldn't change the date");
+    }
+    progress.success(`${group.label} now performs on ${performDate(deadlineFromInput(value))}`);
+    setNewDate((prev) => ({ ...prev, [group.key]: "" }));
+    setWhoHas(null);
+    loadScenarios();
+  };
+
   const handleAssignScenario = async () => {
     if (!selectedScenario || assignCount === 0 || !assignDeadline) return;
 
@@ -503,53 +519,6 @@ export default function FacultyScenariosClient() {
     setSelectedScenario(null);
     setSelectedStudents([]);
     setStudentSearchQuery("");
-  };
-
-  const handleOpenLinkPatientModal = (scenario: SimulationScenario) => {
-    setLinkPatientTarget(scenario);
-    setLinkPatientId(scenario.patient_id || "");
-    setLinkPatientSearchQuery("");
-    setShowLinkPatientModal(true);
-    if (patients.length === 0) void loadPatientsForSelector();
-  };
-
-  const closeLinkPatientModal = () => {
-    setShowLinkPatientModal(false);
-    setLinkPatientTarget(null);
-    setLinkPatientId("");
-    setLinkPatientSearchQuery("");
-  };
-
-  const handleSavePatientLink = async () => {
-    // Every scenario needs a patient, so this only ever switches to a
-    // different one — the picker offers no "no linked patient" option.
-    if (!linkPatientTarget || !linkPatientId) return;
-
-    setSavingPatientLink(true);
-    const updated = await updateScenario(linkPatientTarget.id, {
-      patient_id: linkPatientId,
-    });
-
-    if (updated) {
-      await loadScenarios();
-      const faculty = getCurrentFacultyUser();
-      if (faculty) {
-        logAuditAction({
-          faculty_id: faculty.id,
-          faculty_name: faculty.name,
-          tab: "scenarios",
-          action: "link_scenario_patient",
-          details: `Linked patient case "${linkPatientTarget.title}" to a patient`,
-          target_type: "scenario",
-          target_id: linkPatientTarget.id,
-          metadata: { scenario_title: linkPatientTarget.title, patient_id: linkPatientId },
-        });
-      }
-      toast("Patient linked");
-    }
-
-    setSavingPatientLink(false);
-    closeLinkPatientModal();
   };
 
   const handleOpenDeleteModal = (scenario: SimulationScenario) => {
@@ -606,6 +575,9 @@ export default function FacultyScenariosClient() {
   const assignCount = selectedStudents.length;
 
   const studentById = new Map(students.map((st) => [st.id, st]));
+  // Students who already have the open case: shown as Assigned, not pickable again.
+  const alreadyAssigned = new Set(selectedScenario?.student_ids ?? []);
+  const pickable = (ids: string[]) => ids.filter((id) => !alreadyAssigned.has(id));
   const studentQuery = studentSearchQuery.trim().toLowerCase();
   const filteredStudents = (assignRoster ?? []).filter(
     (st) => !studentQuery || `${st.name} ${st.email} ${st.section} ${st.group}`.toLowerCase().includes(studentQuery),
@@ -676,7 +648,7 @@ export default function FacultyScenariosClient() {
             value={
               new Set(
                 scenarios.flatMap(
-                  (s) => (s as SimulationScenario & { student_ids?: string[] }).student_ids ?? [],
+                  (s) => s.student_ids ?? [],
                 ),
               ).size
             }
@@ -705,22 +677,44 @@ export default function FacultyScenariosClient() {
               className={inputClassName + " pl-10"}
             />
           </div>
-          <div className="relative min-w-0 flex-[1_1_10rem] sm:w-48 sm:flex-none">
+          <div className="relative min-w-0 flex-[1_1_12rem] sm:w-64 sm:flex-none">
             <FontAwesomeIcon
-              icon={faHospitalUser}
+              icon={faBookMedical}
               className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500"
             />
             <select
-              value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
+              value={chapterFilter}
+              onChange={(e) => setChapterFilter(e.target.value)}
+              aria-label="Filter by chapter"
               className={selectClassName + " pl-10 pr-10 w-full"}
             >
-              <option value="all">All Categories</option>
-              {categories.map((cat) => (
-                <option key={cat} value={cat}>
-                  {cat}
+              <option value="all">All chapters</option>
+              {chapterOptions.map((c) => (
+                <option key={c} value={c}>
+                  Ch. {c} · {TAYLORS_CHAPTERS.find((x) => x.chapter === c)?.name ?? "Chapter"}
                 </option>
               ))}
+            </select>
+            <FontAwesomeIcon
+              icon={faChevronDown}
+              className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none"
+            />
+          </div>
+          <div className="relative min-w-0 flex-[1_1_10rem] sm:w-52 sm:flex-none">
+            <FontAwesomeIcon
+              icon={faUsers}
+              className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500"
+            />
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
+              aria-label="Filter by status"
+              className={selectClassName + " pl-10 pr-10 w-full"}
+            >
+              <option value="all">All statuses</option>
+              <option value="to_grade">Needs grading</option>
+              <option value="assigned">Assigned</option>
+              <option value="unassigned">Not assigned yet</option>
             </select>
             <FontAwesomeIcon
               icon={faChevronDown}
@@ -738,16 +732,6 @@ export default function FacultyScenariosClient() {
               className="w-4 h-4 text-brand-600 transition-transform group-hover:scale-110"
             />
             Generate Library
-          </button>
-          <button
-            onClick={() => router.push("/faculty/scenarios/review")}
-            className="group flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-xl sm:flex-none border border-gray-300 bg-surface px-4 py-2.5 text-sm font-semibold text-gray-700 transition-all hover:border-brand-300 hover:bg-brand-50"
-          >
-            <FontAwesomeIcon
-              icon={faListCheck}
-              className="w-4 h-4 text-brand-600 transition-transform group-hover:scale-110"
-            />
-            Review cases
           </button>
           <button
             onClick={() => router.push("/faculty/scenarios/new")}
@@ -771,11 +755,11 @@ export default function FacultyScenariosClient() {
           <FontAwesomeIcon icon={faNotesMedical} className="w-12 h-12 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-gray-700">No patient cases found</h3>
           <p className="text-gray-500 text-sm mt-1">
-            {searchQuery || categoryFilter !== "all"
+            {filtering
               ? "Try adjusting your filters."
               : "Generate a starter library, or create your first patient case by hand."}
           </p>
-          {!searchQuery && categoryFilter === "all" && (
+          {!filtering && (
             <button
               onClick={openBatchModal}
               className="mt-4 inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-brand-600 to-brand-800 text-white font-medium rounded-xl hover:from-brand-700 hover:to-brand-900 transition-all shadow-lg shadow-[0_4px_14px_-2px_rgb(27_107_123_/_0.45)]"
@@ -820,9 +804,21 @@ export default function FacultyScenariosClient() {
                     </div>
                     <p className="text-sm text-gray-500 line-clamp-2 mb-4">{scenario.description}</p>
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="px-2.5 py-1 bg-gray-100 text-gray-700 text-xs font-medium rounded-full">
-                        {scenario.category}
-                      </span>
+                      {(scenario.chapters ?? []).length === 0 ? (
+                        <span className="px-2.5 py-1 bg-gray-100 text-gray-500 text-xs font-medium rounded-full">
+                          No skills yet
+                        </span>
+                      ) : (
+                        (scenario.chapters ?? []).map((c) => (
+                          <span
+                            key={c}
+                            title={TAYLORS_CHAPTERS.find((x) => x.chapter === c)?.name}
+                            className="px-2.5 py-1 bg-gray-100 text-gray-700 text-xs font-medium rounded-full"
+                          >
+                            Ch. {c} · {TAYLORS_CHAPTERS.find((x) => x.chapter === c)?.name ?? "Chapter"}
+                          </span>
+                        ))
+                      )}
                       {scenario.patient_name && (
                         <span className="px-2.5 py-1 bg-teal-50 text-teal-700 text-xs font-medium rounded-full flex items-center gap-1">
                           <FontAwesomeIcon icon={faUsers} className="w-3 h-3" />
@@ -832,16 +828,66 @@ export default function FacultyScenariosClient() {
                     </div>
                   </div>
                   <div className="p-5 bg-subtle">
-                    <div className="flex items-center justify-between text-sm mb-4">
-                      <span className="text-gray-500 flex items-center gap-1.5">
+                    <div className="flex items-center justify-between gap-3 text-sm mb-4">
+                      <span className="text-gray-500 flex shrink-0 items-center gap-1.5">
                         <FontAwesomeIcon icon={faUsers} className="w-3.5 h-3.5" />
-                        {scenario.student_count} students
+                        {scenario.student_count} student{scenario.student_count === 1 ? "" : "s"}
                       </span>
-                      <span className="text-gray-400 flex items-center gap-1.5">
-                        <FontAwesomeIcon icon={faCalendarDay} className="w-3.5 h-3.5" />
-                        {new Date(scenario.created_at).toLocaleDateString()}
+                      {/* When it was made, not a schedule: dates of performance are behind the calendar button. */}
+                      <span
+                        className="text-gray-400 flex min-w-0 items-center gap-1.5 text-xs"
+                        title={new Date(scenario.created_at).toLocaleString("en-US", { dateStyle: "full", timeStyle: "short" })}
+                      >
+                        <FontAwesomeIcon icon={faClock} className="w-3 h-3 shrink-0" />
+                        <span className="truncate">
+                        Created{" "}
+                        {new Date(scenario.created_at).toLocaleString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                          hour: "numeric",
+                          minute: "2-digit",
+                        })}
+                        </span>
                       </span>
                     </div>
+                    {scenario.student_count > 0 && (
+                      <div className="mb-2 flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => router.push(`/faculty/scenarios/review?case=${scenario.id}`)}
+                        className={`flex min-w-0 flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
+                          (scenario.to_grade ?? 0) > 0
+                            ? "bg-brand-600 text-white hover:bg-brand-700"
+                            : "border border-brand-600/40 bg-surface text-brand-700 hover:bg-brand-600/5"
+                        }`}
+                      >
+                        <FontAwesomeIcon icon={faListCheck} className="h-3.5 w-3.5" />
+                        {(scenario.to_grade ?? 0) > 0 ? (
+                          <>
+                            Review
+                            <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs tabular-nums">
+                              {scenario.to_grade} to grade
+                            </span>
+                          </>
+                        ) : (
+                          "Review grades"
+                        )}
+                      </button>
+                      {(scenario.assigned_groups ?? []).length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setWhoHas(scenario)}
+                          title="Who has it: the groups and sections, and their dates of performance"
+                          aria-label={`Who has it: ${(scenario.assigned_groups ?? []).length} groups`}
+                          className="flex shrink-0 items-center gap-1.5 rounded-lg border border-brand-600/40 bg-surface px-3 py-2 text-sm font-semibold tabular-nums text-brand-700 hover:bg-brand-600/5"
+                        >
+                          <FontAwesomeIcon icon={faCalendarDay} className="h-3.5 w-3.5" />
+                          {(scenario.assigned_groups ?? []).length}
+                        </button>
+                      )}
+                      </div>
+                    )}
                     <ActionsMenu
                       actions={[
                         { label: "View", icon: faEye, onClick: () => handleViewDetails(scenario) },
@@ -849,16 +895,14 @@ export default function FacultyScenariosClient() {
                           label: "Edit",
                           icon: faPenToSquare,
                           onClick: () => router.push(`/faculty/scenarios/${scenario.id}/edit`),
+                          // What students were given stays what they are graded on.
+                          disabled: scenario.student_count > 0,
+                          disabledReason: `You can't edit this patient case because it's already assigned to ${scenario.student_count} student${scenario.student_count === 1 ? "" : "s"}. Make a new one to change it.`,
                         },
                         {
                           label: "Assign",
                           icon: faUserPlus,
                           onClick: () => handleOpenAssignModal(scenario),
-                        },
-                        {
-                          label: scenario.patient_name ? "Change patient" : "Link patient",
-                          icon: faHospitalUser,
-                          onClick: () => handleOpenLinkPatientModal(scenario),
                         },
                         {
                           label: "Delete",
@@ -875,6 +919,79 @@ export default function FacultyScenariosClient() {
               )}
             </section>
           ))}
+        </div>
+      )}
+
+      {/* Who has it, with each group's date of performance */}
+      {whoHas && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setWhoHas(null)}>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="case-who-has-title"
+            onClick={(e) => e.stopPropagation()}
+            className="bg-surface rounded-xl shadow-overlay w-full max-w-lg p-4 space-y-3 max-h-[90vh] overflow-y-auto border border-hairline"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 id="case-who-has-title" className="font-semibold text-gray-800">Who has &ldquo;{whoHas.title}&rdquo;</h3>
+                <p className="text-sm text-gray-500">
+                  {whoHas.student_count} student{whoHas.student_count === 1 ? "" : "s"} in {(whoHas.assigned_groups ?? []).length} group
+                  {(whoHas.assigned_groups ?? []).length === 1 ? "" : "s"}. Move a group&apos;s date of performance below.
+                </p>
+              </div>
+              <button onClick={() => setWhoHas(null)} aria-label="Close" className="text-gray-400 hover:text-gray-600">
+                <FontAwesomeIcon icon={faTimes} className="w-4 h-4" />
+              </button>
+            </div>
+            <ul className="divide-y divide-hairline rounded-xl border border-hairline">
+              {(whoHas.assigned_groups ?? []).map((g) => (
+                <li key={g.key} className="space-y-2 px-4 py-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-gray-900">{g.label}</p>
+                      <p className="text-xs text-gray-500">
+                        {g.count} student{g.count === 1 ? "" : "s"} ·{" "}
+                        {g.deadline === "mixed" ? "different dates" : g.deadline ? `performs on ${performDate(g.deadline)}` : "no date"}
+                      </p>
+                    </div>
+                    <span
+                      className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium tabular-nums ${
+                        g.done === g.count ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-gray-600"
+                      }`}
+                    >
+                      {g.done === g.count ? "All graded" : `${g.done} of ${g.count} graded`}
+                    </span>
+                  </div>
+                  {g.done < g.count && (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="date"
+                        aria-label={`New date of performance for ${g.label}`}
+                        value={newDate[g.key] ?? ""}
+                        onChange={(e) => setNewDate((prev) => ({ ...prev, [g.key]: e.target.value }))}
+                        className={inputClassName + " py-1.5 text-xs"}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => void changeDate(whoHas, g)}
+                        disabled={!newDate[g.key] || movingDate !== null}
+                        className="shrink-0 rounded-lg border border-brand-600/40 px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-600/5 disabled:opacity-50"
+                      >
+                        {movingDate === g.key ? "Saving…" : "Change date"}
+                      </button>
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+            <p className="text-xs text-gray-500">Students already graded keep their date.</p>
+            <div className="flex justify-end">
+              <button onClick={() => setWhoHas(null)} className="px-5 py-2 rounded-lg bg-brand-600 text-white text-sm hover:bg-brand-700">
+                Done
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -1635,7 +1752,7 @@ export default function FacultyScenariosClient() {
                 </h3>
                 <div className="grid grid-cols-1 gap-3">
                   <div>
-                    <label className={labelClassName}>Deadline</label>
+                    <label className={labelClassName}>Date of performance</label>
                     <div className="relative">
                       <FontAwesomeIcon
                         icon={faCalendarDay}
@@ -1669,11 +1786,12 @@ export default function FacultyScenariosClient() {
                     Select Students
                   </h3>
                   <button
-                    onClick={() => toggleMany(filteredStudents.map((s) => s.id))}
-                    disabled={filteredStudents.length === 0}
+                    onClick={() => toggleMany(pickable(filteredStudents.map((s) => s.id)))}
+                    disabled={pickable(filteredStudents.map((s) => s.id)).length === 0}
                     className="text-sm text-brand-600 hover:text-brand-700 font-semibold disabled:opacity-40"
                   >
-                    {filteredStudents.length > 0 && filteredStudents.every((st) => selectedStudents.includes(st.id))
+                    {pickable(filteredStudents.map((s) => s.id)).length > 0 &&
+                    pickable(filteredStudents.map((s) => s.id)).every((id) => selectedStudents.includes(id))
                       ? "Clear All"
                       : "Select All"}
                   </button>
@@ -1731,8 +1849,9 @@ export default function FacultyScenariosClient() {
                         return (
                           <tbody key={section} className="border-t-2 border-gray-200 first:border-t-0">
                             {groups.map(([group, list]) => {
-                              const groupIds = list.map((st) => st.id);
+                              const groupIds = pickable(list.map((st) => st.id));
                               const groupPicked = groupIds.filter((id) => selectedStudents.includes(id)).length;
+                              const groupAssigned = list.length - groupIds.length;
                               return [
                                 <tr
                                   key={`${group}-head`}
@@ -1743,7 +1862,9 @@ export default function FacultyScenariosClient() {
                                     <input
                                       type="checkbox"
                                       aria-label={`Select all of ${section} ${group}`}
-                                      checked={groupPicked === groupIds.length}
+                                      checked={groupIds.length === 0 || groupPicked === groupIds.length}
+                                      disabled={groupIds.length === 0}
+                                      title={groupIds.length === 0 ? "Everyone in this group already has this case" : undefined}
                                       ref={(el) => {
                                         if (el) el.indeterminate = groupPicked > 0 && groupPicked < groupIds.length;
                                       }}
@@ -1758,7 +1879,8 @@ export default function FacultyScenariosClient() {
                                       <span className="text-gray-300">·</span>
                                       <span className="font-semibold text-gray-700">{group}</span>
                                       <span className="text-xs text-gray-500">
-                                        {groupIds.length} student{groupIds.length === 1 ? "" : "s"}
+                                        {list.length} student{list.length === 1 ? "" : "s"}
+                                        {groupAssigned > 0 ? ` · ${groupAssigned} assigned` : ""}
                                         {groupPicked > 0 ? ` · ${groupPicked} selected` : ""}
                                       </span>
                                     </span>
@@ -1766,23 +1888,34 @@ export default function FacultyScenariosClient() {
                                 </tr>,
                                 ...list.map((student) => {
                                   const info = studentById.get(student.id);
+                                  const assigned = alreadyAssigned.has(student.id);
                                   return (
                                     <tr
                                       key={student.id}
-                                      className={`border-t border-gray-100 transition-colors cursor-pointer ${
-                                        selectedStudents.includes(student.id)
-                                          ? "bg-brand-600/5 hover:bg-brand-600/10"
-                                          : "hover:bg-gray-50"
+                                      className={`border-t border-gray-100 transition-colors ${
+                                        assigned
+                                          ? "bg-emerald-50/50"
+                                          : selectedStudents.includes(student.id)
+                                            ? "cursor-pointer bg-brand-600/5 hover:bg-brand-600/10"
+                                            : "cursor-pointer hover:bg-gray-50"
                                       }`}
-                                      onClick={() => toggleStudentSelection(student.id)}
+                                      onClick={assigned ? undefined : () => toggleStudentSelection(student.id)}
                                     >
                                       <td className="py-2.5 px-4" onClick={(e) => e.stopPropagation()}>
-                                        <input
-                                          type="checkbox"
-                                          checked={selectedStudents.includes(student.id)}
-                                          onChange={() => toggleStudentSelection(student.id)}
-                                          className="w-4 h-4 text-brand-600 rounded focus:ring-brand-600"
-                                        />
+                                        {assigned ? (
+                                          <FontAwesomeIcon
+                                            icon={faCheck}
+                                            className="ml-0.5 h-3.5 w-3.5 text-emerald-600"
+                                            aria-label="Already assigned"
+                                          />
+                                        ) : (
+                                          <input
+                                            type="checkbox"
+                                            checked={selectedStudents.includes(student.id)}
+                                            onChange={() => toggleStudentSelection(student.id)}
+                                            className="w-4 h-4 text-brand-600 rounded focus:ring-brand-600"
+                                          />
+                                        )}
                                       </td>
                                       <td className="py-2.5 px-4 text-sm text-gray-800">
                                         <div className="flex items-center gap-2">
@@ -1794,6 +1927,11 @@ export default function FacultyScenariosClient() {
                                             size="xs"
                                           />
                                           {student.name}
+                                          {assigned && (
+                                            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                                              Assigned
+                                            </span>
+                                          )}
                                           {student.source === "added" && (
                                             <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-600">
                                               Added by you
@@ -1841,170 +1979,11 @@ export default function FacultyScenariosClient() {
       )}
 
       {/* Link Patient Modal */}
-      {showLinkPatientModal && linkPatientTarget && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-surface rounded-xl w-full max-w-3xl max-h-[85vh] overflow-hidden flex flex-col shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-hairline">
-            <div className="p-4 border-b border-hairline flex items-center justify-between bg-subtle">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-brand-600/10 rounded-lg flex items-center justify-center">
-                  <FontAwesomeIcon icon={faHospitalUser} className="text-brand-600 w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-gray-900">
-                    {linkPatientTarget.patient_id ? "Switch Patient" : "Link Patient"}
-                  </h3>
-                  <p className="text-sm text-gray-500 line-clamp-1">{linkPatientTarget.title}</p>
-                </div>
-              </div>
-              <button
-                onClick={closeLinkPatientModal}
-                className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
-              >
-                <FontAwesomeIcon icon={faTimes} className="w-5 h-5 text-gray-500" />
-              </button>
-            </div>
-
-            <div className="p-4 space-y-3 overflow-y-auto flex-1">
-              <p className="text-sm text-gray-500">
-                Every patient case needs a patient so students can chart vitals and EHR data for the
-                case — pick one below.
-              </p>
-
-              {linkPatientSelected && (
-                <div className="p-3 bg-teal-50 border border-teal-200 rounded-xl flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-teal-100 rounded-full flex items-center justify-center text-teal-700">
-                      <FontAwesomeIcon icon={faHospitalUser} className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-gray-800">
-                        {linkPatientSelected.name}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        {linkPatientSelected.diagnosis} · {linkPatientSelected.mimic_id}
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setLinkPatientId("")}
-                    className="text-xs text-teal-700 hover:text-teal-800 font-medium"
-                  >
-                    Clear
-                  </button>
-                </div>
-              )}
-
-              <div className="border border-gray-200 rounded-xl overflow-hidden">
-                <div className="p-3 border-b border-gray-200 bg-subtle">
-                  <div className="relative">
-                    <FontAwesomeIcon
-                      icon={faSearch}
-                      className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500"
-                    />
-                    <input
-                      type="text"
-                      value={linkPatientSearchQuery}
-                      onChange={(e) => setLinkPatientSearchQuery(e.target.value)}
-                      placeholder="Search patients by name, diagnosis, MIMIC ID, or room..."
-                      className={inputClassName + " pl-10"}
-                    />
-                  </div>
-                </div>
-                <div className="max-h-[260px] overflow-y-auto custom-scrollbar">
-                  {loadingPatients ? (
-                    <div className="p-8 text-center">
-                      <EcgLoader size="md" className="text-brand-600" />
-                      <p className="text-sm text-gray-500 mt-2">Loading patients...</p>
-                    </div>
-                  ) : linkModalFilteredPatients.length === 0 ? (
-                    <div className="p-6 text-center text-gray-500 text-sm">
-                      {linkPatientSearchQuery
-                        ? "No patients match your search."
-                        : "No MIMIC-IV patients available."}
-                    </div>
-                  ) : (
-                    <table className="w-full">
-                      <thead className="bg-gray-50 sticky top-0">
-                        <tr>
-                          <th className="text-left py-2.5 px-4 text-xs font-semibold text-gray-600">
-                            Patient
-                          </th>
-                          <th className="text-left py-2.5 px-4 text-xs font-semibold text-gray-600">
-                            Diagnosis
-                          </th>
-                          <th className="text-left py-2.5 px-4 text-xs font-semibold text-gray-600">
-                            Room
-                          </th>
-                          <th className="text-left py-2.5 px-4 text-xs font-semibold text-gray-600">
-                            MIMIC ID
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100">
-                        {linkModalFilteredPatients.map((patient) => (
-                          <tr
-                            key={patient.id}
-                            onClick={() => setLinkPatientId(patient.id)}
-                            className={`cursor-pointer transition-colors ${
-                              linkPatientId === patient.id
-                                ? "bg-brand-600/5 hover:bg-brand-600/10"
-                                : "hover:bg-gray-50"
-                            }`}
-                          >
-                            <td className="py-2.5 px-4">
-                              <div className="flex items-center gap-2">
-                                <div className="w-7 h-7 bg-brand-600/10 rounded-full flex items-center justify-center text-brand-600 text-xs font-semibold">
-                                  {patient.name.charAt(0)}
-                                </div>
-                                <div>
-                                  <p className="text-sm font-medium text-gray-800">
-                                    {patient.name}
-                                  </p>
-                                  <p className="text-xs text-gray-500">
-                                    {patient.age}yo {patient.gender}
-                                  </p>
-                                </div>
-                              </div>
-                            </td>
-                            <td className="py-2.5 px-4 text-sm text-gray-600">
-                              {patient.diagnosis}
-                            </td>
-                            <td className="py-2.5 px-4 text-sm text-gray-600">
-                              {patient.room_number}
-                            </td>
-                            <td className="py-2.5 px-4">
-                              <span className="text-xs font-mono text-gray-500">
-                                {patient.mimic_id}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="p-4 border-t border-hairline bg-subtle flex justify-end gap-3">
-              <button
-                onClick={closeLinkPatientModal}
-                className="px-5 py-2.5 bg-surface border border-gray-200 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-all"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSavePatientLink}
-                disabled={savingPatientLink || !linkPatientId}
-                className="px-5 py-2.5 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
-              >
-                {savingPatientLink && <EcgLoader />}
-                Save
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
+}
+
+/** "Oct 16, 2026": a case is performed on a day, so no time. */
+function performDate(iso: string | null): string {
+  return iso ? new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "";
 }

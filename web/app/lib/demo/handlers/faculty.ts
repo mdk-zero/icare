@@ -25,6 +25,7 @@ import {
 import {
   byName,
   canSeeStudent,
+  manageableSections,
   memberInfo,
   ownTeams,
   sectionName,
@@ -367,7 +368,7 @@ route("POST", "/api/faculty/students", (ctx) => {
   if (!email) return json({ error: "Student email is required" }, 400);
   if (!sectionId) return json({ error: "Section is required" }, 400);
   if (!validEmail(email)) return json({ error: "Invalid email format" }, 400);
-  if (!visibleSections(db, ctx.role, ctx.viewer.id).some((s) => s.id === sectionId)) {
+  if (!manageableSections(db, ctx.role, ctx.viewer.id).some((s) => s.id === sectionId)) {
     return json({ error: "You can only add students to your own sections" }, 403);
   }
   if (db.users.some((u) => u.email === email)) return json({ error: "A user with this email already exists" }, 409);
@@ -396,6 +397,7 @@ route("POST", "/api/faculty/students", (ctx) => {
   return json(
     {
       student: { id: student.id, email, name, role: "student", section_id: sectionId },
+      user: { id: student.id, email },
       password: "Demo-Pass-2026",
       warning: "This is a demo: no invitation email was sent. In the real app the student gets this temporary password by email.",
     },
@@ -570,13 +572,17 @@ route("GET", "/api/faculty/students/:id/reflections", (ctx) => {
 route("GET", "/api/faculty/teams", (ctx) => {
   if (!staffOnly(ctx)) return forbidden();
   const { db } = ctx;
-  const sections = visibleSections(db, ctx.role, ctx.viewer.id);
+  const sections = manageableSections(db, ctx.role, ctx.viewer.id);
   const teams = ownTeams(db, ctx.role, ctx.viewer.id).filter((t) => sections.some((s) => s.id === t.section_id));
-  const students = myStudents(ctx);
-  const sectionStudents =
-    ctx.role === "faculty"
-      ? students
-      : db.users.filter((u) => u.role === "student" && sections.some((s) => s.id === u.section_id)).sort(byName);
+  const ownTeamIds = new Set(teams.map((t) => t.id));
+  const sectionStudents = db.users
+    .filter(
+      (u) =>
+        u.role === "student" &&
+        sections.some((s) => s.id === u.section_id) &&
+        (ctx.role !== "faculty" || !u.team_id || ownTeamIds.has(u.team_id)),
+    )
+    .sort(byName);
   return {
     enabled: true,
     faculty_enabled: true,
@@ -641,8 +647,8 @@ route("PUT", "/api/faculty/teams/members", (ctx) => {
   const teamId: string | null = typeof body?.team_id === "string" ? body.team_id : null;
   const target = db.teams.find((t) => t.id === teamId);
 
-  if (ctx.role === "faculty") {
-    const reason = typeof body?.reason === "string" ? body.reason.trim() : "";
+  if (ctx.role === "faculty" && typeof body?.reason === "string") {
+    const reason = body.reason.trim();
     if (!teamId || !target) return json({ error: "Choose the group to move them to" }, 400);
     if (reason.length < 10) return json({ error: "Give a reason of at least 10 characters" }, 400);
     const from = db.teams.find((t) => t.id === student.team_id);
@@ -669,6 +675,14 @@ route("PUT", "/api/faculty/teams/members", (ctx) => {
   }
 
   if (teamId && !target) return notFound("Team not found");
+  if (ctx.role === "faculty") {
+    const from = db.teams.find((t) => t.id === student.team_id);
+    if (from && from.faculty_id !== viewer.id) return json({ error: "That student is in another instructor's group" }, 403);
+    if (target && target.faculty_id !== viewer.id) return json({ error: "You can only move students into groups you supervise" }, 403);
+    if (!manageableSections(db, ctx.role, viewer.id).some((x) => x.id === student.section_id)) {
+      return json({ error: "Student not in your sections" }, 403);
+    }
+  }
   if (target && target.section_id !== student.section_id) return json({ error: "The team is in a different section" }, 400);
   student.team_id = target?.id ?? null;
   audit(db, viewer, "team.move_member", "teams", {
@@ -678,24 +692,36 @@ route("PUT", "/api/faculty/teams/members", (ctx) => {
 });
 
 route("POST", "/api/faculty/teams", (ctx) => {
-  if (ctx.role !== "admin") return forbidden();
+  if (!staffOnly(ctx)) return forbidden();
   const { db, body } = ctx;
   const name = typeof body?.name === "string" ? body.name.trim() : "";
   if (!name || name.length > 60) return json({ error: "Team name must be 1–60 characters" }, 400);
-  if (!db.sections.some((s) => s.id === body?.section_id)) return json({ error: "Not one of your sections" }, 403);
+  if (!manageableSections(db, ctx.role, ctx.viewer.id).some((s) => s.id === body?.section_id)) {
+    return json({ error: "Not one of your sections" }, 403);
+  }
   if (db.teams.some((t) => t.section_id === body.section_id && t.name === name)) {
     return json({ error: "That section already has a team with this name" }, 409);
   }
-  const team = { id: newId(), section_id: body.section_id, name, faculty_id: null, created_at: new Date().toISOString() };
+  const team = {
+    id: newId(),
+    section_id: body.section_id,
+    name,
+    // An instructor supervises the groups they make.
+    faculty_id: ctx.role === "faculty" ? ctx.viewer.id : null,
+    created_at: new Date().toISOString(),
+  };
   db.teams.push(team);
   return json({ team: { id: team.id, section_id: team.section_id, name, members: [] } }, 201);
 });
 
 route("PATCH", "/api/faculty/teams/:id", (ctx) => {
-  if (ctx.role !== "admin") return forbidden();
+  if (!staffOnly(ctx)) return forbidden();
   const { db, body, params } = ctx;
   const team = db.teams.find((t) => t.id === params.id);
-  if (!team) return notFound("Team not found");
+  if (!team || (ctx.role === "faculty" && team.faculty_id !== ctx.viewer.id)) return notFound("Team not found");
+  if (ctx.role === "faculty" && "faculty_id" in (body ?? {})) {
+    return json({ error: "Only your dean can change who supervises a group" }, 403);
+  }
   if (typeof body?.name === "string") {
     const name = body.name.trim();
     if (!name || name.length > 60) return json({ error: "Team name must be 1–60 characters" }, 400);
@@ -712,28 +738,34 @@ route("PATCH", "/api/faculty/teams/:id", (ctx) => {
 });
 
 route("DELETE", "/api/faculty/teams/:id", (ctx) => {
-  if (ctx.role !== "admin") return forbidden();
+  if (!staffOnly(ctx)) return forbidden();
   const { db, params } = ctx;
-  if (!db.teams.some((t) => t.id === params.id)) return notFound("Team not found");
+  const team = db.teams.find((t) => t.id === params.id);
+  if (!team || (ctx.role === "faculty" && team.faculty_id !== ctx.viewer.id)) return notFound("Team not found");
   db.teams = db.teams.filter((t) => t.id !== params.id);
   for (const u of db.users) if (u.team_id === params.id) u.team_id = null;
   return { ok: true };
 });
 
 route("POST", "/api/faculty/teams/auto", (ctx) => {
-  if (ctx.role !== "admin") return forbidden();
+  if (!staffOnly(ctx)) return forbidden();
   const { db, body } = ctx;
   const sectionId = body?.section_id;
   const count = Math.max(1, Math.min(20, Number(body?.count) || 2));
-  if (!db.sections.some((s) => s.id === sectionId)) return json({ error: "Not one of your sections" }, 403);
+  if (!manageableSections(db, ctx.role, ctx.viewer.id).some((s) => s.id === sectionId)) {
+    return json({ error: "Not one of your sections" }, 403);
+  }
   const existing = db.teams.filter((t) => t.section_id === sectionId).sort((a, b) => a.name.localeCompare(b.name));
+  if (ctx.role === "faculty" && existing.some((t) => t.faculty_id !== ctx.viewer.id)) {
+    return json({ error: "Another instructor has groups in this section, so it can only be regrouped by your dean" }, 403);
+  }
   const teams = [...existing];
   for (let i = existing.length; i < count; i++) {
     const team = {
       id: newId(),
       section_id: sectionId,
       name: `Group ${String.fromCharCode(65 + i)}`,
-      faculty_id: null,
+      faculty_id: ctx.role === "faculty" ? ctx.viewer.id : null,
       created_at: new Date().toISOString(),
     };
     db.teams.push(team);
@@ -823,6 +855,26 @@ function canSeeScenario(ctx: Ctx, scenarioId: string) {
   return assigned.length === 0 || assigned.some((a) => mine.has(a.student_id));
 }
 
+/** Who has a case, by group, as lib/assigned-groups.ts reports it. */
+function caseGroupsOf(ctx: Ctx, rows: DemoAssignment[]) {
+  const groups = new Map<string, { key: string; label: string; count: number; student_ids: string[]; deadline: string | null | "mixed"; done: number }>();
+  for (const a of rows) {
+    const u = userById(ctx.db, a.student_id);
+    const team = ctx.db.teams.find((t) => t.id === u?.team_id);
+    const key = team ? `team:${team.id}` : `section:${u?.section_id ?? "none"}`;
+    const label = team ? (teamLabel(ctx.db, team.id) ?? team.name) : (sectionName(ctx.db, u?.section_id) ?? "No section");
+    const done = a.status === "completed" ? 1 : 0;
+    const g = groups.get(key);
+    if (g) {
+      g.count += 1;
+      g.done += done;
+      g.student_ids.push(a.student_id);
+      if (g.deadline !== a.deadline) g.deadline = "mixed";
+    } else groups.set(key, { key, label, count: 1, student_ids: [a.student_id], deadline: a.deadline, done });
+  }
+  return [...groups.values()].sort((x, y) => x.label.localeCompare(y.label, undefined, { numeric: true }));
+}
+
 function scenarioOut(ctx: Ctx, s: DemoScenario) {
   const mine = ctx.role === "admin" ? null : myStudentIds(ctx);
   const assigned = ctx.db.assignments.filter((a) => a.scenario_id === s.id && (!mine || mine.has(a.student_id)));
@@ -832,6 +884,15 @@ function scenarioOut(ctx: Ctx, s: DemoScenario) {
     patient_name: patient?.name ?? null,
     student_count: assigned.length,
     student_ids: [...new Set(assigned.map((a) => a.student_id))],
+    to_grade: assigned.filter((a) => a.status !== "completed").length,
+    assigned_groups: caseGroupsOf(ctx, assigned),
+    chapters: [
+      ...new Set(
+        ctx.db.tasks
+          .filter((t) => t.scenario_id === s.id && t.skill_id)
+          .map((t) => Number(String(t.skill_id).split("-")[0])),
+      ),
+    ].sort((a, b) => a - b),
   };
 }
 
@@ -920,7 +981,7 @@ route("PATCH", "/api/faculty/scenarios/:id", (ctx) => {
   const scenario = db.scenarios.find((s) => s.id === params.id);
   if (!scenario) return notFound("Patient case not found");
   if (!canSeeScenario(ctx, scenario.id)) return forbidden();
-  for (const key of ["title", "description", "category", "learning_objectives", "patient_id", "patient_case", "rubric", "is_ai_generated"] as const) {
+  for (const key of ["title", "description", "category", "learning_objectives", "patient_id", "patient_case", "rubric", "is_ai_generated", "offering_id"] as const) {
     if (body && key in body) (scenario as unknown as Record<string, unknown>)[key] = body[key];
   }
   scenario.updated_at = new Date().toISOString();
@@ -962,6 +1023,24 @@ route("POST", "/api/faculty/scenarios/:id/assign", (ctx) => {
   db.assignments.unshift(...created);
   audit(db, viewer, "scenario.assign", "scenarios", { message: `Assigned “${scenario.title}” to ${created.length} student(s)` }, scenario.id);
   return { assignments: created.map((a) => assignmentRow(db, a)) };
+});
+
+route("PATCH", "/api/faculty/scenarios/:id/assign", (ctx) => {
+  if (!staffOnly(ctx)) return forbidden();
+  const { db, body, params } = ctx;
+  const ids: string[] = Array.isArray(body?.student_ids) ? body.student_ids : [];
+  if (ids.length === 0) return json({ error: "Choose at least one student" }, 400);
+  const mine = myStudentIds(ctx);
+  if (ids.some((id) => !mine.has(id))) return forbidden();
+  const deadlineCheck = parseDeadline(body?.deadline);
+  if (!deadlineCheck.ok) return json({ error: deadlineCheck.error }, 400);
+  let updated = 0;
+  for (const a of db.assignments) {
+    if (a.scenario_id !== params.id || !ids.includes(a.student_id) || a.status === "completed") continue;
+    a.deadline = deadlineCheck.value as string;
+    updated += 1;
+  }
+  return { updated };
 });
 
 route("GET", "/api/faculty/scenarios/:id/skills", (ctx) => {

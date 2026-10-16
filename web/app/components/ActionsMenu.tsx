@@ -12,6 +12,9 @@ export type MenuAction = {
   onClick: () => void;
   /** Destructive items read red and sit below a divider. */
   danger?: boolean;
+  /** Shown but not clickable; the reason shows on hover. */
+  disabled?: boolean;
+  disabledReason?: string;
 };
 
 /**
@@ -119,27 +122,49 @@ export default function ActionsMenu({
               left: coords.left,
               transform: coords.flip ? "translate(-100%, -100%)" : "translateX(-100%)",
             }}
-            className="z-50 min-w-44 overflow-hidden rounded-xl border border-hairline bg-surface py-1 shadow-[0_8px_30px_rgba(0,0,0,0.12)]"
+            className="z-50 min-w-44 rounded-xl border border-hairline bg-surface py-1 shadow-[0_8px_30px_rgba(0,0,0,0.12)]"
           >
             {actions.map((action) => (
               <button
                 key={action.label}
                 type="button"
                 role="menuitem"
+                // Not the disabled attribute: a disabled button gets no hover,
+                // so its reason could never show.
+                aria-disabled={action.disabled || undefined}
+                aria-describedby={action.disabled && action.disabledReason ? `why-${action.label}` : undefined}
                 onClick={() => {
+                  if (action.disabled) return;
                   setOpen(false);
                   action.onClick();
                 }}
-                className={`group flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-sm transition-colors ${
-                  action.danger
-                    ? "border-t border-hairline text-rose-600 hover:bg-rose-50"
-                    : "text-gray-700 hover:bg-brand-600/5 hover:text-brand-700"
+                className={`group relative flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-sm transition-colors ${
+                  action.disabled
+                    ? "cursor-not-allowed text-gray-400"
+                    : action.danger
+                      ? "border-t border-hairline text-rose-600 hover:bg-rose-50"
+                      : "text-gray-700 hover:bg-brand-600/5 hover:text-brand-700"
                 }`}
               >
+                {action.disabled && action.disabledReason && (
+                  <span
+                    // Read once through aria-describedby, not again as part of the item's name.
+                    aria-hidden
+                    data-tooltip
+                    id={`why-${action.label}`}
+                    className="pointer-events-none absolute right-full top-1/2 z-10 mr-2 w-60 -translate-y-1/2 rounded-lg bg-gray-900 px-3 py-2 text-xs font-medium leading-snug text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
+                  >
+                    {action.disabledReason}
+                  </span>
+                )}
                 <FontAwesomeIcon
                   icon={action.icon}
                   className={`w-4 h-4 transition-colors ${
-                    action.danger ? "text-rose-500" : "text-gray-400 group-hover:text-brand-600"
+                    action.disabled
+                      ? "text-gray-300"
+                      : action.danger
+                        ? "text-rose-500"
+                        : "text-gray-400 group-hover:text-brand-600"
                   }`}
                 />
                 {action.label}
