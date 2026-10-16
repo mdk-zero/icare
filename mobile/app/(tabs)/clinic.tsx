@@ -1,4 +1,5 @@
 import React from "react";
+import { openCase } from "@/lib/open-case";
 import {
   ScrollView,
   View,
@@ -279,8 +280,7 @@ export default function ClinicScreen() {
 
   const openAssignment = React.useCallback(
     (assignment: WardAssignment) => {
-      if (assignment.patient_id) router.push(`/clinic/patient/${assignment.patient_id}`);
-      else router.push(`/clinic/assignment/${assignment.id}`);
+      openCase(router, assignment);
     },
     [router],
   );

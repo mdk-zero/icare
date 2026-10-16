@@ -1,5 +1,5 @@
 import React from 'react';
-import { ScrollView, View, Text, StyleSheet } from 'react-native';
+import { ActivityIndicator, ScrollView, View, Text, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Card, PrimaryButton } from '@/components/ui';
@@ -31,7 +31,8 @@ export function CaseStartGate({
   patientName?: string | null;
   room?: string | null;
   deadline?: string | null;
-  taskCount: number;
+  /** Null when not known yet. */
+  taskCount: number | null;
   starting: boolean;
   onStart: () => void;
 }) {
@@ -57,12 +58,14 @@ export function CaseStartGate({
             </Text>
           </View>
         ) : null}
-        <View style={styles.metaRow}>
-          <Ionicons name="list-outline" size={14} color={Palette.textSecondary} />
-          <Text style={styles.metaText}>
-            {taskCount} task{taskCount === 1 ? '' : 's'} to demonstrate
-          </Text>
-        </View>
+        {taskCount != null ? (
+          <View style={styles.metaRow}>
+            <Ionicons name="list-outline" size={14} color={Palette.textSecondary} />
+            <Text style={styles.metaText}>
+              {taskCount} task{taskCount === 1 ? '' : 's'} to demonstrate
+            </Text>
+          </View>
+        ) : null}
         {deadline ? (
           <View style={styles.metaRow}>
             <Ionicons name="time-outline" size={14} color={Palette.textSecondary} />
@@ -86,6 +89,23 @@ export function CaseStartGate({
       <PrimaryButton title="Start" size="lg" onPress={onStart} loading={starting} style={styles.start} />
       <PrimaryButton title="Not yet" variant="outline" onPress={() => router.back()} disabled={starting} />
     </ScrollView>
+  );
+}
+
+/**
+ * Shown while an unfinished case is still loading, so its tasks never flash
+ * on screen before the app knows whether the student has pressed Start.
+ */
+export function CaseOpening() {
+  const { Palette } = useTheme();
+  return (
+    <View
+      style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.md, backgroundColor: Palette.background }}
+      accessibilityLabel="Opening the patient case"
+    >
+      <ActivityIndicator color={Palette.primary} size="large" />
+      <Text style={{ fontSize: 14, color: Palette.textSecondary }}>Opening the patient case…</Text>
+    </View>
   );
 }
 

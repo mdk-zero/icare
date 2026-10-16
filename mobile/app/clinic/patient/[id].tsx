@@ -21,7 +21,7 @@ import {
 } from '@/lib/api';
 import { ClinicalTaskList, ClinicalTaskListSkeleton } from '@/components/ClinicalTaskList';
 import { AssistanceButton } from '@/components/AssistanceButton';
-import { CaseStartGate } from '@/components/CaseStartGate';
+import { CaseOpening, CaseStartGate } from '@/components/CaseStartGate';
 
 /** How often an open scenario re-checks for the instructor's grades. */
 const GRADE_POLL_MS = 8000;
@@ -88,8 +88,17 @@ function VitalsGrid({
 
 
 export default function PatientHubScreen() {
-  const { id } = useLocalSearchParams();
-  const patientId = id as string;
+  const params = useLocalSearchParams<{
+    id: string;
+    gate?: string;
+    assignment?: string;
+    title?: string;
+    due?: string;
+    tasks?: string;
+  }>();
+  const patientId = params.id;
+  // Opened from a list that knew the case hadn't started (lib/open-case):
+  // its Before you start screen shows at once, before anything loads.
   const { Palette, Accent, Shadow, Type } = useTheme();
   const styles = React.useMemo(() => createStyles(Palette, Accent, Shadow, Type), [Palette, Accent, Shadow, Type]);
 
@@ -136,7 +145,7 @@ export default function PatientHubScreen() {
   const isSubmitted = !isFinalized && Boolean(submittedAt);
   const isActive = isAssigned && !isFinalized && !isSubmitted;
   // Opens on the case's instructions until Start, then times the demonstration.
-  const clock = useCaseClock(taskResult?.assignment ?? null, isActive);
+  const clock = useCaseClock(taskResult?.assignment ?? null, isActive, params.assignment ?? null);
   const elapsed = clock.elapsed;
 
   // Grades land the moment the instructor saves them: while the screen is open
@@ -151,6 +160,22 @@ export default function PatientHubScreen() {
     }, [isAssigned, isFinalized, loadChart]),
   );
 
+
+  if (params.gate === '1' && !clock.started && !taskResult) {
+    return (
+      <CaseStartGate
+        title={assignment?.scenario_title ?? params.title ?? 'Patient case'}
+        patientName={patient?.name}
+        room={patient?.room_number}
+        deadline={assignment?.deadline ?? (params.due || null)}
+        taskCount={params.tasks ? Number(params.tasks) : null}
+        starting={clock.starting}
+        onStart={clock.start}
+      />
+    );
+  }
+
+  if (params.gate === 'wait' && !taskResult && !chartError && !error) return <CaseOpening />;
 
   if (loading && !data) {
     return (
@@ -197,6 +222,10 @@ export default function PatientHubScreen() {
       </View>
     );
   }
+
+  // Until the case's tasks load we can't tell whether it has started: show
+  // nothing of it yet rather than the tasks the Start screen should come before.
+  if (isAssigned && !isFinalized && !taskResult && !chartError) return <CaseOpening />;
 
   if (isAssigned && clock.needsStart && taskResult) {
     return (
@@ -322,30 +351,35 @@ export default function PatientHubScreen() {
             </Card>
           ) : null}
 
-          <Text style={styles.sectionTitle}>Latest Vitals</Text>
-          <Card style={styles.blockCard}>
-            {vitals ? (
-              <>
-                <VitalsGrid vitals={vitals} styles={styles} />
-                {vitals.is_anomaly ? (
-                  <View style={styles.anomalyAlert}>
-                    <Ionicons name="warning" size={14} color={Accent.red.fg} />
-                    <View style={styles.anomalyBody}>
-                      <Text style={styles.anomalyText}>
-                        {vitals.anomaly_reasons?.[0]?.message ?? 'Anomaly detected'}
-                      </Text>
-                      {vitals.anomaly_reasons?.[0]?.recommendation ? (
-                        <Text style={styles.anomalyAdvice}>{vitals.anomaly_reasons[0].recommendation}</Text>
-                      ) : null}
+          {/* The patient's vitals help while doing the case; a graded case doesn't need them. */}
+          {!isFinalized ? (
+            <>
+            <Text style={styles.sectionTitle}>Latest Vitals</Text>
+            <Card style={styles.blockCard}>
+              {vitals ? (
+                <>
+                  <VitalsGrid vitals={vitals} styles={styles} />
+                  {vitals.is_anomaly ? (
+                    <View style={styles.anomalyAlert}>
+                      <Ionicons name="warning" size={14} color={Accent.red.fg} />
+                      <View style={styles.anomalyBody}>
+                        <Text style={styles.anomalyText}>
+                          {vitals.anomaly_reasons?.[0]?.message ?? 'Anomaly detected'}
+                        </Text>
+                        {vitals.anomaly_reasons?.[0]?.recommendation ? (
+                          <Text style={styles.anomalyAdvice}>{vitals.anomaly_reasons[0].recommendation}</Text>
+                        ) : null}
+                      </View>
                     </View>
-                  </View>
-                ) : null}
-                <Text style={styles.vitalsTime}>Recorded {formatTimestamp(vitals.recorded_at)}</Text>
-              </>
-            ) : (
-              <Text style={styles.emptyText}>No vitals recorded for this patient yet</Text>
-            )}
-          </Card>
+                  ) : null}
+                  <Text style={styles.vitalsTime}>Recorded {formatTimestamp(vitals.recorded_at)}</Text>
+                </>
+              ) : (
+                <Text style={styles.emptyText}>No vitals recorded for this patient yet</Text>
+              )}
+            </Card>
+            </>
+          ) : null}
 
           <Text style={[styles.sectionTitle, styles.sectionSpacer]}>Clinical Tasks</Text>
           <Card style={styles.blockCard}>

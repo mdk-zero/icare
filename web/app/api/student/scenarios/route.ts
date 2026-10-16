@@ -16,7 +16,8 @@ export async function GET() {
 
     const { data: assignments, error } = await supabase
       .from('scenario_assignments')
-      .select('id, scenario_id, student_id, assigned_at, deadline, status, required, score, completed_at, time_taken')
+      // '*' so a database without started_at (before 063) still answers.
+      .select('*')
       .eq('student_id', session.uid)
       .order('assigned_at', { ascending: false });
 
@@ -66,6 +67,8 @@ export async function GET() {
         score: a.score,
         completed_at: a.completed_at,
         time_taken: a.time_taken,
+        // When the student pressed Start (null: not yet); absent before 063.
+        ...('started_at' in a ? { started_at: a.started_at } : {}),
       };
     });
 
