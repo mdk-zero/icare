@@ -12,6 +12,23 @@
  */
 export type TaskRating = 'excellent' | 'satisfactory' | 'needs_practice';
 
+/**
+ * A Patient Case checklist row can also be marked Not Applicable: Taylor's is
+ * written for practice abroad, and some of its steps aren't done in the
+ * Philippines. An N/A row is left out of the score — it adds nothing to the
+ * points earned or to the points possible. Case presentations are rated on
+ * the three levels alone.
+ */
+export const NOT_APPLICABLE = 'not_applicable';
+
+/** What a scenario checklist row (a sub-task, or a task graded whole) can be marked. */
+export type ChecklistRating = TaskRating | typeof NOT_APPLICABLE;
+
+export const NOT_APPLICABLE_LABEL = 'N/A';
+
+export const NOT_APPLICABLE_RUBRIC =
+  "Not applicable: the step isn't done in Philippine practice. It counts toward neither the points earned nor the points possible.";
+
 export interface TaskRatingLevel {
   key: TaskRating;
   label: string;
@@ -73,6 +90,11 @@ export function isTaskRating(value: unknown): value is TaskRating {
   return typeof value === 'string' && LEVEL_BY_KEY.has(value as TaskRating);
 }
 
+/** A level or N/A: what a scenario checklist row accepts. */
+export function isChecklistRating(value: unknown): value is ChecklistRating {
+  return value === NOT_APPLICABLE || isTaskRating(value);
+}
+
 /**
  * The six-level scale before migration 046, read as today's three. Stored
  * "not performed" meant the step or task wasn't done: it reads as absent.
@@ -86,17 +108,19 @@ const LEGACY_RATINGS: Record<string, TaskRating | 'absent'> = {
 };
 
 /**
- * A rating column's value as a level; null for an unrated row, 'absent' for a
- * row that means nothing was performed (a pre-046 "not performed", which 046
- * deletes). Lets the app read the database correctly before 046 is applied.
+ * A scenario rating column's value as a level or N/A; null for an unrated
+ * row, 'absent' for a row that means nothing was performed (a pre-046 "not
+ * performed", which 046 deletes). Lets the app read the database correctly
+ * before 046 is applied.
  */
-export function storedRating(value: unknown): TaskRating | null | 'absent' {
-  if (isTaskRating(value)) return value;
+export function storedRating(value: unknown): ChecklistRating | null | 'absent' {
+  if (isChecklistRating(value)) return value;
   if (typeof value === 'string' && value in LEGACY_RATINGS) return LEGACY_RATINGS[value];
   return null;
 }
 
-export function ratingLabel(rating: TaskRating): string {
+export function ratingLabel(rating: ChecklistRating): string {
+  if (rating === NOT_APPLICABLE) return NOT_APPLICABLE_LABEL;
   return LEVEL_BY_KEY.get(rating)?.label ?? rating;
 }
 
@@ -106,24 +130,27 @@ export function ratingPoints(rating: TaskRating): number {
 
 /** The part of a completion row that decides its credit. */
 export interface GradedCompletion {
-  rating: TaskRating | null;
+  rating: ChecklistRating | null;
 }
 
 /**
  * Credit for one task. No completion row earns nothing; a row without a
  * rating is a pre-rating check-off or an auto-completed task faculty have not
- * rated, and keeps the full credit it always had.
+ * rated, and keeps the full credit it always had. Null for a task rated N/A,
+ * which is out of the score.
  */
-export function completionCredit(completion: GradedCompletion | undefined): number {
+export function completionCredit(completion: GradedCompletion | undefined): number | null {
   if (!completion) return 0;
   if (completion.rating === null) return 1;
+  if (completion.rating === NOT_APPLICABLE) return null;
   return LEVEL_BY_KEY.get(completion.rating)?.credit ?? 0;
 }
 
 /**
- * Whether a completion row means the task was done. Every level on the scale
- * is a performance, so any row is — except a "not performed" left from before
- * migration 046, which was a row too. Takes raw rows as well as parsed ones.
+ * Whether a completion row means the task is done. Every level on the scale
+ * is a performance, and an N/A row leaves nothing to do, so any row is —
+ * except a "not performed" left from before migration 046, which was a row
+ * too. Takes raw rows as well as parsed ones.
  */
 export function isPerformed(completion: { rating?: unknown } | undefined): boolean {
   return Boolean(completion) && storedRating(completion!.rating) !== 'absent';
@@ -133,25 +160,31 @@ export function isPerformed(completion: { rating?: unknown } | undefined): boole
 export interface StepGrades {
   /** How many sub-tasks the task has. */
   total: number;
-  /** The levels of the sub-tasks that are rated; the rest earn nothing. */
-  ratings: readonly TaskRating[];
+  /** The marks of the sub-tasks that are rated; the rest earn nothing. */
+  ratings: readonly ChecklistRating[];
 }
 
 /**
  * Credit for one task. Once any of its sub-tasks is rated, the task earns the
- * average of its sub-tasks' credit, an unrated one counting as zero. Until
- * then it scores as a whole, from its completion row.
+ * average of its applicable sub-tasks' credit, an unrated one counting as
+ * zero and an N/A one not counting at all. Until then it scores as a whole,
+ * from its completion row. Null when nothing on the task applies — every
+ * sub-task N/A, or the task rated N/A whole — so it's out of the score.
  */
-export function taskCredit(completion: GradedCompletion | undefined, steps?: StepGrades): number {
+export function taskCredit(completion: GradedCompletion | undefined, steps?: StepGrades): number | null {
   if (steps && steps.total > 0 && steps.ratings.length > 0) {
     let earned = 0;
-    for (const rating of steps.ratings) earned += LEVEL_BY_KEY.get(rating)?.credit ?? 0;
-    return Math.min(1, earned / steps.total);
+    let applicable = steps.total;
+    for (const rating of steps.ratings) {
+      if (rating === NOT_APPLICABLE) applicable -= 1;
+      else earned += LEVEL_BY_KEY.get(rating)?.credit ?? 0;
+    }
+    return applicable > 0 ? Math.min(1, earned / applicable) : null;
   }
   return completionCredit(completion);
 }
 
-/** Weighted 0–100 score across a scenario's tasks. */
+/** Weighted 0–100 score across a scenario's tasks; an N/A task carries no weight. */
 export function gradedScore(
   tasks: readonly { id: string; points: number | null }[],
   completionByTask: ReadonlyMap<string, GradedCompletion>,
@@ -160,11 +193,71 @@ export function gradedScore(
   let total = 0;
   let earned = 0;
   for (const task of tasks) {
+    const credit = taskCredit(completionByTask.get(task.id), stepsByTask?.get(task.id));
+    if (credit === null) continue;
     const points = task.points ?? 0;
     total += points;
-    earned += points * taskCredit(completionByTask.get(task.id), stepsByTask?.get(task.id));
+    earned += points * credit;
   }
   return total > 0 ? Math.round((earned / total) * 100) : 0;
+}
+
+/**
+ * The patient case grade scale: the checklist is worth 37.5% at its floor, so
+ * a raw share becomes a percentage between 37.5 and 100.
+ */
+export const GRADE_FLOOR = 37.5;
+export const GRADE_SCALE = 62.5;
+
+/**
+ * A raw score as a percentage: `raw / total * 62.5 + 37.5`, read left to
+ * right, not simplified into any other grouping, kept to one decimal (never
+ * rounded off to a whole number). Zero with nothing on offer.
+ */
+export function scaledGrade(raw: number, total: number): number {
+  if (total <= 0) return 0;
+  return Math.round(((raw / total) * GRADE_SCALE + GRADE_FLOOR) * 10) / 10;
+}
+
+/**
+ * One skill's checklist points: every row scores its level's points out of
+ * MAX_RATING_POINTS, so a skill's maximum is its number of rows times three.
+ * A task with no sub-tasks counts as a single row. An N/A row is on offer to
+ * no one: it adds to neither side, and a task with nothing that applies is
+ * zero out of zero.
+ */
+export function taskRawPoints(
+  completion: GradedCompletion | undefined,
+  steps?: StepGrades,
+): { earned: number; max: number } {
+  const credit = taskCredit(completion, steps);
+  if (credit === null) return { earned: 0, max: 0 };
+  const stepRated = steps && steps.total > 0 && steps.ratings.length > 0;
+  const notApplicable = stepRated ? steps.ratings.filter((r) => r === NOT_APPLICABLE).length : 0;
+  const rows = (steps && steps.total > 0 ? steps.total : 1) - notApplicable;
+  const max = rows * MAX_RATING_POINTS;
+  return { earned: credit * max, max };
+}
+
+/**
+ * The whole patient case's grade: every checklist row counts the same, whatever
+ * its skill's `points` weight is, so it is the overall checklist raw score over
+ * every row on offer, scaled to a percentage. Shared by the server that locks the
+ * grade in and the sheet that projects it, so the two can never disagree.
+ */
+export function scenarioScore(
+  tasks: readonly { id: string }[],
+  completionByTask: ReadonlyMap<string, GradedCompletion>,
+  stepsByTask?: ReadonlyMap<string, StepGrades>,
+): number {
+  let earned = 0;
+  let total = 0;
+  for (const task of tasks) {
+    const raw = taskRawPoints(completionByTask.get(task.id), stepsByTask?.get(task.id));
+    earned += raw.earned;
+    total += raw.max;
+  }
+  return scaledGrade(earned, total);
 }
 
 /** Each band starts halfway between two levels' credits (3 / 2 / 1 points: 100 / 67 / 33). */
@@ -183,6 +276,11 @@ export function ratingForCredit(credit: number): TaskRating {
   return 'needs_practice';
 }
 
+/** The level a task sums up to from its taskCredit: N/A when it's out of the score. */
+export function taskLevelForCredit(credit: number | null): ChecklistRating {
+  return credit === null ? NOT_APPLICABLE : ratingForCredit(credit);
+}
+
 
 /**
  * The sub-task ratings a task ends up with after `changes` (step id → level,
@@ -194,10 +292,10 @@ export function ratingForCredit(credit: number): TaskRating {
  */
 export function resolveStepRatings(
   stepIds: readonly string[],
-  current: ReadonlyMap<string, TaskRating>,
-  wholeTaskLevel: TaskRating | null,
-  changes: ReadonlyMap<string, TaskRating | null>,
-): (TaskRating | null)[] {
+  current: ReadonlyMap<string, ChecklistRating>,
+  wholeTaskLevel: ChecklistRating | null,
+  changes: ReadonlyMap<string, ChecklistRating | null>,
+): (ChecklistRating | null)[] {
   const implied = current.size === 0 ? wholeTaskLevel : null;
   return stepIds.map((id) => {
     if (changes.has(id)) return changes.get(id) ?? null;
@@ -210,7 +308,7 @@ export function resolveStepRatings(
  * rating, or full credit for a completion nobody rated. Null when there is no
  * completion, which earns nothing.
  */
-export function wholeTaskLevel(completion: GradedCompletion | undefined): TaskRating | null {
+export function wholeTaskLevel(completion: GradedCompletion | undefined): ChecklistRating | null {
   if (!completion) return null;
   return completion.rating ?? 'excellent';
 }

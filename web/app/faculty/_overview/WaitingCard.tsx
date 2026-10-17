@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faCircleCheck, faClipboardCheck, faFlask, faListCheck } from "@fortawesome/free-solid-svg-icons";
+import { faCircleCheck, faClipboardCheck, faFlask, faHandHoldingMedical, faListCheck } from "@fortawesome/free-solid-svg-icons";
 import { CardLabel } from "../../components/Card";
 import type { FacultyOverview } from "../../lib/api";
 import { dueIn, plural, timeAgo } from "./format";
@@ -71,7 +71,10 @@ export default function WaitingCard({
             {dueSoon.map((item) => (
               <li key={`${item.kind}-${item.id}`} className="flex items-center gap-2.5">
                 <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-slate-100 text-slate-500">
-                  <FontAwesomeIcon icon={item.kind === "scenario" ? faFlask : faListCheck} className="h-3.5 w-3.5" />
+                  <FontAwesomeIcon
+                    icon={item.kind === "scenario" ? faFlask : item.kind === "return_demo" ? faHandHoldingMedical : faListCheck}
+                    className="h-3.5 w-3.5"
+                  />
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[13px] font-medium text-slate-900">{item.title}</span>

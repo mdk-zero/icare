@@ -2,12 +2,13 @@ import type { MlEvent } from './ml';
 import { NDJSON, readNdjson } from './ndjson';
 import { cachedFetch, clearRequestCache } from './request-cache';
 import { recordRequest } from './telemetry';
-import { resolveRubric, type Rubric, type TaskRating } from './task-ratings';
+import { resolveRubric, type ChecklistRating, type Rubric, type TaskRating } from './task-ratings';
 import { reportNetworkFailure, reportNetworkSuccess } from './connectivity';
 import { endDemo, isDemo } from './demo/session';
 import type { ItemProgress, OfferingSummary, RequirementInput, RequirementRow, TermStatus } from './course-progress';
 import type { GradingSplit } from './course-grading';
 import type { ActivityKind, AttendanceRow, AttendanceTally } from './attendance';
+import type { ScenarioKind } from './scenario-kind';
 
 export interface User {
   id: string;
@@ -1110,7 +1111,7 @@ export interface FacultyOverview {
     total: number;
     items: { assignment_id: string; student_id: string; student_name: string; scenario_title: string; submitted_at: string }[];
   };
-  due_soon: { kind: 'scenario' | 'quiz'; id: string; title: string; deadline: string; open: number }[];
+  due_soon: { kind: 'scenario' | 'return_demo' | 'quiz'; id: string; title: string; deadline: string; open: number }[];
   overdue_assignments: number;
   students_behind: number;
   cohort_avg_recent: number | null;
@@ -1124,6 +1125,8 @@ export interface CreateStudentResponse {
     email: string;
     name: string;
     role: string;
+    section_id?: string | null;
+    team_id?: string | null;
   };
   password?: string;
   warning?: string;
@@ -1186,6 +1189,8 @@ export interface ScenarioAssignment {
   id: string;
   scenario_id: string;
   scenario_title: string;
+  /** Patient Case or Return Demonstration (migration 072). */
+  kind?: ScenarioKind;
   student_id: string;
   student_name: string;
   student_picture_url?: string | null;
@@ -2221,6 +2226,154 @@ export async function deleteScenario(id: string): Promise<boolean> {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Return Demonstrations (migration 072): Taylor's skill checklists, no patient
+// ---------------------------------------------------------------------------
+
+export interface ReturnDemoSummary {
+  id: string;
+  title: string;
+  description: string;
+  created_by: string | null;
+  /** The course offering it was made for; null for none. */
+  offering_id: string | null;
+  created_at: string;
+  /** Its skills in checklist order: the skill number and the task's title. */
+  skills: { id: string; title: string }[];
+  /** Your students given it, and how many of them are graded. */
+  student_count: number;
+  graded_count: number;
+  /** You made it (or are an admin), so may assign, edit or delete it. */
+  can_edit?: boolean;
+}
+
+export interface ReturnDemoTask {
+  id: string;
+  skill_id: string | null;
+  title: string;
+  steps: number;
+  /** The stored checklist, in order; an edit can't change a kept skill's variant. */
+  step_titles?: string[];
+  /** A student has a grade on it, so it can't be removed. */
+  graded: boolean;
+}
+
+export interface ReturnDemoDetail extends ReturnDemoSummary {
+  tasks: ReturnDemoTask[];
+}
+
+export interface ReturnDemoInput {
+  title: string;
+  description: string;
+  offering_id: string | null;
+  skills: SkillSelection[];
+}
+
+/** An error message from a failed write, or a fallback. */
+async function errorOf(res: Response, fallback: string): Promise<string> {
+  try {
+    const json = (await res.json()) as { error?: string };
+    return json.error ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+/** Every Return Demonstration you can see; `enabled` is false before migration 072. */
+export async function fetchReturnDemos(): Promise<{ returnDemos: ReturnDemoSummary[]; enabled: boolean } | null> {
+  try {
+    const res = await apiFetch('/api/faculty/return-demos', { credentials: 'include' });
+    const json = (await res.json()) as { return_demos?: ReturnDemoSummary[]; enabled?: boolean; error?: string };
+    if (!res.ok) {
+      console.error('fetchReturnDemos() failed', json.error);
+      return null;
+    }
+    return { returnDemos: json.return_demos ?? [], enabled: json.enabled !== false };
+  } catch (err) {
+    console.error('fetchReturnDemos() failed', err);
+    return null;
+  }
+}
+
+export async function fetchReturnDemo(id: string): Promise<ReturnDemoDetail | null> {
+  try {
+    const res = await apiFetch(`/api/faculty/return-demos/${id}`, { credentials: 'include' });
+    const json = (await res.json()) as { return_demo?: ReturnDemoDetail; error?: string };
+    if (!res.ok || !json.return_demo) {
+      console.error('fetchReturnDemo() failed', json.error);
+      return null;
+    }
+    return json.return_demo;
+  } catch (err) {
+    console.error('fetchReturnDemo() failed', err);
+    return null;
+  }
+}
+
+export async function createReturnDemo(input: ReturnDemoInput): Promise<{ id?: string; error?: string }> {
+  try {
+    const res = await apiFetch('/api/faculty/return-demos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(input),
+    });
+    if (!res.ok) return { error: await errorOf(res, 'Unable to create the Return Demonstration') };
+    const json = (await res.json()) as { return_demo?: { id: string } };
+    return { id: json.return_demo?.id };
+  } catch (err) {
+    console.error('createReturnDemo() failed', err);
+    return { error: 'Unable to create the Return Demonstration' };
+  }
+}
+
+export async function updateReturnDemo(id: string, patch: Partial<ReturnDemoInput>): Promise<{ error?: string }> {
+  try {
+    const res = await apiFetch(`/api/faculty/return-demos/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(patch),
+    });
+    if (!res.ok) return { error: await errorOf(res, 'Unable to update the Return Demonstration') };
+    return {};
+  } catch (err) {
+    console.error('updateReturnDemo() failed', err);
+    return { error: 'Unable to update the Return Demonstration' };
+  }
+}
+
+export async function deleteReturnDemo(id: string): Promise<{ error?: string }> {
+  try {
+    const res = await apiFetch(`/api/faculty/return-demos/${id}`, { method: 'DELETE', credentials: 'include' });
+    if (!res.ok) return { error: await errorOf(res, 'Unable to delete the Return Demonstration') };
+    return {};
+  } catch (err) {
+    console.error('deleteReturnDemo() failed', err);
+    return { error: 'Unable to delete the Return Demonstration' };
+  }
+}
+
+export async function assignReturnDemo(
+  id: string,
+  input: { team_ids: string[]; student_ids: string[]; deadline: string; required: boolean },
+): Promise<{ assigned?: number; skipped?: number; error?: string }> {
+  try {
+    const res = await apiFetch(`/api/faculty/return-demos/${id}/assign`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(input),
+    });
+    if (!res.ok) return { error: await errorOf(res, 'Unable to assign the Return Demonstration') };
+    const json = (await res.json()) as { assigned?: number; skipped?: number };
+    return { assigned: json.assigned ?? 0, skipped: json.skipped ?? 0 };
+  } catch (err) {
+    console.error('assignReturnDemo() failed', err);
+    return { error: 'Unable to assign the Return Demonstration' };
+  }
+}
+
 export async function fetchScenarioById(id: string): Promise<SimulationScenario | null> {
   try {
     const res = await apiFetch(`/api/scenarios/${id}`, {
@@ -2807,11 +2960,15 @@ export async function getClinicalDecisionSupport(patientCase: any): Promise<any 
   };
 }
 
-export async function fetchScenarioAssignments(scenarioId?: string): Promise<ScenarioAssignment[]> {
+/** Patient Cases by default; `kind` asks for Return Demonstrations, or both. */
+export async function fetchScenarioAssignments(
+  scenarioId?: string,
+  kind: ScenarioKind | 'all' = 'patient_case',
+): Promise<ScenarioAssignment[]> {
   try {
-    const url = scenarioId
-      ? `/api/faculty/scenarios/assignments?scenario_id=${encodeURIComponent(scenarioId)}`
-      : '/api/faculty/scenarios/assignments';
+    const params = new URLSearchParams({ kind });
+    if (scenarioId) params.set('scenario_id', scenarioId);
+    const url = `/api/faculty/scenarios/assignments?${params}`;
     const res = await apiFetch(url, { credentials: 'include' });
     const json = (await res.json()) as { assignments?: ScenarioAssignment[]; error?: string };
     if (!res.ok) {
@@ -2839,8 +2996,8 @@ export interface FacultyScenarioTask {
   is_completed: boolean;
   completed_via: 'system' | 'faculty' | null;
   completed_at: string | null;
-  /** Faculty's verbal rating; null when unrated. Students get it once finalized. */
-  rating: TaskRating | null;
+  /** Faculty's verbal rating, or N/A; null when unrated. Students get it once finalized. */
+  rating: ChecklistRating | null;
   remarks: string | null;
 }
 
@@ -2850,7 +3007,7 @@ export interface GradingTaskStep {
   title: string;
   /** The Taylor's checklist steps it condenses, e.g. "Skill 1-7, steps 12–15". */
   source: string;
-  rating: TaskRating | null;
+  rating: ChecklistRating | null;
 }
 
 /** A task on the faculty grading sheet: its completion state plus its sub-tasks. */
@@ -2898,7 +3055,7 @@ export async function fetchFacultyAssignmentTasks(assignmentId: string): Promise
 }
 
 type GradeSaveResult =
-  | { ok: true; score?: number; rating: TaskRating | null }
+  | { ok: true; score?: number; rating: ChecklistRating | null }
   | { ok: false; error: string };
 
 async function putTaskGrade(assignmentId: string, body: object, label: string): Promise<GradeSaveResult> {
@@ -2912,7 +3069,7 @@ async function putTaskGrade(assignmentId: string, body: object, label: string): 
     const json = (await res.json().catch(() => ({}))) as {
       error?: string;
       score?: number;
-      rating?: TaskRating | null;
+      rating?: ChecklistRating | null;
     };
     if (!res.ok) {
       console.error(`${label}() failed`, json.error);
@@ -2937,7 +3094,7 @@ async function putTaskGrade(assignmentId: string, body: object, label: string): 
 export async function saveTaskRating(
   assignmentId: string,
   taskId: string,
-  grade: { rating?: TaskRating | null; remarks?: string | null },
+  grade: { rating?: ChecklistRating | null; remarks?: string | null },
 ): Promise<GradeSaveResult> {
   return putTaskGrade(assignmentId, { task_id: taskId, ...grade }, 'saveTaskRating');
 }
@@ -2949,7 +3106,7 @@ export async function saveTaskRating(
 export async function saveStepRatings(
   assignmentId: string,
   taskId: string,
-  steps: { step_id: string; rating: TaskRating | null }[],
+  steps: { step_id: string; rating: ChecklistRating | null }[],
 ): Promise<GradeSaveResult> {
   return putTaskGrade(assignmentId, { task_id: taskId, steps }, 'saveStepRatings');
 }
@@ -3093,17 +3250,23 @@ export async function submitScenarioForReview(
 /** "" means unrecorded — the API stores null and mobile drops the honorific. */
 export type StudentSex = 'male' | 'female' | '';
 
+/**
+ * An instructor registers a student into one of the groups they supervise; the
+ * account goes into that group's section. The temporary password comes back
+ * too, with a `warning` when the invitation email didn't go out.
+ */
 export async function createFacultyStudent(
   name: string,
   email: string,
-  sectionId: string,
+  teamId: string,
   sex: StudentSex = '',
 ): Promise<{ data?: CreateStudentResponse; error?: string }> {
   try {
     const res = await apiFetch('/api/faculty/students', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, email, section_id: sectionId, sex }),
+      credentials: 'include',
+      body: JSON.stringify({ name, email, team_id: teamId, sex }),
     });
 
     const json = await res.json() as { student?: CreateStudentResponse['student']; password?: string; warning?: string; error?: string };
@@ -3754,7 +3917,7 @@ export interface CasePresentation {
   deadline: string | null;
   section_ids: string[];
   sections: { id: string; name: string }[];
-  /** The groups it was given to (074); empty for one given to whole sections. */
+  /** The groups it was given to (075); empty for one given to whole sections. */
   groups?: { id: string; name: string; section_name: string }[];
   /** The course it is for (070). */
   offering_id?: string | null;
@@ -3878,7 +4041,7 @@ export const createCasePresentation = (input: {
   deadline: string | null;
   /** Whole sections; with a course, those where the instructor has no group. */
   section_ids: string[];
-  /** Groups it goes to (074). */
+  /** Groups it goes to (075). */
   team_ids?: string[];
   /** Students added to the course by hand. */
   student_ids?: string[];
@@ -3940,7 +4103,7 @@ export interface LibraryMaterial {
   file_name: string | null;
   file_size: number | null;
   mime_type: string | null;
-  /** The course it is for (074); null for none. */
+  /** The course it is for (075); null for none. */
   offering_id?: string | null;
   target_sections: string[] | null;
   status: 'draft' | 'published';
@@ -3971,7 +4134,7 @@ export interface LibrarySuggestion {
 
 /** What the add/edit form sends; the content field is the one its kind needs. */
 export interface LibraryMaterialInput {
-  /** The course it is for (074); an instructor picks one of theirs. */
+  /** The course it is for (075); an instructor picks one of theirs. */
   offering_id?: string | null;
   skill_id: string;
   kind: LibraryKind;
@@ -3994,7 +4157,7 @@ export const fetchLibrary = () =>
     sections: Section[];
     materials: LibraryMaterial[];
     enabled: boolean;
-    /** False until migration 074 lets materials belong to a course. */
+    /** False until migration 075 lets materials belong to a course. */
     courses_ready?: boolean;
   }>('/api/faculty/library');
 
@@ -4168,6 +4331,8 @@ export interface CourseRequirement extends RequirementRow {
   label: string;
   /** The linked activity was deleted after the item was made. */
   removed: boolean;
+  /** A Return Demonstration's skills (072), for the Skills tab; empty on other items. */
+  skill_ids?: string[];
 }
 
 export interface CourseTermRef {

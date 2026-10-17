@@ -141,7 +141,7 @@ export default function LibraryClient() {
   );
   // Where a new material goes: the course's sections, or the instructor's own.
   const courseSections: Section[] = course ? course.sections.map((x) => ({ id: x.id, name: x.name })) : sections;
-  // Once materials carry a course (074), an instructor adds them to one.
+  // Once materials carry a course (075), an instructor adds them to one.
   const canAdd = data?.enabled !== false && !(courseKey === "none" && data?.coursesReady);
   const [search, setSearch] = useState("");
   const [picked, setPicked] = useState<string | null>(null);

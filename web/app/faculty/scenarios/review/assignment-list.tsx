@@ -33,6 +33,12 @@ const FILTERS: { key: Filter; label: string; title: string }[] = [
   { key: "all", label: "All", title: "Every patient case" },
 ];
 
+/** "Every Return Demonstration" when that is all the list holds (072), else the Patient Case wording. */
+const filterTitle = (f: (typeof FILTERS)[number], assignments: ScenarioAssignment[]) =>
+  f.key === "all" && assignments.length > 0 && assignments.every((a) => a.kind === "return_demo")
+    ? "Every Return Demonstration"
+    : f.title;
+
 /** Submitted and waiting for a grade — still Assigned, but the ones to grade first. */
 export function isSubmitted(a: ScenarioAssignment) {
   return Boolean(a.submitted_at) && a.status !== "completed";
@@ -129,7 +135,7 @@ export default function AssignmentList({
               role="tab"
               aria-selected={active}
               onClick={() => setFilter(f.key)}
-              title={f.title}
+              title={filterTitle(f, assignments)}
               className={`flex min-w-0 items-center justify-center gap-1 rounded-lg px-1.5 py-1.5 text-xs font-medium transition-all ${
                 active
                   ? "bg-surface text-gray-900 shadow-tile"
@@ -237,7 +243,7 @@ export function AssignmentFilterTabs({
   return (
     <div
       role="tablist"
-      aria-label="Filter patient cases"
+      aria-label={assignments.length > 0 && assignments.every((a) => a.kind === "return_demo") ? "Filter Return Demonstrations" : "Filter patient cases"}
       className="mb-4 inline-grid grid-cols-3 gap-1 rounded-xl border border-hairline bg-subtle p-1"
     >
       {FILTERS.map((f) => {
@@ -249,7 +255,7 @@ export function AssignmentFilterTabs({
             role="tab"
             aria-selected={active}
             onClick={() => onFilterChange(f.key)}
-            title={f.title}
+            title={filterTitle(f, assignments)}
             className={`flex min-w-[96px] items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
               active
                 ? "bg-surface text-gray-900 shadow-tile"

@@ -219,7 +219,7 @@ export function isMissingLibrary(error: { code?: string } | null | undefined): b
 }
 
 /** Notify the students a newly published material is for. Never fails the request. */
-/** A course offering's sections, by name (migration 074 files materials under courses). */
+/** A course offering's sections, by name (migration 075 files materials under courses). */
 export async function offeringSections(supabase: Supabase, offeringId: string): Promise<{ id: string; name: string }[]> {
   const { data: links } = await supabase.from('course_offering_sections').select('section_id').eq('offering_id', offeringId);
   const ids = (links ?? []).map((l) => l.section_id as string);

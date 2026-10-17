@@ -6,6 +6,7 @@
  */
 import type { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { scoreDescriptor } from '../task-ratings';
+import { ofKind, scenarioKinds } from '../scenario-kind';
 
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
 
@@ -102,7 +103,7 @@ export async function studentWork(
   const ids = [...studentIds];
 
   const [scenarios, cases, attempts] = await Promise.all([
-    supabase.from('scenario_assignments').select('student_id, status, score').in('student_id', ids),
+    supabase.from('scenario_assignments').select('student_id, scenario_id, status, score').in('student_id', ids),
     supabase.from('case_submissions').select('student_id, status, score').in('student_id', ids),
     supabase.from('assessment_attempts').select('student_id, score').eq('status', 'submitted').in('student_id', ids),
   ]);
@@ -115,7 +116,9 @@ export async function studentWork(
     if (!e) lists.set(id, (e = { scenario: [], assigned: 0, kase: [], quiz: [] }));
     return e;
   };
-  for (const a of scenarios.data ?? []) {
+  // The Patient Case figures leave Return Demonstrations (072) out.
+  const kinds = await scenarioKinds(supabase, [...new Set((scenarios.data ?? []).map((a) => a.scenario_id as string))]);
+  for (const a of ofKind(scenarios.data ?? [], kinds, 'patient_case', (row) => row.scenario_id as string)) {
     const e = entry(a.student_id as string);
     e.assigned += 1;
     if (a.status === 'completed' && a.score !== null) e.scenario.push(Number(a.score));

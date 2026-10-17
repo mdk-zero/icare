@@ -16,6 +16,7 @@
     "check:courses": "tsx scripts/check-course-progress.ts",
     "check:grading": "tsx scripts/check-course-grading.ts",
     "check:attendance": "TZ=Asia/Manila tsx scripts/check-attendance.ts",
+    "check:return-demos": "tsx scripts/check-return-demos.ts",
     "db:seed:basic-cases": "tsx scripts/seed-basic-cases.ts",
     "db:seed:scenario-quizzes": "tsx scripts/seed-scenario-quizzes.ts",
     "db:seed:student-history": "tsx scripts/seed-student-history.ts",

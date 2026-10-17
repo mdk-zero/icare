@@ -43,7 +43,7 @@ async function load(supabase: Supabase, session: Session, id: string) {
     const allowed = session.role === 'admin' && ownsFaculty(await getAdminScope(supabase, session.uid), material.created_by);
     if (!allowed) return { response: NextResponse.json({ error: 'You can only change materials you published' }, { status: 403 }) };
   }
-  // Its course (074); null for none, or before 074.
+  // Its course (075); null for none, or before 075.
   const offeringId = (await activityOfferings(supabase, 'library_materials', [id])).get(id) ?? null;
   return { material, offeringId };
 }

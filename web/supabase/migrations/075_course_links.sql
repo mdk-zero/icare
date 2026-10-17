@@ -1,5 +1,5 @@
 -- =================================================================
--- 074: Library materials belong to a course; case presentations go to groups.
+-- 075: Library materials belong to a course; case presentations go to groups.
 --
 -- 1. Library materials
 -- Like Patient Cases, Quizzes and Case Presentations (070), a material an
@@ -9,7 +9,7 @@
 -- instructor added to the course by hand (073).
 --
 -- offering_id is null for a material made for no course (a Dean's, or one
--- from before 074); it keeps the old rule: target_sections, or every
+-- from before 075); it keeps the old rule: target_sections, or every
 -- section when that is null.
 --
 -- Existing materials are linked once, from their maker: an instructor who

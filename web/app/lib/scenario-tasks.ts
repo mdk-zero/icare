@@ -1,12 +1,12 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
-  gradedScore,
   isPerformed,
-  ratingForCredit,
+  scenarioScore,
   storedRating,
   taskCredit,
+  taskLevelForCredit,
+  type ChecklistRating,
   type StepGrades,
-  type TaskRating,
 } from '@/app/lib/task-ratings';
 
 export type ScenarioTaskTrigger = 'vitals' | 'charting';
@@ -16,7 +16,7 @@ export interface TaskCompletionRow {
   task_id: string;
   completed_via: 'system' | 'faculty';
   completed_at: string;
-  rating: TaskRating | null;
+  rating: ChecklistRating | null;
   remarks: string | null;
 }
 
@@ -41,6 +41,9 @@ export function isOldRatingScale(error: { code?: string } | null): boolean {
 
 export const SCALE_NEEDS_MIGRATION =
   'The Excellent / Satisfactory / Needs Practice scale needs database migration 046 applied first.';
+
+/** Before migration 071 the same check constraints refuse an N/A. */
+export const NOT_APPLICABLE_NEEDS_MIGRATION = 'N/A needs database migration 071 applied first.';
 
 const BASE_COLUMNS = 'assignment_id, task_id, completed_via, completed_at';
 
@@ -176,7 +179,27 @@ export interface TaskStepRow {
 export interface StepRatingRow {
   assignment_id: string;
   step_id: string;
-  rating: TaskRating;
+  rating: ChecklistRating;
+}
+
+/**
+ * Each task's checklist steps as a student sees them, in order: the step's
+ * words, and its rating only on a task whose grade is released (the
+ * `released` task ids, the same rule the task's own rating follows).
+ */
+export function studentTaskSteps(
+  steps: readonly TaskStepRow[],
+  ratings: readonly StepRatingRow[],
+  assignmentId: string,
+  released: ReadonlySet<string>,
+): Map<string, { id: string; title: string; rating: ChecklistRating | null }[]> {
+  const ratingOf = new Map(ratings.filter((r) => r.assignment_id === assignmentId).map((r) => [r.step_id, r.rating]));
+  const byTask = new Map<string, { id: string; title: string; rating: ChecklistRating | null }[]>();
+  for (const step of [...steps].sort((a, b) => a.sort_order - b.sort_order)) {
+    const rating = released.has(step.task_id) ? ratingOf.get(step.id) ?? null : null;
+    byTask.set(step.task_id, [...(byTask.get(step.task_id) ?? []), { id: step.id, title: step.title, rating }]);
+  }
+  return byTask;
 }
 
 /**
@@ -240,7 +263,7 @@ export function stepGradesByTask(
   ratings: readonly StepRatingRow[],
 ): Map<string, StepGrades> {
   const ratingByStep = new Map(ratings.map((r) => [r.step_id, r.rating]));
-  const byTask = new Map<string, { total: number; ratings: TaskRating[] }>();
+  const byTask = new Map<string, { total: number; ratings: ChecklistRating[] }>();
   for (const step of steps) {
     const entry = byTask.get(step.task_id) ?? { total: 0, ratings: [] };
     entry.total += 1;
@@ -252,9 +275,10 @@ export function stepGradesByTask(
 }
 
 /**
- * Everything that decides one assignment's grade, and the grade itself: each
- * task's points scaled by its rating, or by its sub-tasks' ratings once any
- * are rated. Shared by finalize and by edits to a finalized grade.
+ * Everything that decides one assignment's grade, and the grade itself: every
+ * checklist row's rating points over every row on offer, scaled to a
+ * percentage (scenarioScore). Shared by finalize and by edits to a finalized
+ * grade.
  */
 export async function scoreAssignment(
   supabase: SupabaseClient,
@@ -284,7 +308,7 @@ export async function scoreAssignment(
   if (error) return { error };
 
   const stepsByTask = stepGradesByTask(steps.steps, stepRatings.rows);
-  const score = gradedScore(
+  const score = scenarioScore(
     tasks ?? [],
     new Map(completions.rows.map((c) => [c.task_id, c])),
     stepsByTask,
@@ -312,7 +336,7 @@ export async function syncStepGradedLevels(
   for (const [taskId, steps] of stepsByTask) {
     if (steps.ratings.length === 0) continue;
     const completion = completionByTask.get(taskId);
-    const level = ratingForCredit(taskCredit(completion, steps));
+    const level = taskLevelForCredit(taskCredit(completion, steps));
     if (!completion) {
       writes.push(
         supabase.from('scenario_task_completions').insert({

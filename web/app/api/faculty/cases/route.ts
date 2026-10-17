@@ -126,7 +126,7 @@ export async function POST(request: NextRequest) {
   // Every activity has a deadline: it is what attendance is measured against.
   const deadlineCheck = parseDeadline(deadline);
   if (!deadlineCheck.ok) return NextResponse.json({ error: deadlineCheck.error }, { status: 400 });
-  // Given to groups (074), to whole sections where the instructor has no
+  // Given to groups (075), to whole sections where the instructor has no
   // group, and to students added to the course by hand.
   const sectionIds = uniqueStrings(section_ids);
   const teamIds = uniqueStrings(team_ids);
@@ -146,7 +146,7 @@ export async function POST(request: NextRequest) {
     );
     if ('error' in course) return NextResponse.json({ error: course.error }, { status: 400 });
 
-    // Every section it reaches, groups' sections included, as before 074.
+    // Every section it reaches, groups' sections included, as before 075.
     const teams = await loadTeams(supabase, teamIds);
     const reachedSections = [...new Set([...sectionIds, ...teams.map((t) => t.section_id)])];
     const row: Record<string, unknown> = {
@@ -162,7 +162,7 @@ export async function POST(request: NextRequest) {
       .insert(teamIds.length ? { ...row, team_ids: teamIds } : row)
       .select(PRESENTATION_COLUMNS)
       .single();
-    // Before 074 there is no team_ids column: the groups' members still get it.
+    // Before 075 there is no team_ids column: the groups' members still get it.
     if (inserted.error && (inserted.error.code === '42703' || inserted.error.code === 'PGRST204')) {
       inserted = await supabase.from('case_presentations').insert(row).select(PRESENTATION_COLUMNS).single();
     }

@@ -43,7 +43,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
   const material = data as unknown as MaterialRow | null;
   const section = (me?.sections as unknown as { name?: string } | null)?.name ?? null;
   if (!material) return NextResponse.json({ error: 'Material not found' }, { status: 404 });
-  // A course material (074) is for that course's students only.
+  // A course material (075) is for that course's students only.
   const [offeringOf, offerings] = await Promise.all([
     activityOfferings(supabase, 'library_materials', [material.id]),
     studentOfferings(supabase, session.uid, (me?.section_id as string | null) ?? null),

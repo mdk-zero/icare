@@ -24,10 +24,12 @@ export interface SkillDetectInput {
 interface SkillPickerProps {
   value: SkillSelection[];
   onChange: (next: SkillSelection[]) => void;
-  /** What detection reads: the scenario as it stands on the form. */
-  detectInput: () => SkillDetectInput;
+  /** What detection reads: the scenario as it stands on the form. Without it there is no "Detect skills". */
+  detectInput?: () => SkillDetectInput;
   /** Skills the scenario already has, which can't be picked again. */
   existingIds?: readonly string[];
+  /** What a skill it already has says in the list. */
+  existingLabel?: string;
   disabled?: boolean;
   /** Chapters the case centres on; their skills are listed first. */
   focusChapters?: readonly number[];
@@ -47,6 +49,7 @@ export default function SkillPicker({
   onChange,
   detectInput,
   existingIds = [],
+  existingLabel = "In patient case",
   disabled,
   focusChapters = NO_CHAPTERS,
 }: SkillPickerProps) {
@@ -106,6 +109,7 @@ export default function SkillPicker({
     onChange(value.map((s) => (s.id === id ? { ...s, skipped } : s)));
 
   const detect = async () => {
+    if (!detectInput) return;
     const input = detectInput();
     if (!input.title.trim() && !input.description?.trim()) {
       setNote("Give the patient case a title or description first.");
@@ -297,15 +301,17 @@ export default function SkillPicker({
             Each skill becomes a task, and its checklist steps become the sub-tasks you grade.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={detect}
-          disabled={disabled || detecting}
-          className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-brand-600/40 bg-surface px-3 py-1.5 text-xs font-semibold text-brand-700 transition-all hover:bg-brand-600/5 disabled:opacity-50"
-        >
-          {detecting ? <EcgLoader className="text-brand-600" /> : <FontAwesomeIcon icon={faRobot} className="h-3.5 w-3.5" />}
-          {detecting ? "Detecting…" : "Detect skills"}
-        </button>
+        {detectInput && (
+          <button
+            type="button"
+            onClick={detect}
+            disabled={disabled || detecting}
+            className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-brand-600/40 bg-surface px-3 py-1.5 text-xs font-semibold text-brand-700 transition-all hover:bg-brand-600/5 disabled:opacity-50"
+          >
+            {detecting ? <EcgLoader className="text-brand-600" /> : <FontAwesomeIcon icon={faRobot} className="h-3.5 w-3.5" />}
+            {detecting ? "Detecting…" : "Detect skills"}
+          </button>
+        )}
       </div>
       {note && <p className="mt-2 text-xs text-gray-600">{note}</p>}
 
@@ -388,7 +394,7 @@ export default function SkillPicker({
                         />
                         <span className="w-11 shrink-0 font-mono text-xs text-gray-500">{sk.id}</span>
                         <span className="text-gray-800">{sk.title}</span>
-                        {already && <span className="ml-auto text-[11px] text-gray-500">In patient case</span>}
+                        {already && <span className="ml-auto text-[11px] text-gray-500">{existingLabel}</span>}
                       </label>
                     );
                   })}

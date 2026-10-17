@@ -12,30 +12,46 @@ import type { GradingTask } from "../../../lib/api";
 import {
   MAX_RATING_POINTS,
   MAX_REMARKS_LENGTH,
+  NOT_APPLICABLE,
   TASK_RATINGS,
   ratingLabel,
   ratingPoints,
+  scaledGrade,
+  type ChecklistRating,
   type Rubric,
-  type TaskRating,
 } from "../../../lib/task-ratings";
-import { RATING_STYLE, checklistRows, hasCompletion, taskPoints, type ChecklistRow } from "./grading";
+import {
+  CHECKLIST_COLUMNS,
+  RATING_STYLE,
+  checklistRows,
+  columnRubric,
+  hasCompletion,
+  outOfGrade,
+  taskPoints,
+  type ChecklistColumn,
+  type ChecklistRow,
+} from "./grading";
 
-const COLUMN_COUNT = TASK_RATINGS.length + 2;
+const COLUMN_COUNT = CHECKLIST_COLUMNS.length + 2;
 
 /** Whole points today (3 / 2 / 1), but a total could still come out fractional: "7", "7.5". */
 export const formatPoints = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
+
+/** A column's points as its header and checkmarks state them; N/A isn't scored. */
+const columnPoints = (column: ChecklistColumn) =>
+  column.points === null ? "not scored" : `${formatPoints(column.points)} pts`;
 
 const formatWhen = (iso: string) =>
   new Date(iso).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
 /**
  * The checklist's shape while it loads: the column header, then a task row
- * over a few sub-task rows, each with its three empty checkmarks.
+ * over a few sub-task rows, each with its empty checkmarks.
  */
 function GradingTableSkeleton() {
   const circles = (
     <>
-      {TASK_RATINGS.map((level) => (
+      {CHECKLIST_COLUMNS.map((level) => (
         <div key={level.key} className="flex w-[92px] shrink-0 justify-center">
           <div className="h-6 w-6 rounded-full border-2 border-gray-200" />
         </div>
@@ -52,7 +68,7 @@ function GradingTableSkeleton() {
           <div className="flex-1 px-4">
             <div className="h-2.5 w-24 rounded bg-gray-200" />
           </div>
-          {TASK_RATINGS.map((level) => (
+          {CHECKLIST_COLUMNS.map((level) => (
             <div key={level.key} className="flex w-[92px] shrink-0 flex-col items-center gap-1.5">
               <div className="h-2 w-2 rounded-full bg-gray-300" />
               <div className="h-2 w-14 rounded bg-gray-200" />
@@ -126,8 +142,8 @@ interface GradingTableProps {
   readOnly?: boolean;
   /** Where the column headers dock while the checklist scrolls under them. */
   stickyTop?: number;
-  onRateTask: (task: GradingTask, rating: TaskRating | null) => void;
-  onRateSteps: (task: GradingTask, changes: Map<string, TaskRating | null>) => void;
+  onRateTask: (task: GradingTask, rating: ChecklistRating | null) => void;
+  onRateSteps: (task: GradingTask, changes: Map<string, ChecklistRating | null>) => void;
   noteDrafts: Record<string, string>;
   openNotes: ReadonlySet<string>;
   onOpenNote: (taskId: string) => void;
@@ -136,8 +152,9 @@ interface GradingTableProps {
 
 /**
  * The grading sheet, laid out like a Taylor's skill checklist: one row per
- * sub-task under each task, one checkmark column per level, and the points
- * each row earns. A task without sub-tasks is a single checkable row.
+ * sub-task under each task, one checkmark column per level plus N/A for a
+ * step not done in Philippine practice, and the points each row earns. A task
+ * without sub-tasks is a single checkable row.
  */
 export default function GradingTable({
   tasks,
@@ -221,14 +238,14 @@ export default function GradingTable({
       {/* Scrolls sideways on narrow screens; on wide ones it isn't a scroll
           container, so the column headers can stick to the page. */}
       <div className="overflow-x-auto rounded-xl border border-hairline lg:overflow-visible">
-        <table ref={tableRef} className="w-full min-w-[600px] border-collapse text-sm">
+        <table ref={tableRef} className="w-full min-w-[680px] border-collapse text-sm">
           <caption className="sr-only">
             Grading checklist: rate each task&apos;s sub-tasks Excellent ({MAX_RATING_POINTS} points), Satisfactory,
-            or Needs Practice. An unrated sub-task earns no points.
+            or Needs Practice, or mark one N/A to leave it out of the score. An unrated sub-task earns no points.
           </caption>
           <colgroup>
             <col />
-            {TASK_RATINGS.map((level) => (
+            {CHECKLIST_COLUMNS.map((level) => (
               <col key={level.key} className="w-[92px]" />
             ))}
             <col className="w-[64px]" />
@@ -242,20 +259,18 @@ export default function GradingTable({
               >
                 Task / sub-task
               </th>
-              {TASK_RATINGS.map((level) => (
+              {CHECKLIST_COLUMNS.map((level) => (
                 <th
                   key={level.key}
                   scope="col"
-                  title={rubric[level.key]}
+                  title={columnRubric(rubric, level.key)}
                   style={{ top: stickyTop }}
                   className={`${headCell} cursor-help px-0.5 py-3 align-bottom`}
                 >
                   <span className="flex flex-col items-center gap-1 text-center">
                     <span className={`h-2 w-2 rounded-full ${RATING_STYLE[level.key].dot}`} aria-hidden />
                     <span className="text-[10.5px] font-semibold leading-tight text-gray-700">{level.label}</span>
-                    <span className="text-[10px] font-medium tabular-nums text-gray-400">
-                      {formatPoints(level.points)} pts
-                    </span>
+                    <span className="text-[10px] font-medium tabular-nums text-gray-400">{columnPoints(level)}</span>
                   </span>
                 </th>
               ))}
@@ -291,15 +306,15 @@ export default function GradingTable({
       </div>
 
       {/* The rubric: what each column means for this patient case. */}
-      <dl className="mt-3 grid gap-2 rounded-xl border border-hairline bg-subtle p-3 sm:grid-cols-3">
-        {TASK_RATINGS.map((level) => (
+      <dl className="mt-3 grid gap-2 rounded-xl border border-hairline bg-subtle p-3 sm:grid-cols-2 xl:grid-cols-4">
+        {CHECKLIST_COLUMNS.map((level) => (
           <div key={level.key} className="min-w-0">
             <dt className="flex items-center gap-1.5 text-[11px] font-semibold text-gray-700">
               <span className={`h-2 w-2 rounded-full ${RATING_STYLE[level.key].dot}`} aria-hidden />
               {level.label}
-              <span className="font-medium tabular-nums text-gray-400">· {formatPoints(level.points)} pts</span>
+              <span className="font-medium tabular-nums text-gray-400">· {columnPoints(level)}</span>
             </dt>
-            <dd className="mt-0.5 text-[11px] leading-snug text-gray-500">{rubric[level.key]}</dd>
+            <dd className="mt-0.5 text-[11px] leading-snug text-gray-500">{columnRubric(rubric, level.key)}</dd>
           </div>
         ))}
       </dl>
@@ -329,8 +344,8 @@ interface TaskGroupProps {
   index: number;
   totalPoints: number;
   readOnly: boolean;
-  onRateTask: (task: GradingTask, rating: TaskRating | null) => void;
-  onRateSteps: (task: GradingTask, changes: Map<string, TaskRating | null>) => void;
+  onRateTask: (task: GradingTask, rating: ChecklistRating | null) => void;
+  onRateSteps: (task: GradingTask, changes: Map<string, ChecklistRating | null>) => void;
   noteOpen: boolean;
   noteAutoFocus: boolean;
   noteValue: string;
@@ -364,6 +379,8 @@ function TaskGroup({
   const pin = hasSteps && pinned;
   const taskHead = `bg-subtle ${pin ? "sticky shadow-[inset_0_-1px_0_var(--color-hairline)]" : ""}`;
   const { earned, max } = taskPoints(task);
+  // Every row N/A: out of the grade, so it has no weight to show.
+  const notApplicable = outOfGrade(task);
   const weight = totalPoints > 0 ? Math.round((task.points / totalPoints) * 100) : 0;
 
   // Rows nobody has rated yet — the ones a header checkmark fills in.
@@ -373,19 +390,21 @@ function TaskGroup({
 
   const status = impliedLevel
     ? `Unrated ${hasSteps ? "rows count" : "— counts"} as ${ratingLabel(impliedLevel)} until you rate ${hasSteps ? "them" : "it"}`
-    : unscored === rows.length
-      ? "Not rated — earns no points yet"
-      : unscored > 0
-        ? `${unscored} unrated ${unscored === 1 ? "row earns" : "rows earn"} no points`
-        : null;
+    : notApplicable
+      ? "Marked N/A — left out of the grade"
+      : unscored === rows.length
+        ? "Not rated — earns no points yet"
+        : unscored > 0
+          ? `${unscored} unrated ${unscored === 1 ? "row earns" : "rows earn"} no points`
+          : null;
 
-  const rateRow = (row: ChecklistRow, option: TaskRating) => {
+  const rateRow = (row: ChecklistRow, option: ChecklistRating) => {
     const next = row.level === option && !row.implied ? null : option;
     if (row.stepId === null) onRateTask(task, next);
     else onRateSteps(task, new Map([[row.stepId, next]]));
   };
 
-  const fillOpenRows = (option: TaskRating) =>
+  const fillOpenRows = (option: ChecklistRating) =>
     onRateSteps(task, new Map(openRows.map((r) => [r.stepId!, option])));
 
   return (
@@ -414,12 +433,18 @@ function TaskGroup({
                   <FontAwesomeIcon icon={faHandHoldingMedical} className="h-2.5 w-2.5" />
                   Hands-on
                 </span>
-                <span
-                  title={`${task.points} of ${totalPoints} points`}
-                  className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium tabular-nums text-gray-600"
-                >
-                  {weight}% of grade
-                </span>
+                {notApplicable ? (
+                  <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-500">
+                    Not in grade
+                  </span>
+                ) : (
+                  <span
+                    title={`${task.points} of ${totalPoints} points`}
+                    className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium tabular-nums text-gray-600"
+                  >
+                    {weight}% of grade
+                  </span>
+                )}
               </div>
               {task.description && (
                 <p className={`mt-1.5 text-xs text-gray-500 ${hasSteps ? "line-clamp-2" : ""}`} title={task.description}>
@@ -448,7 +473,7 @@ function TaskGroup({
           </div>
         </th>
 
-        {TASK_RATINGS.map((option) =>
+        {CHECKLIST_COLUMNS.map((option) =>
           hasSteps ? (
             <td
               key={option.key}
@@ -458,8 +483,8 @@ function TaskGroup({
               {openRows.length > 0 && !readOnly && (
                 <button
                   onClick={() => fillOpenRows(option.key)}
-                  title={`Rate the ${openRows.length} unrated sub-task${openRows.length === 1 ? "" : "s"} ${option.label}`}
-                  aria-label={`Rate the ${openRows.length} unrated sub-tasks of ${task.title} ${option.label}`}
+                  title={`${option.key === NOT_APPLICABLE ? "Mark" : "Rate"} the ${openRows.length} unrated sub-task${openRows.length === 1 ? "" : "s"} ${option.label}`}
+                  aria-label={`${option.key === NOT_APPLICABLE ? "Mark" : "Rate"} the ${openRows.length} unrated sub-tasks of ${task.title} ${option.label}`}
                   className={`mx-auto grid h-6 w-6 place-items-center rounded-md border border-dashed border-gray-300 text-transparent opacity-40 transition-all group-hover/task:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600/40 disabled:opacity-30 ${RATING_STYLE[option.key].hover}`}
                 >
                   <FontAwesomeIcon icon={faCheckDouble} className="h-2.5 w-2.5" />
@@ -470,7 +495,7 @@ function TaskGroup({
             <RatingCell
               key={option.key}
               row={rows[0]}
-              option={option.key}
+              column={option}
               label={task.title}
               readOnly={readOnly}
               onRate={rateRow}
@@ -482,15 +507,23 @@ function TaskGroup({
           style={pin ? { top: stickyTop } : undefined}
           className={`py-3.5 pl-1 pr-4 text-right align-top ${hasSteps ? `${taskHead} z-[1]` : ""}`}
         >
-          <span
-            className={`block font-display text-base font-bold tabular-nums ${
-              rows.every((r) => r.level === null) ? "text-gray-300" : rows.some((r) => r.implied) ? "text-gray-400" : "text-gray-800"
-            }`}
-          >
-            {formatPoints(earned)}
-            <span className="text-xs font-semibold text-gray-400">/{formatPoints(max)}</span>
-          </span>
-          <span className="text-[11px] tabular-nums text-gray-400">{max > 0 ? Math.round((earned / max) * 100) : 0}%</span>
+          {notApplicable ? (
+            <span title="Not scored" className="block font-display text-base font-bold text-gray-400">
+              N/A
+            </span>
+          ) : (
+            <>
+              <span
+                className={`block font-display text-base font-bold tabular-nums ${
+                  rows.every((r) => r.level === null) ? "text-gray-300" : rows.some((r) => r.implied) ? "text-gray-400" : "text-gray-800"
+                }`}
+              >
+                {formatPoints(earned)}
+                <span className="text-xs font-semibold text-gray-400">/{formatPoints(max)}</span>
+              </span>
+              <span className="text-[11px] tabular-nums text-gray-400">{scaledGrade(earned, max)}%</span>
+            </>
+          )}
         </td>
       </tr>
 
@@ -509,11 +542,11 @@ function TaskGroup({
                   </div>
                 </div>
               </th>
-              {TASK_RATINGS.map((option) => (
+              {CHECKLIST_COLUMNS.map((option) => (
                 <RatingCell
                   key={option.key}
                   row={row}
-                  option={option.key}
+                  column={option}
                   label={step.title}
                   readOnly={readOnly}
                   onRate={rateRow}
@@ -522,10 +555,18 @@ function TaskGroup({
               <td className="py-2.5 pl-1 pr-4 text-right align-top">
                 <span
                   className={`text-sm font-semibold tabular-nums ${
-                    row.level === null ? "text-gray-300" : row.implied ? "text-gray-400" : "text-gray-800"
+                    row.level === null
+                      ? "text-gray-300"
+                      : row.implied || row.level === NOT_APPLICABLE
+                        ? "text-gray-400"
+                        : "text-gray-800"
                   }`}
                 >
-                  {row.level === null ? "—" : formatPoints(ratingPoints(row.level))}
+                  {row.level === null
+                    ? "—"
+                    : row.level === NOT_APPLICABLE
+                      ? "N/A"
+                      : formatPoints(ratingPoints(row.level))}
                 </span>
               </td>
             </tr>
@@ -556,20 +597,21 @@ function TaskGroup({
 
 interface RatingCellProps {
   row: ChecklistRow;
-  option: TaskRating;
+  column: ChecklistColumn;
   /** The row's title, for the checkmark's accessible name. */
   label: string;
   readOnly: boolean;
-  onRate: (row: ChecklistRow, option: TaskRating) => void;
+  onRate: (row: ChecklistRow, option: ChecklistRating) => void;
 }
 
-function RatingCell({ row, option, label, readOnly, onRate }: RatingCellProps) {
+function RatingCell({ row, column, label, readOnly, onRate }: RatingCellProps) {
+  const option = column.key;
   const style = RATING_STYLE[option];
   const shown = row.level === option;
   const checked = shown && !row.implied;
   // Roving focus: Tab lands on the row's mark (or its first cell), arrows move within it.
   const tabbable = row.level === null ? option === TASK_RATINGS[0].key : shown;
-  const points = ratingPoints(option);
+  const scored = column.points === null ? "not scored" : `${formatPoints(column.points)} points`;
 
   return (
     <td className="px-0.5 py-2.5 text-center align-top">
@@ -577,21 +619,19 @@ function RatingCell({ row, option, label, readOnly, onRate }: RatingCellProps) {
         data-rating-cell
         role="radio"
         aria-checked={checked}
-        aria-label={`${label}: ${ratingLabel(option)}, ${formatPoints(points)} points${
-          shown && row.implied ? " (counts until rated)" : ""
-        }`}
+        aria-label={`${label}: ${column.label}, ${scored}${shown && row.implied ? " (counts until rated)" : ""}`}
         tabIndex={tabbable ? 0 : -1}
         disabled={readOnly}
         onClick={() => onRate(row, option)}
         onKeyDown={moveWithinRow}
         title={
           readOnly
-            ? `${ratingLabel(option)} — ${formatPoints(points)} points`
+            ? `${column.label} — ${scored}`
             : checked
             ? "Click again to clear"
             : shown
-              ? `Counts as ${ratingLabel(option)} until rated — click to confirm`
-              : `${ratingLabel(option)} — ${formatPoints(points)} points`
+              ? `Counts as ${column.label} until rated — click to confirm`
+              : `${column.label} — ${scored}`
         }
         className={`group mx-auto grid h-7 w-7 place-items-center rounded-full border transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600/40 disabled:cursor-default ${checked ? style.checked : shown ? style.implied : `border-gray-300 bg-surface text-transparent ${readOnly ? "" : style.hover}`}`}
       >

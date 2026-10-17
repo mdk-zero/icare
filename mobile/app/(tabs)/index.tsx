@@ -17,6 +17,7 @@ import { useLiveRefresh } from "@/hooks/useLiveRefresh";
 import { CourseRequirements } from "@/components/CourseRequirements";
 import {
   fetchScenarioAssignments,
+  isReturnDemo,
   fetchAssessments,
   fetchProgress,
   fetchPatients,
@@ -172,10 +173,12 @@ export default function DashboardScreen() {
   const router = useRouter();
 
   // A scenario is worked on its patient now, in the Clinic tab. Scenarios with
-  // no patient linked still have a brief-only screen to land on.
+  // no patient linked still have a brief-only screen to land on, and a Return
+  // Demonstration (skill checklists, no patient) has its own.
   const openAssignment = React.useCallback(
     (assignment: ScenarioAssignment) => {
-      openCase(router, assignment);
+      if (isReturnDemo(assignment)) router.push(`/retdem/${assignment.id}`);
+      else openCase(router, assignment);
     },
     [router],
   );
@@ -348,7 +351,7 @@ export default function DashboardScreen() {
               style={styles.heroCard}
             >
               <View style={styles.heroTopRow}>
-                <Text style={styles.heroEyebrow}>NEXT UP</Text>
+                <Text style={styles.heroEyebrow}>{isReturnDemo(nextTask) ? "NEXT UP · RETURN DEMO" : "NEXT UP"}</Text>
                 {nextTask.required && (
                   <View style={styles.heroRequiredPill}>
                     <Text style={styles.heroRequiredText}>REQUIRED</Text>
@@ -453,6 +456,7 @@ export default function DashboardScreen() {
                   <View style={styles.taskMeta}>
                     <FontAwesome6 name="clock" size={10} color={Palette.textMuted} />
                     <Text style={styles.taskDue}>Due {formatDeadline(task)}</Text>
+                    {isReturnDemo(task) && <Text style={styles.taskKind}>Return Demo</Text>}
                     {task.required && <Text style={styles.taskRequired}>Required</Text>}
                   </View>
                 </View>
@@ -751,6 +755,14 @@ function createStyles(
       fontSize: 12,
       color: Palette.textMuted,
       marginLeft: 5,
+    },
+    taskKind: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: Accent.blue.fg,
+      marginLeft: Spacing.md,
+      textTransform: "uppercase",
+      letterSpacing: 0.3,
     },
     taskRequired: {
       fontSize: 11,

@@ -15,9 +15,10 @@ const MIN_REASON_LENGTH = 10;
  * PUT { student_id, team_id | null, reason? }: move a student into a team, or
  * out of every team.
  *
- * An admin may do either freely. An instructor may only move a student
- * between two groups they supervise in the same section, and must say why:
- * the reason goes to the audit trail and to their dean.
+ * An admin may do either freely. An instructor may put a student who is in
+ * no group yet, in one of their sections, into a group they supervise. They
+ * may move a student between two groups they supervise in the same section
+ * only with a reason, which goes to the audit trail and to their dean.
  */
 export async function PUT(request: NextRequest) {
   const session = await readSession();
@@ -83,7 +84,10 @@ export async function PUT(request: NextRequest) {
   return NextResponse.json({ ok: true });
 }
 
-/** An instructor's move: from one of their groups to another in the same section, with a reason. */
+/**
+ * An instructor's change: a student in no group goes into one of their groups;
+ * one already in their group moves to another in the same section, with a reason.
+ */
 async function moveBetweenOwnGroups(
   supabase: Supabase,
   session: SessionPayload,
@@ -93,15 +97,6 @@ async function moveBetweenOwnGroups(
   reason: string,
 ) {
   if (!teamId) return NextResponse.json({ error: 'Choose the group to move them to' }, { status: 400 });
-  if (reason.length < MIN_REASON_LENGTH) {
-    return NextResponse.json(
-      { error: `Say why this student is moving (at least ${MIN_REASON_LENGTH} characters)` },
-      { status: 400 },
-    );
-  }
-  if (reason.length > MAX_REASON_LENGTH) {
-    return NextResponse.json({ error: `Keep the reason under ${MAX_REASON_LENGTH} characters` }, { status: 400 });
-  }
 
   const { data: membership, error: membershipError } = await supabase
     .from('team_members')
@@ -113,7 +108,17 @@ async function moveBetweenOwnGroups(
     console.error('Failed to read team membership', membershipError);
     return NextResponse.json({ error: 'Unable to move student' }, { status: 500 });
   }
-  if (!membership) return NextResponse.json({ error: 'That student is not in one of your groups' }, { status: 403 });
+  if (!membership) return placeInOwnGroup(supabase, session, request, studentId, teamId);
+
+  if (reason.length < MIN_REASON_LENGTH) {
+    return NextResponse.json(
+      { error: `Say why this student is moving (at least ${MIN_REASON_LENGTH} characters)` },
+      { status: 400 },
+    );
+  }
+  if (reason.length > MAX_REASON_LENGTH) {
+    return NextResponse.json({ error: `Keep the reason under ${MAX_REASON_LENGTH} characters` }, { status: 400 });
+  }
   if (membership.team_id === teamId) {
     return NextResponse.json({ error: 'They are already in that group' }, { status: 409 });
   }
@@ -191,6 +196,59 @@ async function moveBetweenOwnGroups(
         to_team_id: to.id,
         to_team: to.name,
         reason,
+      },
+    },
+    request,
+  );
+
+  return NextResponse.json({ ok: true });
+}
+
+/**
+ * An instructor puts a student who is in no group into one they supervise.
+ * Nobody's grouping is undone, so no reason is asked and the dean isn't sent
+ * a notice; the audit trail records it.
+ */
+async function placeInOwnGroup(
+  supabase: Supabase,
+  session: SessionPayload,
+  request: NextRequest,
+  studentId: string,
+  teamId: string,
+) {
+  const [{ data: student }, { data: team }] = await Promise.all([
+    supabase.from('users').select('id, name, role, section_id').eq('id', studentId).maybeSingle(),
+    supabase.from('teams').select('id, name, section_id, faculty_id').eq('id', teamId).maybeSingle(),
+  ]);
+  if (!team || team.faculty_id !== session.uid) {
+    return NextResponse.json({ error: 'You can only put students into groups you supervise' }, { status: 403 });
+  }
+  if (!student || student.role !== 'student' || student.section_id !== team.section_id) {
+    return NextResponse.json({ error: "That student isn't in this group's section" }, { status: 403 });
+  }
+
+  const { error } = await supabase.from('team_members').insert({ team_id: teamId, student_id: studentId });
+  if (error) {
+    // Someone else grouped them a moment ago.
+    if (error.code === '23505') return NextResponse.json({ error: 'That student is already in a group' }, { status: 409 });
+    console.error('Failed to add team member', error);
+    return NextResponse.json({ error: 'Unable to add the student to the group' }, { status: 500 });
+  }
+
+  const { data: section } = await supabase.from('sections').select('name').eq('id', team.section_id).maybeSingle();
+  const where = section?.name ? `${section.name} · ` : '';
+  await logAudit(
+    session,
+    {
+      action: 'team.member_add',
+      entityType: 'team_members',
+      entityId: studentId,
+      details: {
+        message: `Added ${student.name} to ${where}${team.name}`,
+        student_name: student.name,
+        section_id: team.section_id,
+        to_team_id: team.id,
+        to_team: team.name,
       },
     },
     request,

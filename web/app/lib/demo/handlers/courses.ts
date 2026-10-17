@@ -466,7 +466,18 @@ async function labelled(db: DemoDb, requirements: RequirementRow[]) {
     presentations: Object.fromEntries(db.casePresentations.map((p) => [p.id, p.title])),
     skills: Object.fromEntries(skills.map((s) => [s.id, s.title])),
   };
-  return requirements.map((r) => ({ ...strip(r), label: requirementLabel(r, names), removed: isRemovedActivity(r) }));
+  // A Return Demonstration's skills (072), for the Skills tab's coverage.
+  const skillIdsOf = (scenarioId: string) =>
+    db.tasks
+      .filter((t) => t.scenario_id === scenarioId && t.skill_id)
+      .sort((a, b) => a.sort_order - b.sort_order)
+      .map((t) => t.skill_id as string);
+  return requirements.map((r) => ({
+    ...strip(r),
+    label: requirementLabel(r, names),
+    removed: isRemovedActivity(r),
+    skill_ids: r.activity_type === "return_demo" && r.scenario_id ? skillIdsOf(r.scenario_id) : [],
+  }));
 }
 
 /** A stored item without its demo-only bookkeeping. */
@@ -509,7 +520,7 @@ export function linkActivityCourses(db: DemoDb) {
   link(db.scenarios, "scenario_id");
   link(db.quizzes, "assessment_id");
   link(db.casePresentations, "presentation_id");
-  // Library materials (074) have no checklist item; they follow their author.
+  // Library materials (075) have no checklist item; they follow their author.
   link(db.materials as Activity[], null);
 }
 
@@ -523,7 +534,7 @@ const checklist = (db: DemoDb, offeringId: string): DemoRequirement[] => {
   let position = 0;
   const item = (
     a: { id: string; created_at: string },
-    type: "scenario" | "assessment" | "case_presentation",
+    type: "scenario" | "return_demo" | "assessment" | "case_presentation",
   ): DemoRequirement => ({
     id: a.id,
     offering_id: offeringId,
@@ -531,7 +542,7 @@ const checklist = (db: DemoDb, offeringId: string): DemoRequirement[] => {
     kind: "activity",
     title: "",
     activity_type: type,
-    scenario_id: type === "scenario" ? a.id : null,
+    scenario_id: type === "scenario" || type === "return_demo" ? a.id : null,
     assessment_id: type === "assessment" ? a.id : null,
     presentation_id: type === "case_presentation" ? a.id : null,
     target_count: null,
@@ -543,7 +554,8 @@ const checklist = (db: DemoDb, offeringId: string): DemoRequirement[] => {
   });
   const oldest = <T extends { created_at: string }>(list: T[]) => [...list].sort((a, b) => a.created_at.localeCompare(b.created_at));
   return [
-    ...oldest(db.scenarios.filter((s) => s.offering_id === offeringId)).map((s) => item(s, "scenario")),
+    ...oldest(db.scenarios.filter((s) => s.offering_id === offeringId && s.kind !== "return_demo")).map((s) => item(s, "scenario")),
+    ...oldest(db.scenarios.filter((s) => s.offering_id === offeringId && s.kind === "return_demo")).map((s) => item(s, "return_demo")),
     ...oldest(db.quizzes.filter((q) => q.offering_id === offeringId)).map((q) => item(q, "assessment")),
     ...oldest(db.casePresentations.filter((p) => p.offering_id === offeringId)).map((p) => item(p, "case_presentation")),
   ];
@@ -643,7 +655,8 @@ route("GET", "/api/faculty/courses/:id/activities", (ctx) => {
   const roster = new Set(offeringRoster(db, o).students.map((s) => s.id));
   const from = new Date(termBounds(termOf(db, o)).from).getTime();
   return {
-    scenarios: db.scenarios.map((s) => ({
+    // Patient Cases only: a Return Demonstration (072) is never linked by hand.
+    scenarios: db.scenarios.filter((s) => s.kind !== "return_demo").map((s) => ({
       id: s.id,
       title: s.title,
       completed_before_term: db.assignments.filter(
@@ -791,7 +804,8 @@ function demoFacts(db: DemoDb, studentIds: string[], requirementIds: string[]): 
           const stepIds = new Set(steps.map((s) => s.id));
           const ratings = db.stepRatings.filter((r) => r.assignment_id === a.id && stepIds.has(r.step_id)).map((r) => r.rating);
           const completion = db.completions.find((c) => c.assignment_id === a.id && c.task_id === t.id);
-          return { skill_id: t.skill_id!, credit: taskCredit(completion, { total: steps.length, ratings }) };
+          // A task rated N/A shows nothing of the skill: no credit, so no evidence.
+          return { skill_id: t.skill_id!, credit: taskCredit(completion, { total: steps.length, ratings }) ?? 0 };
         }),
     }));
   const attempts = db.attempts

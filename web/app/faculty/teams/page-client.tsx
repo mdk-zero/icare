@@ -37,15 +37,13 @@ import { loadingToast, toast } from "../../components/Toast";
 import { usePageData } from "../../lib/use-page-data";
 import { termStatus } from "../../lib/course-progress";
 import SectionGroups from "../../admin/student-management/SectionGroups";
-import RegisterStudentModal from "../../admin/student-management/RegisterStudentModal";
-import BulkEnrollModal from "../../admin/student-management/BulkEnrollModal";
+import RegisterStudentModal from "../../components/enroll/RegisterStudentModal";
+import BulkEnrollModal from "../../components/enroll/BulkEnrollModal";
 import { isStudentDrag, leftTarget, readStudentDrag, startStudentDrag } from "../../admin/student-management/drag";
 
 /** Long enough to read a sentence with numbers in it. */
 const ML_TOAST_MS = 8000;
 
-/** Accounts an instructor makes go through their own students API, scoped to their sections. */
-const ENROLL_ENDPOINT = "/api/faculty/students";
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name, undefined, { numeric: true });
@@ -214,6 +212,10 @@ export default function TeamsClient() {
     ? (shownOverview?.teams ?? []).filter((t) => t.section_id === section.id).sort(byName)
     : [];
   const hasGroups = sectionGroups.length > 0;
+  // New students go into one of the instructor's own groups here (the
+  // students API needs one), so they land on their roster.
+  const enrollGroups = sectionGroups.map((t) => ({ id: t.id, name: t.name, size: t.members.length }));
+  const enrollBlocked = enrollGroups.length === 0 ? "Make a group in this section first; new students join one of your groups." : undefined;
   // The section's students in no group, as searched and filtered.
   const tableStudents = sectionStudents.filter(
     (s) =>
@@ -478,14 +480,18 @@ export default function TeamsClient() {
             <div className="flex flex-wrap items-center gap-2">
               <button
                 onClick={() => setBulkEnrolling(true)}
-                className="flex items-center gap-2 rounded-lg border border-gray-200 bg-surface px-4 py-2 text-sm font-medium text-gray-700 transition-all hover:border-brand-300 hover:text-brand-700"
+                disabled={!!enrollBlocked}
+                title={enrollBlocked}
+                className="disabled:cursor-not-allowed disabled:opacity-50 flex items-center gap-2 rounded-lg border border-gray-200 bg-surface px-4 py-2 text-sm font-medium text-gray-700 transition-all hover:border-brand-300 hover:text-brand-700"
               >
                 <FontAwesomeIcon icon={faUsers} className="h-3.5 w-3.5" />
                 Bulk enroll
               </button>
               <button
                 onClick={() => setRegistering(true)}
-                className="flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition-all hover:bg-brand-700"
+                disabled={!!enrollBlocked}
+                title={enrollBlocked}
+                className="disabled:cursor-not-allowed disabled:opacity-50 flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition-all hover:bg-brand-700"
               >
                 <FontAwesomeIcon icon={faUserPlus} className="h-3.5 w-3.5" />
                 Register student
@@ -685,8 +691,8 @@ export default function TeamsClient() {
         <BulkEnrollModal
           sectionId={section.id}
           sectionName={section.name}
-          groups={sectionGroups}
-          endpoint={ENROLL_ENDPOINT}
+          groups={enrollGroups}
+          asInstructor
           onClose={() => setBulkEnrolling(false)}
           onFinished={(created) => {
             if (created > 0) void refreshRoster();
@@ -698,8 +704,8 @@ export default function TeamsClient() {
         <RegisterStudentModal
           sectionId={section.id}
           sectionName={section.name}
-          groups={sectionGroups}
-          endpoint={ENROLL_ENDPOINT}
+          groups={enrollGroups}
+          asInstructor
           onClose={() => setRegistering(false)}
           onRegistered={() => {
             void refreshRoster();

@@ -9,22 +9,24 @@ import {
   isMissingRatingColumns,
   isMissingStepTables,
   isOldRatingScale,
+  NOT_APPLICABLE_NEEDS_MIGRATION,
   RATINGS_NEED_MIGRATION,
   SCALE_NEEDS_MIGRATION,
   scoreAssignment,
   STEPS_NEED_MIGRATION,
 } from '@/app/lib/scenario-tasks';
 import {
+  isChecklistRating,
   isPerformed,
-  isTaskRating,
   MAX_REMARKS_LENGTH,
-  ratingForCredit,
+  NOT_APPLICABLE,
   resolveRubric,
   resolveStepRatings,
   storedRating,
   taskCredit,
+  taskLevelForCredit,
   wholeTaskLevel,
-  type TaskRating,
+  type ChecklistRating,
 } from '@/app/lib/task-ratings';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { activeGradeEditApproval, EDIT_NEEDS_APPROVAL, needsEditApproval } from '@/app/lib/grade-edit-requests';
@@ -94,7 +96,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
 
     const completionByTask = new Map(completions.rows.map((c) => [c.task_id, c]));
     const ratingByStep = new Map(stepRatings.rows.map((r) => [r.step_id, r.rating]));
-    const stepsByTask = new Map<string, { id: string; title: string; source: string; rating: TaskRating | null }[]>();
+    const stepsByTask = new Map<string, { id: string; title: string; source: string; rating: ChecklistRating | null }[]>();
     for (const step of steps.steps) {
       const list = stepsByTask.get(step.task_id) ?? [];
       list.push({ id: step.id, title: step.title, source: step.source, rating: ratingByStep.get(step.id) ?? null });
@@ -130,12 +132,12 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
 
 /** A completion row as the whole-task level reads it; a pre-046 "not performed" counts as none. */
-function existingLevel(existing: { rating: unknown } | null): { rating: TaskRating | null } | undefined {
+function existingLevel(existing: { rating: unknown } | null): { rating: ChecklistRating | null } | undefined {
   if (!existing) return undefined;
   const rating = storedRating(existing.rating);
   return rating === 'absent' ? undefined : { rating };
 }
-type StepChange = { step_id: string; rating: TaskRating | null };
+type StepChange = { step_id: string; rating: ChecklistRating | null };
 
 /** A body's `steps`, or an error message saying why it isn't one. */
 function parseStepChanges(value: unknown): StepChange[] | string {
@@ -144,15 +146,18 @@ function parseStepChanges(value: unknown): StepChange[] | string {
   for (const item of value) {
     const { step_id, rating } = (item ?? {}) as { step_id?: unknown; rating?: unknown };
     if (typeof step_id !== 'string' || !step_id) return 'each step needs a step_id';
-    if (rating !== null && !isTaskRating(rating)) return 'each step rating must be a rating level or null';
-    changes.push({ step_id, rating: rating as TaskRating | null });
+    if (rating !== null && !isChecklistRating(rating)) return 'each step rating must be a rating level, N/A, or null';
+    changes.push({ step_id, rating: rating as ChecklistRating | null });
   }
   return changes;
 }
 
 // PUT: grade one task, as a whole or sub-task by sub-task.
-//   { task_id, rating?: TaskRating | null, remarks?: string | null }
-//   { task_id, steps: [{ step_id, rating: TaskRating | null }, ...] }
+//   { task_id, rating?: ChecklistRating | null, remarks?: string | null }
+//   { task_id, steps: [{ step_id, rating: ChecklistRating | null }, ...] }
+//
+// A rating is a level or 'not_applicable' (N/A), which leaves the row out of
+// the score.
 //
 // A field left out is kept, so a note and a rating saved back to back can't
 // overwrite each other. Any task can be rated, including system tasks the
@@ -203,8 +208,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     if (typeof parsed === 'string') return NextResponse.json({ error: parsed }, { status: 400 });
     stepChanges = parsed;
   }
-  if (rating !== undefined && rating !== null && !isTaskRating(rating)) {
-    return NextResponse.json({ error: 'rating must be a rating level or null' }, { status: 400 });
+  if (rating !== undefined && rating !== null && !isChecklistRating(rating)) {
+    return NextResponse.json({ error: 'rating must be a rating level, N/A, or null' }, { status: 400 });
   }
   if (remarks !== undefined && remarks !== null && typeof remarks !== 'string') {
     return NextResponse.json({ error: 'remarks must be text' }, { status: 400 });
@@ -212,7 +217,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   if (rating === undefined && remarks === undefined && !stepChanges) {
     return NextResponse.json({ error: 'Nothing to save' }, { status: 400 });
   }
-  const nextRating = rating as TaskRating | null | undefined;
+  const nextRating = rating as ChecklistRating | null | undefined;
   // Undefined leaves the saved note alone; blank clears it.
   const nextRemarks =
     typeof remarks === 'string' ? remarks.trim().slice(0, MAX_REMARKS_LENGTH) || null : remarks;
@@ -246,7 +251,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unable to save rating' }, { status: 500 });
     }
 
-    let saved: NextResponse | { level: TaskRating | null };
+    let saved: NextResponse | { level: ChecklistRating | null };
     if (stepChanges) {
       if (!taskSteps.stepsEnabled) {
         return NextResponse.json({ error: STEPS_NEED_MIGRATION }, { status: 503 });
@@ -298,10 +303,10 @@ async function saveTaskGrade(
   supabase: Supabase,
   assignmentId: string,
   taskId: string,
-  nextRating: TaskRating | null | undefined,
+  nextRating: ChecklistRating | null | undefined,
   nextRemarks: string | null | undefined,
   uid: string,
-): Promise<NextResponse | { level: TaskRating | null }> {
+): Promise<NextResponse | { level: ChecklistRating | null }> {
   const { data: existing, error: existingError } = await supabase
     .from('scenario_task_completions')
     .select('id, completed_via')
@@ -359,7 +364,8 @@ async function saveTaskGrade(
       return NextResponse.json({ error: RATINGS_NEED_MIGRATION }, { status: 503 });
     }
     if (isOldRatingScale(error)) {
-      return NextResponse.json({ error: SCALE_NEEDS_MIGRATION }, { status: 503 });
+      const message = nextRating === NOT_APPLICABLE ? NOT_APPLICABLE_NEEDS_MIGRATION : SCALE_NEEDS_MIGRATION;
+      return NextResponse.json({ error: message }, { status: 503 });
     }
     console.error('Failed to save task rating', error);
     return NextResponse.json({ error: 'Unable to save rating' }, { status: 500 });
@@ -389,7 +395,7 @@ async function saveStepRatings(
   stepIds: string[],
   changes: StepChange[],
   uid: string,
-): Promise<NextResponse | { level: TaskRating | null }> {
+): Promise<NextResponse | { level: ChecklistRating | null }> {
   if (stepIds.length === 0) {
     return NextResponse.json({ error: 'This task has no sub-tasks' }, { status: 409 });
   }
@@ -441,7 +447,7 @@ async function saveStepRatings(
   );
 
   const ratedAt = new Date().toISOString();
-  const row = (stepId: string, rating: TaskRating) => ({
+  const row = (stepId: string, rating: ChecklistRating) => ({
     assignment_id: assignmentId,
     step_id: stepId,
     rating,
@@ -475,7 +481,8 @@ async function saveStepRatings(
     const { error } = await write;
     if (error) {
       if (isOldRatingScale(error)) {
-        return NextResponse.json({ error: SCALE_NEEDS_MIGRATION }, { status: 503 });
+        const message = final.includes(NOT_APPLICABLE) ? NOT_APPLICABLE_NEEDS_MIGRATION : SCALE_NEEDS_MIGRATION;
+        return NextResponse.json({ error: message }, { status: 503 });
       }
       console.error('Failed to save sub-task ratings', error);
       return NextResponse.json({ error: 'Unable to save rating' }, { status: 500 });
@@ -483,11 +490,11 @@ async function saveStepRatings(
   }
 
   // The task's overall level, from what its sub-tasks now hold.
-  const rated = final.filter((level): level is TaskRating => level !== null);
+  const rated = final.filter((level): level is ChecklistRating => level !== null);
   let error: { code?: string; message?: string } | null = null;
-  let level: TaskRating | null = null;
+  let level: ChecklistRating | null = null;
   if (rated.length > 0) {
-    level = ratingForCredit(taskCredit(undefined, { total: stepIds.length, ratings: rated }));
+    level = taskLevelForCredit(taskCredit(undefined, { total: stepIds.length, ratings: rated }));
     if (existing) {
       ({ error } = await supabase
         .from('scenario_task_completions')

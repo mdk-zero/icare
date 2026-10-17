@@ -31,7 +31,7 @@ const ENTRIES: Entry[] = [
   [INSTRUCTOR_ID, "faculty", "case_presentation.create", "case_presentations", { message: "Assigned “Case Presentation 2: Fluid balance” to BSN 3101 and BSN 3102" }, 6],
   [INSTRUCTOR_ID, "faculty", "team.move_member", "teams", { message: "Moved Rafael Tan from Group A to Group B", reason: "Balancing group sizes after the schedule change" }, 9],
   [INSTRUCTOR_ID, "faculty", "assessment.assign", "assessments", { message: "Assigned “A Full Set of Vital Signs” to BSN 3102 · Group A" }, 11],
-  [INSTRUCTOR_ID, "faculty", "attendance.excuse", "activity_excuses", { message: "Excused an absence from a RetDem", reason: "Medical certificate submitted." }, 12],
+  [INSTRUCTOR_ID, "faculty", "attendance.excuse", "activity_excuses", { message: "Excused an absence from a Patient Case", reason: "Medical certificate submitted." }, 12],
   [INSTRUCTOR_ID, "faculty", "library.create", "library", { message: "Added “Vital signs pocket guide” to Vital Signs" }, 15],
   [INSTRUCTOR_2_ID, "faculty", "scenario.assign", "scenarios", { message: "Assigned “Cellulitis: IV Antibiotic Through a Saline Lock” to BSN 3102 · Group B" }, 3.2],
   [INSTRUCTOR_2_ID, "faculty", "scenario_assignment.finalize", "scenario_assignments", { message: "Graded Jasmine Castro on “Dehydration: Starting and Monitoring a Peripheral IV”", score: 88 }, 4.4],

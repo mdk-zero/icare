@@ -15,6 +15,8 @@ import {
 /**
  * GET: the caller's sections, their students, and the teams in them.
  *   { sections: [{ id, name }], teams: [...], students: [{ id, name, section_id, team_id, ... }], enabled }
+ * For an instructor, `students` is their groups' members plus their sections'
+ * students in no group (team_id null).
  */
 export async function GET() {
   const session = await readSession();
@@ -54,15 +56,15 @@ export async function GET() {
       : Promise.resolve({ data: [] }),
     supabase.from('teams').select('faculty_id', { head: true, count: 'exact' }).limit(1),
   ]);
-  // An instructor sees the groups they supervise, with their members, and the
-  // students of their sections who are in no group yet (theirs to place).
-  // Students in another instructor's group are not theirs.
+  // A faculty member sees only the groups they supervise and those groups'
+  // members. Students in another's group are not theirs. Students in no group
+  // yet are listed too (team_id null), so they can put them in one of theirs.
   const ownTeams =
     session.role === 'faculty' ? loaded.teams.filter((t) => t.faculty_id === session.uid) : loaded.teams;
   const ownStudentIds = new Set(ownTeams.flatMap((t) => t.members.map((m) => m.id)));
   const visibleStudents =
     session.role === 'faculty'
-      ? (students ?? []).filter((s) => ownStudentIds.has(s.id as string) || !loaded.teamOf.get(s.id as string))
+      ? (students ?? []).filter((s) => ownStudentIds.has(s.id as string) || !loaded.teamOf.has(s.id as string))
       : students ?? [];
 
   return NextResponse.json({

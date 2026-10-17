@@ -4,23 +4,25 @@ import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import type { ScenarioTask } from '@/lib/api';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
-import { TASK_RATING_LABEL, type TaskRating } from '@/lib/task-ratings';
+import { TASK_RATING_LABEL, type ChecklistRating } from '@/lib/task-ratings';
 
 /**
  * A scenario's clinical tasks as a numbered list. It is not a checklist the
  * student works through: the instructor watches the demonstration and grades
  * each task, so the only thing on the right is that grade, as the share of the
  * task's points earned — a dash until the instructor's saved grade is
- * released, when the task's title is struck through.
+ * released, when the task's title is struck through. A task marked N/A (not
+ * done in Philippine practice) reads "N/A" and isn't in the score.
  */
 export function ClinicalTaskList({ tasks }: { tasks: ScenarioTask[] }) {
   const { Palette, Accent, Type } = useTheme();
   const styles = React.useMemo(() => createStyles(Palette, Type), [Palette, Type]);
 
-  const gradeAccent: Record<TaskRating, { fg: string; bg: string }> = {
+  const gradeAccent: Record<ChecklistRating, { fg: string; bg: string }> = {
     excellent: Accent.green,
     satisfactory: Accent.blue,
     needs_practice: Accent.amber,
+    not_applicable: Accent.slate,
   };
 
   return (

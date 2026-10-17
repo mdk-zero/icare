@@ -164,7 +164,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       if (addedSections.length > 0) update.section_ids = [...presentation.section_ids, ...addedSections];
     }
 
-    // More groups (074), and students added to the course by hand.
+    // More groups (075), and students added to the course by hand.
     const strings = (v: unknown) =>
       Array.isArray(v) ? [...new Set(v.filter((x): x is string => typeof x === 'string' && x.length > 0))] : [];
     const { data: current } = await supabase.from('case_presentations').select('team_ids').eq('id', id).maybeSingle();

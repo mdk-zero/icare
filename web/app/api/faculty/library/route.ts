@@ -56,7 +56,7 @@ export async function GET() {
 
     const ids = rows.map((r) => r.id);
     const authorIds = [...new Set(rows.map((r) => r.created_by))];
-    // Each material's course (074), and whether materials can carry one yet.
+    // Each material's course (075), and whether materials can carry one yet.
     const [offeringOf, coursesReady] = await Promise.all([
       activityOfferings(supabase, 'library_materials', ids),
       activityCoursesReady(supabase, 'library_materials'),
@@ -109,7 +109,7 @@ export async function POST(request: NextRequest) {
     const parsed = await parseMaterialInput(body, session.uid, isSkillId);
     if ('error' in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 });
 
-    // The course it is for (074): an instructor picks one of theirs.
+    // The course it is for (075): an instructor picks one of theirs.
     const course = await activityCourse(supabase, 'library_materials', session, parseOfferingId(body));
     if ('error' in course) return NextResponse.json({ error: course.error }, { status: 400 });
     const offeringId = course.value.offering_id ?? null;

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { kindOf, scenarioKinds } from '@/app/lib/scenario-kind';
 
 export async function GET() {
   const session = await readSession();
@@ -42,6 +43,8 @@ export async function GET() {
     }
 
     const scenariosById = new Map(scenarios?.map((s) => [s.id, s]));
+    // Patient Case or Return Demonstration (072), so the app opens the right screen.
+    const kinds = await scenarioKinds(supabase, scenarioIds);
     // The student's team, if any; nothing before migration 048.
     const { data: membership } = await supabase
       .from('team_members')
@@ -57,6 +60,7 @@ export async function GET() {
         scenario_id: a.scenario_id,
         scenario_title: scenario?.title ?? 'Unknown Patient Case',
         patient_id: scenario?.patient_id ?? null,
+        kind: kindOf(kinds, a.scenario_id),
         student_id: a.student_id,
         student_name: session.email,
         team_name: teamName,

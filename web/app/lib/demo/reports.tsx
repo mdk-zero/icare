@@ -55,7 +55,11 @@ function studentReport(ctx: Ctx, id: string): Built {
   const { db } = ctx;
   const s = userById(db, id);
   if (!s || !visibleStudents(db, ctx.role, ctx.viewer.id).some((x) => x.id === id)) return { error: "Not found", status: 404 };
-  const cases = db.assignments.filter((a) => a.student_id === id).sort((a, b) => b.assigned_at.localeCompare(a.assigned_at));
+  // Return Demonstrations (072) get their own table; the case table and average leave them out.
+  const demos = new Set(db.scenarios.filter((x) => x.kind === "return_demo").map((x) => x.id));
+  const work = db.assignments.filter((a) => a.student_id === id).sort((a, b) => b.assigned_at.localeCompare(a.assigned_at));
+  const cases = work.filter((a) => !demos.has(a.scenario_id));
+  const returnDemos = work.filter((a) => demos.has(a.scenario_id));
   const attempts = submittedAttempts(db, id);
   const attendance = tallyAttendance(demoAttendanceRows(db, [id]).map((r) => r.status));
   return {
@@ -76,6 +80,13 @@ function studentReport(ctx: Ctx, id: string): Built {
         <Table head={["Case", "Status", "Score", "Deadline"]} widths={[4, 1.4, 1, 1.4]} rows={cases.map((a) => [
           db.scenarios.find((x) => x.id === a.scenario_id)?.title ?? "—",
           a.status === "completed" ? "Graded" : a.submitted_at ? "Awaiting review" : a.status === "overdue" ? "Overdue" : "Open",
+          pct(a.score),
+          date(a.deadline),
+        ])} />
+        <H>Return Demonstrations</H>
+        <Table head={["Return Demonstration", "Status", "Score", "Deadline"]} widths={[4, 1.4, 1, 1.4]} rows={returnDemos.map((a) => [
+          db.scenarios.find((x) => x.id === a.scenario_id)?.title ?? "—",
+          a.status === "completed" ? "Graded" : a.status === "overdue" ? "Overdue" : "Open",
           pct(a.score),
           date(a.deadline),
         ])} />
@@ -220,7 +231,7 @@ function attendanceReport(ctx: Ctx, id: string): Built {
         })} />
         <H>By activity</H>
         <Table head={["Activity", "Due", "Present", "Late", "Absent", "Excused"]} widths={[3, 1.6, 1, 1, 1, 1]} rows={activities.map((a) => [
-          activityLabel(a.kind, a.title), date(a.deadline), a.tally.present, a.tally.late, a.tally.absent, a.tally.excused,
+          activityLabel(a.kind, a.title, a.scenario_kind), date(a.deadline), a.tally.present, a.tally.late, a.tally.absent, a.tally.excused,
         ])} />
         <Text style={note}>Rate counts present and late as attended. Excused and upcoming activities are left out of the rate.</Text>
       </Shell>

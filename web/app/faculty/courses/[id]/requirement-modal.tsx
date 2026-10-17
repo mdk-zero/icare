@@ -43,7 +43,7 @@ const KINDS: { kind: RequirementKind; manualType?: ManualType; label: string; hi
   { kind: "count", label: "Count", hint: "A number of graded activities, or activities attended", icon: faHashtag },
   {
     kind: "skill",
-    label: "Return Demonstration",
+    label: "Skill",
     hint: "A course skill, met by graded Patient Case tasks or Quizzes on it",
     icon: faListCheck,
   },
@@ -170,7 +170,14 @@ export default function RequirementModal({
     if (next === "activity" && activityType === "shift") pickType("scenario");
   };
 
-  const link = { scenario: "scenario_id", assessment: "assessment_id", case_presentation: "presentation_id", shift: null }[activityType];
+  const link = {
+    scenario: "scenario_id",
+    assessment: "assessment_id",
+    case_presentation: "presentation_id",
+    // Only ever an automatic item (072); never picked here.
+    return_demo: "scenario_id",
+    shift: null,
+  }[activityType];
   const body: Record<string, unknown> = {
     kind,
     title,

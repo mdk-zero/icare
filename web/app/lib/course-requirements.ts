@@ -59,7 +59,10 @@ export async function loadProgressFacts(
 ): Promise<ProgressFacts> {
   const has = (test: (r: RequirementRow) => boolean) => requirements.some(test);
   const skillItems = has((r) => r.kind === 'skill');
-  const wantsCases = skillItems || has((r) => (r.kind === 'activity' || r.kind === 'count') && r.activity_type === 'scenario');
+  // A Return Demonstration (072) is scored from its assignment like a Patient Case.
+  const wantsCases =
+    skillItems ||
+    has((r) => (r.kind === 'activity' || r.kind === 'count') && (r.activity_type === 'scenario' || r.activity_type === 'return_demo'));
   const wantsCaseSkills = skillItems || has((r) => r.kind === 'count' && r.activity_type === 'scenario' && r.skills_only);
   const wantsAttempts = skillItems || has((r) => (r.kind === 'activity' || r.kind === 'count') && r.activity_type === 'assessment');
   const wantsQuizSkills = skillItems || has((r) => r.kind === 'count' && r.activity_type === 'assessment' && r.skills_only);
@@ -155,7 +158,8 @@ async function loadCases(
       const stepsByTask = stepGradesByTask(steps, ratings.filter((x) => x.assignment_id === r.id));
       for (const t of skillTasks) {
         if (t.scenario_id !== r.scenario_id) continue;
-        credit.set(`${r.id}:${t.id}`, taskCredit(completion.get(`${r.id}:${t.id}`), stepsByTask.get(t.id)));
+        // A task rated N/A shows nothing of the skill: no credit, so no evidence.
+        credit.set(`${r.id}:${t.id}`, taskCredit(completion.get(`${r.id}:${t.id}`), stepsByTask.get(t.id)) ?? 0);
       }
     }
   }

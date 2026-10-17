@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { ofKind, scenarioKinds } from '@/app/lib/scenario-kind';
 import { fetchTaskCompletions } from '@/app/lib/scenario-tasks';
 import { isPerformed } from '@/app/lib/task-ratings';
 
@@ -61,7 +62,9 @@ export async function GET() {
       return NextResponse.json({ error: 'Unable to load the ward' }, { status: 500 });
     }
 
-    const assignments = assignmentRows ?? [];
+    // Return Demonstrations (072) have no patient and their own screen.
+    const kinds = await scenarioKinds(supabase, [...new Set((assignmentRows ?? []).map((a) => a.scenario_id as string))]);
+    const assignments = ofKind(assignmentRows ?? [], kinds, 'patient_case', (a) => a.scenario_id as string);
     const scenarioIds = [...new Set(assignments.map((a) => a.scenario_id))];
 
     let scenariosById = new Map<string, ScenarioRow>();

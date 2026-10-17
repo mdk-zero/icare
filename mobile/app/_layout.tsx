@@ -40,6 +40,7 @@ function AuthStack() {
       <Stack.Screen name="clinic/room/[id]" options={{ title: 'Room' }} />
       <Stack.Screen name="clinic/patient/[id]" options={{ title: 'Patient' }} />
       <Stack.Screen name="clinic/assignment/[id]" options={{ title: 'Patient Case' }} />
+      <Stack.Screen name="retdem/[id]" options={{ title: 'Return Demonstration' }} />
       <Stack.Screen name="cases/[id]" options={{ title: 'Case Write-up' }} />
       {/* Draws its own top bar: none at all while a quiz is open (strict mode). */}
       <Stack.Screen name="quiz/[id]" options={{ headerShown: false }} />

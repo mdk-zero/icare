@@ -298,7 +298,7 @@ function youtubeId(input: string): string | null {
 
 route("GET", "/api/faculty/library", async (ctx) => {
   if (!staffOnly(ctx)) return forbidden();
-  // Each material's course (074).
+  // Each material's course (075).
   linkActivityCourses(ctx.db);
   const mine = new Set([ctx.viewer.id, ...ctx.db.users.filter((u) => u.admin_id === ctx.viewer.id).map((u) => u.id)]);
   return {

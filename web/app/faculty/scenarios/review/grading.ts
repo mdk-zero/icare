@@ -1,13 +1,18 @@
 import type { GradingTask } from "../../../lib/api";
 import {
   MAX_RATING_POINTS,
-  ratingForCredit,
+  NOT_APPLICABLE,
+  NOT_APPLICABLE_LABEL,
+  NOT_APPLICABLE_RUBRIC,
+  TASK_RATINGS,
   ratingPoints,
   resolveStepRatings,
   taskCredit,
+  taskLevelForCredit,
   wholeTaskLevel,
+  type ChecklistRating,
+  type Rubric,
   type StepGrades,
-  type TaskRating,
 } from "../../../lib/task-ratings";
 
 /**
@@ -17,7 +22,7 @@ import {
  * together; tints use 50/100, which it remaps. So every pairing reads in both.
  */
 export const RATING_STYLE: Record<
-  TaskRating,
+  ChecklistRating,
   { dot: string; checked: string; implied: string; hover: string; count: string }
 > = {
   excellent: {
@@ -41,7 +46,33 @@ export const RATING_STYLE: Record<
     hover: "hover:border-amber-600 hover:bg-amber-50 hover:text-amber-600",
     count: "bg-amber-100 text-amber-800",
   },
+  // Not a grade, so no hue: the neutral ramp, which the dark theme inverts.
+  not_applicable: {
+    dot: "bg-slate-400",
+    checked: "border-slate-500 bg-slate-500 text-surface",
+    implied: "border-dashed border-slate-500 text-slate-500",
+    hover: "hover:border-slate-500 hover:bg-slate-50 hover:text-slate-500",
+    count: "bg-slate-100 text-slate-700",
+  },
 };
+
+/** One checkmark column of the sheet. */
+export interface ChecklistColumn {
+  key: ChecklistRating;
+  label: string;
+  /** What a checkmark here scores; null for N/A, which isn't scored. */
+  points: number | null;
+}
+
+/** The sheet's checkmark columns: the three levels, best first, then N/A. */
+export const CHECKLIST_COLUMNS: readonly ChecklistColumn[] = [
+  ...TASK_RATINGS.map(({ key, label, points }) => ({ key, label, points })),
+  { key: NOT_APPLICABLE, label: NOT_APPLICABLE_LABEL, points: null },
+];
+
+/** What a column means on this scenario: its rubric, or the fixed N/A wording. */
+export const columnRubric = (rubric: Rubric, key: ChecklistRating) =>
+  key === NOT_APPLICABLE ? NOT_APPLICABLE_RUBRIC : rubric[key];
 
 /** A completion row exists — done by the student's charting, or rated by faculty. */
 export const hasCompletion = (t: GradingTask) => t.completed_via !== null;
@@ -54,8 +85,8 @@ export interface ChecklistRow {
   key: string;
   /** Null when the row is the task itself. */
   stepId: string | null;
-  /** The level the row scores at right now; null earns nothing. */
-  level: TaskRating | null;
+  /** The level the row scores at right now; null earns nothing, N/A isn't scored. */
+  level: ChecklistRating | null;
   /**
    * True when `level` isn't a rating anyone gave this row but the level its
    * task counts at as a whole — an auto-completion, or a whole-task rating
@@ -78,22 +109,31 @@ export function checklistRows(t: GradingTask): ChecklistRow[] {
   }));
 }
 
-/** The task's checklist points: each row scores its level's points out of MAX_RATING_POINTS. */
+/**
+ * The task's checklist points: each row scores its level's points out of
+ * MAX_RATING_POINTS, and an N/A row is in neither sum.
+ */
 export function taskPoints(t: GradingTask): { earned: number; max: number } {
-  const rows = checklistRows(t);
-  return {
-    earned: rows.reduce((sum, r) => sum + (r.level ? ratingPoints(r.level) : 0), 0),
-    max: rows.length * MAX_RATING_POINTS,
-  };
+  let earned = 0;
+  let max = 0;
+  for (const r of checklistRows(t)) {
+    if (r.level === NOT_APPLICABLE) continue;
+    max += MAX_RATING_POINTS;
+    if (r.level) earned += ratingPoints(r.level);
+  }
+  return { earned, max };
 }
 
+/** Every row N/A: the task is out of the grade, and its weight goes to the others. */
+export const outOfGrade = (t: GradingTask) => checklistRows(t).every((r) => r.level === NOT_APPLICABLE);
+
 /** The single level the task reads at now, for its segment of the composition bar. */
-export function taskLevel(t: GradingTask): { level: TaskRating | null; implied: boolean } {
+export function taskLevel(t: GradingTask): { level: ChecklistRating | null; implied: boolean } {
   const rows = checklistRows(t);
   if (rows.length === 1 || rows.every((r) => r.implied || r.level === null)) {
     return { level: rows[0].level, implied: rows[0].implied };
   }
-  return { level: ratingForCredit(taskCredit(undefined, stepGrades(t))), implied: false };
+  return { level: taskLevelForCredit(taskCredit(undefined, stepGrades(t))), implied: false };
 }
 
 export function stepGrades(t: GradingTask): StepGrades {
@@ -104,7 +144,7 @@ export function stepGrades(t: GradingTask): StepGrades {
 }
 
 /** The task as it reads after the server applies a whole-task `rating` (see the PUT route). */
-export function withRating(t: GradingTask, rating: TaskRating | null): GradingTask {
+export function withRating(t: GradingTask, rating: ChecklistRating | null): GradingTask {
   if (rating === null) {
     if (t.completed_via === "faculty") {
       return { ...t, rating: null, remarks: null, is_completed: false, completed_via: null, completed_at: null };
@@ -125,7 +165,7 @@ export function withRating(t: GradingTask, rating: TaskRating | null): GradingTa
  * level, or null to clear): the same resolveStepRatings the route runs, then
  * the overall level it stores on the completion row.
  */
-export function withStepChanges(t: GradingTask, changes: ReadonlyMap<string, TaskRating | null>): GradingTask {
+export function withStepChanges(t: GradingTask, changes: ReadonlyMap<string, ChecklistRating | null>): GradingTask {
   const current = new Map(t.steps.flatMap((s) => (s.rating ? [[s.id, s.rating] as const] : [])));
   const final = resolveStepRatings(
     t.steps.map((s) => s.id),
@@ -134,7 +174,7 @@ export function withStepChanges(t: GradingTask, changes: ReadonlyMap<string, Tas
     changes,
   );
   const steps = t.steps.map((s, i) => ({ ...s, rating: final[i] }));
-  const rated = final.filter((level): level is TaskRating => level !== null);
+  const rated = final.filter((level): level is ChecklistRating => level !== null);
   if (rated.length === 0) return withRating({ ...t, steps }, null);
-  return withRating({ ...t, steps }, ratingForCredit(taskCredit(undefined, { total: steps.length, ratings: rated })));
+  return withRating({ ...t, steps }, taskLevelForCredit(taskCredit(undefined, { total: steps.length, ratings: rated })));
 }

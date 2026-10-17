@@ -18,6 +18,7 @@ import {
 } from './data';
 import { activityLabel, byActivity, tallyAttendance } from '../attendance';
 import { loadActivityAttendance } from '../activity-attendance';
+import { ofKind, scenarioKinds } from '../scenario-kind';
 import { isActiveSkillArea } from '@/scripts/taylors-chapters';
 import { CASE_CRITERIA, isLateSubmission, type CaseObservations } from '../case-rubric';
 import { isLateSubmission as isLateAttempt } from '../assessment-timing';
@@ -85,7 +86,7 @@ export async function buildStudentReport(
     groupNames(supabase, [studentId]),
     supabase
       .from('scenario_assignments')
-      .select('status, score, submitted_at, completed_at, deadline, scenarios(title)')
+      .select('scenario_id, status, score, submitted_at, completed_at, deadline, scenarios(title)')
       .eq('student_id', studentId)
       .order('assigned_at', { ascending: false }),
     supabase
@@ -108,7 +109,9 @@ export async function buildStudentReport(
   ]);
   if (cases.error) console.error('Report: failed to read case submissions', cases.error);
 
-  const scenarioRows = (scenarios ?? []).map((a) => {
+  // Return Demonstrations (072) get their own table; the Patient Case rows and average leave them out.
+  const kinds = await scenarioKinds(supabase, (scenarios ?? []).map((a) => a.scenario_id as string));
+  const scenarioRows = ofKind(scenarios ?? [], kinds, 'patient_case', (a) => a.scenario_id as string).map((a) => {
     const title = (a as unknown as { scenarios: { title: string } | null }).scenarios?.title ?? 'Unknown patient case';
     const late = isLate(a.submitted_at, a.deadline);
     return {
@@ -118,6 +121,12 @@ export async function buildStudentReport(
       score: a.status === 'completed' && a.score !== null ? Number(a.score) : null,
     };
   });
+  const returnDemoRows = ofKind(scenarios ?? [], kinds, 'return_demo', (a) => a.scenario_id as string).map((a) => ({
+    title: (a as unknown as { scenarios: { title: string } | null }).scenarios?.title ?? 'Return Demonstration',
+    status: scenarioStatus(a),
+    graded: a.status === 'completed' && a.completed_at ? date(a.completed_at) : '—',
+    score: a.status === 'completed' && a.score !== null ? Number(a.score) : null,
+  }));
   const scenarioScores = scenarioRows.flatMap((r) => (r.score === null ? [] : [r.score]));
 
   const caseRows = (cases.data ?? []).map((c) => {
@@ -187,6 +196,14 @@ export async function buildStudentReport(
         widths={[3, 1.3, 1.3, 1.9]}
         rows={scenarioRows.map((r) => [r.title, r.status, r.handedIn, grade(r.score)])}
         emptyText="No patient cases assigned yet."
+      />
+
+      <Text style={styles.sectionTitle}>Return Demonstrations</Text>
+      <Table
+        head={['Return Demonstration', 'Status', 'Graded', 'Grade']}
+        widths={[3, 1.3, 1.3, 1.9]}
+        rows={returnDemoRows.map((r) => [r.title, r.status, r.graded, grade(r.score)])}
+        emptyText="No return demonstrations assigned yet."
       />
 
       <Text style={styles.sectionTitle}>Case presentations</Text>
@@ -789,7 +806,7 @@ export async function buildDischargeReport(
 
 /**
  * Attendance for one section: a per-student rate plus the activity-by-
- * activity counts behind it, from each RetDem, Quiz and Case Presentation's
+ * activity counts behind it, from each Patient Case, Return Demonstration, Quiz and Case Presentation's
  * deadline.
  *
  * Rates come from `tallyAttendance`, the same function the student's
@@ -880,7 +897,7 @@ export async function buildAttendanceReport(
         head={['Activity', 'Due', 'Present', 'Late', 'Absent', 'Excused']}
         widths={[3, 1.6, 1, 1, 1, 1]}
         rows={activities.map((a) => [
-          activityLabel(a.kind, a.title),
+          activityLabel(a.kind, a.title, a.scenario_kind),
           date(a.deadline),
           a.tally.present,
           a.tally.late,

@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
   }
   if (!suggestion) return NextResponse.json({ error: 'Suggestion not found' }, { status: 404 });
 
-  // Published for one of the instructor's courses (074), to its sections.
+  // Published for one of the instructor's courses (075), to its sections.
   const course = await activityCourse(supabase, 'library_materials', session, parseOfferingId(body as Record<string, unknown>));
   if ('error' in course) return NextResponse.json({ error: course.error }, { status: 400 });
   const offeringId = course.value.offering_id ?? null;

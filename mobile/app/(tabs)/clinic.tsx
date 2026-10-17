@@ -26,11 +26,15 @@ import {
 import { useApiData } from "@/hooks/useApiData";
 import { useLiveRefresh } from "@/hooks/useLiveRefresh";
 import { FloorPlan, FloorPlanSkeleton } from "@/components/FloorPlan";
+import { returnDemoStatus } from "@/lib/return-demos";
 import { useAppHeaderHeight } from "@/components/navigation/AppTabs";
 import {
   fetchWard,
   fetchAiTips,
   fetchMyCases,
+  fetchScenarioAssignments,
+  isReturnDemo,
+  ScenarioAssignment,
   AiTip,
   WardRoom,
   WardPatient,
@@ -179,10 +183,10 @@ function TipCard({ tip }: { tip: AiTip }) {
   );
 }
 
-type DropdownKey = "pending" | "completed" | "hospital";
+type DropdownKey = "pending" | "completed" | "demos" | "hospital";
 
 /** Top to bottom, as they appear on the screen. */
-const DROPDOWN_ORDER: DropdownKey[] = ["pending", "completed", "hospital"];
+const DROPDOWN_ORDER: DropdownKey[] = ["pending", "completed", "demos", "hospital"];
 
 /** Room left for a dropdown's heading when deciding whether it should still be pinned. */
 const DROPDOWN_HEADING_H = 56;
@@ -251,13 +255,17 @@ export default function ClinicScreen() {
   // Separate call: a slow LLM generation must never hold up the ward.
   const tips = useApiData(fetchAiTips);
   const cases = useApiData(fetchMyCases);
+  // Return Demonstrations have no patient, so they aren't on the ward.
+  const demos = useApiData(fetchScenarioAssignments);
   // A case assigned or graded shows up at once: its notification arrives live.
   const reloadCases = cases.reload;
+  const reloadDemos = demos.reload;
   useLiveRefresh(
     React.useCallback(() => {
       reload();
       reloadCases();
-    }, [reload, reloadCases]),
+      reloadDemos();
+    }, [reload, reloadCases, reloadDemos]),
   );
 
   // Faculty check tasks off in the meantime, so the counters are stale on return.
@@ -266,17 +274,20 @@ export default function ClinicScreen() {
       if (data) reload();
       // A case edited or handed in comes back with a new status.
       cases.reload();
+      demos.reload();
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [reload]),
   );
 
   const refreshTips = tips.refresh;
   const refreshCases = cases.refresh;
+  const refreshDemos = demos.refresh;
   const handleRefresh = React.useCallback(() => {
     refresh();
     refreshTips();
     refreshCases();
-  }, [refresh, refreshTips, refreshCases]);
+    refreshDemos();
+  }, [refresh, refreshTips, refreshCases, refreshDemos]);
 
   const openAssignment = React.useCallback(
     (assignment: WardAssignment) => {
@@ -290,6 +301,7 @@ export default function ClinicScreen() {
   const [open, setOpen] = React.useState<Record<DropdownKey, boolean>>({
     pending: true,
     completed: false,
+    demos: false,
     hospital: false,
   });
 
@@ -361,6 +373,15 @@ export default function ClinicScreen() {
 
   const tipList = tips.data?.tips ?? [];
   const caseList = cases.data ?? [];
+  // Open ones first, soonest due; then graded ones, newest first.
+  const demoList = (demos.data ?? [])
+    .filter(isReturnDemo)
+    .sort((a, b) =>
+      (a.status === "completed" ? 1 : 0) - (b.status === "completed" ? 1 : 0) ||
+      (a.status === "completed"
+        ? (b.completed_at ?? "").localeCompare(a.completed_at ?? "")
+        : (a.deadline ?? "").localeCompare(b.deadline ?? "")),
+    );
   // Write-ups still in the student's hands: not started, or a draft.
   const pendingCases = caseList.filter((c) => c.status === "not_started" || c.status === "draft");
   const pendingCount = openAssignments.length + pendingCases.length;
@@ -369,6 +390,7 @@ export default function ClinicScreen() {
   const headings: Record<DropdownKey, { title: string; count: number; tone?: "alert" }> = {
     pending: { title: "Pending Tasks", count: pendingCount, tone: "alert" },
     completed: { title: "Completed Patient Cases", count: completedAssignments.length },
+    demos: { title: "Return Demonstrations", count: demoList.length },
     hospital: { title: "Hospital Cases", count: caseList.length },
   };
 
@@ -514,6 +536,24 @@ export default function ClinicScreen() {
           </View>
         ) : null}
 
+        {demoList.length > 0 ? (
+          <View style={styles.section} onLayout={(e) => onSectionLayout("demos", e)}>
+            <DropdownHeading {...headings.demos} open={open.demos} onToggle={() => toggle("demos")} />
+            {open.demos ? (
+              <View style={styles.dropdownBody}>
+                <Text style={styles.dropdownNote}>Skills you&apos;ll demonstrate to your instructor</Text>
+                {demoList.map((assignment) => (
+                  <ReturnDemoCard
+                    key={assignment.id}
+                    assignment={assignment}
+                    onPress={() => router.push(`/retdem/${assignment.id}`)}
+                  />
+                ))}
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+
         {caseList.length > 0 || cases.loading ? (
           <View style={styles.section} onLayout={(e) => onSectionLayout("hospital", e)}>
             <DropdownHeading {...headings.hospital} open={open.hospital} onToggle={() => toggle("hospital")} />
@@ -626,6 +666,41 @@ function CompletedCaseCard({
             {patient.name}
           </Text>
         ) : null}
+      </View>
+      <Ionicons name="chevron-forward" size={17} color={Palette.textFaint} />
+    </Pressable>
+  );
+}
+
+/** A Return Demonstration: its title, when it's due, and where it stands. Opens its skills and steps. */
+function ReturnDemoCard({ assignment, onPress }: { assignment: ScenarioAssignment; onPress: () => void }) {
+  const { Palette, Accent, Shadow, Type } = useTheme();
+  const styles = React.useMemo(
+    () => createStyles(Palette, Accent, Shadow, Type),
+    [Palette, Accent, Shadow, Type],
+  );
+  const status = returnDemoStatus(assignment);
+  const due = assignment.deadline
+    ? new Date(assignment.deadline).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+    : null;
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.tipCard, styles.caseCard, pressed && styles.pressedCard]}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${assignment.scenario_title}, ${status.label}`}
+    >
+      <View style={[styles.bannerIcon, { backgroundColor: Accent.blue.bg }]}>
+        <Ionicons name="hand-left-outline" size={17} color={Accent.blue.fg} />
+      </View>
+      <View style={styles.tipBody}>
+        <Text style={Type.itemTitle} numberOfLines={1}>
+          {assignment.scenario_title}
+        </Text>
+        <View style={styles.caseMeta}>
+          <Badge label={status.label} variant={status.variant} size="sm" />
+          {due && assignment.status !== "completed" ? <Text style={Type.caption}>Due {due}</Text> : null}
+        </View>
       </View>
       <Ionicons name="chevron-forward" size={17} color={Palette.textFaint} />
     </Pressable>

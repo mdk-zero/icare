@@ -745,7 +745,7 @@ export default function StudentDetailClient() {
             {
               key: 'attendance',
               label: 'Attendance',
-              hint: 'RetDems, quizzes, case presentations',
+              hint: 'Patient cases, return demos, quizzes, case presentations',
               count: attendanceRate === null ? '—' : `${attendanceRate}%`,
               unit: 'attended',
               icon: faCalendarCheck,

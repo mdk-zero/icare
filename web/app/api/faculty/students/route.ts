@@ -8,6 +8,7 @@ import { manageableSectionIds } from '@/app/lib/teams';
 import { parseSex } from '@/app/lib/auth/user';
 import { getLatestRiskByStudent, getLastActivityByStudent } from '@/app/lib/faculty-dashboard';
 import { logAudit } from '@/app/lib/audit';
+import { isMissingTeamTables, manageableTeam, TEAMS_NEED_MIGRATION } from '@/app/lib/teams';
 
 function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -107,6 +108,15 @@ export async function GET() {
   }
 }
 
+/**
+ * POST { name, email, sex?, team_id?, section_id? }: register a student.
+ *
+ * An instructor registers into one of the groups they supervise (`team_id`,
+ * required): the account goes into that group's section and the group in one
+ * step, since a student in no group of theirs is not on their roster. An
+ * admin may give a section alone. The temporary password is emailed to the
+ * student and also returned, in case the email doesn't land.
+ */
 export async function POST(request: NextRequest) {
   const session = await readSession();
   if (!session) {
@@ -123,11 +133,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const { name, email, section_id, sex } = body as {
+  const { name, email, section_id, sex, team_id } = body as {
     name?: unknown;
     email?: unknown;
     section_id?: unknown;
     sex?: unknown;
+    team_id?: unknown;
   };
 
   if (typeof name !== 'string' || name.trim().length === 0) {
@@ -138,13 +149,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Student email is required' }, { status: 400 });
   }
 
-  if (typeof section_id !== 'string' || section_id.trim().length === 0) {
+  const teamId = typeof team_id === 'string' && team_id.trim() ? team_id.trim() : null;
+  if (session.role === 'faculty' && !teamId) {
+    return NextResponse.json({ error: 'Choose one of your groups for the student' }, { status: 400 });
+  }
+  const givenSectionId = typeof section_id === 'string' ? section_id.trim() : '';
+  if (!teamId && !givenSectionId) {
     return NextResponse.json({ error: 'Section is required' }, { status: 400 });
   }
 
   const trimmedName = name.trim();
   const normalizedEmail = email.trim().toLowerCase();
-  const sectionId = section_id.trim();
 
   if (!isValidEmail(normalizedEmail)) {
     return NextResponse.json({ error: 'Invalid email format' }, { status: 400 });
@@ -157,6 +172,30 @@ export async function POST(request: NextRequest) {
 
   try {
     const supabase = getSupabaseAdmin();
+
+    // The group decides the section: an instructor's must be one they
+    // supervise, an admin's one in their sections.
+    let team: { id: string; name: string; section_id: string } | null = null;
+    if (teamId) {
+      const { data } = await supabase
+        .from('teams')
+        .select('id, name, section_id, faculty_id')
+        .eq('id', teamId)
+        .maybeSingle();
+      const allowed =
+        data &&
+        (session.role === 'faculty'
+          ? data.faculty_id === session.uid
+          : Boolean(await manageableTeam(supabase, session.role, session.uid, teamId)));
+      if (!data || !allowed) {
+        return NextResponse.json({ error: 'You can only register students into your own groups' }, { status: 403 });
+      }
+      if (givenSectionId && givenSectionId !== data.section_id) {
+        return NextResponse.json({ error: 'The group is in a different section' }, { status: 400 });
+      }
+      team = { id: data.id as string, name: data.name as string, section_id: data.section_id as string };
+    }
+    const sectionId = team?.section_id ?? givenSectionId;
 
     const sectionCheck = await resolveSection(supabase, session, sectionId);
     if (sectionCheck.error) {
@@ -199,12 +238,50 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unable to create student' }, { status: 500 });
     }
 
+    if (team) {
+      const { error: memberError } = await supabase
+        .from('team_members')
+        .insert({ team_id: team.id, student_id: student.id });
+      if (memberError) {
+        // An instructor can't see a student outside their groups, so a
+        // half-made registration would be lost to them: take it back.
+        console.error('Failed to add the new student to their group', memberError);
+        await supabase.from('users').delete().eq('id', student.id).eq('role', 'student');
+        const message = isMissingTeamTables(memberError) ? TEAMS_NEED_MIGRATION : 'Unable to add the student to the group';
+        return NextResponse.json({ error: message }, { status: isMissingTeamTables(memberError) ? 503 : 500 });
+      }
+    }
+
+    await logAudit(
+      session,
+      {
+        action: 'user.create',
+        entityType: 'users',
+        entityId: student.id,
+        details: {
+          role: 'student',
+          message: `Registered ${trimmedName}${team ? ` into ${team.name}` : ''}`,
+          section_id: sectionId,
+          ...(team ? { team_id: team.id, team: team.name } : {}),
+        },
+      },
+      request,
+    );
+
+    const created = {
+      id: student.id,
+      email: student.email,
+      name: student.name,
+      role: student.role,
+      section_id: student.section_id,
+      team_id: team?.id ?? null,
+    };
     const emailResult = await sendStudentInvitationEmail(normalizedEmail, trimmedName, tempPassword);
 
     if (!emailResult.success) {
       return NextResponse.json(
         {
-          student: { id: student.id, email: student.email, name: student.name, role: student.role, section_id: student.section_id },
+          student: created,
           // Same shape as /api/admin/users, so the dean's register and bulk-enroll forms work here too.
           user: { id: student.id, email: student.email },
           password: tempPassword,
@@ -215,11 +292,7 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json(
-      {
-        student: { id: student.id, email: student.email, name: student.name, role: student.role, section_id: student.section_id },
-        user: { id: student.id, email: student.email },
-        password: tempPassword,
-      },
+      { student: created, user: { id: student.id, email: student.email }, password: tempPassword },
       { status: 201 },
     );
   } catch (err) {

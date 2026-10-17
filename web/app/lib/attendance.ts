@@ -1,8 +1,9 @@
 import type { Parsed } from './course-progress';
+import { SCENARIO_KIND_SHORT, type ScenarioKind } from './scenario-kind';
 
 /**
- * Attendance from deadlines. Every RetDem (patient case), Quiz and Case
- * Presentation a student is given has a deadline; doing the work by it is
+ * Attendance from deadlines. Every Patient Case, Return Demonstration, Quiz
+ * and Case Presentation a student is given has a deadline; doing the work by it is
  * Present, after it Late, and not at all once it has passed Absent, unless an
  * instructor excused it. Nothing but excuses is stored: this runs on every
  * read, so a moved deadline or a late hand-in shows at once.
@@ -25,14 +26,25 @@ export const ATTENDANCE_LABEL: Record<AttendanceStatus, string> = {
 
 const KINDS: readonly ActivityKind[] = ['scenario', 'assessment', 'case_presentation'];
 
+/**
+ * The stored kinds. 'scenario' covers Patient Cases and Return
+ * Demonstrations (072) alike, since excuses (068) key on the assignment;
+ * scenario_kind tells them apart for display.
+ */
 export const ACTIVITY_KIND_LABEL: Record<ActivityKind, string> = {
-  scenario: 'RetDem',
+  scenario: 'Patient Case',
   assessment: 'Quiz',
   case_presentation: 'Case Presentation',
 };
 
-/** "Quiz · Vital Signs": a RetDem and a Quiz can share a title. */
-export const activityLabel = (kind: ActivityKind, title: string) => `${ACTIVITY_KIND_LABEL[kind]} · ${title}`;
+/** "Return Demo", "Patient Case", "Quiz": what one activity is, for a row. */
+export function activityKindLabel(fact: { kind: ActivityKind; scenario_kind?: ScenarioKind }): string {
+  return fact.kind === 'scenario' ? SCENARIO_KIND_SHORT[fact.scenario_kind ?? 'patient_case'] : ACTIVITY_KIND_LABEL[fact.kind];
+}
+
+/** "Quiz · Vital Signs": a Patient Case, a Return Demo and a Quiz can share a title. */
+export const activityLabel = (kind: ActivityKind, title: string, scenarioKind?: ScenarioKind) =>
+  `${activityKindLabel({ kind, scenario_kind: scenarioKind })} · ${title}`;
 
 /** One student's piece of deadline-bound work. activity_id: the assignment, or the case presentation. */
 export interface ActivityFact {
@@ -41,6 +53,8 @@ export interface ActivityFact {
   activity_id: string;
   /** What was given: the patient case, the quiz, or the case presentation, shared by every student given it. */
   source_id: string;
+  /** On a 'scenario' row only: a Patient Case or a Return Demonstration (072). */
+  scenario_kind?: ScenarioKind;
   title: string;
   deadline: string | null;
   /** When the work was done: the first graded task, the first submitted attempt, the hand-in. */
@@ -73,7 +87,8 @@ export interface AttendanceTally {
 
 /** The rows activities are built from, as the database (or the demo) holds them. */
 export interface ActivitySources {
-  scenarioAssignments: { id: string; student_id: string; scenario_id: string; title: string; deadline: string | null }[];
+  /** kind: a Patient Case unless given (072). */
+  scenarioAssignments: { id: string; student_id: string; scenario_id: string; title: string; deadline: string | null; kind?: ScenarioKind }[];
   /** Graded tasks: a row is written when the instructor grades a task. */
   completions: { assignment_id: string; completed_at: string }[];
   /** default_deadline: the quiz's own deadline, which an assignment without one inherits. */
@@ -130,6 +145,7 @@ export function collectActivities(src: ActivitySources): ActivityFact[] {
         kind: 'scenario',
         activity_id: a.id,
         source_id: a.scenario_id,
+        scenario_kind: a.kind ?? 'patient_case',
         title: a.title,
         deadline: a.deadline,
         done_at: firstGraded.get(a.id) ?? null,
@@ -192,6 +208,7 @@ export function attendanceRows(activities: readonly ActivityFact[], excuses: rea
 export interface ActivityGroup {
   kind: ActivityKind;
   source_id: string;
+  scenario_kind?: ScenarioKind;
   title: string;
   deadline: string;
   tally: AttendanceTally;
@@ -203,11 +220,21 @@ export interface ActivityGroup {
  * newest deadline first. Activities with no deadline are left out.
  */
 export function byActivity(rows: readonly AttendanceRow[]): ActivityGroup[] {
-  const groups = new Map<string, { kind: ActivityKind; source_id: string; title: string; deadline: string; statuses: AttendanceStatus[] }>();
+  const groups = new Map<
+    string,
+    { kind: ActivityKind; source_id: string; scenario_kind?: ScenarioKind; title: string; deadline: string; statuses: AttendanceStatus[] }
+  >();
   for (const r of rows) {
     if (!r.deadline) continue;
     const key = `${r.kind}:${r.source_id}:${Date.parse(r.deadline)}`;
-    const g = groups.get(key) ?? { kind: r.kind, source_id: r.source_id, title: r.title, deadline: r.deadline, statuses: [] };
+    const g = groups.get(key) ?? {
+      kind: r.kind,
+      source_id: r.source_id,
+      ...(r.scenario_kind ? { scenario_kind: r.scenario_kind } : {}),
+      title: r.title,
+      deadline: r.deadline,
+      statuses: [],
+    };
     g.statuses.push(r.status);
     groups.set(key, g);
   }

@@ -19,7 +19,7 @@ import {
   setToken,
 } from './client';
 import type { AnomalyReason } from './vitals-rules';
-import type { TaskRating } from './task-ratings';
+import type { ChecklistRating, TaskRating } from './task-ratings';
 
 // ---------------------------------------------------------------
 // Auth (5.1)
@@ -371,6 +371,13 @@ export interface ScenarioAssignment {
   team_name?: string | null;
   /** When the student pressed Start (null: not yet); absent before migration 063. */
   started_at?: string | null;
+  /** A Patient Case, or a Return Demonstration (skill checklists, no patient); absent from older servers. */
+  kind?: 'patient_case' | 'return_demo';
+}
+
+/** A Return Demonstration opens its own screen, not the ward. */
+export function isReturnDemo(assignment: Pick<ScenarioAssignment, 'kind'>): boolean {
+  return assignment.kind === 'return_demo';
 }
 
 export async function fetchScenarioAssignments(): Promise<CachedResult<ScenarioAssignment[]>> {
@@ -407,10 +414,12 @@ export interface ScenarioTask {
   completed_via: 'system' | 'faculty' | null;
   completed_at: string | null;
   /** Instructor's verbal rating and note — sent only once the scenario is finalized. */
-  rating?: TaskRating | null;
+  rating?: ChecklistRating | null;
   remarks?: string | null;
   /** The share of this task's points earned (0–100), sent with the rating. */
   percent?: number | null;
+  /** The skill's checklist steps, each with its rating once the task's grade is released. */
+  steps?: { id: string; title: string; rating: ChecklistRating | null }[];
 }
 
 export interface ScenarioTasksResult {

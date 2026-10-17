@@ -56,8 +56,8 @@ export async function loadTeams(
 }
 
 /**
- * Each presentation's groups (074), "BSN 3101 · Group A", for the list and its
- * detail. Empty before 074, or for a presentation given to whole sections.
+ * Each presentation's groups (075), "BSN 3101 · Group A", for the list and its
+ * detail. Empty before 075, or for a presentation given to whole sections.
  */
 export async function presentationGroups(
   supabase: Supabase,

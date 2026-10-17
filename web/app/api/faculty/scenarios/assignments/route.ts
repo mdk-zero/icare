@@ -7,6 +7,7 @@ import {
   fetchPerformedTaskCounts,
   fetchTaskCountsByScenario,
 } from '@/app/lib/scenario-tasks';
+import { kindOf, kindParam, ofKind, scenarioKinds } from '@/app/lib/scenario-kind';
 
 export async function GET(request: NextRequest) {
   const session = await readSession();
@@ -21,6 +22,8 @@ export async function GET(request: NextRequest) {
     const supabase = getSupabaseAdmin();
     const { searchParams } = new URL(request.url);
     const requestedStudentId = searchParams.get('student_id');
+    // Patient Cases unless asked for Return Demonstrations (072) or both.
+    const kind = kindParam(searchParams.get('kind'));
 
     let studentIds: string[] = [];
 
@@ -59,7 +62,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ assignments: [] });
     }
 
-    const { data: assignments, error: assignmentsError } = await supabase
+    const { data: allAssignments, error: assignmentsError } = await supabase
       .from('scenario_assignments')
       .select('id, scenario_id, student_id, assigned_at, deadline, status, required, score, completed_at, time_taken, submitted_at, finalized_by, team_id')
       .in('student_id', studentIds)
@@ -71,7 +74,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unable to fetch assignments' }, { status: 500 });
     }
 
-    if (!assignments || assignments.length === 0) {
+    if (!allAssignments || allAssignments.length === 0) {
+      return NextResponse.json({ assignments: [] });
+    }
+
+    const kinds = await scenarioKinds(supabase, [...new Set(allAssignments.map((a) => a.scenario_id as string))]);
+    const assignments = ofKind(allAssignments, kinds, kind, (a) => a.scenario_id as string);
+    if (assignments.length === 0) {
       return NextResponse.json({ assignments: [] });
     }
 
@@ -124,6 +133,7 @@ export async function GET(request: NextRequest) {
       id: a.id,
       scenario_id: a.scenario_id,
       scenario_title: scenariosById.get(a.scenario_id) ?? 'Unknown Patient Case',
+      kind: kindOf(kinds, a.scenario_id as string),
       student_id: a.student_id,
       student_name: studentsById.get(a.student_id)?.name ?? 'Unknown Student',
       student_picture_url: studentsById.get(a.student_id)?.picture_url ?? null,

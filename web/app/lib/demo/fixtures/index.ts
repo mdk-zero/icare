@@ -7,6 +7,7 @@ import { seedTeaching } from "./teaching";
 import { seedSystem } from "./system";
 import { seedCourses } from "./courses";
 import { seedExcuses, type DemoExcuse } from "./attendance";
+import { seedReturnDemos } from "./return-demos";
 
 /** A fresh copy of every demo table, as it stands before the visitor changes anything. */
 export function seed() {
@@ -16,6 +17,7 @@ export function seed() {
     ...people,
   };
   const school = seedSchool(people.users, people.teams);
+  seedReturnDemos(school, people.users, people.teams);
   const system = seedSystem();
   const teaching = seedTeaching(people.users);
   return {

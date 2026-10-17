@@ -1,7 +1,7 @@
 import type { DemoDb } from "../store";
 import type { DemoUser } from "../fixtures/people";
 import type { DemoAssignment } from "../fixtures/school";
-import type { TaskRating } from "@/app/lib/task-ratings";
+import { MAX_RATING_POINTS, NOT_APPLICABLE, type ChecklistRating, type TaskRating } from "@/app/lib/task-ratings";
 import { sectionName, teamLabel } from "./scope";
 import { attendanceRows, collectActivities, tallyAttendance, type AttendanceRow } from "@/app/lib/attendance";
 
@@ -19,6 +19,7 @@ export const DAY_MS = 86_400_000;
 export function demoAttendanceRows(db: DemoDb, studentIds: readonly string[], now = Date.now()): AttendanceRow[] {
   const ids = new Set(studentIds);
   const scenarioTitle = new Map(db.scenarios.map((s) => [s.id, s.title]));
+  const scenarioKind = new Map(db.scenarios.map((s) => [s.id, s.kind ?? "patient_case"]));
   const quizTitle = new Map(db.quizzes.map((q) => [q.id, q.title]));
   const presentation = new Map(db.casePresentations.map((p) => [p.id, p]));
   const scenarioAssignments = db.assignments.filter((a) => ids.has(a.student_id));
@@ -29,6 +30,7 @@ export function demoAttendanceRows(db: DemoDb, studentIds: readonly string[], no
       student_id: a.student_id,
       scenario_id: a.scenario_id,
       title: scenarioTitle.get(a.scenario_id) ?? "Patient case",
+      kind: scenarioKind.get(a.scenario_id) ?? "patient_case",
       deadline: a.deadline,
     })),
     completions: db.completions.filter((c) => assignmentIds.has(c.assignment_id)),
@@ -75,29 +77,48 @@ export function scoredAt(): string {
 
 const CREDIT: Record<TaskRating, number> = { excellent: 1, satisfactory: 2 / 3, needs_practice: 1 / 3 };
 
-export function levelForCredit(credit: number): TaskRating {
+/** A mark's credit; null for N/A, which isn't scored. */
+const creditOf = (rating: ChecklistRating): number | null => (rating === NOT_APPLICABLE ? null : CREDIT[rating]);
+
+/** The level a task sums up to; N/A when it's out of the score. */
+export function levelForCredit(credit: number | null): ChecklistRating {
+  if (credit === null) return NOT_APPLICABLE;
   const score = Math.round(credit * 100);
   if (score >= 90) return "excellent";
   if (score >= 60) return "satisfactory";
   return "needs_practice";
 }
 
-/** A task's credit: its rated sub-tasks' share, or its whole-task rating. */
-export function taskCredit(db: DemoDb, assignmentId: string, taskId: string): { credit: number; rated: number; total: number } {
+/**
+ * A task's credit: its rated sub-tasks' share of the applicable ones, or its
+ * whole-task rating. Null when nothing on it applies (all N/A). `applicable`
+ * is how many of its rows are on offer.
+ */
+export function taskCredit(
+  db: DemoDb,
+  assignmentId: string,
+  taskId: string,
+): { credit: number | null; rated: number; total: number; applicable: number } {
   const steps = db.steps.filter((s) => s.task_id === taskId);
   const completion = db.completions.find((c) => c.assignment_id === assignmentId && c.task_id === taskId);
   if (steps.length > 0) {
     const ids = new Set(steps.map((s) => s.id));
     const ratings = db.stepRatings.filter((r) => r.assignment_id === assignmentId && ids.has(r.step_id));
     if (ratings.length > 0) {
-      const earned = ratings.reduce((sum, r) => sum + CREDIT[r.rating], 0);
-      return { credit: Math.min(1, earned / steps.length), rated: ratings.length, total: steps.length };
+      let earned = 0;
+      let applicable = steps.length;
+      for (const r of ratings) {
+        const credit = creditOf(r.rating);
+        if (credit === null) applicable -= 1;
+        else earned += credit;
+      }
+      return { credit: applicable > 0 ? Math.min(1, earned / applicable) : null, rated: ratings.length, total: steps.length, applicable };
     }
-    if (completion) return { credit: completion.rating ? CREDIT[completion.rating] : 1, rated: steps.length, total: steps.length };
-    return { credit: 0, rated: 0, total: steps.length };
+    if (completion) return { credit: completion.rating ? creditOf(completion.rating) : 1, rated: steps.length, total: steps.length, applicable: steps.length };
+    return { credit: 0, rated: 0, total: steps.length, applicable: steps.length };
   }
-  if (!completion) return { credit: 0, rated: 0, total: 1 };
-  return { credit: completion.rating ? CREDIT[completion.rating] : 1, rated: 1, total: 1 };
+  if (!completion) return { credit: 0, rated: 0, total: 1, applicable: 1 };
+  return { credit: completion.rating ? creditOf(completion.rating) : 1, rated: 1, total: 1, applicable: 1 };
 }
 
 export function scoreAssignment(db: DemoDb, a: DemoAssignment): { score: number; remaining: number } {
@@ -106,11 +127,17 @@ export function scoreAssignment(db: DemoDb, a: DemoAssignment): { score: number;
   let remaining = 0;
   for (const task of db.tasks.filter((t) => t.scenario_id === a.scenario_id)) {
     const c = taskCredit(db, a.id, task.id);
-    earned += task.points * c.credit;
-    total += task.points;
     remaining += c.total - c.rated;
+    if (c.credit === null) continue;
+    // Every applicable checklist row is worth MAX_RATING_POINTS, whatever the
+    // task's own points say; a task with no sub-tasks counts as a single row.
+    // The whole case is the raw score over every row on offer, scaled to a
+    // percentage.
+    const max = c.applicable * MAX_RATING_POINTS;
+    earned += max * c.credit;
+    total += max;
   }
-  return { score: total > 0 ? Math.round((earned / total) * 100) : 0, remaining };
+  return { score: total > 0 ? Math.round(((earned / total) * 62.5 + 37.5) * 10) / 10 : 0, remaining };
 }
 
 /** How many of the case's tasks the student performed (has any grade on). */
@@ -130,6 +157,7 @@ export function assignmentRow(db: DemoDb, a: DemoAssignment) {
     id: a.id,
     scenario_id: a.scenario_id,
     scenario_title: db.scenarios.find((s) => s.id === a.scenario_id)?.title ?? "Unknown Patient Case",
+    kind: db.scenarios.find((s) => s.id === a.scenario_id)?.kind ?? "patient_case",
     student_id: a.student_id,
     student_name: student?.name ?? "Unknown Student",
     student_picture_url: student?.picture_url ?? null,
@@ -198,9 +226,13 @@ export function quizAverage(db: DemoDb, studentId: string): number | null {
   return mean(submittedAttempts(db, studentId).map((a) => a.score ?? 0));
 }
 
+/** Over Patient Cases only: Return Demonstrations (072) are reported on their own. */
 export function caseAverage(db: DemoDb, studentId: string): number | null {
+  const demos = new Set(db.scenarios.filter((s) => s.kind === "return_demo").map((s) => s.id));
   return mean(
-    db.assignments.filter((a) => a.student_id === studentId && a.status === "completed").map((a) => a.score ?? 0),
+    db.assignments
+      .filter((a) => a.student_id === studentId && a.status === "completed" && !demos.has(a.scenario_id))
+      .map((a) => a.score ?? 0),
   );
 }
 
