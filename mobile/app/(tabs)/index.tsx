@@ -14,6 +14,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { useAvatarImage } from "@/hooks/useAvatar";
 import { useApiData, allCached } from "@/hooks/useApiData";
 import { useLiveRefresh } from "@/hooks/useLiveRefresh";
+import { useWallClock } from "@/components/navigation/AppTabs";
+import { performOn } from "@/lib/return-demos";
 import { CourseRequirements } from "@/components/CourseRequirements";
 import {
   fetchScenarioAssignments,
@@ -49,20 +51,6 @@ function getGreeting() {
   if (hour < 12) return "Good morning";
   if (hour < 17) return "Good afternoon";
   return "Good evening";
-}
-
-/**
- * Duty band by the clock, following the AM/PM/night convention the schema's
- * shift_type enum uses (migration 029). The shifts table itself is not
- * reachable from mobile yet, so this frames the screen by time of day rather
- * than by a roster entry.
- */
-function getShiftLabel() {
-  const hour = new Date().getHours();
-  if (hour < 6) return "NIGHT SHIFT";
-  if (hour < 14) return "AM SHIFT";
-  if (hour < 22) return "PM SHIFT";
-  return "NIGHT SHIFT";
 }
 
 /** Null when sex is unrecorded, which is the default for every account. */
@@ -158,19 +146,20 @@ function statusColors(Accent: ReturnType<typeof useTheme>["Accent"]): Record<str
   return {
     completed: Accent.green.fg,
     in_progress: Accent.amber.fg,
-    overdue: Accent.red.fg,
   };
 }
 
+/** Patient cases and Return Demonstrations are performed on their date, not due by it. */
 function formatDeadline(assignment: ScenarioAssignment): string {
-  if (!assignment.deadline) return "No deadline";
-  return new Date(assignment.deadline).toLocaleDateString([], { month: "short", day: "numeric" });
+  return performOn(assignment.deadline);
 }
 
 export default function DashboardScreen() {
   // content starts below the floating header, then scrolls beneath it
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  // The time lives here now; the header keeps the bell and the profile.
+  const time = useWallClock();
 
   // A scenario is worked on its patient now, in the Clinic tab. Scenarios with
   // no patient linked still have a brief-only screen to land on, and a Return
@@ -280,8 +269,10 @@ export default function DashboardScreen() {
       <Animated.View entering={FadeInDown.duration(220)} style={styles.greetingRow}>
         <View style={styles.greetingText}>
           <View style={styles.dutyPill}>
-            <View style={styles.dutyDot} />
-            <Text style={styles.dutyText}>ON DUTY · {getShiftLabel()}</Text>
+            <FontAwesome6 name="clock" size={10} color={Accent.teal.fg} />
+            <Text style={styles.dutyText} accessibilityLabel={`Current time ${time}`} allowFontScaling={false}>
+              {time}
+            </Text>
           </View>
           <Text style={styles.greeting}>{getGreeting()},</Text>
           <Text style={styles.name} numberOfLines={2}>
@@ -364,7 +355,7 @@ export default function DashboardScreen() {
               <View style={styles.heroBottomRow}>
                 <View style={styles.heroMetaPill}>
                   <FontAwesome6 name="clock" size={11} color={Teal.aqua} />
-                  <Text style={styles.heroMetaText}>Due {formatDeadline(nextTask)}</Text>
+                  <Text style={styles.heroMetaText}>{formatDeadline(nextTask)}</Text>
                 </View>
                 <View style={styles.heroGo}>
                   <FontAwesome6 name="arrow-right" size={15} solid color={Teal.primary} />
@@ -455,7 +446,7 @@ export default function DashboardScreen() {
                   </Text>
                   <View style={styles.taskMeta}>
                     <FontAwesome6 name="clock" size={10} color={Palette.textMuted} />
-                    <Text style={styles.taskDue}>Due {formatDeadline(task)}</Text>
+                    <Text style={styles.taskDue}>{formatDeadline(task)}</Text>
                     {isReturnDemo(task) && <Text style={styles.taskKind}>Return Demo</Text>}
                     {task.required && <Text style={styles.taskRequired}>Required</Text>}
                   </View>
@@ -505,23 +496,18 @@ function createStyles(
       alignItems: "center",
       alignSelf: "flex-start",
       gap: 5,
-      backgroundColor: Accent.green.bg,
+      backgroundColor: Accent.teal.bg,
       borderRadius: Radius.pill,
       paddingHorizontal: Spacing.sm,
       paddingVertical: 3,
       marginBottom: 6,
     },
-    dutyDot: {
-      width: 5,
-      height: 5,
-      borderRadius: Radius.pill,
-      backgroundColor: Accent.green.fg,
-    },
     dutyText: {
-      fontSize: 9.5,
+      fontSize: 11,
       fontWeight: "800",
-      letterSpacing: 0.8,
-      color: Accent.green.fg,
+      letterSpacing: 0.4,
+      color: Accent.teal.fg,
+      fontVariant: ["tabular-nums"],
     },
     greetingText: {
       flex: 1,

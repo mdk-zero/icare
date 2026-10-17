@@ -149,7 +149,17 @@ function TabItem({
   );
 }
 
-export function FloatingTabBar({ state, descriptors, navigation, icons }: BottomTabBarProps & { icons: TabIcons }) {
+export function FloatingTabBar({
+  state,
+  descriptors,
+  navigation,
+  icons,
+  hidden = [],
+}: BottomTabBarProps & {
+  icons: TabIcons;
+  /** Routes that stay reachable but get no tab (the student's Profile, opened from the header). */
+  hidden?: readonly string[];
+}) {
   const insets = useSafeAreaInsets();
   const { Palette } = useTheme();
   const metrics = useTabBarMetrics();
@@ -172,6 +182,7 @@ export function FloatingTabBar({ state, descriptors, navigation, icons }: Bottom
         ]}
       >
         {state.routes.map((route, index) => {
+          if (hidden.includes(route.name)) return null;
           const { options } = descriptors[route.key];
           const label = options.title ?? route.name;
           const isFocused = state.index === index;
@@ -245,7 +256,7 @@ function formatNow(): string {
 
 /** Live HH:MM:SS wall clock. Each tick re-reads the clock, so a throttled
  * interval (backgrounded app) never accumulates drift — it just resyncs. */
-function useWallClock(): string {
+export function useWallClock(): string {
   const [time, setTime] = useState(formatNow);
   useEffect(() => {
     const id = setInterval(() => setTime(formatNow()), 1000);
@@ -282,9 +293,15 @@ export function useAppHeaderHeight() {
 export function AppHeader({
   notificationCount,
   tagline = "CLINICAL COMPANION",
+  showClock = true,
+  onProfile,
 }: {
   notificationCount: number;
   tagline?: string;
+  /** The clock pill; the student's Home shows the time instead. */
+  showClock?: boolean;
+  /** A profile button beside the bell, when the profile has no tab. */
+  onProfile?: () => void;
 }) {
   const router = useRouter();
   const { width } = useWindowDimensions();
@@ -309,6 +326,7 @@ export function AppHeader({
               <Text style={styles.headerTagline}>{tagline}</Text>
             </View>
             <View style={styles.headerRight}>
+              {showClock ? (
               <View style={styles.clockPill}>
                 <FontAwesome6 name="clock" size={12} color="rgba(255, 255, 255, 0.85)" />
                 <Text
@@ -319,6 +337,7 @@ export function AppHeader({
                   {time}
                 </Text>
               </View>
+              ) : null}
               <Pressable
                 style={({ pressed }) => [
                   styles.notificationButton,
@@ -338,6 +357,19 @@ export function AppHeader({
                   </View>
                 )}
               </Pressable>
+              {onProfile ? (
+                <Pressable
+                  style={({ pressed }) => [styles.notificationButton, pressed && styles.notificationButtonPressed]}
+                  onPress={onProfile}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Profile"
+                >
+                  <View style={styles.notificationIconBox}>
+                    <FontAwesome6 name="user" size={16} color="#FFFFFF" />
+                  </View>
+                </Pressable>
+              ) : null}
             </View>
           </View>
         </SafeAreaView>

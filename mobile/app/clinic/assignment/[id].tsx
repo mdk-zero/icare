@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ScrollView, View, Text, StyleSheet, Pressable, RefreshControl } from 'react-native';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Card, Badge, PrimaryButton, SkeletonBlock, EmptyState } from '@/components/ui';
+import { Card, PrimaryButton, SkeletonBlock, EmptyState } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { useApiData, allCached } from '@/hooks/useApiData';
@@ -13,9 +13,9 @@ import {
   fetchScenarioTasks,
   Scenario,
 } from '@/lib/api';
+import { performOn } from '@/lib/return-demos';
 import { ClinicalTaskList, ClinicalTaskListSkeleton } from '@/components/ClinicalTaskList';
 import { AssistanceButton } from '@/components/AssistanceButton';
-import { ReflectionCard } from '@/components/ReflectionCard';
 import { CaseOpening, CaseStartGate } from '@/components/CaseStartGate';
 
 /** How often an open scenario re-checks for the instructor's grades. */
@@ -83,8 +83,11 @@ export default function ScenarioBriefScreen() {
   const [scenario, setScenario] = useState<Scenario | null>(null);
   const [scenarioError, setScenarioError] = useState<string | null>(null);
 
+  // A graded case shows only its result and grades, so it doesn't need the
+  // brief: skipping it keeps the screen from loading in a second time.
+  const graded = (taskAssignment?.status ?? assignment?.status) === 'completed';
   useEffect(() => {
-    if (!assignment) return;
+    if (!assignment || graded) return;
     let cancelled = false;
     fetchScenario(assignment.scenario_id)
       .then((result) => {
@@ -96,7 +99,7 @@ export default function ScenarioBriefScreen() {
     return () => {
       cancelled = true;
     };
-  }, [assignment?.scenario_id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [assignment?.scenario_id, graded]); // eslint-disable-line react-hooks/exhaustive-deps
 
 
   const status = taskAssignment?.status ?? assignment?.status ?? 'pending';
@@ -201,20 +204,9 @@ export default function ScenarioBriefScreen() {
         <RefreshControl refreshing={refreshing} onRefresh={refresh} colors={[Palette.primary]} tintColor={Palette.primary} />
       }
     >
-      <View style={styles.header}>
-        <Badge
-          label={isCompleted ? 'Completed' : isSubmitted ? 'Awaiting Review' : assignment.status === 'overdue' ? 'Overdue' : assignment.status === 'in_progress' ? 'In Progress' : 'Pending'}
-          variant={isCompleted ? 'success' : isSubmitted ? 'info' : assignment.status === 'overdue' ? 'danger' : assignment.status === 'in_progress' ? 'warning' : 'default'}
-        />
-        {assignment.required && isActive && <Badge label="Required" variant="danger" />}
-        {assignment.team_name ? <Badge label={assignment.team_name} variant="info" /> : null}
-      </View>
-
       <Text style={styles.title}>{assignment.scenario_title}</Text>
       <Text style={styles.subtitle}>
-        {assignment.deadline
-          ? `Due ${new Date(assignment.deadline).toLocaleString()}`
-          : 'No deadline'}
+        {performOn(assignment.deadline)}
       </Text>
 
       {isCompleted ? (
@@ -241,9 +233,7 @@ export default function ScenarioBriefScreen() {
         </Card>
       ) : null}
 
-      {isCompleted ? (
-        <ReflectionCard source="scenario" sourceId={assignment.id} />
-      ) : isSubmitted ? (
+      {isCompleted ? null : isSubmitted ? (
         <Card style={styles.reviewCard}>
           <Ionicons name="hourglass-outline" size={20} color={Accent.blue.fg} />
           <View style={styles.reviewText}>
@@ -275,18 +265,19 @@ export default function ScenarioBriefScreen() {
         </Card>
       )}
 
-      {scenarioError && <EmptyState icon="cloud-offline-outline" message={scenarioError} />}
+      {/* Graded: just the result and the grades; the brief, the patient and the chart are for doing it. */}
+      {!isCompleted && scenarioError && <EmptyState icon="cloud-offline-outline" message={scenarioError} />}
 
-      {scenario && scenario.description.length > 0 && (
+      {!isCompleted && scenario && scenario.description.length > 0 && (
         <Card style={styles.blockCard}>
           <Text style={styles.blockLabel}>Patient Case</Text>
           <Text style={styles.description}>{scenario.description}</Text>
         </Card>
       )}
 
-      {scenario && <PatientCase patientCase={scenario.patient_case} styles={styles} />}
+      {!isCompleted && scenario && <PatientCase patientCase={scenario.patient_case} styles={styles} />}
 
-      {scenario?.patient_id && (
+      {!isCompleted && scenario?.patient_id && (
         <Card style={styles.blockCard}>
           <Text style={styles.blockLabel}>Assigned Patient</Text>
           <View style={styles.patientLinkRow}>
@@ -307,7 +298,7 @@ export default function ScenarioBriefScreen() {
         <AssistanceButton scenarioTitle={assignment.scenario_title} patientId={scenario?.patient_id ?? null} />
       )}
 
-      {scenario && scenario.learning_objectives.length > 0 && (
+      {!isCompleted && scenario && scenario.learning_objectives.length > 0 && (
         <Card style={styles.blockCard}>
           <Text style={styles.blockLabel}>Learning Objectives</Text>
           {scenario.learning_objectives.map((objective, idx) => (
