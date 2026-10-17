@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { logAudit } from '@/app/lib/audit';
+import { viewerDeanId } from '@/app/lib/dean-scope';
 
 const TABLES = { tpr: 'tpr_records', ivf: 'ivf_records', note: 'progress_notes' } as const;
 type EhrType = keyof typeof TABLES;
@@ -28,11 +29,15 @@ export async function GET(request: NextRequest) {
   try {
     const supabase = getSupabaseAdmin();
     const ownerColumn = type === 'note' ? 'author_id' : 'recorded_by';
+    // Records on the viewer's Dean's patients only (077).
+    const deanId = await viewerDeanId(supabase, session);
+    const patientEmbed = deanId ? 'patients!inner(name, room_number)' : 'patients(name, room_number)';
     let query = supabase
       .from(TABLES[type])
-      .select('*, patients(name, room_number), users!' + `${TABLES[type]}_${ownerColumn}_fkey(name, email)`)
+      .select(`*, ${patientEmbed}, users!` + `${TABLES[type]}_${ownerColumn}_fkey(name, email)`)
       .order('created_at', { ascending: false })
       .limit(200);
+    if (deanId) query = query.eq('patients.admin_id', deanId);
     if (patientId) query = query.eq('patient_id', patientId);
     if (studentId) query = query.eq(ownerColumn, studentId);
 
@@ -70,6 +75,17 @@ export async function PATCH(request: NextRequest) {
 
   try {
     const supabase = getSupabaseAdmin();
+    // A note on one of the viewer's Dean's patients (077).
+    const deanId = await viewerDeanId(supabase, session);
+    if (deanId) {
+      const { data: target } = await supabase
+        .from('progress_notes')
+        .select('id, patients!inner(admin_id)')
+        .eq('id', note_id)
+        .eq('patients.admin_id', deanId)
+        .maybeSingle();
+      if (!target) return NextResponse.json({ error: 'Unreviewed note not found' }, { status: 404 });
+    }
     const { data: note, error } = await supabase
       .from('progress_notes')
       .update({ reviewed_by: session.uid, reviewed_at: new Date().toISOString() })

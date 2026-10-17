@@ -5,6 +5,7 @@ import { getScopedStudentIds } from '@/app/lib/admin-scope';
 
 import { isMissingTeamTables } from '@/app/lib/teams';
 import { isLateSubmission } from '@/app/lib/assessment-timing';
+import { quizInDeanScope } from '@/app/lib/assessment-access';
 
 type Status = 'submitted' | 'in_progress' | 'not_started';
 
@@ -43,7 +44,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       .eq('id', id)
       .maybeSingle();
 
-    if (assessmentError || !assessment) {
+    if (assessmentError || !assessment || !(await quizInDeanScope(supabase, session, id))) {
       return NextResponse.json({ error: 'Assessment not found' }, { status: 404 });
     }
 

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { logAudit } from '@/app/lib/audit';
+import { deanInstitution, viewerDeanId } from '@/app/lib/dean-scope';
 
 const validStatuses = ['active', 'inactive', 'maintenance'] as const;
 
@@ -14,6 +15,10 @@ export async function GET() {
 
   try {
     const supabase = getSupabaseAdmin();
+    // The viewer's Dean's ward only (077).
+    const deanId = await viewerDeanId(supabase, session);
+    let roomsQuery = supabase.from('rooms').select('*').order('room_number');
+    if (deanId) roomsQuery = roomsQuery.eq('admin_id', deanId);
     // A room's occupancy is its patients — that is what `capacity` gates in
     // /api/faculty/patients. Students rostered to a room are a separate count
     // and are deliberately not measured against the same ceiling.
@@ -22,7 +27,7 @@ export async function GET() {
       { data: assignments, error: asgError },
       { data: roomedPatients, error: patientsError },
     ] = await Promise.all([
-      supabase.from('rooms').select('*').order('room_number'),
+      roomsQuery,
       supabase.from('room_assignments').select('room_id').is('ends_at', null),
       supabase.from('patients').select('room_id').not('room_id', 'is', null),
     ]);
@@ -89,12 +94,18 @@ export async function POST(request: NextRequest) {
   try {
     const supabase = getSupabaseAdmin();
 
-    const { data: campus } = await supabase.from('campuses').select('id').limit(1).single();
+    // The room is in this Dean's ward, at their institution (077). Before
+    // 077 it goes to the first campus, as it always did.
+    const deanId = await viewerDeanId(supabase, session);
+    const campusId = deanId
+      ? ((await deanInstitution(supabase, deanId))?.id ?? null)
+      : ((await supabase.from('campuses').select('id').limit(1).maybeSingle()).data?.id ?? null);
 
     const { data: room, error } = await supabase
       .from('rooms')
       .insert({
-        campus_id: campus?.id ?? null,
+        campus_id: campusId,
+        ...(deanId ? { admin_id: deanId } : {}),
         name: name.trim(),
         room_number: room_number.trim(),
         capacity: cap,

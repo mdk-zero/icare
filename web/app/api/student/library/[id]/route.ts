@@ -12,6 +12,7 @@ import {
   type MaterialRow,
 } from '@/app/lib/library';
 import { activityOfferings } from '@/app/lib/activity-course';
+import { ownsRow, viewerDeanId } from '@/app/lib/dean-scope';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -42,7 +43,10 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
   }
   const material = data as unknown as MaterialRow | null;
   const section = (me?.sections as unknown as { name?: string } | null)?.name ?? null;
-  if (!material) return NextResponse.json({ error: 'Material not found' }, { status: 404 });
+  // Another Dean's (077) is not found at all.
+  if (!material || !(await ownsRow(supabase, 'library_materials', material.id, await viewerDeanId(supabase, session)))) {
+    return NextResponse.json({ error: 'Material not found' }, { status: 404 });
+  }
   // A course material (075) is for that course's students only.
   const [offeringOf, offerings] = await Promise.all([
     activityOfferings(supabase, 'library_materials', [material.id]),

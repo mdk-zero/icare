@@ -152,8 +152,9 @@ export async function POST(request: NextRequest) {
         force_password_change: true,
         picture_url: null,
         section_id: sectionId,
-        // A faculty account an admin creates is theirs (migration 053).
-        ...(scope && role === 'faculty' ? { admin_id: session.uid } : {}),
+        // A faculty or student account an admin creates is theirs (053, 077).
+        // A student in a section follows the section's Dean either way.
+        ...(scope && (role === 'faculty' || role === 'student') ? { admin_id: session.uid } : {}),
       })
       .select('id, email, name, role, picture_url, sex, created_at, last_login_at, section_id, sections(name)')
       .single();

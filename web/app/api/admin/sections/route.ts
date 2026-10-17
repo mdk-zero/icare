@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { logAudit } from '@/app/lib/audit';
+import { viewerDeanId } from '@/app/lib/dean-scope';
 
 export async function POST(request: NextRequest) {
   const session = await readSession();
@@ -29,22 +30,25 @@ export async function POST(request: NextRequest) {
   try {
     const supabase = getSupabaseAdmin();
 
-    const { data: existing } = await supabase
-      .from('sections')
-      .select('id')
-      .ilike('name', trimmedName)
-      .maybeSingle();
+    // The section is this Dean's (077), and only their own names can clash.
+    const deanId = await viewerDeanId(supabase, session);
+    let existingQuery = supabase.from('sections').select('id').ilike('name', trimmedName);
+    if (deanId) existingQuery = existingQuery.eq('admin_id', deanId);
+    const { data: existing } = await existingQuery.limit(1).maybeSingle();
     if (existing) {
       return NextResponse.json({ error: 'A section with this name already exists' }, { status: 409 });
     }
 
     const { data: section, error } = await supabase
       .from('sections')
-      .insert({ name: trimmedName })
+      .insert({ name: trimmedName, ...(deanId ? { admin_id: deanId } : {}) })
       .select('id, name')
       .single();
 
     if (error) {
+      if (error.code === '23505') {
+        return NextResponse.json({ error: 'A section with this name already exists' }, { status: 409 });
+      }
       console.error('Failed to create section', error);
       return NextResponse.json({ error: 'Unable to create section' }, { status: 500 });
     }

@@ -1,5 +1,6 @@
 import type { getSupabaseAdmin } from './supabase/server';
 import { getFacultyStudentIds } from './roster';
+import { ownsRow, viewerDeanId } from './dean-scope';
 
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
 
@@ -14,7 +15,10 @@ type Supabase = ReturnType<typeof getSupabaseAdmin>;
  *
  * Connection is section-based, the same rule as the rest of the app: a
  * faculty member's students are those in the sections listed against them in
- * faculty_sections (see ./roster). Admins are not filtered.
+ * faculty_sections (see ./roster). Admins are not filtered by students.
+ *
+ * Above both rules, the bank belongs to one Dean (077): a scenario is shared
+ * only among that Dean and their instructors, never with another Dean's.
  *
  * The rule lives here rather than in either route because both the list
  * (/api/faculty/scenarios) and the single fetch (/api/scenarios/[id]) have to
@@ -53,6 +57,8 @@ export async function canFacultySeeScenario(
   facultyId: string,
   scenarioId: string,
 ): Promise<boolean> {
+  if (!(await scenarioInDeanScope(supabase, { uid: facultyId, role: 'faculty' }, scenarioId))) return false;
+
   const { data, error } = await supabase
     .from('scenario_assignments')
     .select('student_id')
@@ -67,4 +73,13 @@ export async function canFacultySeeScenario(
   if (assigned.length === 0) return true;
 
   return scenarioVisibleToFaculty(assigned, await getFacultyStudentIdSet(supabase, facultyId));
+}
+
+/** Whether a scenario belongs to the viewer's Dean (077); always, before it or for a super admin. */
+export async function scenarioInDeanScope(
+  supabase: Supabase,
+  session: { uid: string; role: string },
+  scenarioId: string,
+): Promise<boolean> {
+  return ownsRow(supabase, 'scenarios', scenarioId, await viewerDeanId(supabase, session));
 }

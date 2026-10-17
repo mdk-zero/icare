@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { getSupabaseAdmin } from "@/app/lib/supabase/server";
 import { readSession } from "@/app/lib/auth/session";
 import { adminVisibleUserIds, getAdminScope } from "@/app/lib/admin-scope";
+import { viewerDeanId } from "@/app/lib/dean-scope";
 import { getStudentsWithWork } from "@/app/lib/faculty-dashboard";
 import { deanActorFilter } from "@/app/lib/audit-trail";
 import { DEMO_COOKIE } from "@/app/lib/demo/session";
@@ -44,6 +45,16 @@ async function loadDashboard(viewerId: string): Promise<DashboardData> {
   // before it, when every admin still sees everything.
   const scope = await getAdminScope(supabase, viewerId);
   const visible = scope ? new Set(adminVisibleUserIds(scope, viewerId)) : null;
+  // Their own ward (077); null before it.
+  const deanId = await viewerDeanId(supabase, { uid: viewerId, role: "admin" });
+  let roomsQuery = supabase.from("rooms").select("id, status, capacity");
+  // Only admitted patients hold a bed; check-out clears room_id anyway, the
+  // status filter keeps a hand-edited discharged row from counting.
+  let patientsQuery = supabase.from("patients").select("room_id").eq("status", "admitted").not("room_id", "is", null);
+  if (deanId) {
+    roomsQuery = roomsQuery.eq("admin_id", deanId);
+    patientsQuery = patientsQuery.eq("admin_id", deanId);
+  }
 
   const [
     usersRes,
@@ -61,10 +72,8 @@ async function loadDashboard(viewerId: string): Promise<DashboardData> {
       .from("performance_predictions")
       .select("student_id, risk, predicted_at")
       .order("predicted_at", { ascending: false }),
-    supabase.from("rooms").select("id, status, capacity"),
-    // Only admitted patients hold a bed; check-out clears room_id anyway, the
-    // status filter keeps a hand-edited discharged row from counting.
-    supabase.from("patients").select("room_id").eq("status", "admitted").not("room_id", "is", null),
+    roomsQuery,
+    patientsQuery,
     // The dean's own activity and their instructors'; the whole trail is the admin's.
     supabase
       .from("audit_logs")

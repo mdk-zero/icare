@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
-import { getFacultyStudentIds } from '@/app/lib/roster';
+import { getScopedStudentIds } from '@/app/lib/admin-scope';
+import { scenarioInDeanScope } from '@/app/lib/scenario-visibility';
 import { isMissingTeamTables } from '@/app/lib/teams';
 import { parseDeadline } from '@/app/lib/deadline-input';
 import { notifyCaseAssigned } from '@/app/lib/notify-case-assigned';
@@ -67,14 +68,17 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       .eq('id', scenarioId)
       .maybeSingle();
 
-    // A Return Demonstration (072) is assigned from its own page.
-    if (!scenario || (await isReturnDemo(supabase, scenarioId))) {
+    // A Return Demonstration (072) is assigned from its own page, and
+    // another Dean's case (077) is not found at all.
+    if (!scenario || (await isReturnDemo(supabase, scenarioId)) || !(await scenarioInDeanScope(supabase, session, scenarioId))) {
       return NextResponse.json({ error: 'Patient case not found' }, { status: 404 });
     }
 
-    // Faculty can only assign to students in their sections.
-    if (session.role === 'faculty') {
-      const rosterIds = new Set(await getFacultyStudentIds(supabase, session.uid));
+    // Faculty can only assign to students in their sections, an admin to
+    // their own students.
+    const scopedIds = await getScopedStudentIds(supabase, session);
+    if (scopedIds) {
+      const rosterIds = new Set(scopedIds);
       const invalid = normalizedStudentIds.filter((sid) => !rosterIds.has(sid));
       if (invalid.length > 0) {
         return NextResponse.json(
@@ -162,8 +166,12 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
   try {
     const supabase = getSupabaseAdmin();
-    if (session.role === 'faculty') {
-      const rosterIds = new Set(await getFacultyStudentIds(supabase, session.uid));
+    if (!(await scenarioInDeanScope(supabase, session, scenarioId))) {
+      return NextResponse.json({ error: 'Patient case not found' }, { status: 404 });
+    }
+    const scopedIds = await getScopedStudentIds(supabase, session);
+    if (scopedIds) {
+      const rosterIds = new Set(scopedIds);
       if (ids.some((sid) => !rosterIds.has(sid))) {
         return NextResponse.json({ error: 'Some students are not in your sections' }, { status: 403 });
       }

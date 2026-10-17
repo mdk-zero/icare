@@ -12,6 +12,7 @@ import {
   sanitizeScenario,
   type PatientContext,
 } from '@/app/lib/ai/scenario';
+import { viewerDeanId } from '@/app/lib/dean-scope';
 
 // A prompt carrying up to 15k characters of lesson can outrun the default budget.
 export const maxDuration = 60;
@@ -60,7 +61,7 @@ export async function POST(request: NextRequest) {
     const supabase = getSupabaseAdmin();
     let patient: PatientContext | null = null;
     if (patientId) {
-      patient = await fetchPatientContext(supabase, patientId);
+      patient = await fetchPatientContext(supabase, patientId, await viewerDeanId(supabase, session));
     }
 
     const generated = await callAI(

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import type { getSupabaseAdmin } from './supabase/server';
 import type { SessionPayload } from './auth/jwt';
 import { getAdminScope, ownsFaculty } from './admin-scope';
+import { ownsRow, viewerDeanId } from './dean-scope';
 
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
 
@@ -32,6 +33,10 @@ export async function guardAssessmentEdit(
 ): Promise<NextResponse | null> {
   const assessmentId = await resolveAssessmentId(supabase, target);
   if (!assessmentId) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  // Another Dean's quiz (077) is not found at all.
+  if (!(await quizInDeanScope(supabase, session, assessmentId))) {
+    return NextResponse.json({ error: 'Assessment not found' }, { status: 404 });
+  }
 
   const { data: assessment, error } = await supabase
     .from('assessments')
@@ -74,4 +79,17 @@ async function resolveAssessmentId(supabase: Supabase, target: AssessmentTarget)
   const { data, error } = await supabase.from(table).select('assessment_id').eq('id', id).maybeSingle();
   if (error) throw error;
   return (data?.assessment_id as string | undefined) ?? null;
+}
+
+/**
+ * Whether a quiz belongs to the viewer's Dean (077): their own, or their
+ * instructors'. A student's Dean is the one they belong to. Always true
+ * before 077 and for a super admin.
+ */
+export async function quizInDeanScope(
+  supabase: Supabase,
+  session: { uid: string; role: string },
+  assessmentId: string,
+): Promise<boolean> {
+  return ownsRow(supabase, 'assessments', assessmentId, await viewerDeanId(supabase, session));
 }

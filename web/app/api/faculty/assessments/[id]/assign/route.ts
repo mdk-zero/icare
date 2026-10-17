@@ -3,10 +3,10 @@ import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { getScopedStudentIds } from '@/app/lib/admin-scope';
 import { logAudit } from '@/app/lib/audit';
-import { getFacultyStudentIds } from '@/app/lib/roster';
 import { manageableSectionIds, manageableTeam } from '@/app/lib/teams';
 import { parseDeadline } from '@/app/lib/deadline-input';
 import { assessmentPublishBlockers } from '@/app/lib/assessment-validation';
+import { quizInDeanScope } from '@/app/lib/assessment-access';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -33,6 +33,9 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
   const { id: assessmentId } = await params;
   try {
     const supabase = getSupabaseAdmin();
+    if (!(await quizInDeanScope(supabase, session, assessmentId))) {
+      return NextResponse.json({ error: 'Assessment not found' }, { status: 404 });
+    }
     const { data, error } = await supabase
       .from('assessment_assignments')
       .select('student_id, deadline')
@@ -107,7 +110,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       .select('id, title, target_sections, deadline, is_published')
       .eq('id', assessmentId)
       .single();
-    if (!assessment) {
+    // Another Dean's quiz (077) is not found at all.
+    if (!assessment || !(await quizInDeanScope(supabase, session, assessmentId))) {
       return NextResponse.json({ error: 'Assessment not found' }, { status: 404 });
     }
     // Assigning is what puts a quiz in front of students, so a draft is
@@ -122,8 +126,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Set a deadline' }, { status: 400 });
     }
 
-    // Faculty reach only the sections they handle; admin may use any.
-    if (session.role === 'faculty' && sectionIds.length > 0) {
+    // Faculty reach only the sections they handle, an admin their own.
+    if (sectionIds.length > 0) {
       const own = new Set(await manageableSectionIds(supabase, session.role, session.uid));
       const outside = sectionIds.filter((id) => !own.has(id));
       if (outside.length > 0) {
@@ -195,8 +199,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       }
     }
 
-    if (session.role === 'faculty' && studentIds.length > 0) {
-      const roster = new Set(await getFacultyStudentIds(supabase, session.uid));
+    const scopedStudents = studentIds.length > 0 ? await getScopedStudentIds(supabase, session) : null;
+    if (scopedStudents) {
+      const roster = new Set(scopedStudents);
       const invalid = studentIds.filter((id) => !roster.has(id));
       if (invalid.length > 0) {
         return NextResponse.json(

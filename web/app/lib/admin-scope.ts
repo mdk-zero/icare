@@ -1,17 +1,20 @@
 import type { getSupabaseAdmin } from './supabase/server';
 import { getFacultySectionIds, getFacultyStudentIds } from './roster';
+import { deanOwnershipLive } from './dean-scope';
 
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
 
 /**
- * What one admin looks after (migration 053). Every admin has their own
- * faculty: the faculty accounts whose users.admin_id is theirs. From those
- * follow the admin's sections, which are the sections their faculty are
- * attached to or supervise a group in, plus any section no faculty is
- * attached to yet so a new section can be set up. Their students are the
- * students in those sections, plus students not in a section yet.
+ * What one admin (Dean) looks after. Every Dean has their own faculty: the
+ * faculty accounts whose users.admin_id is theirs (migration 053). Since 077
+ * sections and students carry their Dean too (sections.admin_id,
+ * users.admin_id), so a Dean's sections and students are simply the ones
+ * they own, and nothing is shared with another Dean. Rooms, patients and
+ * the rest are owned the same way; see ./dean-scope.
  *
- * Rooms and patients are not part of it; they stay shared.
+ * Before 077 the sections are derived instead: the sections their faculty
+ * are attached to or supervise a group in, plus any section no faculty is
+ * attached to yet, and the students in them plus students in no section.
  *
  * `null` means no limit: before 053 is applied there is no owner column, and
  * every admin keeps seeing everything, as before.
@@ -35,6 +38,22 @@ export async function getAdminScope(supabase: Supabase, adminId: string): Promis
     throw new Error('Unable to read your instructors');
   }
   const facultyIds = (faculty ?? []).map((f) => f.id as string);
+
+  if (await deanOwnershipLive(supabase)) {
+    const [sections, students] = await Promise.all([
+      supabase.from('sections').select('id').eq('admin_id', adminId),
+      supabase.from('users').select('id').eq('role', 'student').eq('admin_id', adminId).limit(5000),
+    ]);
+    if (sections.error || students.error) {
+      console.error('Failed to read the dean sections and students', sections.error ?? students.error);
+      throw new Error('Unable to read your sections');
+    }
+    return {
+      facultyIds,
+      sectionIds: (sections.data ?? []).map((s) => s.id as string),
+      studentIds: (students.data ?? []).map((u) => u.id as string),
+    };
+  }
 
   const [links, groups, allLinks, allSections] = await Promise.all([
     facultyIds.length

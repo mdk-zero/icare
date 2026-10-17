@@ -4,6 +4,7 @@ import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { listSkills } from '@/app/lib/taylor-skills';
 import { isMissingLibrary, studentOfferings, visibleToStudent } from '@/app/lib/library';
 import { activityOfferings } from '@/app/lib/activity-course';
+import { viewerDeanId } from '@/app/lib/dean-scope';
 
 /**
  * GET: the published materials for the student's section and courses, by chapter and skill.
@@ -32,6 +33,9 @@ export async function GET(request: NextRequest) {
       .order('published_at', { ascending: false })
       .limit(1000);
     if (skill) query = query.eq('skill_id', skill);
+    // Their own Dean's materials only (077).
+    const deanId = await viewerDeanId(supabase, session);
+    if (deanId) query = query.eq('admin_id', deanId);
 
     const [skills, materialsRes, viewsRes] = await Promise.all([
       listSkills(supabase),

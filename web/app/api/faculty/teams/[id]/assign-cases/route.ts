@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
-import { getFacultyStudentIdSet, scenarioVisibleToFaculty } from '@/app/lib/scenario-visibility';
+import { getFacultyStudentIdSet, scenarioInDeanScope, scenarioVisibleToFaculty } from '@/app/lib/scenario-visibility';
 import { isMissingTeamTables, manageableTeam, TEAMS_NEED_MIGRATION } from '@/app/lib/teams';
 import { notifyCaseAssigned } from '@/app/lib/notify-case-assigned';
 import { isReturnDemo } from '@/app/lib/scenario-kind';
@@ -78,8 +78,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       console.error('Failed to read patient case', scenarioError);
       return NextResponse.json({ error: 'Unable to assign the case' }, { status: 500 });
     }
-    // A Return Demonstration (072) is not a group's case.
-    if (!scenario || (await isReturnDemo(supabase, scenario_id))) {
+    // A Return Demonstration (072) is not a group's case, and another Dean's
+    // case (077) is not this group's to have.
+    if (!scenario || (await isReturnDemo(supabase, scenario_id)) || !(await scenarioInDeanScope(supabase, session, scenario_id))) {
       return NextResponse.json({ error: 'That case no longer exists' }, { status: 404 });
     }
 

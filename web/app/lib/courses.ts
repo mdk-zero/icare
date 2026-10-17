@@ -16,6 +16,7 @@ import {
   type RequirementRow,
 } from './course-progress';
 import { canFacultySeeScenario } from './scenario-visibility';
+import { ownsRow, viewerDeanId } from './dean-scope';
 import { isMissingKindColumn } from './scenario-kind';
 import { autoSplit, gradingSignature, readStoredSplit, type GradingSplit } from './course-grading';
 import { MigrationNeeded, isMissingGradingSchema, normaliseRequirement, requirementQuery } from './course-schema';
@@ -903,13 +904,18 @@ export async function checkRequirementLinks(
     const exists = must(await supabase.from('scenarios').select('id').eq('id', input.scenario_id).maybeSingle());
     if (!exists || !(await canFacultySeeScenario(supabase, facultyId, input.scenario_id))) return 'That Patient Case was not found';
   }
+  // Quizzes and Case Presentations of the instructor's own Dean (077).
+  const deanId =
+    input.assessment_id || input.presentation_id ? await viewerDeanId(supabase, { uid: facultyId, role: 'faculty' }) : null;
   if (input.assessment_id) {
     const exists = must(await supabase.from('assessments').select('id').eq('id', input.assessment_id).maybeSingle());
-    if (!exists) return 'That Quiz was not found';
+    if (!exists || !(await ownsRow(supabase, 'assessments', input.assessment_id, deanId))) return 'That Quiz was not found';
   }
   if (input.presentation_id) {
     const exists = must(await supabase.from('case_presentations').select('id').eq('id', input.presentation_id).maybeSingle());
-    if (!exists) return 'That Case Presentation was not found';
+    if (!exists || !(await ownsRow(supabase, 'case_presentations', input.presentation_id, deanId))) {
+      return 'That Case Presentation was not found';
+    }
   }
   if (input.skill_id) {
     if (!isSkillId(input.skill_id)) return 'Unknown skill';

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { logAudit } from '@/app/lib/audit';
+import { ownsRow, viewerDeanId } from '@/app/lib/dean-scope';
 
 const validStatuses = ['active', 'inactive', 'maintenance'] as const;
 
@@ -20,6 +21,10 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
 
   try {
     const supabase = getSupabaseAdmin();
+    // Only a room in the viewer's Dean's ward (077).
+    if (!(await ownsRow(supabase, 'rooms', id, await viewerDeanId(supabase, session)))) {
+      return NextResponse.json({ error: 'Room not found' }, { status: 404 });
+    }
     const [{ data: room, error: roomError }, { data: assignments, error: asgError }] =
       await Promise.all([
         supabase.from('rooms').select('*').eq('id', id).single(),
@@ -101,6 +106,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
   try {
     const supabase = getSupabaseAdmin();
+    if (!(await ownsRow(supabase, 'rooms', id, await viewerDeanId(supabase, session)))) {
+      return NextResponse.json({ error: 'Room not found' }, { status: 404 });
+    }
     const { data: room, error } = await supabase
       .from('rooms')
       .update(updates)
@@ -145,6 +153,9 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
   try {
     const supabase = getSupabaseAdmin();
+    if (!(await ownsRow(supabase, 'rooms', id, await viewerDeanId(supabase, session)))) {
+      return NextResponse.json({ error: 'Room not found' }, { status: 404 });
+    }
     const { error } = await supabase.from('rooms').delete().eq('id', id);
 
     if (error) {

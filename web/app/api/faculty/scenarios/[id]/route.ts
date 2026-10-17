@@ -5,6 +5,7 @@ import { ensureCategories } from '@/app/lib/scenario-categories';
 import { MAX_RUBRIC_LENGTH, TASK_RATINGS } from '@/app/lib/task-ratings';
 import { activityCourse, parseOfferingId } from '@/app/lib/activity-course';
 import { isReturnDemo } from '@/app/lib/scenario-kind';
+import { ownsRow, viewerDeanId } from '@/app/lib/dean-scope';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -116,8 +117,10 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       .eq('id', id)
       .maybeSingle();
 
-    // A Return Demonstration (072) is edited on its own page.
-    if (!existing || (await isReturnDemo(supabase, id))) {
+    // A Return Demonstration (072) is edited on its own page, and another
+    // Dean's case (077) is not found at all.
+    const deanId = await viewerDeanId(supabase, session);
+    if (!existing || (await isReturnDemo(supabase, id)) || !(await ownsRow(supabase, 'scenarios', id, deanId))) {
       return NextResponse.json({ error: 'Patient case not found' }, { status: 404 });
     }
 
@@ -145,11 +148,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     }
 
     if (typeof updateData.patient_id === 'string') {
-      const { data: patient } = await supabase
-        .from('patients')
-        .select('id')
-        .eq('id', updateData.patient_id)
-        .maybeSingle();
+      let patientQuery = supabase.from('patients').select('id').eq('id', updateData.patient_id);
+      if (deanId) patientQuery = patientQuery.eq('admin_id', deanId);
+      const { data: patient } = await patientQuery.maybeSingle();
       if (!patient) {
         return NextResponse.json({ error: 'Patient not found' }, { status: 400 });
       }
@@ -200,8 +201,10 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       .eq('id', id)
       .maybeSingle();
 
-    // A Return Demonstration (072) is edited on its own page.
-    if (!existing || (await isReturnDemo(supabase, id))) {
+    // A Return Demonstration (072) is edited on its own page, and another
+    // Dean's case (077) is not found at all.
+    const deanId = await viewerDeanId(supabase, session);
+    if (!existing || (await isReturnDemo(supabase, id)) || !(await ownsRow(supabase, 'scenarios', id, deanId))) {
       return NextResponse.json({ error: 'Patient case not found' }, { status: 404 });
     }
 

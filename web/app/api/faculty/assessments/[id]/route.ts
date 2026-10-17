@@ -4,7 +4,7 @@ import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { logAudit } from '@/app/lib/audit';
 import { assessmentPublishBlockers } from '@/app/lib/assessment-validation';
-import { guardAssessmentEdit } from '@/app/lib/assessment-access';
+import { guardAssessmentEdit, quizInDeanScope } from '@/app/lib/assessment-access';
 import { activityCourse, activityOfferings, parseOfferingId } from '@/app/lib/activity-course';
 
 interface RouteParams {
@@ -30,7 +30,8 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
       .eq('id', id)
       .single();
 
-    if (error || !assessment) {
+    // Another Dean's quiz (077) is not found at all.
+    if (error || !assessment || !(await quizInDeanScope(supabase, session, id))) {
       return NextResponse.json({ error: 'Assessment not found' }, { status: 404 });
     }
 

@@ -3,6 +3,7 @@ import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { callAnalytics, resolveSummaryArgs, withStudentAvatars, type SummaryArgs } from '@/app/lib/analytics';
 import { isMissingTeamTables, loadTeams, manageableSectionIds } from '@/app/lib/teams';
+import { viewerDeanId } from '@/app/lib/dean-scope';
 
 /**
  * Dashboard analytics read from the star-schema warehouse
@@ -19,9 +20,54 @@ const STALE_MS = 5 * 60 * 1000; // refresh the warehouse at most every 5 minutes
 
 type Summary = {
   etl?: { last_run_at?: string | null };
+  room_utilization?: RoomUtilization[];
   weekly_trend?: { week_start: string; average_score: number; attempts: number }[];
   top_students?: { student_key: string }[];
 } | null;
+
+type RoomUtilization = {
+  name: string;
+  room_number: string;
+  status: string;
+  capacity: number;
+  assigned: number;
+  utilization_pct: number;
+};
+
+/**
+ * The warehouse lists every room in the system; a Dean's viewers (077) get
+ * their own ward's instead, worked out the same way: students rostered to
+ * each room against its capacity.
+ */
+async function ownRoomUtilization(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  deanId: string,
+): Promise<RoomUtilization[]> {
+  const { data: rooms, error } = await supabase
+    .from('rooms')
+    .select('id, name, room_number, status, capacity')
+    .eq('admin_id', deanId)
+    .order('room_number');
+  if (error) throw error;
+  const ids = (rooms ?? []).map((r) => r.id as string);
+  const { data: assignments } = ids.length
+    ? await supabase.from('room_assignments').select('room_id').in('room_id', ids).is('ends_at', null)
+    : { data: [] as { room_id: string }[] };
+  const assigned = new Map<string, number>();
+  for (const a of assignments ?? []) assigned.set(a.room_id as string, (assigned.get(a.room_id as string) ?? 0) + 1);
+  return (rooms ?? []).map((r) => {
+    const count = assigned.get(r.id as string) ?? 0;
+    const capacity = Number(r.capacity ?? 0);
+    return {
+      name: r.name as string,
+      room_number: r.room_number as string,
+      status: String(r.status),
+      capacity,
+      assigned: count,
+      utilization_pct: capacity > 0 ? Math.round((100 * count) / capacity) : 0,
+    };
+  });
+}
 
 /** Ids per `in` filter — each is a URL-encoded query param, so keep it short. */
 const MEMBER_CHUNK = 150;
@@ -201,6 +247,8 @@ export async function GET(request: NextRequest) {
       wantsTrend ? readGroupTrend(supabase, session, args) : null,
     ]);
     if (summary && topStudents) summary = { ...summary, top_students: topStudents };
+    const deanId = summary ? await viewerDeanId(supabase, session) : null;
+    if (summary && deanId) summary = { ...summary, room_utilization: await ownRoomUtilization(supabase, deanId) };
 
     if (summary && wantsTrend) {
       return NextResponse.json({

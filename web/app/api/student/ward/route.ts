@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { viewerDeanId } from '@/app/lib/dean-scope';
 import { ofKind, scenarioKinds } from '@/app/lib/scenario-kind';
 import { fetchTaskCompletions } from '@/app/lib/scenario-tasks';
 import { isPerformed } from '@/app/lib/task-ratings';
@@ -83,15 +84,27 @@ export async function GET() {
     }
     const assignedIdList = [...assignedPatientIds];
 
-    // 2. The ward itself plus the per-assignment task state and the assigned
-    //    patients' latest vitals.
+    // 2. The ward itself (their Dean's, 077) plus the per-assignment task
+    //    state and the assigned patients' latest vitals.
+    const deanId = await viewerDeanId(supabase, session);
+    let roomsQuery = supabase.from('rooms').select('*').order('room_number');
+    let patientsQuery = supabase
+      .from('patients')
+      .select('id, name, age, gender, diagnosis, room_id, room_number, status')
+      .eq('status', 'admitted')
+      .limit(500);
+    let fixturesQuery = supabase
+      .from('ward_fixtures')
+      .select('id, kind, label, plan_x, plan_y, plan_w, plan_h')
+      .order('created_at');
+    if (deanId) {
+      roomsQuery = roomsQuery.eq('admin_id', deanId);
+      patientsQuery = patientsQuery.eq('admin_id', deanId);
+      fixturesQuery = fixturesQuery.eq('admin_id', deanId);
+    }
     const [roomsRes, patientsRes, tasksRes, completionsRes, vitalsRes, fixturesRes] = await Promise.all([
-      supabase.from('rooms').select('*').order('room_number'),
-      supabase
-        .from('patients')
-        .select('id, name, age, gender, diagnosis, room_id, room_number, status')
-        .eq('status', 'admitted')
-        .limit(500),
+      roomsQuery,
+      patientsQuery,
       scenarioIds.length > 0
         ? supabase
             .from('scenario_tasks')
@@ -112,10 +125,7 @@ export async function GET() {
             .order('recorded_at', { ascending: false })
             .limit(200)
         : Promise.resolve({ data: [], error: null }),
-      supabase
-        .from('ward_fixtures')
-        .select('id, kind, label, plan_x, plan_y, plan_w, plan_h')
-        .order('created_at'),
+      fixturesQuery,
     ]);
     // Missing before 062; any other failure only costs the plan its fixtures.
     if (fixturesRes.error && !['42P01', 'PGRST205'].includes(fixturesRes.error.code ?? '')) {

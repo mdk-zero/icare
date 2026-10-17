@@ -1,4 +1,5 @@
 import type { getSupabaseAdmin } from './supabase/server';
+import { viewerDeanId } from './dean-scope';
 
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
 
@@ -11,18 +12,29 @@ export interface PatientCourseOption {
 /**
  * Which courses each patient belongs to (migration 069). An instructor
  * works only with the patients of the courses they are assigned to teach;
- * a Dean sees every patient and can file one under any of their courses.
+ * a Dean sees every patient of their own (077) and can file one under any
+ * of their courses.
  *
- * Before 069 is applied there is no link table: everything here then reads
- * as "no limit", so the ward behaves as it did before.
+ * Before 069 is applied there is no link table: an instructor then sees
+ * every patient of their Dean, so the ward behaves as it did before.
  */
 export interface PatientCourseScope {
   /** False until 069 is applied; the form then hides the course picker. */
   enabled: boolean;
   /** Courses this viewer can file a patient under. */
   courses: PatientCourseOption[];
-  /** Patients this viewer may see; null means every patient (a Dean, or before 069). */
+  /** Patients this viewer may see; null means every patient (before 077 and 069). */
   patientIds: string[] | null;
+  /** The Dean whose ward this is (077); null for no limit. */
+  deanId: string | null;
+}
+
+/** Every patient a Dean owns (077), or null for no limit. */
+async function deanPatientIds(supabase: Supabase, deanId: string | null): Promise<string[] | null> {
+  if (deanId === null) return null;
+  const { data, error } = await supabase.from('patients').select('id').eq('admin_id', deanId).limit(5000);
+  if (error) throw new Error(`Unable to read patients: ${error.message}`);
+  return (data ?? []).map((r) => r.id as string);
 }
 
 function missingTable(error: { code?: string } | null): boolean {
@@ -57,20 +69,24 @@ export async function getPatientCourseScope(
   supabase: Supabase,
   session: { uid: string; role: string },
 ): Promise<PatientCourseScope> {
+  const deanId = await viewerDeanId(supabase, session);
+  const ownPatients = await deanPatientIds(supabase, deanId);
   const probe = await supabase.from('patient_courses').select('patient_id').limit(1);
-  if (missingTable(probe.error)) return { enabled: false, courses: [], patientIds: null };
+  if (missingTable(probe.error)) return { enabled: false, courses: [], patientIds: ownPatients, deanId };
   if (probe.error) throw new Error(`Unable to read patient courses: ${probe.error.message}`);
 
   const courses = await viewerCourses(supabase, session.uid, session.role);
-  if (session.role === 'admin') return { enabled: true, courses, patientIds: null };
+  if (session.role === 'admin') return { enabled: true, courses, patientIds: ownPatients, deanId };
 
-  if (courses.length === 0) return { enabled: true, courses, patientIds: [] };
+  if (courses.length === 0) return { enabled: true, courses, patientIds: [], deanId };
   const { data, error } = await supabase
     .from('patient_courses')
     .select('patient_id')
     .in('course_id', courses.map((c) => c.id));
   if (error) throw new Error(`Unable to read patient courses: ${error.message}`);
-  return { enabled: true, courses, patientIds: [...new Set((data ?? []).map((r) => r.patient_id as string))] };
+  const own = ownPatients ? new Set(ownPatients) : null;
+  const linked = [...new Set((data ?? []).map((r) => r.patient_id as string))];
+  return { enabled: true, courses, patientIds: own ? linked.filter((id) => own.has(id)) : linked, deanId };
 }
 
 /** True when this viewer may see the patient. */

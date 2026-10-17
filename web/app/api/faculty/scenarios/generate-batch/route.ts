@@ -16,6 +16,7 @@ import {
   type PatientContext,
   type SanitizedScenario,
 } from '@/app/lib/ai/scenario';
+import { viewerDeanId } from '@/app/lib/dean-scope';
 
 // A 12-scenario library is three sequential AI calls; the default 10s budget is not enough.
 export const maxDuration = 60;
@@ -204,10 +205,11 @@ export async function POST(request: NextRequest) {
     // Every scenario in the library is grounded on a roster patient's record — a
     // slot reuses one (planSlots cycles i % patients.length) rather than going
     // ungrounded when the roster is smaller than the batch.
-    const { data: patientRows } = await supabase
-      .from('patients')
-      .select(PATIENT_CONTEXT_COLUMNS)
-      .limit(100);
+    // The viewer's Dean's patients only (077).
+    const deanId = await viewerDeanId(supabase, session);
+    let patientQuery = supabase.from('patients').select(PATIENT_CONTEXT_COLUMNS).limit(100);
+    if (deanId) patientQuery = patientQuery.eq('admin_id', deanId);
+    const { data: patientRows } = await patientQuery;
     const patients = shuffle((patientRows ?? []) as unknown as PatientContext[]).slice(0, count);
     if (patients.length === 0) {
       return NextResponse.json(

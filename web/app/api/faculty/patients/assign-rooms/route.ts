@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { canSeePatient, getPatientCourseScope } from '@/app/lib/patient-courses';
 
 /**
  * Places a set of patients into rooms without exceeding any room's capacity.
@@ -26,21 +27,30 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const patientIds = Array.isArray(body.patient_ids)
+  const requestedIds = Array.isArray(body.patient_ids)
     ? body.patient_ids.filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
     : [];
   const mode = body.mode === 'spread' ? 'spread' : 'fill';
-  if (patientIds.length === 0) {
+  if (requestedIds.length === 0) {
     return NextResponse.json({ assigned: 0, unassigned: 0 });
   }
 
   try {
     const supabase = getSupabaseAdmin();
 
-    const { data: roomRows } = await supabase
+    // Only the viewer's own patients, into their Dean's rooms (077).
+    const scope = await getPatientCourseScope(supabase, session);
+    const patientIds = requestedIds.filter((id) => canSeePatient(scope, id));
+    if (patientIds.length === 0) {
+      return NextResponse.json({ assigned: 0, unassigned: 0 });
+    }
+
+    let roomQuery = supabase
       .from('rooms')
       .select('id, name, room_number, capacity')
       .order('room_number');
+    if (scope.deanId) roomQuery = roomQuery.eq('admin_id', scope.deanId);
+    const { data: roomRows } = await roomQuery;
     const rooms = (roomRows ?? []) as {
       id: string;
       name: string;

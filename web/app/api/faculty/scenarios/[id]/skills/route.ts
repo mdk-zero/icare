@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { isReturnDemo } from '@/app/lib/scenario-kind';
+import { scenarioInDeanScope } from '@/app/lib/scenario-visibility';
 import { addSkillTasks, parseSkillSelections } from '@/app/lib/skill-tasks';
 import { skillsIn } from '@/scripts/taylors-chapters';
 
@@ -11,11 +12,14 @@ interface RouteParams {
 
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
 
-/** The caller may change this scenario's tasks: its creator, or an admin. */
+/** The caller may change this scenario's tasks: its creator, or their admin. */
 async function authorize(supabase: Supabase, role: string, uid: string, id: string): Promise<NextResponse | null> {
   const { data } = await supabase.from('scenarios').select('created_by').eq('id', id).maybeSingle();
-  // A Return Demonstration's skills change through its own edit (072).
-  if (!data || (await isReturnDemo(supabase, id))) return NextResponse.json({ error: 'Patient case not found' }, { status: 404 });
+  // A Return Demonstration's skills change through its own edit (072); another
+  // Dean's case (077) is not found at all.
+  if (!data || (await isReturnDemo(supabase, id)) || !(await scenarioInDeanScope(supabase, { uid, role }, id))) {
+    return NextResponse.json({ error: 'Patient case not found' }, { status: 404 });
+  }
   if (role !== 'admin' && data.created_by !== uid) {
     return NextResponse.json({ error: 'You can only change patient cases you created' }, { status: 403 });
   }
@@ -54,6 +58,9 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
 
   const { id } = await params;
   const supabase = getSupabaseAdmin();
+  if (!(await scenarioInDeanScope(supabase, session, id))) {
+    return NextResponse.json({ error: 'Patient case not found' }, { status: 404 });
+  }
   const { data, error } = await readTasks(supabase, id);
   if (error) return NextResponse.json({ error: 'Unable to read tasks' }, { status: 500 });
 

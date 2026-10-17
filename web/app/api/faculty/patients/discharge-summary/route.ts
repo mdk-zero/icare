@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { canSeePatient, getPatientCourseScope } from '@/app/lib/patient-courses';
 import { callAI, aiErrorResponse } from '@/app/lib/ai/generate';
 import { logAudit } from '@/app/lib/audit';
 import type { VitalsDigest, EhrDigest } from '@/app/lib/discharge';
@@ -124,7 +125,7 @@ export async function POST(request: NextRequest) {
       .eq('id', summaryId)
       .maybeSingle();
 
-    if (!summary) {
+    if (!summary || !canSeePatient(await getPatientCourseScope(supabase, session), summary.patient_id as string)) {
       return NextResponse.json({ error: 'Discharge summary not found' }, { status: 404 });
     }
 

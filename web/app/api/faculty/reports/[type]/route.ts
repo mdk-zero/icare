@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
-import { canSeeStudent, getScopedStudentIds } from '@/app/lib/admin-scope';
+import { canSeeStudent, getScopedSectionIds, getScopedStudentIds } from '@/app/lib/admin-scope';
+import { deanInstitution, ownsRow, viewerDeanId } from '@/app/lib/dean-scope';
 import { logAudit } from '@/app/lib/audit';
 import { renderReport, type ReportMeta } from '@/app/lib/reports/kit';
 import { slugify } from '@/app/lib/reports/data';
@@ -62,11 +63,20 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
+    // Another Dean's case, quiz, presentation, discharge or section (077)
+    // reads as missing too.
+    const deanId = await viewerDeanId(supabase, session);
+    if (await outsideDean(supabase, session, deanId, type, id)) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
+
     const { data: faculty } = await supabase.from('users').select('name').eq('id', session.uid).maybeSingle();
-    const { data: campus } = await supabase.from('campuses').select('name').limit(1).maybeSingle();
+    // The viewer's Dean's institution (077), else the first one on file.
+    const campus = (deanId ? await deanInstitution(supabase, deanId) : null)
+      ?? (await supabase.from('campuses').select('name').limit(1).maybeSingle()).data;
 
     const meta: ReportMeta = {
-      campus: campus?.name ?? 'Batangas State University – TNEU ARASOF Nasugbu',
+      campus: campus?.name ?? 'Batangas State University - The NEU ARASOF Nasugbu',
       generatedBy: faculty?.name ?? session.email,
       generatedAt: new Date().toLocaleString('en-PH', { dateStyle: 'long', timeStyle: 'short' }),
     };
@@ -141,6 +151,29 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
  * reached from the patient chart, so only the section-bound subjects are
  * checked here.
  */
+/** Whether a report's subject belongs to another Dean (077); never, with no limit. */
+async function outsideDean(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  session: { uid: string; role: string },
+  deanId: string | null,
+  type: string,
+  id: string,
+): Promise<boolean> {
+  if (deanId === null || !id) return false;
+  if (type === 'scenario') return !(await ownsRow(supabase, 'scenarios', id, deanId));
+  if (type === 'assessment') return !(await ownsRow(supabase, 'assessments', id, deanId));
+  if (type === 'case') return !(await ownsRow(supabase, 'case_presentations', id, deanId));
+  if (type === 'discharge') {
+    const { data } = await supabase.from('discharge_summaries').select('patient_id').eq('id', id).maybeSingle();
+    return !data || !(await ownsRow(supabase, 'patients', data.patient_id as string, deanId));
+  }
+  if ((type === 'section' || type === 'attendance') && session.role === 'admin') {
+    const sections = await getScopedSectionIds(supabase, session);
+    return sections !== null && !sections.includes(id);
+  }
+  return false;
+}
+
 async function outOfScope(
   supabase: ReturnType<typeof getSupabaseAdmin>,
   facultyId: string,

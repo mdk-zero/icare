@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import type { getSupabaseAdmin } from './supabase/server';
 import type { SessionPayload } from './auth/jwt';
-import { getFacultyStudentIdSet } from './scenario-visibility';
+import { getFacultyStudentIdSet, scenarioInDeanScope } from './scenario-visibility';
+import { viewerDeanId } from './dean-scope';
 import { returnDemoVisibleTo } from './return-demos';
 import { isMissingKindColumn, RETURN_DEMOS_NEED_MIGRATION, scenarioKindsReady } from './scenario-kind';
 import { activityCoursesReady } from './activity-course';
@@ -81,6 +82,8 @@ export async function loadReturnDemo(
     throw new Error(`Unable to read the Return Demonstration: ${error.message}`);
   }
   if (!data || data.kind !== 'return_demo') return { response: notFound() };
+  // Another Dean's (077) is not found at all.
+  if (!(await scenarioInDeanScope(supabase, session, id))) return { response: notFound() };
   if (session.role !== 'admin' && data.created_by !== session.uid) {
     const { data: holders, error: holdersError } = await supabase.from('scenario_assignments').select('student_id').eq('scenario_id', id);
     if (holdersError) throw new Error(`Unable to read the assignments: ${holdersError.message}`);
@@ -132,18 +135,22 @@ export async function gradedTaskIds(supabase: Supabase, taskIds: string[]): Prom
 
 /**
  * Every Return Demonstration the viewer may see, newest first, with its
- * skills and the viewer's own students on it. An admin sees all of them.
+ * skills and the viewer's own students on it. An admin sees all of their
+ * own (077).
  */
 export async function listReturnDemos(
   supabase: Supabase,
   session: Pick<SessionPayload, 'uid' | 'role'>,
 ): Promise<ReturnDemoSummary[]> {
-  const { data, error } = await supabase
+  const deanId = await viewerDeanId(supabase, session);
+  let query = supabase
     .from('scenarios')
     .select(`${COLUMNS}, scenario_assignments(student_id, status, deadline)`)
     .eq('kind', 'return_demo')
     .order('created_at', { ascending: false })
     .limit(500);
+  if (deanId) query = query.eq('admin_id', deanId);
+  const { data, error } = await query;
   if (error) throw new Error(`Unable to read Return Demonstrations: ${error.message}`);
   const rows = (data ?? []) as unknown as (ReturnDemoRow & { scenario_assignments: { student_id: string; status: string; deadline: string | null }[] | null })[];
 

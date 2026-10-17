@@ -78,8 +78,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       }
       previousRole = target.role as string;
     }
-    // Someone made faculty by this admin becomes this admin's faculty.
-    if (scope && updates.role === 'faculty') updates.admin_id = session.uid;
+    // Someone this admin makes faculty or a student stays theirs (053, 077).
+    if (scope && (updates.role === 'faculty' || updates.role === 'student')) updates.admin_id = session.uid;
     // A role change signs the account out everywhere, in the same write.
     const { data: user, error } = await updateUser(id, updates, {
       revoke: previousRole !== null && updates.role !== undefined && updates.role !== previousRole,

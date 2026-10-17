@@ -11,6 +11,7 @@ import {
   needsEditApproval,
   type GradeEditRequestData,
 } from '@/app/lib/grade-edit-requests';
+import { deanOwnershipLive } from '@/app/lib/dean-scope';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -111,13 +112,15 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       supabase.from('scenarios').select('title').eq('id', assignment.scenario_id).single(),
     ]);
 
-    // Their own admin (053); every admin when they have none.
+    // Their own admin (053). Every admin when they have none, but only until
+    // each Dean's data is kept apart (077): then a request never reaches
+    // another Dean.
     let approvers: string[] = [];
     if (me?.admin_id) {
       const { data: admin } = await supabase.from('users').select('id').eq('id', me.admin_id).eq('role', 'admin').maybeSingle();
       if (admin) approvers = [admin.id as string];
     }
-    if (approvers.length === 0) {
+    if (approvers.length === 0 && !(await deanOwnershipLive(supabase))) {
       const { data: admins } = await supabase.from('users').select('id').eq('role', 'admin');
       approvers = (admins ?? []).map((a) => a.id as string);
     }

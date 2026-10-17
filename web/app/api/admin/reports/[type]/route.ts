@@ -14,6 +14,7 @@ import {
   isAdminReportType,
   type BuildResult,
 } from '@/app/lib/reports/admin-builders';
+import { deanInstitution, viewerDeanId } from '@/app/lib/dean-scope';
 
 interface RouteParams {
   params: Promise<{ type: string }>;
@@ -42,10 +43,13 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const supabase = getSupabaseAdmin();
 
     const { data: admin } = await supabase.from('users').select('name').eq('id', session.uid).maybeSingle();
-    const { data: campus } = await supabase.from('campuses').select('name').limit(1).maybeSingle();
+    // The Dean's own institution (077), else the first one on file.
+    const deanId = await viewerDeanId(supabase, session);
+    const campus = (await deanInstitution(supabase, session.uid))
+      ?? (await supabase.from('campuses').select('name').limit(1).maybeSingle()).data;
 
     const meta: ReportMeta = {
-      campus: campus?.name ?? 'Batangas State University – TNEU ARASOF Nasugbu',
+      campus: campus?.name ?? 'Batangas State University - The NEU ARASOF Nasugbu',
       generatedBy: admin?.name ?? session.email,
       generatedAt: new Date().toLocaleString('en-PH', { dateStyle: 'long', timeStyle: 'short' }),
     };
@@ -58,13 +62,13 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         result = await buildAdminFacultyReport(supabase, meta, id, scope);
         break;
       case 'rooms':
-        result = await buildAdminRoomReport(supabase, meta, id);
+        result = await buildAdminRoomReport(supabase, meta, id, deanId);
         break;
       case 'users':
         result = await buildAdminUserReport(supabase, meta, id, scope, session.uid);
         break;
       case 'summary':
-        result = await buildAdminSummaryReport(supabase, meta, scope, session.uid);
+        result = await buildAdminSummaryReport(supabase, meta, scope, session.uid, deanId);
         break;
     }
 

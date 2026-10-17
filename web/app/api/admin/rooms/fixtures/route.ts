@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { viewerDeanId } from '@/app/lib/dean-scope';
 
 /**
  * Everything on the ward floor plan that is not a room: corridors, the nurse
@@ -17,10 +18,14 @@ export async function GET() {
 
   try {
     const supabase = getSupabaseAdmin();
-    const { data, error } = await supabase
+    // The viewer's Dean's floor plan (077).
+    const deanId = await viewerDeanId(supabase, session);
+    let query = supabase
       .from('ward_fixtures')
       .select('id, kind, label, plan_x, plan_y, plan_w, plan_h')
       .order('created_at');
+    if (deanId) query = query.eq('admin_id', deanId);
+    const { data, error } = await query;
     if (error) {
       if (error.code === '42P01' || error.code === 'PGRST205') {
         return NextResponse.json({ fixtures: [], enabled: false });

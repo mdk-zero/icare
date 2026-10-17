@@ -2,7 +2,7 @@
  * Changing a saved scenario grade needs an admin's say-so.
  *
  * A faculty member who wants to edit a completed scenario asks their admin
- * (users.admin_id, migration 053; every admin when they have none) with a
+ * (users.admin_id, migration 053; every admin when they have none, before 077) with a
  * reason. Like sign-up page account requests, the request lives only in the
  * approvers' notifications: one copy each, sharing `request_id`, with the
  * decision written onto every copy so the others lose their buttons.

@@ -4,6 +4,8 @@ import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { resolveRoom, roomCapacityError } from '@/app/lib/patient-rooms';
 import { logAudit } from '@/app/lib/audit';
 import { buildStayDigest } from '@/app/lib/discharge';
+import { canSeePatient, getPatientCourseScope } from '@/app/lib/patient-courses';
+import { ownsRow } from '@/app/lib/dean-scope';
 
 /**
  * Patient check-in / check-out.
@@ -40,6 +42,9 @@ export async function POST(request: NextRequest) {
 
   try {
     const supabase = getSupabaseAdmin();
+    // Only a patient this viewer may see: their Dean's (077), and for an
+    // instructor one of their courses' (069).
+    const scope = await getPatientCourseScope(supabase, session);
 
     const { data: existing } = await supabase
       .from('patients')
@@ -47,7 +52,7 @@ export async function POST(request: NextRequest) {
       .eq('id', id)
       .maybeSingle();
 
-    if (!existing) {
+    if (!existing || !canSeePatient(scope, id)) {
       return NextResponse.json({ error: 'Patient not found' }, { status: 404 });
     }
 
@@ -123,6 +128,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: `${existing.name} is already checked in` }, { status: 409 });
     }
 
+    if (roomId && !(await ownsRow(supabase, 'rooms', roomId, scope.deanId))) {
+      return NextResponse.json({ error: 'Room not found' }, { status: 400 });
+    }
     if (roomId) {
       const capacityError = await roomCapacityError(supabase, roomId, id);
       if (capacityError) return NextResponse.json({ error: capacityError }, { status: 409 });

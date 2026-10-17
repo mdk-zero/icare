@@ -266,10 +266,14 @@ export async function buildAdminRoomReport(
   supabase: Supabase,
   meta: ReportMeta,
   roomId: string,
+  /** The Dean whose ward this is (077); null for every room. */
+  deanId: string | null = null,
 ): Promise<BuildResult> {
+  let roomsQuery = supabase.from('rooms').select('*').order('room_number');
+  if (deanId) roomsQuery = roomsQuery.eq('admin_id', deanId);
   if (!roomId) {
     const [{ data: rooms }, { data: activeAssignments }] = await Promise.all([
-      supabase.from('rooms').select('*').order('room_number'),
+      roomsQuery,
       supabase.from('room_assignments').select('room_id').is('ends_at', null),
     ]);
 
@@ -317,11 +321,7 @@ export async function buildAdminRoomReport(
     return { subject: 'all-rooms', pdf };
   }
 
-  const { data: room } = await supabase
-    .from('rooms')
-    .select('*')
-    .eq('id', roomId)
-    .maybeSingle();
+  const { data: room } = await roomsQuery.eq('id', roomId).maybeSingle();
 
   if (!room) return { error: 'Room not found', status: 404 };
 
@@ -533,6 +533,8 @@ export async function buildAdminSummaryReport(
   meta: ReportMeta,
   scope: AdminScope | null = null,
   adminId = '',
+  /** The Dean whose ward this is (077); null for every room. */
+  deanId: string | null = null,
 ): Promise<BuildResult> {
   let facultyQuery = supabase
     .from('users')
@@ -540,14 +542,16 @@ export async function buildAdminSummaryReport(
     .eq('role', 'faculty')
     .order('name');
   let countQuery = supabase.from('users').select('role').in('role', ['student', 'faculty', 'admin']);
-  // Only this admin's faculty and students (migration 053); rooms stay shared.
+  // Only this admin's faculty, students (053) and rooms (077).
   if (scope) {
     facultyQuery = facultyQuery.in('id', idsOrNone(scope.facultyIds));
     countQuery = countQuery.in('id', adminVisibleUserIds(scope, adminId));
   }
+  let roomsQuery = supabase.from('rooms').select('*').order('room_number');
+  if (deanId) roomsQuery = roomsQuery.eq('admin_id', deanId);
   const [{ data: faculty }, { data: rooms }, { data: userCounts }] = await Promise.all([
     facultyQuery,
-    supabase.from('rooms').select('*').order('room_number'),
+    roomsQuery,
     countQuery,
   ]);
 

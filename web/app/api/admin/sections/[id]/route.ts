@@ -3,6 +3,7 @@ import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { getAdminScope } from '@/app/lib/admin-scope';
 import { logAudit } from '@/app/lib/audit';
+import { viewerDeanId } from '@/app/lib/dean-scope';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -40,13 +41,18 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Section not found' }, { status: 404 });
     }
 
+    // Quizzes name their sections, and another Dean may have one of the same
+    // name (077), so only this Dean's quizzes count.
+    const deanId = await viewerDeanId(supabase, session);
+    let assessmentsQuery = supabase
+      .from('assessments')
+      .select('id', { count: 'exact', head: true })
+      .contains('target_sections', [section.name]);
+    if (deanId) assessmentsQuery = assessmentsQuery.eq('admin_id', deanId);
     const [studentsRes, facultyRes, assessmentsRes] = await Promise.all([
       supabase.from('users').select('id', { count: 'exact', head: true }).eq('section_id', id),
       supabase.from('faculty_sections').select('users:faculty_id(id, name)').eq('section_id', id),
-      supabase
-        .from('assessments')
-        .select('id', { count: 'exact', head: true })
-        .contains('target_sections', [section.name]),
+      assessmentsQuery,
     ]);
 
     const faculty = (facultyRes.data ?? [])
@@ -120,12 +126,11 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ section: current, assessments_retargeted: 0 });
     }
 
-    const { data: clash } = await supabase
-      .from('sections')
-      .select('id')
-      .ilike('name', trimmedName)
-      .neq('id', id)
-      .maybeSingle();
+    // Names are unique per Dean (077); another Dean may have the same one.
+    const deanId = await viewerDeanId(supabase, session);
+    let clashQuery = supabase.from('sections').select('id').ilike('name', trimmedName).neq('id', id);
+    if (deanId) clashQuery = clashQuery.eq('admin_id', deanId);
+    const { data: clash } = await clashQuery.limit(1).maybeSingle();
     if (clash) {
       return NextResponse.json({ error: 'A section with this name already exists' }, { status: 409 });
     }
@@ -137,6 +142,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       .select('id, name')
       .single();
 
+    if (error?.code === '23505') {
+      return NextResponse.json({ error: 'A section with this name already exists' }, { status: 409 });
+    }
     if (error || !section) {
       console.error('Failed to rename section', error);
       return NextResponse.json({ error: 'Unable to rename section' }, { status: 500 });
@@ -148,10 +156,12 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     // name may already sit in the array as a stale entry left by a section
     // that was deleted.
     let retargeted = 0;
-    const { data: targeted } = await supabase
+    let targetedQuery = supabase
       .from('assessments')
       .select('id, target_sections')
       .contains('target_sections', [current.name]);
+    if (deanId) targetedQuery = targetedQuery.eq('admin_id', deanId);
+    const { data: targeted } = await targetedQuery;
 
     for (const assessment of targeted ?? []) {
       const next = [

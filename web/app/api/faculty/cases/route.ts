@@ -13,6 +13,7 @@ import {
 import { loadTeams, presentationGroups } from '@/app/lib/cases';
 import { isLateSubmission } from '@/app/lib/case-rubric';
 import { parseDeadline } from '@/app/lib/deadline-input';
+import { viewerDeanId } from '@/app/lib/dean-scope';
 
 const MAX_TITLE = 200;
 const MAX_INSTRUCTIONS = 4000;
@@ -52,6 +53,9 @@ export async function GET() {
 
     const ids = new Set(submissions.map((s) => s.presentation_id));
     let presQuery = supabase.from('case_presentations').select(PRESENTATION_COLUMNS).order('created_at', { ascending: false });
+    // The viewer's own Dean's only (077).
+    const deanId = await viewerDeanId(supabase, session);
+    if (deanId) presQuery = presQuery.eq('admin_id', deanId);
     if (scope !== null) {
       // Their own presentations show up even before anyone is on the roster.
       const idList = [...ids];

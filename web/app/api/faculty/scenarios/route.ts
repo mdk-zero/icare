@@ -7,6 +7,7 @@ import { canSeePatient, getPatientCourseScope } from '@/app/lib/patient-courses'
 import { seedScenarioTasks } from '@/app/lib/scenario-default-tasks';
 import { ofKind, scenarioKinds } from '@/app/lib/scenario-kind';
 import { ensureCategories } from '@/app/lib/scenario-categories';
+import { viewerDeanId } from '@/app/lib/dean-scope';
 import { addSkillTasks, parseSkillSelections } from '@/app/lib/skill-tasks';
 import {
   getFacultyStudentIdSet,
@@ -38,13 +39,17 @@ export async function GET() {
   try {
     const supabase = getSupabaseAdmin();
 
-    const { data: scenarios, error } = await supabase
+    // The bank of the viewer's own Dean only (077).
+    const deanId = await viewerDeanId(supabase, session);
+    let scenariosQuery = supabase
       .from('scenarios')
       .select(
         'id, created_by, title, description, category, learning_objectives, is_ai_generated, created_at, updated_at, patient_id, patients(name), scenario_assignments(student_id, status, deadline), scenario_tasks(skill_id)',
       )
       .order('created_at', { ascending: false })
       .limit(500);
+    if (deanId) scenariosQuery = scenariosQuery.eq('admin_id', deanId);
+    const { data: scenarios, error } = await scenariosQuery;
 
     if (error) {
       console.error('Failed to fetch patient cases', error);
@@ -54,7 +59,8 @@ export async function GET() {
       );
     }
 
-    // An admin oversees every section, so nothing is filtered for them.
+    // An admin oversees every section of their own, so nothing more is
+    // filtered for them.
     const facultyStudentIds =
       session.role === 'admin'
         ? null

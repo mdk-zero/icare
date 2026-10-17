@@ -6,6 +6,7 @@ import { activityCourse, activityCoursesReady, activityOfferings, parseOfferingI
 import { getScopedStudentIds } from '@/app/lib/admin-scope';
 import { assignedGroups, type AssignedGroup } from '@/app/lib/assigned-groups';
 import { logAudit } from '@/app/lib/audit';
+import { viewerDeanId } from '@/app/lib/dean-scope';
 
 const validCategories = [
   'Cardiac Emergency',
@@ -29,13 +30,17 @@ export async function GET() {
 
   try {
     const supabase = getSupabaseAdmin();
-    const { data, error } = await supabase
+    // The quizzes of the viewer's own Dean only (077).
+    const deanId = await viewerDeanId(supabase, session);
+    let quizQuery = supabase
       .from('assessments')
       .select(
         'id, created_by, title, description, category, time_limit_seconds, is_published, is_ai_generated, target_sections, total_questions, max_attempts, created_at, updated_at, questions(count)',
       )
       .order('created_at', { ascending: false })
       .limit(500);
+    if (deanId) quizQuery = quizQuery.eq('admin_id', deanId);
+    const { data, error } = await quizQuery;
 
     if (error) {
       console.error('Failed to fetch assessments', error);

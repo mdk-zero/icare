@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { viewerDeanId } from '@/app/lib/dean-scope';
 
 export async function GET(request: NextRequest) {
   const session = await readSession();
@@ -16,11 +17,14 @@ export async function GET(request: NextRequest) {
 
   try {
     const supabase = getSupabaseAdmin();
+    // Readings on the viewer's Dean's patients only (077).
+    const deanId = await viewerDeanId(supabase, session);
     let query = supabase
       .from('vital_sign_readings')
-      .select('*, patients(name, room_number), users(name, email)')
+      .select(deanId ? '*, patients!inner(name, room_number), users(name, email)' : '*, patients(name, room_number), users(name, email)')
       .order('recorded_at', { ascending: false })
       .limit(200);
+    if (deanId) query = query.eq('patients.admin_id', deanId);
     if (flaggedOnly) query = query.eq('is_anomaly', true);
     if (patientId) query = query.eq('patient_id', patientId);
     if (studentId) query = query.eq('recorded_by', studentId);

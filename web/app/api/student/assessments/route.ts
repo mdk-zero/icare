@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { activityOfferings } from '@/app/lib/activity-course';
+import { viewerDeanId } from '@/app/lib/dean-scope';
 
 export async function GET() {
   const session = await readSession();
@@ -23,14 +24,19 @@ export async function GET() {
     const studentSection: string | null =
       (studentUser?.sections as unknown as { name?: string } | null)?.name ?? null;
 
+    // Only the quizzes of the student's own Dean (077): "every section" and a
+    // section name both mean that Dean's sections, never another Dean's.
+    const deanId = await viewerDeanId(supabase, session);
+    let publishedQuery = supabase
+      .from('assessments')
+      .select('id, title, description, category, time_limit_seconds, target_sections, total_questions, max_attempts, created_by, questions(count)')
+      .eq('is_published', true)
+      .order('created_at', { ascending: false })
+      .limit(200);
+    if (deanId) publishedQuery = publishedQuery.eq('admin_id', deanId);
     const [{ data: published, error: pubError }, { data: assignments, error: asgError }, { data: allAttempts, error: attError }] =
       await Promise.all([
-        supabase
-          .from('assessments')
-          .select('id, title, description, category, time_limit_seconds, target_sections, total_questions, max_attempts, created_by, questions(count)')
-          .eq('is_published', true)
-          .order('created_at', { ascending: false })
-          .limit(200),
+        publishedQuery,
         supabase
           .from('assessment_assignments')
           .select('id, assessment_id, status, deadline, required, assigned_at, max_attempts')

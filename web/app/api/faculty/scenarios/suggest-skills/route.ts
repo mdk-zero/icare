@@ -5,6 +5,7 @@ import { MAX_LESSON_CHARS } from '@/app/lib/ai/lesson';
 import { fetchPatientContext } from '@/app/lib/ai/scenario';
 import { listSkills } from '@/app/lib/taylor-skills';
 import { aiSuggestions, keywordSuggestions } from '@/app/lib/skill-suggest';
+import { viewerDeanId } from '@/app/lib/dean-scope';
 
 /** Enough for a full case write-up; anything longer is trimmed. */
 const MAX_CASE_CHARS = 8_000;
@@ -41,7 +42,7 @@ export async function POST(request: NextRequest) {
 
   const supabase = getSupabaseAdmin();
   if (text(body.patient_id)) {
-    const patient = await fetchPatientContext(supabase, text(body.patient_id));
+    const patient = await fetchPatientContext(supabase, text(body.patient_id), await viewerDeanId(supabase, session));
     if (patient) parts.push(`Patient: ${patient.age}-year-old ${patient.gender}, ${patient.diagnosis}`);
   }
   const caseText = parts.filter(Boolean).join('\n').slice(0, MAX_CASE_CHARS);

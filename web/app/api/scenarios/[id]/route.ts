@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
-import { canFacultySeeScenario } from '@/app/lib/scenario-visibility';
+import { canFacultySeeScenario, scenarioInDeanScope } from '@/app/lib/scenario-visibility';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -33,8 +33,12 @@ export async function GET(request: Request, { params }: RouteParams) {
       return NextResponse.json({ error: 'Patient case not found' }, { status: 404 });
     }
 
-    // An admin oversees every section and reads anything.
+    // An admin oversees every section of their own and reads any of their
+    // own scenarios (077).
     if (session.role === 'admin') {
+      if (!(await scenarioInDeanScope(supabase, session, id))) {
+        return NextResponse.json({ error: 'Patient case not found' }, { status: 404 });
+      }
       return NextResponse.json({ scenario });
     }
 

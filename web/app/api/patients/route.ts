@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { getAssignedPatientIds } from '@/app/lib/assigned-patients';
+import { viewerDeanId } from '@/app/lib/dean-scope';
 
 function invalidSessionResponse() {
   return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -18,7 +19,7 @@ export async function GET(request: NextRequest) {
     const supabase = getSupabaseAdmin();
 
     // Students only see patients from scenarios assigned to them; faculty and
-    // admin see the whole roster.
+    // admin see their Dean's whole roster (077).
     let assignedIds: string[] | null = null;
     if (session.role === 'student') {
       assignedIds = await getAssignedPatientIds(supabase, session.uid);
@@ -35,6 +36,9 @@ export async function GET(request: NextRequest) {
 
     if (assignedIds) {
       query = query.in('id', assignedIds);
+    } else {
+      const deanId = await viewerDeanId(supabase, session);
+      if (deanId) query = query.eq('admin_id', deanId);
     }
 
     if (search) {

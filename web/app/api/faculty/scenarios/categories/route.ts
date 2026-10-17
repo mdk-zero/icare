@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { ensureCategories, listCategories } from '@/app/lib/scenario-categories';
+import { viewerDeanId } from '@/app/lib/dean-scope';
 
 /** More than a lesson's topic pass ever proposes; guards against a runaway client. */
 const MAX_PER_REQUEST = 10;
@@ -15,7 +16,9 @@ export async function GET() {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (!isFacultyOrAdmin(session.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-  return NextResponse.json({ categories: await listCategories(getSupabaseAdmin()) });
+  // The presets and the viewer's own Dean's (077).
+  const supabase = getSupabaseAdmin();
+  return NextResponse.json({ categories: await listCategories(supabase, await viewerDeanId(supabase, session)) });
 }
 
 /**
@@ -58,6 +61,6 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({
     created: result.names,
-    categories: await listCategories(supabase),
+    categories: await listCategories(supabase, await viewerDeanId(supabase, session), result.names),
   });
 }

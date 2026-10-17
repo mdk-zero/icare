@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { logAudit } from '@/app/lib/audit';
+import { ownedIds, viewerDeanId } from '@/app/lib/dean-scope';
 
 /**
  * Bulk-saves the floor plan. Each `positions` entry either places a room
@@ -156,6 +157,13 @@ export async function PUT(request: NextRequest) {
   try {
     const supabase = getSupabaseAdmin();
 
+    // Only this Dean's own rooms and fixtures (077).
+    const deanId = await viewerDeanId(supabase, session);
+    const placedIds = placements.map((p) => p.id);
+    if ((await ownedIds(supabase, 'rooms', placedIds, deanId)).length !== placedIds.length) {
+      return NextResponse.json({ error: 'One or more rooms were not found' }, { status: 404 });
+    }
+
     // No bulk upsert here: upsert would need every not-null column of the row,
     // and a partial failure should name the room it tripped on.
     for (const p of placements) {
@@ -182,7 +190,7 @@ export async function PUT(request: NextRequest) {
     }
 
     if (hasFixtures) {
-      const fixtureError = await replaceFixtures(supabase, fixtures, session.uid);
+      const fixtureError = await replaceFixtures(supabase, fixtures, session.uid, deanId);
       if (fixtureError) {
         return NextResponse.json(
           { error: fixtureError === 'missing' ? NEEDS_062 : 'Unable to save the plan\'s fixtures; rooms were saved' },
@@ -213,13 +221,15 @@ export async function PUT(request: NextRequest) {
 }
 
 /**
- * Makes the stored fixtures exactly `fixtures`: deletes the rest, updates the
- * ones that exist, and inserts the new ones under the saving dean's name.
+ * Makes the Dean's stored fixtures exactly `fixtures`: deletes the rest,
+ * updates the ones that exist, and inserts the new ones under the saving
+ * dean's name. Another Dean's fixtures are never touched (077).
  */
 async function replaceFixtures(
   supabase: ReturnType<typeof getSupabaseAdmin>,
   fixtures: Fixture[],
   uid: string,
+  deanId: string | null,
 ): Promise<'missing' | 'failed' | null> {
   const fail = (error: { code?: string }, what: string) => {
     if (isMissing062(error)) return 'missing' as const;
@@ -227,7 +237,9 @@ async function replaceFixtures(
     return 'failed' as const;
   };
 
-  const { data: existing, error: readError } = await supabase.from('ward_fixtures').select('id');
+  let existingQuery = supabase.from('ward_fixtures').select('id');
+  if (deanId) existingQuery = existingQuery.eq('admin_id', deanId);
+  const { data: existing, error: readError } = await existingQuery;
   if (readError) return fail(readError, 'read');
   const existingIds = new Set((existing ?? []).map((f) => f.id as string));
   const keep = new Set(fixtures.map((f) => f.id));
@@ -248,7 +260,7 @@ async function replaceFixtures(
   if (inserts.length > 0) {
     const { error } = await supabase
       .from('ward_fixtures')
-      .insert(inserts.map((f) => ({ ...f, created_by: uid })));
+      .insert(inserts.map((f) => ({ ...f, created_by: uid, ...(deanId ? { admin_id: deanId } : {}) })));
     if (error) return fail(error, 'insert');
   }
   return null;

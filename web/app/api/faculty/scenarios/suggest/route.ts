@@ -11,6 +11,7 @@ import {
   type PatientContext,
   type ScenarioCategory,
 } from '@/app/lib/ai/scenario';
+import { viewerDeanId } from '@/app/lib/dean-scope';
 
 const scenarioFocuses = [
   'interpreting and acting on abnormal lab values',
@@ -63,11 +64,14 @@ function scorePatientAbnormality(patient: PatientContext): number {
   return score;
 }
 
-async function pickSuggestedPatient(supabase: ReturnType<typeof getSupabaseAdmin>): Promise<PatientContext | null> {
-  const { data: patients, error } = await supabase
-    .from('patients')
-    .select(PATIENT_CONTEXT_COLUMNS)
-    .limit(100);
+async function pickSuggestedPatient(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  deanId: string | null,
+): Promise<PatientContext | null> {
+  // From the viewer's Dean's patients only (077).
+  let query = supabase.from('patients').select(PATIENT_CONTEXT_COLUMNS).limit(100);
+  if (deanId) query = query.eq('admin_id', deanId);
+  const { data: patients, error } = await query;
 
   if (error || !patients || patients.length === 0) return null;
 
@@ -115,14 +119,15 @@ export async function POST(request: NextRequest) {
     const supabase = getSupabaseAdmin();
 
     let patient: PatientContext | null = null;
+    const deanId = await viewerDeanId(supabase, session);
 
     if (typeof body.patient_id === 'string' && body.patient_id.trim()) {
-      patient = await fetchPatientContext(supabase, body.patient_id.trim());
+      patient = await fetchPatientContext(supabase, body.patient_id.trim(), deanId);
       if (!patient) {
         return NextResponse.json({ error: 'Selected patient not found' }, { status: 404 });
       }
     } else {
-      patient = await pickSuggestedPatient(supabase);
+      patient = await pickSuggestedPatient(supabase, deanId);
       if (!patient) {
         return NextResponse.json({ error: 'No patients available to suggest' }, { status: 404 });
       }

@@ -4,7 +4,7 @@ import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { logAudit } from '@/app/lib/audit';
 import { parseDeadline } from '@/app/lib/deadline-input';
 import { notifyReturnDemoAssigned } from '@/app/lib/notify-case-assigned';
-import { getFacultyStudentIdSet } from '@/app/lib/scenario-visibility';
+import { getScopedStudentIds } from '@/app/lib/admin-scope';
 import { isMissingTeamTables, manageableTeam, TEAMS_NEED_MIGRATION } from '@/app/lib/teams';
 import { mergeAssignees } from '@/app/lib/return-demos';
 import { canEdit, loadReturnDemo } from '@/app/lib/return-demos-server';
@@ -96,8 +96,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       already: new Set((holders ?? []).map((h) => h.student_id as string)),
     });
 
-    if (session.role === 'faculty') {
-      const roster = await getFacultyStudentIdSet(supabase, session.uid);
+    // An instructor's own group members; an admin's own students (077).
+    const scopedIds = await getScopedStudentIds(supabase, session);
+    if (scopedIds) {
+      const roster = new Set(scopedIds);
       if (rows.some((r) => !roster.has(r.student_id))) {
         return NextResponse.json({ error: 'Some students are not in your groups' }, { status: 403 });
       }

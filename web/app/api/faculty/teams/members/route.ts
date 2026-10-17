@@ -5,6 +5,7 @@ import { logAudit } from '@/app/lib/audit';
 import type { SessionPayload } from '@/app/lib/auth/session';
 import { MAX_REASON_LENGTH } from '@/app/lib/grade-edit-requests';
 import { isMissingTeamTables, manageableSectionIds, manageableTeam, TEAMS_NEED_MIGRATION } from '@/app/lib/teams';
+import { deanOwnershipLive } from '@/app/lib/dean-scope';
 
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
 
@@ -154,14 +155,15 @@ async function moveBetweenOwnGroups(
     supabase.from('sections').select('name').eq('id', from.section_id).maybeSingle(),
   ]);
 
-  // Their own dean (053); every dean when they have none. The move has
-  // already happened, so a failed notice is logged rather than undone.
+  // Their own dean (053); every dean when they have none, until each Dean's
+  // data is kept apart (077). The move has already happened, so a failed
+  // notice is logged rather than undone.
   let deans: string[] = [];
   if (me?.admin_id) {
     const { data: admin } = await supabase.from('users').select('id').eq('id', me.admin_id).eq('role', 'admin').maybeSingle();
     if (admin) deans = [admin.id as string];
   }
-  if (deans.length === 0) {
+  if (deans.length === 0 && !(await deanOwnershipLive(supabase))) {
     const { data: admins } = await supabase.from('users').select('id').eq('role', 'admin');
     deans = (admins ?? []).map((a) => a.id as string);
   }

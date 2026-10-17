@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
-import { guardAssessmentEdit } from '@/app/lib/assessment-access';
+import { guardAssessmentEdit, quizInDeanScope } from '@/app/lib/assessment-access';
 import { isSkillId } from '@/app/lib/taylor-skills';
 
 export async function GET(
@@ -18,6 +18,9 @@ export async function GET(
 
   try {
     const supabase = getSupabaseAdmin();
+    if (!(await quizInDeanScope(supabase, session, id))) {
+      return NextResponse.json({ error: 'Assessment not found' }, { status: 404 });
+    }
     const { data, error } = await supabase
       .from('assessment_criteria')
       .select('id, assessment_id, name, weight, competency_id, skill_id, sort_order, min_questions, created_at')

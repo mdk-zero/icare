@@ -1,5 +1,6 @@
 import type { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { VALID_CATEGORIES } from '@/app/lib/ai/scenario';
+import { ownedOrSharedFilter } from '@/app/lib/dean-scope';
 
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
 
@@ -44,13 +45,26 @@ function sortCategories(names: string[]): string[] {
   );
 }
 
-export async function listCategories(supabase: Supabase): Promise<string[]> {
-  const { data, error } = await supabase.from('scenario_categories').select('name');
+/**
+ * The categories a viewer picks from: the presets everyone shares, plus the
+ * ones made under their own Dean (077). `include` adds names the viewer just
+ * used, which may be another Dean's: names are unique system-wide, so a case
+ * typed with one reuses it rather than making a duplicate.
+ */
+export async function listCategories(
+  supabase: Supabase,
+  deanId: string | null,
+  include: string[] = [],
+): Promise<string[]> {
+  let query = supabase.from('scenario_categories').select('name');
+  if (deanId) query = query.or(ownedOrSharedFilter(deanId));
+  const { data, error } = await query;
   if (error) {
     if (!isMissingTable(error)) console.error('Failed to list scenario categories', error);
     return sortCategories([...VALID_CATEGORIES]);
   }
-  return sortCategories((data ?? []).map((row) => (row as { name: string }).name));
+  const names = (data ?? []).map((row) => (row as { name: string }).name);
+  return sortCategories([...new Set([...names, ...include])]);
 }
 
 /**

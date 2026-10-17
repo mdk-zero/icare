@@ -3,6 +3,7 @@ import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { resolveRoom, roomCapacityError } from '@/app/lib/patient-rooms';
 import { logAudit } from '@/app/lib/audit';
+import { ownsRow } from '@/app/lib/dean-scope';
 import {
   courseIdsError,
   coursesByPatient,
@@ -183,6 +184,10 @@ export async function POST(request: NextRequest) {
     const nextSubjectId = minSubject?.subject_id ? minSubject.subject_id - 1 : -1;
 
     const { room_id, ...rest } = input;
+    // Only a room in this Dean's ward (077).
+    if (room_id && !(await ownsRow(supabase, 'rooms', room_id, scope.deanId))) {
+      return NextResponse.json({ error: 'Room not found' }, { status: 400 });
+    }
     if (room_id) {
       const capacityError = await roomCapacityError(supabase, room_id, null);
       if (capacityError) return NextResponse.json({ error: capacityError }, { status: 409 });
@@ -280,6 +285,9 @@ export async function PUT(request: NextRequest) {
       input.room_id = null;
     }
 
+    if (input.room_id && !(await ownsRow(supabase, 'rooms', input.room_id, scope.deanId))) {
+      return NextResponse.json({ error: 'Room not found' }, { status: 400 });
+    }
     if (input.room_id) {
       const capacityError = await roomCapacityError(supabase, input.room_id, id);
       if (capacityError) return NextResponse.json({ error: capacityError }, { status: 409 });

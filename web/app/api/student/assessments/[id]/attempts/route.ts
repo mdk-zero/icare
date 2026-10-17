@@ -7,6 +7,7 @@ import {
   loadServedQuestions,
   SelectionError,
 } from '@/app/lib/assessment-selection';
+import { quizInDeanScope } from '@/app/lib/assessment-access';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -61,6 +62,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       .eq('assessment_id', assessmentId)
       .eq('student_id', session.uid)
       .maybeSingle();
+    // Unless it was given to them, only a quiz of their own Dean's (077).
+    if (!assignment && !(await quizInDeanScope(supabase, session, assessmentId))) {
+      return NextResponse.json({ error: 'Assessment not available' }, { status: 404 });
+    }
 
     // A per-student override beats the assessment default; null at both levels
     // means unlimited.

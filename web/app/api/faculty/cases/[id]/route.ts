@@ -14,6 +14,7 @@ import { loadTeams, presentationGroups } from '@/app/lib/cases';
 import { activityOfferings } from '@/app/lib/activity-course';
 import { isLateSubmission } from '@/app/lib/case-rubric';
 import { parseDeadline } from '@/app/lib/deadline-input';
+import { ownsRow, viewerDeanId } from '@/app/lib/dean-scope';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -37,14 +38,21 @@ async function authorize() {
   return { session } as const;
 }
 
-async function loadPresentation(supabase: ReturnType<typeof getSupabaseAdmin>, id: string) {
+async function loadPresentation(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  session: { uid: string; role: string },
+  id: string,
+) {
   const { data, error } = await supabase.from('case_presentations').select(PRESENTATION_COLUMNS).eq('id', id).maybeSingle();
   if (error) {
     if (isMissingCaseTables(error)) return { response: NextResponse.json({ error: CASES_NOT_READY }, { status: 503 }) };
     // A malformed id fails the query outright.
     return { response: NextResponse.json({ error: 'Case presentation not found' }, { status: 404 }) };
   }
-  if (!data) return { response: NextResponse.json({ error: 'Case presentation not found' }, { status: 404 }) };
+  // Another Dean's (077) is not found at all.
+  if (!data || !(await ownsRow(supabase, 'case_presentations', id, await viewerDeanId(supabase, session)))) {
+    return { response: NextResponse.json({ error: 'Case presentation not found' }, { status: 404 }) };
+  }
   return { presentation: data as unknown as Presentation };
 }
 
@@ -57,7 +65,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
 
   try {
     const supabase = getSupabaseAdmin();
-    const loaded = await loadPresentation(supabase, id);
+    const loaded = await loadPresentation(supabase, session, id);
     if (loaded.response) return loaded.response;
     const presentation = loaded.presentation;
 
@@ -132,7 +140,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
   try {
     const supabase = getSupabaseAdmin();
-    const loaded = await loadPresentation(supabase, id);
+    const loaded = await loadPresentation(supabase, session, id);
     if (loaded.response) return loaded.response;
     const presentation = loaded.presentation;
     if (!canManagePresentation(session, presentation)) {
@@ -218,7 +226,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
   try {
     const supabase = getSupabaseAdmin();
-    const loaded = await loadPresentation(supabase, id);
+    const loaded = await loadPresentation(supabase, session, id);
     if (loaded.response) return loaded.response;
     if (!canManagePresentation(session, loaded.presentation)) {
       return NextResponse.json({ error: 'Only the instructor who created this can delete it' }, { status: 403 });

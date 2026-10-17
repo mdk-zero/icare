@@ -4,6 +4,7 @@ import { courseFailure, loadOfferingRosters, loadOwnOffering, must, notFound, re
 import { termBounds } from '@/app/lib/course-progress';
 import { getFacultyStudentIdSet, scenarioVisibleToFaculty } from '@/app/lib/scenario-visibility';
 import { ofKind, scenarioKinds } from '@/app/lib/scenario-kind';
+import { viewerDeanId } from '@/app/lib/dean-scope';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -28,26 +29,33 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
     const offering = await loadOwnOffering(supabase, session.uid, id);
     if (!offering) return notFound('Course');
 
+    // Only what belongs to the instructor's Dean (077).
+    const deanId = await viewerDeanId(supabase, session);
+    let scenarioQuery = supabase
+      .from('scenarios')
+      .select('id, title, scenario_assignments(student_id)')
+      .order('created_at', { ascending: false })
+      .limit(500);
+    let quizQuery = supabase
+      .from('assessments')
+      .select('id, title')
+      .eq('is_published', true)
+      .order('created_at', { ascending: false })
+      .limit(500);
+    let presentationQuery = supabase
+      .from('case_presentations')
+      .select('id, title, created_by, section_ids')
+      .order('created_at', { ascending: false })
+      .limit(500);
+    if (deanId) {
+      scenarioQuery = scenarioQuery.eq('admin_id', deanId);
+      quizQuery = quizQuery.eq('admin_id', deanId);
+      presentationQuery = presentationQuery.eq('admin_id', deanId);
+    }
     const [scenarioRows, quizRows, presentationRows, mine, rosters] = await Promise.all([
-      supabase
-        .from('scenarios')
-        .select('id, title, scenario_assignments(student_id)')
-        .order('created_at', { ascending: false })
-        .limit(500)
-        .then(must),
-      supabase
-        .from('assessments')
-        .select('id, title')
-        .eq('is_published', true)
-        .order('created_at', { ascending: false })
-        .limit(500)
-        .then(must),
-      supabase
-        .from('case_presentations')
-        .select('id, title, created_by, section_ids')
-        .order('created_at', { ascending: false })
-        .limit(500)
-        .then(must),
+      scenarioQuery.then(must),
+      quizQuery.then(must),
+      presentationQuery.then(must),
       getFacultyStudentIdSet(supabase, session.uid),
       loadOfferingRosters(supabase, [{ id, faculty_id: offering.faculty_id, section_ids: offering.section_ids }]),
     ]);

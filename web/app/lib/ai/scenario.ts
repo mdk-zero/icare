@@ -41,15 +41,15 @@ export interface PatientContext {
 export const PATIENT_CONTEXT_COLUMNS =
   'id, name, age, gender, room_number, diagnosis, admission_date, vital_signs, labs, mimic_id, medical_history';
 
+/** One patient's record for a prompt; with a Dean (077), only one of theirs. */
 export async function fetchPatientContext(
   supabase: ReturnType<typeof getSupabaseAdmin>,
   patientId: string,
+  deanId: string | null,
 ): Promise<PatientContext | null> {
-  const { data, error } = await supabase
-    .from('patients')
-    .select(PATIENT_CONTEXT_COLUMNS)
-    .eq('id', patientId)
-    .maybeSingle();
+  let query = supabase.from('patients').select(PATIENT_CONTEXT_COLUMNS).eq('id', patientId);
+  if (deanId) query = query.eq('admin_id', deanId);
+  const { data, error } = await query.maybeSingle();
 
   if (error || !data) return null;
   return data as unknown as PatientContext;

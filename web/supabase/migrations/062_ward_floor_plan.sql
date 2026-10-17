@@ -38,6 +38,8 @@ create table if not exists public.ward_fixtures (
   plan_w int not null check (plan_w >= 1),
   plan_h int not null check (plan_h >= 1),
   created_by uuid references public.users(id) on delete set null,
+  -- The Dean whose floor plan it is on (077 keeps each Dean's ward apart).
+  admin_id uuid references public.users(id) on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   -- Same generous ceiling as chk_rooms_plan_placement.

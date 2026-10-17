@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { logAudit } from '@/app/lib/audit';
+import { getScopedStudentIds } from '@/app/lib/admin-scope';
+import { ownsRow, viewerDeanId } from '@/app/lib/dean-scope';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -33,6 +35,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
   try {
     const supabase = getSupabaseAdmin();
+    // A room in the viewer's Dean's ward (077).
+    if (!(await ownsRow(supabase, 'rooms', roomId, await viewerDeanId(supabase, session)))) {
+      return NextResponse.json({ error: 'Room not found' }, { status: 404 });
+    }
 
     const [{ data: room, error: roomError }, { data: current, error: curError }] =
       await Promise.all([
@@ -63,10 +69,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
+    // Only students the viewer may see: a Dean's own, an instructor's groups.
+    const scoped = await getScopedStudentIds(supabase, session);
     const { data: students, error: studentError } = await supabase
       .from('users')
       .select('id')
-      .in('id', newIds)
+      .in('id', scoped ? newIds.filter((sid) => scoped.includes(sid)) : newIds)
       .eq('role', 'student');
     if (studentError || (students ?? []).length !== newIds.length) {
       return NextResponse.json({ error: 'One or more students not found' }, { status: 400 });
@@ -131,6 +139,9 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
   try {
     const supabase = getSupabaseAdmin();
+    if (!(await ownsRow(supabase, 'rooms', roomId, await viewerDeanId(supabase, session)))) {
+      return NextResponse.json({ error: 'Active assignment not found' }, { status: 404 });
+    }
     const { data: assignment, error } = await supabase
       .from('room_assignments')
       .update({ ends_at: new Date().toISOString() })
