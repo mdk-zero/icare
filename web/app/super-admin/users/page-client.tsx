@@ -462,7 +462,7 @@ export default function SuperAdminUsersClient() {
           <table className="w-full">
             <thead className="bg-subtle border-b border-gray-100">
               <tr>
-                {["User", "Role", "Section / Owner", "Created", "Last sign-in", ""].map((h) => (
+                {["User", "Role", "Section / Dean", "Created", "Last sign-in", ""].map((h) => (
                   <th
                     key={h}
                     className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap"

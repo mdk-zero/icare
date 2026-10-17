@@ -32,5 +32,5 @@ export const accounts = Object.fromEntries(
   }),
 );
 
-/** Whether to send the finished run to the super admin's Test Results page. */
+/** Whether to send the finished run to the super admin's System Tests page. */
 export const reportEnabled = ['1', 'true', 'yes'].includes((process.env.TEST_REPORT || '').toLowerCase());

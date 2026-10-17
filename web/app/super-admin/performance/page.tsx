@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import PerformanceClient from "./page-client";
 
 export const metadata: Metadata = {
-  title: "Performance | iCARE++",
+  title: "System Performance | iCARE++",
 };
 
 export default function PerformancePage() {

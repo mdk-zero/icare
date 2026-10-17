@@ -190,7 +190,7 @@ export default function SuperAdminDashboardClient() {
       <PageHeader
         badge={{ icon: <FontAwesomeIcon icon={faHouse} className="w-3.5 h-3.5" />, label: "System Administration" }}
         title="System Dashboard"
-        subtitle="Accounts, live performance and the latest test results at a glance"
+        subtitle="Accounts, system performance and the latest system tests at a glance"
       />
 
       {data?.pending_migration && (
@@ -211,7 +211,7 @@ export default function SuperAdminDashboardClient() {
           pending={pending}
         />
         <Tile
-          label="Active in 7 days"
+          label="Active users · 7 days"
           value={data ? data.accounts.active_7d.toLocaleString() : dash}
           detail={
             data && data.accounts.total
@@ -235,7 +235,7 @@ export default function SuperAdminDashboardClient() {
           pending={pending}
         />
         <Tile
-          label="Health"
+          label="System Health"
           value={health ? `${health.summary.pass}/${health.summary.total}` : dash}
           detail={
             health
@@ -325,9 +325,9 @@ export default function SuperAdminDashboardClient() {
           }
         />
         <RunCard
-          title="Latest warehouse benchmark"
+          title="Latest data warehouse benchmark"
           pending={pending}
-          empty="No warehouse benchmark yet"
+          empty="No data warehouse benchmark yet"
           at={dw?.created_at}
           rows={
             dw
@@ -384,7 +384,7 @@ function RunCard({
         href="/super-admin/tests"
         className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-brand-700 hover:text-brand-800"
       >
-        Test results
+        System tests
         <FontAwesomeIcon icon={faArrowRight} className="w-3 h-3" />
       </Link>
     </section>

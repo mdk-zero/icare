@@ -194,8 +194,8 @@ export default function TestsClient() {
     <div>
       <PageHeader
         badge={{ icon: <FontAwesomeIcon icon={faFlaskVial} className="w-3.5 h-3.5" />, label: "System" }}
-        title="Test Results"
-        subtitle="Health checks, automated frontend and API tests, load and warehouse benchmarks, and the prediction models' evaluation"
+        title="System Tests"
+        subtitle="System health checks, automated frontend and API tests, load and data warehouse benchmarks, and the prediction models' evaluation"
       />
       {pending && (
         <div className="mb-5">
@@ -336,7 +336,7 @@ function HealthSection({ runs, onRun, loading }: { runs: HealthRun[]; onRun: (ru
 
   return (
     <section className={`${CARD} p-4 sm:p-5`}>
-      <SectionHead icon={faHeartPulse} title="Health checks" subtitle="Is every dependency reachable and configured right now?">
+      <SectionHead icon={faHeartPulse} title="System health checks" subtitle="Is every dependency reachable and configured right now?">
         <button type="button" onClick={run} disabled={busy} className={PRIMARY}>
           <FontAwesomeIcon icon={faPlay} className="w-3 h-3" />
           {busy ? "Checking…" : "Run checks"}
@@ -360,7 +360,7 @@ function HealthSection({ runs, onRun, loading }: { runs: HealthRun[]; onRun: (ru
           </ul>
         </>
       ) : !shown ? (
-        <p className="text-sm text-gray-400">No health check has been run yet.</p>
+        <p className="text-sm text-gray-400">No system health check has been run yet.</p>
       ) : (
         <>
           <p className="text-xs text-gray-500 mb-2">
@@ -502,7 +502,7 @@ function BenchmarkSection({ runs, onRun, loading }: { runs: BenchRun[]; onRun: (
       </fieldset>
       <p className="text-xs text-gray-500 mb-4">
         {totalRequests.toLocaleString()} read-only requests from this browser. Each counts toward Supabase usage; the
-        warehouse target is the heaviest.
+        data warehouse target is the heaviest.
       </p>
 
       {progress && (
@@ -541,7 +541,7 @@ function BenchmarkSection({ runs, onRun, loading }: { runs: BenchRun[]; onRun: (
               <thead className="bg-subtle">
                 <tr>
                   <th className={`${TH} text-left`}>Target</th>
-                  <th className={`${TH} text-right`}>Users</th>
+                  <th className={`${TH} text-right`}>Concurrent users</th>
                   <th className={`${TH} text-right`}>p50</th>
                   <th className={`${TH} text-left w-[30%]`}>p95</th>
                   <th className={`${TH} text-right`}>Req/s</th>
@@ -646,7 +646,7 @@ function DwSection({ runs, onRun, loading }: { runs: DwRun[]; onRun: (run: TestR
       {loading ? (
         <RunSkeleton />
       ) : !shown ? (
-        <p className="text-sm text-gray-400">No warehouse benchmark has been run yet.</p>
+        <p className="text-sm text-gray-400">No data warehouse benchmark has been run yet.</p>
       ) : (
         <>
           <p className="text-xs text-gray-500 mb-2">

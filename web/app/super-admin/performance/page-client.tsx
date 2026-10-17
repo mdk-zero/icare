@@ -80,7 +80,7 @@ export default function PerformanceClient() {
     <div>
       <PageHeader
         badge={{ icon: <FontAwesomeIcon icon={faGaugeHigh} className="w-3.5 h-3.5" />, label: "System" }}
-        title="Performance"
+        title="System Performance"
         subtitle="Live response time, throughput and reliability, measured from every API call users make"
         action={{
           icon: <FontAwesomeIcon icon={faRotateRight} className="w-3.5 h-3.5" />,

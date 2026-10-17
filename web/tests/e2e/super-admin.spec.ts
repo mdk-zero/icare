@@ -12,7 +12,7 @@ test.describe('Admin portal', () => {
     await expect(page.getByRole('heading', { name: 'System Dashboard' })).toBeVisible();
     // The sidebar has an "Accounts" section heading too; only look at the page body.
     const outsideNav = page.locator('xpath=//*[not(ancestor-or-self::nav)]');
-    for (const label of ['Accounts', 'Active in 7 days', 'Response time · 24 h', 'Reliability · 24 h', 'Health']) {
+    for (const label of ['Accounts', 'Active users · 7 days', 'Response time · 24 h', 'Reliability · 24 h', 'System Health']) {
       await expect(page.getByText(label, { exact: true }).and(outsideNav)).toBeVisible();
     }
   });
@@ -21,8 +21,8 @@ test.describe('Admin portal', () => {
     const nav = page.getByRole('navigation').first();
     for (const [link, heading] of [
       ['Users', 'Users'],
-      ['Performance', 'Performance'],
-      ['Test Results', 'Test Results'],
+      ['System Performance', 'System Performance'],
+      ['System Tests', 'System Tests'],
       ['Settings', 'Settings'],
       ['Dashboard', 'System Dashboard'],
     ]) {
@@ -64,10 +64,10 @@ test.describe('Admin portal', () => {
     await expect(page.getByRole('heading', { name: 'Endpoints' }).or(page.getByText(/Migration 054/))).toBeVisible();
   });
 
-  test('test results lists every kind of test', async ({ page }) => {
+  test('system tests lists every kind of test', async ({ page }) => {
     await page.goto('/super-admin/tests');
     for (const heading of [
-      'Health checks',
+      'System health checks',
       'Frontend tests (Playwright)',
       'API tests (Postman)',
       'Load benchmark',
@@ -81,7 +81,7 @@ test.describe('Admin portal', () => {
   // Saves one health-check run. The AI checks only look models up, so no quota is spent.
   test('health checks cover each AI provider in fallback order', async ({ page }) => {
     await page.goto('/super-admin/tests');
-    const section = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Health checks' }) });
+    const section = page.locator('section').filter({ has: page.getByRole('heading', { name: 'System health checks' }) });
     await section.getByRole('button', { name: 'Run checks' }).click();
     await expect(section.getByRole('button', { name: 'Run checks' })).toBeEnabled({ timeout: 30_000 });
     const labels = ['AI: Claude (primary)', 'AI: Gemini (fallback)', 'AI: OpenRouter (last fallback)'];

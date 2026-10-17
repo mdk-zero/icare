@@ -12,7 +12,7 @@ export const BENCHMARK_TARGETS = [
   { id: "health", label: "Baseline (no DB)", url: "/api/health" },
   { id: "auth", label: "Auth check", url: "/api/super-admin/probe?target=auth" },
   { id: "db", label: "Database read", url: "/api/super-admin/probe?target=db" },
-  { id: "dw", label: "Warehouse query", url: "/api/super-admin/probe?target=dw" },
+  { id: "dw", label: "Data warehouse query", url: "/api/super-admin/probe?target=dw" },
 ] as const;
 
 export const CONCURRENCY_LEVELS = [1, 5, 10, 25];

@@ -8,7 +8,7 @@ const KINDS = ['benchmark', 'dw_benchmark', 'health', 'e2e', 'api'];
 /**
  * Recent runs, newest first, optionally of one kind. With `since` (the `now`
  * of an earlier response), only the Playwright/Postman runs that started or
- * changed after it: the Test Results page polls this to follow a live run.
+ * changed after it: the System Tests page polls this to follow a live run.
  */
 export async function GET(request: NextRequest) {
   const guard = await requireSuperAdmin();

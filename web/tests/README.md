@@ -3,7 +3,7 @@
 Two suites, both run against a **running** iCARE++ web app (local `npm run dev`, or a
 deployment). Neither creates, edits nor deletes app data, so they are safe to point at the live
 site. Signing in does update each test account's "last sign-in" time, and the Playwright
-health-check test saves one health-check run to Test Results (its AI checks only look models
+health-check test saves one health-check run to System Tests (its AI checks only look models
 up, so they spend no AI quota).
 
 | Suite | Tool | What it checks | Files |
@@ -36,7 +36,7 @@ npm run test:api:report
 ```
 
 The `:report` variants sign in as the super admin account from `.env.test` and save the run.
-It shows under **Test Results → Frontend tests / API tests**, next to the health checks and
+It shows under **System Tests → Frontend tests / API tests**, next to the health checks and
 benchmarks, live: each test appears there as it finishes, with a progress bar, and the run
 turns into the usual summary when it ends. A run that stops sending (Ctrl+C, a crash) shows
 as stopped. Set `TEST_REPORT_URL` to report to a different deployment from the one

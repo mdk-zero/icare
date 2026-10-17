@@ -7,7 +7,7 @@ type LiveRun = Awaited<ReturnType<typeof startLiveRun>>;
 
 /**
  * Collects each test's final outcome and, with TEST_REPORT=1, streams the run
- * to Test Results as tests finish.
+ * to System Tests as tests finish.
  */
 export default class IcareReporter implements Reporter {
   private rows = new Map<string, Row>();
