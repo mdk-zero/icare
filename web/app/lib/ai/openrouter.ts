@@ -36,11 +36,11 @@ function parseRetryAfterSeconds(errorText: string): number | undefined {
 
 // Free models come and go; the super admin health check flags any that
 // OpenRouter stops offering. Checked 2026-09-29: the nemotrons answered, the
-// gemma and qwen models were live but often rate-limited upstream.
+// gemma and qwen models were live but often rate-limited upstream. The qwen
+// model was withdrawn by 2026-10-17 and dropped.
 export const DEFAULT_FREE_MODELS = [
   'nvidia/nemotron-3-super-120b-a12b:free',
   'google/gemma-4-31b-it:free',
-  'qwen/qwen3.8-27b:free',
   'nvidia/nemotron-3-ultra-550b-a55b:free',
 ];
 
