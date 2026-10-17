@@ -869,7 +869,7 @@ export function canSeeScenario(ctx: Ctx, scenarioId: string) {
 }
 
 /** Who has a case, by group, as lib/assigned-groups.ts reports it. */
-function caseGroupsOf(ctx: Ctx, rows: DemoAssignment[]) {
+export function caseGroupsOf(ctx: Ctx, rows: DemoAssignment[]) {
   const groups = new Map<string, { key: string; label: string; count: number; student_ids: string[]; deadline: string | null | "mixed"; done: number }>();
   for (const a of rows) {
     const u = userById(ctx.db, a.student_id);

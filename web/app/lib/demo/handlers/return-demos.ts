@@ -4,7 +4,7 @@ import { json, notFound, route, type DemoContext } from "../router";
 import { newId } from "../store";
 import type { DemoScenario } from "../fixtures/school";
 import { audit } from "./shared";
-import { addSkillTasks, myStudentIds, newAssignment } from "./faculty";
+import { addSkillTasks, caseGroupsOf, myStudentIds, newAssignment } from "./faculty";
 import { parseDeadline } from "@/app/lib/deadline-input";
 import { mergeAssignees, parseReturnDemoInput, RETURN_DEMO_CATEGORY, returnDemoVisibleTo, skillDiff } from "@/app/lib/return-demos";
 
@@ -56,6 +56,7 @@ function summary(ctx: Ctx, demo: DemoScenario) {
     skills: tasksOf(ctx, demo.id).map((t) => ({ id: t.skill_id ?? "", title: t.title })),
     student_count: new Set(own.map((a) => a.student_id)).size,
     graded_count: new Set(own.filter((a) => a.status === "completed").map((a) => a.student_id)).size,
+    assigned_groups: caseGroupsOf(ctx, own),
     can_edit: canEdit(ctx, demo),
   };
 }
@@ -236,4 +237,23 @@ route("POST", "/api/faculty/return-demos/:id/assign", (ctx) => {
   db.assignments.unshift(...rows.map((r) => newAssignment(demo, r.student_id, deadline.value as string, required, viewer.id, r.team_id)));
   audit(db, viewer, "return_demo.assign", "scenarios", { message: `Assigned Return Demonstration “${demo.title}” to ${rows.length} student(s)` }, demo.id);
   return json({ assigned: rows.length, skipped }, 201);
+});
+
+route("PATCH", "/api/faculty/return-demos/:id/assign", (ctx) => {
+  if (!staffOnly(ctx)) return forbidden();
+  const { db, body } = ctx;
+  const studentIds: string[] = Array.isArray(body?.student_ids) ? body.student_ids : [];
+  if (studentIds.length === 0) return json({ error: "Choose at least one student" }, 400);
+  const deadline = parseDeadline(body?.deadline);
+  if (!deadline.ok) return json({ error: deadline.error }, 400);
+  const demo = findDemo(ctx, ctx.params.id);
+  if (!demo) return notFound(NOT_FOUND);
+  if (!canEdit(ctx, demo)) return json({ error: "Only its maker can change this Return Demonstration" }, 403);
+  let updated = 0;
+  for (const a of db.assignments) {
+    if (a.scenario_id !== demo.id || !studentIds.includes(a.student_id) || a.status === "completed") continue;
+    a.deadline = deadline.value as string;
+    updated += 1;
+  }
+  return { updated };
 });

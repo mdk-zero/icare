@@ -5,6 +5,7 @@ import { getFacultyStudentIdSet } from './scenario-visibility';
 import { returnDemoVisibleTo } from './return-demos';
 import { isMissingKindColumn, RETURN_DEMOS_NEED_MIGRATION, scenarioKindsReady } from './scenario-kind';
 import { activityCoursesReady } from './activity-course';
+import { assignedGroups, type AssignedGroup } from './assigned-groups';
 
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
 
@@ -28,6 +29,8 @@ export interface ReturnDemoSummary extends ReturnDemoRow {
   /** The viewer's students given it, and how many of them are graded. */
   student_count: number;
   graded_count: number;
+  /** Who has it, by group, with their date of performance. */
+  assigned_groups?: AssignedGroup[];
   /** Whether the viewer made it (or is an admin), so may assign, edit or delete it. */
   can_edit: boolean;
 }
@@ -137,18 +140,26 @@ export async function listReturnDemos(
 ): Promise<ReturnDemoSummary[]> {
   const { data, error } = await supabase
     .from('scenarios')
-    .select(`${COLUMNS}, scenario_assignments(student_id, status)`)
+    .select(`${COLUMNS}, scenario_assignments(student_id, status, deadline)`)
     .eq('kind', 'return_demo')
     .order('created_at', { ascending: false })
     .limit(500);
   if (error) throw new Error(`Unable to read Return Demonstrations: ${error.message}`);
-  const rows = (data ?? []) as unknown as (ReturnDemoRow & { scenario_assignments: { student_id: string; status: string }[] | null })[];
+  const rows = (data ?? []) as unknown as (ReturnDemoRow & { scenario_assignments: { student_id: string; status: string; deadline: string | null }[] | null })[];
 
   const mine = session.role === 'admin' ? null : await getFacultyStudentIdSet(supabase, session.uid);
   const visible = rows.filter(
     (r) => mine === null || returnDemoVisibleTo(r, (r.scenario_assignments ?? []).map((a) => a.student_id), session, mine),
   );
   const tasks = await loadTasks(supabase, visible.map((r) => r.id));
+  const own = (r: (typeof visible)[number]) =>
+    (r.scenario_assignments ?? []).filter((a) => mine === null || mine.has(a.student_id));
+  const groupsOf = await assignedGroups(
+    supabase,
+    visible.flatMap((r) =>
+      own(r).map((a) => ({ activity_id: r.id, student_id: a.student_id, deadline: a.deadline, done: a.status === 'completed' })),
+    ),
+  );
 
   return visible.map(({ scenario_assignments, ...demo }) => {
     const own = (scenario_assignments ?? []).filter((a) => mine === null || mine.has(a.student_id));
@@ -157,6 +168,7 @@ export async function listReturnDemos(
       skills: tasks.filter((t) => t.scenario_id === demo.id).map((t) => ({ id: t.skill_id ?? '', title: t.title })),
       student_count: new Set(own.map((a) => a.student_id)).size,
       graded_count: new Set(own.filter((a) => a.status === 'completed').map((a) => a.student_id)).size,
+      assigned_groups: groupsOf.get(demo.id) ?? [],
       can_edit: canEdit(session, demo),
     };
   });

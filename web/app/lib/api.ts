@@ -2243,6 +2243,16 @@ export interface ReturnDemoSummary {
   /** Your students given it, and how many of them are graded. */
   student_count: number;
   graded_count: number;
+  /** Who has it, by group, with their date of performance. */
+  assigned_groups?: {
+    key: string;
+    label: string;
+    count: number;
+    student_ids: string[];
+    deadline: string | null | "mixed";
+    /** Graded already. */
+    done: number;
+  }[];
   /** You made it (or are an admin), so may assign, edit or delete it. */
   can_edit?: boolean;
 }

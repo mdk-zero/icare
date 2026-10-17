@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faCalendarDay,
-  faClipboardCheck,
+  faClock,
+  faListCheck,
   faHandHoldingMedical,
   faPenToSquare,
   faPlus,
@@ -16,6 +17,7 @@ import {
   faUsers,
 } from "@fortawesome/free-solid-svg-icons";
 import {
+  assignReturnDemo,
   deleteReturnDemo,
   fetchMyCourses,
   fetchReturnDemos,
@@ -30,7 +32,8 @@ import ActionsMenu from "../../components/ActionsMenu";
 import ConfirmModal from "../../components/ConfirmModal";
 import { SkeletonScenarioCard } from "../../components/skeletons";
 import { toast } from "../../components/Toast";
-import AssignModal from "./assign-modal";
+import AssignStudentsModal from "../../components/AssignStudentsModal";
+import PerformanceDatesModal from "../../components/PerformanceDatesModal";
 
 const NO_DEMOS: ReturnDemoSummary[] = [];
 
@@ -48,6 +51,8 @@ export default function ReturnDemosClient() {
   const [search, setSearch] = useState("");
   const [assignTarget, setAssignTarget] = useState<ReturnDemoSummary | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ReturnDemoSummary | null>(null);
+  // The "Who has it" list for one, with each group's date of performance.
+  const [whoHas, setWhoHas] = useState<ReturnDemoSummary | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
@@ -119,13 +124,6 @@ export default function ReturnDemosClient() {
             </div>
             <div className="ml-auto flex flex-wrap justify-end gap-2">
               <button
-                onClick={() => router.push("/faculty/return-demos/review")}
-                className="flex items-center gap-2 whitespace-nowrap rounded-xl border border-brand-700/25 bg-surface px-4 py-2.5 text-sm font-semibold text-brand-800 transition-all hover:border-brand-700/40 hover:bg-brand-50"
-              >
-                <FontAwesomeIcon icon={faClipboardCheck} className="h-4 w-4 text-brand-600" />
-                Grade
-              </button>
-              <button
                 onClick={() => router.push("/faculty/return-demos/new")}
                 className="flex items-center gap-2 whitespace-nowrap rounded-xl bg-gradient-to-r from-brand-600 to-brand-800 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_4px_14px_-2px_rgb(27_107_123_/_0.45)] transition-all hover:from-brand-700 hover:to-brand-900"
               >
@@ -194,33 +192,84 @@ export default function ReturnDemosClient() {
                             </ul>
                           </div>
                           <div className="bg-subtle p-5">
-                            <div className="mb-4 flex items-center justify-between text-sm">
-                              <span className="flex items-center gap-1.5 text-gray-500">
+                            <div className="mb-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-sm">
+                              <span className="flex shrink-0 items-center gap-1.5 text-gray-500">
                                 <FontAwesomeIcon icon={faUsers} className="h-3.5 w-3.5" />
                                 {demo.student_count} assigned · {demo.graded_count} graded
                               </span>
-                              <span className="flex items-center gap-1.5 text-gray-400">
-                                <FontAwesomeIcon icon={faCalendarDay} className="h-3.5 w-3.5" />
-                                {new Date(demo.created_at).toLocaleDateString()}
+                              {/* When it was made, not a schedule: dates of performance are behind the calendar button. */}
+                              <span
+                                className="flex items-center gap-1.5 text-xs text-gray-400"
+                                title={new Date(demo.created_at).toLocaleString("en-US", { dateStyle: "full", timeStyle: "short" })}
+                              >
+                                <FontAwesomeIcon icon={faClock} className="h-3 w-3 shrink-0" />
+                                <span>
+                                  Created{" "}
+                                  {new Date(demo.created_at).toLocaleString("en-US", {
+                                    month: "short",
+                                    day: "numeric",
+                                    // This year's go without the year, so the stamp fits beside the counts.
+                                    year:
+                                      new Date(demo.created_at).getFullYear() === new Date().getFullYear() ? undefined : "numeric",
+                                    hour: "numeric",
+                                    minute: "2-digit",
+                                  })}
+                                </span>
                               </span>
                             </div>
-                            {/* Only its maker assigns, edits or deletes one; others who hold it can grade. */}
+                            {/* Review and who has it, as on a patient case card. */}
+                            {demo.student_count > 0 && (
+                              <div className="mb-2 flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => router.push(`/faculty/return-demos/review?scenario=${demo.id}`)}
+                                  className={`flex min-w-0 flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
+                                    demo.student_count > demo.graded_count
+                                      ? "bg-brand-600 text-white hover:bg-brand-700"
+                                      : "border border-brand-600/40 bg-surface text-brand-700 hover:bg-brand-600/5"
+                                  }`}
+                                >
+                                  <FontAwesomeIcon icon={faListCheck} className="h-3.5 w-3.5" />
+                                  {demo.student_count > demo.graded_count ? (
+                                    <>
+                                      Review
+                                      <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs tabular-nums">
+                                        {demo.student_count - demo.graded_count} to grade
+                                      </span>
+                                    </>
+                                  ) : (
+                                    "Review grades"
+                                  )}
+                                </button>
+                                {(demo.assigned_groups ?? []).length > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setWhoHas(demo)}
+                                    title="Who has it: the groups and sections, and their dates of performance"
+                                    aria-label={`Who has it: ${(demo.assigned_groups ?? []).length} groups`}
+                                    className="flex shrink-0 items-center gap-1.5 rounded-lg border border-brand-600/40 bg-surface px-3 py-2 text-sm font-semibold tabular-nums text-brand-700 hover:bg-brand-600/5"
+                                  >
+                                    <FontAwesomeIcon icon={faCalendarDay} className="h-3.5 w-3.5" />
+                                    {(demo.assigned_groups ?? []).length}
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                            {/* Only its maker assigns, edits or deletes one. */}
                             <ActionsMenu
                               actions={[
                                 ...(demo.can_edit
                                   ? [{ label: "Assign", icon: faUserPlus, onClick: () => setAssignTarget(demo) }]
                                   : []),
-                                {
-                                  label: "Grade",
-                                  icon: faClipboardCheck,
-                                  onClick: () => router.push(`/faculty/return-demos/review?scenario=${demo.id}`),
-                                },
                                 ...(demo.can_edit
                                   ? [
                                       {
                                         label: "Edit",
                                         icon: faPenToSquare,
                                         onClick: () => router.push(`/faculty/return-demos/${demo.id}/edit`),
+                                        // What students were given stays what they are graded on.
+                                        disabled: demo.student_count > 0,
+                                        disabledReason: `You can't edit this Return Demonstration because it's already assigned to ${demo.student_count} student${demo.student_count === 1 ? "" : "s"}. Make a new one to change it.`,
                                       },
                                       {
                                         label: "Delete",
@@ -247,11 +296,44 @@ export default function ReturnDemosClient() {
         </>
       )}
 
+      {whoHas && (
+        <PerformanceDatesModal
+          title={whoHas.title}
+          studentCount={whoHas.student_count}
+          groups={whoHas.assigned_groups ?? []}
+          endpoint={`/api/faculty/return-demos/${whoHas.id}/assign`}
+          onClose={() => setWhoHas(null)}
+          onChanged={() => {
+            setWhoHas(null);
+            void refresh();
+          }}
+        />
+      )}
+
+      {/* The same Assign window as a patient case, so it reads the same. */}
       {assignTarget && (
-        <AssignModal
-          demo={assignTarget}
+        <AssignStudentsModal
+          heading="Assign Return Demonstration"
+          title={assignTarget.title}
+          noun="Return Demonstration"
+          offeringId={assignTarget.offering_id}
+          fallbackOfferingIds={(data?.offerings ?? []).map((o) => o.id)}
+          alreadyAssigned={new Set((assignTarget.assigned_groups ?? []).flatMap((g) => g.student_ids))}
           onClose={() => setAssignTarget(null)}
-          onAssigned={() => {
+          onAssign={async (studentIds, deadline) => {
+            // An assigned Return Demonstration is always required, like a patient case.
+            const result = await assignReturnDemo(assignTarget.id, {
+              team_ids: [],
+              student_ids: studentIds,
+              deadline,
+              required: true,
+            });
+            if (result.error) {
+              toast(result.error, "error");
+              return;
+            }
+            const assigned = result.assigned ?? 0;
+            toast(`Assigned to ${assigned} student${assigned === 1 ? "" : "s"}`);
             setAssignTarget(null);
             void refresh();
           }}
