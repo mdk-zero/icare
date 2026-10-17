@@ -186,12 +186,6 @@ export default function FacultyClient() {
         }}
         title="Instructors"
         subtitle="Manage instructor accounts and the groups they handle"
-        action={{
-          icon: <FontAwesomeIcon icon={faPlus} className="h-4 w-4" />,
-          onClick: () => setShowAddModal(true),
-          label: "Add an instructor account",
-          text: "Add Instructor",
-        }}
       />
 
       {message && (
@@ -223,7 +217,16 @@ export default function FacultyClient() {
         <StatTile icon={faUsers} value={facultyWithoutGroups} label="Instructors Without Groups" />
       </div>
 
-      <div className="flex items-center gap-3 mb-3">
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        {/* The action first, then the filter. */}
+        <button
+          onClick={() => setShowAddModal(true)}
+          aria-label="Add an instructor account"
+          className="flex shrink-0 items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_2px_8px_-1px_rgb(27_107_123_/_0.35)] transition-all hover:bg-brand-700"
+        >
+          <FontAwesomeIcon icon={faPlus} className="h-4 w-4" />
+          Add Instructor
+        </button>
         <FilterSelect value={filterSection} onChange={(e) => setFilterSection(e.target.value)}>
           <option value="">All Sections</option>
           <option value="__none__">No Group</option>
