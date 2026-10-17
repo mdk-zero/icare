@@ -66,7 +66,26 @@ export function seedSupportRequests(users: DemoUser[]): DemoNotification[] {
     ];
   };
 
+  const deanReply = (deanAnswer: string) =>
+    dean
+      ? [
+          {
+            id: demoId(KIND.notification, 8199),
+            user_id: dean.id,
+            type: "system",
+            title: "Support replied: Exporting the term report",
+            body: `${admin?.name ?? "iCARE++ Support"}: ${deanAnswer}\n\nThe full reply is in your email.`,
+            data: { kind: "support_update", event: "replied", subject: "Exporting the term report" },
+            read_at: null,
+            created_at: ago(1.3),
+          },
+        ]
+      : [];
+  const deanAnswer =
+    "Hi Ramon, open Reports from the sidebar, pick the term, and choose Download All Sections. It saves one PDF with a page per section.";
+
   return [
+    ...deanReply(deanAnswer),
     ...request(instructor, "Instructor", 0.08, false, {
       status: "open",
       topic: "Something isn't working",
@@ -85,8 +104,7 @@ export function seedSupportRequests(users: DemoUser[]): DemoNotification[] {
           id: demoId(KIND.misc, 8190),
           by: ADMIN_ID,
           by_name: admin?.name ?? "iCARE++ Support",
-          message:
-            "Hi Ramon, open Reports from the sidebar, pick the term, and choose Download All Sections. It saves one PDF with a page per section.",
+          message: deanAnswer,
           attachments: [],
           sent_at: ago(1.3),
         },

@@ -227,7 +227,7 @@ export default function FacultyNotificationsClient({
                                 />
                               )}
                             </div>
-                            <p className="mt-0.5 text-sm leading-relaxed text-foreground/60">
+                            <p className="mt-0.5 whitespace-pre-line text-sm leading-relaxed text-foreground/60">
                               {notification.message}
                             </p>
                             {notification.access_request && (

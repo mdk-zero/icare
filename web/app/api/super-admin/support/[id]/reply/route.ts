@@ -9,6 +9,7 @@ import { SUPPORT_REPLY_LIMIT } from '@/app/lib/support';
 import {
   downloadAttachments,
   loadSupportCopies,
+  notifyRequester,
   parseAttachments,
   saveSupportCopies,
   signAttachments,
@@ -108,6 +109,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         { status: 500 },
       );
     }
+
+    await notifyRequester(next, { kind: 'replied', adminName, message, images: attachments.length, resolved: resolve });
 
     await logAudit(
       session,

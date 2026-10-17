@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { requireSuperAdmin } from '@/app/lib/auth/super-admin';
 import { logAudit } from '@/app/lib/audit';
-import { loadSupportCopies, saveSupportCopies, signAttachments } from '@/app/lib/support-requests';
+import { loadSupportCopies, notifyRequester, saveSupportCopies, signAttachments } from '@/app/lib/support-requests';
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -102,6 +102,9 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       };
     }
     await saveSupportCopies(copies, next);
+    if (next.status === 'resolved') {
+      await notifyRequester(next, { kind: 'resolved', adminName: next.resolved_by_name ?? 'The iCARE++ team' });
+    }
 
     await logAudit(
       session,

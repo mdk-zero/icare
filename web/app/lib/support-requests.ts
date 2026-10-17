@@ -212,3 +212,48 @@ export async function saveSupportCopies(copies: SupportCopy[], data: SupportRequ
   const failed = results.find((r) => r.error);
   if (failed?.error) throw failed.error;
 }
+
+/** Longest stretch of a reply quoted in a notification; the email has all of it. */
+const REPLY_EXCERPT = 600;
+
+/**
+ * Tells the person who asked that an Admin replied or resolved their request:
+ * a row in their own notifications, which the database also pushes to their
+ * phone. Best effort: the email already went, and a deleted account or a
+ * failed insert mustn't turn a sent reply into an error.
+ */
+export async function notifyRequester(
+  request: SupportRequestData,
+  event: { kind: 'replied'; adminName: string; message: string; images: number; resolved: boolean } | { kind: 'resolved'; adminName: string },
+): Promise<void> {
+  if (!request.user_id) return;
+  let title: string;
+  let body: string;
+  if (event.kind === 'replied') {
+    const excerpt =
+      event.message.length > REPLY_EXCERPT ? `${event.message.slice(0, REPLY_EXCERPT).trimEnd()}…` : event.message;
+    const images = event.images ? ` and ${event.images} image${event.images === 1 ? '' : 's'}` : '';
+    title = `Support replied: ${request.subject}`;
+    body =
+      `${event.adminName}: ${excerpt}\n\n` +
+      `The full reply${images} is in your email.` +
+      (event.resolved ? ' They also marked your request resolved.' : '');
+  } else {
+    title = `Support request resolved: ${request.subject}`;
+    body = `${event.adminName} marked your request resolved. If something is still wrong, send a new message from Help & Support.`;
+  }
+  try {
+    const { error } = await getSupabaseAdmin()
+      .from('notifications')
+      .insert({
+        user_id: request.user_id,
+        type: 'system',
+        title,
+        body,
+        data: { kind: 'support_update', event: event.kind, request_id: request.request_id, subject: request.subject },
+      });
+    if (error) throw error;
+  } catch (err) {
+    console.error('Failed to notify the requester of a support update', err);
+  }
+}
