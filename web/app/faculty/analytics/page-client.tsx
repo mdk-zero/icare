@@ -757,7 +757,15 @@ export default function FacultyAnalyticsClient() {
 
   // Performance by Group reads the same cache entry, so this doesn't fetch it
   // twice; it's here so the first paint waits for the groups too.
-  const { loading: groupsLoading } = usePageData("faculty:group-summaries", fetchGroupSummaries);
+  const { data: groupData, loading: groupsLoading } = usePageData(
+    "faculty:group-summaries",
+    fetchGroupSummaries,
+  );
+  // Performance by Group hides itself with no groups in the sections picked
+  // (the same filter it applies); its row then splits in two, not three.
+  const hasGroups = (groupData?.groups ?? []).some(
+    (g) => sectionIds.length === 0 || sectionIds.includes(g.section_id),
+  );
 
   // Course grades come from each course's progress, not the warehouse, so
   // they are their own read, scoped by the same filters.
@@ -1106,12 +1114,12 @@ export default function FacultyAnalyticsClient() {
               <SkeletonChartArea height="h-64" />
             </div>
           </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 mb-4">
             <SkeletonChartArea height="h-56" />
             <SkeletonChartArea height="h-56" />
-          </div>
-          <div className="mb-4">
-            <SkeletonChartArea height="h-24" />
+            <div className="lg:col-span-2 xl:col-span-1">
+              <SkeletonChartArea height="h-56" />
+            </div>
           </div>
         </div>
       ) : (
@@ -1231,10 +1239,16 @@ export default function FacultyAnalyticsClient() {
             </Card>
           </div>
 
-          {/* Side by side; with no groups the skill areas take the whole row. */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4 items-stretch">
+          {/* Three columns, lined up with the row above; under xl the courses
+              take a row of their own, as three would be too narrow. With no
+              groups, skill areas and courses split the row. */}
+          <div
+            className={`grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4 items-stretch ${
+              hasGroups ? "xl:grid-cols-3" : ""
+            }`}
+          >
             <GroupPerformance sectionIds={sectionIds} />
-            <Card padding="md" className="flex flex-col lg:only:col-span-2">
+            <Card padding="md" className="flex flex-col">
               <div className="flex items-center gap-2.5 mb-5">
                 <div className="rounded-xl bg-brand-600/10 p-2.5">
                   <FontAwesomeIcon icon={faLayerGroup} className="h-5 w-5 text-brand-600" />
@@ -1261,13 +1275,11 @@ export default function FacultyAnalyticsClient() {
                 )}
               </div>
             </Card>
-          </div>
-
-          <div className="mb-4">
             <CoursePerformance
               courses={courseData?.data?.courses ?? []}
               error={courseData?.error ?? null}
               rangeLabel={formatRange(from, to)}
+              className={hasGroups ? "lg:col-span-2 xl:col-span-1" : ""}
             />
           </div>
         </div>

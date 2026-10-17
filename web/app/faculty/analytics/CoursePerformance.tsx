@@ -245,14 +245,17 @@ export default function CoursePerformance({
   courses,
   error,
   rangeLabel,
+  className = "",
 }: {
   courses: CourseRow[];
   error: string | null;
   /** "Jul 17 – Oct 17", for the empty state. */
   rangeLabel: string;
+  /** Its place in the page's grid. */
+  className?: string;
 }) {
   return (
-    <Card padding="md" className="flex flex-col">
+    <Card padding="md" className={`flex flex-col ${className}`}>
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-center gap-2.5">
           <div className="rounded-xl bg-brand-600/10 p-2.5">
@@ -260,7 +263,7 @@ export default function CoursePerformance({
           </div>
           <div>
             <h3 className="font-semibold text-gray-900">Performance per Course</h3>
-            <p className="text-xs text-gray-400">Class average grade so far, for terms in this range</p>
+            <p className="text-xs text-gray-400">Class average grade, terms in this range</p>
           </div>
         </div>
         {courses.length > 0 && (
@@ -270,15 +273,18 @@ export default function CoursePerformance({
         )}
       </div>
 
-      {error ? (
-        <p className="py-10 text-center text-sm text-gray-400">{error}</p>
-      ) : courses.length === 0 ? (
-        <p className="py-10 text-center text-sm text-gray-400">
-          None of your courses has students in these sections during {rangeLabel}.
-        </p>
-      ) : (
-        <CourseBarChart courses={courses} />
-      )}
+      {/* Centred when a taller card beside it stretches the row, as the skill areas are. */}
+      <div className="flex flex-1 flex-col justify-center">
+        {error ? (
+          <p className="py-10 text-center text-sm text-gray-400">{error}</p>
+        ) : courses.length === 0 ? (
+          <p className="py-10 text-center text-sm text-gray-400">
+            None of your courses has students in these sections during {rangeLabel}.
+          </p>
+        ) : (
+          <CourseBarChart courses={courses} />
+        )}
+      </div>
     </Card>
   );
 }
