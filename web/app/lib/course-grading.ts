@@ -412,6 +412,27 @@ function autoGrades(
   return { invalid: false, grades };
 }
 
+/**
+ * A class's average course grade: the mean of the grades so far of the given
+ * students, leaving out those with nothing scored yet. `graded` counts the
+ * students it averages. Used by "Performance per Course" on Analytics, so it
+ * reads the same grades the course's own Performance tab shows.
+ */
+export function classAverage(
+  split: GradingSplit | null,
+  requirements: readonly RequirementRow[],
+  progress: Record<string, Record<string, ItemProgress>>,
+  studentIds: readonly string[],
+): { graded: number; average: number | null } {
+  const { grades } = computeGrades(split, requirements, progress);
+  const scores = studentIds.map((id) => grades[id]?.grade ?? null);
+  const average = mean(scores);
+  return {
+    graded: scores.filter((s) => s !== null).length,
+    average: average === null ? null : Math.round(average * 10) / 10,
+  };
+}
+
 /** Where an item can be filed: "Written Exams › Midterm", or a part with no components. */
 export function gradingLeaves(split: GradingSplit | null): { id: string; label: string }[] {
   if (!split) return [];

@@ -18,6 +18,7 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import {
   fetchAnalyticsSummary,
+  fetchCoursePerformance,
   fetchFacultySections,
   fetchGroupSummaries,
   generateAnalyticsNarrative,
@@ -38,6 +39,7 @@ import { EcgLoader } from "../../components/EcgLoader";
 import AiThinking from "../../components/AiThinking";
 import { Leaderboard, LeaderboardSkeleton } from "./Leaderboard";
 import GroupPerformance from "./GroupPerformance";
+import CoursePerformance from "./CoursePerformance";
 import { parseDay, formatRange } from "./dates";
 import { buildTrendSeries, TrendLegend, TrendBarChart, TrendTable } from "./GroupTrendChart";
 import { isActiveSkillArea } from "../../../scripts/taylors-chapters";
@@ -757,10 +759,22 @@ export default function FacultyAnalyticsClient() {
   // twice; it's here so the first paint waits for the groups too.
   const { loading: groupsLoading } = usePageData("faculty:group-summaries", fetchGroupSummaries);
 
+  // Course grades come from each course's progress, not the warehouse, so
+  // they are their own read, scoped by the same filters.
+  const {
+    data: courseData,
+    loading: coursesLoading,
+    revalidating: coursesRefreshing,
+  } = usePageData(
+    `faculty:analytics:courses:${sectionKey}:${from}:${to}`,
+    () => fetchCoursePerformance({ sectionIds, from, to }),
+    { keepPreviousData: true },
+  );
+
   // Every panel appears at once: the skeleton stays until the summary, the
-  // previous period behind the "vs" badges and the groups have all arrived,
-  // rather than badges and the group chart popping in after the rest.
-  const firstLoad = loading || prevLoading || groupsLoading;
+  // previous period behind the "vs" badges, the groups and the courses have
+  // all arrived, rather than badges and charts popping in after the rest.
+  const firstLoad = loading || prevLoading || groupsLoading || coursesLoading;
 
   const applyPreset = useCallback((id: PresetId) => {
     setPreset(id);
@@ -1080,10 +1094,6 @@ export default function FacultyAnalyticsClient() {
               <SkeletonStatTile key={i} />
             ))}
           </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
-            <SkeletonChartArea height="h-56" />
-            <SkeletonChartArea height="h-56" />
-          </div>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
             <Card padding="md">
               <div className="mb-5 flex items-center gap-2.5 animate-pulse">
@@ -1096,9 +1106,20 @@ export default function FacultyAnalyticsClient() {
               <SkeletonChartArea height="h-64" />
             </div>
           </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+            <SkeletonChartArea height="h-56" />
+            <SkeletonChartArea height="h-56" />
+          </div>
+          <div className="mb-4">
+            <SkeletonChartArea height="h-24" />
+          </div>
         </div>
       ) : (
-        <div className={`transition-opacity duration-200 ${refreshing ? "opacity-60" : ""}`}>
+        <div
+          className={`transition-opacity duration-200 ${
+            refreshing || coursesRefreshing ? "opacity-60" : ""
+          }`}
+        >
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4 items-stretch">
             {statCards.map((card) => (
               <StatTile
@@ -1113,38 +1134,6 @@ export default function FacultyAnalyticsClient() {
                 iconColor={card.iconColor}
               />
             ))}
-          </div>
-
-          {/* Side by side; with no groups the skill areas take the whole row. */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4 items-stretch">
-            <GroupPerformance sectionIds={sectionIds} />
-            <Card padding="md" className="flex flex-col lg:only:col-span-2">
-              <div className="flex items-center gap-2.5 mb-5">
-                <div className="rounded-xl bg-brand-600/10 p-2.5">
-                  <FontAwesomeIcon icon={faLayerGroup} className="h-5 w-5 text-brand-600" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900">Performance per Skill Area</h3>
-                  <p className="text-xs text-gray-400">Average score by skill area</p>
-                </div>
-              </div>
-              <div className="flex-1 flex flex-col justify-center">
-                {competencies.length === 0 ? (
-                  <p className="text-gray-400 text-sm py-12 text-center">
-                    No validated skill area scores yet — record them from each student&apos;s
-                    profile.
-                  </p>
-                ) : (
-                  <CompetencyBarChart
-                    items={competencies.map(([name, value]) => ({
-                      key: name,
-                      label: name,
-                      value,
-                    }))}
-                  />
-                )}
-              </div>
-            </Card>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4 items-stretch">
@@ -1242,6 +1231,45 @@ export default function FacultyAnalyticsClient() {
             </Card>
           </div>
 
+          {/* Side by side; with no groups the skill areas take the whole row. */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4 items-stretch">
+            <GroupPerformance sectionIds={sectionIds} />
+            <Card padding="md" className="flex flex-col lg:only:col-span-2">
+              <div className="flex items-center gap-2.5 mb-5">
+                <div className="rounded-xl bg-brand-600/10 p-2.5">
+                  <FontAwesomeIcon icon={faLayerGroup} className="h-5 w-5 text-brand-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-900">Performance per Skill Area</h3>
+                  <p className="text-xs text-gray-400">Average score by skill area</p>
+                </div>
+              </div>
+              <div className="flex-1 flex flex-col justify-center">
+                {competencies.length === 0 ? (
+                  <p className="text-gray-400 text-sm py-12 text-center">
+                    No validated skill area scores yet — record them from each student&apos;s
+                    profile.
+                  </p>
+                ) : (
+                  <CompetencyBarChart
+                    items={competencies.map(([name, value]) => ({
+                      key: name,
+                      label: name,
+                      value,
+                    }))}
+                  />
+                )}
+              </div>
+            </Card>
+          </div>
+
+          <div className="mb-4">
+            <CoursePerformance
+              courses={courseData?.data?.courses ?? []}
+              error={courseData?.error ?? null}
+              rangeLabel={formatRange(from, to)}
+            />
+          </div>
         </div>
       )}
 

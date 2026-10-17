@@ -4549,6 +4549,30 @@ export interface StudentCourseRequirements {
 export const fetchCourseProgress = (offeringId: string) =>
   courseRequest<CourseProgress>(`/api/faculty/courses/${offeringId}/progress`);
 
+/** One course on Analytics' "Performance per Course": its class average grade so far. */
+export interface CoursePerformance {
+  /** The course assignment (offering) id, for linking to its page. */
+  id: string;
+  course: { code: string; title: string };
+  term: Omit<CourseTermRef, 'id'>;
+  /** On the roster, in the sections picked. */
+  students: number;
+  /** Of those, the ones with a grade so far. */
+  graded: number;
+  /** Their mean grade, to one decimal; null with nobody graded yet. */
+  average: number | null;
+}
+
+/** The instructor's courses whose term overlaps the range, counting only students of the picked sections. */
+export const fetchCoursePerformance = (filters: AnalyticsFilters = {}) => {
+  const params = new URLSearchParams();
+  if (filters.sectionIds?.length) params.set('section_ids', filters.sectionIds.join(','));
+  if (filters.from) params.set('from', filters.from);
+  if (filters.to) params.set('to', filters.to);
+  const query = params.toString();
+  return courseRequest<{ courses: CoursePerformance[] }>(`/api/analytics/courses${query ? `?${query}` : ''}`);
+};
+
 /** Tick or untick one student on one item; on an automatic item a tick needs a note. */
 export const setRequirementCheck = (
   offeringId: string,

@@ -16,6 +16,7 @@ import {
   summarize,
   termBounds,
   termStatus,
+  termsOverlap,
   type ProgressFacts,
   type RequirementInput,
   type RequirementNames,
@@ -24,6 +25,7 @@ import {
 import { listSkillSummaries } from "../fixtures/skills";
 import {
   GRADING_ENDED_LOCK,
+  classAverage,
   fileItem,
   gradeLeafProblem,
   readStoredSplit,
@@ -976,6 +978,45 @@ route("GET", "/api/faculty/courses/:id/progress", async (ctx) => {
     grading: autoSplit(checklist(db, o.id)),
     grading_ready: true,
     grading_auto: true,
+  };
+});
+
+/** Analytics' "Performance per Course", from the same progress and split as the Progress tab. */
+route("GET", "/api/analytics/courses", async (ctx) => {
+  if (!instructorOnly(ctx)) return forbidden();
+  const db = courseDb(ctx.db);
+  const wanted = new Set((ctx.query.get("section_ids") ?? "").split(",").filter(Boolean));
+  const from = ctx.query.get("from");
+  const to = ctx.query.get("to");
+  const offerings = db.offerings.filter((o) => {
+    if (o.faculty_id !== ctx.viewer.id) return false;
+    const term = termOf(db, o);
+    return !from || !to || termsOverlap(term, { starts_on: from, ends_on: to });
+  });
+  const courses = await Promise.all(
+    offerings.map(async (o) => {
+      const result = await demoProgress(db, o);
+      const ids = result.students.filter((s) => wanted.size === 0 || wanted.has(s.section_id)).map((s) => s.id);
+      const course = courseOf(db, o);
+      const { id: _termId, ...term } = termRef(db, o);
+      void _termId;
+      return {
+        id: o.id,
+        course: { code: course.code, title: course.title },
+        term,
+        students: ids.length,
+        ...classAverage(autoSplit(checklist(db, o.id)), result.requirements, result.progress, ids),
+      };
+    }),
+  );
+  return {
+    courses: courses
+      .filter((c) => c.students > 0)
+      .sort(
+        (a, b) =>
+          b.term.starts_on.localeCompare(a.term.starts_on) ||
+          a.course.code.localeCompare(b.course.code, undefined, { numeric: true }),
+      ),
   };
 });
 
