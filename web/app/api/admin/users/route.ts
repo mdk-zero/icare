@@ -6,6 +6,7 @@ import { generateRandomPassword, hashPassword } from '@/app/lib/auth/password';
 import { logAudit } from '@/app/lib/audit';
 import { parseSex } from '@/app/lib/auth/user';
 import { adminVisibleUserIds, getAdminScope } from '@/app/lib/admin-scope';
+import { roleLabel } from '@/app/lib/role-labels';
 
 const VALID_ROLES = ['student', 'faculty', 'admin'] as const;
 
@@ -168,18 +169,28 @@ export async function POST(request: NextRequest) {
       request,
     );
 
-    // The invitation template is student-worded; for faculty/admin accounts the
-    // Dean hands over the temporary password shown in the response instead.
+    // A student is pointed at the mobile app; an instructor gets the staff
+    // welcome that links the web sign-in. An instructor's temporary password
+    // comes back to the Dean only when that email fails, so it can still be
+    // handed over.
     let warning: string | undefined;
-    if (role === 'student') {
-      const emailResult = await sendStudentInvitationEmail(normalizedEmail, trimmedName, tempPassword);
-      if (!emailResult.success) {
-        warning =
-          'User created but the invitation email could not be sent. Share the temporary password below manually.';
-      }
+    const emailResult = await sendStudentInvitationEmail(
+      normalizedEmail,
+      trimmedName,
+      tempPassword,
+      role === 'student'
+        ? undefined
+        : { roleLabel: roleLabel(role), signInUrl: `${request.nextUrl.origin}/login`, origin: 'dean' },
+    );
+    if (!emailResult.success) {
+      warning = `User created, but the welcome email could not be sent. Share the temporary password below manually. Reason: ${emailResult.error}`;
     }
+    const returnPassword = role === 'student' || !emailResult.success;
 
-    return NextResponse.json({ user, password: tempPassword, warning }, { status: 201 });
+    return NextResponse.json(
+      { user, ...(returnPassword ? { password: tempPassword } : {}), warning },
+      { status: 201 },
+    );
   } catch (err) {
     console.error('Create user failed', err);
     return NextResponse.json({ error: 'Unable to create user' }, { status: 500 });

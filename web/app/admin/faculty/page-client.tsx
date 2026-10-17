@@ -58,7 +58,7 @@ export default function FacultyClient() {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [tempPassword, setTempPassword] = useState<{ email: string; password: string } | null>(null);
+  const [tempPassword, setTempPassword] = useState<{ email: string; password: string; warning?: string } | null>(null);
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [newFaculty, setNewFaculty] = useState({ name: "", email: "" });
@@ -117,6 +117,7 @@ export default function FacultyClient() {
     const json = (await res.json()) as {
       user?: Omit<Faculty, "sections" | "groups" | "student_count">;
       password?: string;
+      warning?: string;
       error?: string;
     };
     if (!res.ok || !json.user) {
@@ -133,8 +134,13 @@ export default function FacultyClient() {
     }));
     setShowAddModal(false);
     setNewFaculty({ name: "", email: "" });
-    if (json.password) setTempPassword({ email: json.user.email, password: json.password });
-    flash("Instructor account created");
+    // The password comes back only when the welcome email could not go out.
+    if (json.password) {
+      setTempPassword({ email: json.user.email, password: json.password, warning: json.warning });
+      flash("Instructor account created");
+    } else {
+      flash(`Instructor account created. Their temporary password was emailed to ${json.user.email}.`);
+    }
   };
 
   const openAssignModal = (member: Faculty) => {
@@ -197,9 +203,10 @@ export default function FacultyClient() {
       {tempPassword && (
         <div className="mb-4 bg-amber-50 border border-amber-300 text-amber-800 px-4 py-3 rounded-xl text-sm flex items-center justify-between gap-4">
           <span>
+            {tempPassword.warning && <span className="block mb-1">{tempPassword.warning}</span>}
             Temporary password for <strong>{tempPassword.email}</strong>:{" "}
             <code className="font-mono bg-surface px-2 py-0.5 rounded border border-amber-200">{tempPassword.password}</code>{" "}
-            — share it with the faculty member; they must change it at first login.
+            — they must change it at first login.
           </span>
           <button
             onClick={() => setTempPassword(null)}
@@ -359,7 +366,7 @@ export default function FacultyClient() {
                   placeholder="faculty@icare.edu"
                 />
                 <p className="text-xs text-gray-400 mt-2">
-                  A temporary password is generated and shown here once; they must change it at first login.
+                  They get a welcome email with a temporary password, which they must change at first login.
                 </p>
               </div>
             </div>

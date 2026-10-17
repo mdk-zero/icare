@@ -134,7 +134,13 @@ export async function POST(request: NextRequest) {
       email,
       name,
       tempPassword,
-      role === 'student' ? undefined : { roleLabel: roleLabel(role), signInUrl: `${request.nextUrl.origin}/login` },
+      role === 'student'
+        ? undefined
+        : {
+            roleLabel: roleLabel(role),
+            signInUrl: `${request.nextUrl.origin}/login`,
+            origin: requestId ? 'request' : 'admin',
+          },
     );
     if (!sent.success) {
       warning = [warning, 'The welcome email could not be sent. Share the temporary password manually.']

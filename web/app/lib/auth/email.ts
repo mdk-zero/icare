@@ -274,8 +274,18 @@ function mobileAppUrl(): string | null {
 /**
  * A staff account (Instructor, Dean, Admin) signs in on the web rather than
  * the mobile app, so its welcome email names the role and links the site.
+ * `origin` picks the opening line: an accepted access request, a dean adding
+ * one of their instructors, or an Admin creating the account directly.
  */
-export type StaffWelcome = { roleLabel: string; signInUrl: string };
+export type StaffWelcome = { roleLabel: string; signInUrl: string; origin: "request" | "dean" | "admin" };
+
+function staffIntro(staff: StaffWelcome): string {
+  const role = `<strong>${htmlEscape(staff.roleLabel)}</strong>`;
+  const article = /^[aeiou]/i.test(staff.roleLabel) ? "an" : "a";
+  if (staff.origin === "request") return `Your request was accepted and ${article} ${role} account has been created for you`;
+  if (staff.origin === "dean") return `Your dean has created ${article} ${role} account for you`;
+  return `${article === "an" ? "An" : "A"} ${role} account has been created for you`;
+}
 
 function buildWelcomeHtml(name: string, email: string, password: string, staff?: StaffWelcome): string {
   const safeName = htmlEscape(name);
@@ -307,8 +317,8 @@ function buildWelcomeHtml(name: string, email: string, password: string, staff?:
             <td style="padding:32px 40px;">
               <h2 style="margin:0 0 8px;font-size:20px;color:#0f172a;font-weight:600;">Welcome, ${safeName}!</h2>
               ${staff ? `<p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">
-                Your request was accepted and an <strong>${htmlEscape(staff.roleLabel)}</strong> account has been created
-                for you on <strong>iCARE++</strong> — a clinical competency assessment and adaptive learning system
+                ${staffIntro(staff)}
+                on <strong>iCARE++</strong> — a clinical competency assessment and adaptive learning system
                 for nursing students.
               </p>
               <p style="margin:0 0 24px;font-size:15px;color:#475569;line-height:1.6;">
@@ -352,7 +362,7 @@ function buildWelcomeHtml(name: string, email: string, password: string, staff?:
                 </tr>
               </table>`}
               <p style="margin:0;font-size:13px;color:#94a3b8;">
-                If you believe this account was created in error, please contact ${staff ? "the iCARE++ team" : "your instructor"}.
+                If you believe this account was created in error, please contact ${staff ? (staff.origin === "dean" ? "your dean" : "the iCARE++ team") : "your instructor"}.
               </p>
             </td>
           </tr>
