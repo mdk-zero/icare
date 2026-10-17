@@ -79,8 +79,11 @@ export async function POST(request: NextRequest) {
     userAgent: request.headers.get('user-agent')?.slice(0, 300) ?? null,
   };
 
+  // contact@ as well, so every request also lands in the Resend Receiving
+  // inbox for the domain, beside the developers' own copies.
+  const recipients = [...new Set([...DEV_TEAM_EMAILS, CONTACT_EMAIL])];
   try {
-    await sendSupportRequestEmail(DEV_TEAM_EMAILS, supportRequest);
+    await sendSupportRequestEmail(recipients, supportRequest);
   } catch (err) {
     console.error('Support request email failed', err);
     return NextResponse.json(
