@@ -4,7 +4,7 @@ import { canSeeStudent, getScopedStudentIds } from '@/app/lib/admin-scope';
 import { readSession } from '@/app/lib/auth/session';
 import { sendStudentInvitationEmail } from '@/app/lib/auth/email';
 import { generateRandomPassword, hashPassword } from '@/app/lib/auth/password';
-import { getFacultySectionIds, getFacultyStudentIds } from '@/app/lib/roster';
+import { manageableSectionIds } from '@/app/lib/teams';
 import { parseSex } from '@/app/lib/auth/user';
 import { getLatestRiskByStudent, getLastActivityByStudent } from '@/app/lib/faculty-dashboard';
 import { logAudit } from '@/app/lib/audit';
@@ -44,7 +44,8 @@ async function resolveSection(
   }
 
   if (session.role === 'faculty') {
-    const facultySections = await getFacultySectionIds(supabase, session.uid);
+    // Their course sections and group sections, as on the Students page.
+    const facultySections = await manageableSectionIds(supabase, session.role, session.uid);
     if (!facultySections.includes(sectionId)) {
       return { error: 'You can only assign students to your own sections', status: 403 };
     }
@@ -67,7 +68,7 @@ export async function GET() {
     // Faculty see the members of the groups they supervise; an admin their own students.
     let query = supabase
       .from('users')
-      .select('id, email, name, role, picture_url, sex, section_id, sections(id, name)')
+      .select('id, email, name, role, picture_url, sex, section_id, created_at, sections(id, name)')
       .eq('role', 'student')
       .order('name', { ascending: true });
 
@@ -281,6 +282,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           student: created,
+          // Same shape as /api/admin/users, so the dean's register and bulk-enroll forms work here too.
+          user: { id: student.id, email: student.email },
           password: tempPassword,
           warning: 'Student created but the invitation email could not be sent. Please share the temporary password below with the student.',
         },
@@ -288,7 +291,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    return NextResponse.json({ student: created, password: tempPassword }, { status: 201 });
+    return NextResponse.json(
+      { student: created, user: { id: student.id, email: student.email }, password: tempPassword },
+      { status: 201 },
+    );
   } catch (err) {
     console.error('Create student failed', err);
     return NextResponse.json(

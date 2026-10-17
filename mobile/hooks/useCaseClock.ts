@@ -10,6 +10,8 @@ export interface CaseClock {
    * instead of the tasks until the student taps Start.
    */
   needsStart: boolean;
+  /** Start has been pressed (here or earlier). */
+  started: boolean;
   starting: boolean;
   start: () => void;
 }
@@ -20,12 +22,17 @@ export interface CaseClock {
  * the clock runs until the instructor grades the last task.
  * A server without the clock (before migration 063) never asks.
  */
-export function useCaseClock(assignment: ScenarioTasksResult['assignment'] | null, active: boolean): CaseClock {
+export function useCaseClock(
+  assignment: ScenarioTasksResult['assignment'] | null,
+  active: boolean,
+  /** The case's id before its tasks load, so Start works straight away. */
+  fallbackId?: string | null,
+): CaseClock {
   const [started, setStarted] = useState<{ id: string; at: string } | null>(null);
   const [starting, setStarting] = useState(false);
   const [now, setNow] = useState(() => Date.now());
 
-  const id = assignment?.id ?? null;
+  const id = assignment?.id ?? fallbackId ?? null;
   const supported = assignment != null && assignment.started_at !== undefined;
   const startedAt = (started?.id === id ? started?.at : null) ?? assignment?.started_at ?? null;
 
@@ -52,6 +59,7 @@ export function useCaseClock(assignment: ScenarioTasksResult['assignment'] | nul
   return {
     elapsed: running && startedAt ? Math.max(0, Math.floor((now - Date.parse(startedAt)) / 1000)) : null,
     needsStart: Boolean(id) && active && supported && !startedAt,
+    started: Boolean(startedAt),
     starting,
     start,
   };

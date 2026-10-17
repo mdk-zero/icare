@@ -7,9 +7,11 @@ import {
   isMissingLibrary,
   MATERIAL_COLUMNS,
   signedFileUrl,
-  visibleToSection,
+  studentOfferings,
+  visibleToStudent,
   type MaterialRow,
 } from '@/app/lib/library';
+import { activityOfferings } from '@/app/lib/activity-course';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -31,7 +33,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
 
   const [{ data, error }, { data: me }] = await Promise.all([
     supabase.from('library_materials').select(MATERIAL_COLUMNS).eq('id', id).eq('status', 'published').maybeSingle(),
-    supabase.from('users').select('sections(name)').eq('id', session.uid).single(),
+    supabase.from('users').select('section_id, sections(name)').eq('id', session.uid).single(),
   ]);
   if (error) {
     if (isMissingLibrary(error)) return NextResponse.json({ error: 'Material not found' }, { status: 404 });
@@ -40,7 +42,13 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
   }
   const material = data as unknown as MaterialRow | null;
   const section = (me?.sections as unknown as { name?: string } | null)?.name ?? null;
-  if (!material || !visibleToSection(material.target_sections, section)) {
+  if (!material) return NextResponse.json({ error: 'Material not found' }, { status: 404 });
+  // A course material (075) is for that course's students only.
+  const [offeringOf, offerings] = await Promise.all([
+    activityOfferings(supabase, 'library_materials', [material.id]),
+    studentOfferings(supabase, session.uid, (me?.section_id as string | null) ?? null),
+  ]);
+  if (!visibleToStudent(material, offeringOf.get(material.id) ?? null, { section, offerings })) {
     return NextResponse.json({ error: 'Material not found' }, { status: 404 });
   }
 

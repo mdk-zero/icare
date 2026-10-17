@@ -16,7 +16,7 @@ import {
 import { ClinicalTaskList, ClinicalTaskListSkeleton } from '@/components/ClinicalTaskList';
 import { AssistanceButton } from '@/components/AssistanceButton';
 import { ReflectionCard } from '@/components/ReflectionCard';
-import { CaseStartGate } from '@/components/CaseStartGate';
+import { CaseOpening, CaseStartGate } from '@/components/CaseStartGate';
 
 /** How often an open scenario re-checks for the instructor's grades. */
 const GRADE_POLL_MS = 8000;
@@ -59,9 +59,9 @@ function PatientCase({
  * brief, follow the tasks and see their grades as the instructor saves them.
  */
 export default function ScenarioBriefScreen() {
-  const { id } = useLocalSearchParams();
+  const params = useLocalSearchParams<{ id: string; gate?: string; title?: string; due?: string; tasks?: string }>();
   const router = useRouter();
-  const assignmentId = id as string;
+  const assignmentId = params.id;
   const { Palette, Accent, Type } = useTheme();
   const styles = useMemo(() => createStyles(Palette, Accent, Type), [Palette, Accent, Type]);
 
@@ -105,7 +105,7 @@ export default function ScenarioBriefScreen() {
   const isSubmitted = !isCompleted && Boolean(submittedAt);
   const isActive = !isCompleted && !isSubmitted;
   // Opens on the case's instructions until Start, then times the demonstration.
-  const clock = useCaseClock(taskAssignment, isActive);
+  const clock = useCaseClock(taskAssignment, isActive, assignmentId);
   const elapsed = clock.elapsed;
 
   // Grades land the moment the instructor saves them: while the screen is open
@@ -122,6 +122,21 @@ export default function ScenarioBriefScreen() {
 
   const totalCount = tasks.length;
 
+
+  // Known not started (lib/open-case): its Before you start screen shows at once.
+  if (params.gate === '1' && !clock.started && !taskAssignment) {
+    return (
+      <CaseStartGate
+        title={assignment?.scenario_title ?? params.title ?? 'Patient case'}
+        deadline={assignment?.deadline ?? (params.due || null)}
+        taskCount={params.tasks ? Number(params.tasks) : null}
+        starting={clock.starting}
+        onStart={clock.start}
+      />
+    );
+  }
+
+  if (params.gate === 'wait' && !taskAssignment && !error) return <CaseOpening />;
 
   if (loading && !data) {
     return (
@@ -162,6 +177,9 @@ export default function ScenarioBriefScreen() {
       </View>
     );
   }
+
+  // Until the tasks load we can't tell whether it has started (see the patient screen).
+  if (isActive && !taskAssignment && !error) return <CaseOpening />;
 
   if (clock.needsStart) {
     return (

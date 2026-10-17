@@ -19,6 +19,7 @@ import { toast } from "../../../components/Toast";
 import { usePageData } from "../../../lib/use-page-data";
 import {
   deleteRequirement,
+  fetchCourseProgress,
   fetchFacultyCourse,
   fetchSkillCatalog,
   saveCourseSkills,
@@ -82,6 +83,13 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
   const loadError = data?.error ?? null;
   const offering = detail?.offering ?? null;
   const requirements = detail?.requirements ?? [];
+  // The Progress tab's own data (same cache key), for its count: the quizzes,
+  // patient cases and case presentations students completed in this course.
+  const { data: progressData } = usePageData(
+    detail ? `faculty:course-progress:${offeringId}:${checklistSignature(requirements)}` : null,
+    () => fetchCourseProgress(offeringId),
+  );
+  const completedCount = Object.values(progressData?.data?.totals ?? {}).reduce((n, t) => n + t, 0);
   // The Grading tab's unsaved edits live here, so looking at another tab
   // doesn't throw them away. They follow the server's split while clean.
   const serverGrading = detail?.grading ?? null;
@@ -157,13 +165,15 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
             id: "progress",
             label: "Progress",
             icon: faChartColumn,
-            count: offering?.student_count ?? 0,
+            count: completedCount,
           },
           {
             id: "performance",
             label: "Performance",
             icon: faChartLine,
-            count: detail?.grading?.parts.length ?? 0,
+            // The activities graded in this course, not the parts they sit under:
+            // every course has the same three parts, even with nothing in them.
+            count: (detail?.grading?.parts ?? []).reduce((n, p) => n + p.items.length, 0),
           },
           {
             id: "skills",
@@ -233,14 +243,9 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
 
         {tab === "skills" && offering && (
           <SkillsTab
-            offeringId={offeringId}
             courseCode={offering.course.code}
             skillIds={detail?.skill_ids ?? []}
             catalog={catalog}
-            requirements={requirements}
-            signature={checklistSignature(requirements)}
-            locked={locked}
-            onAddRequirement={(skillId) => addRequirement("skill", skillId)}
             onEditSkills={() => setSkillsOpen(true)}
           />
         )}

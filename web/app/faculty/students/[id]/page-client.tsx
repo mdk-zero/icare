@@ -811,7 +811,15 @@ export default function StudentDetailClient() {
                           assignment={a}
                           header="scenario"
                           onCollapse={() => openAssignment(null)}
-                          onAssignmentChange={(patch) => updateAssignment(a.id, patch)}
+                          onAssignmentChange={(patch) => {
+                            updateAssignment(a.id, patch);
+                            // Fully graded: follow it to Completed, still open, instead
+                            // of it vanishing from the Assigned view.
+                            if (patch.status === "completed" && activeFilter === "assigned") {
+                              setScenarioFilter("completed");
+                              setOpenedId(a.id);
+                            }
+                          }}
                           onDirtyChange={setGradingDirty}
                         />
                       ) : (

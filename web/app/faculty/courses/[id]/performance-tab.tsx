@@ -121,6 +121,19 @@ export default function PerformanceTab({
       </div>
     );
   }
+  // A new course has nothing of its own yet; work done for other courses never counts here.
+  if (auto && itemCount === 0) {
+    return (
+      <div className="rounded-xl border border-dashed border-gray-300 bg-surface px-6 py-12 text-center">
+        <FontAwesomeIcon icon={faChartLine} className="mb-3 h-7 w-7 text-gray-300" />
+        <p className="font-semibold text-gray-700">Nothing to grade in this course yet</p>
+        <p className="mx-auto mt-1 max-w-md text-sm text-gray-500">
+          Grades come only from the patient cases, quizzes and case presentations made for this course. Work
+          students did in other courses doesn&apos;t count here.
+        </p>
+      </div>
+    );
+  }
   if (!progress?.grading || graded.invalid) {
     return (
       <div className="rounded-xl border border-dashed border-gray-300 bg-surface px-6 py-12 text-center">

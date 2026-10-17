@@ -1,7 +1,7 @@
 // Server code only.
 import type { getSupabaseAdmin } from './supabase/server';
 import { getAdminScope } from './admin-scope';
-import { getFacultySectionIds } from './roster';
+import { manageableSectionIds } from './teams';
 
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
 
@@ -119,7 +119,8 @@ export async function publishableSections(
     if (!scope) return null;
     ids = scope.sectionIds;
   } else {
-    ids = await getFacultySectionIds(supabase, session.uid);
+    // The sections of their courses, and any where they supervise a group.
+    ids = await manageableSectionIds(supabase, session.role, session.uid);
   }
   if (ids.length === 0) return [];
   const { data, error } = await supabase.from('sections').select('id, name').in('id', ids);
@@ -218,17 +219,104 @@ export function isMissingLibrary(error: { code?: string } | null | undefined): b
 }
 
 /** Notify the students a newly published material is for. Never fails the request. */
-export async function notifyPublished(supabase: Supabase, material: Pick<MaterialRow, 'id' | 'title' | 'skill_id' | 'kind' | 'target_sections'>): Promise<void> {
+/** A course offering's sections, by name (migration 075 files materials under courses). */
+export async function offeringSections(supabase: Supabase, offeringId: string): Promise<{ id: string; name: string }[]> {
+  const { data: links } = await supabase.from('course_offering_sections').select('section_id').eq('offering_id', offeringId);
+  const ids = (links ?? []).map((l) => l.section_id as string);
+  if (ids.length === 0) return [];
+  const { data } = await supabase.from('sections').select('id, name').in('id', ids);
+  return ((data ?? []) as { id: string; name: string }[]).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/**
+ * Where a material may be published: its course's sections when it is for a
+ * course, otherwise the caller's sections (null: every section).
+ */
+export async function materialSections(
+  supabase: Supabase,
+  session: { uid: string; role: string },
+  offeringId: string | null,
+): Promise<{ id: string; name: string }[] | null> {
+  return offeringId ? offeringSections(supabase, offeringId) : publishableSections(supabase, session);
+}
+
+/**
+ * The students a material reaches. A course material: the course's students
+ * in its target sections (every section of the course when none are picked),
+ * and the students the instructor added to the course by hand. Otherwise its
+ * target sections, or every student.
+ */
+export async function materialAudience(
+  supabase: Supabase,
+  material: Pick<MaterialRow, 'target_sections'>,
+  offeringId: string | null,
+): Promise<string[]> {
+  if (offeringId) {
+    const sections = await offeringSections(supabase, offeringId);
+    const target = material.target_sections?.length ? material.target_sections : null;
+    const ids = sections.filter((s) => !target || target.includes(s.name)).map((s) => s.id);
+    const [inSections, added] = await Promise.all([
+      ids.length
+        ? supabase.from('users').select('id').eq('role', 'student').in('section_id', ids).limit(5000)
+        : Promise.resolve({ data: [] }),
+      supabase.from('course_offering_students').select('student_id').eq('offering_id', offeringId),
+    ]);
+    return [
+      ...new Set([
+        ...((inSections.data ?? []) as { id: string }[]).map((s) => s.id),
+        ...((added.data ?? []) as { student_id: string }[]).map((r) => r.student_id),
+      ]),
+    ];
+  }
+  let query = supabase.from('users').select('id').eq('role', 'student').limit(5000);
+  if (material.target_sections && material.target_sections.length) {
+    const { data: sections } = await supabase.from('sections').select('id').in('name', material.target_sections);
+    const ids = (sections ?? []).map((s) => s.id as string);
+    if (ids.length === 0) return [];
+    query = query.in('section_id', ids);
+  }
+  const { data } = await query;
+  return ((data ?? []) as { id: string }[]).map((s) => s.id);
+}
+
+/** The course offerings a student is on: through their section, or added by hand (073). */
+export async function studentOfferings(
+  supabase: Supabase,
+  studentId: string,
+  sectionId: string | null,
+): Promise<{ viaSection: Set<string>; added: Set<string> }> {
+  const [bySection, byHand] = await Promise.all([
+    sectionId
+      ? supabase.from('course_offering_sections').select('offering_id').eq('section_id', sectionId)
+      : Promise.resolve({ data: [] }),
+    supabase.from('course_offering_students').select('offering_id').eq('student_id', studentId),
+  ]);
+  return {
+    viaSection: new Set(((bySection.data ?? []) as { offering_id: string }[]).map((r) => r.offering_id)),
+    added: new Set(((byHand.data ?? []) as { offering_id: string }[]).map((r) => r.offering_id)),
+  };
+}
+
+/** Whether a student sees a published material (see materialAudience). */
+export function visibleToStudent(
+  material: { target_sections: string[] | null },
+  offeringId: string | null,
+  student: { section: string | null; offerings: { viaSection: Set<string>; added: Set<string> } },
+): boolean {
+  if (!offeringId) return visibleToSection(material.target_sections, student.section);
+  if (student.offerings.added.has(offeringId)) return true;
+  return student.offerings.viaSection.has(offeringId) && visibleToSection(material.target_sections, student.section);
+}
+
+export async function notifyPublished(
+  supabase: Supabase,
+  material: Pick<MaterialRow, 'id' | 'title' | 'skill_id' | 'kind' | 'target_sections'>,
+  offeringId: string | null = null,
+): Promise<void> {
   try {
-    let query = supabase.from('users').select('id').eq('role', 'student').limit(5000);
-    if (material.target_sections && material.target_sections.length) {
-      const { data: sections } = await supabase.from('sections').select('id').in('name', material.target_sections);
-      const ids = (sections ?? []).map((s) => s.id as string);
-      if (ids.length === 0) return;
-      query = query.in('section_id', ids);
-    }
-    const { data: students, error } = await query;
-    if (error || !students?.length) return;
+    const studentIds = await materialAudience(supabase, material, offeringId);
+    const students = studentIds.map((id) => ({ id }));
+    if (!students.length) return;
     const noun = { video: 'video', note: 'note', pdf: 'handout', slides: 'presentation', link: 'link' }[material.kind];
     const { error: insertError } = await supabase.from('notifications').insert(
       students.map((s) => ({

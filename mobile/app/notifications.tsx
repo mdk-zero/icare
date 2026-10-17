@@ -74,9 +74,17 @@ export default function NotificationsScreen() {
     void markRead(notification.id);
     // A newly published Library material opens straight to it, and a new
     // course assignment (instructors) to its checklist.
-    const { kind, materialId, offeringId } = notification.data ?? {};
+    const { kind, materialId, offeringId, assessment_id, assignment_id, patient_id } = notification.data ?? {};
     if (kind === 'library' && typeof materialId === 'string') router.push(`/library/${materialId}`);
     if (kind === 'course' && typeof offeringId === 'string') router.push(`/course/${offeringId}`);
+    // A newly assigned quiz opens on its details; a patient case on its patient
+    // (or its brief), behind a short spinner until it knows whether it started.
+    if (typeof assessment_id === 'string') router.push(`/quiz-info/${assessment_id}`);
+    if (kind === 'scenario' && typeof patient_id === 'string') {
+      router.push({ pathname: '/clinic/patient/[id]', params: { id: patient_id, gate: 'wait' } });
+    } else if (kind === 'scenario' && typeof assignment_id === 'string') {
+      router.push({ pathname: '/clinic/assignment/[id]', params: { id: assignment_id, gate: 'wait' } });
+    }
   };
 
   return (

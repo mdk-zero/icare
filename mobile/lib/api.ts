@@ -220,6 +220,8 @@ export interface WardAssignment {
   completed_at: string | null;
   tasks_done: number;
   tasks_total: number;
+  /** When the student pressed Start (null: not yet); absent before migration 063. */
+  started_at?: string | null;
 }
 
 export interface WardResult {
@@ -367,6 +369,8 @@ export interface ScenarioAssignment {
   time_taken: number | null;
   /** The student's team, when faculty have put them in one. */
   team_name?: string | null;
+  /** When the student pressed Start (null: not yet); absent before migration 063. */
+  started_at?: string | null;
   /** A Patient Case, or a Return Demonstration (skill checklists, no patient); absent from older servers. */
   kind?: 'patient_case' | 'return_demo';
 }
@@ -913,6 +917,8 @@ export interface LibraryItem {
   url: string | null;
   published_at: string | null;
   author_name: string;
+  /** The course it was shared for; null for a general material. */
+  course?: { code: string; title: string } | null;
   seen: boolean;
 }
 

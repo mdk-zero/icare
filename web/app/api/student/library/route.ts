@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { listSkills } from '@/app/lib/taylor-skills';
-import { isMissingLibrary, visibleToSection } from '@/app/lib/library';
+import { isMissingLibrary, studentOfferings, visibleToStudent } from '@/app/lib/library';
+import { activityOfferings } from '@/app/lib/activity-course';
 
 /**
- * GET: the published materials for the student's section, by chapter and skill.
+ * GET: the published materials for the student's section and courses, by chapter and skill.
  *   ?skill=1-7 narrows to one skill.
  *   { chapters: [{ chapter, area, skills: [{ id, title, materials: [...] }] }], total, unseen }
  * Materials are summaries; the file link and note body come from /[id].
@@ -19,8 +20,10 @@ export async function GET(request: NextRequest) {
     const supabase = getSupabaseAdmin();
     const skill = request.nextUrl.searchParams.get('skill');
 
-    const { data: me } = await supabase.from('users').select('sections(name)').eq('id', session.uid).single();
+    const { data: me } = await supabase.from('users').select('section_id, sections(name)').eq('id', session.uid).single();
     const section = (me?.sections as unknown as { name?: string } | null)?.name ?? null;
+    // The courses they're on, for materials filed under a course (075).
+    const offerings = await studentOfferings(supabase, session.uid, (me?.section_id as string | null) ?? null);
 
     let query = supabase
       .from('library_materials')
@@ -41,7 +44,25 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unable to load the Library' }, { status: 500 });
     }
 
-    const visible = (materialsRes.data ?? []).filter((m) => visibleToSection(m.target_sections as string[] | null, section));
+    const rows = materialsRes.data ?? [];
+    const offeringOf = await activityOfferings(supabase, 'library_materials', rows.map((m) => m.id as string));
+    const visible = rows.filter((m) =>
+      visibleToStudent({ target_sections: m.target_sections as string[] | null }, offeringOf.get(m.id as string) ?? null, {
+        section,
+        offerings,
+      }),
+    );
+    // The course each material is for, named the way students know it.
+    const visibleOfferings = [...new Set(visible.map((m) => offeringOf.get(m.id as string)).filter((id): id is string => !!id))];
+    const { data: offeringRows } = visibleOfferings.length
+      ? await supabase.from('course_offerings').select('id, courses(code, title)').in('id', visibleOfferings)
+      : { data: [] };
+    const courseOf = new Map(
+      ((offeringRows ?? []) as unknown as { id: string; courses: { code: string; title: string } | null }[]).map((o) => [
+        o.id,
+        o.courses ? { code: o.courses.code, title: o.courses.title } : null,
+      ]),
+    );
     const seen = new Set((viewsRes.data ?? []).map((v) => v.material_id as string));
 
     const authorIds = [...new Set(visible.map((m) => m.created_by as string))];
@@ -63,6 +84,7 @@ export async function GET(request: NextRequest) {
         url: m.url,
         published_at: m.published_at,
         author_name: names.get(m.created_by as string) ?? '',
+        course: courseOf.get(offeringOf.get(m.id as string) ?? '') ?? null,
         seen: seen.has(m.id as string),
       });
       bySkill.set(m.skill_id as string, list);

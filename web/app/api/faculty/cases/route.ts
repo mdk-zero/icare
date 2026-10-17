@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
-import { activityCourse, parseOfferingId } from '@/app/lib/activity-course';
+import { activityCourse, activityOfferings, parseOfferingId } from '@/app/lib/activity-course';
 import { logAudit } from '@/app/lib/audit';
 import {
   assignCasePresentation,
@@ -10,6 +10,7 @@ import {
   CASES_NOT_READY,
   PRESENTATION_COLUMNS,
 } from '@/app/lib/cases';
+import { loadTeams, presentationGroups } from '@/app/lib/cases';
 import { isLateSubmission } from '@/app/lib/case-rubric';
 import { parseDeadline } from '@/app/lib/deadline-input';
 
@@ -69,6 +70,9 @@ export async function GET() {
       ? await supabase.from('sections').select('id, name').in('id', sectionIds)
       : { data: [] as { id: string; name: string }[] };
     const sectionName = new Map((sections ?? []).map((s) => [s.id, s.name]));
+    // The course each was made for (070), for grouping by course.
+    const offeringOf = await activityOfferings(supabase, 'case_presentations', (presentations ?? []).map((p) => p.id as string));
+    const groupsOf = await presentationGroups(supabase, (presentations ?? []).map((p) => p.id as string));
 
     const result = (presentations ?? []).map((p) => {
       const roster = submissions.filter((s) => s.presentation_id === p.id);
@@ -76,6 +80,8 @@ export async function GET() {
       return {
         ...p,
         sections: ((p.section_ids as string[]) ?? []).map((id) => ({ id, name: sectionName.get(id) ?? 'Unknown' })),
+        offering_id: offeringOf.get(p.id as string) ?? null,
+        groups: groupsOf.get(p.id as string) ?? [],
         counts: {
           total: roster.length,
           not_started: count('not_started'),
@@ -109,7 +115,7 @@ export async function POST(request: NextRequest) {
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
-  const { title, instructions, deadline, section_ids } = body as Record<string, unknown>;
+  const { title, instructions, deadline, section_ids, team_ids, student_ids } = body as Record<string, unknown>;
 
   const titleValue = typeof title === 'string' ? title.trim() : '';
   if (!titleValue) return NextResponse.json({ error: 'Title is required' }, { status: 400 });
@@ -120,8 +126,14 @@ export async function POST(request: NextRequest) {
   // Every activity has a deadline: it is what attendance is measured against.
   const deadlineCheck = parseDeadline(deadline);
   if (!deadlineCheck.ok) return NextResponse.json({ error: deadlineCheck.error }, { status: 400 });
+  // Given to groups (075), to whole sections where the instructor has no
+  // group, and to students added to the course by hand.
   const sectionIds = uniqueStrings(section_ids);
-  if (sectionIds.length === 0) return NextResponse.json({ error: 'Select at least one section' }, { status: 400 });
+  const teamIds = uniqueStrings(team_ids);
+  const studentIds = uniqueStrings(student_ids);
+  if (sectionIds.length === 0 && teamIds.length === 0 && studentIds.length === 0) {
+    return NextResponse.json({ error: 'Choose who gets this case presentation' }, { status: 400 });
+  }
 
   try {
     const supabase = getSupabaseAdmin();
@@ -134,25 +146,38 @@ export async function POST(request: NextRequest) {
     );
     if ('error' in course) return NextResponse.json({ error: course.error }, { status: 400 });
 
-    const { data: presentation, error } = await supabase
+    // Every section it reaches, groups' sections included, as before 075.
+    const teams = await loadTeams(supabase, teamIds);
+    const reachedSections = [...new Set([...sectionIds, ...teams.map((t) => t.section_id)])];
+    const row: Record<string, unknown> = {
+      title: titleValue,
+      instructions: instructionsValue,
+      deadline: deadlineCheck.value,
+      section_ids: reachedSections,
+      created_by: session.uid,
+      ...course.value,
+    };
+    let inserted = await supabase
       .from('case_presentations')
-      .insert({
-        title: titleValue,
-        instructions: instructionsValue,
-        deadline: deadlineCheck.value,
-        section_ids: sectionIds,
-        created_by: session.uid,
-        ...course.value,
-      })
+      .insert(teamIds.length ? { ...row, team_ids: teamIds } : row)
       .select(PRESENTATION_COLUMNS)
       .single();
+    // Before 075 there is no team_ids column: the groups' members still get it.
+    if (inserted.error && (inserted.error.code === '42703' || inserted.error.code === 'PGRST204')) {
+      inserted = await supabase.from('case_presentations').insert(row).select(PRESENTATION_COLUMNS).single();
+    }
+    const { data: presentation, error } = inserted;
     if (error || !presentation) {
       if (isMissingCaseTables(error)) return NextResponse.json({ error: CASES_NOT_READY }, { status: 503 });
       console.error('Failed to create case presentation', error);
       return NextResponse.json({ error: 'Unable to create the case presentation' }, { status: 500 });
     }
 
-    const assigned = await assignCasePresentation(supabase, session, presentation as unknown as { id: string; title: string }, sectionIds);
+    const assigned = await assignCasePresentation(supabase, session, presentation as unknown as { id: string; title: string }, {
+      sectionIds,
+      teamIds,
+      studentIds,
+    });
     if (!assigned.ok) {
       // Nobody could be given it, so don't leave an empty shell behind.
       await supabase.from('case_presentations').delete().eq('id', (presentation as unknown as { id: string }).id);
@@ -166,7 +191,7 @@ export async function POST(request: NextRequest) {
         action: 'case.create',
         entityType: 'case_presentations',
         entityId: created.id,
-        details: { title: titleValue, section_ids: sectionIds, student_count: assigned.total },
+        details: { title: titleValue, section_ids: reachedSections, team_ids: teamIds, student_count: assigned.total },
       },
       request,
     );

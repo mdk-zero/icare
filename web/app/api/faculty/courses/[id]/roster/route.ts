@@ -43,7 +43,9 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
           email: emailOf.get(s.id) ?? '',
           picture_url: s.picture_url,
           section,
+          section_id: s.section_id,
           group: group.join(' · ') || 'No group',
+          team_id: s.team_id,
           source: s.source,
         };
       }),

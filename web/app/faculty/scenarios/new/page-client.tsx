@@ -18,6 +18,7 @@ import {
   faWandMagicSparkles,
   faXmark,
   faUserPlus,
+  faPenToSquare,
 } from "@fortawesome/free-solid-svg-icons";
 import {
   createScenario,
@@ -31,7 +32,15 @@ import {
   FacultyPatient,
   Room,
   type SkillSelection,
+  fetchScenarioById,
+  fetchScenarioSkillTasks,
+  fetchFacultyScenarios,
+  updateScenario,
+  addScenarioSkills,
+  removeScenarioTask,
 } from "../../../lib/api";
+import { DEFAULT_RUBRIC, resolveRubric, type Rubric } from "../../../lib/task-ratings";
+import RubricEditor, { rubricToStore } from "../rubric-editor";
 import SkillPicker from "../skill-picker";
 import { roomStatus, ROOM_STATUS_LABEL, ROOM_STATUS_TONE } from "../../../lib/rooms";
 import PageHeader from "../../../components/PageHeader";
@@ -141,8 +150,14 @@ const emptyForm = {
   offeringId: "",
 };
 
-export default function NewScenarioClient() {
+/**
+ * Creates a patient case, or with `editId` edits one in the same layout. A case
+ * already assigned to students can't be edited: what they were given stays
+ * what they are graded on.
+ */
+export default function NewScenarioClient({ editId }: { editId?: string } = {}) {
   const router = useRouter();
+  const editing = Boolean(editId);
   const [form, setForm] = useState(emptyForm);
   const [patientSearch, setPatientSearch] = useState("");
 
@@ -166,6 +181,46 @@ export default function NewScenarioClient() {
   const [skills, setSkills] = useState<SkillSelection[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Editing: the case as saved, its skill tasks (by skill) and its other tasks.
+  const { data: editData, loading: loadingEdit } = usePageData(editId ? `faculty:scenario-edit:${editId}` : null, async () => {
+    const [scenario, tasks, roster, list] = await Promise.all([
+      fetchScenarioById(editId!),
+      fetchScenarioSkillTasks(editId!),
+      fetchPatientRoster(),
+      fetchFacultyScenarios(),
+    ]);
+    return {
+      scenario,
+      tasks: tasks ?? [],
+      patientRoom: roster.patients.find((p) => p.id === scenario?.patient_id)?.room_id ?? "",
+      assigned: list.find((x) => x.id === editId)?.student_count ?? 0,
+    };
+  });
+  const [rubric, setRubric] = useState<Rubric>(DEFAULT_RUBRIC);
+  // Starter (non-skill) tasks marked for removal, removed on save.
+  const [removedTasks, setRemovedTasks] = useState<string[]>([]);
+  const [filledFor, setFilledFor] = useState<string | null>(null);
+  const editScenario = editData?.scenario ?? null;
+  const originalTaskBySkill = useMemo(
+    () => new Map((editData?.tasks ?? []).flatMap((t) => (t.skill_id ? [[t.skill_id, t.id] as const] : []))),
+    [editData?.tasks],
+  );
+  const otherTasks = (editData?.tasks ?? []).filter((t) => !t.skill_id);
+  // The form starts from the saved case, once it has loaded.
+  if (editId && editScenario && filledFor !== editId) {
+    setFilledFor(editId);
+    setForm({
+      title: editScenario.title,
+      description: editScenario.description ?? "",
+      learningObjectives: (editScenario.learning_objectives ?? []).join("\n"),
+      patientId: editScenario.patient_id ?? "",
+      roomId: editData?.patientRoom ?? "",
+      offeringId: editScenario.offering_id ?? "",
+    });
+    setSkills([...originalTaskBySkill.keys()].map((id) => ({ id })));
+    setRubric(resolveRubric(editScenario.rubric));
+  }
 
   const {
     data,
@@ -294,6 +349,11 @@ export default function NewScenarioClient() {
     setError(null);
     const progress = loadingToast(`Saving ${form.title.trim()}…`);
 
+    if (editId) {
+      await saveEdit(progress);
+      return;
+    }
+
     const newScenario = await createScenario({
       title: form.title,
       description: form.description,
@@ -355,6 +415,86 @@ export default function NewScenarioClient() {
     router.replace("/faculty/scenarios");
   };
 
+  const objectives = form.learningObjectives
+    .split("\n")
+    .map((o) => o.trim())
+    .filter(Boolean);
+
+  /** Saves an edit: the details, then the skills that changed, then the room. */
+  const saveEdit = async (progress: ReturnType<typeof loadingToast>) => {
+    const savedRubric = resolveRubric(editScenario?.rubric);
+    const rubricChanged = JSON.stringify(rubricToStore(rubric)) !== JSON.stringify(rubricToStore(savedRubric));
+    const updated = await updateScenario(editId!, {
+      title: form.title,
+      description: form.description,
+      patient_id: form.patientId,
+      learning_objectives: objectives,
+      ...(offerings.length > 0 ? { offering_id: offeringId } : {}),
+      ...(rubricChanged ? { rubric: rubricToStore(rubric) } : {}),
+    });
+    if (!updated) {
+      setError("Unable to save the patient case. You can only edit patient cases you created.");
+      progress.error("Unable to save the patient case");
+      setSaving(false);
+      return;
+    }
+
+    // A skill removed, or one whose route or steps changed, loses its task;
+    // the changed and new ones are added back as they now stand.
+    const picked = new Map(skills.map((sk) => [sk.id, sk]));
+    const remove = [
+      ...[...originalTaskBySkill].filter(([skillId]) => {
+        const sel = picked.get(skillId);
+        return !sel || sel.sections !== undefined || sel.skipped !== undefined;
+      }).map(([, taskId]) => taskId),
+      ...removedTasks,
+    ];
+    const add = skills.filter(
+      (sk) => !originalTaskBySkill.has(sk.id) || sk.sections !== undefined || sk.skipped !== undefined,
+    );
+    const removed = await Promise.all(remove.map((taskId) => removeScenarioTask(editId!, taskId)));
+    const added = add.length > 0 ? await addScenarioSkills(editId!, add) : { added: 0 };
+    if (removed.includes(false) || "error" in added) {
+      setError("The details were saved, but some skills weren't updated. Open the case again to check its skills.");
+      progress.error("Some skills weren't updated");
+      setSaving(false);
+      return;
+    }
+
+    if (form.patientId && form.roomId && selectedPatient && selectedPatient.room_id !== form.roomId) {
+      const res = await updateFacultyPatient(form.patientId, {
+        name: selectedPatient.name,
+        age: selectedPatient.age,
+        gender: selectedPatient.gender,
+        diagnosis: selectedPatient.diagnosis,
+        admission_date: selectedPatient.admission_date,
+        vital_signs: selectedPatient.vital_signs,
+        labs: selectedPatient.labs,
+        room_id: form.roomId,
+      });
+      if (res.error) console.error("Room assignment failed:", res.error);
+    }
+
+    const faculty = getCurrentFacultyUser();
+    if (faculty) {
+      logAuditAction({
+        faculty_id: faculty.id,
+        faculty_name: faculty.name,
+        tab: "scenarios",
+        action: "update_scenario",
+        details: `Updated patient case: ${updated.title}`,
+        target_type: "scenario",
+        target_id: editId!,
+        metadata: { scenario_title: updated.title },
+      });
+    }
+
+    progress.success(`${updated.title} saved`);
+    forgetPage("faculty:scenarios");
+    forgetPage(`faculty:scenario-edit:${editId}`);
+    router.replace("/faculty/scenarios");
+  };
+
   const vitals = selectedPatient?.vital_signs;
   const vitalChips = vitals
     ? [
@@ -366,10 +506,6 @@ export default function NewScenarioClient() {
       ].filter((v) => v.value !== null && v.value !== undefined && v.value !== "")
     : [];
   const selectedRoom = rooms.find((r) => r.id === form.roomId) ?? null;
-  const objectives = form.learningObjectives
-    .split("\n")
-    .map((o) => o.trim())
-    .filter(Boolean);
   const chapterFocus = lesson ? lessonChapters : chapters;
   // The chapters the case's skills come from ("1-6" is Chapter 1), for the summary.
   const skillChapters = [...new Set(skills.map((s) => Number(s.id.split("-")[0])))].sort((a, b) => a - b);
@@ -377,24 +513,73 @@ export default function NewScenarioClient() {
     !generating && !analyzing && !!form.patientId && (!!aiPrompt.trim() || !!lesson);
   const ready = !!form.title.trim() && !!form.patientId && !!form.roomId && (offerings.length === 0 || !!offeringId);
 
+  const backButton = (
+    <button
+      onClick={() => router.push("/faculty/scenarios")}
+      className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-brand-700 transition-colors"
+    >
+      <FontAwesomeIcon icon={faArrowLeft} className="w-3.5 h-3.5" />
+      Back to patient cases
+    </button>
+  );
+  const editHeader = (title: string, subtitle: string) => (
+    <PageHeader
+      badge={{ icon: <FontAwesomeIcon icon={faPenToSquare} className="w-3.5 h-3.5" />, label: "Edit Patient Case" }}
+      title={title}
+      subtitle={subtitle}
+    />
+  );
+  if (editing && (loadingEdit || !editData)) {
+    return (
+      <div className="pb-4">
+        {editHeader("Edit Patient Case", "Loading the patient case…")}
+        <div className="flex items-center gap-2 text-sm text-gray-500">
+          <EcgLoader className="text-brand-600" /> Loading…
+        </div>
+      </div>
+    );
+  }
+  if (editing && !editScenario) {
+    return (
+      <div className="pb-4">
+        {editHeader("Patient case not found", "It may have been deleted by someone else.")}
+        {backButton}
+      </div>
+    );
+  }
+  if (editing && editScenario && (editData?.assigned ?? 0) > 0) {
+    const n = editData?.assigned ?? 0;
+    return (
+      <div className="pb-4">
+        {editHeader(editScenario.title, "This patient case can't be edited.")}
+        {backButton}
+        <div className="flex max-w-xl items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          <FontAwesomeIcon icon={faLock} className="mt-0.5 h-4 w-4 shrink-0" />
+          <p>
+            It&apos;s assigned to {n} student{n === 1 ? "" : "s"}, so its details and skills stay as they were
+            given. To change it, make a new patient case instead.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="pb-4">
-      <PageHeader
-        badge={{
-          icon: <FontAwesomeIcon icon={faRobot} className="w-3.5 h-3.5" />,
-          label: "New Patient Case",
-        }}
-        title="Create Patient Case"
-        subtitle="Build a clinical case by hand, or generate one with AI and edit it"
-      />
+      {editing && editScenario ? (
+        editHeader(editScenario.title, "Change the patient, room, details and skills, then save.")
+      ) : (
+        <PageHeader
+          badge={{
+            icon: <FontAwesomeIcon icon={faRobot} className="w-3.5 h-3.5" />,
+            label: "New Patient Case",
+          }}
+          title="Create Patient Case"
+          subtitle="Build a clinical case by hand, or generate one with AI and edit it"
+        />
+      )}
 
-      <button
-        onClick={() => router.push("/faculty/scenarios")}
-        className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-brand-700 transition-colors"
-      >
-        <FontAwesomeIcon icon={faArrowLeft} className="w-3.5 h-3.5" />
-        Back to patient cases
-      </button>
+      {backButton}
 
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_20rem] gap-5 items-start">
         {/* The case sheet: one numbered step per decision. */}
@@ -657,7 +842,13 @@ export default function NewScenarioClient() {
             n={3}
             title="Case details"
             done={!!form.title.trim()}
-            hint={aiGenerated ? "Filled in by AI — review and edit before saving." : "Write the case yourself, or use Draft with AI on the right."}
+            hint={
+              editing
+                ? undefined
+                : aiGenerated
+                  ? "Filled in by AI — review and edit before saving."
+                  : "Write the case yourself, or use Draft with AI on the right."
+            }
           >
             <div className="space-y-4">
               <div>
@@ -713,7 +904,7 @@ export default function NewScenarioClient() {
             n={4}
             title="Skills"
             done={skills.length > 0}
-            last
+            last={!editing}
             hint={
               skills.length === 0
                 ? "Without skills, the patient case gets the general starter task list."
@@ -733,7 +924,41 @@ export default function NewScenarioClient() {
                 lesson_text: lessonText ?? null,
               })}
             />
+            {otherTasks.filter((t) => !removedTasks.includes(t.id)).length > 0 && (
+              <div className="mt-3 rounded-xl border border-hairline p-3">
+                <p className="text-sm font-semibold text-gray-800">Other tasks</p>
+                <p className="text-xs text-gray-500">Tasks not from a Taylor&apos;s skill. Remove any you no longer want.</p>
+                <ul className="mt-2 space-y-1">
+                  {otherTasks
+                    .filter((t) => !removedTasks.includes(t.id))
+                    .map((t) => (
+                      <li key={t.id} className="flex items-center gap-2 rounded-lg bg-subtle px-3 py-1.5 text-sm text-gray-800">
+                        <span className="min-w-0 flex-1 truncate">{t.title}</span>
+                        <button
+                          type="button"
+                          onClick={() => setRemovedTasks((prev) => [...prev, t.id])}
+                          aria-label={`Remove ${t.title}`}
+                          className="grid h-6 w-6 place-items-center rounded-md text-gray-500 hover:bg-red-50 hover:text-red-600"
+                        >
+                          <FontAwesomeIcon icon={faXmark} className="h-3 w-3" />
+                        </button>
+                      </li>
+                    ))}
+                </ul>
+              </div>
+            )}
           </SheetStep>
+
+          {editing && (
+            <SheetStep
+              n={5}
+              title="Rating wording"
+              last
+              hint="Optional. Your own words for each rating level; blank ones use the book's."
+            >
+              <RubricEditor value={rubric} onChange={setRubric} />
+            </SheetStep>
+          )}
         </div>
 
         {/* The case at a glance, with save — pinned beside the sheet on wide screens. */}
@@ -815,6 +1040,7 @@ export default function NewScenarioClient() {
             </dl>
           </div>
 
+          {!editing && (
           <div className="rounded-2xl border border-brand-200 bg-[linear-gradient(160deg,var(--color-brand-50),transparent_75%)] p-4 shadow-tile">
             <p className="text-sm font-semibold text-gray-900">Draft with AI</p>
             <p className="mt-0.5 text-xs text-gray-600">
@@ -829,6 +1055,7 @@ export default function NewScenarioClient() {
               {aiGenerated ? "Draft again with AI" : "Draft with AI"}
             </button>
           </div>
+          )}
 
           <div className="rounded-2xl border border-hairline bg-surface p-4 shadow-tile">
             <ul className="space-y-1.5 text-xs">
@@ -862,7 +1089,7 @@ export default function NewScenarioClient() {
               className="mt-4 inline-flex w-full items-center justify-center gap-2 px-5 py-2.5 bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white text-sm font-semibold rounded-lg transition-colors shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
             >
               {saving ? <EcgLoader /> : <FontAwesomeIcon icon={faSave} className="w-4 h-4" />}
-              {saving ? "Saving…" : "Save Patient Case"}
+              {saving ? "Saving…" : editing ? "Save changes" : "Save Patient Case"}
             </button>
             <button
               onClick={() => router.push("/faculty/scenarios")}

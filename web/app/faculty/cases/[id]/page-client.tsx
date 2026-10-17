@@ -22,6 +22,7 @@ import {
 import { scoreDescriptor } from "../../../lib/task-ratings";
 import { CaseStatusBadge, formatDue, inputClassName, labelClassName, toLocalInput } from "../case-ui";
 import { deadlineFromInput } from "../../../lib/deadline-input";
+import AudiencePicker, { audiencePayload, useCourseAudience } from "../../../components/AudiencePicker";
 
 const FILTERS: { key: CaseSubmissionStatus | "all"; label: string }[] = [
   { key: "all", label: "All" },
@@ -81,7 +82,9 @@ export default function CasePresentationClient({ presentationId }: { presentatio
               <h1 className="text-xl font-semibold text-gray-900">{presentation.title}</h1>
               <p className="text-sm text-gray-500">
                 Due {formatDue(presentation.deadline)} ·{" "}
-                {presentation.sections.map((s) => `Section ${s.name}`).join(", ")}
+                {presentation.groups?.length
+                  ? presentation.groups.map((g) => `${g.section_name} · ${g.name}`).join(", ")
+                  : presentation.sections.map((s) => `Section ${s.name}`).join(", ")}
               </p>
             </div>
             {presentation.can_manage && (
@@ -255,6 +258,15 @@ function EditModal({
   const [deadline, setDeadline] = useState(toLocalInput(presentation.deadline));
   const [added, setAdded] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
+  // A course presentation gets more groups through the course's roster.
+  const course = presentation.offering_id ?? null;
+  const [audience, setAudience] = useState<string[]>([]);
+  const { roster } = useCourseAudience(course);
+  const picked = audiencePayload(roster, audience);
+  const given = [
+    ...(presentation.groups ?? []).map((g) => `team:${g.id}`),
+    ...presentation.section_ids.map((sid) => `section:${sid}`),
+  ];
   const otherSections = sections.filter((s) => !presentation.section_ids.includes(s.id));
 
   const save = async () => {
@@ -266,6 +278,13 @@ function EditModal({
       instructions,
       deadline: deadlineFromInput(deadline),
       ...(added.size > 0 ? { section_ids: [...presentation.section_ids, ...added] } : {}),
+      ...(course && picked.count > 0
+        ? {
+            section_ids: [...presentation.section_ids, ...picked.section_ids],
+            team_ids: picked.team_ids,
+            student_ids: picked.student_ids,
+          }
+        : {}),
     });
     setBusy(false);
     if (res.error !== undefined) return toast(res.error);
@@ -309,7 +328,14 @@ function EditModal({
             className={inputClassName}
           />
         </div>
-        {otherSections.length > 0 && (
+        {course && (
+          <div>
+            <span className={labelClassName}>Also give it to</span>
+            <AudiencePicker offeringId={course} value={audience} onChange={setAudience} given={given} />
+            <p className="text-xs text-gray-500 mt-1">Groups can be added, not removed — students there may have started.</p>
+          </div>
+        )}
+        {!course && otherSections.length > 0 && (
           <div>
             <span className={labelClassName}>Also assign to</span>
             <div className="border border-hairline rounded-xl divide-y divide-hairline">

@@ -82,8 +82,9 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   const session = await readSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  // Groups are built by admins; faculty only see the ones assigned to them.
-  if (session.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  // A dean builds groups in their sections; an instructor in their course
+  // sections, and supervises the groups they make.
+  if (!['admin', 'faculty'].includes(session.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   let body: { section_id?: unknown; name?: unknown };
   try {
@@ -108,7 +109,12 @@ export async function POST(request: NextRequest) {
 
   const { data, error } = await supabase
     .from('teams')
-    .insert({ section_id: sectionId, name, created_by: session.uid })
+    .insert({
+      section_id: sectionId,
+      name,
+      created_by: session.uid,
+      ...(session.role === 'faculty' ? { faculty_id: session.uid } : {}),
+    })
     .select('id, section_id, name')
     .single();
   if (error) {

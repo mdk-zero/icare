@@ -208,6 +208,7 @@ function MaterialRow({
         </Text>
         <View style={styles.rowMeta}>
           <Text style={[styles.kindLabel, { color: k.fg }]}>{k.label}</Text>
+          {item.course ? <Text style={styles.rowAuthor} numberOfLines={1}>· {item.course.code}</Text> : null}
           {item.author_name ? <Text style={styles.rowAuthor} numberOfLines={1}>· {item.author_name}</Text> : null}
         </View>
       </View>

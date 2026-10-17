@@ -72,6 +72,8 @@ function IconAction({ label, icon, onClick }: { label: string; icon: typeof faPe
 
 interface AssessmentDetail {
   id: string;
+  /** Students who have it; once any do, it can't be edited. */
+  assigned_count?: number;
   created_by: string | null;
   title: string;
   description: string;
@@ -173,7 +175,10 @@ export default function AssessmentQuestionsClient({
   // Mirrors the server's guardAssessmentEdit: the creator may change it, and
   // so may an admin (the server also checks the admin owns the creator).
   // Everyone else views it read-only.
-  const canEdit = !assessment || me?.role === "admin" || assessment.created_by === me?.id;
+  const isOwner = !assessment || me?.role === "admin" || assessment.created_by === me?.id;
+  // Once students have it, what they were given stays what they are graded on.
+  const assignedCount = assessment?.assigned_count ?? 0;
+  const canEdit = isOwner && assignedCount === 0;
   const [loading, setLoading] = useState(true);
   const [confirmAction, setConfirmAction] = useState<{ title: string; message: string; action: () => void; loading?: boolean; error?: string | null } | null>(null);
 
@@ -306,7 +311,7 @@ export default function AssessmentQuestionsClient({
 
       if (assessRes.ok) {
         const json = (await assessRes.json()) as {
-          assessment: { questions: AssessmentQuestion[]; created_by: string | null; title: string; description: string; category: string; time_limit_seconds: number | null; question_count: number; total_questions: number | null; max_attempts: number | null; target_sections: string[] | null; offering_id?: string | null };
+          assessment: { questions: AssessmentQuestion[]; created_by: string | null; title: string; description: string; category: string; time_limit_seconds: number | null; question_count: number; total_questions: number | null; max_attempts: number | null; target_sections: string[] | null; offering_id?: string | null; assigned_count?: number };
           blockers?: PublishBlocker[];
 
         };
@@ -323,6 +328,7 @@ export default function AssessmentQuestionsClient({
           max_attempts: a.max_attempts ?? null,
           target_sections: a.target_sections ?? null,
           offering_id: a.offering_id ?? null,
+          assigned_count: a.assigned_count ?? 0,
         });
         setDetailForm({
           title: a.title,
@@ -1465,8 +1471,14 @@ export default function AssessmentQuestionsClient({
       </section>
 
       {!canEdit && (
-        <div className="bg-subtle border border-hairline rounded-xl p-4 text-sm text-gray-600">
-          View only — only the instructor who created this assessment can change it. You can still assign it and see its results.
+        <div
+          className={`rounded-xl border p-4 text-sm ${
+            isOwner ? "border-amber-200 bg-amber-50 text-amber-900" : "border-hairline bg-subtle text-gray-600"
+          }`}
+        >
+          {isOwner
+            ? `View only — this quiz is already assigned to ${assignedCount} student${assignedCount === 1 ? "" : "s"}, so its questions and details can't change. Make a new quiz to change it. You can still assign it to more groups and see its results.`
+            : "View only — only the instructor who created this assessment can change it. You can still assign it and see its results."}
         </div>
       )}
 

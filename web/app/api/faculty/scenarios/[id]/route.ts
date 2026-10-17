@@ -3,6 +3,7 @@ import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { ensureCategories } from '@/app/lib/scenario-categories';
 import { MAX_RUBRIC_LENGTH, TASK_RATINGS } from '@/app/lib/task-ratings';
+import { activityCourse, parseOfferingId } from '@/app/lib/activity-course';
 import { isReturnDemo } from '@/app/lib/scenario-kind';
 
 interface RouteParams {
@@ -98,7 +99,10 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
   // Resolved against the category table further down, once the caller is
   // known to own the scenario — a refused edit mustn't create a category.
-  if (Object.keys(updateData).length === 0 && category === undefined) {
+  // Moving the case to another course (070), one the instructor teaches.
+  const movesCourse = 'offering_id' in ((body ?? {}) as Record<string, unknown>);
+
+  if (Object.keys(updateData).length === 0 && category === undefined && !movesCourse) {
     return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
   }
 
@@ -119,6 +123,12 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     if (session.role !== 'admin' && existing.created_by !== session.uid) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    if (movesCourse) {
+      const course = await activityCourse(supabase, 'scenarios', session, parseOfferingId(body as Record<string, unknown>));
+      if ('error' in course) return NextResponse.json({ error: course.error }, { status: 400 });
+      Object.assign(updateData, course.value);
     }
 
     if (category !== undefined) {

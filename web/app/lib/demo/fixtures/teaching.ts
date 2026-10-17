@@ -18,6 +18,8 @@ import {
 /** Case presentations with the students' write-ups, and the Library's materials. */
 
 export interface DemoCasePresentation {
+  /** The groups it was given to (075). */
+  team_ids?: string[];
   id: string;
   title: string;
   instructions: string;
@@ -72,6 +74,8 @@ export interface DemoCaseSubmission {
 
 export interface DemoMaterial {
   id: string;
+  /** The course it is for (075); null for none, undefined until linked. */
+  offering_id?: string | null;
   skill_id: string;
   kind: "video" | "note" | "pdf" | "slides" | "link";
   title: string;

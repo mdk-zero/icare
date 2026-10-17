@@ -23,6 +23,12 @@ export async function guardAssessmentEdit(
   supabase: Supabase,
   session: SessionPayload,
   target: AssessmentTarget,
+  /**
+   * Its content (questions, criteria, details) is being changed. Once any
+   * student has the quiz, what they were given stays what they are graded
+   * on, so that is refused; hiding, assigning and deleting stay open.
+   */
+  { content = true }: { content?: boolean } = {},
 ): Promise<NextResponse | null> {
   const assessmentId = await resolveAssessmentId(supabase, target);
   if (!assessmentId) return NextResponse.json({ error: 'Not found' }, { status: 404 });
@@ -36,10 +42,22 @@ export async function guardAssessmentEdit(
   if (!assessment) return NextResponse.json({ error: 'Assessment not found' }, { status: 404 });
 
   const createdBy = assessment.created_by as string | null;
-  if (createdBy === session.uid) return null;
-  if (session.role === 'admin') {
-    if (!createdBy) return null;
-    if (ownsFaculty(await getAdminScope(supabase, session.uid), createdBy)) return null;
+  const owner =
+    createdBy === session.uid ||
+    (session.role === 'admin' && (!createdBy || ownsFaculty(await getAdminScope(supabase, session.uid), createdBy)));
+  if (owner) {
+    if (!content) return null;
+    const { count } = await supabase
+      .from('assessment_assignments')
+      .select('id', { count: 'exact', head: true })
+      .eq('assessment_id', assessmentId);
+    if ((count ?? 0) === 0) return null;
+    return NextResponse.json(
+      {
+        error: `This quiz is already assigned to ${count} student${count === 1 ? '' : 's'}, so it can't be edited. Make a new quiz to change it.`,
+      },
+      { status: 409 },
+    );
   }
   return NextResponse.json(
     { error: 'Only the instructor who created this assessment can change it.' },

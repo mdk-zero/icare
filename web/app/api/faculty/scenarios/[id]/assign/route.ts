@@ -4,6 +4,7 @@ import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { getFacultyStudentIds } from '@/app/lib/roster';
 import { isMissingTeamTables } from '@/app/lib/teams';
 import { parseDeadline } from '@/app/lib/deadline-input';
+import { notifyCaseAssigned } from '@/app/lib/notify-case-assigned';
 import { isReturnDemo } from '@/app/lib/scenario-kind';
 
 interface RouteParams {
@@ -62,7 +63,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     // Verify the scenario exists.
     const { data: scenario } = await supabase
       .from('scenarios')
-      .select('id')
+      .select('id, title, patient_id')
       .eq('id', scenarioId)
       .maybeSingle();
 
@@ -127,9 +128,60 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unable to assign patient case' }, { status: 500 });
     }
 
+    await notifyCaseAssigned(
+      supabase,
+      { id: scenario.id as string, title: scenario.title as string, patient_id: (scenario.patient_id as string | null) ?? null },
+      (assignments ?? []).map((a) => ({ id: a.id as string, student_id: a.student_id as string })),
+      parsedDeadline,
+    );
+
     return NextResponse.json({ assignments, skipped: skip.size }, { status: 201 });
   } catch (err) {
     console.error('Assign patient case failed', err);
     return NextResponse.json({ error: 'Unable to assign patient case' }, { status: 500 });
+  }
+}
+
+/**
+ * Moves the date of performance for students who already have the case:
+ * the "Who has it" list on the patient case card. Graded ones keep theirs.
+ */
+export async function PATCH(request: NextRequest, { params }: RouteParams) {
+  const session = await readSession();
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!['faculty', 'admin'].includes(session.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
+  const { id: scenarioId } = await params;
+  const body = (await request.json().catch(() => null)) as { student_ids?: unknown; deadline?: unknown } | null;
+  const ids = Array.isArray(body?.student_ids)
+    ? [...new Set(body.student_ids.filter((s): s is string => typeof s === 'string'))]
+    : [];
+  if (ids.length === 0) return NextResponse.json({ error: 'Choose at least one student' }, { status: 400 });
+  const deadlineCheck = parseDeadline(body?.deadline);
+  if (!deadlineCheck.ok) return NextResponse.json({ error: deadlineCheck.error }, { status: 400 });
+
+  try {
+    const supabase = getSupabaseAdmin();
+    if (session.role === 'faculty') {
+      const rosterIds = new Set(await getFacultyStudentIds(supabase, session.uid));
+      if (ids.some((sid) => !rosterIds.has(sid))) {
+        return NextResponse.json({ error: 'Some students are not in your sections' }, { status: 403 });
+      }
+    }
+    const { data, error } = await supabase
+      .from('scenario_assignments')
+      .update({ deadline: new Date(deadlineCheck.value as string).toISOString() })
+      .eq('scenario_id', scenarioId)
+      .in('student_id', ids)
+      .neq('status', 'completed')
+      .select('id');
+    if (error) {
+      console.error('Failed to move the date of performance', error);
+      return NextResponse.json({ error: 'Unable to change the date' }, { status: 500 });
+    }
+    return NextResponse.json({ updated: (data ?? []).length });
+  } catch (err) {
+    console.error('Move date of performance failed', err);
+    return NextResponse.json({ error: 'Unable to change the date' }, { status: 500 });
   }
 }

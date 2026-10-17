@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { assignedGroups } from '@/app/lib/assigned-groups';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { activityCourse, activityOfferings, parseOfferingId } from '@/app/lib/activity-course';
@@ -24,6 +25,11 @@ function unauthorizedResponse() {
   return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 }
 
+/** The Taylor's chapters a case's skills come from, in book order. */
+function chaptersOf(skillIds: string[]): number[] {
+  return [...new Set(skillIds.map((id) => Number(id.split('-')[0])).filter(Number.isFinite))].sort((a, b) => a - b);
+}
+
 export async function GET() {
   const session = await readSession();
   if (!session) return unauthorizedResponse();
@@ -35,7 +41,7 @@ export async function GET() {
     const { data: scenarios, error } = await supabase
       .from('scenarios')
       .select(
-        'id, created_by, title, description, category, learning_objectives, is_ai_generated, created_at, updated_at, patient_id, patients(name), scenario_assignments(student_id)',
+        'id, created_by, title, description, category, learning_objectives, is_ai_generated, created_at, updated_at, patient_id, patients(name), scenario_assignments(student_id, status, deadline), scenario_tasks(skill_id)',
       )
       .order('created_at', { ascending: false })
       .limit(500);
@@ -69,9 +75,29 @@ export async function GET() {
     // The course each case was made for (070), for grouping by course.
     const offeringOf = await activityOfferings(supabase, 'scenarios', visible.map((s) => s.id as string));
 
+    type Row = { student_id: string; status: string; deadline: string | null };
+    const ownRows = (s: (typeof visible)[number]) => {
+      const assigned = (s as unknown as { scenario_assignments: Row[] }).scenario_assignments ?? [];
+      return facultyStudentIds === null ? assigned : assigned.filter((a) => facultyStudentIds.has(a.student_id));
+    };
+    // Who has each case, by group, with their date of performance.
+    const groupsOf = await assignedGroups(
+      supabase,
+      visible.flatMap((s) =>
+        ownRows(s).map((a) => ({
+          activity_id: s.id as string,
+          student_id: a.student_id,
+          deadline: a.deadline,
+          done: a.status === 'completed',
+        })),
+      ),
+    );
+
     const formatted = visible.map((s) => {
-      const assigned = (s as unknown as { scenario_assignments: { student_id: string }[] })
-        .scenario_assignments ?? [];
+      const assigned = (s as unknown as { scenario_assignments: Row[] }).scenario_assignments ?? [];
+      const skillIds = ((s as unknown as { scenario_tasks: { skill_id: string | null }[] }).scenario_tasks ?? [])
+        .map((t) => t.skill_id)
+        .filter((id): id is string => !!id);
       // Count the students this viewer actually teaches. The raw total would
       // report other faculty's assignments on a shared scenario, which reads
       // as "3 students" on a card that only lists one of them.
@@ -96,6 +122,11 @@ export async function GET() {
         // Lets the page count distinct students across scenarios; one student
         // on three scenarios is one student, not three.
         student_ids: [...new Set(ownAssigned.map((a) => a.student_id))],
+        // Assigned and not graded yet: what Review on the card leads to.
+        to_grade: ownAssigned.filter((a) => a.status !== 'completed').length,
+        assigned_groups: groupsOf.get(s.id as string) ?? [],
+        // The Taylor's chapters its skills come from ("1-6" is Chapter 1).
+        chapters: chaptersOf(skillIds),
       };
     });
 

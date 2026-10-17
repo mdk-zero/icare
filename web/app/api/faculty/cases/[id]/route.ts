@@ -10,6 +10,8 @@ import {
   CASES_NOT_READY,
   PRESENTATION_COLUMNS,
 } from '@/app/lib/cases';
+import { loadTeams, presentationGroups } from '@/app/lib/cases';
+import { activityOfferings } from '@/app/lib/activity-course';
 import { isLateSubmission } from '@/app/lib/case-rubric';
 import { parseDeadline } from '@/app/lib/deadline-input';
 
@@ -99,6 +101,8 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
       presentation: {
         ...presentation,
         sections: presentation.section_ids.map((sid) => ({ id: sid, name: sectionName.get(sid) ?? 'Unknown' })),
+        groups: (await presentationGroups(supabase, [id])).get(id) ?? [],
+        offering_id: (await activityOfferings(supabase, 'case_presentations', [id])).get(id) ?? null,
         can_manage: canManagePresentation(session, presentation),
       },
       roster,
@@ -124,7 +128,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
-  const { title, instructions, deadline, section_ids } = body as Record<string, unknown>;
+  const { title, instructions, deadline, section_ids, team_ids, student_ids } = body as Record<string, unknown>;
 
   try {
     const supabase = getSupabaseAdmin();
@@ -160,9 +164,28 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       if (addedSections.length > 0) update.section_ids = [...presentation.section_ids, ...addedSections];
     }
 
+    // More groups (075), and students added to the course by hand.
+    const strings = (v: unknown) =>
+      Array.isArray(v) ? [...new Set(v.filter((x): x is string => typeof x === 'string' && x.length > 0))] : [];
+    const { data: current } = await supabase.from('case_presentations').select('team_ids').eq('id', id).maybeSingle();
+    const currentTeams = ((current as { team_ids?: string[] | null } | null)?.team_ids ?? []) as string[];
+    const addedTeams = strings(team_ids).filter((t) => !currentTeams.includes(t));
+    const addedStudents = strings(student_ids);
+    if (addedTeams.length > 0) {
+      const teams = await loadTeams(supabase, addedTeams);
+      const newSections = teams.map((t) => t.section_id).filter((sid) => !presentation.section_ids.includes(sid) && !addedSections.includes(sid));
+      const sectionsNow = (update.section_ids as string[] | undefined) ?? presentation.section_ids;
+      if (newSections.length > 0) update.section_ids = [...new Set([...sectionsNow, ...newSections])];
+      if (current) update.team_ids = [...currentTeams, ...addedTeams];
+    }
+
     let studentsAdded = 0;
-    if (addedSections.length > 0) {
-      const assigned = await assignCasePresentation(supabase, session, presentation, addedSections);
+    if (addedSections.length > 0 || addedTeams.length > 0 || addedStudents.length > 0) {
+      const assigned = await assignCasePresentation(supabase, session, presentation, {
+        sectionIds: addedSections,
+        teamIds: addedTeams,
+        studentIds: addedStudents,
+      });
       if (!assigned.ok) {
         return NextResponse.json({ error: assigned.error, invalid: assigned.invalid }, { status: assigned.status });
       }

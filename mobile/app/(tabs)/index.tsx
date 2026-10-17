@@ -1,4 +1,5 @@
 import React from "react";
+import { openCase } from "@/lib/open-case";
 import { ScrollView, View, Text, StyleSheet, Pressable, RefreshControl } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -177,8 +178,7 @@ export default function DashboardScreen() {
   const openAssignment = React.useCallback(
     (assignment: ScenarioAssignment) => {
       if (isReturnDemo(assignment)) router.push(`/retdem/${assignment.id}`);
-      else if (assignment.patient_id) router.push(`/clinic/patient/${assignment.patient_id}`);
-      else router.push(`/clinic/assignment/${assignment.id}`);
+      else openCase(router, assignment);
     },
     [router],
   );

@@ -4,6 +4,7 @@ import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { activityCourse, activityCoursesReady, activityOfferings, parseOfferingId } from '@/app/lib/activity-course';
 import { getScopedStudentIds } from '@/app/lib/admin-scope';
+import { assignedGroups, type AssignedGroup } from '@/app/lib/assigned-groups';
 import { logAudit } from '@/app/lib/audit';
 
 const validCategories = [
@@ -53,8 +54,9 @@ export async function GET() {
       await getScopedStudentIds(supabase, session);
 
     const assignedCounts = new Map<string, number>();
+    let groupsOf = new Map<string, AssignedGroup[]>();
     if (scopedIds === null || scopedIds.length > 0) {
-      let assignmentQuery = supabase.from('assessment_assignments').select('assessment_id').limit(20000);
+      let assignmentQuery = supabase.from('assessment_assignments').select('assessment_id, student_id, deadline').limit(20000);
       if (scopedIds) assignmentQuery = assignmentQuery.in('student_id', scopedIds);
       const { data: assignments, error: assignmentsError } = await assignmentQuery;
       if (assignmentsError) {
@@ -65,6 +67,15 @@ export async function GET() {
         const key = row.assessment_id as string;
         assignedCounts.set(key, (assignedCounts.get(key) ?? 0) + 1);
       }
+      // Which groups have each quiz, and by when.
+      groupsOf = await assignedGroups(
+        supabase,
+        (assignments ?? []).map((row) => ({
+          activity_id: row.assessment_id as string,
+          student_id: row.student_id as string,
+          deadline: (row.deadline as string | null) ?? null,
+        })),
+      );
     }
 
     // The course each quiz was made for (070), for grouping by course.
@@ -90,6 +101,7 @@ export async function GET() {
         (a as unknown as { questions: [{ count: number }] }).questions?.[0]?.count ?? 0,
       ),
       student_count: assignedCounts.get(a.id) ?? 0,
+      assigned_groups: groupsOf.get(a.id as string) ?? [],
       offering_id: offeringOf.get(a.id as string) ?? null,
     }));
 

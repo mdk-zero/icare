@@ -11,7 +11,7 @@ import {
   faUserGraduate,
   faXmark,
 } from "@fortawesome/free-solid-svg-icons";
-import { ScenarioAssignment, fetchScenarioAssignments } from "../../../lib/api";
+import { ScenarioAssignment, fetchScenarioAssignments, fetchScenarioById } from "../../../lib/api";
 import type { ScenarioKind } from "../../../lib/scenario-kind";
 import AssignmentGrader from "./assignment-grader";
 import AssignmentList, { EmptyPanel, isSubmitted } from "./assignment-list";
@@ -127,6 +127,9 @@ export default function ReviewWorkspace({
     [allAssignments, scenarioId],
   );
   const narrowedTitle = scenarioId ? allAssignments.find((a) => a.scenario_id === scenarioId)?.scenario_title ?? null : null;
+  // One patient case: the page is about it, so its title and description head the page.
+  const caseHeader = kind === "patient_case" && !!scenarioId;
+  const { data: caseData } = usePageData(caseHeader ? `scenario:${scenarioId}` : null, () => fetchScenarioById(scenarioId!));
 
   /** One row per student, so the queue can be searched/picked before any
    * submissions are shown — grouping happens client-side since the API
@@ -206,9 +209,14 @@ export default function ReviewWorkspace({
   const confirmDiscard = () => !dirty || window.confirm("Discard your unsaved ratings and notes?");
 
   const selectStudent = (studentId: string) => {
-    if (!confirmDiscard()) return;
+    if (studentId === selectedStudentId || !confirmDiscard()) return;
     setSelectedStudentId(studentId);
-    setSelectedId(null);
+    // Narrowed to one, a student has just that one: open its checklist at once.
+    const only = scenarioId ? assignments.find((a) => a.student_id === studentId) : undefined;
+    setSelectedId(only?.id ?? null);
+    if (only && !window.matchMedia("(min-width: 1024px)").matches) {
+      requestAnimationFrame(() => gradingRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+    }
   };
 
   const backToStudents = () => {
@@ -244,8 +252,12 @@ export default function ReviewWorkspace({
           icon: <FontAwesomeIcon icon={faClipboardCheck} className="h-3.5 w-3.5" />,
           label: copy.crumb,
         }}
-        title={copy.title}
-        subtitle={copy.subtitle}
+        title={caseHeader ? (caseData?.title ?? narrowedTitle ?? "Patient case") : copy.title}
+        subtitle={
+          caseHeader
+            ? caseData?.description || "Rate each student's demonstration of this patient case, then save the grade."
+            : copy.subtitle
+        }
       />
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
@@ -256,7 +268,8 @@ export default function ReviewWorkspace({
           <FontAwesomeIcon icon={faChevronLeft} className="h-3.5 w-3.5" />
           {copy.back.label}
         </button>
-        {scenarioId && (
+        {/* A patient case names itself in the header instead. */}
+        {scenarioId && !caseHeader && (
           <span className="flex max-w-full items-center gap-2 rounded-full border border-indigo-200 bg-indigo-50 py-1 pl-3 pr-1 text-sm text-indigo-800">
             <span className="truncate">Showing {narrowedTitle ?? "one"}</span>
             <button
@@ -281,7 +294,8 @@ export default function ReviewWorkspace({
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-[280px_minmax(0,1fr)] 2xl:grid-cols-[340px_minmax(0,1fr)]">
         {/* Queue */}
         <aside className="lg:sticky lg:top-0 lg:self-start">
-          {!selectedStudentId ? (
+          {/* Narrowed to one, the students stay listed beside the checklist. */}
+          {!selectedStudentId || scenarioId ? (
             <>
               {/* Step 1: find the student before any submission renders */}
               <div className="relative mb-3">
@@ -379,7 +393,12 @@ export default function ReviewWorkspace({
                     <button
                       onClick={() => selectStudent(g.student_id)}
                       style={{ animationDelay: `${Math.min(i, 8) * 35}ms` }}
-                      className="flex w-full animate-rise items-center gap-3 rounded-xl border border-hairline bg-surface p-3 text-left shadow-tile transition-all hover:border-brand-300 hover:shadow-tile-hover"
+                      aria-current={g.student_id === selectedStudentId ? "true" : undefined}
+                      className={`flex w-full animate-rise items-center gap-3 rounded-xl border p-3 text-left shadow-tile transition-all hover:border-brand-300 hover:shadow-tile-hover ${
+                        g.student_id === selectedStudentId
+                          ? "border-brand-600/50 bg-brand-600/10 shadow-[inset_3px_0_0_0_var(--color-brand-600)]"
+                          : "border-hairline bg-surface"
+                      }`}
                     >
                       <Avatar
                         name={g.student_name}
@@ -458,7 +477,9 @@ export default function ReviewWorkspace({
               <p className="mt-1 max-w-xs text-sm text-gray-500">
                 {selectedStudentId
                   ? copy.pick
-                  : copy.find}
+                  : scenarioId
+                    ? "Pick a student to open their checklist."
+                    : copy.find}
               </p>
             </div>
           ) : (
