@@ -67,7 +67,7 @@ export default function PerformanceClient() {
   const windowMinutes = { "1h": 60, "24h": 1440, "7d": 10080, "30d": 43200 }[range];
   const perMinute = totals ? totals.requests / windowMinutes : null;
   const tiles = [
-    { label: "Requests", value: totals ? totals.requests.toLocaleString() : "—" },
+    { label: "Total requests", value: totals ? totals.requests.toLocaleString() : "—" },
     {
       label: "Throughput",
       value: perMinute !== null ? perMinute.toFixed(perMinute < 10 ? 2 : 0) : "—",
@@ -114,8 +114,8 @@ export default function PerformanceClient() {
         <>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-5">
             <section className={`${CARD} p-4 lg:col-span-2`}>
-              <h2 className="font-semibold text-gray-800">Speed</h2>
-              <p className="text-xs text-gray-500 mb-4">How long users wait for an answer in this window</p>
+              <h2 className="font-semibold text-gray-800">Response speed</h2>
+              <p className="text-xs text-gray-500 mb-4">How long users wait for a response in the selected time range</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 {pending ? (
                   <>
@@ -131,7 +131,7 @@ export default function PerformanceClient() {
                   scale={MEDIAN_SCALE}
                 />
                 <SpeedGauge
-                  label="95th percentile"
+                  label="95th percentile response"
                   hint="The slowest 1 in 20 take longer"
                   value={totals?.requests ? totals.p95_ms : null}
                   scale={P95_SCALE}
@@ -217,7 +217,7 @@ export default function PerformanceClient() {
           <section className={`${CARD} overflow-hidden`}>
             <div className="p-4 pb-2">
               <h2 className="font-semibold text-gray-800">Endpoints</h2>
-              <p className="text-xs text-gray-500">Slowest first; click a column to re-sort</p>
+              <p className="text-xs text-gray-500">Sorted by the column marked ↓; click a column header to sort by it</p>
             </div>
             {/* A floor on the width: on a phone the table scrolls sideways
                 rather than breaking paths and "14 s" over several lines. */}
@@ -231,8 +231,8 @@ export default function PerformanceClient() {
                     {(
                       [
                         ["requests", "Requests"],
-                        ["p50_ms", "p50"],
-                        ["p95_ms", "p95"],
+                        ["p50_ms", "Median (p50)"],
+                        ["p95_ms", "Slowest 5% (p95)"],
                         ["errors", "Errors"],
                       ] as [SortKey, string][]
                     ).map(([key, label]) => (
@@ -271,7 +271,7 @@ export default function PerformanceClient() {
                   ) : routes.length === 0 ? (
                     <tr>
                       <td colSpan={5} className="py-10 text-center text-gray-400">
-                        No requests recorded in this window yet
+                        No requests recorded in this time range yet
                       </td>
                     </tr>
                   ) : (

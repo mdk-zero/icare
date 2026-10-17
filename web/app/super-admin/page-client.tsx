@@ -77,30 +77,30 @@ const BANNER: Record<Tone | "idle", { box: string; icon: IconDefinition; iconCla
     box: "border-emerald-200 bg-emerald-50",
     icon: faCircleCheck,
     iconClass: "text-emerald-600",
-    headline: "All systems normal",
+    headline: "All systems working normally",
   },
   warn: {
     box: "border-amber-200 bg-amber-50",
     icon: faTriangleExclamation,
     iconClass: "text-amber-600",
-    headline: "Something needs a look",
+    headline: "Some systems need attention",
   },
   bad: {
     box: "border-rose-200 bg-rose-50",
     icon: faCircleXmark,
     iconClass: "text-rose-600",
-    headline: "Something is failing",
+    headline: "A system is failing",
   },
   idle: {
     box: "border-hairline bg-surface",
     icon: faCircleQuestion,
     iconClass: "text-gray-400",
-    headline: "No readings yet",
+    headline: "No system status yet",
   },
 };
 
 const SPEED_WORD: Record<Tone, string> = { good: "Fast", warn: "Okay", bad: "Slow" };
-const RELIABILITY_WORD: Record<Tone, string> = { good: "Stable", warn: "Watch", bad: "Unstable" };
+const RELIABILITY_WORD: Record<Tone, string> = { good: "Stable", warn: "Needs watching", bad: "Unstable" };
 
 /**
  * The first thing on the page answers "is anything wrong?": one verdict from
@@ -136,21 +136,21 @@ function StatusBanner({
     setError(null);
     const res = await apiFetch("/api/super-admin/health", { method: "POST" });
     if (res.ok) await onChecked();
-    else setError(((await res.json().catch(() => ({}))) as { error?: string }).error ?? "The checks could not run");
+    else setError(((await res.json().catch(() => ({}))) as { error?: string }).error ?? "The system health check could not run");
     setBusy(false);
   };
 
   const signals: { label: string; value: string; tone: RunTone; verdict: string }[] = [
     {
-      label: "System health",
+      label: "System health status",
       value: health ? `${health.summary.pass ?? 0}/${health.summary.total ?? 0}` : DASH,
       tone: healthVerdict?.tone ?? "idle",
       verdict: health
-        ? `${healthVerdict!.tone === "good" ? "All passing" : healthVerdict!.text} · checked ${ago(health.created_at)}`
+        ? `${healthVerdict!.tone === "good" ? "All checks passing" : healthVerdict!.text} · checked ${ago(health.created_at)}`
         : "Never checked",
     },
     {
-      label: "Reliability · 24 h",
+      label: "Reliability · last 24 hours",
       value: successPct !== null ? formatPct(successPct) : DASH,
       tone: steady ?? "idle",
       verdict: totals?.requests
@@ -158,10 +158,10 @@ function StatusBanner({
         : "No requests yet",
     },
     {
-      label: "Response time · 24 h",
+      label: "Response time · last 24 hours",
       value: totals?.requests ? formatMs(totals.p95_ms) : DASH,
       tone: speed ?? "idle",
-      verdict: totals?.requests ? `${SPEED_WORD[speed!]} · p95, median ${formatMs(totals.p50_ms)}` : "No requests yet",
+      verdict: totals?.requests ? `${SPEED_WORD[speed!]} · 95th percentile; median ${formatMs(totals.p50_ms)}` : "No requests yet",
     },
   ];
 
@@ -188,9 +188,9 @@ function StatusBanner({
                 <p className="text-sm text-gray-600">
                   {stale
                     ? health
-                      ? `The last health check was ${ago(health.created_at)}. Run one for a current reading.`
-                      : "No health check has run yet. Run one to check every connected service."
-                    : "From the latest health check and the last 24 hours of requests."}
+                      ? `The last system health check ran ${ago(health.created_at)}. Check again for the current status.`
+                      : "No system health check has run yet. Run one to test every connected service."
+                    : "Based on the latest system health check and the last 24 hours of requests."}
                 </p>
               </>
             )}
@@ -203,7 +203,7 @@ function StatusBanner({
           className="inline-flex shrink-0 items-center justify-center gap-2 self-start rounded-xl border border-gray-200 bg-surface px-3.5 py-2 text-sm font-medium text-gray-800 transition-colors hover:border-gray-300 hover:bg-subtle disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600/50"
         >
           <FontAwesomeIcon icon={faHeartPulse} className={`h-3.5 w-3.5 text-brand-600 ${busy ? "animate-pulse" : ""}`} />
-          {busy ? "Checking…" : "Run health checks"}
+          {busy ? "Checking system health…" : "Check System Health Status"}
         </button>
       </div>
       {error && <p className="mt-2 text-sm text-rose-700">{error}</p>}
@@ -250,10 +250,10 @@ function LatestChecks({ runs, pending }: { runs: Overview["latest_runs"] | undef
     <section className={`${CARD} p-4 flex flex-col`}>
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="font-semibold text-gray-800">Latest checks</h2>
+          <h2 className="font-semibold text-gray-800">Latest test results</h2>
           <p className="text-xs text-gray-500">The newest run of each test suite</p>
         </div>
-        <CardLink href="/super-admin/tests">All</CardLink>
+        <CardLink href="/super-admin/tests">All system tests</CardLink>
       </div>
       <ul className="mt-2 flex-1 divide-y divide-hairline">
         {RUN_KINDS.map(({ kind, label, anchor }) => {
@@ -314,7 +314,7 @@ function Accounts({ accounts, pending }: { accounts: Overview["accounts"] | unde
               </dd>
             </div>
             <div>
-              <dt className="text-xs text-gray-500">Active users · 7 days</dt>
+              <dt className="text-xs text-gray-500">Active users · last 7 days</dt>
               <dd className="mt-0.5 text-2xl font-bold text-gray-900 tabular-nums">
                 {pending ? <SkeletonText className="mt-1.5 h-6 w-12" /> : accounts ? accounts.active_7d.toLocaleString() : DASH}
                 {accounts && total > 0 && (
@@ -442,7 +442,7 @@ export default function SuperAdminDashboardClient() {
                 </p>
               )}
             </div>
-            <CardLink href="/super-admin/performance">Performance</CardLink>
+            <CardLink href="/super-admin/performance">System performance</CardLink>
           </div>
           {pending ? (
             <SkeletonChartBars height={236} />

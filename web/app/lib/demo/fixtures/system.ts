@@ -13,10 +13,10 @@ export interface DemoTestRun {
 
 const HEALTH = [
   ["db", "Database", "Connected · 38 ms round trip"],
-  ["auth", "Sessions", "Signing and verifying session tokens"],
+  ["auth", "Sign-in sessions", "Signing and verifying session tokens"],
   ["storage", "File storage", "Avatars and library buckets reachable"],
-  ["ml", "ML service", "Model 2026.09.1 loaded · last scored 03:00"],
-  ["dw", "Analytics warehouse", "Refreshed today at 03:05"],
+  ["ml", "ML prediction service", "Model 2026.09.1 loaded · last scored 03:00"],
+  ["dw", "Data warehouse", "Refreshed today at 03:05"],
   ["email", "Email", "SMTP relay accepting mail"],
   ["ai", "AI providers", "Claude Haiku primary · Gemini fallback ready"],
   ["migrations", "Migrations", "All 64 applied"],

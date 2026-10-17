@@ -50,21 +50,21 @@ async function checkWarehouse(supabase: ReturnType<typeof getSupabaseAdmin>): Pr
   }
   const lastRun = (value.data as { etl?: { last_run_at?: string | null } } | null)?.etl?.last_run_at ?? null;
   if (!lastRun) {
-    return { id: 'dw', label: 'Data warehouse', status: 'warn', detail: 'Reachable, but the ETL has never run', duration_ms: ms };
+    return { id: 'dw', label: 'Data warehouse', status: 'warn', detail: 'Reachable, but the ETL has never refreshed it', duration_ms: ms };
   }
   const hours = (Date.now() - new Date(lastRun).getTime()) / 3_600_000;
   return {
     id: 'dw',
     label: 'Data warehouse',
     status: hours > ETL_STALE_HOURS ? 'warn' : 'pass',
-    detail: `Last ETL ${hours < 1 ? 'under an hour' : `${Math.round(hours)} h`} ago`,
+    detail: `Last refreshed by the ETL ${hours < 1 ? 'under an hour' : `${Math.round(hours)} h`} ago`,
     duration_ms: ms,
   };
 }
 
 async function checkMl(): Promise<Check> {
   const url = process.env.ML_SERVICE_URL;
-  if (!url) return { id: 'ml', label: 'ML service', status: 'fail', detail: 'ML_SERVICE_URL is not set' };
+  if (!url) return { id: 'ml', label: 'ML prediction service', status: 'fail', detail: 'ML_SERVICE_URL is not set' };
   const started = performance.now();
   try {
     const res = await fetch(`${url.replace(/\/$/, '')}/health`, {
@@ -73,13 +73,13 @@ async function checkMl(): Promise<Check> {
     });
     const ms = Math.round(performance.now() - started);
     return res.ok
-      ? { id: 'ml', label: 'ML service', status: ms > 5000 ? 'warn' : 'pass', detail: `Healthy (HTTP ${res.status})`, duration_ms: ms }
-      : { id: 'ml', label: 'ML service', status: 'fail', detail: `HTTP ${res.status}`, duration_ms: ms };
+      ? { id: 'ml', label: 'ML prediction service', status: ms > 5000 ? 'warn' : 'pass', detail: `Responding (HTTP ${res.status})`, duration_ms: ms }
+      : { id: 'ml', label: 'ML prediction service', status: 'fail', detail: `HTTP ${res.status}`, duration_ms: ms };
   } catch {
     // A free Render instance sleeps and takes up to a minute to wake.
     return {
       id: 'ml',
-      label: 'ML service',
+      label: 'ML prediction service',
       status: 'warn',
       detail: 'No answer within 10 s; it may be waking from sleep. Run again in a minute.',
       duration_ms: Math.round(performance.now() - started),
@@ -175,9 +175,14 @@ function checkConfig(): Check[] {
     },
     {
       id: 'session',
-      label: 'Session signing',
+      label: 'Sign-in sessions',
       status: secret.length >= 32 ? 'pass' : secret.length >= 16 ? 'warn' : 'fail',
-      detail: secret.length >= 32 ? 'Secret set' : secret.length >= 16 ? 'Secret shorter than 32 characters' : 'Secret missing',
+      detail:
+        secret.length >= 32
+          ? 'SESSION_SECRET is set'
+          : secret.length >= 16
+            ? 'SESSION_SECRET is shorter than 32 characters'
+            : 'SESSION_SECRET is not set',
     },
   ];
 }

@@ -125,7 +125,7 @@ export default function TimeSeriesChart({
   if (n === 0) {
     return (
       <div className="flex items-center justify-center text-sm text-gray-400" style={{ height }}>
-        No requests recorded in this window yet
+        No requests recorded in this time range yet
       </div>
     );
   }

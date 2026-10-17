@@ -395,17 +395,17 @@ function HealthSection({ runs, onRun, loading }: { runs: HealthRun[]; onRun: (ru
     const res = await apiFetch("/api/super-admin/health", { method: "POST" });
     setBusy(false);
     const json = (await res.json().catch(() => ({}))) as { run?: HealthRun; error?: string };
-    if (!res.ok || !json.run) return setError(json.error ?? "The checks could not run");
+    if (!res.ok || !json.run) return setError(json.error ?? "The system health check could not run");
     setPicked(null);
     onRun(json.run);
   };
 
   return (
     <section id="health" className={`${CARD} p-4 sm:p-5 scroll-mt-4`}>
-      <SectionHead icon={faHeartPulse} title="System health checks" subtitle="Is every dependency reachable and configured right now?">
+      <SectionHead icon={faHeartPulse} title="System health checks" subtitle="Tests whether the database, data warehouse, ML service, AI providers, email and sign-in sessions are reachable and set up correctly">
         <button type="button" onClick={run} disabled={busy} className={PRIMARY}>
           <FontAwesomeIcon icon={faPlay} className="w-3 h-3" />
-          {busy ? "Checking…" : "Run checks"}
+          {busy ? "Checking system health…" : "Check System Health Status"}
         </button>
       </SectionHead>
       {error && <p className="text-sm text-rose-700 mb-3">{error}</p>}
@@ -520,19 +520,19 @@ function BenchmarkSection({ runs, onRun, loading }: { runs: BenchRun[]; onRun: (
         {running ? (
           <button type="button" onClick={() => abort.current?.abort()} className={`${BUTTON} border border-rose-200 text-rose-700 hover:bg-rose-50`}>
             <FontAwesomeIcon icon={faStop} className="w-3 h-3" />
-            Stop
+            Stop Load Benchmark
           </button>
         ) : (
           <button type="button" onClick={start} disabled={!targets.length || !levels.length} className={PRIMARY}>
             <FontAwesomeIcon icon={faPlay} className="w-3 h-3" />
-            Run benchmark
+            Run Load Benchmark
           </button>
         )}
       </SectionHead>
 
-      <fieldset disabled={running} aria-label="Benchmark settings" className="flex flex-wrap gap-x-6 gap-y-3 mb-4 text-sm">
+      <fieldset disabled={running} aria-label="Load benchmark settings" className="flex flex-wrap gap-x-6 gap-y-3 mb-4 text-sm">
         <div>
-          <p className="text-xs font-medium text-gray-500 mb-1.5">Targets</p>
+          <p className="text-xs font-medium text-gray-500 mb-1.5">Endpoints to test</p>
           <div className="flex flex-wrap gap-1.5">
             {BENCHMARK_TARGETS.map((t) => (
               <Chip key={t.id} active={targets.includes(t.id)} onClick={() => setTargets(toggle(targets, t.id))}>
@@ -552,7 +552,7 @@ function BenchmarkSection({ runs, onRun, loading }: { runs: BenchRun[]; onRun: (
           </div>
         </div>
         <label>
-          <span className="block text-xs font-medium text-gray-500 mb-1.5">Requests per level</span>
+          <span className="block text-xs font-medium text-gray-500 mb-1.5">Requests per concurrency level</span>
           <select
             value={perLevel}
             onChange={(e) => setPerLevel(Number(e.target.value))}
@@ -592,12 +592,12 @@ function BenchmarkSection({ runs, onRun, loading }: { runs: BenchRun[]; onRun: (
       {loading ? (
         <RunSkeleton />
       ) : !shown ? (
-        !running && <p className="text-sm text-gray-400">No benchmark has been run yet.</p>
+        !running && <p className="text-sm text-gray-400">No load benchmark has been run yet.</p>
       ) : (
         <>
           <p className="text-xs text-gray-500 mb-2">
             {when(shown.created_at)} · {shown.summary.requests.toLocaleString()} requests · {shown.summary.success_pct}%
-            successful · peak {shown.summary.peak_rps} req/s
+            successful · peak {shown.summary.peak_rps} requests/s
           </p>
           {/* Width floors on these tables: on a phone they scroll sideways
               instead of squeezing the bar columns to nothing and cutting off
@@ -606,12 +606,12 @@ function BenchmarkSection({ runs, onRun, loading }: { runs: BenchRun[]; onRun: (
             <table className="w-full min-w-[640px] whitespace-nowrap text-sm">
               <thead className="bg-subtle">
                 <tr>
-                  <th className={`${TH} text-left`}>Target</th>
+                  <th className={`${TH} text-left`}>Endpoint</th>
                   <th className={`${TH} text-right`}>Concurrent users</th>
-                  <th className={`${TH} text-right`}>p50</th>
-                  <th className={`${TH} text-left w-[30%]`}>p95</th>
-                  <th className={`${TH} text-right`}>Req/s</th>
-                  <th className={`${TH} text-right`}>Success</th>
+                  <th className={`${TH} text-right`}>Median (p50)</th>
+                  <th className={`${TH} text-left w-[30%]`}>Slowest 5% (p95)</th>
+                  <th className={`${TH} text-right`}>Requests/s</th>
+                  <th className={`${TH} text-right`}>Success rate</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-hairline">
@@ -653,7 +653,7 @@ function BenchmarkSection({ runs, onRun, loading }: { runs: BenchRun[]; onRun: (
         runs={runs}
         selected={shown}
         onSelect={setPicked}
-        describe={(r) => `worst p95 ${formatMs(r.summary.worst_p95_ms)} · ${r.summary.success_pct}% ok`}
+        describe={(r) => `slowest p95 ${formatMs(r.summary.worst_p95_ms)} · ${r.summary.success_pct}% succeeded`}
       />
     </section>
   );
@@ -688,8 +688,8 @@ function DwSection({ runs, onRun, loading }: { runs: DwRun[]; onRun: (run: TestR
     const res = await apiFetch("/api/super-admin/dw-benchmark", { method: "POST" });
     setBusy(false);
     const json = (await res.json().catch(() => ({}))) as { run?: DwRun; error?: string; pending_migration?: boolean };
-    if (json.pending_migration) return setError("Apply migration 054 to run the warehouse benchmark.");
-    if (!res.ok || !json.run) return setError(json.error ?? "The benchmark could not run");
+    if (json.pending_migration) return setError("Apply migration 054 to run the data warehouse benchmark.");
+    if (!res.ok || !json.run) return setError(json.error ?? "The data warehouse benchmark could not run");
     setPicked(null);
     onRun(json.run);
   };
@@ -701,11 +701,11 @@ function DwSection({ runs, onRun, loading }: { runs: DwRun[]; onRun: (run: TestR
       <SectionHead
         icon={faDatabase}
         title="Data warehouse query benchmark"
-        subtitle="Execution time of the six analytical workloads, measured inside the database"
+        subtitle="How long each of the six analytics queries takes to run, measured inside the database"
       >
         <button type="button" onClick={run} disabled={busy} className={PRIMARY}>
           <FontAwesomeIcon icon={faPlay} className="w-3 h-3" />
-          {busy ? "Running…" : "Run benchmark"}
+          {busy ? "Running benchmark…" : "Run Data Warehouse Benchmark"}
         </button>
       </SectionHead>
       {error && <p className="text-sm text-rose-700 mb-3">{error}</p>}
@@ -725,7 +725,7 @@ function DwSection({ runs, onRun, loading }: { runs: DwRun[]; onRun: (run: TestR
                 <tr>
                   <th className={`${TH} text-left`}>Query</th>
                   <th className={`${TH} text-left w-[40%]`}>Execution time</th>
-                  <th className={`${TH} text-right`}>Rows</th>
+                  <th className={`${TH} text-right`}>Rows returned</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-hairline">
@@ -839,7 +839,7 @@ function SuiteSection({
         {verdict && (
           <span className={`inline-flex items-center gap-1.5 text-sm font-medium ${STATUS[verdict].className}`}>
             <FontAwesomeIcon icon={STATUS[verdict].icon} className="w-4 h-4" />
-            {verdict === "fail" ? `${s!.failed} failing` : verdict === "pass" ? "All passing" : "Nothing ran"}
+            {verdict === "fail" ? `${s!.failed} failing` : verdict === "pass" ? "All passing" : "No tests ran"}
             {live === "interrupted" && <span className="text-gray-500 font-normal">· stopped early</span>}
           </span>
         )}
@@ -907,7 +907,7 @@ function SuiteSection({
           </div>
           <p className="text-xs text-gray-500 mb-3">
             {when(shown.created_at)}
-            {shown.run_by_name && ` · reported as ${shown.run_by_name}`}
+            {shown.run_by_name && ` · reported by ${shown.run_by_name}`}
             {s.base_url && ` · against ${s.base_url}`}
             {s.commit && (
               <>

@@ -13,12 +13,12 @@ test.describe('Admin portal', () => {
     // The sidebar has an "Accounts" section heading too; only look at the page body.
     const outsideNav = page.locator('xpath=//*[not(ancestor-or-self::nav)]');
     for (const label of [
-      'System health',
-      'Reliability · 24 h',
-      'Response time · 24 h',
-      'Latest checks',
+      'System health status',
+      'Reliability · last 24 hours',
+      'Response time · last 24 hours',
+      'Latest test results',
       'Total accounts',
-      'Active users · 7 days',
+      'Active users · last 7 days',
     ]) {
       await expect(page.getByText(label, { exact: true }).and(outsideNav)).toBeVisible();
     }
@@ -89,8 +89,8 @@ test.describe('Admin portal', () => {
   test('health checks cover each AI provider in fallback order', async ({ page }) => {
     await page.goto('/super-admin/tests');
     const section = page.locator('section').filter({ has: page.getByRole('heading', { name: 'System health checks' }) });
-    await section.getByRole('button', { name: 'Run checks' }).click();
-    await expect(section.getByRole('button', { name: 'Run checks' })).toBeEnabled({ timeout: 30_000 });
+    await section.getByRole('button', { name: 'Check System Health Status' }).click();
+    await expect(section.getByRole('button', { name: 'Check System Health Status' })).toBeEnabled({ timeout: 30_000 });
     const labels = ['AI: Claude (primary)', 'AI: Gemini (fallback)', 'AI: OpenRouter (last fallback)'];
     for (const label of labels) await expect(section.getByText(label).first()).toBeVisible();
     const order = await section.locator('li p.font-medium').allInnerTexts();

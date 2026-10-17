@@ -48,20 +48,20 @@ export function runVerdict(kind: RunKind, summary: Summary | null | undefined, n
       if (failed) return { tone: "bad", text: `${failed} failing` };
       const stopped = summary.status === "interrupted" || summary.status === "running";
       if (stopped) return { tone: "warn", text: `Stopped early · ${passed} passed` };
-      return passed ? { tone: "good", text: `${passed} passed` } : { tone: "warn", text: "Nothing ran" };
+      return passed ? { tone: "good", text: `${passed} passed` } : { tone: "warn", text: "No tests ran" };
     }
     case "benchmark": {
       const ok = num(summary, "success_pct");
       return {
         tone: reliabilityTone(ok),
-        text: `${ok}% ok · worst p95 ${formatMs(num(summary, "worst_p95_ms"))}`,
+        text: `${ok}% succeeded · slowest p95 ${formatMs(num(summary, "worst_p95_ms"))}`,
       };
     }
     case "dw_benchmark": {
       const failed = num(summary, "failed");
       const queries = num(summary, "queries");
       if (failed) return { tone: "bad", text: `${failed} of ${queries} queries failed` };
-      return { tone: "good", text: `${plural(queries, "query", "queries")} · ${num(summary, "total_ms")} ms` };
+      return { tone: "good", text: `${plural(queries, "query", "queries")} · ${num(summary, "total_ms")} ms total` };
     }
   }
 }

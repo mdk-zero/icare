@@ -300,7 +300,7 @@ export default function SuperAdminUsersClient() {
       </span>
       {user.force_password_change && (
         <span className="ml-2 text-[11px] text-amber-700" title="Must set a new password at next sign-in">
-          temp password
+          temporary password
         </span>
       )}
     </>
@@ -316,10 +316,10 @@ export default function SuperAdminUsersClient() {
 
   const userActions = (user: Account) => (
     <div className="flex items-center justify-end gap-1">
-      <IconButton label="Edit" icon={faPencil} onClick={() => openEdit(user)} />
+      <IconButton label="Edit account" icon={faPencil} onClick={() => openEdit(user)} />
       <IconButton label="Reset password" icon={faKey} disabled={busy} onClick={() => handleReset(user)} />
       <IconButton
-        label="Delete"
+        label="Delete account"
         icon={faTrash}
         danger
         disabled={busy || me?.id === user.id}
@@ -651,7 +651,7 @@ export default function SuperAdminUsersClient() {
             )}
             {form.role === "faculty" && payload.owner_enabled && (
               <div>
-                <label className={LABEL} htmlFor="acct-owner">Belongs to dean</label>
+                <label className={LABEL} htmlFor="acct-owner">Assigned dean</label>
                 <select
                   id="acct-owner"
                   value={form.admin_id}
@@ -711,7 +711,7 @@ export default function SuperAdminUsersClient() {
           <div className="flex items-center gap-2 p-3 rounded-xl bg-subtle border border-hairline">
             <code className="flex-1 font-mono text-lg text-gray-900 select-all break-all">{revealed.password}</code>
             <IconButton
-              label="Copy"
+              label="Copy password"
               icon={faCopy}
               onClick={() => {
                 void navigator.clipboard?.writeText(revealed.password);
