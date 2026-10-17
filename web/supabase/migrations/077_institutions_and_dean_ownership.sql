@@ -212,8 +212,24 @@ create trigger trg_sections_owner
 
 -- Existing sections and students ---------------------------------------------
 
--- A section belongs to the Dean whose course runs in it, else to the Dean of
--- an instructor attached to it or supervising a group in it.
+-- Rooms and sections record no creator, but the audit trail does: a room or
+-- section belongs to the Dean who created it.
+update public.rooms r
+  set admin_id = a.actor_id
+  from public.audit_logs a
+  join public.users u on u.id = a.actor_id and u.role = 'admin'
+  where a.entity_type = 'rooms' and a.action = 'room.create' and a.entity_id = r.id::text
+    and r.admin_id is null;
+
+update public.sections s
+  set admin_id = a.actor_id
+  from public.audit_logs a
+  join public.users u on u.id = a.actor_id and u.role = 'admin'
+  where a.entity_type = 'sections' and a.action = 'section.create' and a.entity_id = s.id::text
+    and s.admin_id is null;
+
+-- Otherwise a section belongs to the Dean whose course runs in it, else to
+-- the Dean of an instructor attached to it or supervising a group in it.
 update public.sections s
   set admin_id = c.admin_id
   from public.course_offering_sections cos
