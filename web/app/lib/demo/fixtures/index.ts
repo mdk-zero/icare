@@ -8,6 +8,7 @@ import { seedSystem } from "./system";
 import { seedCourses } from "./courses";
 import { seedExcuses, type DemoExcuse } from "./attendance";
 import { seedReturnDemos } from "./return-demos";
+import { seedSupportRequests } from "./support";
 
 /** A fresh copy of every demo table, as it stands before the visitor changes anything. */
 export function seed() {
@@ -30,6 +31,7 @@ export function seed() {
     notifications: [
       ...seedNotifications(people.users, school.assignments, school.scenarios),
       system.accessRequest,
+      ...seedSupportRequests(people.users),
     ] as DemoNotification[],
     audit: seedAudit() as DemoAudit[],
     excuses: seedExcuses(people.users, people.teams, school.assignments, school.completions) as DemoExcuse[],

@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
-import { sendSupportReceipt, sendSupportRequestEmail } from '@/app/lib/auth/email';
+import { sendSupportReceipt, sendSupportRequestEmail, type EmailAttachment } from '@/app/lib/auth/email';
 import { consumeRateLimit } from '@/app/lib/auth/rate-limit';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { CONTACT_EMAIL, DEV_TEAM_EMAILS } from '@/app/lib/dev-team';
 import { roleLabel } from '@/app/lib/role-labels';
 import { SUPPORT_LIMITS, supportTopicLabel } from '@/app/lib/support';
+import { downloadAttachments, fileSupportRequest, parseAttachments } from '@/app/lib/support-requests';
 
 const MAX_REQUESTS = 5;
 const WINDOW_MS = 60 * 60 * 1000; // an hour
@@ -16,9 +17,10 @@ function text(body: Record<string, unknown>, key: keyof typeof SUPPORT_LIMITS): 
 }
 
 /**
- * Help & Support, for every signed-in role on web and mobile: mails the
- * message to the dev team with the sender's account details attached, and
- * mails the sender a copy.
+ * Help & Support, for every signed-in role on web and mobile: files the
+ * message with the Admins (their bell and Support Requests page, where they
+ * answer it), mails it to the dev team with the sender's account details and
+ * any images attached, and mails the sender a copy.
  */
 export async function POST(request: NextRequest) {
   const session = await readSession();
@@ -42,6 +44,8 @@ export async function POST(request: NextRequest) {
   if (subject.length > SUPPORT_LIMITS.subject || message.length > SUPPORT_LIMITS.message) {
     return NextResponse.json({ error: 'That message is too long.' }, { status: 400 });
   }
+  const attachments = parseAttachments(body.attachments, session.uid);
+  if (!attachments) return NextResponse.json({ error: 'Those images could not be attached.' }, { status: 400 });
 
   if (!(await consumeRateLimit(`support:${session.uid}`, MAX_REQUESTS, WINDOW_MS))) {
     return NextResponse.json(
@@ -67,35 +71,66 @@ export async function POST(request: NextRequest) {
     console.error('Support request: could not load the sender profile', err);
   }
 
-  const supportRequest = {
+  // Read back before anything is filed, which also proves each one is stored.
+  let files: EmailAttachment[];
+  try {
+    files = await downloadAttachments(attachments);
+  } catch (err) {
+    console.error('Support request: an image could not be read back', err);
+    return NextResponse.json(
+      { error: "One of your images didn't finish uploading. Remove it, attach it again, and resend." },
+      { status: 400 },
+    );
+  }
+
+  const role = roleLabel(session.role);
+  const requestId = await fileSupportRequest({
+    user_id: session.uid,
     name,
     email: session.email,
-    role: roleLabel(session.role),
+    role,
     section,
     topic,
     subject,
     message,
     client,
-    userAgent: request.headers.get('user-agent')?.slice(0, 300) ?? null,
-  };
+    attachments,
+  });
 
   // contact@ as well, so every request also lands in the Resend Receiving
   // inbox for the domain, beside the developers' own copies.
   const recipients = [...new Set([...DEV_TEAM_EMAILS, CONTACT_EMAIL])];
   try {
-    await sendSupportRequestEmail(recipients, supportRequest);
+    await sendSupportRequestEmail(recipients, {
+      name,
+      email: session.email,
+      role,
+      section,
+      topic,
+      subject,
+      message,
+      client,
+      userAgent: request.headers.get('user-agent')?.slice(0, 300) ?? null,
+      attachments: files,
+      inboxUrl: requestId
+        ? `${request.nextUrl.origin}/super-admin/support?request=${encodeURIComponent(requestId)}`
+        : null,
+    });
   } catch (err) {
     console.error('Support request email failed', err);
-    return NextResponse.json(
-      { error: `Your message could not be sent. Please try again, or email ${CONTACT_EMAIL}.` },
-      { status: 500 },
-    );
+    // Filed with the Admins, it still reaches someone who can answer it.
+    if (!requestId) {
+      return NextResponse.json(
+        { error: `Your message could not be sent. Please try again, or email ${CONTACT_EMAIL}.` },
+        { status: 500 },
+      );
+    }
   }
 
   // The team's copy is what matters; a bounced receipt must not turn a
   // delivered message into an error the sender retries.
   try {
-    await sendSupportReceipt(session.email, CONTACT_EMAIL, supportRequest);
+    await sendSupportReceipt(session.email, CONTACT_EMAIL, { name, subject, message, imageCount: files.length });
   } catch (err) {
     console.error('Support receipt failed', err);
   }

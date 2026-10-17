@@ -154,6 +154,112 @@ route("PATCH", "/api/super-admin/access-requests/:id", (ctx) => {
 route("GET", "/api/super-admin/audit", (ctx) => (adminOnly(ctx) ? auditTrail(ctx, null) : forbidden()));
 
 // ---------------------------------------------------------------------------
+// Support requests: the demo inbox. Replies are kept but never emailed, and
+// images can't be uploaded, so a reply is text only.
+// ---------------------------------------------------------------------------
+
+type SupportReply = { id: string; by: string; by_name: string; message: string; attachments: unknown[]; sent_at: string };
+
+function supportCopy(ctx: Ctx, id: string) {
+  return ctx.db.notifications.find(
+    (n) => n.user_id === ctx.viewer.id && n.data?.kind === "support_request" && n.data.request_id === id,
+  );
+}
+
+route("GET", "/api/super-admin/support", (ctx) => {
+  if (!adminOnly(ctx)) return forbidden();
+  const requests = ctx.db.notifications
+    .filter((n) => n.user_id === ctx.viewer.id && n.data?.kind === "support_request")
+    .map((n) => {
+      const d = n.data as Record<string, unknown>;
+      const replies = (d.replies as SupportReply[] | undefined) ?? [];
+      return {
+        id: d.request_id,
+        status: d.status,
+        name: d.name,
+        email: d.email,
+        role: d.role,
+        topic: d.topic,
+        subject: d.subject,
+        preview: String(d.message ?? "").slice(0, 180),
+        image_count: ((d.attachments as unknown[] | undefined) ?? []).length,
+        reply_count: replies.length,
+        unread: !n.read_at,
+        created_at: n.created_at,
+        last_activity_at: replies[replies.length - 1]?.sent_at ?? n.created_at,
+      };
+    })
+    .sort((a, b) => b.created_at.localeCompare(a.created_at));
+  return { requests };
+});
+
+route("GET", "/api/super-admin/support/:id", (ctx) => {
+  if (!adminOnly(ctx)) return forbidden();
+  const copy = supportCopy(ctx, ctx.params.id);
+  if (!copy) return notFound("Request not found");
+  const markedRead = !copy.read_at;
+  copy.read_at ??= new Date().toISOString();
+  const d = copy.data as Record<string, unknown>;
+  return {
+    marked_read: markedRead,
+    request: {
+      ...d,
+      id: d.request_id,
+      created_at: copy.created_at,
+      resolved_by_name: d.resolved_by_name ?? null,
+      resolved_at: d.resolved_at ?? null,
+    },
+  };
+});
+
+route("PATCH", "/api/super-admin/support/:id", (ctx) => {
+  if (!adminOnly(ctx)) return forbidden();
+  const wanted = ctx.body?.status;
+  if (wanted !== "resolved" && wanted !== "open") return json({ error: "status must be resolved or open" }, 400);
+  const copy = supportCopy(ctx, ctx.params.id);
+  if (!copy) return notFound("Request not found");
+  const d = copy.data as Record<string, unknown>;
+  const replies = (d.replies as SupportReply[] | undefined) ?? [];
+  copy.data =
+    wanted === "resolved"
+      ? { ...d, status: "resolved", resolved_by_name: ctx.viewer.name, resolved_at: new Date().toISOString() }
+      : { ...d, status: replies.length ? "answered" : "open", resolved_by_name: null, resolved_at: null };
+  audit(ctx.db, ctx.viewer, `support_request.${wanted === "resolved" ? "resolved" : "reopened"}`, "notifications", {
+    message: `${wanted === "resolved" ? "Resolved" : "Reopened"} a support request from ${d.name}`,
+  });
+  return { status: copy.data.status, resolved_by_name: copy.data.resolved_by_name ?? null, resolved_at: copy.data.resolved_at ?? null };
+});
+
+route("POST", "/api/super-admin/support/:id/reply", (ctx) => {
+  if (!adminOnly(ctx)) return forbidden();
+  const message = typeof ctx.body?.message === "string" ? ctx.body.message.trim() : "";
+  if (!message) return json({ error: "Write a reply first." }, 400);
+  const copy = supportCopy(ctx, ctx.params.id);
+  if (!copy) return notFound("Request not found");
+  const d = copy.data as Record<string, unknown>;
+  const now = new Date().toISOString();
+  const reply: SupportReply = { id: newId(), by: ctx.viewer.id, by_name: ctx.viewer.name, message, attachments: [], sent_at: now };
+  const resolve = ctx.body?.resolve === true;
+  copy.data = {
+    ...d,
+    replies: [...((d.replies as SupportReply[] | undefined) ?? []), reply],
+    status: resolve ? "resolved" : "answered",
+    resolved_by_name: resolve ? ctx.viewer.name : null,
+    resolved_at: resolve ? now : null,
+  };
+  audit(ctx.db, ctx.viewer, "support_request.replied", "notifications", { message: `Replied to a support request from ${d.name}` });
+  return {
+    reply,
+    status: copy.data.status,
+    resolved_by_name: copy.data.resolved_by_name,
+    resolved_at: copy.data.resolved_at,
+    sent_to: d.email,
+    notice: "Saved on the request. This is a demo, so no email was sent.",
+  };
+});
+
+
+// ---------------------------------------------------------------------------
 // Metrics: a plausible day-and-night traffic curve, the same every time for a moment
 // ---------------------------------------------------------------------------
 

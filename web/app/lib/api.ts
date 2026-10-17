@@ -1278,6 +1278,8 @@ export interface FacultyNotification {
   access_request?: AccessRequestInfo;
   /** Set on an admin's copy of a faculty request to change a saved grade. */
   grade_edit_request?: GradeEditRequestInfo;
+  /** Where clicking it goes: a support request opens on Support Requests. */
+  href?: string;
 }
 
 export interface GradeEditRequestInfo {
@@ -2731,6 +2733,10 @@ export function toFacultyNotification(n: ServerNotification): FacultyNotificatio
     student_id: typeof n.data?.student_id === 'string' ? n.data.student_id : undefined,
     access_request: toAccessRequest(n.data),
     grade_edit_request: toGradeEditRequest(n.data),
+    href:
+      n.data?.kind === 'support_request' && typeof n.data.request_id === 'string'
+        ? `/super-admin/support?request=${encodeURIComponent(n.data.request_id)}`
+        : undefined,
   };
 }
 

@@ -39,6 +39,7 @@ route("POST", "/api/users/change-password", notInDemo);
 // A demo account has no inbox for the team to reply to; the page shows the
 // address to write to instead.
 route("POST", "/api/support", notInDemo);
+route("POST", "/api/support/attachments", notInDemo);
 
 // --- Plumbing ----------------------------------------------------------------
 

@@ -263,6 +263,10 @@ export default function NotificationsPopover({
                           if (notification.access_request?.status === "pending") {
                             setOpen(false);
                             openAccessRequest(notification.id, notification.access_request);
+                          } else if (notification.href) {
+                            void markRead(notification.id);
+                            setOpen(false);
+                            router.push(notification.href);
                           } else {
                             void markRead(notification.id);
                           }

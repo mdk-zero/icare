@@ -19,6 +19,9 @@ type SmtpConfig = {
 
 let transporter: Transporter | null = null;
 
+/** A file sent with a message: the images on a support request or reply. */
+export type EmailAttachment = { filename: string; content: Buffer; contentType: string };
+
 function getSmtpConfig(): SmtpConfig {
   const required = [
     "SMTP_HOST",
@@ -112,7 +115,9 @@ async function sendViaResend(message: {
   subject: string;
   html: string;
   replyTo?: string;
+  attachments?: EmailAttachment[];
 }): Promise<void> {
+  const attachments = message.attachments ?? [];
   const response = await fetch(RESEND_ENDPOINT, {
     method: 'POST',
     headers: {
@@ -125,8 +130,18 @@ async function sendViaResend(message: {
       subject: message.subject,
       html: message.html,
       ...(message.replyTo ? { reply_to: message.replyTo } : {}),
+      ...(attachments.length
+        ? {
+            attachments: attachments.map((a) => ({
+              filename: a.filename,
+              content: a.content.toString('base64'),
+              content_type: a.contentType,
+            })),
+          }
+        : {}),
     }),
-    signal: AbortSignal.timeout(10000),
+    // A few megabytes of images take longer to hand over than plain text.
+    signal: AbortSignal.timeout(attachments.length ? 30000 : 10000),
   });
 
   if (response.ok) return;
@@ -190,8 +205,9 @@ async function sendEmail(options: {
   html: string;
   /** Where a reply goes — the person who filled in a form, not the sender. */
   replyTo?: string;
+  attachments?: EmailAttachment[];
 }): Promise<void> {
-  const { to, subject, html, replyTo } = options;
+  const { to, subject, html, replyTo, attachments } = options;
 
   const recipients = Array.isArray(to) ? to : [to];
   if (recipients.length === 0 || !recipients.every(isValidEmail)) {
@@ -217,11 +233,11 @@ async function sendEmail(options: {
   const from = getFromHeader();
 
   if (provider === 'resend') {
-    await sendViaResend({ from, to, subject, html, replyTo });
+    await sendViaResend({ from, to, subject, html, replyTo, attachments });
     return;
   }
 
-  await getTransporter().sendMail({ from, to, subject, html, replyTo });
+  await getTransporter().sendMail({ from, to, subject, html, replyTo, attachments });
 }
 
 function buildOtpHtml(otp: string, name: string, heading: string, bodyText: string): string {
@@ -659,7 +675,16 @@ export type SupportRequest = {
   /** Where it was sent from: "Web portal", "Mobile app · android". */
   client: string | null;
   userAgent: string | null;
+  /** The images sent as proof, attached to the team's copy. */
+  attachments: EmailAttachment[];
+  /** The Admin portal's Support Requests page, opened on this request. */
+  inboxUrl: string | null;
 };
+
+function imageCountLine(count: number, verb: "attached" | "received" = "attached"): string {
+  if (count === 0) return "";
+  return `<p style="font-size: 13px; color: #64748b; margin: 12px 0 0;">${count} image${count === 1 ? "" : "s"} ${verb}.</p>`;
+}
 
 /**
  * A signed-in user writing to the team from Help & Support. Unlike the public
@@ -668,7 +693,10 @@ export type SupportRequest = {
  */
 export async function sendSupportRequestEmail(to: string[], request: SupportRequest): Promise<void> {
   if (shouldSkipSending()) {
-    console.log(`[DEV] Support request from ${request.email} (${request.role}): ${request.topic} · ${request.subject}`);
+    console.log(
+      `[DEV] Support request from ${request.email} (${request.role}): ${request.topic} · ${request.subject}` +
+        (request.attachments.length ? ` · ${request.attachments.length} image(s)` : ""),
+    );
     return;
   }
 
@@ -676,11 +704,15 @@ export async function sendSupportRequestEmail(to: string[], request: SupportRequ
     `<p style="margin: 0 0 4px;"><strong>${label}:</strong> ${value}</p>`;
   const email = htmlEscape(request.email);
   const message = htmlEscape(request.message).replace(/\n/g, "<br/>");
+  const answer = request.inboxUrl
+    ? `Answer it from <a href="${htmlEscape(request.inboxUrl)}" style="color: #0d7377;">Support Requests</a> in the Admin portal, so the reply is kept with the request, or reply to this email to answer them directly.`
+    : "Reply to this email to answer them directly.";
 
   await sendEmail({
     to,
     replyTo: request.email,
     subject: `iCARE++ support (${request.role}): ${request.subject}`,
+    attachments: request.attachments,
     html: `
     <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 32px; color: #0f172a;">
       <h2 style="color: #0d7377; margin: 0 0 16px;">${htmlEscape(request.topic)}</h2>
@@ -690,8 +722,9 @@ export async function sendSupportRequestEmail(to: string[], request: SupportRequ
       ${request.client ? row("Sent from", htmlEscape(request.client)) : ""}
       <p style="margin: 0 0 16px;"><strong>Subject:</strong> ${htmlEscape(request.subject)}</p>
       <div style="background: #f0f9fa; border: 1px solid #d0ebea; border-radius: 12px; padding: 16px; line-height: 1.6;">${message}</div>
+      ${imageCountLine(request.attachments.length)}
       ${request.userAgent ? `<p style="font-size: 12px; color: #94a3b8; margin-top: 16px;">${htmlEscape(request.userAgent)}</p>` : ""}
-      <p style="font-size: 13px; color: #64748b; margin-top: 24px;">Reply to this email to answer them directly.</p>
+      <p style="font-size: 13px; color: #64748b; margin-top: 24px;">${answer}</p>
     </div>`,
   });
 }
@@ -704,7 +737,7 @@ export async function sendSupportRequestEmail(to: string[], request: SupportRequ
 export async function sendSupportReceipt(
   to: string,
   replyTo: string,
-  request: Pick<SupportRequest, "name" | "subject" | "message">,
+  request: Pick<SupportRequest, "name" | "subject" | "message"> & { imageCount: number },
 ): Promise<void> {
   if (shouldSkipSending()) {
     console.log(`[DEV] Support receipt to ${to}`);
@@ -721,6 +754,51 @@ export async function sendSupportReceipt(
       <p style="line-height: 1.6; margin: 0 0 12px;">Hi ${htmlEscape(request.name)}, thanks for writing in. We'll reply to this address. If there's anything to add, just reply to this email.</p>
       <p style="margin: 16px 0 6px;"><strong>${htmlEscape(request.subject)}</strong></p>
       <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; line-height: 1.6; color: #334155;">${htmlEscape(request.message).replace(/\n/g, "<br/>")}</div>
+      ${imageCountLine(request.imageCount, "received")}
+    </div>`,
+  });
+}
+
+/**
+ * An Admin's answer to a Help & Support request, written in the Admin portal.
+ * Goes only to the account that asked, with the Admin's own images attached
+ * and the original message quoted underneath so the thread reads on its own.
+ */
+export async function sendSupportReply(
+  to: string,
+  replyTo: string,
+  reply: {
+    name: string;
+    subject: string;
+    message: string;
+    adminName: string;
+    originalMessage: string;
+    attachments: EmailAttachment[];
+  },
+): Promise<void> {
+  if (shouldSkipSending()) {
+    console.log(
+      `[DEV] Support reply to ${to}: ${reply.subject}` +
+        (reply.attachments.length ? ` · ${reply.attachments.length} image(s)` : ""),
+    );
+    return;
+  }
+
+  await sendEmail({
+    to,
+    replyTo,
+    subject: `Re: ${reply.subject}`,
+    attachments: reply.attachments,
+    html: `
+    <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 32px; color: #0f172a;">
+      <h2 style="color: #0d7377; margin: 0 0 16px;">The iCARE++ team replied</h2>
+      <p style="line-height: 1.6; margin: 0 0 12px;">Hi ${htmlEscape(reply.name)},</p>
+      <div style="line-height: 1.6; margin: 0 0 12px;">${htmlEscape(reply.message).replace(/\n/g, "<br/>")}</div>
+      <p style="line-height: 1.6; margin: 0 0 4px; color: #334155;">${htmlEscape(reply.adminName)}<br/><span style="color: #64748b;">iCARE++ Support</span></p>
+      ${imageCountLine(reply.attachments.length)}
+      <p style="font-size: 13px; color: #64748b; margin: 24px 0 6px;">Your message, <strong>${htmlEscape(reply.subject)}</strong>:</p>
+      <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; line-height: 1.6; color: #334155;">${htmlEscape(reply.originalMessage).replace(/\n/g, "<br/>")}</div>
+      <p style="font-size: 13px; color: #64748b; margin-top: 24px;">Need anything else? Reply to this email, or send a new message from Help &amp; Support in the app.</p>
     </div>`,
   });
 }

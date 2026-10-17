@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { useNotifications } from "../../lib/notifications-live";
 import { FacultyNotification } from "../../lib/api";
 import { SkeletonNotificationItem } from "../../components/skeletons";
@@ -9,6 +10,7 @@ import {
   faBell,
   faCheck,
   faCheckDouble,
+  faChevronRight,
   faCircleCheck,
   faCircleInfo,
   faTriangleExclamation,
@@ -240,6 +242,18 @@ export default function FacultyNotificationsClient({
                               <div className="mt-2.5">
                                 <GradeEditRequestActions request={notification.grade_edit_request} />
                               </div>
+                            )}
+                            {notification.href && (
+                              <Link
+                                href={notification.href}
+                                onClick={() => {
+                                  if (unread) void markRead(notification.id);
+                                }}
+                                className="mt-2.5 inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-brand-700"
+                              >
+                                Open Request
+                                <FontAwesomeIcon icon={faChevronRight} className="h-3 w-3" />
+                              </Link>
                             )}
                             <div className="mt-2 flex items-center gap-2">
                               <span className="text-xs text-foreground/40">

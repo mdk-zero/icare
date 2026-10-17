@@ -12,13 +12,14 @@ import {
 import PageHeader from "./PageHeader";
 import { EcgLoader } from "./EcgLoader";
 import { toast } from "./Toast";
+import { SupportImagePicker, useSupportImages } from "./SupportImagePicker";
 import { apiFetch, getCurrentUser } from "../lib/api";
 import { SUPPORT_LIMITS, SUPPORT_TOPICS, type SupportTopic } from "../lib/support";
 
 const TIPS = [
   "What you were trying to do, what happened, and what you expected instead.",
   "The page and the student, course, or Patient Case it involves.",
-  "Any error message, word for word.",
+  "Any error message, word for word, or a screenshot of it.",
 ];
 
 const inputClass =
@@ -26,7 +27,8 @@ const inputClass =
 
 /**
  * Help & Support for the web portals: writes to the iCARE++ team, who get
- * the sender's account details with it and reply by email.
+ * the sender's account details and any images with it, and answer from the
+ * Admin portal by email.
  */
 export default function HelpCenter({ contactEmail }: { contactEmail: string }) {
   // The portal layouts render nothing until the session is known, so this
@@ -37,8 +39,15 @@ export default function HelpCenter({ contactEmail }: { contactEmail: string }) {
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
+  const images = useSupportImages();
 
-  const canSend = !!topic && subject.trim().length > 0 && message.trim().length > 0 && !sending;
+  const canSend =
+    !!topic &&
+    subject.trim().length > 0 &&
+    message.trim().length > 0 &&
+    !sending &&
+    !images.uploading &&
+    !images.failed;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,7 +57,13 @@ export default function HelpCenter({ contactEmail }: { contactEmail: string }) {
       const res = await apiFetch("/api/support", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topic, subject, message, client: "Web portal" }),
+        body: JSON.stringify({
+          topic,
+          subject,
+          message,
+          attachments: images.attachments,
+          client: "Web portal",
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Your message could not be sent.");
@@ -56,6 +71,7 @@ export default function HelpCenter({ contactEmail }: { contactEmail: string }) {
       setTopic(null);
       setSubject("");
       setMessage("");
+      images.clear();
       toast("Message sent to the iCARE++ team.");
     } catch (err) {
       toast(err instanceof Error ? err.message : "Your message could not be sent.", "error");
@@ -91,7 +107,7 @@ export default function HelpCenter({ contactEmail }: { contactEmail: string }) {
                 onClick={() => setSent(false)}
                 className="mt-1 rounded-lg border border-gray-200 bg-surface px-4 py-2 text-sm font-semibold text-gray-700 transition-colors hover:border-gray-300 hover:bg-gray-50"
               >
-                Write another message
+                Write Another Message
               </button>
             </div>
           ) : (
@@ -155,11 +171,19 @@ export default function HelpCenter({ contactEmail }: { contactEmail: string }) {
                   id="support-message"
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
+                  onPaste={images.onPaste}
                   maxLength={SUPPORT_LIMITS.message}
                   rows={8}
                   placeholder="Tell us what's going on"
                   className={`${inputClass} resize-y leading-relaxed`}
                 />
+              </div>
+
+              <div>
+                <p className="mb-1.5 block text-sm font-medium text-gray-700">
+                  Images <span className="font-normal text-gray-400">(optional)</span>
+                </p>
+                <SupportImagePicker images={images} disabled={sending} />
               </div>
 
               <div className="flex flex-col-reverse gap-3 border-t border-hairline pt-4 sm:flex-row sm:items-center sm:justify-between">
@@ -182,7 +206,7 @@ export default function HelpCenter({ contactEmail }: { contactEmail: string }) {
                   ) : (
                     <FontAwesomeIcon icon={faPaperPlane} className="h-3.5 w-3.5" />
                   )}
-                  {sending ? "Sending…" : "Send message"}
+                  {sending ? "Sending…" : images.uploading ? "Uploading images…" : "Send Message"}
                 </button>
               </div>
             </form>
