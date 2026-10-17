@@ -46,6 +46,16 @@ const CHIP: Record<AttendanceStatus, string> = {
   no_deadline: "bg-gray-100 text-gray-600",
 };
 
+/** A quiz or case presentation is due; a patient case or Return Demonstration is performed on its date. */
+const dateLine = (r: Pick<AttendanceRow, "kind" | "deadline">) =>
+  r.kind === "scenario"
+    ? r.deadline
+      ? `Performs on ${when(r.deadline)}`
+      : "No date of performance"
+    : r.deadline
+      ? `Due ${when(r.deadline)}`
+      : "No deadline";
+
 const when = (iso: string) =>
   new Date(iso).toLocaleString([], { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
 
@@ -130,7 +140,7 @@ export default function AttendanceTab({ studentId, studentName }: { studentId: s
                   {r.title} <span className="font-normal text-gray-400">· {kind.label}</span>
                 </p>
                 <p className="text-xs text-gray-500">
-                  {r.deadline ? `Due ${when(r.deadline)}` : "No deadline"}
+                  {dateLine(r)}
                   {r.done_at && ` · Done ${when(r.done_at)}`}
                 </p>
                 {r.excuse && (
@@ -245,7 +255,7 @@ function ExcuseDialog({
         >
           <div className="text-sm">
             <p className="font-semibold text-gray-800">{row.title}</p>
-            <p className="text-gray-500">{row.deadline ? `Due ${when(row.deadline)}` : "No deadline"} · nothing done by then</p>
+            <p className="text-gray-500">{dateLine(row)} · nothing done by then</p>
           </div>
           <div>
             <label htmlFor="excuse-reason" className="mb-1.5 block text-sm font-semibold text-gray-700">
