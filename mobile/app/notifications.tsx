@@ -131,7 +131,12 @@ export default function NotificationsScreen() {
       )}
 
       {notifications.map((notification) => {
-        const accent = TYPE_ACCENT[notification.type] ?? { ...Accent.slate, icon: 'notifications' as const, label: 'Other' };
+        // The team's answer to a Help & Support message is a 'system' row;
+        // it gets its own label so it doesn't read as an app announcement.
+        const accent =
+          notification.data?.kind === 'support_update'
+            ? { ...Accent.teal, icon: 'help-buoy' as const, label: 'Support' }
+            : (TYPE_ACCENT[notification.type] ?? { ...Accent.slate, icon: 'notifications' as const, label: 'Other' });
         const isUnread = !notification.read_at;
 
         return (
