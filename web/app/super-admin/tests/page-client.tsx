@@ -22,8 +22,9 @@ import { usePageData } from "@/app/lib/use-page-data";
 import { SkeletonText } from "../../components/skeletons";
 import { MODEL_EVAL_DATASET, MODEL_EVAL_SNAPSHOT } from "@/app/lib/model-eval-snapshot";
 import PageHeader from "../../components/PageHeader";
-import { CARD, MigrationPending } from "../ui";
+import { CARD, MigrationPending, StatusText } from "../ui";
 import { formatMs } from "../metrics";
+import { RUN_KINDS, STALE_RUN_MS, ago, runVerdict, type RunKind, type RunVerdict } from "../run-status";
 import {
   BENCHMARK_TARGETS,
   CONCURRENCY_LEVELS,
@@ -101,16 +102,13 @@ interface RunsPayload {
 /** Poll often while a suite is running, and gently otherwise to notice a new one. */
 const POLL_LIVE_MS = 2000;
 const POLL_IDLE_MS = 5000;
-/** Playwright's per-test timeout is 45 s; a run silent for longer than this has died. */
-const STALE_MS = 2 * 60_000;
-
 type LiveState = "running" | "interrupted" | null;
 
 function liveState(run: SuiteRun, now: number): LiveState {
   const { status, updated_at } = run.summary;
   if (status === "interrupted") return "interrupted";
   if (status !== "running") return null;
-  return updated_at && now - Date.parse(updated_at) > STALE_MS ? "interrupted" : "running";
+  return updated_at && now - Date.parse(updated_at) > STALE_RUN_MS ? "interrupted" : "running";
 }
 
 const STATUS: Record<Status, { icon: IconDefinition; className: string; label: string }> = {
@@ -188,6 +186,15 @@ export default function TestsClient() {
     };
   }, [anyLive, pending, loaded, loadedAt, setData]);
 
+  // A link from the dashboard (#warehouse, say) jumps while the sections are
+  // still skeletons; once the runs fill them in, the target has moved down.
+  // Jump again after that first load.
+  useEffect(() => {
+    if (!loaded) return;
+    const target = window.location.hash ? document.getElementById(window.location.hash.slice(1)) : null;
+    target?.scrollIntoView({ block: "start" });
+  }, [loaded]);
+
   const ofKind = <T extends TestRun>(kind: TestRun["kind"]) => runs.filter((r) => r.kind === kind) as T[];
 
   return (
@@ -202,6 +209,7 @@ export default function TestsClient() {
           <MigrationPending />
         </div>
       )}
+      <SuiteSummary runs={runs} now={now} loading={!loaded} />
       <div className="space-y-5">
         <HealthSection runs={ofKind<HealthRun>("health")} onRun={addRun} loading={!loaded} />
         <SuiteSection
@@ -229,6 +237,64 @@ export default function TestsClient() {
         <MlSection />
       </div>
     </div>
+  );
+}
+
+const SUITE_ICONS: Record<RunKind, IconDefinition> = {
+  health: faHeartPulse,
+  e2e: faDisplay,
+  api: faCode,
+  benchmark: faTruckFast,
+  dw_benchmark: faDatabase,
+};
+
+/** Each suite's latest outcome in one place, every tile a jump to its section below. */
+function SuiteSummary({ runs, now, loading }: { runs: TestRun[]; now: number; loading: boolean }) {
+  const bestF1 = Math.max(...Object.values(MODEL_EVAL_SNAPSHOT).map((m) => m.f1));
+  const items: { key: string; label: string; anchor: string; icon: IconDefinition; verdict: RunVerdict; meta: string }[] = [
+    ...RUN_KINDS.map(({ kind, label, anchor }) => {
+      const run = runs.find((r) => r.kind === kind);
+      return {
+        key: kind,
+        label,
+        anchor,
+        icon: SUITE_ICONS[kind],
+        verdict: runVerdict(kind, run?.summary as Record<string, number | string | null> | undefined, now),
+        meta: run ? ago(run.created_at, now) : "Never run",
+      };
+    }),
+    {
+      key: "models",
+      label: "Prediction models",
+      anchor: "models",
+      icon: faRobot,
+      verdict: { tone: "idle", text: `Best F1 ${(bestF1 * 100).toFixed(1)}%` },
+      meta: "Offline snapshot",
+    },
+  ];
+  return (
+    <nav aria-label="Test suites" className="mb-5 grid grid-cols-2 gap-2 md:grid-cols-3 2xl:grid-cols-6">
+      {items.map((item) => (
+        <a
+          key={item.key}
+          href={`#${item.anchor}`}
+          className={`${CARD} flex min-w-0 flex-col gap-1 p-3 transition-colors hover:border-gray-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600/50`}
+        >
+          <span className="flex items-start gap-2 text-xs font-medium text-gray-600">
+            <FontAwesomeIcon icon={item.icon} className="mt-px h-3.5 w-3.5 shrink-0 text-brand-600" />
+            <span className="min-w-0">{item.label}</span>
+          </span>
+          {loading ? (
+            <SkeletonText className="my-0.5 h-4 w-24" />
+          ) : (
+            <StatusText tone={item.verdict.tone} className="text-sm font-semibold">
+              {item.verdict.text}
+            </StatusText>
+          )}
+          <span className="text-[11px] text-gray-400">{loading ? "\u00a0" : item.meta}</span>
+        </a>
+      ))}
+    </nav>
   );
 }
 
@@ -335,7 +401,7 @@ function HealthSection({ runs, onRun, loading }: { runs: HealthRun[]; onRun: (ru
   };
 
   return (
-    <section className={`${CARD} p-4 sm:p-5`}>
+    <section id="health" className={`${CARD} p-4 sm:p-5 scroll-mt-4`}>
       <SectionHead icon={faHeartPulse} title="System health checks" subtitle="Is every dependency reachable and configured right now?">
         <button type="button" onClick={run} disabled={busy} className={PRIMARY}>
           <FontAwesomeIcon icon={faPlay} className="w-3 h-3" />
@@ -445,7 +511,7 @@ function BenchmarkSection({ runs, onRun, loading }: { runs: BenchRun[]; onRun: (
   const totalRequests = targets.length * levels.length * perLevel;
 
   return (
-    <section className={`${CARD} p-4 sm:p-5`}>
+    <section id="load" className={`${CARD} p-4 sm:p-5 scroll-mt-4`}>
       <SectionHead
         icon={faTruckFast}
         title="Load benchmark"
@@ -631,7 +697,7 @@ function DwSection({ runs, onRun, loading }: { runs: DwRun[]; onRun: (run: TestR
   const maxMs = shown ? Math.max(1, ...shown.results.map((r) => Number(r.duration_ms ?? 0))) : 1;
 
   return (
-    <section className={`${CARD} p-4 sm:p-5`}>
+    <section id="warehouse" className={`${CARD} p-4 sm:p-5 scroll-mt-4`}>
       <SectionHead
         icon={faDatabase}
         title="Data warehouse query benchmark"
@@ -757,7 +823,7 @@ function SuiteSection({
   const planned = s?.planned ?? null;
 
   return (
-    <section className={`${CARD} p-4 sm:p-5`} aria-labelledby={`suite-${kind}`}>
+    <section id={kind} className={`${CARD} p-4 sm:p-5 scroll-mt-4`} aria-labelledby={`suite-${kind}`}>
       <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
         <div className="flex items-start gap-3">
           <span className="w-9 h-9 rounded-xl bg-brand-600/10 text-brand-600 flex items-center justify-center shrink-0">
@@ -925,7 +991,7 @@ function MlSection() {
     ["rocAuc", "ROC-AUC"],
   ] as const;
   return (
-    <section className={`${CARD} p-4 sm:p-5`}>
+    <section id="models" className={`${CARD} p-4 sm:p-5 scroll-mt-4`}>
       <SectionHead
         icon={faRobot}
         title="Risk-prediction model evaluation"

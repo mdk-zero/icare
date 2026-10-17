@@ -12,7 +12,14 @@ test.describe('Admin portal', () => {
     await expect(page.getByRole('heading', { name: 'System Dashboard' })).toBeVisible();
     // The sidebar has an "Accounts" section heading too; only look at the page body.
     const outsideNav = page.locator('xpath=//*[not(ancestor-or-self::nav)]');
-    for (const label of ['Accounts', 'Active users · 7 days', 'Response time · 24 h', 'Reliability · 24 h', 'System Health']) {
+    for (const label of [
+      'System health',
+      'Reliability · 24 h',
+      'Response time · 24 h',
+      'Latest checks',
+      'Total accounts',
+      'Active users · 7 days',
+    ]) {
       await expect(page.getByText(label, { exact: true }).and(outsideNav)).toBeVisible();
     }
   });

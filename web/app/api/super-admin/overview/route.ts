@@ -21,7 +21,8 @@ export async function GET() {
       .from('system_test_runs')
       .select('id, kind, created_at, summary')
       .order('created_at', { ascending: false })
-      .limit(30),
+      // Enough that a burst of health checks doesn't push the latest test suite out.
+      .limit(60),
     supabase.rpc('super_admin_ai_usage', { p_since: since24h }),
     supabase.rpc('super_admin_ai_usage', { p_since: since30d }),
   ]);
@@ -68,6 +69,8 @@ export async function GET() {
     metrics: metrics.error ? null : { ...(metrics.data as object), since: since24h, bucket: 'hour' },
     latest_runs: {
       health: latest('health'),
+      e2e: latest('e2e'),
+      api: latest('api'),
       benchmark: latest('benchmark'),
       dw_benchmark: latest('dw_benchmark'),
     },
