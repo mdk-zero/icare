@@ -8,7 +8,6 @@ import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { useApiData, allCached } from '@/hooks/useApiData';
 import { fetchScenarioAssignments, fetchScenarioTasks } from '@/lib/api';
-import { returnDemoStatus } from '@/lib/return-demos';
 import { TASK_RATING_BADGE, TASK_RATING_LABEL } from '@/lib/task-ratings';
 
 /** How often an open Return Demonstration re-checks for the instructor's grades. */
@@ -73,10 +72,10 @@ export default function ReturnDemoScreen() {
     );
   }
 
-  const status = returnDemoStatus({ ...assignment, ...(taskResult?.assignment ?? {}) }, tasks);
   const score = taskResult?.assignment.score ?? assignment.score;
-  const deadline = assignment.deadline
-    ? new Date(assignment.deadline).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+  // The day they perform it, not a deadline.
+  const performOn = assignment.deadline
+    ? new Date(assignment.deadline).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
     : null;
 
   return (
@@ -85,14 +84,9 @@ export default function ReturnDemoScreen() {
       contentContainerStyle={styles.content}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} colors={[Palette.primary]} tintColor={Palette.primary} />}
     >
-      <View style={styles.header}>
-        <Badge label="Return Demonstration" variant="info" />
-        <Badge label={status.label} variant={status.variant} />
-        {assignment.required && !completed ? <Badge label="Required" variant="danger" /> : null}
-      </View>
       <Text style={styles.title}>{assignment.scenario_title}</Text>
       <Text style={styles.subtitle}>
-        {deadline ? `Due ${deadline} · ` : ''}
+        {performOn ? `Perform on ${performOn} · ` : ''}
         {tasks.length} skill{tasks.length === 1 ? '' : 's'} to demonstrate
       </Text>
 
@@ -100,12 +94,12 @@ export default function ReturnDemoScreen() {
         <Card style={styles.resultCard}>
           <ScoreRing score={score} size={64} label="Score" color={Palette.primary} />
           <Text style={styles.resultText}>
-            Graded by your instructor. Steps marked N/A aren&apos;t counted in your score.
+            Graded by your instructor. See how you did on each step below.
           </Text>
         </Card>
       ) : (
         <Card style={styles.prepareCard}>
-          <Ionicons name="hand-left-outline" size={18} color={Accent.blue.fg} />
+          <Ionicons name="hand-left-outline" size={18} color={Accent.teal.fg} />
           <Text style={styles.prepareText}>
             You&apos;ll demonstrate each skill to your instructor, step by step. Read the steps below to prepare.
           </Text>

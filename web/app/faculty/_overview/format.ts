@@ -59,6 +59,14 @@ export function dueIn(iso: string): string {
   return `due in ${offset} days`;
 }
 
+/** A patient case or Return Demonstration is performed on its date, not due by it. */
+export function performsIn(iso: string): string {
+  const offset = dayOffset(iso);
+  if (offset <= 0) return "performs today";
+  if (offset === 1) return "performs tomorrow";
+  return `performs in ${offset} days`;
+}
+
 export function greeting(now = new Date()): string {
   const hour = now.getHours();
   if (hour < 12) return "Good morning";

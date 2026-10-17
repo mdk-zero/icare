@@ -209,8 +209,8 @@ export default function AssignmentList({
                     : a.submitted_at
                       ? `Submitted ${formatWhen(a.submitted_at)}`
                       : a.deadline
-                        ? `Due ${formatDay(a.deadline)}`
-                        : "Not submitted"}
+                        ? `Performs on ${formatDay(a.deadline)}`
+                        : "No date of performance"}
                 </p>
               </button>
             );

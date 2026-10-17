@@ -85,6 +85,8 @@ export default function NotificationsScreen() {
     } else if (kind === 'scenario' && typeof assignment_id === 'string') {
       router.push({ pathname: '/clinic/assignment/[id]', params: { id: assignment_id, gate: 'wait' } });
     }
+    // A Return Demonstration opens on its skills' checklists.
+    if (kind === 'return_demo' && typeof assignment_id === 'string') router.push(`/retdem/${assignment_id}`);
   };
 
   return (

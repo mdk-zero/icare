@@ -127,8 +127,9 @@ export default function ReviewWorkspace({
     [allAssignments, scenarioId],
   );
   const narrowedTitle = scenarioId ? allAssignments.find((a) => a.scenario_id === scenarioId)?.scenario_title ?? null : null;
-  // One patient case: the page is about it, so its title and description head the page.
-  const caseHeader = kind === "patient_case" && !!scenarioId;
+  // One patient case or Return Demonstration: the page is about it, so its
+  // title and description head the page.
+  const caseHeader = !!scenarioId;
   const { data: caseData } = usePageData(caseHeader ? `scenario:${scenarioId}` : null, () => fetchScenarioById(scenarioId!));
 
   /** One row per student, so the queue can be searched/picked before any
@@ -252,10 +253,13 @@ export default function ReviewWorkspace({
           icon: <FontAwesomeIcon icon={faClipboardCheck} className="h-3.5 w-3.5" />,
           label: copy.crumb,
         }}
-        title={caseHeader ? (caseData?.title ?? narrowedTitle ?? "Patient case") : copy.title}
+        title={caseHeader ? (caseData?.title ?? narrowedTitle ?? copy.title) : copy.title}
         subtitle={
           caseHeader
-            ? caseData?.description || "Rate each student's demonstration of this patient case, then save the grade."
+            ? caseData?.description ||
+              (kind === "return_demo"
+                ? "Rate each student's demonstration of these skills, step by step, then save the grade."
+                : "Rate each student's demonstration of this patient case, then save the grade.")
             : copy.subtitle
         }
       />

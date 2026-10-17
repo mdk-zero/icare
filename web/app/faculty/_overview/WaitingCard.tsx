@@ -3,7 +3,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCircleCheck, faClipboardCheck, faFlask, faHandHoldingMedical, faListCheck } from "@fortawesome/free-solid-svg-icons";
 import { CardLabel } from "../../components/Card";
 import type { FacultyOverview } from "../../lib/api";
-import { dueIn, plural, timeAgo } from "./format";
+import { dueIn, performsIn, plural, timeAgo } from "./format";
 
 /**
  * What is waiting on the faculty member: scenario submissions to finalize,
@@ -63,9 +63,9 @@ export default function WaitingCard({
       </div>
 
       <div className="border-t border-hairline px-4 pb-3.5 pt-3">
-        <CardLabel>Due this week</CardLabel>
+        <CardLabel>Coming up this week</CardLabel>
         {dueSoon.length === 0 ? (
-          <p className="mt-2 text-[13px] text-slate-500">Nothing falls due in the next 7 days.</p>
+          <p className="mt-2 text-[13px] text-slate-500">Nothing coming up in the next 7 days.</p>
         ) : (
           <ul className="mt-2 space-y-2">
             {dueSoon.map((item) => (
@@ -79,7 +79,10 @@ export default function WaitingCard({
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[13px] font-medium text-slate-900">{item.title}</span>
                   <span className="block text-[12px] text-slate-500">
-                    {dueIn(item.deadline)} · {plural(item.open, "student")} yet to hand in
+                    {/* Quizzes are due; patient cases and Return Demonstrations are performed on their date. */}
+                    {item.kind === "scenario" || item.kind === "return_demo"
+                      ? `${performsIn(item.deadline)} · ${plural(item.open, "student")} not graded yet`
+                      : `${dueIn(item.deadline)} · ${plural(item.open, "student")} yet to hand in`}
                   </span>
                 </span>
               </li>

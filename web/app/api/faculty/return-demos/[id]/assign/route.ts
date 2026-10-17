@@ -3,6 +3,7 @@ import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { logAudit } from '@/app/lib/audit';
 import { parseDeadline } from '@/app/lib/deadline-input';
+import { notifyReturnDemoAssigned } from '@/app/lib/notify-case-assigned';
 import { getFacultyStudentIdSet } from '@/app/lib/scenario-visibility';
 import { isMissingTeamTables, manageableTeam, TEAMS_NEED_MIGRATION } from '@/app/lib/teams';
 import { mergeAssignees } from '@/app/lib/return-demos';
@@ -106,7 +107,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
 
     const required = typeof body.required === 'boolean' ? body.required : true;
-    const { error: insertError } = await supabase.from('scenario_assignments').insert(
+    const { data: inserted, error: insertError } = await supabase.from('scenario_assignments').insert(
       rows.map((r) => ({
         scenario_id: id,
         student_id: r.student_id,
@@ -116,8 +117,16 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         required,
         status: 'pending' as const,
       })),
-    );
+    ).select('id, student_id');
     if (insertError) throw insertError;
+
+    // Each student hears about it, on their phone too.
+    await notifyReturnDemoAssigned(
+      supabase,
+      { id, title: loaded.demo.title },
+      ((inserted ?? []) as { id: string; student_id: string }[]),
+      new Date(deadline.value as string),
+    );
 
     await logAudit(
       session,
@@ -133,5 +142,44 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   } catch (err) {
     console.error('Assign Return Demonstration failed', err);
     return NextResponse.json({ error: 'Unable to assign the Return Demonstration' }, { status: 500 });
+  }
+}
+
+/**
+ * PATCH { student_ids, deadline }: moves the date of performance for students
+ * who already have it (the card's "Who has it" list). Only its maker does;
+ * graded students keep theirs.
+ */
+export async function PATCH(request: NextRequest, { params }: RouteParams) {
+  const session = await readSession();
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!['faculty', 'admin'].includes(session.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const { id } = await params;
+
+  const body = ((await request.json().catch(() => null)) ?? {}) as Record<string, unknown>;
+  const studentIds = ids(body.student_ids);
+  if (studentIds.length === 0) return NextResponse.json({ error: 'Choose at least one student' }, { status: 400 });
+  const deadline = parseDeadline(body.deadline);
+  if (!deadline.ok) return NextResponse.json({ error: deadline.error }, { status: 400 });
+
+  try {
+    const supabase = getSupabaseAdmin();
+    const loaded = await loadReturnDemo(supabase, session, id);
+    if ('response' in loaded) return loaded.response;
+    if (!canEdit(session, loaded.demo)) {
+      return NextResponse.json({ error: 'Only its maker can change this Return Demonstration' }, { status: 403 });
+    }
+    const { data, error } = await supabase
+      .from('scenario_assignments')
+      .update({ deadline: new Date(deadline.value as string).toISOString() })
+      .eq('scenario_id', id)
+      .in('student_id', studentIds)
+      .neq('status', 'completed')
+      .select('id');
+    if (error) throw error;
+    return NextResponse.json({ updated: (data ?? []).length });
+  } catch (err) {
+    console.error('Move Return Demonstration date failed', err);
+    return NextResponse.json({ error: 'Unable to change the date' }, { status: 500 });
   }
 }

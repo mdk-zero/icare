@@ -1,4 +1,5 @@
 import React from 'react';
+import { performOn } from '@/lib/return-demos';
 import { ActivityIndicator, ScrollView, View, Text, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -68,8 +69,8 @@ export function CaseStartGate({
         ) : null}
         {deadline ? (
           <View style={styles.metaRow}>
-            <Ionicons name="time-outline" size={14} color={Palette.textSecondary} />
-            <Text style={styles.metaText}>Due {new Date(deadline).toLocaleString()}</Text>
+            <Ionicons name="calendar-outline" size={14} color={Palette.textSecondary} />
+            <Text style={styles.metaText}>{performOn(deadline)}</Text>
           </View>
         ) : null}
       </View>

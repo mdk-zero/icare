@@ -400,6 +400,8 @@ export default function AssignmentGrader({
   });
   const unratedImplied = impliedByLevel.reduce((sum, g) => sum + g.count, 0);
   const rowNoun = (n: number) => (n === 1 ? "row" : "rows");
+  // Save asks first, and says what's still unrated, so nothing is missed.
+  const [confirmSave, setConfirmSave] = useState(false);
 
   // Clicks only change the sheet; Save sends them.
   const handleRateTask = (task: GradingTask, rating: ChecklistRating | null) => {
@@ -879,7 +881,7 @@ export default function AssignmentGrader({
                   </button>
                 )}
                 <button
-                  onClick={handleSave}
+                  onClick={() => setConfirmSave(true)}
                   disabled={
                     finalizing || tasksLoading || tasks.length === 0 || ungraded
                   }
@@ -907,6 +909,44 @@ export default function AssignmentGrader({
           </div>
         </div>
       </div>
+
+      {confirmSave && selected && (
+        <ConfirmModal
+          onClose={() => setConfirmSave(false)}
+          config={{
+            title: unratedMissing > 0 ? "Save this progress?" : "Save this grade?",
+            message:
+              unratedMissing > 0
+                ? `${selected.student_name}'s ratings on "${selected.scenario_title}" will be saved. It isn't finished until every row is rated.`
+                : `${selected.student_name}'s grade on "${selected.scenario_title}" will be saved, and they will see it.`,
+            confirmLabel: unratedMissing > 0 ? "Save progress" : "Save grade",
+            danger: false,
+            loading: finalizing,
+            onConfirm: async () => {
+              setConfirmSave(false);
+              await handleSave();
+            },
+            children:
+              unratedMissing > 0 || unratedImplied > 0 ? (
+                <div className="mt-3 space-y-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-800">
+                  <p className="font-semibold">Did you miss any?</p>
+                  {unratedMissing > 0 && (
+                    <p>
+                      {unratedMissing} {rowNoun(unratedMissing)} {unratedMissing === 1 ? "isn't" : "aren't"} rated yet and{" "}
+                      {unratedMissing === 1 ? "earns" : "earn"} no points.
+                    </p>
+                  )}
+                  {unratedImplied > 0 && (
+                    <p>
+                      {unratedImplied} auto-completed {rowNoun(unratedImplied)} count as their task&apos;s level until you
+                      rate them.
+                    </p>
+                  )}
+                </div>
+              ) : undefined,
+          }}
+        />
+      )}
 
       {requestReason !== null && selected && (
         <ConfirmModal

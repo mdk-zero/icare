@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Card, Badge, SkeletonBlock, EmptyState } from '@/components/ui';
+import { Card, SkeletonBlock, EmptyState } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { useApiData } from '@/hooks/useApiData';
@@ -17,8 +17,8 @@ import {
   fetchWard,
   fetchScenarioTasks,
   ScenarioTasksResult,
-  WardVitals,
 } from '@/lib/api';
+import { performOn } from '@/lib/return-demos';
 import { ClinicalTaskList, ClinicalTaskListSkeleton } from '@/components/ClinicalTaskList';
 import { AssistanceButton } from '@/components/AssistanceButton';
 import { CaseOpening, CaseStartGate } from '@/components/CaseStartGate';
@@ -28,7 +28,7 @@ const GRADE_POLL_MS = 8000;
 
 /**
  * The patient hub — the end of the ward walk-through. It carries the scenario
- * brief, the latest vitals and the task list. Students no
+ * brief and the task list. Students no
  * longer chart here: RetDem is a skills demonstration, rated by the instructor
  * task by task (there is nothing to hand in: the instructor grades as they
  * watch), and what students write up is a real hospital case (Clinic →
@@ -38,54 +38,11 @@ const GRADE_POLL_MS = 8000;
  */
 
 
-function formatTimestamp(iso: string) {
-  return new Date(iso).toLocaleString([], {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
-
 function formatDuration(seconds: number) {
   const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;
   return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 }
-
-function VitalsGrid({
-  vitals,
-  styles,
-}: {
-  vitals: WardVitals;
-  styles: ReturnType<typeof createStyles>;
-}) {
-  const cells = [
-    { label: 'HR', value: vitals.heart_rate, unit: 'bpm' },
-    {
-      label: 'BP',
-      value:
-        vitals.bp_systolic != null && vitals.bp_diastolic != null
-          ? `${vitals.bp_systolic}/${vitals.bp_diastolic}`
-          : null,
-      unit: 'mmHg',
-    },
-    { label: 'Temp', value: vitals.temperature_c, unit: '°C' },
-    { label: 'SpO₂', value: vitals.oxygen_saturation, unit: '%' },
-  ];
-  return (
-    <View style={styles.vitalsGrid}>
-      {cells.map((cell) => (
-        <View key={cell.label} style={styles.vitalCell}>
-          <Text style={styles.vitalLabel}>{cell.label}</Text>
-          <Text style={styles.vitalValue}>{cell.value ?? '—'}</Text>
-          <Text style={styles.vitalUnit}>{cell.unit}</Text>
-        </View>
-      ))}
-    </View>
-  );
-}
-
 
 export default function PatientHubScreen() {
   const params = useLocalSearchParams<{
@@ -196,17 +153,6 @@ export default function PatientHubScreen() {
           <SkeletonBlock width="100%" height={12} style={{ marginTop: Spacing.md }} />
           <SkeletonBlock width="70%" height={12} style={{ marginTop: 6 }} />
         </Card>
-        <Text style={styles.sectionTitle}>Latest Vitals</Text>
-        <Card style={styles.blockCard}>
-          <View style={styles.vitalsGrid}>
-            {['HR', 'BP', 'Temp', 'SpO₂'].map((label) => (
-              <View key={label} style={styles.vitalCell}>
-                <Text style={styles.vitalLabel}>{label}</Text>
-                <SkeletonBlock width={40} height={18} style={{ marginTop: 4 }} />
-              </View>
-            ))}
-          </View>
-        </Card>
         <Text style={[styles.sectionTitle, styles.sectionSpacer]}>Clinical Tasks</Text>
         <Card style={styles.blockCard}>
           <ClinicalTaskListSkeleton />
@@ -241,7 +187,6 @@ export default function PatientHubScreen() {
     );
   }
 
-  const vitals = patient.latest_vitals ?? null;
 
 
   return (
@@ -280,17 +225,9 @@ export default function PatientHubScreen() {
       ) : (
         <>
           <Card style={styles.scenarioCard}>
-            <View style={styles.scenarioHeader}>
-              <Badge
-                label={isFinalized ? 'Completed' : isSubmitted ? 'Awaiting Review' : status === 'overdue' ? 'Overdue' : status === 'in_progress' ? 'In Progress' : 'Pending'}
-                variant={isFinalized ? 'success' : isSubmitted ? 'info' : status === 'overdue' ? 'danger' : status === 'in_progress' ? 'warning' : 'default'}
-              />
-            </View>
             <Text style={styles.scenarioTitle}>{assignment?.scenario_title}</Text>
             <Text style={styles.scenarioMeta}>
-              {assignment?.deadline
-                ? `Due ${new Date(assignment.deadline).toLocaleString()}`
-                : 'No deadline'}
+              {performOn(assignment?.deadline)}
             </Text>
 
             {isFinalized ? (
@@ -349,36 +286,6 @@ export default function PatientHubScreen() {
                 </Text>
               </View>
             </Card>
-          ) : null}
-
-          {/* The patient's vitals help while doing the case; a graded case doesn't need them. */}
-          {!isFinalized ? (
-            <>
-            <Text style={styles.sectionTitle}>Latest Vitals</Text>
-            <Card style={styles.blockCard}>
-              {vitals ? (
-                <>
-                  <VitalsGrid vitals={vitals} styles={styles} />
-                  {vitals.is_anomaly ? (
-                    <View style={styles.anomalyAlert}>
-                      <Ionicons name="warning" size={14} color={Accent.red.fg} />
-                      <View style={styles.anomalyBody}>
-                        <Text style={styles.anomalyText}>
-                          {vitals.anomaly_reasons?.[0]?.message ?? 'Anomaly detected'}
-                        </Text>
-                        {vitals.anomaly_reasons?.[0]?.recommendation ? (
-                          <Text style={styles.anomalyAdvice}>{vitals.anomaly_reasons[0].recommendation}</Text>
-                        ) : null}
-                      </View>
-                    </View>
-                  ) : null}
-                  <Text style={styles.vitalsTime}>Recorded {formatTimestamp(vitals.recorded_at)}</Text>
-                </>
-              ) : (
-                <Text style={styles.emptyText}>No vitals recorded for this patient yet</Text>
-              )}
-            </Card>
-            </>
           ) : null}
 
           <Text style={[styles.sectionTitle, styles.sectionSpacer]}>Clinical Tasks</Text>

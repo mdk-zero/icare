@@ -1,4 +1,4 @@
-import { Redirect, Tabs } from "expo-router";
+import { Redirect, Tabs, useRouter } from "expo-router";
 import React from "react";
 import { View } from "react-native";
 import { useTheme } from "@/hooks/useTheme";
@@ -9,6 +9,7 @@ import { AppHeader, FloatingTabBar, type TabIcons } from "@/components/navigatio
 
 const TAB_ICONS: TabIcons = {
   clinic: "hospital",
+  demos: "hand-holding-medical",
   quiz: "clipboard-question",
   index: "house",
   library: "book-open",
@@ -21,6 +22,7 @@ export default function TabLayout() {
   const { unread: unreadCount } = useNotifications();
   const { Palette } = useTheme();
   const { user } = useAuth();
+  const router = useRouter();
 
   // These tabs are the student's. Anyone else is sent to their own home
   // before a student screen mounts and asks a student-only endpoint (403).
@@ -28,12 +30,13 @@ export default function TabLayout() {
 
   return (
     <View style={{ flex: 1, backgroundColor: Palette.background }}>
-      <AppHeader notificationCount={unreadCount} />
+      {/* Profile sits beside the bell, so Home stays the middle tab; Home shows the time. */}
+      <AppHeader notificationCount={unreadCount} showClock={false} onProfile={() => router.push("/profile")} />
       <Tabs
         // Without this, the tab navigator defaults to whichever Tabs.Screen
         // is registered first (Clinic) instead of Home.
         initialRouteName="index"
-        tabBar={(props) => <FloatingTabBar {...props} icons={TAB_ICONS} />}
+        tabBar={(props) => <FloatingTabBar {...props} icons={TAB_ICONS} hidden={["profile"]} />}
         screenOptions={{
           headerShown: false,
         }}
@@ -42,6 +45,7 @@ export default function TabLayout() {
         <Tabs.Screen name="clinic" options={{ title: "Clinic" }} />
         <Tabs.Screen name="index" options={{ title: "Home" }} />
         <Tabs.Screen name="quiz" options={{ title: "Quizzes" }} />
+        <Tabs.Screen name="demos" options={{ title: "Demos" }} />
         <Tabs.Screen name="profile" options={{ title: "Profile" }} />
       </Tabs>
     </View>

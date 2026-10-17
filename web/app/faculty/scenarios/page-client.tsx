@@ -8,17 +8,12 @@ import {
   faPlus,
   faSearch,
   faTimes,
-  faEye,
   faUserPlus,
   faListCheck,
-  faHeartbeat,
-  faStethoscope,
   faCalendarDay,
   faHospitalUser,
   faNotesMedical,
-  faExclamationTriangle,
   faUsers,
-  faUser,
   faChevronDown,
   faLayerGroup,
   faPenToSquare,
@@ -30,7 +25,7 @@ import {
   faClock,
   faBookMedical,
 } from "@fortawesome/free-solid-svg-icons";
-import { toast, loadingToast } from "../../components/Toast";
+import { toast } from "../../components/Toast";
 import {
   fetchFacultyScenarios,
   createScenario,
@@ -48,20 +43,17 @@ import {
   assignPatientRooms,
   FacultyPatient,
   fetchMyCourses,
-  fetchCourseRoster,
-  type CourseRosterStudent,
-  apiFetch,
 } from "../../lib/api";
 import { groupByCourse, numberWithinCourse } from "../../lib/course-groups";
 import CourseGroupHeading from "../../components/CourseGroupHeading";
-import { deadlineFromInput } from "../../lib/deadline-input";
 import { usePageData } from "../../lib/use-page-data";
 import { SkeletonStatTile, SkeletonScenarioCard } from "../../components/skeletons";
 import PageHeader from "../../components/PageHeader";
 import StatTile from "../../components/StatTile";
 import Card from "../../components/Card";
-import Avatar from "../../components/Avatar";
 import ActionsMenu from "../../components/ActionsMenu";
+import PerformanceDatesModal from "../../components/PerformanceDatesModal";
+import AssignStudentsModal from "../../components/AssignStudentsModal";
 import { EcgLoader } from "../../components/EcgLoader";
 import { LessonPanel, useLessonImport } from "../../components/LessonImport";
 import {
@@ -85,12 +77,14 @@ const inputClassName =
  *  looping the route in sub-batches of this size — no fixed total ceiling. */
 const MAX_PER_REQUEST = 12;
 
+/** Generate Library is hidden for now; flip this to bring it back. */
+const SHOW_GENERATE_LIBRARY = false;
+
 // Stable empty fallbacks, so the memos below them are not invalidated by a
 // fresh `[]` on every render.
 const NO_SCENARIOS: SimulationScenario[] = [];
 const NO_STUDENTS: FacultyStudent[] = [];
 
-const labelClassName = "block text-sm font-bold text-gray-800 mb-2";
 
 export default function FacultyScenariosClient() {
   const router = useRouter();
@@ -151,26 +145,14 @@ export default function FacultyScenariosClient() {
     planPool.length > 0 ? planPool[i % planPool.length] : undefined,
   );
 
-  const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedScenario, setSelectedScenario] = useState<SimulationScenario | null>(null);
 
   const [showAssignModal, setShowAssignModal] = useState(false);
 
-  const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
   // Teams picked in the assign modal; each member is assigned on their own.
   const [assignHasTeams, setAssignHasTeams] = useState(false);
-  const [assignDeadline, setAssignDeadline] = useState("");
   // The "Who has it" list for one case, with a date change per group.
   const [whoHas, setWhoHas] = useState<SimulationScenario | null>(null);
-  const [newDate, setNewDate] = useState<Record<string, string>>({});
-  const [movingDate, setMovingDate] = useState<string | null>(null);
-  const [studentSearchQuery, setStudentSearchQuery] = useState("");
-  const [assigning, setAssigning] = useState(false);
-  // Who the open case can go to: the students the instructor handles in its
-  // course (in all their courses for a case in none). Null while loading.
-  const [assignRoster, setAssignRoster] = useState<CourseRosterStudent[] | null>(null);
-  const [assignRosterError, setAssignRosterError] = useState<string | null>(null);
-  const assignFor = useRef<string | null>(null);
 
 
 
@@ -418,74 +400,24 @@ export default function FacultyScenariosClient() {
     setBatchSelected([]);
   };
 
-  const handleViewDetails = (scenario: SimulationScenario) => {
-    setSelectedScenario(scenario);
-    setShowDetailsModal(true);
-  };
-
   const handleOpenAssignModal = (scenario: SimulationScenario) => {
     setSelectedScenario(scenario);
-    setSelectedStudents([]);
     void fetchFacultyTeams().then((overview) =>
       setAssignHasTeams(
         Boolean(overview?.enabled && overview.teams.some((t) => t.members.length > 0)),
       ),
     );
-    setAssignDeadline("");
-    setStudentSearchQuery("");
-    setAssignRoster(null);
-    setAssignRosterError(null);
-    assignFor.current = scenario.id;
-    const offeringIds = scenario.offering_id ? [scenario.offering_id] : (data?.offerings ?? []).map((o) => o.id);
-    void Promise.all(offeringIds.map((id) => fetchCourseRoster(id))).then((results) => {
-      if (assignFor.current !== scenario.id) return;
-      const byId = new Map<string, CourseRosterStudent>();
-      for (const res of results) for (const st of res.data?.students ?? []) if (!byId.has(st.id)) byId.set(st.id, st);
-      const failed = results.find((res) => res.error);
-      setAssignRosterError(failed && byId.size === 0 ? (failed.error ?? "Unable to load your students") : null);
-      setAssignRoster([...byId.values()]);
-    });
     setShowAssignModal(true);
   };
 
-  const toggleStudentSelection = (studentId: string) => {
-    setSelectedStudents((prev) =>
-      prev.includes(studentId) ? prev.filter((id) => id !== studentId) : [...prev, studentId],
-    );
-  };
+  const handleAssignScenario = async (studentIds: string[], deadline: string) => {
+    if (!selectedScenario) return;
 
-  type CaseGroup = NonNullable<SimulationScenario["assigned_groups"]>[number];
-  const changeDate = async (scenario: SimulationScenario, group: CaseGroup) => {
-    const value = newDate[group.key];
-    if (!value) return toast("Pick the new date first");
-    setMovingDate(group.key);
-    const progress = loadingToast(`Moving ${group.label}'s date…`);
-    const res = await apiFetch(`/api/faculty/scenarios/${scenario.id}/assign`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ student_ids: group.student_ids, deadline: deadlineFromInput(value) }),
-    });
-    setMovingDate(null);
-    if (!res.ok) {
-      const j = (await res.json().catch(() => null)) as { error?: string } | null;
-      return progress.error(j?.error ?? "Couldn't change the date");
-    }
-    progress.success(`${group.label} now performs on ${performDate(deadlineFromInput(value))}`);
-    setNewDate((prev) => ({ ...prev, [group.key]: "" }));
-    setWhoHas(null);
-    loadScenarios();
-  };
-
-  const handleAssignScenario = async () => {
-    if (!selectedScenario || assignCount === 0 || !assignDeadline) return;
-
-    setAssigning(true);
     const assignments = await assignScenarioToStudents(
       selectedScenario.id,
-      selectedStudents,
-      // A date means the end of that day, here: deadlines decide attendance.
-      deadlineFromInput(assignDeadline) ?? "",
+      studentIds,
+      // The end of the picked day: deadlines decide attendance.
+      deadline,
       // An assigned patient case is always required.
       true,
     );
@@ -514,11 +446,8 @@ export default function FacultyScenariosClient() {
       toast("Nobody new to assign — everyone chosen already has this patient case");
     }
 
-    setAssigning(false);
     setShowAssignModal(false);
     setSelectedScenario(null);
-    setSelectedStudents([]);
-    setStudentSearchQuery("");
   };
 
   const handleOpenDeleteModal = (scenario: SimulationScenario) => {
@@ -572,39 +501,7 @@ export default function FacultyScenariosClient() {
     setDeleteTarget(null);
   };
 
-  const assignCount = selectedStudents.length;
-
   const studentById = new Map(students.map((st) => [st.id, st]));
-  // Students who already have the open case: shown as Assigned, not pickable again.
-  const alreadyAssigned = new Set(selectedScenario?.student_ids ?? []);
-  const pickable = (ids: string[]) => ids.filter((id) => !alreadyAssigned.has(id));
-  const studentQuery = studentSearchQuery.trim().toLowerCase();
-  const filteredStudents = (assignRoster ?? []).filter(
-    (st) => !studentQuery || `${st.name} ${st.email} ${st.section} ${st.group}`.toLowerCase().includes(studentQuery),
-  );
-  // Section, then group, then name: one block per section with a row per group.
-  const assignSections = (() => {
-    const out = new Map<string, Map<string, CourseRosterStudent[]>>();
-    const sorted = [...filteredStudents].sort(
-      (a, b) =>
-        a.section.localeCompare(b.section, undefined, { numeric: true }) ||
-        Number(a.group === "No group") - Number(b.group === "No group") ||
-        a.group.localeCompare(b.group, undefined, { numeric: true }) ||
-        a.name.localeCompare(b.name),
-    );
-    for (const st of sorted) {
-      const groups = out.get(st.section) ?? new Map<string, CourseRosterStudent[]>();
-      groups.set(st.group, [...(groups.get(st.group) ?? []), st]);
-      out.set(st.section, groups);
-    }
-    return [...out.entries()].map(([section, groups]) => ({ section, groups: [...groups.entries()] }));
-  })();
-  /** Ticks or clears a whole block of students at once. */
-  const toggleMany = (ids: string[]) =>
-    setSelectedStudents((prev) => {
-      const all = ids.every((id) => prev.includes(id));
-      return all ? prev.filter((id) => !ids.includes(id)) : [...new Set([...prev, ...ids])];
-    });
 
   const selectClassName =
     "w-full px-4 py-3 bg-surface border border-gray-400 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 focus:bg-surface transition-all text-sm appearance-none shadow-sm cursor-pointer";
@@ -723,6 +620,7 @@ export default function FacultyScenariosClient() {
           </div>
         </div>
         <div className="ml-auto flex min-w-0 basis-full flex-wrap justify-end gap-2 sm:basis-auto">
+          {SHOW_GENERATE_LIBRARY && (
           <button
             onClick={openBatchModal}
             className="group flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-xl sm:flex-none border border-brand-700/25 bg-surface px-4 py-2.5 text-sm font-semibold text-brand-800 transition-all hover:border-brand-700/40 hover:bg-brand-50"
@@ -733,6 +631,7 @@ export default function FacultyScenariosClient() {
             />
             Generate Library
           </button>
+          )}
           <button
             onClick={() => router.push("/faculty/scenarios/new")}
             className="flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-brand-600 sm:flex-none px-4 py-2.5 text-sm font-semibold text-white shadow-[0_2px_8px_-1px_rgb(27_107_123_/_0.35)] transition-all hover:bg-brand-700 hover:shadow-[0_4px_14px_-2px_rgb(27_107_123_/_0.45)]"
@@ -757,9 +656,11 @@ export default function FacultyScenariosClient() {
           <p className="text-gray-500 text-sm mt-1">
             {filtering
               ? "Try adjusting your filters."
-              : "Generate a starter library, or create your first patient case by hand."}
+              : SHOW_GENERATE_LIBRARY
+                ? "Generate a starter library, or create your first patient case by hand."
+                : "Create your first patient case."}
           </p>
-          {!filtering && (
+          {!filtering && SHOW_GENERATE_LIBRARY && (
             <button
               onClick={openBatchModal}
               className="mt-4 inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-brand-600 to-brand-800 text-white font-medium rounded-xl hover:from-brand-700 hover:to-brand-900 transition-all shadow-lg shadow-[0_4px_14px_-2px_rgb(27_107_123_/_0.45)]"
@@ -890,7 +791,6 @@ export default function FacultyScenariosClient() {
                     )}
                     <ActionsMenu
                       actions={[
-                        { label: "View", icon: faEye, onClick: () => handleViewDetails(scenario) },
                         {
                           label: "Edit",
                           icon: faPenToSquare,
@@ -924,75 +824,17 @@ export default function FacultyScenariosClient() {
 
       {/* Who has it, with each group's date of performance */}
       {whoHas && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setWhoHas(null)}>
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="case-who-has-title"
-            onClick={(e) => e.stopPropagation()}
-            className="bg-surface rounded-xl shadow-overlay w-full max-w-lg p-4 space-y-3 max-h-[90vh] overflow-y-auto border border-hairline"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h3 id="case-who-has-title" className="font-semibold text-gray-800">Who has &ldquo;{whoHas.title}&rdquo;</h3>
-                <p className="text-sm text-gray-500">
-                  {whoHas.student_count} student{whoHas.student_count === 1 ? "" : "s"} in {(whoHas.assigned_groups ?? []).length} group
-                  {(whoHas.assigned_groups ?? []).length === 1 ? "" : "s"}. Move a group&apos;s date of performance below.
-                </p>
-              </div>
-              <button onClick={() => setWhoHas(null)} aria-label="Close" className="text-gray-400 hover:text-gray-600">
-                <FontAwesomeIcon icon={faTimes} className="w-4 h-4" />
-              </button>
-            </div>
-            <ul className="divide-y divide-hairline rounded-xl border border-hairline">
-              {(whoHas.assigned_groups ?? []).map((g) => (
-                <li key={g.key} className="space-y-2 px-4 py-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-gray-900">{g.label}</p>
-                      <p className="text-xs text-gray-500">
-                        {g.count} student{g.count === 1 ? "" : "s"} ·{" "}
-                        {g.deadline === "mixed" ? "different dates" : g.deadline ? `performs on ${performDate(g.deadline)}` : "no date"}
-                      </p>
-                    </div>
-                    <span
-                      className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium tabular-nums ${
-                        g.done === g.count ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-gray-600"
-                      }`}
-                    >
-                      {g.done === g.count ? "All graded" : `${g.done} of ${g.count} graded`}
-                    </span>
-                  </div>
-                  {g.done < g.count && (
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="date"
-                        aria-label={`New date of performance for ${g.label}`}
-                        value={newDate[g.key] ?? ""}
-                        onChange={(e) => setNewDate((prev) => ({ ...prev, [g.key]: e.target.value }))}
-                        className={inputClassName + " py-1.5 text-xs"}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => void changeDate(whoHas, g)}
-                        disabled={!newDate[g.key] || movingDate !== null}
-                        className="shrink-0 rounded-lg border border-brand-600/40 px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-600/5 disabled:opacity-50"
-                      >
-                        {movingDate === g.key ? "Saving…" : "Change date"}
-                      </button>
-                    </div>
-                  )}
-                </li>
-              ))}
-            </ul>
-            <p className="text-xs text-gray-500">Students already graded keep their date.</p>
-            <div className="flex justify-end">
-              <button onClick={() => setWhoHas(null)} className="px-5 py-2 rounded-lg bg-brand-600 text-white text-sm hover:bg-brand-700">
-                Done
-              </button>
-            </div>
-          </div>
-        </div>
+        <PerformanceDatesModal
+          title={whoHas.title}
+          studentCount={whoHas.student_count}
+          groups={whoHas.assigned_groups ?? []}
+          endpoint={`/api/faculty/scenarios/${whoHas.id}/assign`}
+          onClose={() => setWhoHas(null)}
+          onChanged={() => {
+            setWhoHas(null);
+            loadScenarios();
+          }}
+        />
       )}
 
       {/* Delete Patient Case Modal */}
@@ -1548,434 +1390,30 @@ export default function FacultyScenariosClient() {
         </div>
       )}
 
-      {/* Details Modal */}
-      {showDetailsModal && selectedScenario && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-surface rounded-xl w-full max-w-3xl max-h-[85vh] overflow-hidden flex flex-col shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-hairline">
-            <div className="p-4 border-b border-hairline bg-subtle">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-3 flex-wrap">
-                    <div className="w-10 h-10 bg-brand-600/10 rounded-lg flex items-center justify-center">
-                      <FontAwesomeIcon icon={faNotesMedical} className="text-brand-600 w-5 h-5" />
-                    </div>
-                    <h2 className="text-2xl font-bold text-gray-900">{selectedScenario.title}</h2>
-                    {selectedScenario.is_ai_generated && (
-                      <span className="px-2.5 py-1 bg-brand-100 text-brand-700 text-xs font-semibold rounded-full flex items-center gap-1">
-                        <FontAwesomeIcon icon={faRobot} className="w-3 h-3" />
-                        AI Generated
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-gray-600">{selectedScenario.description}</p>
-                </div>
-                <button
-                  onClick={() => setShowDetailsModal(false)}
-                  className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
-                >
-                  <FontAwesomeIcon icon={faTimes} className="w-5 h-5 text-gray-500" />
-                </button>
-              </div>
-              <div className="flex items-center gap-3 mt-4 flex-wrap">
-                <span className="px-3 py-1 bg-gray-100 text-gray-700 text-sm font-semibold rounded-full">
-                  {selectedScenario.category}
-                </span>
-                <span className="text-sm text-gray-500 flex items-center gap-1">
-                  <FontAwesomeIcon icon={faUsers} className="w-3.5 h-3.5" />
-                  {selectedScenario.student_count} students
-                </span>
-                <span className="text-sm text-gray-400 flex items-center gap-1">
-                  <FontAwesomeIcon icon={faCalendarDay} className="w-3.5 h-3.5" />
-                  Created: {new Date(selectedScenario.created_at).toLocaleDateString()}
-                </span>
-              </div>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
-              <div>
-                <h3 className="text-lg font-bold text-gray-900 mb-3 flex items-center gap-2">
-                  <FontAwesomeIcon icon={faStethoscope} className="text-brand-600" />
-                  Patient Case
-                </h3>
-                <div className="bg-gray-50 rounded-xl p-5 border border-gray-200">
-                  {selectedScenario.patient_case ? (
-                    <div className="space-y-4">
-                      {selectedScenario.patient_case.chief_complaint && (
-                        <div className="bg-red-50 border border-red-200 rounded-xl p-4">
-                          <p className="text-sm font-bold text-red-700 mb-1 flex items-center gap-2">
-                            <FontAwesomeIcon icon={faExclamationTriangle} className="w-4 h-4" />
-                            Chief Complaint
-                          </p>
-                          <p className="text-gray-800">
-                            {selectedScenario.patient_case.chief_complaint}
-                          </p>
-                        </div>
-                      )}
-                      {selectedScenario.patient_case.vitals && (
-                        <div>
-                          <p className="text-sm font-bold text-gray-600 mb-2 flex items-center gap-2">
-                            <FontAwesomeIcon icon={faHeartbeat} className="w-4 h-4 text-red-600" />
-                            Vital Signs
-                          </p>
-                          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-                            {Object.entries(selectedScenario.patient_case.vitals).map(
-                              ([key, value]) => (
-                                <div
-                                  key={key}
-                                  className="bg-surface rounded-lg p-3 border border-gray-200"
-                                >
-                                  <p className="text-xs text-gray-500 capitalize">
-                                    {key.replace(/_/g, " ")}
-                                  </p>
-                                  <p className="font-semibold text-gray-800">{String(value)}</p>
-                                </div>
-                              ),
-                            )}
-                          </div>
-                        </div>
-                      )}
-                      {selectedScenario.patient_case.medical_history && (
-                        <div>
-                          <p className="text-sm font-bold text-gray-600 mb-1">Medical History</p>
-                          <p className="text-gray-800">
-                            {selectedScenario.patient_case.medical_history}
-                          </p>
-                        </div>
-                      )}
-                      {selectedScenario.patient_case.physical_exam && (
-                        <div>
-                          <p className="text-sm font-bold text-gray-600 mb-1">
-                            Physical Examination
-                          </p>
-                          <p className="text-gray-800">
-                            {selectedScenario.patient_case.physical_exam}
-                          </p>
-                        </div>
-                      )}
-                      {selectedScenario.patient_case.diagnosis && (
-                        <div>
-                          <p className="text-sm font-bold text-gray-600 mb-1">Diagnosis</p>
-                          <p className="text-gray-800">{selectedScenario.patient_case.diagnosis}</p>
-                        </div>
-                      )}
-                      {selectedScenario.patient_case.treatment_plan && (
-                        <div>
-                          <p className="text-sm font-bold text-gray-600 mb-1">Treatment Plan</p>
-                          <p className="text-gray-800">
-                            {selectedScenario.patient_case.treatment_plan}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <p className="text-gray-500">No patient case details available</p>
-                  )}
-                </div>
-              </div>
-
-              <div>
-                <h3 className="text-lg font-bold text-gray-900 mb-3 flex items-center gap-2">
-                  <FontAwesomeIcon icon={faListCheck} className="text-brand-600" />
-                  Learning Objectives
-                </h3>
-                <ul className="space-y-2">
-                  {selectedScenario.learning_objectives &&
-                  selectedScenario.learning_objectives.length > 0 ? (
-                    selectedScenario.learning_objectives.map((objective, index) => (
-                      <li key={index} className="flex items-start gap-3">
-                        <div className="w-6 h-6 rounded-full bg-brand-600/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                          <span className="text-sm font-bold text-brand-600">{index + 1}</span>
-                        </div>
-                        <p className="text-gray-700">{objective}</p>
-                      </li>
-                    ))
-                  ) : (
-                    <p className="text-gray-500">No learning objectives defined</p>
-                  )}
-                </ul>
-              </div>
-            </div>
-
-            <div className="p-4 border-t border-hairline bg-subtle">
-              <div className="flex justify-end gap-3">
-                <button
-                  onClick={() => setShowDetailsModal(false)}
-                  className="px-5 py-2.5 bg-surface border border-gray-200 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-all"
-                >
-                  Close
-                </button>
-                <button
-                  onClick={() => {
-                    setShowDetailsModal(false);
-                    handleOpenAssignModal(selectedScenario);
-                  }}
-                  className="px-5 py-2.5 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 transition-all flex items-center gap-2 shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
-                >
-                  <FontAwesomeIcon icon={faUserPlus} className="w-4 h-4" />
-                  Assign to Students
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Assign Modal */}
       {showAssignModal && selectedScenario && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-surface rounded-xl w-full max-w-4xl max-h-[85vh] overflow-hidden flex flex-col shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-hairline">
-            <div className="p-4 border-b border-hairline bg-subtle">
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-brand-600/10 rounded-lg flex items-center justify-center">
-                    <FontAwesomeIcon icon={faUserPlus} className="text-brand-600 w-5 h-5" />
-                  </div>
-                  <div>
-                    <h2 className="text-lg font-bold text-gray-900">Assign Patient Case</h2>
-                    <p className="text-sm text-gray-500">{selectedScenario.title}</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setShowAssignModal(false)}
-                  className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
-                >
-                  <FontAwesomeIcon icon={faTimes} className="w-5 h-5 text-gray-500" />
-                </button>
-              </div>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
-              <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
-                <h3 className="text-sm font-bold text-gray-900 mb-3 flex items-center gap-2">
-                  <FontAwesomeIcon icon={faCalendarDay} className="text-brand-600" />
-                  Assignment Settings
-                </h3>
-                <div className="grid grid-cols-1 gap-3">
-                  <div>
-                    <label className={labelClassName}>Date of performance</label>
-                    <div className="relative">
-                      <FontAwesomeIcon
-                        icon={faCalendarDay}
-                        className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500"
-                      />
-                      <input
-                        type="date"
-                        value={assignDeadline}
-                        onChange={(e) => setAssignDeadline(e.target.value)}
-                        className={inputClassName + " pl-10"}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {assignHasTeams && (
-                <p className="flex items-start gap-2 rounded-xl border border-hairline bg-subtle px-3 py-2 text-xs text-gray-600">
-                  <FontAwesomeIcon icon={faUsers} className="mt-0.5 h-3.5 w-3.5 text-brand-600" />
-                  <span>
-                    To give a whole group work, use <strong>Assign case</strong> on the Groups page.
-                    The group shares one case and each member is graded on their own.
-                  </span>
-                </p>
-              )}
-
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
-                    <FontAwesomeIcon icon={faUser} className="text-brand-600" />
-                    Select Students
-                  </h3>
-                  <button
-                    onClick={() => toggleMany(pickable(filteredStudents.map((s) => s.id)))}
-                    disabled={pickable(filteredStudents.map((s) => s.id)).length === 0}
-                    className="text-sm text-brand-600 hover:text-brand-700 font-semibold disabled:opacity-40"
-                  >
-                    {pickable(filteredStudents.map((s) => s.id)).length > 0 &&
-                    pickable(filteredStudents.map((s) => s.id)).every((id) => selectedStudents.includes(id))
-                      ? "Clear All"
-                      : "Select All"}
-                  </button>
-                </div>
-                <div className="mb-3">
-                  <div className="relative">
-                    <FontAwesomeIcon
-                      icon={faSearch}
-                      className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500"
-                    />
-                    <input
-                      type="text"
-                      value={studentSearchQuery}
-                      onChange={(e) => setStudentSearchQuery(e.target.value)}
-                      placeholder="Search by name, email, section or group..."
-                      className={inputClassName + " pl-10"}
-                    />
-                  </div>
-                </div>
-                <p className="mb-2 text-xs text-gray-500">
-                  {selectedScenario.offering_id
-                    ? "Only the students you handle in this patient case's course are listed."
-                    : "This patient case isn't in a course, so the students you handle in all your courses are listed."}
-                </p>
-                <div className="border border-gray-200 rounded-xl max-h-[320px] overflow-y-auto custom-scrollbar">
-                  {assignRoster === null ? (
-                    <div className="flex items-center justify-center gap-2 p-6 text-sm text-gray-500">
-                      <EcgLoader className="text-brand-600" />
-                      Loading your students…
-                    </div>
-                  ) : assignRosterError ? (
-                    <div className="p-4 text-center text-sm text-red-600">{assignRosterError}</div>
-                  ) : filteredStudents.length === 0 ? (
-                    <div className="p-4 text-center text-gray-500 text-sm">
-                      {studentSearchQuery
-                        ? "No students match your search"
-                        : "No students in this course yet. Students join a course through their section or group."}
-                    </div>
-                  ) : (
-                    <table className="w-full">
-                      <thead className="bg-gray-50 sticky top-0 z-10">
-                        <tr>
-                          <th className="text-left py-2.5 px-4 text-xs font-semibold text-gray-600 w-16">
-                            Select
-                          </th>
-                          <th className="text-left py-2.5 px-4 text-xs font-semibold text-gray-600">
-                            Name
-                          </th>
-                          <th className="text-left py-2.5 px-4 text-xs font-semibold text-gray-600">
-                            Email
-                          </th>
-                        </tr>
-                      </thead>
-                      {assignSections.map(({ section, groups }) => {
-                        return (
-                          <tbody key={section} className="border-t-2 border-gray-200 first:border-t-0">
-                            {groups.map(([group, list]) => {
-                              const groupIds = pickable(list.map((st) => st.id));
-                              const groupPicked = groupIds.filter((id) => selectedStudents.includes(id)).length;
-                              const groupAssigned = list.length - groupIds.length;
-                              return [
-                                <tr
-                                  key={`${group}-head`}
-                                  // Stays under the column headings while its students scroll by.
-                                  className="sticky top-[37px] z-[5] bg-[color-mix(in_srgb,var(--color-brand-600)_8%,var(--color-surface))] shadow-[0_1px_0_var(--color-gray-200)]"
-                                >
-                                  <td className="py-2 px-4">
-                                    <input
-                                      type="checkbox"
-                                      aria-label={`Select all of ${section} ${group}`}
-                                      checked={groupIds.length === 0 || groupPicked === groupIds.length}
-                                      disabled={groupIds.length === 0}
-                                      title={groupIds.length === 0 ? "Everyone in this group already has this case" : undefined}
-                                      ref={(el) => {
-                                        if (el) el.indeterminate = groupPicked > 0 && groupPicked < groupIds.length;
-                                      }}
-                                      onChange={() => toggleMany(groupIds)}
-                                      className="w-4 h-4 text-brand-600 rounded focus:ring-brand-600"
-                                    />
-                                  </td>
-                                  <td colSpan={2} className="py-2 px-4">
-                                    <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm">
-                                      <FontAwesomeIcon icon={faUsers} className="h-3.5 w-3.5 text-brand-600" />
-                                      <span className="font-bold text-gray-900">{section}</span>
-                                      <span className="text-gray-300">·</span>
-                                      <span className="font-semibold text-gray-700">{group}</span>
-                                      <span className="text-xs text-gray-500">
-                                        {list.length} student{list.length === 1 ? "" : "s"}
-                                        {groupAssigned > 0 ? ` · ${groupAssigned} assigned` : ""}
-                                        {groupPicked > 0 ? ` · ${groupPicked} selected` : ""}
-                                      </span>
-                                    </span>
-                                  </td>
-                                </tr>,
-                                ...list.map((student) => {
-                                  const info = studentById.get(student.id);
-                                  const assigned = alreadyAssigned.has(student.id);
-                                  return (
-                                    <tr
-                                      key={student.id}
-                                      className={`border-t border-gray-100 transition-colors ${
-                                        assigned
-                                          ? "bg-emerald-50/50"
-                                          : selectedStudents.includes(student.id)
-                                            ? "cursor-pointer bg-brand-600/5 hover:bg-brand-600/10"
-                                            : "cursor-pointer hover:bg-gray-50"
-                                      }`}
-                                      onClick={assigned ? undefined : () => toggleStudentSelection(student.id)}
-                                    >
-                                      <td className="py-2.5 px-4" onClick={(e) => e.stopPropagation()}>
-                                        {assigned ? (
-                                          <FontAwesomeIcon
-                                            icon={faCheck}
-                                            className="ml-0.5 h-3.5 w-3.5 text-emerald-600"
-                                            aria-label="Already assigned"
-                                          />
-                                        ) : (
-                                          <input
-                                            type="checkbox"
-                                            checked={selectedStudents.includes(student.id)}
-                                            onChange={() => toggleStudentSelection(student.id)}
-                                            className="w-4 h-4 text-brand-600 rounded focus:ring-brand-600"
-                                          />
-                                        )}
-                                      </td>
-                                      <td className="py-2.5 px-4 text-sm text-gray-800">
-                                        <div className="flex items-center gap-2">
-                                          <Avatar
-                                            name={student.name}
-                                            src={student.picture_url}
-                                            userId={student.id}
-                                            sex={info?.sex}
-                                            size="xs"
-                                          />
-                                          {student.name}
-                                          {assigned && (
-                                            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
-                                              Assigned
-                                            </span>
-                                          )}
-                                          {student.source === "added" && (
-                                            <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-600">
-                                              Added by you
-                                            </span>
-                                          )}
-                                        </div>
-                                      </td>
-                                      <td className="py-2.5 px-4 text-sm text-gray-500">{student.email}</td>
-                                    </tr>
-                                  );
-                                }),
-                              ];
-                            })}
-                          </tbody>
-                        );
-                      })}
-                    </table>
-                  )}
-                </div>
-                <p className="text-sm text-gray-500 mt-2">{assignCount} student(s) selected</p>
-              </div>
-            </div>
-
-            <div className="p-4 border-t border-hairline bg-subtle">
-              <div className="flex justify-end gap-3">
-                <button
-                  onClick={() => setShowAssignModal(false)}
-                  className="px-5 py-2.5 bg-surface border border-gray-200 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-all"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleAssignScenario}
-                  disabled={assignCount === 0 || !assignDeadline || assigning}
-                  className="px-5 py-2.5 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
-                >
-                  {assigning && <EcgLoader />}
-                  Assign to {assignCount} Student
-                  {assignCount !== 1 ? "s" : ""}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <AssignStudentsModal
+          heading="Assign Patient Case"
+          title={selectedScenario.title}
+          noun="patient case"
+          offeringId={selectedScenario.offering_id ?? null}
+          fallbackOfferingIds={(data?.offerings ?? []).map((o) => o.id)}
+          alreadyAssigned={new Set(selectedScenario.student_ids ?? [])}
+          sexOf={(id) => studentById.get(id)?.sex}
+          note={
+            assignHasTeams ? (
+              <p className="flex items-start gap-2 rounded-xl border border-hairline bg-subtle px-3 py-2 text-xs text-gray-600">
+                <FontAwesomeIcon icon={faUsers} className="mt-0.5 h-3.5 w-3.5 text-brand-600" />
+                <span>
+                  To give a whole group work, use <strong>Assign case</strong> on the Groups page.
+                  The group shares one case and each member is graded on their own.
+                </span>
+              </p>
+            ) : undefined
+          }
+          onClose={() => setShowAssignModal(false)}
+          onAssign={handleAssignScenario}
+        />
       )}
 
       {/* Link Patient Modal */}
@@ -1983,7 +1421,3 @@ export default function FacultyScenariosClient() {
   );
 }
 
-/** "Oct 16, 2026": a case is performed on a day, so no time. */
-function performDate(iso: string | null): string {
-  return iso ? new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "";
-}

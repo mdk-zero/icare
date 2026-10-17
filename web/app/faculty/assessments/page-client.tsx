@@ -7,6 +7,7 @@ import {
   faPlus,
   faTimes,
   faUserPlus,
+  faClock,
   faListCheck,
   faTrash,
   faPen,
@@ -576,11 +577,30 @@ export default function FacultyAssessmentsClient() {
                         : a.student_count > 0
                           ? `Assigned to ${audience}`
                           : `Visible to ${audience} · not assigned`;
+                      const created = new Date(a.created_at);
                       return (
-                        <p className={`flex min-w-0 items-center gap-2 text-xs font-medium ${a.is_published ? "text-green-700" : "text-gray-500"}`}>
-                          <span aria-hidden className={`h-2 w-2 shrink-0 rounded-full ${a.is_published ? "bg-green-600" : "bg-gray-300"}`} />
-                          <span className="truncate" title={label}>{label}</span>
-                        </p>
+                        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                          <p className={`flex min-w-0 items-center gap-2 text-xs font-medium ${a.is_published ? "text-green-700" : "text-gray-500"}`}>
+                            <span aria-hidden className={`h-2 w-2 shrink-0 rounded-full ${a.is_published ? "bg-green-600" : "bg-gray-300"}`} />
+                            <span className="truncate" title={label}>{label}</span>
+                          </p>
+                          {/* When it was made, as on patient case and Return Demonstration cards. */}
+                          <span
+                            className="flex items-center gap-1.5 text-xs text-gray-400"
+                            title={created.toLocaleString("en-US", { dateStyle: "full", timeStyle: "short" })}
+                          >
+                            <FontAwesomeIcon icon={faClock} className="h-3 w-3 shrink-0" />
+                            Created{" "}
+                            {created.toLocaleString("en-US", {
+                              month: "short",
+                              day: "numeric",
+                              // This year's go without the year, so the stamp fits.
+                              year: created.getFullYear() === new Date().getFullYear() ? undefined : "numeric",
+                              hour: "numeric",
+                              minute: "2-digit",
+                            })}
+                          </span>
+                        </div>
                       );
                     })()}
                     {/* One row: the two assign actions, then icon buttons. */}

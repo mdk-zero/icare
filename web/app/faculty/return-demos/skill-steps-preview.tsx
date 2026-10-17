@@ -9,7 +9,8 @@ import { usePageData } from "../../lib/use-page-data";
 /**
  * The checklist each picked skill becomes, word for word: what the student
  * will demonstrate and you will grade, one row per step. Only the variants
- * picked (oral, rectal, axillary temperature...) are listed.
+ * picked (oral, rectal, axillary temperature...) are listed, and steps left
+ * out in the skill picker aren't: this is what the student sees.
  */
 export default function SkillStepsPreview({ value }: { value: SkillSelection[] }) {
   const ids = value.map((s) => s.id);
@@ -23,12 +24,17 @@ export default function SkillStepsPreview({ value }: { value: SkillSelection[] }
   return (
     <div className="rounded-xl border border-hairline bg-surface p-4">
       <p className="text-sm font-bold text-gray-800">What students demonstrate</p>
-      <p className="mt-0.5 text-xs text-gray-500">Each step is graded Excellent, Satisfactory, Needs Practice or N/A.</p>
+      <p className="mt-0.5 text-xs text-gray-500">
+        What students see and prepare from. Each step is graded Excellent, Satisfactory or Needs Practice.
+      </p>
       <ul className="mt-3 space-y-2">
         {value.map((sel) => {
           const detail = (details ?? []).find((d) => d.id === sel.id);
           const sections = sel.sections ?? detail?.variants.defaults ?? [];
-          const steps = (detail?.steps ?? []).filter((st) => st.section === null || sections.includes(st.section));
+          const skipped = sel.skipped ?? [];
+          const steps = (detail?.steps ?? []).filter(
+            (st) => (st.section === null || sections.includes(st.section)) && !skipped.includes(st.position),
+          );
           const isOpen = open === sel.id;
           return (
             <li key={sel.id} className="rounded-lg border border-hairline">
@@ -40,7 +46,12 @@ export default function SkillStepsPreview({ value }: { value: SkillSelection[] }
               >
                 <span className="min-w-0 flex-1 text-sm text-gray-800">
                   <span className="font-mono text-xs text-indigo-700">Skill {sel.id}</span> {detail?.title ?? ""}
-                  {detail && <span className="ml-1 text-xs text-gray-500">· {steps.length} steps</span>}
+                  {detail && (
+                    <span className="ml-1 text-xs text-gray-500">
+                      · {steps.length} steps
+                      {skipped.length > 0 ? ` (${skipped.length} left out)` : ""}
+                    </span>
+                  )}
                 </span>
                 <FontAwesomeIcon
                   icon={faChevronDown}
