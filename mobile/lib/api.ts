@@ -668,15 +668,39 @@ export async function updateProfile(name: string): Promise<User> {
 /** Mirrors web/app/lib/support.ts; the server refuses any other value. */
 export type SupportTopic = 'problem' | 'question' | 'account' | 'suggestion' | 'other';
 
+/** An uploaded proof image, as /api/support/attachments returns it. */
+export interface SupportAttachment {
+  path: string;
+  name: string;
+  type: string;
+  size: number;
+}
+
+/** Mirrors SUPPORT_ATTACHMENTS in web/app/lib/support.ts. */
+export const SUPPORT_MAX_IMAGES = 4;
+
 /**
- * Help & Support: emails the iCARE++ team, who reply to the account's email.
- * Not queued offline like the clinical writes: the sender should know on the
- * spot whether it went.
+ * Uploads one already-shrunk JPEG for a Help & Support message. Like the
+ * avatar, never queued offline: a cache file URI may be gone by the time a
+ * replay ran.
+ */
+export async function uploadSupportImage(uri: string, name: string): Promise<SupportAttachment> {
+  const form = new FormData();
+  form.append('file', { uri, name, type: 'image/jpeg' } as unknown as Blob);
+  const result = await apiUpload<{ attachment: SupportAttachment }>('/api/support/attachments', form);
+  return result.attachment;
+}
+
+/**
+ * Help & Support: sends the message, with any uploaded images, to the
+ * iCARE++ team, who answer by email. Not queued offline like the clinical
+ * writes: the sender should know on the spot whether it went.
  */
 export async function sendSupportRequest(input: {
   topic: SupportTopic;
   subject: string;
   message: string;
+  attachments: SupportAttachment[];
 }): Promise<void> {
   await api<{ ok: true }>('/api/support', {
     method: 'POST',

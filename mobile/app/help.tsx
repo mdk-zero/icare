@@ -11,11 +11,21 @@ import {
   Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
+import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { useAuth } from '@/hooks/useAuth';
 import { SectionHeader } from '@/components/ui';
-import { sendSupportRequest, SupportTopic } from '@/lib/api';
+import {
+  sendSupportRequest,
+  SUPPORT_MAX_IMAGES,
+  uploadSupportImage,
+  type SupportAttachment,
+  type SupportTopic,
+} from '@/lib/api';
+import { isNetworkError } from '@/lib/client';
 
 /** Mirrors web/app/lib/support.ts. */
 const TOPICS: { value: SupportTopic; label: string }[] = [
@@ -30,9 +40,58 @@ const MAX_SUBJECT = 150;
 const MAX_MESSAGE = 4000;
 const CONTACT_EMAIL = 'contact@i-care.dev';
 
+/** Plenty for a screenshot to stay readable, and far under the 4 MB cap. */
+const MAX_IMAGE_PX = 1600;
+const JPEG_QUALITY = 0.8;
+
+type PickedImage = {
+  key: string;
+  uri: string;
+  status: 'uploading' | 'ready' | 'failed';
+  attachment?: SupportAttachment;
+};
+
+let nextImageKey = 0;
+
+/**
+ * Re-encodes a picked image as a JPEG the server accepts: iOS hands back
+ * HEIC, and a camera photo runs several times over the upload cap.
+ */
+async function toUploadableJpeg(asset: ImagePicker.ImagePickerAsset): Promise<string> {
+  const context = ImageManipulator.manipulate(asset.uri);
+  if (asset.width > MAX_IMAGE_PX || asset.height > MAX_IMAGE_PX) {
+    context.resize(asset.width >= asset.height ? { width: MAX_IMAGE_PX } : { height: MAX_IMAGE_PX });
+  }
+  const image = await context.renderAsync();
+  const saved = await image.saveAsync({ compress: JPEG_QUALITY, format: SaveFormat.JPEG });
+  return saved.uri;
+}
+
+function jpegName(asset: ImagePicker.ImagePickerAsset, index: number): string {
+  const base = asset.fileName?.replace(/\.[^.]+$/, '') || `image-${index + 1}`;
+  return `${base}.jpg`;
+}
+
+function permissionDenied(what: 'camera' | 'photos', canAskAgain: boolean) {
+  const subject = what === 'camera' ? 'the camera' : 'your photos';
+  if (canAskAgain) {
+    Alert.alert('Permission needed', `iCARE++ needs access to ${subject} to attach an image.`);
+    return;
+  }
+  Alert.alert(
+    'Permission needed',
+    `Access to ${subject} is turned off for iCARE++. You can enable it in Settings.`,
+    [
+      { text: 'Not now', style: 'cancel' },
+      { text: 'Open Settings', onPress: () => void Linking.openSettings() },
+    ],
+  );
+}
+
 /**
  * Help & Support for students and instructors: writes to the iCARE++ team,
- * who reply by email. Clinical help from an instructor is Request Assistance.
+ * with screenshots or photos as proof, and they reply by email. Clinical
+ * help from an instructor is Request Assistance.
  */
 export default function HelpScreen() {
   const { user } = useAuth();
@@ -47,8 +106,86 @@ export default function HelpScreen() {
   const [message, setMessage] = React.useState('');
   const [sending, setSending] = React.useState(false);
   const [sent, setSent] = React.useState(false);
+  const [images, setImages] = React.useState<PickedImage[]>([]);
+  // Uploads finish one after another, after renders; they patch the latest list.
+  const imagesRef = React.useRef<PickedImage[]>([]);
 
-  const canSend = !!topic && subject.trim().length > 0 && message.trim().length > 0 && !sending;
+  const commitImages = (next: PickedImage[]) => {
+    imagesRef.current = next;
+    setImages(next);
+  };
+  const patchImage = (key: string, patch: Partial<PickedImage>) =>
+    commitImages(imagesRef.current.map((img) => (img.key === key ? { ...img, ...patch } : img)));
+
+  const uploading = images.some((img) => img.status === 'uploading');
+  const failed = images.some((img) => img.status === 'failed');
+  const canSend =
+    !!topic &&
+    subject.trim().length > 0 &&
+    message.trim().length > 0 &&
+    !sending &&
+    !uploading &&
+    !failed;
+
+  const addAssets = async (assets: ImagePicker.ImagePickerAsset[]) => {
+    const room = SUPPORT_MAX_IMAGES - imagesRef.current.length;
+    if (assets.length > room) {
+      Alert.alert('Image limit', `You can attach up to ${SUPPORT_MAX_IMAGES} images.`);
+    }
+    const picked = assets.slice(0, Math.max(0, room)).map((asset) => ({
+      asset,
+      item: { key: `img-${++nextImageKey}`, uri: asset.uri, status: 'uploading' as const },
+    }));
+    if (picked.length === 0) return;
+    commitImages([...imagesRef.current, ...picked.map((p) => p.item)]);
+    // One at a time: a campus connection copes better than with four at once.
+    for (const [i, { asset, item }] of picked.entries()) {
+      try {
+        const uri = await toUploadableJpeg(asset);
+        const attachment = await uploadSupportImage(uri, jpegName(asset, i));
+        patchImage(item.key, { status: 'ready', attachment });
+      } catch (err) {
+        patchImage(item.key, { status: 'failed' });
+        if (isNetworkError(err)) {
+          Alert.alert('Upload failed', 'You appear to be offline. Remove the image and add it again once you reconnect.');
+        }
+      }
+    }
+  };
+
+  const pickFromLibrary = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) return permissionDenied('photos', permission.canAskAgain);
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsMultipleSelection: true,
+      selectionLimit: SUPPORT_MAX_IMAGES - imagesRef.current.length,
+      // Full quality out of the picker; toUploadableJpeg does the one compression pass.
+      quality: 1,
+    });
+    if (result.canceled) return;
+    await addAssets(result.assets);
+  };
+
+  const takePhoto = async () => {
+    const permission = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permission.granted) return permissionDenied('camera', permission.canAskAgain);
+    const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 1 });
+    if (result.canceled || !result.assets[0]) return;
+    await addAssets([result.assets[0]]);
+  };
+
+  /** Android caps Alert at three buttons, which this is. */
+  const addImage = () => {
+    if (sending) return;
+    Alert.alert('Attach an image', 'A screenshot or photo that shows the problem.', [
+      { text: 'Take photo', onPress: () => void takePhoto() },
+      { text: 'Choose from library', onPress: () => void pickFromLibrary() },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
+  const removeImage = (key: string) => commitImages(imagesRef.current.filter((img) => img.key !== key));
 
   const handleSend = async () => {
     if (!topic) {
@@ -61,10 +198,16 @@ export default function HelpScreen() {
     }
     setSending(true);
     try {
-      await sendSupportRequest({ topic, subject: subject.trim(), message: message.trim() });
+      await sendSupportRequest({
+        topic,
+        subject: subject.trim(),
+        message: message.trim(),
+        attachments: imagesRef.current.flatMap((img) => (img.attachment ? [img.attachment] : [])),
+      });
       setTopic(null);
       setSubject('');
       setMessage('');
+      commitImages([]);
       setSent(true);
     } catch (err) {
       Alert.alert('Could not send', err instanceof Error ? err.message : 'Please try again.');
@@ -155,6 +298,53 @@ export default function HelpScreen() {
               editable={!sending}
               style={[styles.input, styles.messageInput]}
             />
+
+            <Text style={[styles.fieldLabel, styles.fieldGap]}>Images (optional)</Text>
+            <View style={styles.thumbs}>
+              {images.map((img) => (
+                <View key={img.key} style={styles.thumb}>
+                  <Image source={{ uri: img.uri }} style={styles.thumbImage} contentFit="cover" />
+                  {img.status === 'uploading' && (
+                    <View style={styles.thumbOverlay}>
+                      <ActivityIndicator size="small" color="#fff" />
+                    </View>
+                  )}
+                  {img.status === 'failed' && (
+                    <View style={[styles.thumbOverlay, styles.thumbFailed]}>
+                      <Ionicons name="alert-circle" size={16} color="#fff" />
+                      <Text style={styles.thumbFailedText}>Failed</Text>
+                    </View>
+                  )}
+                  <Pressable
+                    onPress={() => removeImage(img.key)}
+                    disabled={sending}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel="Remove image"
+                    style={styles.thumbRemove}
+                  >
+                    <Ionicons name="close" size={13} color="#fff" />
+                  </Pressable>
+                </View>
+              ))}
+              {images.length < SUPPORT_MAX_IMAGES && (
+                <Pressable
+                  onPress={addImage}
+                  disabled={sending}
+                  accessibilityRole="button"
+                  accessibilityLabel="Attach an image"
+                  style={({ pressed }) => [styles.addThumb, pressed && styles.pressed]}
+                >
+                  <Ionicons name="image-outline" size={20} color={Palette.textSecondary} />
+                  <Text style={styles.addThumbText}>Add</Text>
+                </Pressable>
+              )}
+            </View>
+            <Text style={styles.imageHint}>
+              {failed
+                ? "Remove the images that didn't upload, then add them again."
+                : `Screenshots or photos of the problem, up to ${SUPPORT_MAX_IMAGES}.`}
+            </Text>
 
             <View style={styles.footer}>
               <Text style={styles.counter}>
@@ -283,6 +473,53 @@ function createStyles(
       justifyContent: 'center',
     },
     sendDisabled: { opacity: 0.5 },
+    thumbs: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
+    thumb: {
+      width: 68,
+      height: 68,
+      borderRadius: Radius.md,
+      overflow: 'hidden',
+      borderWidth: 1,
+      borderColor: Palette.border,
+      backgroundColor: Palette.background,
+    },
+    thumbImage: { width: '100%', height: '100%' },
+    thumbOverlay: {
+      position: 'absolute',
+      top: 0,
+      right: 0,
+      bottom: 0,
+      left: 0,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: 'rgba(0,0,0,0.4)',
+    },
+    thumbFailed: { backgroundColor: 'rgba(190,18,60,0.75)', gap: 2 },
+    thumbFailedText: { color: '#fff', fontSize: 10, fontWeight: '700' },
+    thumbRemove: {
+      position: 'absolute',
+      top: 4,
+      right: 4,
+      width: 22,
+      height: 22,
+      borderRadius: 11,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: 'rgba(0,0,0,0.6)',
+    },
+    addThumb: {
+      width: 68,
+      height: 68,
+      borderRadius: Radius.md,
+      borderWidth: 1,
+      borderStyle: 'dashed',
+      borderColor: Palette.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 2,
+    },
+    addThumbText: { fontSize: 11, fontWeight: '600', color: Palette.textSecondary },
+    imageHint: { ...Type.micro, marginTop: Spacing.xs, lineHeight: 16 },
     sendText: { color: '#fff', fontWeight: '700', fontSize: 13 },
     hint: { ...Type.micro, marginTop: Spacing.sm, lineHeight: 16 },
     sentIcon: {
