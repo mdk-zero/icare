@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { getSupabaseAdmin } from "@/app/lib/supabase/server";
 import { readSession } from "@/app/lib/auth/session";
 import { adminVisibleUserIds, getAdminScope } from "@/app/lib/admin-scope";
-import { viewerDeanId } from "@/app/lib/dean-scope";
+import { deanInstitution, viewerDeanId } from "@/app/lib/dean-scope";
 import { getStudentsWithWork } from "@/app/lib/faculty-dashboard";
 import { deanActorFilter } from "@/app/lib/audit-trail";
 import { DEMO_COOKIE } from "@/app/lib/demo/session";
@@ -236,6 +236,7 @@ async function loadDashboard(viewerId: string): Promise<DashboardData> {
   return {
     // The masthead greets whoever is signed in, the way the faculty one does.
     viewerName: users.find((u) => u.id === viewerId)?.name ?? null,
+    institution: (await deanInstitution(supabase, viewerId))?.name ?? null,
     totalStudents: students.length,
     assessedCount,
     atRiskCount,

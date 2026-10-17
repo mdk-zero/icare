@@ -7,6 +7,7 @@ import { audit } from "./shared";
 import { mlRun } from "./faculty";
 import { hasWork, scoredAt, submittedAttempts } from "./derive";
 import { byName, sectionName, teamLabel, userById } from "./scope";
+import { DEMO_INSTITUTION } from "../fixtures/school";
 
 /** The Dean portal's own API: the overview, instructors, sections, students, accounts. */
 
@@ -62,6 +63,7 @@ route("GET", "/api/admin/overview", (ctx) => {
 
   return {
     viewerName: ctx.viewer.name,
+    institution: DEMO_INSTITUTION,
     totalStudents: all.length,
     assessedCount: assessed.length,
     atRiskCount: atRisk,

@@ -3,7 +3,7 @@ import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { requireSuperAdmin } from '@/app/lib/auth/super-admin';
 import { applyRoleChangeReporting, parseSex } from '@/app/lib/auth/user';
 import { logAudit } from '@/app/lib/audit';
-import { countSuperAdmins, isAccountRole, selectAccounts, toAccount } from '@/app/lib/super-admin-users';
+import { countSuperAdmins, isAccountRole, resolveInstitution, selectAccounts, toAccount } from '@/app/lib/super-admin-users';
 import { updateUser } from '@/app/lib/auth/session';
 
 interface RouteParams {
@@ -45,7 +45,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     }
     updates.section_id = body.section_id || null;
   }
-  if (Object.keys(updates).length === 0) {
+  const namesInstitution = body.campus_id !== undefined || typeof body.new_institution === 'string';
+  if (Object.keys(updates).length === 0 && !namesInstitution) {
     return NextResponse.json({ error: 'Nothing to update' }, { status: 400 });
   }
 
@@ -55,6 +56,18 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     if (!target) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
     const nextRole = (updates.role as string | undefined) ?? (target.role as string);
+    // A Dean's institution (077). Their instructors and students move with
+    // them; an instructor's or student's own follows their Dean instead.
+    if (nextRole === 'admin' && namesInstitution) {
+      const institution = await resolveInstitution(supabase, body);
+      if (institution && 'error' in institution) {
+        return NextResponse.json({ error: institution.error }, { status: 400 });
+      }
+      if (institution) updates.campus_id = institution.id;
+    }
+    if (Object.keys(updates).length === 0) {
+      return NextResponse.json({ error: 'Nothing to update' }, { status: 400 });
+    }
     if (target.role === 'super_admin' && nextRole !== 'super_admin') {
       if (id === session.uid) {
         return NextResponse.json({ error: 'You cannot change your own role' }, { status: 400 });

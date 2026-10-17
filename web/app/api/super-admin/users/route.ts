@@ -6,7 +6,14 @@ import { generateRandomPassword, hashPassword } from '@/app/lib/auth/password';
 import { parseSex } from '@/app/lib/auth/user';
 import { logAudit } from '@/app/lib/audit';
 import { roleLabel } from '@/app/lib/role-labels';
-import { isAccountRole, selectAccounts, toAccount } from '@/app/lib/super-admin-users';
+import {
+  isAccountRole,
+  listInstitutions,
+  listSectionsWithOwner,
+  resolveInstitution,
+  selectAccounts,
+  toAccount,
+} from '@/app/lib/super-admin-users';
 
 /** Every account in the system, whichever admin owns it. */
 export async function GET() {
@@ -15,9 +22,11 @@ export async function GET() {
 
   try {
     const supabase = getSupabaseAdmin();
-    const [accounts, sections] = await Promise.all([
+    const [accounts, sections, institutions] = await Promise.all([
       selectAccounts(supabase),
-      supabase.from('sections').select('id, name').order('name'),
+      // Each with its Dean (077): two Deans may both have a "BSN 1101".
+      listSectionsWithOwner(supabase),
+      listInstitutions(supabase),
     ]);
     if (accounts.error) {
       console.error('Failed to list accounts', accounts.error);
@@ -25,7 +34,8 @@ export async function GET() {
     }
     return NextResponse.json({
       users: accounts.users.map(toAccount),
-      sections: sections.data ?? [],
+      sections,
+      institutions,
       owner_enabled: accounts.ownerEnabled,
     });
   } catch (err) {
@@ -59,8 +69,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Only students can be placed in a section' }, { status: 400 });
   }
   const adminId = typeof body.admin_id === 'string' && body.admin_id ? body.admin_id : null;
-  if (adminId && role !== 'faculty') {
-    return NextResponse.json({ error: 'Only instructors belong to a dean' }, { status: 400 });
+  if (adminId && role !== 'faculty' && role !== 'student') {
+    return NextResponse.json({ error: 'Only instructors and students belong to a dean' }, { status: 400 });
   }
 
   try {
@@ -91,6 +101,13 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // A Dean belongs to an institution (077); instructors and students take
+    // their Dean's.
+    const institution = role === 'admin' ? await resolveInstitution(supabase, body) : undefined;
+    if (institution && 'error' in institution) {
+      return NextResponse.json({ error: institution.error }, { status: 400 });
+    }
+
     const tempPassword = generateRandomPassword();
     const { data: created, error } = await supabase
       .from('users')
@@ -103,6 +120,7 @@ export async function POST(request: NextRequest) {
         force_password_change: true,
         section_id: sectionId,
         ...(adminId ? { admin_id: adminId } : {}),
+        ...(institution ? { campus_id: institution.id } : {}),
         ...(googleSub ? { google_sub: googleSub } : {}),
       })
       .select('id')

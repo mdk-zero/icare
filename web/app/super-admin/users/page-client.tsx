@@ -34,9 +34,19 @@ interface Account {
   section_id: string | null;
   section_name: string | null;
   admin_id?: string | null;
+  /** A Dean's institution (campuses, 077); instructors and students follow their Dean's. */
+  campus_id?: string | null;
+  institution_name?: string | null;
 }
 
 interface Section {
+  id: string;
+  name: string;
+  /** The Dean who owns it (077); null before it or when nobody does. */
+  admin_id?: string | null;
+}
+
+interface Institution {
   id: string;
   name: string;
 }
@@ -44,6 +54,8 @@ interface Section {
 interface AccountsPayload {
   users: Account[];
   sections: Section[];
+  /** Absent in a demo, which has no institutions to pick from. */
+  institutions?: Institution[];
   owner_enabled: boolean;
 }
 
@@ -54,7 +66,12 @@ interface FormState {
   sex: string;
   section_id: string;
   admin_id: string;
+  campus_id: string;
+  new_institution: string;
 }
+
+/** The institution picker's "make a new one" choice. */
+const NEW_INSTITUTION = "__new__";
 
 const EMPTY: AccountsPayload = { users: [], sections: [], owner_enabled: false };
 
@@ -94,7 +111,7 @@ function formatDate(value: string | null): string {
 }
 
 function blankForm(): FormState {
-  return { name: "", email: "", role: "student", sex: "", section_id: "", admin_id: "" };
+  return { name: "", email: "", role: "student", sex: "", section_id: "", admin_id: "", campus_id: "", new_institution: "" };
 }
 
 async function readJson<T>(res: Response): Promise<T & { error?: string }> {
@@ -118,7 +135,7 @@ export default function SuperAdminUsersClient() {
     setTimeout(() => setMessage(null), 5000);
   };
 
-  const { data, loading, setData } = usePageData("super-admin:users", async () => {
+  const { data, loading, setData, refresh } = usePageData("super-admin:users", async () => {
     const res = await apiFetch("/api/super-admin/users");
     if (!res.ok) return EMPTY;
     return (await res.json()) as AccountsPayload;
@@ -191,12 +208,18 @@ export default function SuperAdminUsersClient() {
       sex: user.sex ?? "",
       section_id: user.section_id ?? "",
       admin_id: user.admin_id ?? "",
+      campus_id: user.campus_id ?? "",
+      new_institution: "",
     });
     setEditing(user);
   };
 
   const handleSave = async () => {
     if (!editing) return;
+    if (form.role === "admin" && form.campus_id === NEW_INSTITUTION && !form.new_institution.trim()) {
+      flash("Name the new institution", "error");
+      return;
+    }
     setBusy(true);
     const creating = editing === "new";
     const body: Record<string, unknown> = {
@@ -204,7 +227,14 @@ export default function SuperAdminUsersClient() {
       role: form.role,
       sex: form.sex,
       section_id: form.role === "student" ? form.section_id || null : null,
-      ...(payload.owner_enabled ? { admin_id: form.role === "faculty" ? form.admin_id || null : null } : {}),
+      // Only an instructor's Dean is picked here; a student's follows their
+      // section (077), and other roles belong to no Dean.
+      ...(payload.owner_enabled && form.role === "faculty" ? { admin_id: form.admin_id || null } : {}),
+      ...(form.role === "admin" && payload.institutions
+        ? form.campus_id === NEW_INSTITUTION
+          ? { new_institution: form.new_institution }
+          : { campus_id: form.campus_id || null }
+        : {}),
       ...(creating ? { email: form.email } : {}),
       // Lets the server carry over a Google account picked on the request.
       ...(creating && fromRequest ? { request_id: fromRequest } : {}),
@@ -222,6 +252,9 @@ export default function SuperAdminUsersClient() {
     }
     const saved = json.user;
     setUsers((prev) => (creating ? [saved, ...prev] : prev.map((u) => (u.id === saved.id ? saved : u))));
+    // A new institution, or a Dean's move taking their people along (077):
+    // the cached list is stale either way.
+    if (form.role === "admin") void refresh();
     let requestWarning: string | undefined;
     if (creating && fromRequest) {
       const settled = await resolveAccessRequest(fromRequest, "accepted");
@@ -306,13 +339,29 @@ export default function SuperAdminUsersClient() {
     </>
   );
 
+  const deanName = (id: string | null | undefined) => (id ? admins.find((a) => a.id === id)?.name : null) ?? null;
+
+  // Where an account sits: a student's section (and its Dean, since two
+  // Deans may name sections alike), an instructor's Dean, a Dean's institution.
   const placement = (user: Account) => {
-    if (user.role === "student") return user.section_name ?? "No section";
-    if (user.role === "faculty" && payload.owner_enabled) {
-      return (user.admin_id ? admins.find((a) => a.id === user.admin_id)?.name : null) ?? "No dean";
+    if (user.role === "student") {
+      const dean = deanName(user.admin_id);
+      return [user.section_name ?? "No section", dean].filter(Boolean).join(" · ");
     }
+    if (user.role === "faculty" && payload.owner_enabled) return deanName(user.admin_id) ?? "No dean";
+    if (user.role === "admin" && payload.institutions) return user.institution_name ?? "No institution";
     return "—";
   };
+
+  // The section picker, grouped by Dean once sections have one (077).
+  const sectionsByDean = new Map<string, Section[]>();
+  for (const section of payload.sections) {
+    const key = section.admin_id ?? "";
+    sectionsByDean.set(key, [...(sectionsByDean.get(key) ?? []), section]);
+  }
+  const sectionGroups = [...sectionsByDean.entries()]
+    .map(([id, sections]) => ({ label: id ? (deanName(id) ?? "Another dean") : "No dean", sections }))
+    .sort((a, b) => a.label.localeCompare(b.label));
 
   const userActions = (user: Account) => (
     <div className="flex items-center justify-end gap-1">
@@ -468,7 +517,7 @@ export default function SuperAdminUsersClient() {
           <table className="w-full">
             <thead className="bg-subtle border-b border-gray-100">
               <tr>
-                {["User", "Role", "Section / Dean", "Created", "Last sign-in", ""].map((h) => (
+                {["User", "Role", "Belongs to", "Created", "Last sign-in", ""].map((h) => (
                   <th
                     key={h}
                     className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap"
@@ -641,12 +690,56 @@ export default function SuperAdminUsersClient() {
                   className={INPUT}
                 >
                   <option value="">No section</option>
-                  {payload.sections.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
+                  {sectionGroups.length > 1 || sectionGroups.some((g) => g.label !== "No dean")
+                    ? sectionGroups.map((group) => (
+                        <optgroup key={group.label} label={group.label}>
+                          {group.sections.map((s) => (
+                            <option key={s.id} value={s.id}>
+                              {s.name}
+                            </option>
+                          ))}
+                        </optgroup>
+                      ))
+                    : payload.sections.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name}
+                        </option>
+                      ))}
+                </select>
+                <p className="mt-1.5 text-xs text-gray-500">The student belongs to the dean whose section this is.</p>
+              </div>
+            )}
+            {form.role === "admin" && payload.institutions && (
+              <div>
+                <label className={LABEL} htmlFor="acct-institution">Institution</label>
+                <select
+                  id="acct-institution"
+                  value={form.campus_id}
+                  onChange={(e) => setForm({ ...form, campus_id: e.target.value })}
+                  className={INPUT}
+                >
+                  <option value="">No institution</option>
+                  {payload.institutions.map((i) => (
+                    <option key={i.id} value={i.id}>
+                      {i.name}
                     </option>
                   ))}
+                  <option value={NEW_INSTITUTION}>New institution…</option>
                 </select>
+                {form.campus_id === NEW_INSTITUTION && (
+                  <input
+                    aria-label="New institution name"
+                    value={form.new_institution}
+                    onChange={(e) => setForm({ ...form, new_institution: e.target.value })}
+                    placeholder="Institution name"
+                    maxLength={120}
+                    className={`${INPUT} mt-2`}
+                  />
+                )}
+                <p className="mt-1.5 text-xs text-gray-500">
+                  Each dean sees only their own instructors, students and records, even beside another dean of the same
+                  institution. Their instructors and students take this institution too.
+                </p>
               </div>
             )}
             {form.role === "faculty" && payload.owner_enabled && (
@@ -661,7 +754,7 @@ export default function SuperAdminUsersClient() {
                   <option value="">No dean</option>
                   {admins.map((a) => (
                     <option key={a.id} value={a.id}>
-                      {a.name}
+                      {a.institution_name ? `${a.name} · ${a.institution_name}` : a.name}
                     </option>
                   ))}
                 </select>

@@ -8,6 +8,7 @@ import type { DemoContext } from "./router";
 import { caseAverage, demoAttendanceRows, lastActivity, mean, quizAverage, submittedAttempts } from "./handlers/derive";
 import { activityLabel, byActivity, tallyAttendance } from "../attendance";
 import { sectionName, teamLabel as teamLabelUi, userById, visibleSections, visibleStudents } from "./handlers/scope";
+import { DEMO_INSTITUTION } from "./fixtures/school";
 
 /** The PDF's built-in Helvetica has no middle dot, so labels use an en dash. */
 const teamLabel: typeof teamLabelUi = (db, id) => teamLabelUi(db, id)?.replace(" – ", " – ") ?? null;
@@ -30,7 +31,7 @@ const date = (v: string | null) => (v ? new Date(v).toLocaleDateString("en-PH", 
 
 function meta(ctx: Ctx): ReportMeta {
   return {
-    campus: "Batangas State University – TNEU ARASOF Nasugbu",
+    campus: DEMO_INSTITUTION,
     generatedBy: ctx.viewer.name,
     generatedAt: new Date().toLocaleString("en-PH", { dateStyle: "long", timeStyle: "short" }),
   };

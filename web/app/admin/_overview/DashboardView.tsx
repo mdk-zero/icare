@@ -42,6 +42,8 @@ export interface AttentionItem {
 
 export interface DashboardData {
   viewerName: string | null;
+  /** The Dean's institution (077); null when none is set. */
+  institution?: string | null;
   totalStudents: number;
   assessedCount: number;
   atRiskCount: number;
@@ -180,7 +182,11 @@ export function DashboardView({ data }: { data: DashboardData }) {
           label: "Dean Dashboard",
         }}
         title={surname ? `Welcome back, Dean ${surname}!` : "Welcome back!"}
-        subtitle={`${today} • Here's what's happening across the program today.`}
+        subtitle={
+          data.institution
+            ? `${data.institution} • ${today}`
+            : `${today} • Here's what's happening across the program today.`
+        }
       />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

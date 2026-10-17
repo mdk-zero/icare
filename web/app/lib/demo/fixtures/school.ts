@@ -10,6 +10,9 @@
 
 import caseTasks from "./case-tasks.json";
 import { CASES, WARD_ROOMS } from "./cases-data";
+
+/** The institution the demo Dean belongs to, on the overview and on reports. */
+export const DEMO_INSTITUTION = "Batangas State University - The NEU ARASOF Nasugbu";
 import { SKILL_QUESTIONS } from "@/scripts/data/skill-questions";
 import {
   DEAN_ID,
