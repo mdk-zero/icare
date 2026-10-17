@@ -78,8 +78,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       });
     } catch (err) {
       console.error('Support reply email failed', err);
+      // Admins are the developers, and the provider's reason (an unverified
+      // sender domain, say) is the whole diagnosis, so it's shown as is.
+      const reason = err instanceof Error && err.message ? ` ${err.message}` : '';
       return NextResponse.json(
-        { error: `The reply could not be emailed to ${to}. Nothing was saved; please try again.` },
+        { error: `The reply could not be emailed to ${to}, so nothing was saved.${reason}` },
         { status: 502 },
       );
     }
