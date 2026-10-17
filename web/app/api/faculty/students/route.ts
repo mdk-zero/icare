@@ -68,7 +68,7 @@ export async function GET() {
     // Faculty see the members of the groups they supervise; an admin their own students.
     let query = supabase
       .from('users')
-      .select('id, email, name, role, picture_url, sex, section_id, created_at, sections(id, name)')
+      .select('id, email, name, role, picture_url, sex, section_id, created_at, sections!section_id(id, name)')
       .eq('role', 'student')
       .order('name', { ascending: true });
 
@@ -388,7 +388,7 @@ export async function PUT(request: NextRequest) {
       .from('users')
       .update(updates)
       .eq('id', id)
-      .select('id, email, name, role, picture_url, sex, section_id, sections(id, name)')
+      .select('id, email, name, role, picture_url, sex, section_id, sections!section_id(id, name)')
       .single();
 
     if (updateError) {

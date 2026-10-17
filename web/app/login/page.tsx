@@ -17,7 +17,7 @@ import {
   faHeart,
   faCirclePlay,
 } from "@fortawesome/free-solid-svg-icons";
-import { login, LoginRateLimitedError, logout, isAuthenticated, refreshCurrentUser, User, logAuditAction } from "../lib/api";
+import { login, LoginRateLimitedError, LoginServerError, logout, isAuthenticated, refreshCurrentUser, User, logAuditAction } from "../lib/api";
 import logo_white from "../../public/logo-white-no-bg.png";
 import logo_colour from "../../public/logo-no-bg.png";
 import { EcgLoader } from "../components/EcgLoader";
@@ -127,7 +127,7 @@ export default function LoginPage() {
       }
     } catch (err) {
       setError(
-        err instanceof LoginRateLimitedError
+        err instanceof LoginRateLimitedError || err instanceof LoginServerError
           ? err.message
           : "Connection error. Please make sure the backend is running.",
       );

@@ -24,7 +24,7 @@ export async function GET() {
     if (scope && scope.studentIds.length === 0) return NextResponse.json({ students: [] });
     let studentQuery = supabase
       .from('users')
-      .select('id, email, name, picture_url, sex, created_at, last_login_at, section_id, sections(name)')
+      .select('id, email, name, picture_url, sex, created_at, last_login_at, section_id, sections!section_id(name)')
       .eq('role', 'student')
       .order('name');
     if (scope) studentQuery = studentQuery.in('id', scope.studentIds);

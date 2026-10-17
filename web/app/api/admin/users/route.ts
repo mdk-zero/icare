@@ -156,7 +156,7 @@ export async function POST(request: NextRequest) {
         // A student in a section follows the section's Dean either way.
         ...(scope && (role === 'faculty' || role === 'student') ? { admin_id: session.uid } : {}),
       })
-      .select('id, email, name, role, picture_url, sex, created_at, last_login_at, section_id, sections(name)')
+      .select('id, email, name, role, picture_url, sex, created_at, last_login_at, section_id, sections!section_id(name)')
       .single();
 
     if (insertError || !user) {

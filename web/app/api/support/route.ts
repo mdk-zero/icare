@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
   try {
     const { data } = await getSupabaseAdmin()
       .from('users')
-      .select('name, sections(name)')
+      .select('name, sections!section_id(name)')
       .eq('id', session.uid)
       .maybeSingle();
     if (data?.name) name = data.name as string;

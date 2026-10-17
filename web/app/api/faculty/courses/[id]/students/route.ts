@@ -41,7 +41,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const [found, rosters] = await Promise.all([
       supabase
         .from('users')
-        .select('id, name, email, sections(name)')
+        .select('id, name, email, sections!section_id(name)')
         .eq('role', 'student')
         .or(`name.ilike.%${q}%,email.ilike.%${q}%`)
         .order('name')

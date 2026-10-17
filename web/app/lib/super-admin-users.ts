@@ -11,7 +11,7 @@ export function isAccountRole(value: unknown): value is AccountRole {
 
 // campus_id is the institution (007, shown as "Institution" since 077).
 const BASE_SELECT =
-  'id, email, name, role, picture_url, sex, created_at, last_login_at, force_password_change, section_id, sections(name), campus_id, campuses(name)';
+  'id, email, name, role, picture_url, sex, created_at, last_login_at, force_password_change, section_id, sections!section_id(name), campus_id, campuses(name)';
 
 /**
  * users.admin_id arrives with migration 053, which may not be applied yet.

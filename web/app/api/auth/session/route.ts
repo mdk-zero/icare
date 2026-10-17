@@ -18,7 +18,7 @@ export async function GET() {
     const supabase = getSupabaseAdmin();
     const { data, error } = await supabase
       .from('users')
-      .select(`${USER_SELECT}, sections(name)`)
+      .select(`${USER_SELECT}, sections!section_id(name)`)
       .eq('id', session.uid)
       .maybeSingle();
     if (error) throw error;

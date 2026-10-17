@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
     const supabase = getSupabaseAdmin();
     const skill = request.nextUrl.searchParams.get('skill');
 
-    const { data: me } = await supabase.from('users').select('section_id, sections(name)').eq('id', session.uid).single();
+    const { data: me } = await supabase.from('users').select('section_id, sections!section_id(name)').eq('id', session.uid).single();
     const section = (me?.sections as unknown as { name?: string } | null)?.name ?? null;
     // The courses they're on, for materials filed under a course (075).
     const offerings = await studentOfferings(supabase, session.uid, (me?.section_id as string | null) ?? null);

@@ -76,7 +76,7 @@ export async function buildStudentReport(
 ): Promise<BuildResult> {
   const { data: student } = await supabase
     .from('users')
-    .select('id, name, email, sections(name)')
+    .select('id, name, email, sections!section_id(name)')
     .eq('id', studentId)
     .eq('role', 'student')
     .maybeSingle();
@@ -583,7 +583,7 @@ export async function buildRosterReport(
   session: { uid: string; role: string },
   scope: StudentScope = null,
 ): Promise<BuildResult> {
-  let query = supabase.from('users').select('id, name, sections(name)').eq('role', 'student').order('name');
+  let query = supabase.from('users').select('id, name, sections!section_id(name)').eq('role', 'student').order('name');
 
   if (session.role === 'faculty') {
     // The members of the groups they supervise.

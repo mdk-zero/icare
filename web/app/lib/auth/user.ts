@@ -69,7 +69,7 @@ export function toPublicUser(
 export async function sectionNameOf(userId: string): Promise<string | null> {
   const { data, error } = await getSupabaseAdmin()
     .from('users')
-    .select('sections(name)')
+    .select('sections!section_id(name)')
     .eq('id', userId)
     .maybeSingle();
   if (error) throw error;

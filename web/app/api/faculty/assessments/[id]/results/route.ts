@@ -65,7 +65,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
     let studentQuery = supabase
       .from('users')
-      .select('id, name, email, picture_url, sex, sections(name)')
+      .select('id, name, email, picture_url, sex, sections!section_id(name)')
       .eq('role', 'student')
       .order('name');
     if (scopedIds) studentQuery = studentQuery.in('id', scopedIds);

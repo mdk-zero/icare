@@ -191,6 +191,13 @@ export interface AttemptResult {
 /** Sign-in was refused for too many attempts; `message` is the server's. */
 export class LoginRateLimitedError extends Error {}
 
+/**
+ * The server failed, so the password was never checked. Kept apart from a
+ * wrong password: showing "Invalid email or password" for a 500 sends people
+ * through password resets that cannot help.
+ */
+export class LoginServerError extends Error {}
+
 export async function login(email: string, password: string): Promise<{ user: User; sessionToken: string } | null> {
   // A real sign-in never mixes with a demo left open in this browser.
   endDemo();
@@ -208,6 +215,9 @@ export async function login(email: string, password: string): Promise<{ user: Us
   if (res.status === 429) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
     throw new LoginRateLimitedError(data.error || 'Too many sign-in attempts. Please try again later.');
+  }
+  if (res.status >= 500) {
+    throw new LoginServerError('Sign-in failed on our side, not because of your password. Please try again in a few minutes.');
   }
   try {
     if (!res.ok) return null;

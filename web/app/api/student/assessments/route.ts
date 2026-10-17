@@ -17,7 +17,7 @@ export async function GET() {
     // Get the student's section name (target_sections stores names)
     const { data: studentUser } = await supabase
       .from('users')
-      .select('section_id, sections(name)')
+      .select('section_id, sections!section_id(name)')
       .eq('id', session.uid)
       .single();
 

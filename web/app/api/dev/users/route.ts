@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
     const supabase = getSupabaseAdmin();
     const columns =
       'id, email, name, role, sex, picture_url, section_id, google_sub, ' +
-      'password_hash, force_password_change, created_at, last_login_at, sections(name)';
+      'password_hash, force_password_change, created_at, last_login_at, sections!section_id(name)';
     const list = (withAdmin: boolean) => {
       let query = supabase
         .from('users')

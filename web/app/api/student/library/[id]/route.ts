@@ -34,7 +34,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
 
   const [{ data, error }, { data: me }] = await Promise.all([
     supabase.from('library_materials').select(MATERIAL_COLUMNS).eq('id', id).eq('status', 'published').maybeSingle(),
-    supabase.from('users').select('section_id, sections(name)').eq('id', session.uid).single(),
+    supabase.from('users').select('section_id, sections!section_id(name)').eq('id', session.uid).single(),
   ]);
   if (error) {
     if (isMissingLibrary(error)) return NextResponse.json({ error: 'Material not found' }, { status: 404 });
