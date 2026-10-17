@@ -35,6 +35,9 @@ export function recordRequest(method: string, input: string, status: number, dur
   if (navigator.webdriver) return;
   // A demo's requests never leave the browser; they aren't real traffic either.
   if (isDemo()) return;
+  // next dev compiles each route on its first hit, and its samples land in
+  // the same live table as production's.
+  if (process.env.NODE_ENV === 'development') return;
   const path = input.split('?')[0];
   if (!path.startsWith('/api/') || path === ENDPOINT) return;
   buffer.push({ method, path, status, duration_ms: Math.round(durationMs), at: Date.now() });
