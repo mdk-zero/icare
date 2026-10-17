@@ -324,10 +324,24 @@ export default function ProfileScreen() {
       </View>
 
       <View style={styles.section}>
-        <SectionHeader title="Legal" />
+        <SectionHeader title="Help & Legal" />
         <View style={styles.listCard}>
           <Pressable
             style={({ pressed }) => [styles.linkItem, pressed && styles.pressedDim]}
+            onPress={() => router.push("/help")}
+            accessibilityRole="button"
+          >
+            <View style={[styles.linkIconContainer, { backgroundColor: Accent.teal.bg }]}>
+              <Ionicons name="help-buoy-outline" size={17} color={Accent.teal.fg} />
+            </View>
+            <View style={styles.settingTextWrap}>
+              <Text style={styles.linkText}>Help & Support</Text>
+              <Text style={styles.settingSubtext}>Report a problem or ask the iCARE++ team</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={17} color={Palette.textFaint} />
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [styles.linkItem, styles.rowBorder, pressed && styles.pressedDim]}
             onPress={openTerms}
             accessibilityRole="button"
           >

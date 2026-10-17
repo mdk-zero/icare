@@ -66,6 +66,13 @@ export default function InstructorMeScreen() {
 
   const legal = [
     {
+      label: "Help & Support",
+      detail: "Report a problem or ask the iCARE++ team",
+      icon: "help-buoy-outline" as const,
+      accent: Accent.teal,
+      onPress: () => router.push("/help"),
+    },
+    {
       label: "Terms of Use",
       detail: "The rules for using iCARE++",
       icon: "document-text-outline" as const,
@@ -156,7 +163,7 @@ export default function InstructorMeScreen() {
         </View>
       </View>
 
-      <SectionHeader title="Legal" />
+      <SectionHeader title="Help & Legal" />
       <View style={styles.listCard}>
         {legal.map((link, i) => (
           <Pressable

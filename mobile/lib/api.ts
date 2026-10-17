@@ -18,6 +18,7 @@ import {
   replaceToken,
   setToken,
 } from './client';
+import { Platform } from 'react-native';
 import type { AnomalyReason } from './vitals-rules';
 import type { ChecklistRating, TaskRating } from './task-ratings';
 
@@ -662,6 +663,25 @@ export async function updateProfile(name: string): Promise<User> {
     body: { name },
   });
   return result.user;
+}
+
+/** Mirrors web/app/lib/support.ts; the server refuses any other value. */
+export type SupportTopic = 'problem' | 'question' | 'account' | 'suggestion' | 'other';
+
+/**
+ * Help & Support: emails the iCARE++ team, who reply to the account's email.
+ * Not queued offline like the clinical writes: the sender should know on the
+ * spot whether it went.
+ */
+export async function sendSupportRequest(input: {
+  topic: SupportTopic;
+  subject: string;
+  message: string;
+}): Promise<void> {
+  await api<{ ok: true }>('/api/support', {
+    method: 'POST',
+    body: { ...input, client: `Mobile app · ${Platform.OS}` },
+  });
 }
 
 /**

@@ -53,6 +53,7 @@ function AuthStack() {
       <Stack.Screen name="account" options={{ title: 'Account' }} />
       <Stack.Screen name="account/password" options={{ title: 'Change Password' }} />
       <Stack.Screen name="assistance" options={{ title: 'Request Assistance' }} />
+      <Stack.Screen name="help" options={{ title: 'Help & Support' }} />
       <Stack.Screen
         name="change-password"
         options={{ title: 'Set a New Password', headerBackVisible: false }}
