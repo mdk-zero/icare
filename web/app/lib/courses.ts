@@ -479,11 +479,14 @@ export async function notifyCourseAssigned(
   sectionNames: string[],
 ): Promise<void> {
   const sections = sectionNames.length ? ` for ${sectionNames.join(', ')}` : '';
+  const next = sectionNames.length
+    ? 'Set up its requirements checklist.'
+    : 'Add the sections you teach it in, then set up its requirements checklist.';
   const { error } = await supabase.from('notifications').insert({
     user_id: facultyId,
     type: 'assignment_created',
     title: 'New course assignment',
-    body: `You were assigned ${course.code} ${course.title}${sections} (${termName}). Set up its requirements checklist.`,
+    body: `You were assigned ${course.code} ${course.title}${sections} (${termName}). ${next}`,
     data: { kind: 'course', offeringId },
   });
   if (error) console.error('Failed to notify instructor of course assignment', error);
@@ -537,7 +540,9 @@ export interface AssignmentTarget {
 
 /**
  * Check who a Dean is assigning a course to: one of their own instructors,
- * for sections they manage. Returns the error to show, or the resolved names.
+ * for sections they manage. Sections are optional: with none, the instructor
+ * adds the sections they teach it in themselves. Returns the error to show,
+ * or the resolved names.
  */
 export async function checkAssignmentTarget(
   supabase: Supabase,
@@ -546,7 +551,7 @@ export async function checkAssignmentTarget(
   sectionIds: string[] | null,
 ): Promise<Parsed<AssignmentTarget>> {
   if (typeof facultyId !== 'string' || !facultyId) return { ok: false, error: 'Choose an instructor' };
-  if (!sectionIds || sectionIds.length === 0) return { ok: false, error: 'Choose at least one section' };
+  if (!sectionIds) return { ok: false, error: 'Invalid sections' };
 
   const scope = await getAdminScope(supabase, adminId);
   if (!ownsFaculty(scope, facultyId)) return { ok: false, error: 'That instructor is not one of yours' };
@@ -555,21 +560,54 @@ export async function checkAssignmentTarget(
   );
   if (!faculty) return { ok: false, error: 'That instructor is not one of yours' };
 
-  const allowed = new Set(await manageableSectionIds(supabase, 'admin', adminId));
+  const allowed = new Set(sectionIds.length ? await manageableSectionIds(supabase, 'admin', adminId) : []);
   if (sectionIds.some((id) => !allowed.has(id))) return { ok: false, error: 'One of those sections is not yours to assign' };
-  const sections = (must(await supabase.from('sections').select('id, name').in('id', sectionIds)) ?? []) as {
-    id: string;
-    name: string;
-  }[];
+  const sections = await loadSectionNames(supabase, sectionIds);
   if (sections.length !== sectionIds.length) return { ok: false, error: 'One of those sections no longer exists' };
 
   return {
     ok: true,
     value: {
       faculty: { id: faculty.id as string, name: (faculty.name as string) ?? 'Instructor' },
-      sections: sections.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true })),
+      sections,
     },
   };
+}
+
+/** Sections by id with their names, in name order (BSN 1101 before BSN 1102). */
+export async function loadSectionNames(supabase: Supabase, sectionIds: string[]): Promise<{ id: string; name: string }[]> {
+  if (sectionIds.length === 0) return [];
+  const rows = (must(await supabase.from('sections').select('id, name').in('id', sectionIds)) ?? []) as {
+    id: string;
+    name: string;
+  }[];
+  return rows.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+}
+
+/**
+ * Make an offering's sections exactly these, adding and removing links. The
+ * checklist, entered scores and hand-added students are not touched.
+ */
+export async function setOfferingSections(supabase: Supabase, offeringId: string, sectionIds: string[]): Promise<void> {
+  const before = (await loadOfferingSections(supabase, [offeringId])).get(offeringId) ?? [];
+  const wanted = new Set(sectionIds);
+  const removed = before.filter((s) => !wanted.has(s));
+  const added = sectionIds.filter((s) => !before.includes(s));
+  if (removed.length) {
+    must(await supabase.from('course_offering_sections').delete().eq('offering_id', offeringId).in('section_id', removed));
+  }
+  if (added.length) {
+    must(
+      await supabase.from('course_offering_sections').insert(added.map((section_id) => ({ offering_id: offeringId, section_id }))),
+    );
+  }
+}
+
+/** "Michael Smith supervises no group in BSN 1101, so the whole section is on the roster." */
+export function wholeSectionWarnings(facultyName: string, sections: { id: string; name: string }[], without: Set<string>): string[] {
+  return sections
+    .filter((s) => without.has(s.id))
+    .map((s) => `${facultyName} supervises no group in ${s.name}, so the whole section is on the roster.`);
 }
 
 /** The Dean's own offering (through its course), with the course and term it belongs to. */
@@ -626,6 +664,44 @@ export async function loadOwnOffering(supabase: Supabase, facultyId: string, id:
     faculty_id: facultyId,
     section_ids: sections,
   };
+}
+
+export interface SectionChoice {
+  id: string;
+  name: string;
+  /** The course is in this section now. */
+  on_course: boolean;
+  /** The instructor's own groups there; none means the whole section joins the roster. */
+  groups: string[];
+}
+
+/**
+ * The sections an instructor can put their course in: the ones the course's
+ * Dean could have assigned it to (the Dean's sections), the sections of the
+ * groups the instructor supervises, and the sections it is in already.
+ */
+export async function instructorSectionChoices(supabase: Supabase, offering: OwnOffering): Promise<SectionChoice[]> {
+  const [course, me, teamsRes] = await Promise.all([
+    supabase.from('courses').select('admin_id').eq('id', offering.course.id).maybeSingle().then(must),
+    supabase.from('users').select('admin_id').eq('id', offering.faculty_id).maybeSingle().then(must),
+    supabase.from('teams').select('name, section_id').eq('faculty_id', offering.faculty_id),
+  ]);
+  if (teamsRes.error && !isMissingTeamTables(teamsRes.error)) throw teamsRes.error;
+  const teams = (teamsRes.error ? [] : (teamsRes.data ?? [])) as { name: string; section_id: string }[];
+
+  // The course's Dean, or the instructor's own when the course has lost its Dean.
+  const deanId = ((course?.admin_id as string | null) ?? (me?.admin_id as string | null)) || null;
+  const deanSections = deanId ? await manageableSectionIds(supabase, 'admin', deanId) : [];
+  const ids = [...new Set([...deanSections, ...teams.map((t) => t.section_id), ...offering.section_ids])];
+  const current = new Set(offering.section_ids);
+  return (await loadSectionNames(supabase, ids)).map((s) => ({
+    ...s,
+    on_course: current.has(s.id),
+    groups: teams
+      .filter((t) => t.section_id === s.id)
+      .map((t) => t.name)
+      .sort((a, b) => a.localeCompare(b, undefined, { numeric: true })),
+  }));
 }
 
 /**

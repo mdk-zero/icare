@@ -422,15 +422,6 @@ export function AssignmentModal({
     return map;
   }, [instructor]);
 
-  // A new assignment starts from the sections where the chosen instructor has groups.
-  const pickInstructor = (id: string) => {
-    setFacultyId(id);
-    const picked = instructors.find((f) => f.id === id);
-    if (!offering && picked && sectionIds.length === 0) {
-      setSectionIds([...new Set(picked.groups.map((g) => g.section_id))]);
-    }
-  };
-
   const orderedSections = useMemo(
     () =>
       [...sections].sort(
@@ -452,8 +443,8 @@ export function AssignmentModal({
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!termId || !courseId || !facultyId || sectionIds.length === 0) {
-      setError("Choose a term, a course, an instructor and at least one section.");
+    if (!termId || !courseId || !facultyId) {
+      setError("Choose a term, a course and an instructor.");
       return;
     }
     setSaving(true);
@@ -480,7 +471,7 @@ export function AssignmentModal({
       subtitle={
         offering
           ? `${term?.name ?? "Term"} · the checklist stays with the assignment`
-          : "Who teaches which course, for which sections"
+          : "Who teaches which course; the instructor can add the sections"
       }
       busy={saving}
       onClose={onClose}
@@ -534,7 +525,7 @@ export function AssignmentModal({
           <select
             id="assign-instructor"
             value={facultyId}
-            onChange={(e) => pickInstructor(e.target.value)}
+            onChange={(e) => setFacultyId(e.target.value)}
             disabled={saving}
             className={inputClass}
           >
@@ -553,7 +544,7 @@ export function AssignmentModal({
         </div>
         <fieldset>
           <legend className={labelClass}>
-            Sections <span className="text-rose-500">*</span>
+            Sections <span className="font-normal text-gray-400">(optional)</span>
           </legend>
           {sections.length === 0 ? (
             <p className="text-sm text-gray-500">You have no sections yet.</p>
@@ -577,10 +568,7 @@ export function AssignmentModal({
                         {!instructor ? null : groups ? (
                           <span className="block text-xs text-gray-500">Supervises {groups.join(", ")}</span>
                         ) : (
-                          <span className="flex items-center gap-1.5 text-xs text-amber-700">
-                            <FontAwesomeIcon icon={faTriangleExclamation} className="h-3 w-3" />
-                            No group here, so no students come from this section yet
-                          </span>
+                          <span className="block text-xs text-gray-500">No group here, so the whole section is on the roster</span>
                         )}
                       </span>
                     </label>
@@ -590,7 +578,8 @@ export function AssignmentModal({
             </ul>
           )}
           <p className="mt-1.5 text-xs text-gray-500">
-            The checklist covers the instructor&rsquo;s own group members in these sections.
+            Leave these empty and the instructor adds the sections they teach it in. Students come from the
+            instructor&rsquo;s groups in each section, or the whole section where they have no group.
           </p>
         </fieldset>
         <ErrorNote error={error} />
@@ -598,7 +587,7 @@ export function AssignmentModal({
           busy={saving}
           onClose={onClose}
           submitLabel={offering ? "Save assignment" : "Assign course"}
-          disabled={!termId || !courseId || !facultyId || sectionIds.length === 0 || !!clash}
+          disabled={!termId || !courseId || !facultyId || !!clash}
         />
       </form>
     </ModalFrame>

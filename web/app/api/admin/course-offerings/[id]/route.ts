@@ -8,13 +8,14 @@ import {
   courseFailure,
   loadDeanOffering,
   loadOfferingRosters,
-  loadOfferingSections,
   must,
   notFound,
   notifyCourseAssigned,
   readJson,
   requireRole,
+  setOfferingSections,
   stringList,
+  wholeSectionWarnings,
 } from '@/app/lib/courses';
 
 interface RouteParams {
@@ -52,9 +53,9 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
 
 /**
  * PATCH { faculty_id, section_ids }: hand the assignment to another of the
- * Dean's instructors, or change its sections. The checklist stays with the
- * assignment. The course and term are fixed; to change those, remove the
- * assignment and make a new one.
+ * Dean's instructors, or change its sections (none is fine: the instructor
+ * adds their own). The checklist stays with the assignment. The course and
+ * term are fixed; to change those, remove the assignment and make a new one.
  */
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   const { session, response } = await requireRole('admin');
@@ -69,7 +70,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const offering = await loadDeanOffering(supabase, session.uid, id);
     if (!offering) return notFound('Course assignment');
 
-    const target = await checkAssignmentTarget(supabase, session.uid, body.faculty_id, stringList(body.section_ids));
+    const target = await checkAssignmentTarget(supabase, session.uid, body.faculty_id, stringList(body.section_ids ?? []));
     if (!target.ok) return badRequest(target.error);
     const { faculty, sections } = target.value;
 
@@ -85,16 +86,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       if (error) throw error;
     }
 
-    const before = (await loadOfferingSections(supabase, [id])).get(id) ?? [];
-    const wanted = new Set(sections.map((s) => s.id));
-    const removed = before.filter((s) => !wanted.has(s));
-    const added = sections.map((s) => s.id).filter((s) => !before.includes(s));
-    if (removed.length) {
-      must(await supabase.from('course_offering_sections').delete().eq('offering_id', id).in('section_id', removed));
-    }
-    if (added.length) {
-      must(await supabase.from('course_offering_sections').insert(added.map((section_id) => ({ offering_id: id, section_id }))));
-    }
+    await setOfferingSections(supabase, id, sections.map((s) => s.id));
 
     const roster = (
       await loadOfferingRosters(supabase, [{ id, faculty_id: faculty.id, section_ids: sections.map((s) => s.id) }])
@@ -131,9 +123,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         sections: sections.map((s) => ({ ...s, has_group: !without.has(s.id) })),
         student_count: roster?.students.length ?? 0,
       },
-      warnings: sections
-        .filter((s) => without.has(s.id))
-        .map((s) => `${faculty.name} supervises no group in ${s.name}, so no students come from it yet.`),
+      warnings: wholeSectionWarnings(faculty.name, sections, without),
     });
   } catch (err) {
     return courseFailure(err, 'Unable to update course assignment');

@@ -347,9 +347,10 @@ route("DELETE", "/api/admin/terms/:id", (ctx) => {
 // Course assignments
 // ---------------------------------------------------------------------------
 
+/** Sections are optional: with none, the instructor adds their own. */
 function checkTarget(ctx: Ctx, facultyId: unknown, sectionIds: unknown): string | null {
   if (typeof facultyId !== "string" || !facultyId) return "Choose an instructor";
-  if (!Array.isArray(sectionIds) || sectionIds.length === 0) return "Choose at least one section";
+  if (!Array.isArray(sectionIds)) return "Invalid sections";
   const own = ctx.db.users.some((u) => u.id === facultyId && u.role === "faculty" && u.admin_id === ctx.viewer.id);
   if (!own) return "That instructor is not one of yours";
   if (sectionIds.some((id) => !ctx.db.sections.some((s) => s.id === id))) return "One of those sections no longer exists";
@@ -366,7 +367,9 @@ function notifyAssigned(ctx: Ctx, o: DemoOffering) {
     user_id: o.faculty_id,
     type: "assignment_created",
     title: "New course assignment",
-    body: `You were assigned ${course.code} ${course.title}${sections ? ` for ${sections}` : ""} (${term?.name ?? "this term"}). Set up its requirements checklist.`,
+    body: `You were assigned ${course.code} ${course.title}${sections ? ` for ${sections}` : ""} (${term?.name ?? "this term"}). ${
+      sections ? "Set up its requirements checklist." : "Add the sections you teach it in, then set up its requirements checklist."
+    }`,
     data: { kind: "course", offeringId: o.id },
     read_at: null,
     created_at: new Date().toISOString(),
@@ -381,7 +384,7 @@ route("POST", "/api/admin/course-offerings", (ctx) => {
   const term = ownTerms(ctx).find((t) => t.id === body?.term_id);
   if (!course) return json({ error: "That course is not one of yours" }, 400);
   if (!term) return json({ error: "That term is not one of yours" }, 400);
-  const problem = checkTarget(ctx, body?.faculty_id, body?.section_ids);
+  const problem = checkTarget(ctx, body?.faculty_id, body?.section_ids ?? []);
   if (problem) return json({ error: problem }, 400);
   if (db.offerings.some((o) => o.course_id === course.id && o.term_id === term.id && o.faculty_id === body.faculty_id)) {
     const name = db.users.find((u) => u.id === body.faculty_id)?.name ?? "That instructor";
@@ -392,7 +395,7 @@ route("POST", "/api/admin/course-offerings", (ctx) => {
     course_id: course.id,
     term_id: term.id,
     faculty_id: body.faculty_id,
-    section_ids: [...new Set<string>(body.section_ids)],
+    section_ids: [...new Set<string>(body.section_ids ?? [])],
     created_at: new Date().toISOString(),
   };
   db.offerings.push(offering);
@@ -414,7 +417,7 @@ route("PATCH", "/api/admin/course-offerings/:id", (ctx) => {
   const db = courseDb(ctx.db);
   const offering = ownOffering(ctx, ctx.params.id);
   if (!offering) return notFound("Course assignment not found");
-  const problem = checkTarget(ctx, ctx.body?.faculty_id, ctx.body?.section_ids);
+  const problem = checkTarget(ctx, ctx.body?.faculty_id, ctx.body?.section_ids ?? []);
   if (problem) return json({ error: problem }, 400);
   const reassigned = ctx.body.faculty_id !== offering.faculty_id;
   if (
@@ -424,7 +427,7 @@ route("PATCH", "/api/admin/course-offerings/:id", (ctx) => {
     return json({ error: "That instructor already teaches this course in this term." }, 409);
   }
   offering.faculty_id = ctx.body.faculty_id;
-  offering.section_ids = [...new Set<string>(ctx.body.section_ids)];
+  offering.section_ids = [...new Set<string>(ctx.body.section_ids ?? [])];
   if (reassigned) notifyAssigned(ctx, offering);
   audit(db, ctx.viewer, "course.assignment.update", "course_offerings", { reassigned }, offering.id);
   return { offering: offeringRow(db, offering), warnings: warningsFor(db, offering) };
@@ -880,6 +883,43 @@ route("GET", "/api/faculty/courses/:id/roster", (ctx) => {
   });
   const order = (x: { section: string; group: string; name: string }) => `${x.section} ${x.group} ${x.name}`;
   return { students: students.sort((a, b) => order(a).localeCompare(order(b), undefined, { numeric: true })) };
+});
+
+/** The sections an instructor can teach a course in: the whole (demo) school, as the Dean sees it. */
+function sectionChoices(db: DemoDb, o: DemoOffering, viewerId: string) {
+  return [...db.sections]
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
+    .map((s) => ({
+      id: s.id,
+      name: s.name,
+      on_course: o.section_ids.includes(s.id),
+      groups: db.teams
+        .filter((t) => t.section_id === s.id && t.faculty_id === viewerId)
+        .map((t) => t.name)
+        .sort((a, b) => a.localeCompare(b, undefined, { numeric: true })),
+    }));
+}
+
+route("GET", "/api/faculty/courses/:id/sections", (ctx) => {
+  if (!instructorOnly(ctx)) return forbidden();
+  const db = courseDb(ctx.db);
+  const o = ownFacultyOffering(ctx, ctx.params.id);
+  if (!o) return notFound("Course not found");
+  return { sections: sectionChoices(db, o, ctx.viewer.id) };
+});
+
+route("PUT", "/api/faculty/courses/:id/sections", (ctx) => {
+  if (!instructorOnly(ctx)) return forbidden();
+  const db = courseDb(ctx.db);
+  const o = ownFacultyOffering(ctx, ctx.params.id);
+  if (!o) return notFound("Course not found");
+  const ids: unknown = ctx.body?.section_ids;
+  if (!Array.isArray(ids) || ids.some((id) => typeof id !== "string")) return json({ error: "Invalid sections" }, 400);
+  if (termStatus(termOf(db, o)) === "ended") return json({ error: "This term has ended, so its roster is locked" }, 400);
+  if (ids.some((id) => !db.sections.some((s) => s.id === id))) return json({ error: "One of those sections is not open to you" }, 400);
+  o.section_ids = [...new Set<string>(ids)];
+  audit(db, ctx.viewer, "course.sections.update", "course_offerings", { sections: o.section_ids.map((id) => sectionName(db, id)) }, o.id);
+  return { success: true, student_count: offeringRoster(db, o).students.length };
 });
 
 route("GET", "/api/faculty/courses/:id/students", (ctx) => {

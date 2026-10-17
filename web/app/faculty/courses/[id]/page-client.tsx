@@ -8,6 +8,7 @@ import {
   faChartColumn,
   faChartLine,
   faCircleInfo,
+  faLayerGroup,
   faLock,
   faPenToSquare,
   faPercent,
@@ -33,6 +34,7 @@ import {
   type RequirementTopicKey,
 } from "../../../lib/course-progress";
 import RequirementModal from "./requirement-modal";
+import SectionsModal from "./sections-modal";
 import { SkeletonProgressGrid } from "../../../components/skeletons";
 import ProgressTab from "./progress-tab";
 import PerformanceTab from "./performance-tab";
@@ -71,6 +73,7 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
   const [removing, setRemoving] = useState<CourseRequirement | null>(null);
   const [removeBusy, setRemoveBusy] = useState(false);
   const [skillsOpen, setSkillsOpen] = useState(false);
+  const [sectionsOpen, setSectionsOpen] = useState(false);
 
   const { data, loading, refresh } = usePageData(`faculty:course:${offeringId}`, () =>
     fetchFacultyCourse(offeringId),
@@ -126,6 +129,7 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
   }
 
   const noGroup = offering?.sections.filter((s) => !s.has_group) ?? [];
+  const noSections = !!offering && offering.sections.length === 0;
 
   return (
     <div>
@@ -136,7 +140,43 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
           label: offering?.term.name ?? "Course",
         }}
         title={offering ? `${offering.course.code} · ${offering.course.title}` : "Course"}
+        subtitle={
+          offering
+            ? offering.sections.length
+              ? offering.sections.map((s) => s.name).join(" · ")
+              : "No sections yet"
+            : undefined
+        }
+        action={
+          offering
+            ? {
+                icon: <FontAwesomeIcon icon={faLayerGroup} className="h-3.5 w-3.5" />,
+                text: "Sections",
+                label: locked
+                  ? "This term has ended, so the course's sections can't change"
+                  : "Choose the sections you teach this course in",
+                onClick: () => setSectionsOpen(true),
+                disabled: locked,
+              }
+            : undefined
+        }
       />
+
+      {noSections && !locked && (
+        <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2.5 rounded-xl border border-brand-600/30 bg-brand-600/5 px-4 py-3 text-sm text-gray-700">
+          <FontAwesomeIcon icon={faLayerGroup} className="h-4 w-4 shrink-0 text-brand-600" />
+          <p className="min-w-0 flex-1">
+            This course has no sections yet. Add the sections you teach it in, and their students join your roster.
+          </p>
+          <button
+            type="button"
+            onClick={() => setSectionsOpen(true)}
+            className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-brand-700"
+          >
+            Add sections
+          </button>
+        </div>
+      )}
 
       {locked && (
         <div className="mb-4 flex items-start gap-2.5 rounded-xl border border-hairline bg-subtle px-4 py-3 text-sm text-gray-600">
@@ -292,6 +332,17 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
           onClose={() => setSkillsOpen(false)}
           onSaved={async () => {
             setSkillsOpen(false);
+            await refresh();
+          }}
+        />
+      )}
+      {sectionsOpen && offering && (
+        <SectionsModal
+          offeringId={offeringId}
+          courseCode={offering.course.code}
+          onClose={() => setSectionsOpen(false)}
+          onSaved={async () => {
+            setSectionsOpen(false);
             await refresh();
           }}
         />

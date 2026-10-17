@@ -11,13 +11,15 @@ import {
   readJson,
   requireRole,
   stringList,
+  wholeSectionWarnings,
 } from '@/app/lib/courses';
 
 /**
- * POST { course_id, term_id, faculty_id, section_ids }: assign one of the
- * Dean's courses to one of their instructors for some sections in a term.
- * Answers with warnings for sections where the instructor supervises no
- * group, since no students come from those.
+ * POST { course_id, term_id, faculty_id, section_ids? }: assign one of the
+ * Dean's courses to one of their instructors in a term. Sections are
+ * optional: without them the instructor adds the sections they teach it in.
+ * Answers with a note for each section where the instructor supervises no
+ * group, since the whole section is on the roster there.
  */
 export async function POST(request: NextRequest) {
   const { session, response } = await requireRole('admin');
@@ -28,7 +30,7 @@ export async function POST(request: NextRequest) {
   const { course_id: courseId, term_id: termId } = body;
   if (typeof courseId !== 'string' || !courseId) return badRequest('Choose a course');
   if (typeof termId !== 'string' || !termId) return badRequest('Choose a term');
-  const sectionIds = stringList(body.section_ids);
+  const sectionIds = stringList(body.section_ids ?? []);
 
   try {
     const supabase = getSupabaseAdmin();
@@ -56,13 +58,15 @@ export async function POST(request: NextRequest) {
     }
     if (error) throw error;
 
-    const linked = await supabase
-      .from('course_offering_sections')
-      .insert(sections.map((s) => ({ offering_id: offering.id, section_id: s.id })));
-    if (linked.error) {
-      // No half-made assignment: an offering without sections covers nobody.
-      await supabase.from('course_offerings').delete().eq('id', offering.id);
-      throw linked.error;
+    if (sections.length) {
+      const linked = await supabase
+        .from('course_offering_sections')
+        .insert(sections.map((s) => ({ offering_id: offering.id, section_id: s.id })));
+      if (linked.error) {
+        // No half-made assignment: the Dean asked for these sections.
+        await supabase.from('course_offerings').delete().eq('id', offering.id);
+        throw linked.error;
+      }
     }
 
     const roster = (
@@ -91,9 +95,7 @@ export async function POST(request: NextRequest) {
           student_count: roster?.students.length ?? 0,
           requirement_count: 0,
         },
-        warnings: sections
-          .filter((s) => without.has(s.id))
-          .map((s) => `${faculty.name} supervises no group in ${s.name}, so no students come from it yet.`),
+        warnings: wholeSectionWarnings(faculty.name, sections, without),
       },
       { status: 201 },
     );

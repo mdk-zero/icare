@@ -4500,6 +4500,25 @@ export const addCourseStudent = (offeringId: string, studentId: string) =>
 export const removeCourseStudent = (offeringId: string, studentId: string) =>
   courseRequest<{ success: true }>(`/api/faculty/courses/${offeringId}/students/${studentId}`, { method: 'DELETE' });
 
+/** A section an instructor can teach their course in. */
+export interface CourseSectionChoice {
+  id: string;
+  name: string;
+  /** The course is in this section now. */
+  on_course: boolean;
+  /** The instructor's own groups there; none means the whole section joins the roster. */
+  groups: string[];
+}
+
+export const fetchCourseSectionChoices = (offeringId: string) =>
+  courseRequest<{ sections: CourseSectionChoice[] }>(`/api/faculty/courses/${offeringId}/sections`);
+
+export const saveCourseSections = (offeringId: string, sectionIds: string[]) =>
+  courseRequest<{ success: true; student_count: number }>(`/api/faculty/courses/${offeringId}/sections`, {
+    method: 'PUT',
+    body: { section_ids: sectionIds },
+  });
+
 export interface CourseProgress {
   offering: {
     id: string;

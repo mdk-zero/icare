@@ -11,6 +11,7 @@ import {
   faChartLine,
   faPercent,
   faChevronRight,
+  faLayerGroup,
   faPenToSquare,
   faPlus,
   faTriangleExclamation,
@@ -193,22 +194,30 @@ function CourseCard({ offering: o }: { offering: FacultyCourseSummary }) {
   const status = termStatus(o.term);
   const noGroup = o.sections.filter((s) => !s.has_group);
   const toScore = o.progress?.to_score ?? 0;
+  // A Dean can assign a course with no sections: adding them comes first.
   const next =
-    o.requirement_count === 0 && status !== "ended"
+    o.sections.length === 0 && status !== "ended"
       ? {
-          tab: "grading" as const,
-          icon: faPlus,
-          text: "Set up the checklist",
+          tab: undefined,
+          icon: faLayerGroup,
+          text: "Add your sections",
           tone: "bg-brand-600/10 text-brand-800 hover:bg-brand-600/15",
         }
-      : toScore > 0
+      : o.requirement_count === 0 && status !== "ended"
         ? {
-            tab: "progress" as const,
-            icon: faPenToSquare,
-            text: `${plural(toScore, "Lab Activity score")} to enter`,
-            tone: "bg-teal-50 text-teal-800 hover:bg-teal-100",
+            tab: "grading" as const,
+            icon: faPlus,
+            text: "Set up the checklist",
+            tone: "bg-brand-600/10 text-brand-800 hover:bg-brand-600/15",
           }
-        : null;
+        : toScore > 0
+          ? {
+              tab: "progress" as const,
+              icon: faPenToSquare,
+              text: `${plural(toScore, "Lab Activity score")} to enter`,
+              tone: "bg-teal-50 text-teal-800 hover:bg-teal-100",
+            }
+          : null;
   const note =
     o.progress || next
       ? null
@@ -253,6 +262,7 @@ function CourseCard({ offering: o }: { offering: FacultyCourseSummary }) {
               {s.name}
             </span>
           ))}
+          {o.sections.length === 0 && <span className="text-xs text-gray-500">No sections yet</span>}
           <span className="ml-auto flex items-center gap-1.5 text-xs text-gray-500">
             <FontAwesomeIcon icon={faUsers} className="h-3 w-3 text-gray-400" />
             {plural(o.student_count, "student")}

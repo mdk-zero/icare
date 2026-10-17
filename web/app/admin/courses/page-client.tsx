@@ -310,6 +310,9 @@ export default function CoursesClient() {
                                   {!s.has_group && <span className="text-[10px] font-semibold opacity-70">whole section</span>}
                                 </span>
                               ))}
+                              {o.sections.length === 0 && (
+                                <span className="text-sm text-gray-500">None yet · the instructor adds them</span>
+                              )}
                             </div>
                           </td>
                           <td className="px-4 py-3 text-sm text-gray-800">{o.student_count}</td>
