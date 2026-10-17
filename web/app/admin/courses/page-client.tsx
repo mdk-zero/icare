@@ -1,12 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faBookMedical,
   faCalendarDays,
   faChalkboardUser,
-  faListCheck,
   faPenToSquare,
   faPlus,
   faTrashCan,
@@ -20,22 +20,17 @@ import CourseSkillsModal from "../../components/CourseSkillsModal";
 import { toast } from "../../components/Toast";
 import { usePageData } from "../../lib/use-page-data";
 import {
-  apiFetch,
   deleteCourse,
   deleteCourseOffering,
   deleteTerm,
   fetchCourseImpact,
-  fetchDeanCourses,
   fetchOfferingImpact,
-  fetchSections,
   fetchTermImpact,
   saveDeanCourseSkills,
   suggestDeanCourseSkills,
   type AcademicTerm,
   type CourseOfferingRow,
   type CourseSummary,
-  type DeanCourses,
-  type Section,
 } from "../../lib/api";
 import {
   TERM_STATUS_LABEL,
@@ -49,20 +44,9 @@ import {
   CourseFormModal,
   DeleteImpactModal,
   TermFormModal,
-  type InstructorOption,
 } from "./modals";
-
-type Tab = "assignments" | "courses" | "terms";
-
-const TABS: { id: Tab; label: string; icon: typeof faBookMedical }[] = [
-  { id: "assignments", label: "Assignments", icon: faChalkboardUser },
-  { id: "courses", label: "Courses", icon: faBookMedical },
-  { id: "terms", label: "Terms", icon: faCalendarDays },
-];
-
-const NO_DATA: DeanCourses = { terms: [], courses: [], offerings: [] };
-const NO_INSTRUCTORS: InstructorOption[] = [];
-const NO_SECTIONS: Section[] = [];
+import { NO_DATA, NO_INSTRUCTORS, loadDeanCourses } from "./load";
+import CourseBrowser from "./course-browser";
 
 const STATUS_STYLE: Record<TermStatus, string> = {
   current: "bg-emerald-50 text-emerald-700 ring-emerald-600/20",
@@ -70,7 +54,6 @@ const STATUS_STYLE: Record<TermStatus, string> = {
   ended: "bg-gray-100 text-gray-500 ring-gray-500/20",
 };
 
-const thClass = "px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-500";
 const cardClass =
   "overflow-hidden rounded-xl border border-hairline bg-surface shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)]";
 
@@ -101,39 +84,21 @@ type Dialog =
   | { kind: "unassign"; offering: CourseOfferingRow };
 
 export default function CoursesClient() {
-  const [tab, setTab] = useState<Tab>("assignments");
+  const router = useRouter();
   const [termFilter, setTermFilter] = useState<string | null>(null);
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
 
-  const { data, loading, refresh } = usePageData("admin:courses", async () => {
-    const [courses, facultyRes, sections] = await Promise.all([
-      fetchDeanCourses(),
-      apiFetch("/api/admin/faculty", { credentials: "include" }),
-      fetchSections(),
-    ]);
-    const instructors = facultyRes.ok
-      ? ((await facultyRes.json()) as { faculty?: InstructorOption[] }).faculty ?? NO_INSTRUCTORS
-      : NO_INSTRUCTORS;
-    return {
-      courses: courses.data ?? NO_DATA,
-      error: courses.error ?? null,
-      instructors,
-      sections,
-    };
-  });
+  const { data, loading, refresh } = usePageData("admin:courses", loadDeanCourses);
 
   const { terms, courses, offerings } = data?.courses ?? NO_DATA;
   const instructors = data?.instructors ?? NO_INSTRUCTORS;
-  const sections = data?.sections ?? NO_SECTIONS;
   const loadError = data?.error ?? null;
 
   const selectedTerm = termFilter ?? defaultTerm(terms);
-  const termOfferings = useMemo(
-    () => offerings.filter((o) => o.term_id === selectedTerm),
-    [offerings, selectedTerm],
-  );
   const courseById = useMemo(() => new Map(courses.map((c) => [c.id, c])), [courses]);
+  const termRow = terms.find((t) => t.id === selectedTerm) ?? null;
+  const termOverlaps = termRow ? terms.filter((o) => o.id !== termRow.id && termsOverlap(o, termRow)) : [];
   const current = terms.find((t) => termStatus(t) === "current");
 
   const closeAndReload = async () => {
@@ -141,26 +106,14 @@ export default function CoursesClient() {
     await refresh();
   };
 
+  // One process: Assign Course adds the term and the course as it goes, so
+  // every tab starts there. The tabs stay for looking things up and editing.
   const headerAction = {
-    assignments: {
-      onClick: () => setDialog({ kind: "assign", offering: null }),
-      label: "Assign a course to an instructor",
-      text: "Assign Course",
-      disabled: terms.length === 0 || courses.length === 0,
-    },
-    courses: {
-      onClick: () => setDialog({ kind: "course", course: null }),
-      label: "Add a course",
-      text: "Add Course",
-      disabled: false,
-    },
-    terms: {
-      onClick: () => setDialog({ kind: "term", term: null }),
-      label: "Add an academic term",
-      text: "Add Term",
-      disabled: false,
-    },
-  }[tab];
+    onClick: () => router.push("/admin/courses/new"),
+    label: "Assign a course to an instructor",
+    text: "Assign Course",
+    disabled: false,
+  };
 
   return (
     <div>
@@ -209,257 +162,63 @@ export default function CoursesClient() {
         />
       </div>
 
-      <div
-        role="tablist"
-        aria-label="Courses sections"
-        className="mb-4 flex gap-1 overflow-x-auto overflow-y-hidden shadow-[inset_0_-1px_0_var(--color-hairline)]"
-      >
-        {TABS.map((t) => {
-          const active = tab === t.id;
-          return (
-            <button
-              key={t.id}
-              type="button"
-              role="tab"
-              aria-selected={active}
-              onClick={() => setTab(t.id)}
-              className={`flex shrink-0 items-center gap-2 border-b-2 px-3.5 py-2.5 text-sm font-medium transition-colors ${
-                active
-                  ? "border-brand-600 text-brand-700"
-                  : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-800"
-              }`}
-            >
-              <FontAwesomeIcon icon={t.icon} className="h-3.5 w-3.5" />
-              {t.label}
-            </button>
-          );
-        })}
-      </div>
-
-      {tab === "assignments" && (
-        <section>
-          <div className="mb-3 flex flex-wrap items-center gap-3">
-            <FilterSelect
-              value={selectedTerm}
-              onChange={(e) => setTermFilter(e.target.value)}
-              aria-label="Term"
-              disabled={terms.length === 0}
-            >
-              {terms.length === 0 && <option value="">No terms yet</option>}
-              {terms.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name} · {TERM_STATUS_LABEL[termStatus(t)]}
-                </option>
-              ))}
-            </FilterSelect>
-            {terms.length === 0 || courses.length === 0 ? (
-              <p className="text-sm text-gray-500">
-                {terms.length === 0 ? "Add a term first (Terms tab)." : "Add a course first (Courses tab)."}
-              </p>
-            ) : null}
-          </div>
-          <div className={cardClass}>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="border-b border-gray-100 bg-subtle">
-                  <tr>
-                    <th className={thClass}>Course</th>
-                    <th className={thClass}>Instructor</th>
-                    <th className={thClass}>Sections</th>
-                    <th className={thClass}>Students</th>
-                    <th className={thClass}>Checklist</th>
-                    <th className={thClass}>
-                      <span className="sr-only">Actions</span>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-hairline">
-                  {loading ? (
-                    <SkeletonRows cols={6} />
-                  ) : termOfferings.length === 0 ? (
-                    <EmptyRow cols={6}>
-                      {terms.length === 0
-                        ? "No terms yet."
-                        : "No courses are assigned in this term yet. Use Assign Course to give one to an instructor."}
-                    </EmptyRow>
-                  ) : (
-                    termOfferings.map((o) => {
-                      const course = courseById.get(o.course_id);
-                      return (
-                        <tr key={o.id} className="hover:bg-subtle">
-                          <td className="px-4 py-3">
-                            <p className="font-semibold text-gray-800">{course?.code ?? "Course"}</p>
-                            <p className="text-sm text-gray-500">{course?.title}</p>
-                          </td>
-                          <td className="px-4 py-3 text-sm text-gray-800">
-                            {o.faculty_name ?? <span className="text-amber-700">No instructor</span>}
-                          </td>
-                          <td className="px-4 py-3">
-                            <div className="flex flex-wrap gap-1.5">
-                              {o.sections.map((s) => (
-                                <span
-                                  key={s.id}
-                                  title={
-                                    s.has_group
-                                      ? "Students of the instructor's groups here"
-                                      : "The instructor supervises no group here, so the whole section is on the roster"
-                                  }
-                                  className="inline-flex items-center gap-1 rounded-full bg-brand-600/10 px-2 py-0.5 text-xs font-medium text-brand-700"
-                                >
-                                  {s.name}
-                                  {!s.has_group && <span className="text-[10px] font-semibold opacity-70">whole section</span>}
-                                </span>
-                              ))}
-                              {o.sections.length === 0 && (
-                                <span className="text-sm text-gray-500">None yet · the instructor adds them</span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-4 py-3 text-sm text-gray-800">{o.student_count}</td>
-                          <td className="px-4 py-3 text-sm text-gray-500">
-                            {o.requirement_count === 0 ? "Not set up" : plural(o.requirement_count, "item")}
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            <ActionsMenu
-                              variant="compact"
-                              label={`Actions for ${course?.code ?? "assignment"}`}
-                              actions={[
-                                { label: "Edit", icon: faPenToSquare, onClick: () => setDialog({ kind: "assign", offering: o }) },
-                                { label: "Remove", icon: faTrashCan, danger: true, onClick: () => setDialog({ kind: "unassign", offering: o }) },
-                              ]}
-                            />
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </section>
-      )}
-
-      {tab === "courses" && (
-        <div className={cardClass}>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="border-b border-gray-100 bg-subtle">
-                <tr>
-                  <th className={thClass}>Course</th>
-                  <th className={thClass}>Skills</th>
-                  <th className={thClass}>Assignments</th>
-                  <th className={thClass}>
-                    <span className="sr-only">Actions</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-hairline">
-                {loading ? (
-                  <SkeletonRows cols={4} />
-                ) : courses.length === 0 ? (
-                  <EmptyRow cols={4}>No courses yet. Add your first one with Add Course.</EmptyRow>
-                ) : (
-                  courses.map((c) => (
-                    <tr key={c.id} className="hover:bg-subtle">
-                      <td className="max-w-md px-4 py-3">
-                        <p className="font-semibold text-gray-800">
-                          {c.code} <span className="font-normal text-gray-600">· {c.title}</span>
-                        </p>
-                        {c.description && <p className="line-clamp-2 text-sm text-gray-500">{c.description}</p>}
-                      </td>
-                      <td className="px-4 py-3">
-                        <button
-                          type="button"
-                          onClick={() => setDialog({ kind: "skills", course: c })}
-                          className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold transition-colors ${
-                            c.skill_ids.length > 0
-                              ? "bg-brand-600/10 text-brand-700 hover:bg-brand-600/15"
-                              : "bg-amber-50 text-amber-700 hover:bg-amber-100"
-                          }`}
-                        >
-                          <FontAwesomeIcon icon={faListCheck} className="h-3 w-3" />
-                          {c.skill_ids.length > 0 ? plural(c.skill_ids.length, "skill") : "Pick skills"}
-                        </button>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-800">{c.offering_count}</td>
-                      <td className="px-4 py-3 text-right">
-                        <ActionsMenu
-                          variant="compact"
-                          label={`Actions for ${c.code}`}
-                          actions={[
-                            { label: "Edit details", icon: faPenToSquare, onClick: () => setDialog({ kind: "course", course: c }) },
-                            { label: "Edit skills", icon: faListCheck, onClick: () => setDialog({ kind: "skills", course: c }) },
-                            { label: "Delete", icon: faTrashCan, danger: true, onClick: () => setDialog({ kind: "deleteCourse", course: c }) },
-                          ]}
-                        />
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+      {/* One view: the term, then its courses and who teaches them. */}
+      <section className={`${cardClass} mb-4`}>
+        <div className="flex flex-wrap items-center gap-3 px-4 py-3">
+          <FontAwesomeIcon icon={faCalendarDays} className="h-4 w-4 text-brand-600" />
+          <FilterSelect
+            value={selectedTerm}
+            onChange={(e) => setTermFilter(e.target.value)}
+            aria-label="Term"
+            disabled={terms.length === 0}
+          >
+            {terms.length === 0 && <option value="">No terms yet</option>}
+            {terms.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name} · {TERM_STATUS_LABEL[termStatus(t)]}
+              </option>
+            ))}
+          </FilterSelect>
+          {termRow && (
+            <>
+              <StatusBadge status={termStatus(termRow)} />
+              <span className="text-sm text-gray-600">{formatTermDates(termRow)}</span>
+              {termOverlaps.length > 0 && (
+                <span className="flex items-center gap-1.5 text-xs text-amber-700">
+                  <FontAwesomeIcon icon={faTriangleExclamation} className="h-3 w-3" />
+                  Overlaps {termOverlaps.map((o) => o.name).join(", ")}
+                </span>
+              )}
+              <div className="ml-auto">
+                <ActionsMenu
+                  variant="compact"
+                  label={`Actions for ${termRow.name}`}
+                  actions={[
+                    { label: "Edit term", icon: faPenToSquare, onClick: () => setDialog({ kind: "term", term: termRow }) },
+                    { label: "Delete term", icon: faTrashCan, danger: true, onClick: () => setDialog({ kind: "deleteTerm", term: termRow }) },
+                  ]}
+                />
+              </div>
+            </>
+          )}
         </div>
-      )}
+      </section>
 
-      {tab === "terms" && (
-        <div className={cardClass}>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="border-b border-gray-100 bg-subtle">
-                <tr>
-                  <th className={thClass}>Term</th>
-                  <th className={thClass}>Dates</th>
-                  <th className={thClass}>Assignments</th>
-                  <th className={thClass}>
-                    <span className="sr-only">Actions</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-hairline">
-                {loading ? (
-                  <SkeletonRows cols={4} />
-                ) : terms.length === 0 ? (
-                  <EmptyRow cols={4}>No terms yet. Add the current semester with Add Term.</EmptyRow>
-                ) : (
-                  terms.map((t) => {
-                    const overlaps = terms.filter((o) => o.id !== t.id && termsOverlap(o, t));
-                    return (
-                      <tr key={t.id} className="hover:bg-subtle">
-                        <td className="px-4 py-3">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="font-semibold text-gray-800">{t.name}</span>
-                            <StatusBadge status={termStatus(t)} />
-                          </div>
-                          {overlaps.length > 0 && (
-                            <p className="mt-0.5 flex items-center gap-1.5 text-xs text-amber-700">
-                              <FontAwesomeIcon icon={faTriangleExclamation} className="h-3 w-3" />
-                              Overlaps {overlaps.map((o) => o.name).join(", ")}
-                            </p>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-600">{formatTermDates(t)}</td>
-                        <td className="px-4 py-3 text-sm text-gray-800">{t.offering_count}</td>
-                        <td className="px-4 py-3 text-right">
-                          <ActionsMenu
-                            variant="compact"
-                            label={`Actions for ${t.name}`}
-                            actions={[
-                              { label: "Edit", icon: faPenToSquare, onClick: () => setDialog({ kind: "term", term: t }) },
-                              { label: "Delete", icon: faTrashCan, danger: true, onClick: () => setDialog({ kind: "deleteTerm", term: t }) },
-                            ]}
-                          />
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+      {/* The term's courses as cards: a course opens on its sections, a section on its instructors and skills. */}
+      <CourseBrowser
+        key={selectedTerm}
+        term={termRow}
+        courses={courses}
+        offerings={offerings}
+        loading={loading}
+        actions={{
+          editCourse: (course) => setDialog({ kind: "course", course }),
+          editSkills: (course) => setDialog({ kind: "skills", course }),
+          deleteCourse: (course) => setDialog({ kind: "deleteCourse", course }),
+          changeInstructor: (offering) => setDialog({ kind: "assign", offering }),
+          removeOffering: (offering) => setDialog({ kind: "unassign", offering }),
+        }}
+      />
 
       {dialog?.kind === "course" && (
         <CourseFormModal course={dialog.course} courses={courses} onClose={() => setDialog(null)} onSaved={closeAndReload} />
@@ -524,7 +283,6 @@ export default function CoursesClient() {
           courses={courses}
           offerings={offerings}
           instructors={instructors}
-          sections={sections}
           onClose={() => setDialog(null)}
           onSaved={async (next) => {
             setWarnings(next);
@@ -554,28 +312,3 @@ export default function CoursesClient() {
   );
 }
 
-function SkeletonRows({ cols }: { cols: number }) {
-  return (
-    <>
-      {Array.from({ length: 4 }).map((_, i) => (
-        <tr key={i} className="animate-pulse" aria-hidden>
-          {Array.from({ length: cols }).map((__, j) => (
-            <td key={j} className="px-4 py-3">
-              <div className={`h-4 rounded bg-gray-100 ${j === 0 ? "w-40" : "w-16"}`} />
-            </td>
-          ))}
-        </tr>
-      ))}
-    </>
-  );
-}
-
-function EmptyRow({ cols, children }: { cols: number; children: React.ReactNode }) {
-  return (
-    <tr>
-      <td colSpan={cols} className="px-4 py-12 text-center text-sm text-gray-400">
-        {children}
-      </td>
-    </tr>
-  );
-}
