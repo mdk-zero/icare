@@ -250,21 +250,31 @@ export default function SuperAdminUsersClient() {
   };
 
   const handleReset = async (user: Account) => {
-    if (!window.confirm(`Issue a new temporary password for ${user.name}? Their current password stops working.`)) return;
+    if (
+      !window.confirm(
+        `Issue a new temporary password for ${user.name}? It is emailed to ${user.email}, and their current password stops working.`,
+      )
+    )
+      return;
     setBusy(true);
     const res = await apiFetch(`/api/super-admin/users/${user.id}/password`, { method: "POST" });
-    const json = await readJson<{ password?: string }>(res);
+    const json = await readJson<{ success?: boolean; password?: string; warning?: string }>(res);
     setBusy(false);
-    if (!res.ok || !json.password) {
+    if (!res.ok) {
       flash(json.error ?? "Could not reset the password", "error");
       return;
     }
     setUsers((prev) => prev.map((u) => (u.id === user.id ? { ...u, force_password_change: true } : u)));
-    setRevealed({
-      email: user.email,
-      password: json.password,
-      note: "They will be asked to choose a new password when they sign in.",
-    });
+    // The password comes back only when the email could not go out.
+    if (json.password) {
+      setRevealed({
+        email: user.email,
+        password: json.password,
+        note: [json.warning, "They will be asked to choose a new password when they sign in."].filter(Boolean).join(" "),
+      });
+    } else {
+      flash(`Password reset. The new temporary password was emailed to ${user.email}.`);
+    }
   };
 
   const handleDelete = async (user: Account) => {

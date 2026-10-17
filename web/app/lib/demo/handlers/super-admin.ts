@@ -124,7 +124,10 @@ route("POST", "/api/super-admin/users/:id/password", (ctx) => {
   const user = userById(ctx.db, ctx.params.id);
   if (!user) return notFound("Account not found");
   audit(ctx.db, ctx.viewer, "user.password_reset", "users", { message: `Reset the password for ${user.name}` }, user.id);
-  return { password: "Demo-Reset-2026" };
+  return {
+    password: "Demo-Reset-2026",
+    warning: "This is a demo: no email was sent. In the real app the new password goes to their inbox.",
+  };
 });
 
 function settleRequest(ctx: Ctx, requestId: string, status: "accepted" | "declined") {

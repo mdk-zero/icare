@@ -534,6 +534,58 @@ export async function sendStudentInvitationEmail(
 }
 
 /**
+ * Sent when an Admin issues a new temporary password from Users. Staff sign
+ * in on the web (`signInUrl`); without one the account is a student's, which
+ * is pointed at the mobile app as the welcome email does.
+ */
+export async function sendAdminPasswordResetEmail(
+  email: string,
+  name: string,
+  password: string,
+  signInUrl?: string,
+): Promise<EmailResult> {
+  try {
+    if (!password) {
+      return { success: false, error: "A temporary password is required" };
+    }
+
+    // As with the OTPs: when dev mode skips delivery, the password has to
+    // surface somewhere or the account can't be signed into.
+    if (shouldSkipSending()) {
+      console.log(`[DEV] Temporary password for ${email}: ${password}`);
+      return { success: true };
+    }
+
+    const url = signInUrl ?? mobileAppUrl();
+    const safeUrl = url ? htmlEscape(url) : null;
+    await sendEmail({
+      to: email,
+      subject: "Your iCARE++ password was reset",
+      html: `
+    <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px; color: #0f172a;">
+      <h2 style="color: #0d7377; margin-bottom: 16px;">Your password was reset</h2>
+      <p style="margin-bottom: 16px;">Hi ${htmlEscape(name)},</p>
+      <p style="margin-bottom: 16px;">An iCARE++ administrator reset the password for <strong>${htmlEscape(email)}</strong>. Your old password no longer works, and any open sessions were signed out. Sign in ${signInUrl ? "on the web" : "on the iCARE++ mobile app"} with this temporary password:</p>
+      <div style="background: #f0f9fa; border: 1px solid #d0ebea; border-radius: 12px; padding: 20px; text-align: center; margin-bottom: 16px;">
+        <span style="font-family: monospace; font-size: 20px; font-weight: 600; letter-spacing: 1px; color: #0d7377;">${htmlEscape(password)}</span>
+      </div>
+      <p style="margin-bottom: 24px; font-size: 13px; color: #64748b;">You will be asked to choose a new password when you sign in.</p>
+      ${safeUrl ? `<p style="margin-bottom: 24px;"><a href="${safeUrl}" style="display: inline-block; padding: 12px 28px; background: #0d7377; color: #ffffff; text-decoration: none; border-radius: 10px; font-weight: 600;">${signInUrl ? "Sign in to iCARE++" : "Get the iCARE++ app"}</a></p>` : ""}
+      <p style="font-size: 13px; color: #64748b;">If you did not expect this, contact the iCARE++ team.</p>
+    </div>`,
+    });
+
+    return { success: true };
+  } catch (err) {
+    console.error("Failed to send password reset email:", err);
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Unknown error",
+    };
+  }
+}
+
+/**
  * Someone asking the dev team for an account from the public contact form.
  * Accounts are no longer self-service, so this mail is the whole request: the
  * team reads it, validates the person, and creates the account themselves.

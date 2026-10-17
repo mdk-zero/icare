@@ -3,14 +3,16 @@ import { requireSuperAdmin } from '@/app/lib/auth/super-admin';
 import { generateRandomPassword, hashPassword } from '@/app/lib/auth/password';
 import { logAudit } from '@/app/lib/audit';
 import { updateUser } from '@/app/lib/auth/session';
+import { sendAdminPasswordResetEmail } from '@/app/lib/auth/email';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
 }
 
 /**
- * Issues a temporary password the account must change at next sign-in.
- * The plaintext is returned once and is never readable again.
+ * Issues a temporary password the account must change at next sign-in and
+ * emails it to the account. The plaintext comes back to the super admin only
+ * when that email fails, so it can still be handed over.
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
   const guard = await requireSuperAdmin();
@@ -24,7 +26,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const { data, error } = await updateUser(
       id,
       { password_hash: await hashPassword(password), force_password_change: true },
-      { revoke: true },
+      { revoke: true, columns: 'id, email, name, role' },
     );
     if (error) {
       console.error('Failed to reset password', error);
@@ -37,7 +39,19 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       { action: 'user.password_reset', entityType: 'users', entityId: id, details: { by: 'super_admin' } },
       request,
     );
-    return NextResponse.json({ password });
+
+    const account = data as { email: string; name: string; role: string };
+    const sent = await sendAdminPasswordResetEmail(
+      account.email,
+      account.name,
+      password,
+      account.role === 'student' ? undefined : `${request.nextUrl.origin}/login`,
+    );
+    if (sent.success) return NextResponse.json({ success: true });
+    return NextResponse.json({
+      password,
+      warning: `The email with the new password could not be sent. Share it manually. Reason: ${sent.error}`,
+    });
   } catch (err) {
     console.error('Reset password failed', err);
     return NextResponse.json({ error: 'Unable to reset password' }, { status: 500 });
