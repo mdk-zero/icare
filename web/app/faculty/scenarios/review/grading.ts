@@ -2,7 +2,6 @@ import type { GradingTask } from "../../../lib/api";
 import {
   MAX_RATING_POINTS,
   NOT_APPLICABLE,
-  NOT_APPLICABLE_LABEL,
   NOT_APPLICABLE_RUBRIC,
   TASK_RATINGS,
   ratingPoints,
@@ -64,11 +63,11 @@ export interface ChecklistColumn {
   points: number | null;
 }
 
-/** The sheet's checkmark columns: the three levels, best first, then N/A. */
-export const CHECKLIST_COLUMNS: readonly ChecklistColumn[] = [
-  ...TASK_RATINGS.map(({ key, label, points }) => ({ key, label, points })),
-  { key: NOT_APPLICABLE, label: NOT_APPLICABLE_LABEL, points: null },
-];
+/**
+ * The sheet's checkmark columns: the three levels, best first. There is no
+ * N/A column; a row marked N/A before still reads "N/A" in its points.
+ */
+export const CHECKLIST_COLUMNS: readonly ChecklistColumn[] = TASK_RATINGS.map(({ key, label, points }) => ({ key, label, points }));
 
 /** What a column means on this scenario: its rubric, or the fixed N/A wording. */
 export const columnRubric = (rubric: Rubric, key: ChecklistRating) =>

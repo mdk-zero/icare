@@ -241,7 +241,7 @@ export default function GradingTable({
         <table ref={tableRef} className="w-full min-w-[680px] border-collapse text-sm">
           <caption className="sr-only">
             Grading checklist: rate each task&apos;s sub-tasks Excellent ({MAX_RATING_POINTS} points), Satisfactory,
-            or Needs Practice, or mark one N/A to leave it out of the score. An unrated sub-task earns no points.
+            or Needs Practice. An unrated sub-task earns no points.
           </caption>
           <colgroup>
             <col />
