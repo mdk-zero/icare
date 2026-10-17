@@ -15,7 +15,6 @@ import {
 import { apiFetch, getCurrentUser, resolveAccessRequest } from "@/app/lib/api";
 import { usePageData } from "@/app/lib/use-page-data";
 import PageHeader from "../../components/PageHeader";
-import FilterSelect from "../../components/FilterSelect";
 import Avatar from "../../components/Avatar";
 import { SkeletonText } from "../../components/skeletons";
 import ChangeEmailDialog from "../../components/ChangeEmailDialog";
@@ -345,35 +344,40 @@ export default function SuperAdminUsersClient() {
         </div>
       )}
 
-      {/* The tiles double as the role filter. */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-5">
-        {[{ value: "all" as const, plural: "All accounts", count: users.length }, ...ROLES.map((r) => ({ ...r, count: counts[r.value] }))].map(
-          (tile) => {
-            const active = roleFilter === tile.value;
-            return (
-              <button
-                key={tile.value}
-                type="button"
-                aria-pressed={active}
-                onClick={() => setRoleFilter(tile.value)}
-                className={`${CARD} text-left p-4 transition-colors ${
-                  active ? "ring-2 ring-brand-600 border-transparent" : "hover:border-gray-300"
-                }`}
-              >
-                {loading ? (
-                  <SkeletonText className="my-1 h-6 w-10" />
-                ) : (
-                  <p className="text-2xl font-bold text-gray-800 tabular-nums">{tile.count}</p>
-                )}
-                <p className="text-xs text-gray-500">{tile.plural}</p>
-              </button>
-            );
-          },
-        )}
-      </div>
-
-      <div className="flex flex-wrap items-center gap-3 mb-4">
-        <label className="relative flex-1 min-w-[220px] max-w-md">
+      {/* One role filter with each role's count. On a phone it wraps to a
+          second line rather than hiding roles past the edge. */}
+      <div className="flex flex-col lg:flex-row lg:items-center gap-3 mb-4">
+        <div
+          role="radiogroup"
+          aria-label="Filter by role"
+          className="flex flex-wrap gap-0.5 self-start rounded-xl border border-hairline bg-surface p-1"
+        >
+          {[{ value: "all" as const, plural: "All accounts", count: users.length }, ...ROLES.map((r) => ({ ...r, count: counts[r.value] }))].map(
+            (tab) => {
+              const active = roleFilter === tab.value;
+              return (
+                <button
+                  key={tab.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
+                  onClick={() => setRoleFilter(tab.value)}
+                  className={`shrink-0 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600/50 ${
+                    active ? "bg-brand-600 text-white" : "text-gray-600 hover:text-gray-900"
+                  }`}
+                >
+                  {tab.plural}
+                  {loading ? (
+                    <SkeletonText className="h-3 w-4" />
+                  ) : (
+                    <span className={`text-xs tabular-nums ${active ? "text-white/80" : "text-gray-400"}`}>{tab.count}</span>
+                  )}
+                </button>
+              );
+            },
+          )}
+        </div>
+        <label className="relative flex-1 lg:max-w-sm">
           <span className="sr-only">Search accounts</span>
           <FontAwesomeIcon
             icon={faMagnifyingGlass}
@@ -387,14 +391,6 @@ export default function SuperAdminUsersClient() {
             className={`${INPUT} pl-10`}
           />
         </label>
-        <FilterSelect value={roleFilter} onChange={(e) => setRoleFilter(e.target.value as "all" | Role)}>
-          <option value="all">All roles</option>
-          {ROLES.map((r) => (
-            <option key={r.value} value={r.value}>
-              {r.label}
-            </option>
-          ))}
-        </FilterSelect>
       </div>
 
       {/* Phones get cards: the table's actions sat past the right edge, in a

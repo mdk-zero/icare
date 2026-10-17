@@ -25,6 +25,8 @@ interface Props {
   height?: number;
   /** Fixes the y-axis top, e.g. 100 for a percentage. */
   yMax?: number;
+  /** Whole counts: gridlines at least 1 apart, so a max of 2 doesn't label 0, 1, 1, 2, 2. */
+  integer?: boolean;
   ariaLabel: string;
 }
 
@@ -49,9 +51,9 @@ const TICK_COUNT = 4;
  * every label is a round number. Rounding only the max (to 50, say) left
  * quarter-steps of 12.5 that printed as 13 and 38.
  */
-function niceMax(value: number): number {
-  if (value <= 0) return 1;
-  const raw = value / TICK_COUNT;
+function niceMax(value: number, integer = false): number {
+  if (value <= 0) return integer ? TICK_COUNT : 1;
+  const raw = integer ? Math.max(value / TICK_COUNT, 1) : value / TICK_COUNT;
   const exp = 10 ** Math.floor(Math.log10(raw));
   const f = raw / exp;
   // 2.5 (25, 250…) keeps a max of 92 at 100 rather than 200; below 10 it would
@@ -73,6 +75,7 @@ export default function TimeSeriesChart({
   bucket,
   height = 200,
   yMax,
+  integer = false,
   ariaLabel,
 }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -100,8 +103,8 @@ export default function TimeSeriesChart({
       if (kind === "bar") max = Math.max(max, p.values.reduce<number>((sum, v) => sum + (v ?? 0), 0));
       else for (const v of p.values) if (v !== null && v > max) max = v;
     }
-    return niceMax(max);
-  }, [points, yMax, kind]);
+    return niceMax(max, integer);
+  }, [points, yMax, kind, integer]);
 
   const n = points.length;
   const x = (i: number) =>

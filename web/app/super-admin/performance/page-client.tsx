@@ -8,9 +8,11 @@ import { usePageData } from "@/app/lib/use-page-data";
 import PageHeader from "../../components/PageHeader";
 import { SkeletonChartBars, SkeletonText } from "../../components/skeletons";
 import TimeSeriesChart from "../TimeSeriesChart";
-import SpeedGauge, { type SpeedScale } from "../SpeedGauge";
+import SpeedGauge from "../SpeedGauge";
 import {
   BUCKET_MINUTES,
+  MEDIAN_SCALE,
+  P95_SCALE,
   fillBuckets,
   formatMs,
   formatPct,
@@ -26,10 +28,6 @@ const RANGES = [
   { value: "7d", label: "7 days" },
   { value: "30d", label: "30 days" },
 ] as const;
-
-/** A typical request should be quick; the slowest 5% get more headroom. */
-const MEDIAN_SCALE: SpeedScale = { fast: 300, slow: 1000, max: 3000 };
-const P95_SCALE: SpeedScale = { fast: 800, slow: 2500, max: 6000 };
 
 type SortKey = "requests" | "p50_ms" | "p95_ms" | "errors";
 
@@ -67,11 +65,13 @@ export default function PerformanceClient() {
   );
 
   const windowMinutes = { "1h": 60, "24h": 1440, "7d": 10080, "30d": 43200 }[range];
+  const perMinute = totals ? totals.requests / windowMinutes : null;
   const tiles = [
     { label: "Requests", value: totals ? totals.requests.toLocaleString() : "—" },
     {
       label: "Throughput",
-      value: totals ? `${(totals.requests / windowMinutes).toFixed(totals.requests / windowMinutes < 10 ? 2 : 0)}/min` : "—",
+      value: perMinute !== null ? perMinute.toFixed(perMinute < 10 ? 2 : 0) : "—",
+      unit: perMinute !== null ? "/min" : undefined,
     },
     { label: "Reliability", value: totals ? formatPct(reliability(totals.requests, totals.errors)) : "—" },
   ];
@@ -142,11 +142,15 @@ export default function PerformanceClient() {
             </section>
             <div className="grid grid-cols-3 lg:grid-cols-1 gap-3">
               {tiles.map((t) => (
-                <div key={t.label} className={`${CARD} p-4 flex flex-col justify-center`}>
+                <div key={t.label} className={`${CARD} p-3 sm:p-4 flex flex-col justify-center min-w-0`}>
                   {pending ? (
                     <SkeletonText className="my-1 h-6 w-16" />
                   ) : (
-                    <p className="text-2xl font-bold text-gray-800 tabular-nums">{t.value}</p>
+                    // Three abreast on a phone: a smaller figure and unit keep "5.67/min" inside its tile.
+                    <p className="text-xl sm:text-2xl font-bold text-gray-800 tabular-nums">
+                      {t.value}
+                      {t.unit && <span className="ml-0.5 text-sm sm:text-base font-semibold text-gray-500">{t.unit}</span>}
+                    </p>
                   )}
                   <p className="text-xs text-gray-500">{t.label}</p>
                 </div>
@@ -185,7 +189,8 @@ export default function PerformanceClient() {
                 series={[{ label: "Requests / min", color: "var(--chart-1)" }]}
                 points={points.throughput}
                 bucket={bucket}
-                format={(v) => (v < 10 ? v.toFixed(1) : Math.round(v).toString())}
+                // Whole gridlines print as "5", not "5.0"; readings under 10 keep a decimal.
+                format={(v) => (Number.isInteger(v) ? v.toString() : v < 10 ? v.toFixed(1) : Math.round(v).toString())}
                 height={180}
               />
               )}

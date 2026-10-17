@@ -680,7 +680,7 @@ function DwSection({ runs, onRun, loading }: { runs: DwRun[]; onRun: (run: TestR
                               style={{ width: `${(Number(q.duration_ms) / maxMs) * 100}%`, background: "var(--chart-1)" }}
                             />
                           </div>
-                          <span className="tabular-nums text-gray-900 w-20 text-right">{Number(q.duration_ms).toFixed(2)} ms</span>
+                          <span className="tabular-nums text-gray-900 w-20 text-right">{queryMs(Number(q.duration_ms))}</span>
                         </div>
                       )}
                     </td>
@@ -700,6 +700,11 @@ function DwSection({ runs, onRun, loading }: { runs: DwRun[]; onRun: (run: TestR
       />
     </section>
   );
+}
+
+/** Sub-millisecond queries keep their decimals; "182.00 ms" doesn't need them. */
+function queryMs(ms: number): string {
+  return `${ms < 10 ? ms.toFixed(2) : ms < 100 ? ms.toFixed(1) : Math.round(ms)} ms`;
 }
 
 /* ---------------------------------------------------------- test suites */

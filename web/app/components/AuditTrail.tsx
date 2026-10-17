@@ -178,10 +178,15 @@ export default function AuditTrail({ scope }: { scope: "own" | "system" }) {
               placeholder="Search actions… (press Enter)"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-11 pr-4 py-2.5 bg-surface border border-gray-200 rounded-xl text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-600/50 focus:border-brand-600 transition-all"
+              aria-label="Search actions"
+              className="w-full pl-11 pr-4 py-2.5 bg-surface border border-gray-200 rounded-xl text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-600/50 focus:border-brand-600 transition-all"
             />
           </form>
+          {/* w-full: the select fills its cell, so the chevron sits inside it
+              and a long entity name can't push it over the date field. */}
           <FilterSelect
+            aria-label="Role"
+            className="w-full"
             value={roleFilter}
             onChange={(e) => withPageReset(setRoleFilter)(e.target.value)}
           >
@@ -192,6 +197,8 @@ export default function AuditTrail({ scope }: { scope: "own" | "system" }) {
             {scope === "system" && <option value="student">Student</option>}
           </FilterSelect>
           <FilterSelect
+            aria-label="Entity"
+            className="w-full"
             value={entityFilter}
             onChange={(e) => withPageReset(setEntityFilter)(e.target.value)}
           >
@@ -207,36 +214,38 @@ export default function AuditTrail({ scope }: { scope: "own" | "system" }) {
             value={fromDate}
             onChange={(e) => withPageReset(setFromDate)(e.target.value)}
             title="From date"
-            className="px-3 py-2.5 bg-surface border border-gray-200 rounded-xl text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-600/50 focus:border-brand-600 transition-all"
+            aria-label="From date"
+            className="w-full min-w-0 px-3 py-2.5 bg-surface border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-600/50 focus:border-brand-600 transition-all"
           />
           <input
             type="date"
             value={toDate}
             onChange={(e) => withPageReset(setToDate)(e.target.value)}
             title="To date"
-            className="px-3 py-2.5 bg-surface border border-gray-200 rounded-xl text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-600/50 focus:border-brand-600 transition-all"
+            aria-label="To date"
+            className="w-full min-w-0 px-3 py-2.5 bg-surface border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-600/50 focus:border-brand-600 transition-all"
           />
         </div>
       </div>
 
       {/* Result bar */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 mb-4">
         <p className="text-sm text-gray-500">
           {loading
             ? "Loading…"
             : `${total} event${total !== 1 ? "s" : ""} · page ${page + 1} of ${totalPages}`}
         </p>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={exportCsv}
-            disabled={logs.length === 0}
-            className="px-4 py-2 bg-surface border border-gray-200 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-all"
-          >
-            Export page as CSV
-          </button>
+        <div className="flex flex-wrap-reverse items-center justify-end gap-x-3 gap-y-1">
           <span className="text-xs text-gray-400">
             Append-only — entries cannot be edited or deleted
           </span>
+          <button
+            onClick={exportCsv}
+            disabled={logs.length === 0}
+            className="px-4 py-2 bg-surface border border-gray-200 text-gray-700 text-sm font-medium rounded-lg whitespace-nowrap hover:bg-gray-50 disabled:opacity-50 transition-all"
+          >
+            Export page as CSV
+          </button>
         </div>
       </div>
 

@@ -55,9 +55,33 @@ export function reliability(requests: number, errors: number): number | null {
   return requests > 0 ? ((requests - errors) / requests) * 100 : null;
 }
 
+/**
+ * Never rounds up to a whole 100%: 4 errors in 8,158 requests read "100%"
+ * beside "4 errors". Near the top the figure is cut (not rounded) to two
+ * places, so it shows 99.95%.
+ */
 export function formatPct(value: number | null): string {
   if (value === null) return "—";
-  return value >= 99.95 || value === 0 ? `${value.toFixed(0)}%` : `${value.toFixed(1)}%`;
+  if (value === 100 || value === 0) return `${value}%`;
+  if (value >= 99) return `${(Math.floor(value * 100) / 100).toFixed(2).replace(/\.?0+$/, "")}%`;
+  return `${value.toFixed(1)}%`;
+}
+
+export type Tone = "good" | "warn" | "bad";
+
+/** Response-time bands, shared by the gauges and the dashboard tile. A typical
+ * request should be quick; the slowest 5% get more headroom. */
+export const MEDIAN_SCALE = { fast: 300, slow: 1000, max: 3000 };
+export const P95_SCALE = { fast: 800, slow: 2500, max: 6000 };
+
+export function speedTone(ms: number, scale: { fast: number; slow: number }): Tone {
+  // Same cut-offs as the gauge, whose band changes at each boundary.
+  return ms < scale.fast ? "good" : ms < scale.slow ? "warn" : "bad";
+}
+
+/** Below 99% one request in a hundred fails, which users notice. */
+export function reliabilityTone(pct: number): Tone {
+  return pct >= 99.5 ? "good" : pct >= 99 ? "warn" : "bad";
 }
 
 /** A bucket after gap filling: latency is null where nothing was measured. */

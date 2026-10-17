@@ -417,9 +417,12 @@ export default function Shell({ role, navItems, isActive, children }: ShellProps
             onBlur={(e) => {
               if (!e.currentTarget.contains(e.relatedTarget)) setFocusPeek(false);
             }}
-            className={`group/sidebar fixed md:absolute inset-y-0 left-0 z-40 md:z-30 font-sans text-white shadow-[4px_0_24px_-8px_rgba(0,0,0,0.45)] transform transition-[transform,width] duration-300 ease-[cubic-bezier(0.22,0.61,0.36,1)] ${
+            className={`group/sidebar fixed md:absolute inset-y-0 left-0 z-40 md:z-30 font-sans text-white md:shadow-[4px_0_24px_-8px_rgba(0,0,0,0.45)] transform transition-[transform,width] duration-300 ease-[cubic-bezier(0.22,0.61,0.36,1)] ${
               rail ? "w-[68px]" : "w-72"
-            } ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} md:translate-x-0`}
+            } ${
+              // Shadowless while the phone drawer is shut: it would bleed in along the left edge.
+              sidebarOpen ? "translate-x-0 shadow-[4px_0_24px_-8px_rgba(0,0,0,0.45)]" : "-translate-x-full"
+            } md:translate-x-0`}
             style={{ background: SIDEBAR_GRADIENT }}
           >
             {/* Clips the full-width content down to the rail. The collapse

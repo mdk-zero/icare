@@ -11,7 +11,18 @@ import { SkeletonChartBars, SkeletonDonut, SkeletonKeyValues, SkeletonText } fro
 import AiUsage from "./AiUsage";
 import TimeSeriesChart from "./TimeSeriesChart";
 import { CARD, MigrationPending } from "./ui";
-import { fillBuckets, formatMs, formatPct, reliability, type AiUsageRow, type MetricsSummary } from "./metrics";
+import {
+  P95_SCALE,
+  fillBuckets,
+  formatMs,
+  formatPct,
+  reliability,
+  reliabilityTone,
+  speedTone,
+  type AiUsageRow,
+  type MetricsSummary,
+  type Tone,
+} from "./metrics";
 
 interface Overview {
   accounts: {
@@ -55,7 +66,7 @@ function RolePie({ byRole, total, dash }: { byRole: Record<string, number> | nul
   let offset = 0;
   return (
     <div className="flex flex-col gap-4">
-      <div className="relative mx-auto aspect-square w-full max-w-[11rem]">
+      <div className="relative mx-auto aspect-square w-full max-w-[9.5rem]">
         <svg
           viewBox="0 0 120 120"
           className="h-full w-full -rotate-90"
@@ -105,23 +116,30 @@ function RolePie({ byRole, total, dash }: { byRole: Record<string, number> | nul
           )}
         </div>
       </div>
-      <ul className="flex flex-wrap justify-center gap-x-4 gap-y-2 text-sm">
-        {ROLES.map((role) => (
-          <li
-            key={role.key}
-            tabIndex={0}
-            className={`flex cursor-default items-center gap-2 rounded outline-none focus-visible:ring-2 focus-visible:ring-brand-500 transition-opacity ${
-              active && active !== role.key ? "opacity-50" : ""
-            }`}
-            onMouseEnter={() => setActive(role.key)}
-            onMouseLeave={() => setActive(null)}
-            onFocus={() => setActive(role.key)}
-            onBlur={() => setActive(null)}
-          >
-            <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: role.color }} />
-            <span className="text-gray-600">{role.label}</span>
-          </li>
-        ))}
+      <ul className="divide-y divide-hairline text-sm">
+        {ROLES.map((role) => {
+          const count = byRole?.[role.key] ?? 0;
+          return (
+            <li
+              key={role.key}
+              tabIndex={0}
+              className={`flex cursor-default items-center gap-2.5 rounded py-1.5 outline-none focus-visible:ring-2 focus-visible:ring-brand-500 transition-opacity ${
+                active && active !== role.key ? "opacity-50" : ""
+              }`}
+              onMouseEnter={() => setActive(role.key)}
+              onMouseLeave={() => setActive(null)}
+              onFocus={() => setActive(role.key)}
+              onBlur={() => setActive(null)}
+            >
+              <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: role.color }} />
+              <span className="flex-1 text-gray-600">{role.label}</span>
+              <span className="font-medium text-gray-900 tabular-nums">{byRole ? count.toLocaleString() : dash}</span>
+              <span className="w-10 text-right text-xs text-gray-400 tabular-nums">
+                {byRole && total > 0 ? `${Math.round((100 * count) / total)}%` : ""}
+              </span>
+            </li>
+          );
+        })}
       </ul>
     </div>
   );
@@ -136,40 +154,70 @@ function ago(iso: string): string {
   return `${Math.round(hours / 24)} days ago`;
 }
 
+const TONE: Record<Tone, { dot: string; text: string }> = {
+  good: { dot: "bg-emerald-500", text: "text-emerald-700" },
+  warn: { dot: "bg-amber-500", text: "text-amber-700" },
+  bad: { dot: "bg-rose-500", text: "text-rose-700" },
+};
+
+/** A KPI. `status` is the verdict in words beside a coloured dot, so a glance
+ * down the row says whether anything needs looking at. */
 function Tile({
   label,
   value,
   detail,
+  status,
   href,
   pending,
+  className = "",
 }: {
   label: string;
   value: string;
   detail?: string;
+  status?: { tone: Tone; text: string };
   href?: string;
   pending?: boolean;
+  className?: string;
 }) {
-  const body = pending ? (
+  const body = (
     <>
-      <p className="text-xs text-gray-500">{label}</p>
-      <SkeletonText className="mt-1.5 h-6 w-14" />
-      <SkeletonText className="mt-2 h-3 w-24" />
-    </>
-  ) : (
-    <>
-      <p className="text-xs text-gray-500">{label}</p>
-      <p className="text-2xl font-bold text-gray-800 tabular-nums mt-0.5">{value}</p>
-      {detail && <p className="text-xs text-gray-500 mt-1">{detail}</p>}
+      {/* On a narrow tile the status drops under the label instead of breaking "24 h" apart. */}
+      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5">
+        <p className="text-xs text-gray-500 whitespace-nowrap">{label}</p>
+        {status && !pending && (
+          <span className={`inline-flex shrink-0 items-center gap-1.5 text-[11px] font-medium leading-4 ${TONE[status.tone].text}`}>
+            <span className={`h-1.5 w-1.5 rounded-full ${TONE[status.tone].dot}`} />
+            {status.text}
+          </span>
+        )}
+      </div>
+      {pending ? (
+        <>
+          <SkeletonText className="mt-1.5 h-6 w-14" />
+          <SkeletonText className="mt-2 h-3 w-24" />
+        </>
+      ) : (
+        <>
+          <p className="text-2xl font-bold text-gray-800 tabular-nums mt-0.5">{value}</p>
+          {detail && <p className="text-xs text-gray-500 mt-1">{detail}</p>}
+        </>
+      )}
     </>
   );
   return href ? (
-    <Link href={href} className={`${CARD} p-4 block hover:border-gray-300 transition-colors`}>
+    <Link
+      href={href}
+      className={`${CARD} ${className} p-4 block hover:border-gray-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600/50 transition-colors`}
+    >
       {body}
     </Link>
   ) : (
-    <div className={`${CARD} p-4`}>{body}</div>
+    <div className={`${CARD} ${className} p-4`}>{body}</div>
   );
 }
+
+const SPEED_WORD: Record<Tone, string> = { good: "Fast", warn: "Okay", bad: "Slow" };
+const RELIABILITY_WORD: Record<Tone, string> = { good: "Stable", warn: "Watch", bad: "Unstable" };
 
 export default function SuperAdminDashboardClient() {
   const { data, loading } = usePageData("super-admin:overview", async (): Promise<Overview | null> => {
@@ -184,6 +232,10 @@ export default function SuperAdminDashboardClient() {
   const dw = data?.latest_runs.dw_benchmark;
   const pending = loading && !data;
   const dash = "—";
+  const successPct = totals?.requests ? reliability(totals.requests, totals.errors) : null;
+  const speed = totals?.requests && totals.p95_ms !== null ? speedTone(totals.p95_ms, P95_SCALE) : null;
+  const steady = successPct !== null ? reliabilityTone(successPct) : null;
+  const healthTone: Tone | null = health ? (health.summary.fail ? "bad" : health.summary.warn ? "warn" : "good") : null;
 
   return (
     <div>
@@ -224,13 +276,19 @@ export default function SuperAdminDashboardClient() {
           label="Response time · 24 h"
           value={totals?.requests ? formatMs(totals.p95_ms) : dash}
           detail={totals?.requests ? `p95 · median ${formatMs(totals.p50_ms)}` : "No requests yet"}
+          status={speed ? { tone: speed, text: SPEED_WORD[speed] } : undefined}
           href="/super-admin/performance"
           pending={pending}
         />
         <Tile
           label="Reliability · 24 h"
-          value={totals?.requests ? formatPct(reliability(totals.requests, totals.errors)) : dash}
-          detail={totals?.requests ? `${totals.errors} errors in ${totals.requests.toLocaleString()} requests` : undefined}
+          value={successPct !== null ? formatPct(successPct) : dash}
+          detail={
+            totals?.requests
+              ? `${totals.errors.toLocaleString()} ${totals.errors === 1 ? "error" : "errors"} in ${totals.requests.toLocaleString()} requests`
+              : undefined
+          }
+          status={steady ? { tone: steady, text: RELIABILITY_WORD[steady] } : undefined}
           href="/super-admin/performance"
           pending={pending}
         />
@@ -242,8 +300,14 @@ export default function SuperAdminDashboardClient() {
               ? `${health.summary.fail ? `${health.summary.fail} failing · ` : health.summary.warn ? `${health.summary.warn} warning · ` : ""}checked ${ago(health.created_at)}`
               : "Not checked yet"
           }
+          status={
+            healthTone
+              ? { tone: healthTone, text: healthTone === "bad" ? "Failing" : healthTone === "warn" ? "Warning" : "All passing" }
+              : undefined
+          }
           href="/super-admin/tests"
           pending={pending}
+          className="col-span-2 lg:col-span-1"
         />
       </div>
 
@@ -256,7 +320,7 @@ export default function SuperAdminDashboardClient() {
               : "Last 24 hours of API traffic from the web app"}
           </p>
           {pending ? (
-            <SkeletonChartBars height={200} />
+            <SkeletonChartBars height={256} />
           ) : (
           <TimeSeriesChart
             ariaLabel={ai ? "API requests and AI provider calls per hour over the last 24 hours" : "API requests per hour over the last 24 hours"}
@@ -271,8 +335,9 @@ export default function SuperAdminDashboardClient() {
               values: ai ? [b.requests, b.ai_requests ?? 0] : [b.requests],
             }))}
             bucket="hour"
+            integer
             format={(v) => Math.round(v).toLocaleString()}
-            height={200}
+            height={256}
           />
           )}
         </section>
@@ -302,6 +367,7 @@ export default function SuperAdminDashboardClient() {
             series={[{ label: "New accounts", color: "var(--chart-1)" }]}
             points={(data?.accounts.new_per_week ?? []).map((w) => ({ t: w.t, values: [w.count] }))}
             bucket="day"
+            integer
             format={(v) => Math.round(v).toString()}
             height={170}
           />
