@@ -31,6 +31,18 @@ export interface MetricsSummary {
   routes?: MetricsRoute[];
 }
 
+/** One AI model's calls and tokens over a window (super_admin_ai_usage, 076). */
+export interface AiUsageRow {
+  /** "<provider>/<model>", as app/lib/ai/record.ts logs it. */
+  route: string;
+  requests: number;
+  errors: number;
+  /** Calls that carry token counts: successful ones logged since 076. */
+  metered: number;
+  input_tokens: number;
+  output_tokens: number;
+}
+
 export const BUCKET_MINUTES = { minute: 1, hour: 60, day: 1440 } as const;
 
 export function formatMs(value: number | null | undefined): string {

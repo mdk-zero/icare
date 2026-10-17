@@ -11,8 +11,10 @@ export async function GET() {
 
   const supabase = getSupabaseAdmin();
   const since24h = new Date(Date.now() - 86_400_000).toISOString();
+  // request_metrics keeps 30 days, so that is as far back as AI usage goes.
+  const since30d = new Date(Date.now() - 30 * 86_400_000).toISOString();
 
-  const [accounts, metrics, runs] = await Promise.all([
+  const [accounts, metrics, runs, aiDay, aiMonth] = await Promise.all([
     supabase.from('users').select('role, created_at, last_login_at').limit(20000),
     supabase.rpc('super_admin_metrics_summary', { p_since: since24h, p_bucket: 'hour' }),
     supabase
@@ -20,6 +22,8 @@ export async function GET() {
       .select('id, kind, created_at, summary')
       .order('created_at', { ascending: false })
       .limit(30),
+    supabase.rpc('super_admin_ai_usage', { p_since: since24h }),
+    supabase.rpc('super_admin_ai_usage', { p_since: since30d }),
   ]);
   if (accounts.error) {
     console.error('Overview: failed to read accounts', accounts.error);
@@ -67,6 +71,9 @@ export async function GET() {
       benchmark: latest('benchmark'),
       dw_benchmark: latest('dw_benchmark'),
     },
+    // Tokens per AI model (076); null before 076 or if the read failed.
+    ai_usage: aiDay.error || aiMonth.error ? null : { day: aiDay.data ?? [], month: aiMonth.data ?? [] },
+    ai_usage_pending: isMissingMigration(aiDay.error) || isMissingMigration(aiMonth.error),
     pending_migration: pending,
   });
 }

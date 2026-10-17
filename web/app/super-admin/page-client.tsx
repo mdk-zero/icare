@@ -8,9 +8,10 @@ import { apiFetch } from "@/app/lib/api";
 import { usePageData } from "@/app/lib/use-page-data";
 import PageHeader from "../components/PageHeader";
 import { SkeletonChartBars, SkeletonDonut, SkeletonKeyValues, SkeletonText } from "../components/skeletons";
+import AiUsage from "./AiUsage";
 import TimeSeriesChart from "./TimeSeriesChart";
 import { CARD, MigrationPending } from "./ui";
-import { fillBuckets, formatMs, formatPct, reliability, type MetricsSummary } from "./metrics";
+import { fillBuckets, formatMs, formatPct, reliability, type AiUsageRow, type MetricsSummary } from "./metrics";
 
 interface Overview {
   accounts: {
@@ -28,6 +29,9 @@ interface Overview {
     } | null;
     dw_benchmark: { created_at: string; summary: { queries: number; failed: number; total_ms: number } } | null;
   };
+  /** Tokens per AI model over the last 24 hours and 30 days (076). */
+  ai_usage: { day: AiUsageRow[]; month: AiUsageRow[] } | null;
+  ai_usage_pending?: boolean;
   pending_migration: boolean;
 }
 
@@ -282,6 +286,8 @@ export default function SuperAdminDashboardClient() {
           )}
         </section>
       </div>
+
+      <AiUsage usage={data?.ai_usage} pending={pending} migrationPending={!!data?.ai_usage_pending} />
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         <section className={`${CARD} p-4`}>

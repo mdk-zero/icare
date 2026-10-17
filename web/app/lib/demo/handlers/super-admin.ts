@@ -245,6 +245,16 @@ route("GET", "/api/super-admin/overview", (ctx) => {
     },
     metrics: metrics("24h"),
     latest_runs: { health: latest("health"), benchmark: latest("benchmark"), dw_benchmark: latest("dw_benchmark") },
+    ai_usage: {
+      day: [
+        { route: "anthropic/claude-haiku-4-5", requests: 14, errors: 0, metered: 14, input_tokens: 31_420, output_tokens: 22_870 },
+      ],
+      month: [
+        { route: "anthropic/claude-haiku-4-5", requests: 268, errors: 3, metered: 265, input_tokens: 604_300, output_tokens: 441_950 },
+        { route: "gemini/gemini-2.5-flash", requests: 11, errors: 4, metered: 7, input_tokens: 15_200, output_tokens: 18_640 },
+      ],
+    },
+    ai_usage_pending: false,
     pending_migration: false,
   };
 });
