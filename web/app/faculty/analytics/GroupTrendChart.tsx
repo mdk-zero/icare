@@ -170,7 +170,7 @@ const MAX_BAR_W = 28;
 const GAP_FROM_W = 6;
 
 /** A bar rising from the baseline with its top corners rounded. */
-function barPath(x: number, w: number, top: number, base: number): string {
+export function barPath(x: number, w: number, top: number, base: number): string {
   const r = Math.min(3, w / 2, base - top);
   return `M ${x},${base} V ${top + r} Q ${x},${top} ${x + r},${top} H ${x + w - r} Q ${x + w},${top} ${x + w},${top + r} V ${base} Z`;
 }
