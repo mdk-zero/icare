@@ -12,6 +12,7 @@ import {
   faFilePrescription,
   faHandHoldingMedical,
   faHouse,
+  faLifeRing,
   faListCheck,
   faNotesMedical,
   faPeopleGroup,
@@ -113,6 +114,7 @@ const navItems: NavItem[] = [
     icon: faClipboardList,
     section: "Administration",
   },
+  { id: "help", label: "Help & Support", href: "/faculty/help", icon: faLifeRing, section: "Support" },
 ];
 
 function isActive(item: NavItem, pathname: string) {

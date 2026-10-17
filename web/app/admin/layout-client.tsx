@@ -9,6 +9,7 @@ import {
   faClockRotateLeft,
   faFileLines,
   faHouse,
+  faLifeRing,
   faUserTie,
   faUsers,
 } from "@fortawesome/free-solid-svg-icons";
@@ -39,6 +40,7 @@ const navItems: NavItem[] = [
   { id: "analytics", label: "Analytics", href: "/admin/analytics", icon: faChartBar, section: "Data" },
   { id: "reports", label: "Reports", href: "/admin/reports", icon: faFileLines, section: "Data" },
   { id: "audit", label: "Activity Log", href: "/admin/audit", icon: faClockRotateLeft, section: "Administration" },
+  { id: "help", label: "Help & Support", href: "/admin/help", icon: faLifeRing, section: "Support" },
 ];
 
 function isActive(item: NavItem, pathname: string) {

@@ -648,6 +648,83 @@ export async function sendAccessRequestReceipt(to: string, replyTo: string): Pro
   });
 }
 
+export type SupportRequest = {
+  name: string;
+  email: string;
+  role: string;
+  section: string | null;
+  topic: string;
+  subject: string;
+  message: string;
+  /** Where it was sent from: "Web portal", "Mobile app · android". */
+  client: string | null;
+  userAgent: string | null;
+};
+
+/**
+ * A signed-in user writing to the team from Help & Support. Unlike the public
+ * contact form, who sent it is known from the session, so the details here
+ * are the account's own. Replying goes straight to them.
+ */
+export async function sendSupportRequestEmail(to: string[], request: SupportRequest): Promise<void> {
+  if (shouldSkipSending()) {
+    console.log(`[DEV] Support request from ${request.email} (${request.role}): ${request.topic} · ${request.subject}`);
+    return;
+  }
+
+  const row = (label: string, value: string) =>
+    `<p style="margin: 0 0 4px;"><strong>${label}:</strong> ${value}</p>`;
+  const email = htmlEscape(request.email);
+  const message = htmlEscape(request.message).replace(/\n/g, "<br/>");
+
+  await sendEmail({
+    to,
+    replyTo: request.email,
+    subject: `iCARE++ support (${request.role}): ${request.subject}`,
+    html: `
+    <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 32px; color: #0f172a;">
+      <h2 style="color: #0d7377; margin: 0 0 16px;">${htmlEscape(request.topic)}</h2>
+      ${row("From", `${htmlEscape(request.name)} (${htmlEscape(request.role)})`)}
+      ${row("Email", `<a href="mailto:${email}">${email}</a>`)}
+      ${request.section ? row("Section", htmlEscape(request.section)) : ""}
+      ${request.client ? row("Sent from", htmlEscape(request.client)) : ""}
+      <p style="margin: 0 0 16px;"><strong>Subject:</strong> ${htmlEscape(request.subject)}</p>
+      <div style="background: #f0f9fa; border: 1px solid #d0ebea; border-radius: 12px; padding: 16px; line-height: 1.6;">${message}</div>
+      ${request.userAgent ? `<p style="font-size: 12px; color: #94a3b8; margin-top: 16px;">${htmlEscape(request.userAgent)}</p>` : ""}
+      <p style="font-size: 13px; color: #64748b; margin-top: 24px;">Reply to this email to answer them directly.</p>
+    </div>`,
+  });
+}
+
+/**
+ * The sender's copy of what they wrote. Echoing their text back is safe here,
+ * unlike on the public form's receipt: it only ever goes to the signed-in
+ * account's own address.
+ */
+export async function sendSupportReceipt(
+  to: string,
+  replyTo: string,
+  request: Pick<SupportRequest, "name" | "subject" | "message">,
+): Promise<void> {
+  if (shouldSkipSending()) {
+    console.log(`[DEV] Support receipt to ${to}`);
+    return;
+  }
+
+  await sendEmail({
+    to,
+    replyTo,
+    subject: `We got your message: ${request.subject}`,
+    html: `
+    <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 32px; color: #0f172a;">
+      <h2 style="color: #0d7377; margin: 0 0 16px;">Your message reached the iCARE++ team</h2>
+      <p style="line-height: 1.6; margin: 0 0 12px;">Hi ${htmlEscape(request.name)}, thanks for writing in. We'll reply to this address. If there's anything to add, just reply to this email.</p>
+      <p style="margin: 16px 0 6px;"><strong>${htmlEscape(request.subject)}</strong></p>
+      <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; line-height: 1.6; color: #334155;">${htmlEscape(request.message).replace(/\n/g, "<br/>")}</div>
+    </div>`,
+  });
+}
+
 /**
  * Tells a requester their account request was declined. Fixed wording for the
  * same reason as the receipt: the address came from a public form.

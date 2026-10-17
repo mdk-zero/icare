@@ -36,6 +36,9 @@ route("PATCH", "/api/users/profile", ({ viewer, body }) => {
 // Demo accounts have no stored photos; a demo password can't be changed.
 route("GET", "/api/users/avatar-url", () => json({ error: "Not found" }, 404));
 route("POST", "/api/users/change-password", notInDemo);
+// A demo account has no inbox for the team to reply to; the page shows the
+// address to write to instead.
+route("POST", "/api/support", notInDemo);
 
 // --- Plumbing ----------------------------------------------------------------
 

@@ -8,6 +8,7 @@ import {
   faGaugeHigh,
   faGear,
   faHouse,
+  faLifeRing,
   faUsers,
 } from "@fortawesome/free-solid-svg-icons";
 import Shell, { NavItem } from "../components/Shell";
@@ -20,6 +21,7 @@ const navItems: NavItem[] = [
   { id: "performance", label: "System Performance", href: "/super-admin/performance", icon: faGaugeHigh, section: "System" },
   { id: "tests", label: "System Tests", href: "/super-admin/tests", icon: faFlaskVial, section: "System" },
   { id: "settings", label: "Settings", href: "/super-admin/settings", icon: faGear, section: "Account" },
+  { id: "help", label: "Help & Support", href: "/super-admin/help", icon: faLifeRing, section: "Support" },
 ];
 
 function isActive(item: NavItem, pathname: string) {
