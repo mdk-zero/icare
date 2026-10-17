@@ -54,8 +54,6 @@ const STATUS_STYLE: Record<TermStatus, string> = {
   ended: "bg-gray-100 text-gray-500 ring-gray-500/20",
 };
 
-const cardClass =
-  "overflow-hidden rounded-xl border border-hairline bg-surface shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)]";
 
 function StatusBadge({ status }: { status: TermStatus }) {
   return (
@@ -106,14 +104,6 @@ export default function CoursesClient() {
     await refresh();
   };
 
-  // One process: Assign Course adds the term and the course as it goes, so
-  // every tab starts there. The tabs stay for looking things up and editing.
-  const headerAction = {
-    onClick: () => router.push("/admin/courses/new"),
-    label: "Assign a course to an instructor",
-    text: "Assign Course",
-    disabled: false,
-  };
 
   return (
     <div>
@@ -121,7 +111,6 @@ export default function CoursesClient() {
         badge={{ icon: <FontAwesomeIcon icon={faBookMedical} className="h-3.5 w-3.5" />, label: "Curriculum" }}
         title="Courses"
         subtitle="Your terms and courses, and which instructors teach them"
-        action={{ icon: <FontAwesomeIcon icon={faPlus} className="h-4 w-4" />, ...headerAction }}
       />
 
       {loadError && (
@@ -162,47 +151,54 @@ export default function CoursesClient() {
         />
       </div>
 
-      {/* One view: the term, then its courses and who teaches them. */}
-      <section className={`${cardClass} mb-4`}>
-        <div className="flex flex-wrap items-center gap-3 px-4 py-3">
-          <FontAwesomeIcon icon={faCalendarDays} className="h-4 w-4 text-brand-600" />
-          <FilterSelect
-            value={selectedTerm}
-            onChange={(e) => setTermFilter(e.target.value)}
-            aria-label="Term"
-            disabled={terms.length === 0}
-          >
-            {terms.length === 0 && <option value="">No terms yet</option>}
-            {terms.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name} · {TERM_STATUS_LABEL[termStatus(t)]}
-              </option>
-            ))}
-          </FilterSelect>
-          {termRow && (
-            <>
-              <StatusBadge status={termStatus(termRow)} />
-              <span className="text-sm text-gray-600">{formatTermDates(termRow)}</span>
-              {termOverlaps.length > 0 && (
-                <span className="flex items-center gap-1.5 text-xs text-amber-700">
-                  <FontAwesomeIcon icon={faTriangleExclamation} className="h-3 w-3" />
-                  Overlaps {termOverlaps.map((o) => o.name).join(", ")}
-                </span>
-              )}
-              <div className="ml-auto">
-                <ActionsMenu
-                  variant="compact"
-                  label={`Actions for ${termRow.name}`}
-                  actions={[
-                    { label: "Edit term", icon: faPenToSquare, onClick: () => setDialog({ kind: "term", term: termRow }) },
-                    { label: "Delete term", icon: faTrashCan, danger: true, onClick: () => setDialog({ kind: "deleteTerm", term: termRow }) },
-                  ]}
-                />
-              </div>
-            </>
-          )}
-        </div>
-      </section>
+      {/* One view: the term, then its courses. A plain row, like the Instructors and Students filters. */}
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        {/* The action first, then the term. Assign Course adds the term and the course as it goes. */}
+        <button
+          type="button"
+          onClick={() => router.push("/admin/courses/new")}
+          aria-label="Assign a course to an instructor"
+          className="flex shrink-0 items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_2px_8px_-1px_rgb(27_107_123_/_0.35)] transition-all hover:bg-brand-700"
+        >
+          <FontAwesomeIcon icon={faPlus} className="h-4 w-4" />
+          Assign Course
+        </button>
+        <FilterSelect
+          value={selectedTerm}
+          onChange={(e) => setTermFilter(e.target.value)}
+          aria-label="Term"
+          disabled={terms.length === 0}
+        >
+          {terms.length === 0 && <option value="">No terms yet</option>}
+          {terms.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.name} · {TERM_STATUS_LABEL[termStatus(t)]}
+            </option>
+          ))}
+        </FilterSelect>
+        {termRow && (
+          <>
+            <StatusBadge status={termStatus(termRow)} />
+            <span className="text-sm text-gray-600">{formatTermDates(termRow)}</span>
+            {termOverlaps.length > 0 && (
+              <span className="flex items-center gap-1.5 text-xs text-amber-700">
+                <FontAwesomeIcon icon={faTriangleExclamation} className="h-3 w-3" />
+                Overlaps {termOverlaps.map((o) => o.name).join(", ")}
+              </span>
+            )}
+            <div className="ml-auto">
+              <ActionsMenu
+                variant="compact"
+                label={`Actions for ${termRow.name}`}
+                actions={[
+                  { label: "Edit term", icon: faPenToSquare, onClick: () => setDialog({ kind: "term", term: termRow }) },
+                  { label: "Delete term", icon: faTrashCan, danger: true, onClick: () => setDialog({ kind: "deleteTerm", term: termRow }) },
+                ]}
+              />
+            </div>
+          </>
+        )}
+    </div>
 
       {/* The term's courses as cards: a course opens on its sections, a section on its instructors and skills. */}
       <CourseBrowser

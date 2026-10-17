@@ -808,6 +808,19 @@ export default function StudentManagementClient() {
       </div>
 
       <div className="mb-4 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
+        {/* The action first, then the filter, then the search. */}
+        <button
+          onClick={() => setSectionForm({ section: null })}
+          className="flex shrink-0 items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_2px_8px_-1px_rgb(27_107_123_/_0.35)] transition-all hover:bg-brand-700"
+        >
+          <FontAwesomeIcon icon={faFolderPlus} className="h-4 w-4" />
+          New section
+        </button>
+        <FilterSelect value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
+          <option value="all">All Students</option>
+          <option value="at-risk">Low Performing</option>
+          <option value="safe">Safe</option>
+        </FilterSelect>
         <div className="relative flex-1">
           <FontAwesomeIcon
             icon={faSearch}
@@ -818,21 +831,9 @@ export default function StudentManagementClient() {
             placeholder="Search by name or email…"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full rounded-xl border border-gray-200 bg-surface py-2.5 pl-11 pr-4 text-gray-700 transition-all placeholder:text-gray-400 focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/40"
+            className="w-full rounded-xl border border-gray-400 bg-surface py-2.5 pl-11 pr-4 text-sm text-gray-900 transition-all placeholder:text-gray-500 focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30"
           />
         </div>
-        <FilterSelect value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
-          <option value="all">All Students</option>
-          <option value="at-risk">Low Performing</option>
-          <option value="safe">Safe</option>
-        </FilterSelect>
-        <button
-          onClick={() => setSectionForm({ section: null })}
-          className="flex shrink-0 items-center justify-center gap-2 rounded-xl border border-gray-200 bg-surface px-4 py-2.5 text-sm font-medium text-gray-700 transition-all hover:border-brand-300 hover:text-brand-700"
-        >
-          <FontAwesomeIcon icon={faFolderPlus} className="h-4 w-4" />
-          New section
-        </button>
       </div>
 
       {loading ? (
