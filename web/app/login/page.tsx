@@ -22,6 +22,7 @@ import logo_white from "../../public/logo-white-no-bg.png";
 import logo_colour from "../../public/logo-no-bg.png";
 import { EcgLoader } from "../components/EcgLoader";
 import { DriftingKit, RotatingWords } from "../components/AuthShowcase";
+import AuthHomeLink from "../components/AuthHomeLink";
 import DemoPicker from "./DemoPicker";
 import { endDemo } from "../lib/demo/session";
 
@@ -217,6 +218,7 @@ export default function LoginPage() {
       {/* ───────── Left panel — brand story ───────── */}
       <div className="hidden lg:flex lg:w-1/2 relative">
         <div className="relative z-10 flex flex-col w-full px-14 xl:px-20 py-10 xl:py-14 text-white">
+          <AuthHomeLink className="self-start" />
           <div className="flex-1 flex flex-col justify-center max-w-xl py-10">
             <div className="mb-12 opacity-0 animate-fade-in-up">
               <Image src={logo_colour}
@@ -288,6 +290,8 @@ export default function LoginPage() {
       {/* ───────── Right panel — glass form card, floating on the dark side ───────── */}
       <div className="w-full lg:w-1/2 flex items-center justify-center px-5 sm:px-8 py-12 relative">
         <div className="relative z-10 w-full max-w-[460px] mt-17 animate-fade-in-up">
+          <AuthHomeLink className="lg:hidden mb-5" />
+
           {/* Mobile header */}
           <div className="lg:hidden flex flex-col items-center mb-6">
             <div className="mb-3">

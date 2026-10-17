@@ -21,6 +21,7 @@ import logo_white from "../../public/logo-white-no-bg.png";
 import logo_colour from "../../public/logo-no-bg.png";
 import { EcgLoader } from "../components/EcgLoader";
 import { DriftingKit, RotatingWords } from "../components/AuthShowcase";
+import AuthHomeLink from "../components/AuthHomeLink";
 import { GoogleGlyph } from "../components/GoogleSignInButton";
 
 const inputClass =
@@ -211,6 +212,7 @@ export default function ContactUsPage() {
       {/* ───────── Left panel — brand story ───────── */}
       <div className="hidden lg:flex lg:w-1/2 relative">
         <div className="relative z-10 flex flex-col w-full px-14 xl:px-20 py-10 xl:py-14 text-white">
+          <AuthHomeLink className="self-start" />
           <div className="flex-1 flex flex-col justify-center max-w-xl py-10 -mt-20">
             <div className="mb-12 opacity-0 animate-fade-in-up">
               <Image src={logo_colour}
@@ -283,6 +285,8 @@ export default function ContactUsPage() {
       {/* ───────── Right panel — glass form card ───────── */}
       <div className="w-full lg:w-1/2 flex items-center justify-center px-5 sm:px-8 py-12 relative">
         <div className="relative z-10 w-full max-w-[560px] -mt-8 animate-fade-in-up">
+          <AuthHomeLink className="lg:hidden mb-5" />
+
           {/* Mobile header */}
           <div className="lg:hidden flex flex-col items-center mb-6">
             <div className="p-3.5 bg-white/10 border border-white/10 backdrop-blur-md rounded-2xl mb-3">
