@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import {
@@ -20,8 +20,19 @@ import {
   type AcademicTerm,
   type CourseOfferingRow,
   type CourseSummary,
-  type Section,
 } from "../../lib/api";
+import {
+  NCM_LAB_COURSES,
+  SEMESTERS,
+  academicYearOptions,
+  currentAcademicYear,
+  curriculumGroups,
+  defaultTermDates,
+  parseTermName,
+  sameCode,
+  termName,
+  type Semester,
+} from "../../lib/bsn-curriculum";
 import { COURSE_LIMITS, formatTermDates, termsOverlap } from "../../lib/course-progress";
 import { EcgLoader } from "../../components/EcgLoader";
 import { loadingToast } from "../../components/Toast";
@@ -34,9 +45,9 @@ export interface InstructorOption {
   groups: { id: string; name: string; section_id: string; section_name: string }[];
 }
 
-const inputClass =
+export const inputClass =
   "w-full rounded-xl border border-gray-300 bg-surface px-4 py-2.5 text-gray-900 transition-all placeholder:text-gray-400 focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30 disabled:opacity-60";
-const labelClass = "mb-1.5 block text-sm font-semibold text-gray-700";
+export const labelClass = "mb-1.5 block text-sm font-semibold text-gray-700";
 
 function ModalFrame({
   icon,
@@ -143,12 +154,205 @@ function ModalActions({
   );
 }
 
-function ErrorNote({ error }: { error: string | null }) {
+export function ErrorNote({ error }: { error: string | null }) {
   if (!error) return null;
   return <p className="rounded-lg border border-rose-200 bg-rose-50 p-2.5 text-sm text-rose-700">{error}</p>;
 }
 
 const normalizeCode = (code: string) => code.trim().replace(/\s+/g, " ").toLowerCase();
+
+/** The term a semester and academic year name, if there is one already. */
+export const findTerm = (terms: AcademicTerm[], semester: Semester, year: number) =>
+  terms.find((t) => {
+    const parsed = parseTermName(t.name);
+    return parsed ? parsed.semester === semester && parsed.startYear === year : normalizeCode(t.name) === normalizeCode(termName(semester, year));
+  }) ?? null;
+
+/** Where a new term sits: the open one, else by today's month. */
+export function startingTerm(terms: AcademicTerm[], termId: string | null | undefined): { semester: Semester; year: number } {
+  const parsed = parseTermName(terms.find((t) => t.id === termId)?.name ?? "");
+  if (parsed) return { semester: parsed.semester, year: parsed.startYear };
+  const month = new Date().getMonth();
+  return { semester: month >= 7 ? "first" : month <= 4 ? "second" : "midterm", year: currentAcademicYear() };
+}
+
+/** Semester and academic year, from lists: terms are never typed. */
+export function TermPicker({
+  semester,
+  year,
+  years,
+  onChange,
+  disabled,
+  idPrefix,
+}: {
+  semester: Semester;
+  year: number;
+  years: number[];
+  onChange: (next: { semester: Semester; year: number }) => void;
+  disabled?: boolean;
+  idPrefix: string;
+}) {
+  return (
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <div>
+        <label htmlFor={`${idPrefix}-semester`} className={labelClass}>
+          Semester <span className="text-rose-500">*</span>
+        </label>
+        <select
+          id={`${idPrefix}-semester`}
+          value={semester}
+          onChange={(e) => onChange({ semester: e.target.value as Semester, year })}
+          disabled={disabled}
+          className={inputClass}
+        >
+          {SEMESTERS.map((s) => (
+            <option key={s.key} value={s.key}>
+              {s.label}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div>
+        <label htmlFor={`${idPrefix}-year`} className={labelClass}>
+          Academic year <span className="text-rose-500">*</span>
+        </label>
+        <select
+          id={`${idPrefix}-year`}
+          value={year}
+          onChange={(e) => onChange({ semester, year: Number(e.target.value) })}
+          disabled={disabled}
+          className={inputClass}
+        >
+          {years.map((y) => (
+            <option key={y} value={y}>
+              AY {y}–{y + 1}
+            </option>
+          ))}
+        </select>
+      </div>
+    </div>
+  );
+}
+
+/** The curriculum's NCM lab courses, grouped by year level and semester. */
+export function CoursePicker({
+  id,
+  value,
+  onChange,
+  disabled,
+  taken,
+  existing,
+  semester,
+}: {
+  id: string;
+  value: string;
+  onChange: (code: string) => void;
+  disabled?: boolean;
+  /** Codes that can't be picked here, shown as already added. */
+  taken?: (code: string) => boolean;
+  /** Courses already added that aren't in the curriculum list, so they can be picked too. */
+  existing?: { code: string; title: string }[];
+  /** Only the curriculum's courses for this semester; all of them for Midterm or when left out. */
+  semester?: Semester;
+}) {
+  const semesterNo = semester === "first" ? 1 : semester === "second" ? 2 : null;
+  const others = (existing ?? []).filter((c) => !NCM_LAB_COURSES.some((x) => sameCode(x.code, c.code)));
+  return (
+    <select id={id} value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled} className={inputClass}>
+      <option value="">Choose a course</option>
+      {curriculumGroups()
+        .map((g) => ({ ...g, courses: g.courses.filter((c) => semesterNo === null || c.semester === semesterNo) }))
+        .filter((g) => g.courses.length > 0)
+        .map((g) => (
+        <optgroup key={g.label} label={g.label}>
+          {g.courses.map((c) => (
+            <option key={c.code} value={c.code} disabled={taken?.(c.code)}>
+              {c.code} · {c.title}
+              {taken?.(c.code) ? " (already added)" : ""}
+            </option>
+          ))}
+        </optgroup>
+      ))}
+      {others.length > 0 && (
+        <optgroup label="Your other courses">
+          {others.map((c) => (
+            <option key={c.code} value={c.code}>
+              {c.code} · {c.title}
+            </option>
+          ))}
+        </optgroup>
+      )}
+    </select>
+  );
+}
+
+/** Start and end dates, with the overlap note. */
+export function TermDates({
+  startsOn,
+  endsOn,
+  onChange,
+  terms,
+  exceptId,
+  disabled,
+  idPrefix,
+}: {
+  startsOn: string;
+  endsOn: string;
+  onChange: (next: { starts_on: string; ends_on: string }) => void;
+  terms: AcademicTerm[];
+  exceptId?: string;
+  disabled?: boolean;
+  idPrefix: string;
+}) {
+  const valid = startsOn !== "" && endsOn !== "" && endsOn >= startsOn;
+  const overlapping = valid
+    ? terms.filter((t) => t.id !== exceptId && termsOverlap(t, { starts_on: startsOn, ends_on: endsOn }))
+    : [];
+  return (
+    <>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label htmlFor={`${idPrefix}-start`} className={labelClass}>
+            Starts <span className="text-rose-500">*</span>
+          </label>
+          <input
+            id={`${idPrefix}-start`}
+            type="date"
+            value={startsOn}
+            onChange={(e) => onChange({ starts_on: e.target.value, ends_on: endsOn })}
+            disabled={disabled}
+            className={inputClass}
+          />
+        </div>
+        <div>
+          <label htmlFor={`${idPrefix}-end`} className={labelClass}>
+            Ends <span className="text-rose-500">*</span>
+          </label>
+          <input
+            id={`${idPrefix}-end`}
+            type="date"
+            value={endsOn}
+            min={startsOn || undefined}
+            onChange={(e) => onChange({ starts_on: startsOn, ends_on: e.target.value })}
+            disabled={disabled}
+            className={inputClass}
+          />
+        </div>
+      </div>
+      {startsOn && endsOn && endsOn < startsOn && (
+        <p className="text-xs text-rose-600">The term must end on or after its start date.</p>
+      )}
+      {overlapping.length > 0 && (
+        <p className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-800">
+          <FontAwesomeIcon icon={faTriangleExclamation} className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>
+            {`Overlaps ${overlapping.map((t) => `${t.name} (${formatTermDates(t)})`).join(", ")}. That is allowed, but work graded in the overlap counts for both terms.`}
+          </span>
+        </p>
+      )}
+    </>
+  );
+}
 
 export function CourseFormModal({
   course,
@@ -161,19 +365,20 @@ export function CourseFormModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  // A new course is picked from the curriculum; an existing one keeps its code and title.
   const [code, setCode] = useState(course?.code ?? "");
-  const [title, setTitle] = useState(course?.title ?? "");
+  const picked = NCM_LAB_COURSES.find((c) => sameCode(c.code, code));
+  const title = course?.title ?? picked?.title ?? "";
   const [description, setDescription] = useState(course?.description ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const duplicate =
-    code.trim().length > 0 && courses.some((c) => c.id !== course?.id && normalizeCode(c.code) === normalizeCode(code));
+  const taken = (c: string) => courses.some((x) => x.id !== course?.id && normalizeCode(x.code) === normalizeCode(c));
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!code.trim() || !title.trim()) {
-      setError("Code and title are required.");
+      setError("Choose a course.");
       return;
     }
     setSaving(true);
@@ -195,43 +400,26 @@ export function CourseFormModal({
     <ModalFrame
       icon={faBookMedical}
       title={course ? `Edit ${course.code}` : "New course"}
-      subtitle={course ? course.title : "A course your instructors can be assigned to teach"}
+      subtitle={course ? course.title : "A course from the BSN curriculum your instructors can teach"}
       busy={saving}
       onClose={onClose}
+      wide
     >
       <form onSubmit={submit} className="space-y-3 overflow-y-auto p-5">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-[9rem_1fr]">
+        {course ? (
+          <div className="rounded-xl border border-hairline bg-subtle px-4 py-3">
+            <p className="font-mono text-xs font-semibold text-brand-700">{course.code}</p>
+            <p className="text-sm font-medium text-gray-800">{course.title}</p>
+          </div>
+        ) : (
           <div>
             <label htmlFor="course-code" className={labelClass}>
-              Code <span className="text-rose-500">*</span>
+              Course <span className="text-rose-500">*</span>
             </label>
-            <input
-              id="course-code"
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              maxLength={COURSE_LIMITS.courseCode}
-              disabled={saving}
-              autoFocus
-              placeholder="NCM 103"
-              className={inputClass}
-            />
+            <CoursePicker id="course-code" value={code} onChange={setCode} disabled={saving} taken={taken} />
+            <p className="mt-1.5 text-xs text-gray-500">The NCM laboratory courses of the BSN curriculum.</p>
           </div>
-          <div>
-            <label htmlFor="course-title" className={labelClass}>
-              Title <span className="text-rose-500">*</span>
-            </label>
-            <input
-              id="course-title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              maxLength={COURSE_LIMITS.courseTitle}
-              disabled={saving}
-              placeholder="Health Assessment"
-              className={inputClass}
-            />
-          </div>
-        </div>
-        {duplicate && <p className="text-xs text-amber-600">You already have a course with this code.</p>}
+        )}
         <div>
           <label htmlFor="course-description" className={labelClass}>
             Description
@@ -252,7 +440,7 @@ export function CourseFormModal({
           busy={saving}
           onClose={onClose}
           submitLabel={course ? "Save course" : "Add course"}
-          disabled={!code.trim() || !title.trim() || duplicate}
+          disabled={!code.trim() || !title.trim() || (!course && taken(code))}
         />
       </form>
     </ModalFrame>
@@ -270,30 +458,38 @@ export function TermFormModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const [name, setName] = useState(term?.name ?? "");
-  const [startsOn, setStartsOn] = useState(term?.starts_on ?? "");
-  const [endsOn, setEndsOn] = useState(term?.ends_on ?? "");
+  const start = startingTerm(terms, term?.id);
+  const [semester, setSemester] = useState<Semester>(start.semester);
+  const [year, setYear] = useState(start.year);
+  const [dates, setDates] = useState(() =>
+    term ? { starts_on: term.starts_on, ends_on: term.ends_on } : defaultTermDates(start.semester, start.year),
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const datesValid = startsOn !== "" && endsOn !== "" && endsOn >= startsOn;
-  const overlapping = datesValid
-    ? terms.filter((t) => t.id !== term?.id && termsOverlap(t, { starts_on: startsOn, ends_on: endsOn }))
-    : [];
-  const duplicate =
-    name.trim().length > 0 &&
-    terms.some((t) => t.id !== term?.id && t.name.trim().toLowerCase() === name.trim().toLowerCase());
+  const name = termName(semester, year);
+  const years = academicYearOptions(terms.map((t) => parseTermName(t.name)?.startYear ?? 0).filter(Boolean));
+  const datesValid = dates.starts_on !== "" && dates.ends_on !== "" && dates.ends_on >= dates.starts_on;
+  const existing = findTerm(terms, semester, year);
+  const duplicate = existing !== null && existing.id !== term?.id;
+
+  const pick = (next: { semester: Semester; year: number }) => {
+    setSemester(next.semester);
+    setYear(next.year);
+    // A new term follows the usual dates for what was picked.
+    if (!term) setDates(defaultTermDates(next.semester, next.year));
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !datesValid) {
-      setError(!name.trim() ? "Name the term." : "The term must end on or after its start date.");
+    if (!datesValid) {
+      setError("The term must end on or after its start date.");
       return;
     }
     setSaving(true);
     setError(null);
-    const input = { name: name.trim(), starts_on: startsOn, ends_on: endsOn };
-    const progress = loadingToast(term ? `Saving ${input.name}…` : `Adding ${input.name}…`);
+    const input = { name, ...dates };
+    const progress = loadingToast(term ? `Saving ${name}…` : `Adding ${name}…`);
     const result: Result<unknown> = term ? await updateTerm(term.id, input) : await createTerm(input);
     setSaving(false);
     if (result.error !== undefined) {
@@ -301,7 +497,7 @@ export function TermFormModal({
       setError(result.error);
       return;
     }
-    progress.success(term ? `${input.name} saved` : `${input.name} added`);
+    progress.success(term ? `${name} saved` : `${name} added`);
     onSaved();
   };
 
@@ -314,62 +510,20 @@ export function TermFormModal({
       onClose={onClose}
     >
       <form onSubmit={submit} className="space-y-3 overflow-y-auto p-5">
-        <div>
-          <label htmlFor="term-name" className={labelClass}>
-            Name <span className="text-rose-500">*</span>
-          </label>
-          <input
-            id="term-name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            maxLength={COURSE_LIMITS.termName}
-            disabled={saving}
-            autoFocus
-            placeholder="1st Semester AY 2026–2027"
-            className={inputClass}
-          />
-          {duplicate && <p className="mt-1.5 text-xs text-amber-600">You already have a term with this name.</p>}
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label htmlFor="term-start" className={labelClass}>
-              Starts <span className="text-rose-500">*</span>
-            </label>
-            <input
-              id="term-start"
-              type="date"
-              value={startsOn}
-              onChange={(e) => setStartsOn(e.target.value)}
-              disabled={saving}
-              className={inputClass}
-            />
-          </div>
-          <div>
-            <label htmlFor="term-end" className={labelClass}>
-              Ends <span className="text-rose-500">*</span>
-            </label>
-            <input
-              id="term-end"
-              type="date"
-              value={endsOn}
-              min={startsOn || undefined}
-              onChange={(e) => setEndsOn(e.target.value)}
-              disabled={saving}
-              className={inputClass}
-            />
-          </div>
-        </div>
-        {startsOn && endsOn && endsOn < startsOn && (
-          <p className="text-xs text-rose-600">The term must end on or after its start date.</p>
-        )}
-        {overlapping.length > 0 && (
-          <p className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-800">
-            <FontAwesomeIcon icon={faTriangleExclamation} className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            <span>
-              {`Overlaps ${overlapping.map((t) => `${t.name} (${formatTermDates(t)})`).join(", ")}. That is allowed, but work graded in the overlap counts for both terms.`}
-            </span>
-          </p>
-        )}
+        <TermPicker semester={semester} year={year} years={years} onChange={pick} disabled={saving} idPrefix="term" />
+        <p className="text-xs text-gray-500">
+          Named <span className="font-semibold text-gray-700">{name}</span>.
+        </p>
+        {duplicate && <p className="text-xs text-amber-600">You already have this term.</p>}
+        <TermDates
+          startsOn={dates.starts_on}
+          endsOn={dates.ends_on}
+          onChange={setDates}
+          terms={terms}
+          exceptId={term?.id}
+          disabled={saving}
+          idPrefix="term"
+        />
         {term && term.offering_count > 0 && (
           <p className="rounded-lg border border-hairline bg-subtle p-2.5 text-xs text-gray-500">
             {`Changing the dates re-checks the requirements of ${term.offering_count} course assignment${term.offering_count === 1 ? "" : "s"} right away.`}
@@ -380,13 +534,19 @@ export function TermFormModal({
           busy={saving}
           onClose={onClose}
           submitLabel={term ? "Save term" : "Add term"}
-          disabled={!name.trim() || !datesValid || duplicate}
+          disabled={!datesValid || duplicate}
         />
       </form>
     </ModalFrame>
   );
 }
 
+/**
+ * One flow: the term (semester and academic year), the course (from the
+ * curriculum) and the instructor. A term or course that doesn't exist yet is
+ * added as part of saving, so there's nothing to set up first. The instructor
+ * adds the sections they teach it in.
+ */
 export function AssignmentModal({
   offering,
   defaultTermId,
@@ -394,7 +554,6 @@ export function AssignmentModal({
   courses,
   offerings,
   instructors,
-  sections,
   onClose,
   onSaved,
 }: {
@@ -404,120 +563,142 @@ export function AssignmentModal({
   courses: CourseSummary[];
   offerings: CourseOfferingRow[];
   instructors: InstructorOption[];
-  sections: Section[];
   onClose: () => void;
   onSaved: (warnings: string[]) => void;
 }) {
-  const [termId, setTermId] = useState(offering?.term_id ?? defaultTermId);
-  const [courseId, setCourseId] = useState(offering?.course_id ?? "");
+  const start = startingTerm(terms, offering?.term_id ?? defaultTermId);
+  const [semester, setSemester] = useState<Semester>(start.semester);
+  const [year, setYear] = useState(start.year);
+  const [dates, setDates] = useState(() => defaultTermDates(start.semester, start.year));
+  const [code, setCode] = useState(courses.find((c) => c.id === offering?.course_id)?.code ?? "");
   const [facultyId, setFacultyId] = useState(offering?.faculty_id ?? "");
-  const [sectionIds, setSectionIds] = useState<string[]>(offering?.sections.map((s) => s.id) ?? []);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const years = academicYearOptions(terms.map((t) => parseTermName(t.name)?.startYear ?? 0).filter(Boolean));
+  const name = termName(semester, year);
+  const editTerm = offering ? (terms.find((t) => t.id === offering.term_id) ?? null) : null;
+  const term = editTerm ?? findTerm(terms, semester, year);
+  const course = courses.find((c) => sameCode(c.code, code)) ?? null;
+  const fromCurriculum = NCM_LAB_COURSES.find((c) => sameCode(c.code, code)) ?? null;
   const instructor = instructors.find((f) => f.id === facultyId) ?? null;
-  const groupsBySection = useMemo(() => {
-    const map = new Map<string, string[]>();
-    for (const g of instructor?.groups ?? []) map.set(g.section_id, [...(map.get(g.section_id) ?? []), g.name]);
-    return map;
-  }, [instructor]);
-
-  const orderedSections = useMemo(
-    () =>
-      [...sections].sort(
-        (a, b) =>
-          Number(groupsBySection.has(b.id)) - Number(groupsBySection.has(a.id)) ||
-          a.name.localeCompare(b.name, undefined, { numeric: true }),
-      ),
-    [sections, groupsBySection],
-  );
+  const datesValid = dates.starts_on !== "" && dates.ends_on !== "" && dates.ends_on >= dates.starts_on;
 
   const clash = offerings.find(
-    (o) => o.id !== offering?.id && o.course_id === courseId && o.term_id === termId && o.faculty_id === facultyId,
+    (o) =>
+      o.id !== offering?.id && term && course && o.course_id === course.id && o.term_id === term.id && o.faculty_id === facultyId,
   );
-  const course = courses.find((c) => c.id === courseId);
-  const term = terms.find((t) => t.id === termId);
 
-  const toggleSection = (id: string) =>
-    setSectionIds((prev) => (prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]));
+  const pick = (next: { semester: Semester; year: number }) => {
+    setSemester(next.semester);
+    setYear(next.year);
+    setDates(defaultTermDates(next.semester, next.year));
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!termId || !courseId || !facultyId) {
-      setError("Choose a term, a course and an instructor.");
+    if (!code || !facultyId) {
+      setError("Choose a course and an instructor.");
+      return;
+    }
+    if (!term && !datesValid) {
+      setError("Set when the term starts and ends.");
       return;
     }
     setSaving(true);
     setError(null);
-    const label = `${course?.code ?? "Course"} for ${instructor?.name ?? "the instructor"}`;
+    const label = `${code} for ${instructor?.name ?? "the instructor"}`;
     const progress = loadingToast(offering ? `Saving ${label}…` : `Assigning ${label}…`);
-    const result = offering
-      ? await updateCourseOffering(offering.id, { faculty_id: facultyId, section_ids: sectionIds })
-      : await createCourseOffering({ course_id: courseId, term_id: termId, faculty_id: facultyId, section_ids: sectionIds });
-    setSaving(false);
-    if (result.error !== undefined) {
-      progress.error(result.error);
-      setError(result.error);
+    const fail = (message: string) => {
+      setSaving(false);
+      progress.error(message);
+      setError(message);
+    };
+
+    if (offering) {
+      // The sections stay as the instructor set them.
+      const result = await updateCourseOffering(offering.id, {
+        faculty_id: facultyId,
+        section_ids: offering.sections.map((s) => s.id),
+      });
+      if (result.error !== undefined) return fail(result.error);
+      setSaving(false);
+      progress.success("Assignment saved");
+      onSaved(result.data.warnings ?? []);
       return;
     }
-    progress.success(offering ? "Assignment saved" : `Assigned ${label}`);
+
+    // The term and the course are added first when they're new.
+    let termId = term?.id ?? null;
+    if (!termId) {
+      const made = await createTerm({ name, ...dates });
+      if (made.error !== undefined) return fail(made.error);
+      termId = made.data.term.id;
+    }
+    let courseId = course?.id ?? null;
+    if (!courseId) {
+      const made = await createCourse({ code, title: fromCurriculum?.title ?? code, description: "" });
+      if (made.error !== undefined) return fail(made.error);
+      courseId = made.data.course.id;
+    }
+    const result = await createCourseOffering({ course_id: courseId, term_id: termId, faculty_id: facultyId, section_ids: [] });
+    if (result.error !== undefined) return fail(result.error);
+    setSaving(false);
+    progress.success(`Assigned ${label}`);
     onSaved(result.data.warnings ?? []);
   };
 
   return (
     <ModalFrame
       icon={faChalkboardUser}
-      title={offering ? `Edit ${course?.code ?? "assignment"}` : "Assign a course"}
+      title={offering ? `Edit ${code || "assignment"}` : "Assign a course"}
       subtitle={
         offering
-          ? `${term?.name ?? "Term"} · the checklist stays with the assignment`
-          : "Who teaches which course; the instructor can add the sections"
+          ? `${editTerm?.name ?? "Term"} · the checklist stays with the assignment`
+          : "The term, the course and who teaches it, in one go"
       }
       busy={saving}
       onClose={onClose}
       wide
     >
       <form onSubmit={submit} className="space-y-3 overflow-y-auto p-5">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div>
-            <label htmlFor="assign-term" className={labelClass}>
-              Term <span className="text-rose-500">*</span>
-            </label>
-            <select
-              id="assign-term"
-              value={termId}
-              onChange={(e) => setTermId(e.target.value)}
-              disabled={saving || !!offering}
-              className={inputClass}
-            >
-              <option value="">Choose a term</option>
-              {terms.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
+        {offering ? (
+          <div className="rounded-xl border border-hairline bg-subtle px-4 py-3">
+            <p className="text-xs text-gray-500">{editTerm?.name}</p>
+            <p className="text-sm font-medium text-gray-800">
+              {code} · {course?.title}
+            </p>
           </div>
-          <div>
-            <label htmlFor="assign-course" className={labelClass}>
-              Course <span className="text-rose-500">*</span>
-            </label>
-            <select
-              id="assign-course"
-              value={courseId}
-              onChange={(e) => setCourseId(e.target.value)}
-              disabled={saving || !!offering}
-              className={inputClass}
-            >
-              <option value="">Choose a course</option>
-              {courses.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.code} · {c.title}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
+        ) : (
+          <>
+            <TermPicker semester={semester} year={year} years={years} onChange={pick} disabled={saving} idPrefix="assign" />
+            {!term && (
+              <div className="space-y-3 rounded-xl border border-dashed border-brand-600/30 bg-brand-600/5 p-3">
+                <p className="text-xs text-gray-600">
+                  <span className="font-semibold text-gray-800">{name}</span>{" "}is new: it&apos;s added when you assign.
+                  Check its dates.
+                </p>
+                <TermDates
+                  startsOn={dates.starts_on}
+                  endsOn={dates.ends_on}
+                  onChange={setDates}
+                  terms={terms}
+                  disabled={saving}
+                  idPrefix="assign"
+                />
+              </div>
+            )}
+            <div>
+              <label htmlFor="assign-course" className={labelClass}>
+                Course <span className="text-rose-500">*</span>
+              </label>
+              <CoursePicker id="assign-course" value={code} onChange={setCode} disabled={saving} />
+              {code && !course && (
+                <p className="mt-1.5 text-xs text-gray-500">Not in your courses yet: it&apos;s added when you assign.</p>
+              )}
+            </div>
+          </>
+        )}
         <div>
           <label htmlFor="assign-instructor" className={labelClass}>
             Instructor <span className="text-rose-500">*</span>
@@ -541,53 +722,17 @@ export function AssignmentModal({
               {instructor?.name ?? "This instructor"} already teaches this course in this term. Edit that assignment instead.
             </p>
           )}
-        </div>
-        <fieldset>
-          <legend className={labelClass}>
-            Sections <span className="font-normal text-gray-400">(optional)</span>
-          </legend>
-          {sections.length === 0 ? (
-            <p className="text-sm text-gray-500">You have no sections yet.</p>
-          ) : (
-            <ul className="max-h-56 space-y-1 overflow-y-auto rounded-xl border border-hairline p-1.5">
-              {orderedSections.map((s) => {
-                const groups = groupsBySection.get(s.id);
-                const checked = sectionIds.includes(s.id);
-                return (
-                  <li key={s.id}>
-                    <label className="flex cursor-pointer items-start gap-2.5 rounded-lg px-2.5 py-2 hover:bg-subtle">
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => toggleSection(s.id)}
-                        disabled={saving}
-                        className="mt-0.5 h-4 w-4 shrink-0 rounded border-gray-300 text-brand-600 focus:ring-brand-600/30"
-                      />
-                      <span className="min-w-0">
-                        <span className="block text-sm font-medium text-gray-800">{s.name}</span>
-                        {!instructor ? null : groups ? (
-                          <span className="block text-xs text-gray-500">Supervises {groups.join(", ")}</span>
-                        ) : (
-                          <span className="block text-xs text-gray-500">No group here, so the whole section is on the roster</span>
-                        )}
-                      </span>
-                    </label>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
           <p className="mt-1.5 text-xs text-gray-500">
-            Leave these empty and the instructor adds the sections they teach it in. Students come from the
-            instructor&rsquo;s groups in each section, or the whole section where they have no group.
+            The instructor adds the sections they teach it in. Students come from their groups in each section, or the
+            whole section where they have no group.
           </p>
-        </fieldset>
+        </div>
         <ErrorNote error={error} />
         <ModalActions
           busy={saving}
           onClose={onClose}
           submitLabel={offering ? "Save assignment" : "Assign course"}
-          disabled={!termId || !courseId || !facultyId || !!clash}
+          disabled={!code || !facultyId || !!clash || (!offering && !term && !datesValid)}
         />
       </form>
     </ModalFrame>
