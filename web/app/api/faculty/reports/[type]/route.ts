@@ -4,7 +4,7 @@ import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { canSeeStudent, getScopedSectionIds, getScopedStudentIds } from '@/app/lib/admin-scope';
 import { deanInstitution, ownsRow, viewerDeanId } from '@/app/lib/dean-scope';
 import { logAudit } from '@/app/lib/audit';
-import { renderReport, type ReportMeta } from '@/app/lib/reports/kit';
+import { renderReport, reportResponse, type ReportMeta } from '@/app/lib/reports/kit';
 import { slugify } from '@/app/lib/reports/data';
 import { getFacultySectionIds, isStudentInFacultySections } from '@/app/lib/roster';
 import {
@@ -130,16 +130,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     );
 
     const filename = `icare-${type}-report-${slugify(result.subject)}.pdf`;
-    const headers = {
-      'Content-Disposition': `attachment; filename="${filename}"`,
-      'Cache-Control': 'no-store',
-    };
-
-    const pdf = await renderReport(result.pdf);
-    return new NextResponse(new Uint8Array(pdf), {
-      status: 200,
-      headers: { ...headers, 'Content-Type': 'application/pdf' },
-    });
+    return reportResponse(request, await renderReport(result.pdf), filename);
   } catch (err) {
     console.error(`Generate ${type} report failed`, err);
     return NextResponse.json({ error: 'Unable to generate report' }, { status: 500 });

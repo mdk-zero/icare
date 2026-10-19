@@ -10,8 +10,10 @@ export type FetchedReport = { blob: Blob; filename: string } | { error: string }
  * (`/api/faculty/reports` or `/api/admin/reports`); a null `id` asks for the
  * whole-scope version (roster, admin summary, every faculty member).
  *
- * The body is a PDF, which `apiFetch` never caches (only JSON is
- * replayable), so every call really does rebuild the report from live records.
+ * The PDF comes back base64-encoded inside JSON, not as a PDF body: download
+ * managers such as IDM seize any PDF response and abort this request, which
+ * broke previews. `no-store` keeps it out of the response cache, so every call
+ * really does rebuild the report from live records.
  */
 export async function fetchReport(
   endpoint: string,
@@ -20,14 +22,25 @@ export async function fetchReport(
 ): Promise<FetchedReport> {
   try {
     const query = id ? `?${new URLSearchParams({ id })}` : "";
-    const res = await apiFetch(`${endpoint}/${type}${query}`, { credentials: "include" });
+    const res = await apiFetch(`${endpoint}/${type}${query}`, {
+      credentials: "include",
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+    });
 
     if (!res.ok) {
       const json = (await res.json().catch(() => ({}))) as { error?: string };
       return { error: json.error || "Unable to generate this report" };
     }
 
-    // Prefer the filename the server chose, so naming stays consistent.
+    if (res.headers.get("content-type")?.includes("application/json")) {
+      const { filename, pdf } = (await res.json()) as { filename: string; pdf: string };
+      const bytes = Uint8Array.from(atob(pdf), (c) => c.charCodeAt(0));
+      return { blob: new Blob([bytes], { type: "application/pdf" }), filename };
+    }
+
+    // Demo mode answers in the browser with the PDF itself; no download manager
+    // sees that. Prefer the filename the server chose, so naming stays consistent.
     const disposition = res.headers.get("Content-Disposition") ?? "";
     const match = disposition.match(/filename="([^"]+)"/);
     return { blob: await res.blob(), filename: match?.[1] ?? `icare-${type}-report.pdf` };

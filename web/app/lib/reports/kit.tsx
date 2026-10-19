@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { renderToBuffer } from '@react-pdf/renderer';
+import { NextResponse } from 'next/server';
 import type { ComponentProps } from 'react';
 import { ReportShell as ReportShellUI, type ReportDocument } from './kit-ui';
 
@@ -28,4 +29,28 @@ export function ReportShell(props: Omit<ComponentProps<typeof ReportShellUI>, 'l
 
 export async function renderReport(element: ReportDocument): Promise<Buffer> {
   return await renderToBuffer(element);
+}
+
+/**
+ * A rendered report as the route's answer. The Reports page asks with
+ * `Accept: application/json` and gets the PDF base64-encoded inside JSON:
+ * download managers such as IDM seize any response that is a PDF, aborting
+ * the page's own request, even when the page only wanted it for a preview.
+ * Plain links still get the PDF itself, as an attachment.
+ */
+export function reportResponse(request: Request, pdf: Buffer, filename: string): NextResponse {
+  if (request.headers.get('accept')?.includes('application/json')) {
+    return NextResponse.json(
+      { filename, pdf: pdf.toString('base64') },
+      { headers: { 'Cache-Control': 'no-store' } },
+    );
+  }
+  return new NextResponse(new Uint8Array(pdf), {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Cache-Control': 'no-store',
+    },
+  });
 }

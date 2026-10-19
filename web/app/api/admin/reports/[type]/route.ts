@@ -3,7 +3,7 @@ import { readSession } from '@/app/lib/auth/session';
 import { getAdminScope } from '@/app/lib/admin-scope';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { logAudit } from '@/app/lib/audit';
-import { renderReport, type ReportMeta } from '@/app/lib/reports/kit';
+import { renderReport, reportResponse, type ReportMeta } from '@/app/lib/reports/kit';
 import { slugify } from '@/app/lib/reports/data';
 import {
   ADMIN_REPORT_NEEDS_TARGET,
@@ -89,16 +89,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     );
 
     const filename = `icare-admin-${type}-report-${slugify(result.subject)}.pdf`;
-    const headers = {
-      'Content-Disposition': `attachment; filename="${filename}"`,
-      'Cache-Control': 'no-store',
-    };
-
-    const pdf = await renderReport(result.pdf);
-    return new NextResponse(new Uint8Array(pdf), {
-      status: 200,
-      headers: { ...headers, 'Content-Type': 'application/pdf' },
-    });
+    return reportResponse(request, await renderReport(result.pdf), filename);
   } catch (err) {
     console.error(`Generate dean ${type} report failed`, err);
     return NextResponse.json({ error: 'Unable to generate report' }, { status: 500 });
