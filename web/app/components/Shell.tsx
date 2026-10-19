@@ -227,7 +227,11 @@ export default function Shell({ role, navItems, isActive, children }: ShellProps
   // super admins get account requests.
   const hasBell = role === "faculty" || role === "admin" || role === "super_admin";
   const notificationsHref =
-    role === "super_admin" ? "/super-admin/notifications" : role === "admin" ? "/admin/notifications" : "/faculty/notifications";
+    role === "super_admin"
+      ? "/super-admin/notifications"
+      : role === "admin"
+        ? "/admin/notifications"
+        : "/faculty/notifications";
 
   const { logo, logoIsWordmark, portalLabel, mobileRoleLabel, profileHref, homeHref } =
     config[role];
@@ -421,14 +425,20 @@ export default function Shell({ role, navItems, isActive, children }: ShellProps
               rail ? "w-[68px]" : "w-72"
             } ${
               // Shadowless while the phone drawer is shut: it would bleed in along the left edge.
-              sidebarOpen ? "translate-x-0 shadow-[4px_0_24px_-8px_rgba(0,0,0,0.45)]" : "-translate-x-full"
+              sidebarOpen
+                ? "translate-x-0 shadow-[4px_0_24px_-8px_rgba(0,0,0,0.45)]"
+                : "-translate-x-full"
             } md:translate-x-0`}
             style={{ background: SIDEBAR_GRADIENT }}
           >
             {/* Clips the full-width content down to the rail. The collapse
                 button sits outside it so it can straddle the edge. */}
             <div className="relative flex h-full flex-col overflow-hidden">
-              <div aria-hidden className="pointer-events-none absolute inset-0" style={SIDEBAR_GLOW} />
+              <div
+                aria-hidden
+                className="pointer-events-none absolute inset-0"
+                style={SIDEBAR_GLOW}
+              />
               {/* Lit edge, so the panel reads as a raised bezel against the canvas. */}
               <div
                 aria-hidden
@@ -528,10 +538,10 @@ export default function Shell({ role, navItems, isActive, children }: ShellProps
                 <Link
                   href={profileHref}
                   onClick={() => setSidebarOpen(false)}
-                  className={`group flex items-center gap-2.5 flex-1 min-w-0 overflow-hidden rounded-xl py-2 ring-1 transition-all outline-none focus-visible:ring-2 focus-visible:ring-[#5eead4]/70 ${
+                  className={`group flex items-center gap-2.5 flex-1 min-w-0 overflow-hidden rounded-xl py-2 transition-all outline-none  ${
                     rail
                       ? "px-1 bg-transparent ring-transparent"
-                      : "px-2 bg-white/[0.05] ring-white/10 hover:bg-white/[0.09] hover:ring-white/20"
+                      : "px-2 ring-white/10 hover:bg-white/[0.09] hover:ring-white/20"
                   }`}
                 >
                   <span className="w-9 h-9 rounded-full flex items-center justify-center overflow-hidden shrink-0 ring-1 ring-white/25">
@@ -669,7 +679,9 @@ export default function Shell({ role, navItems, isActive, children }: ShellProps
                 <button
                   onClick={() => setShowLogoutConfirm(true)}
                   className={`group w-full flex items-center gap-2.5 overflow-hidden rounded-xl py-2.5 ring-1 text-white/70 hover:bg-rose-500/[0.16] hover:ring-rose-300/30 hover:text-[#ffe4e6] transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-rose-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0f5252] cursor-pointer ${
-                    rail ? "px-1.5 bg-transparent ring-transparent" : "px-2.5 bg-white/[0.04] ring-white/10"
+                    rail
+                      ? "px-1.5 bg-transparent ring-transparent"
+                      : "px-2.5 bg-white/[0.04] ring-white/10"
                   }`}
                 >
                   <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/[0.07] transition-colors duration-200 group-hover:bg-rose-400/25">
@@ -705,7 +717,10 @@ export default function Shell({ role, navItems, isActive, children }: ShellProps
                   : "opacity-0 group-hover/sidebar:opacity-100"
               } [@media(hover:none)]:opacity-100`}
             >
-              <FontAwesomeIcon icon={collapsed ? faAnglesRight : faAnglesLeft} className="w-2.5 h-2.5" />
+              <FontAwesomeIcon
+                icon={collapsed ? faAnglesRight : faAnglesLeft}
+                className="w-2.5 h-2.5"
+              />
             </button>
           </aside>
         </div>
