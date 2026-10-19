@@ -56,9 +56,10 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = getSupabaseAdmin();
+    // `*` because web_session_id only exists once migration 079 is applied.
     const { data: target, error } = await supabase
       .from('users')
-      .select('id, email, name, role')
+      .select('*')
       .eq('id', body.user_id)
       .maybeSingle();
     if (error) throw new DevError(error.message, 400);
@@ -78,9 +79,18 @@ export async function POST(request: NextRequest) {
       request,
     );
 
+    // The target's token rides on their current web session rather than
+    // opening a new one, which would sign them out wherever they are.
     const [targetToken, returnToken] = await Promise.all([
-      signSession({ uid: target.id, role: target.role, email: target.email }),
-      signSession({ uid: session.uid, role: session.role, email: session.email }),
+      signSession({
+        uid: target.id,
+        role: target.role,
+        email: target.email,
+        sessionId: typeof target.web_session_id === 'string' ? target.web_session_id : undefined,
+        platform: 'web',
+        remember: true,
+      }),
+      signSession(session),
     ]);
 
     const response = NextResponse.json({

@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { SESSION_COOKIE, verifySession, type SessionPayload } from '@/app/lib/auth/jwt';
-import { liveSession } from '@/app/lib/auth/live-user';
+import { liveSessionStatus, type SessionEnd } from '@/app/lib/auth/live-user';
+import { TAB_PRESENCE_COOKIE } from '@/app/lib/tab-presence';
 import { isDeveloperEmail } from '@/app/lib/auth/developer-allowlist';
 import { IMPERSONATION_RETURN_COOKIE } from '@/app/lib/dev/impersonation';
 import { DEMO_COOKIE, isDemoRole } from '@/app/lib/demo/session';
@@ -78,7 +79,12 @@ export async function proxy(request: NextRequest) {
   if (!isProtected && !isAuthPage) return NextResponse.next();
 
   const token = request.cookies.get(SESSION_COOKIE)?.value;
-  const realSession = token ? await pageSession(token) : null;
+  const { session: realSession, ended } = token
+    ? await pageSession(token, request.cookies.has(TAB_PRESENCE_COOKIE))
+    : { session: null, ended: undefined };
+  // Said on the sign-in page, so a person signed out by a sign-in somewhere
+  // else knows why, and knows to act if it wasn't them.
+  const replaced = ended === 'replaced';
   // A demo has no session, only its role in a cookie. That routes page shells
   // and nothing more: the API routes never read it, and in a demo the browser
   // answers every API call itself (lib/demo).
@@ -89,6 +95,7 @@ export async function proxy(request: NextRequest) {
   if (isProtected && !session) {
     const login = new URL('/login', request.url);
     login.searchParams.set('next', `${pathname}${search}`);
+    if (replaced) login.searchParams.set('reason', 'replaced');
     const response = NextResponse.redirect(login);
     // The cookie is already invalid; clearing it stops the browser replaying
     // a dead token on every subsequent request.
@@ -106,7 +113,13 @@ export async function proxy(request: NextRequest) {
   // gets a 401 and sends the user to /login, /login bounces them back here,
   // and the two loop forever.
   if (isAuthPage && token && !realSession) {
-    const response = NextResponse.next();
+    const reasonMissing = pathname === '/login' && !request.nextUrl.searchParams.has('reason');
+    let response = NextResponse.next();
+    if (replaced && reasonMissing) {
+      const login = request.nextUrl.clone();
+      login.searchParams.set('reason', 'replaced');
+      response = NextResponse.redirect(login);
+    }
     response.cookies.delete(SESSION_COOKIE);
     return response;
   }
@@ -120,8 +133,8 @@ export async function proxy(request: NextRequest) {
 
 /**
  * The session behind a page navigation, checked against the live user row
- * the same way readSession() checks it for the API, so a deleted or revoked
- * session counts as signed out. Routing still uses the token's role: the
+ * the same way readSession() checks it for the API, so a deleted, revoked or
+ * replaced session counts as signed out. Routing still uses the token's role: the
  * portal layouts gate on the role the client stored at sign-in, and routing
  * on a different one would bounce the two off each other. A role change
  * revokes the token (059), so the next sign-in brings both up to date.
@@ -130,20 +143,28 @@ export async function proxy(request: NextRequest) {
  */
 const PAGE_SESSION_TIMEOUT_MS = 2000;
 
-async function pageSession(token: string): Promise<SessionPayload | null> {
-  const claims = await verifySession(token);
-  if (!claims) return null;
+async function pageSession(
+  token: string,
+  tabOpen: boolean,
+): Promise<{ session: SessionPayload | null; ended?: SessionEnd | 'closed' }> {
+  const verified = await verifySession(token);
+  if (!verified) return { session: null };
+  // A cookie is the web's; only a token from before 079 leaves that unsaid.
+  const claims: SessionPayload = { ...verified, platform: verified.platform ?? 'web' };
+  // Signed in without "Remember me": the session ended with its last tab,
+  // whatever the browser kept of the cookie (lib/tab-presence).
+  if (claims.remember === false && !tabOpen) return { session: null, ended: 'closed' };
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     // A hung lookup must not hold every page navigation hostage.
     const timeout = new Promise<never>((_, reject) => {
       timer = setTimeout(() => reject(new Error('timed out')), PAGE_SESSION_TIMEOUT_MS);
     });
-    const live = await Promise.race([liveSession(claims), timeout]);
-    return live ? claims : null;
+    const live = await Promise.race([liveSessionStatus(claims), timeout]);
+    return live.session ? { session: claims } : { session: null, ended: live.ended };
   } catch (err) {
     console.error('Proxy live session check failed; using the token alone', err);
-    return claims;
+    return { session: claims };
   } finally {
     clearTimeout(timer);
   }

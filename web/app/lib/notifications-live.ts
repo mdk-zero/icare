@@ -181,7 +181,11 @@ export function startNotificationStream() {
   es.addEventListener("error", () => {
     setState({ connected: false });
     // EventSource retries on its own unless the response itself was rejected
-    // (401 after a sign-out, say), which closes it for good.
+    // (401 after a sign-out, say), which closes it for good. On Vercel the
+    // stream reconnects about once a minute, so this is where a session that
+    // a sign-in elsewhere replaced is noticed: the read below gets the same
+    // 401 and sends the tab to the sign-in page.
+    if (es.readyState === EventSource.CLOSED && !stopped) void refreshNotifications();
   });
 
   if (!visibilityBound) {

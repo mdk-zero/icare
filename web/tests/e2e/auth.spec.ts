@@ -1,6 +1,4 @@
 import { expect, test } from '@playwright/test';
-import { accounts } from '../env.mjs';
-import { HOME, type Role } from './helpers';
 
 test.describe('Sign-in page', () => {
   test('renders the email and password form', async ({ page }) => {
@@ -24,17 +22,8 @@ test.describe('Sign-in page', () => {
     await expect(page.getByRole('textbox').first()).toBeVisible();
   });
 
-  // The form end to end, with whichever staff account is configured.
-  const staff = (['super_admin', 'admin', 'faculty'] as Role[]).find((role) => accounts[role]);
-  test('signs a staff member in through the form', async ({ page }) => {
-    test.skip(!staff, 'no staff test account configured');
-    const account = accounts[staff!]!;
-    await page.goto('/login');
-    await page.getByLabel(/email address/i).fill(account.email);
-    await page.locator('#password').fill(account.password);
-    await page.getByRole('button', { name: 'Sign In', exact: true }).click();
-    await expect(page).toHaveURL(new RegExp(`${HOME[staff!]}(\\?|$)`), { timeout: 20_000 });
-  });
+  // Signing in through the form lives with the signed-in tests of its role
+  // (formSignInTest in helpers.ts), so it can't sign them out mid-run.
 });
 
 test.describe('Signed-out access', () => {

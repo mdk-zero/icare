@@ -3,19 +3,24 @@ import { cookies, headers } from 'next/headers';
 import { getSupabaseAdmin } from '../supabase/server';
 import { isMissingColumn, liveSession } from './live-user';
 import { SESSION_COOKIE, getSecret, signSession, verifySession } from './jwt';
-import type { SessionPayload } from './jwt';
+import type { SessionPayload, SessionPlatform } from './jwt';
 
 // Signing and verification live in ./jwt so middleware can share them without
 // pulling in next/headers. Re-exported here so existing importers are unaffected.
 export { SESSION_COOKIE, signSession, verifySession } from './jwt';
-export type { SessionPayload } from './jwt';
+export type { SessionPayload, SessionPlatform } from './jwt';
 
 export const GOOGLE_ONBOARDING_COOKIE = 'icare_google_onboarding';
 const SEVEN_DAYS_SECONDS = 60 * 60 * 24 * 7;
 // Long enough to fill in the contact form after picking a Google account.
 const ONBOARDING_TTL_SECONDS = 60 * 30;
 
-export async function setSessionCookie(token: string): Promise<void> {
+/**
+ * A remembered session's cookie lasts seven days. Any other is a browser
+ * session cookie, gone when the browser quits; the proxy ends it sooner, once
+ * its last tab closes (lib/tab-presence).
+ */
+export async function setSessionCookie(token: string, remember = true): Promise<void> {
   const store = await cookies();
   store.set({
     name: SESSION_COOKIE,
@@ -24,8 +29,35 @@ export async function setSessionCookie(token: string): Promise<void> {
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
     path: '/',
-    maxAge: SEVEN_DAYS_SECONDS,
+    ...(remember ? { maxAge: SEVEN_DAYS_SECONDS } : {}),
   });
+}
+
+/** Signs a token for this session and sets it as the cookie. */
+export async function startSession(session: SessionPayload): Promise<string> {
+  const token = await signSession(session);
+  await setSessionCookie(token, session.remember !== false);
+  return token;
+}
+
+/**
+ * A fresh sign-in. Its new session id takes the account's slot for this
+ * platform, which signs out whichever session held it (newest wins). Before
+ * migration 079 there is no slot, and earlier sessions stay signed in.
+ */
+export async function openSession(
+  user: Pick<SessionPayload, 'uid' | 'role' | 'email'>,
+  { platform, remember }: { platform: SessionPlatform; remember: boolean },
+): Promise<string> {
+  const sessionId = crypto.randomUUID();
+  const column = platform === 'mobile' ? 'mobile_session_id' : 'web_session_id';
+  const { error } = await getSupabaseAdmin()
+    .from('users')
+    .update({ [column]: sessionId })
+    .eq('id', user.uid);
+  if (error && !isMissingColumn(error)) throw error;
+  if (error) console.warn(`users.${column} is missing (apply migration 079); earlier sessions stay signed in`);
+  return startSession({ uid: user.uid, role: user.role, email: user.email, sessionId, platform, remember });
 }
 
 export async function clearSessionCookie(): Promise<void> {
@@ -80,8 +112,7 @@ export async function updateUser(
  * in place of their old one; a cookie client has no use for it in page script.
  */
 export async function reissueSession(session: SessionPayload): Promise<string | undefined> {
-  const token = await signSession(session);
-  await setSessionCookie(token);
+  const token = await startSession(session);
   const authorization = (await headers()).get('authorization');
   return authorization?.startsWith('Bearer ') ? token : undefined;
 }
@@ -92,15 +123,19 @@ async function readTokenClaims(): Promise<SessionPayload | null> {
   // `sessionToken`, in an Authorization bearer header. It wins over a cookie:
   // React Native keeps cookies in a native store, which can still hold one
   // from an earlier sign-in after the app has swapped in a fresh token.
+  // Tokens from before 079 don't say which platform they belong to; a bearer
+  // token is the app's, a cookie the web's.
   const headerStore = await headers();
   const authorization = headerStore.get('authorization');
   if (authorization?.startsWith('Bearer ')) {
-    return verifySession(authorization.slice('Bearer '.length));
+    const claims = await verifySession(authorization.slice('Bearer '.length));
+    return claims && { ...claims, platform: claims.platform ?? 'mobile' };
   }
 
   const store = await cookies();
   const token = store.get(SESSION_COOKIE)?.value;
-  return token ? verifySession(token) : null;
+  const claims = token ? await verifySession(token) : null;
+  return claims && { ...claims, platform: claims.platform ?? 'web' };
 }
 
 export interface GoogleOnboardingPayload {

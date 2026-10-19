@@ -6,6 +6,13 @@ site. Signing in does update each test account's "last sign-in" time, and the Pl
 health-check test saves one health-check run to System Tests (its AI checks only look models
 up, so they spend no AI quota).
 
+An account holds one live web session and one live mobile session (migration 079), and each
+sign-in signs out the one before it on the same platform. So each role's Playwright tests run
+in order rather than side by side, the staff sign-ins in both suites are web sessions, and the
+`:report` reporter's is a mobile one, so it is never signed out by the tests it reports on.
+Don't use a test account by hand while a suite runs, and run one `:report` suite at a time:
+two reporters share the super admin's mobile session.
+
 | Suite | Tool | What it checks | Files |
 |---|---|---|---|
 | Frontend (end-to-end) | [Playwright](https://playwright.dev) | A real Chromium browser opens pages, signs in, clicks through each portal and checks what is shown, including which portals each role is kept out of. | `playwright.config.ts`, `tests/e2e/*.spec.ts` |

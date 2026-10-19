@@ -21,7 +21,7 @@ import { hashPassword, verifyPassword } from './password';
 import { generateOtp } from './reset';
 import { sendEmailChangeOtp, sendEmailChangedNotice } from './email';
 import { readSuperAdminSession } from './super-admin';
-import { setSessionCookie, signSession, type SessionPayload } from './session';
+import { startSession, type SessionPayload } from './session';
 
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
 
@@ -215,7 +215,7 @@ export async function confirmEmailChange(
 
   // The session token carries the email; keep the holder's own in step.
   if (session.uid === target.id) {
-    await setSessionCookie(await signSession({ ...session, email: newEmail }));
+    await startSession({ ...session, email: newEmail });
   }
 
   return { ok: true, value: { id: target.id, email: newEmail } };

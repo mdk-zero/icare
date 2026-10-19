@@ -10,10 +10,25 @@ import type { UserRole } from '../supabase/server';
 
 export const SESSION_COOKIE = 'icare_session';
 
+/** Each platform holds one live session per account (migration 079). */
+export type SessionPlatform = 'web' | 'mobile';
+
 export interface SessionPayload {
   uid: string;
   role: UserRole;
   email: string;
+  /**
+   * This sign-in's id, matched against the account's slot for `platform`.
+   * Tokens from before 079 have none.
+   */
+  sessionId?: string;
+  /** Older tokens lack it; readers fill it in from how the token arrived. */
+  platform?: SessionPlatform;
+  /**
+   * False when the person signed in without "Remember me": the session then
+   * ends when its last tab closes. Older tokens lack it and count as remembered.
+   */
+  remember?: boolean;
   /** When the token was issued, in seconds (the standard claim). */
   iat?: number;
   /**
@@ -34,9 +49,17 @@ export function getSecret(): Uint8Array {
 
 export async function signSession(payload: SessionPayload): Promise<string> {
   // Only the identity claims: callers pass a read session back in, and its
-  // old iat must not ride along.
-  const { uid, role, email } = payload;
-  return await new SignJWT({ uid, role, email, iat_ms: Date.now() })
+  // old iat must not ride along. The sign-in it belongs to does.
+  const { uid, role, email, sessionId, platform, remember } = payload;
+  return await new SignJWT({
+    uid,
+    role,
+    email,
+    iat_ms: Date.now(),
+    ...(sessionId ? { sid: sessionId } : {}),
+    ...(platform ? { pf: platform } : {}),
+    ...(remember === undefined ? {} : { rem: remember }),
+  })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime('7d')
@@ -57,6 +80,9 @@ export async function verifySession(token: string): Promise<SessionPayload | nul
         email: payload.email,
         iat: typeof payload.iat === 'number' ? payload.iat : undefined,
         iatMs: typeof payload.iat_ms === 'number' ? payload.iat_ms : undefined,
+        sessionId: typeof payload.sid === 'string' ? payload.sid : undefined,
+        platform: payload.pf === 'web' || payload.pf === 'mobile' ? payload.pf : undefined,
+        remember: typeof payload.rem === 'boolean' ? payload.rem : undefined,
       };
     }
     return null;

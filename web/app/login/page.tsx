@@ -25,8 +25,11 @@ import { DriftingKit, RotatingWords } from "../components/AuthShowcase";
 import AuthHomeLink from "../components/AuthHomeLink";
 import DemoPicker from "./DemoPicker";
 import { endDemo } from "../lib/demo/session";
+import { holdTabPresence } from "../lib/tab-presence";
 
 const STUDENT_MESSAGE = "Students sign in on the iCARE++ mobile app. The web portal is for instructors, deans and admins.";
+const REPLACED_MESSAGE =
+  "You were signed out because someone signed in to your account on another browser. If that wasn't you, sign in and change your password.";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -36,6 +39,8 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  // Off by default: the session then ends when its last tab closes.
+  const [remember, setRemember] = useState(false);
   const googleButtonRef = useRef<HTMLDivElement>(null);
   const [googleButtonWidth, setGoogleButtonWidth] = useState(0);
   const [demoOpen, setDemoOpen] = useState(false);
@@ -88,10 +93,11 @@ export default function LoginPage() {
   }, []);
 
   useEffect(() => {
-    // The proxy parks a signed-in student here; say why before anything else.
-    if (new URLSearchParams(window.location.search).get("reason") === "student") {
-      setError(STUDENT_MESSAGE);
-    }
+    // The proxy parks a signed-in student here, and a session that a newer
+    // sign-in replaced; say why before anything else.
+    const reason = new URLSearchParams(window.location.search).get("reason");
+    if (reason === "student") setError(STUDENT_MESSAGE);
+    if (reason === "replaced") setError(REPLACED_MESSAGE);
     if (!isAuthenticated()) return;
     // The stored flag outlives the session cookie, so confirm with the server
     // before bouncing away. Trusting localStorage here would ping-pong against
@@ -108,7 +114,7 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      const result = await login(email, password);
+      const result = await login(email, password, remember);
 
       if (result) {
         if (result.user.role === "faculty") {
@@ -147,7 +153,7 @@ export default function LoginPage() {
       const res = await fetch("/api/auth/google", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id_token: response.credential }),
+        body: JSON.stringify({ id_token: response.credential, remember }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -166,6 +172,7 @@ export default function LoginPage() {
       endDemo();
       localStorage.setItem("icare_user", JSON.stringify(user));
       localStorage.setItem("icare_token", "logged_in");
+      holdTabPresence();
       if (user.role === "faculty") {
         void logAuditAction({
           faculty_id: user.id,
@@ -381,6 +388,8 @@ export default function LoginPage() {
                 <label className="flex items-center cursor-pointer group">
                   <input
                     type="checkbox"
+                    checked={remember}
+                    onChange={(e) => setRemember(e.target.checked)}
                     className="w-4 h-4 rounded border-white/20 bg-white/5 text-brand-400 focus:ring-(--auth-accent)/30 cursor-pointer"
                   />
                   <span className="ml-2 text-sm text-white/50 group-hover:text-white/70 transition-colors">

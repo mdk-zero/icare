@@ -1,12 +1,16 @@
 import { expect, test } from '@playwright/test';
 import { accounts } from '../env.mjs';
-import { requireAccount, signIn } from './helpers';
+import { formSignInTest, requireAccount, signIn } from './helpers';
 
 test.describe('Admin portal', () => {
+  // In order: each test's sign-in replaces the one before it.
+  test.describe.configure({ mode: 'default' });
   test.beforeEach(async ({ page }) => {
     requireAccount('super_admin');
     await signIn(page, 'super_admin');
   });
+
+  formSignInTest('super_admin');
 
   test('dashboard shows the system overview', async ({ page }) => {
     await expect(page.getByRole('heading', { name: 'System Dashboard' })).toBeVisible();

@@ -35,6 +35,7 @@ import CacheConsentBanner from "./CacheConsentBanner";
 import { onCacheClear } from "../lib/request-cache";
 import { roleLabel } from "../lib/role-labels";
 import { isDemo } from "../lib/demo/session";
+import { holdTabPresence } from "../lib/tab-presence";
 
 export interface NavItem {
   id: string;
@@ -333,6 +334,9 @@ export default function Shell({ role, navItems, isActive, children }: ShellProps
 
       setUser(fresh);
       setIsLoading(false);
+      // The proxy let this page through, so this tab is part of the session,
+      // even if it was opened after the one that signed in.
+      holdTabPresence();
       const url = await getDisplayAvatarUrl(fresh.picture_url);
       if (mounted) {
         setAvatarUrl(url ?? defaultAvatarSrc(fresh.id, fresh.sex));

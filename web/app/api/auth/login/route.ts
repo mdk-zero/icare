@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { findUserByEmail, sectionNameOf, toPublicUser, touchLastLogin } from '@/app/lib/auth/user';
 import { verifyPassword } from '@/app/lib/auth/password';
-import { setSessionCookie, signSession } from '@/app/lib/auth/session';
+import { openSession } from '@/app/lib/auth/session';
 import { clientIp, consumeRateLimit } from '@/app/lib/auth/rate-limit';
 
 // Password guessing: a cap per address (one attacker) and per account (a
@@ -18,10 +18,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const { email, password } = body as { email?: unknown; password?: unknown };
+  const { email, password, client, remember } = body as {
+    email?: unknown;
+    password?: unknown;
+    client?: unknown;
+    remember?: unknown;
+  };
   if (typeof email !== 'string' || typeof password !== 'string') {
     return NextResponse.json({ error: 'Missing email or password' }, { status: 400 });
   }
+  // The web form says so; the mobile app sends neither field and keeps its
+  // own "Remember me" on the device.
+  const platform = client === 'web' ? 'web' : 'mobile';
 
   const normalizedEmail = email.trim().toLowerCase();
   const allowed =
@@ -45,11 +53,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 });
     }
 
-    const [, section] = await Promise.all([touchLastLogin(row.id), sectionNameOf(row.id)]);
-    const publicUser = { ...toPublicUser(row), section };
-    const token = await signSession({ uid: publicUser.id, role: publicUser.role, email: publicUser.email });
-    await setSessionCookie(token);
-    return NextResponse.json({ user: publicUser, sessionToken: token });
+    const publicUser = toPublicUser(row);
+    const [, section, token] = await Promise.all([
+      touchLastLogin(row.id),
+      sectionNameOf(row.id),
+      openSession(
+        { uid: publicUser.id, role: publicUser.role, email: publicUser.email },
+        { platform, remember: platform === 'mobile' || remember === true },
+      ),
+    ]);
+    return NextResponse.json({ user: { ...publicUser, section }, sessionToken: token });
   } catch (err) {
     console.error('Login handler failed', err);
     return NextResponse.json({ error: 'Sign-in failed' }, { status: 500 });

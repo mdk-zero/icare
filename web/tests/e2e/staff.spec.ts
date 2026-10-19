@@ -1,11 +1,15 @@
 import { expect, test } from '@playwright/test';
-import { requireAccount, signIn } from './helpers';
+import { formSignInTest, requireAccount, signIn } from './helpers';
 
 test.describe('Dean portal', () => {
+  // In order: each test's sign-in replaces the one before it.
+  test.describe.configure({ mode: 'default' });
   test.beforeEach(async ({ page }) => {
     requireAccount('admin');
     await signIn(page, 'admin');
   });
+
+  formSignInTest('admin');
 
   test('has no Users page any more', async ({ page }) => {
     await expect(page.getByRole('navigation').first().getByRole('link', { name: 'Users', exact: true })).toHaveCount(0);
@@ -28,10 +32,14 @@ test.describe('Dean portal', () => {
 });
 
 test.describe('Instructor portal', () => {
+  // In order: each test's sign-in replaces the one before it.
+  test.describe.configure({ mode: 'default' });
   test.beforeEach(async ({ page }) => {
     requireAccount('faculty');
     await signIn(page, 'faculty');
   });
+
+  formSignInTest('faculty');
 
   test('dashboard loads', async ({ page }) => {
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();

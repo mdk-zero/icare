@@ -729,7 +729,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"{{superEmail}}\",\n  \"password\": \"{{superPassword}}\"\n}",
+              "raw": "{\n  \"email\": \"{{superEmail}}\",\n  \"password\": \"{{superPassword}}\",\n  \"client\": \"web\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1393,7 +1393,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}",
+              "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\",\n  \"client\": \"web\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1797,7 +1797,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"{{facultyEmail}}\",\n  \"password\": \"{{facultyPassword}}\"\n}",
+              "raw": "{\n  \"email\": \"{{facultyEmail}}\",\n  \"password\": \"{{facultyPassword}}\",\n  \"client\": \"web\"\n}",
               "options": {
                 "raw": {
                   "language": "json"

@@ -7,7 +7,7 @@ import {
   touchLastLogin,
   USER_SELECT,
 } from '@/app/lib/auth/user';
-import { setSessionCookie, signGoogleOnboarding, signSession } from '@/app/lib/auth/session';
+import { openSession, signGoogleOnboarding } from '@/app/lib/auth/session';
 
 /**
  * An account the team created with this email but that has never signed in
@@ -40,6 +40,8 @@ export async function POST(request: Request) {
   if (typeof idToken !== 'string' || idToken.length === 0) {
     return NextResponse.json({ error: 'Missing id_token' }, { status: 400 });
   }
+  // The login form's "Remember me", as for a password sign-in.
+  const remember = (body as { remember?: unknown }).remember === true;
 
   let profile;
   try {
@@ -76,12 +78,10 @@ export async function POST(request: Request) {
         existing.force_password_change = false;
       }
       const publicUser = toPublicUser(existing);
-      const token = await signSession({
-        uid: publicUser.id,
-        role: publicUser.role,
-        email: publicUser.email,
-      });
-      await setSessionCookie(token);
+      const token = await openSession(
+        { uid: publicUser.id, role: publicUser.role, email: publicUser.email },
+        { platform: 'web', remember },
+      );
       return NextResponse.json({ user: publicUser, sessionToken: token });
     }
 

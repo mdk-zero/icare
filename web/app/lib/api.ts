@@ -5,6 +5,7 @@ import { recordRequest } from './telemetry';
 import { resolveRubric, type ChecklistRating, type Rubric, type TaskRating } from './task-ratings';
 import { reportNetworkFailure, reportNetworkSuccess } from './connectivity';
 import { endDemo, isDemo } from './demo/session';
+import { holdTabPresence, releaseTabPresence } from './tab-presence';
 import type { ItemProgress, OfferingSummary, RequirementInput, RequirementRow, TermStatus } from './course-progress';
 import type { GradingSplit } from './course-grading';
 import type { ActivityKind, AttendanceRow, AttendanceTally } from './attendance';
@@ -54,6 +55,7 @@ function handleSessionExpired() {
   if (typeof window === 'undefined' || sessionExpiryHandled) return;
   sessionExpiryHandled = true;
   mirrorToStorage(null);
+  releaseTabPresence();
   // A stray demo cookie would have the proxy bounce /login straight back here.
   endDemo();
   clearRequestCache();
@@ -198,7 +200,15 @@ export class LoginRateLimitedError extends Error {}
  */
 export class LoginServerError extends Error {}
 
-export async function login(email: string, password: string): Promise<{ user: User; sessionToken: string } | null> {
+/**
+ * Signs in on the web. Without `remember`, the session ends once the last tab
+ * of it closes (lib/tab-presence); with it, it lasts seven days.
+ */
+export async function login(
+  email: string,
+  password: string,
+  remember = false,
+): Promise<{ user: User; sessionToken: string } | null> {
   // A real sign-in never mixes with a demo left open in this browser.
   endDemo();
   let res: Response;
@@ -206,7 +216,7 @@ export async function login(email: string, password: string): Promise<{ user: Us
     res = await apiFetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email, password, remember, client: 'web' }),
     });
   } catch (err) {
     console.error('login() failed', err);
@@ -223,6 +233,7 @@ export async function login(email: string, password: string): Promise<{ user: Us
     if (!res.ok) return null;
     const { user, sessionToken } = (await res.json()) as { user: User; sessionToken: string };
     mirrorToStorage(user);
+    holdTabPresence();
     return { user, sessionToken };
   } catch (err) {
     console.error('login() failed', err);
@@ -242,6 +253,7 @@ export async function logout(): Promise<void> {
     return;
   }
   mirrorToStorage(null);
+  releaseTabPresence();
   // Logout returns to /login through the router, so the document — and with it
   // every cached read of the outgoing user's data — survives. Drop it here
   // rather than relying on the request below, which may never land.
