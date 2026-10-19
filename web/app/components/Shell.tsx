@@ -512,8 +512,8 @@ export default function Shell({ role, navItems, isActive, children }: ShellProps
                     </span>
                   </span>
                 </Link>
-                {/* Beside the logo, where the eye lands first, rather than tucked
-                    after the profile card. Centred on the 48px wordmark, not on the
+                {/* Beside the logo, where the eye lands first, rather than down
+                    by the profile. Centred on the 48px wordmark, not on the
                     wordmark plus the portal label under it. */}
                 {hasBell && (
                   <div className="mt-1.5 shrink-0 self-start">
@@ -531,51 +531,6 @@ export default function Shell({ role, navItems, isActive, children }: ShellProps
                 >
                   <FontAwesomeIcon icon={faXmark} className="w-4 h-4" />
                 </button>
-              </div>
-
-              {/* Profile */}
-              <div className="relative z-10 shrink-0 mx-3 mb-2 flex items-center gap-2">
-                <Link
-                  href={profileHref}
-                  onClick={() => setSidebarOpen(false)}
-                  className={`group flex items-center gap-2.5 flex-1 min-w-0 overflow-hidden rounded-xl py-2 transition-all outline-none  ${
-                    rail
-                      ? "px-1 bg-transparent ring-transparent"
-                      : "px-2 ring-white/10 hover:bg-white/[0.09] hover:ring-white/20"
-                  }`}
-                >
-                  <span className="w-9 h-9 rounded-full flex items-center justify-center overflow-hidden shrink-0 ring-1 ring-white/25">
-                    {avatarUrl ? (
-                      <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
-                    ) : (
-                      <span className="w-full h-full bg-gradient-to-br from-white/25 to-white/5 flex items-center justify-center">
-                        <span className="text-sm font-bold text-white/90">
-                          {user.name.charAt(0).toUpperCase()}
-                        </span>
-                      </span>
-                    )}
-                  </span>
-                  <span
-                    className={`flex-1 min-w-0 transition-opacity duration-200 ${
-                      rail ? "opacity-0" : "opacity-100"
-                    }`}
-                  >
-                    <span className="block text-sm font-semibold text-white truncate leading-tight">
-                      {user.name}
-                    </span>
-                    <span className="block font-mono text-[10px] uppercase tracking-[0.14em] text-white/55 leading-none mt-1">
-                      {roleLabel(user.role)}
-                      {isDemo() && (
-                        <span
-                          title="Sample data — resets when you log out"
-                          className="ml-1.5 rounded bg-amber-300/90 px-1 py-px text-[9px] font-semibold tracking-[0.1em] text-amber-950"
-                        >
-                          Demo
-                        </span>
-                      )}
-                    </span>
-                  </span>
-                </Link>
               </div>
 
               {/* Navigation */}
@@ -667,37 +622,73 @@ export default function Shell({ role, navItems, isActive, children }: ShellProps
                 })}
               </nav>
 
-              {/* Logout */}
-              <div className="relative z-10 shrink-0 px-3 pt-3 pb-3.5">
+              {/* Profile and logout share the foot. Laid out at full width like
+                  the brand, so the avatar holds the rail's centre line and the
+                  logout button is simply clipped off it until the rail opens. */}
+              <div className="relative z-10 w-72 shrink-0 px-3 pt-2.5 pb-3">
                 <div
                   aria-hidden
-                  className="mb-3 h-px bg-gradient-to-r from-transparent via-white/15 to-transparent"
+                  className="mb-2.5 h-px bg-gradient-to-r from-transparent via-white/15 to-transparent"
                 />
-                {/* Hover tint is a literal rose-100: the `rose-50` token retint to
-                    near-black in dark mode would blacken the label and icon here,
-                    since this sidebar is dark in both schemes. */}
-                <button
-                  onClick={() => setShowLogoutConfirm(true)}
-                  className={`group w-full flex items-center gap-2.5 overflow-hidden rounded-xl py-2.5 ring-1 text-white/70 hover:bg-rose-500/[0.16] hover:ring-rose-300/30 hover:text-[#ffe4e6] transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-rose-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0f5252] cursor-pointer ${
-                    rail
-                      ? "px-1.5 bg-transparent ring-transparent"
-                      : "px-2.5 bg-white/[0.04] ring-white/10"
-                  }`}
-                >
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/[0.07] transition-colors duration-200 group-hover:bg-rose-400/25">
+                <div className="flex items-center gap-2">
+                  {/* A pill whose left end is concentric with the avatar. */}
+                  <Link
+                    href={profileHref}
+                    onClick={() => setSidebarOpen(false)}
+                    className={`group flex min-w-0 flex-1 items-center gap-2.5 rounded-full py-1 pl-1 pr-3 transition-colors duration-150 outline-none focus-visible:ring-2 focus-visible:ring-[#5eead4]/70 ${
+                      rail ? "" : "hover:bg-white/[0.08]"
+                    }`}
+                  >
+                    <span className="w-9 h-9 rounded-full flex items-center justify-center overflow-hidden shrink-0 ring-1 ring-white/25">
+                      {avatarUrl ? (
+                        <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="w-full h-full bg-gradient-to-br from-white/25 to-white/5 flex items-center justify-center">
+                          <span className="text-sm font-bold text-white/90">
+                            {user.name.charAt(0).toUpperCase()}
+                          </span>
+                        </span>
+                      )}
+                    </span>
+                    <span
+                      className={`flex-1 min-w-0 transition-opacity duration-200 ${
+                        rail ? "opacity-0" : "opacity-100"
+                      }`}
+                    >
+                      <span className="block text-sm font-semibold text-white truncate leading-tight">
+                        {user.name}
+                      </span>
+                      <span className="block font-mono text-[10px] uppercase tracking-[0.14em] text-white/55 leading-none mt-1">
+                        {roleLabel(user.role)}
+                        {isDemo() && (
+                          <span
+                            title="Sample data — resets when you log out"
+                            className="ml-1.5 rounded bg-amber-300/90 px-1 py-px text-[9px] font-semibold tracking-[0.1em] text-amber-950"
+                          >
+                            Demo
+                          </span>
+                        )}
+                      </span>
+                    </span>
+                  </Link>
+                  {/* Hover tint is a literal rose-100: the `rose-50` token retint to
+                      near-black in dark mode would blacken the icon here, since
+                      this sidebar is dark in both schemes. */}
+                  <button
+                    type="button"
+                    onClick={() => setShowLogoutConfirm(true)}
+                    aria-label="Log out"
+                    title="Log out"
+                    className={`group flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/[0.07] text-white/70 transition-[background-color,color,opacity] duration-200 hover:bg-rose-500/25 hover:text-[#ffe4e6] outline-none focus-visible:ring-2 focus-visible:ring-rose-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0f5252] cursor-pointer ${
+                      rail ? "opacity-0" : "opacity-100"
+                    }`}
+                  >
                     <FontAwesomeIcon
                       icon={faRightFromBracket}
                       className="w-4 h-4 transition-transform duration-200 group-hover:translate-x-0.5"
                     />
-                  </span>
-                  <span
-                    className={`whitespace-nowrap text-sm font-semibold leading-none transition-opacity duration-200 ${
-                      rail ? "opacity-0" : "opacity-100"
-                    }`}
-                  >
-                    Log out
-                  </span>
-                </button>
+                  </button>
+                </div>
               </div>
             </div>
 

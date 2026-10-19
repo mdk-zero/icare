@@ -462,18 +462,6 @@ export function SkeletonSidebar({ collapsed = false }: { collapsed?: boolean }) 
             <div className="h-2 w-20 bg-white/[0.06] rounded" />
           </div>
         </div>
-        {/* Profile */}
-        <div
-          className={`mx-3 mb-2 flex items-center gap-2.5 rounded-xl bg-white/[0.05] px-2 py-2 ${
-            collapsed ? 'md:justify-center md:bg-transparent md:px-0' : ''
-          }`}
-        >
-          <div className="w-8 h-8 shrink-0 bg-white/10 rounded-full" />
-          <div className={`space-y-2 flex-1 ${collapsed ? 'md:hidden' : ''}`}>
-            <div className="h-3 w-24 bg-white/10 rounded" />
-            <div className="h-2 w-12 bg-white/[0.06] rounded" />
-          </div>
-        </div>
         {/* Nav groups */}
         <div className="flex-1 px-3 py-2 space-y-3">
           {[3, 3, 2].map((count, group) => (
@@ -488,9 +476,18 @@ export function SkeletonSidebar({ collapsed = false }: { collapsed?: boolean }) 
             </div>
           ))}
         </div>
-        {/* Logout */}
-        <div className="px-3 pb-3 pt-2 border-t border-white/10">
-          <div className="h-9 bg-white/[0.04] rounded-lg" />
+        {/* Profile + logout */}
+        <div
+          className={`flex items-center gap-2.5 px-3 pb-3 pt-2.5 border-t border-white/10 ${
+            collapsed ? 'md:justify-center md:px-0' : ''
+          }`}
+        >
+          <div className="w-9 h-9 shrink-0 bg-white/10 rounded-full" />
+          <div className={`space-y-2 flex-1 ${collapsed ? 'md:hidden' : ''}`}>
+            <div className="h-3 w-24 bg-white/10 rounded" />
+            <div className="h-2 w-12 bg-white/[0.06] rounded" />
+          </div>
+          <div className={`w-9 h-9 shrink-0 bg-white/[0.06] rounded-full ${collapsed ? 'md:hidden' : ''}`} />
         </div>
       </div>
       <div className="flex-1 p-4 space-y-4">
