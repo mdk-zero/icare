@@ -7,7 +7,6 @@ import {
   faBuildingColumns,
   faChalkboardUser,
   faChevronRight,
-  faUserShield,
   faXmark,
   type IconDefinition,
 } from "@fortawesome/free-solid-svg-icons";

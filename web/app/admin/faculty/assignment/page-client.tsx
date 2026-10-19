@@ -75,6 +75,7 @@ export default function AssignSectionsClient() {
   // The page opens on someone, so the first arrival picks the first member.
   useEffect(() => {
     if (selectedFaculty || faculty.length === 0) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSelectedFaculty(faculty[0]);
     setSelectedSections(faculty[0].sections.map((s) => s.id));
   }, [faculty, selectedFaculty]);

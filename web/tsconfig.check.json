@@ -1,0 +1,8 @@
+{
+  // check.sh's typecheck: the source plus the route types `next typegen` just
+  // wrote, which is what CI sees. It leaves out what `next dev` and builds
+  // into another distDir generate (.next/dev, .next-build*): a dev server
+  // can leave those half-rewritten, failing the check on no change of ours.
+  "extends": "./tsconfig.json",
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", "**/*.mts", ".next/types/**/*.ts"]
+}

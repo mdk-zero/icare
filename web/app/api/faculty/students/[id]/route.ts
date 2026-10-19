@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { canSeeStudent } from '@/app/lib/admin-scope';
-import { isStudentInFacultySections } from '@/app/lib/roster';
 import { getLatestRiskByStudent, getLastActivityByStudent } from '@/app/lib/faculty-dashboard';
 
 interface RouteParams {

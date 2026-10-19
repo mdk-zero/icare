@@ -4,7 +4,6 @@ import Image from "next/image";
 import logo from "../public/logo-no-bg.png";
 import logoWhite from "../public/logo-white-no-bg.png";
 import sapiens from "../public/sapiens.png";
-import { TAYLORS_CHAPTERS } from "../scripts/taylors-chapters";
 import { EcgLoader } from "./components/EcgLoader";
 import LandingNav from "./components/landing/LandingNav";
 import Reveal from "./components/landing/Reveal";

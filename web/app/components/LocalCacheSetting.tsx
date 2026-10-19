@@ -71,9 +71,9 @@ export default function LocalCacheSetting({
             </label>
           </div>
           <p className="mt-0.5 text-sm text-gray-500">
-            Keep a copy of what you've loaded on this device, so pages you've
+            Keep a copy of what you&apos;ve loaded on this device, so pages you&apos;ve
             already opened come back instantly instead of waiting on the
-            network — until it's five minutes old.
+            network — until it&apos;s five minutes old.
           </p>
           {mounted && (
             <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.12em] text-gray-400">

@@ -40,7 +40,7 @@ export default function CacheConsentBanner() {
       <div className="min-w-0 flex-1">
         <p className="text-sm font-semibold text-gray-900">Save data on this device?</p>
         <p className="mt-0.5 text-sm text-gray-500">
-          Pages you've already opened will load instantly next time instead of
+          Pages you&apos;ve already opened will load instantly next time instead of
           waiting on the network. Nothing leaves your device, and you can turn
           it off anytime in settings.
         </p>

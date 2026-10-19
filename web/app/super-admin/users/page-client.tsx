@@ -176,6 +176,7 @@ export default function SuperAdminUsersClient() {
     const requestId = params.get("request");
     if (!requestId) return;
     const sex = params.get("sex");
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setForm({
       ...blankForm(),
       name: params.get("name") ?? "",

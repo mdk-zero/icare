@@ -9,6 +9,13 @@ const nextConfig: NextConfig = {
   // `NEXT_DIST_DIR=.next-build npm run build`. Running a build into .next while
   // `next dev` is live leaves the dev server serving a half-updated CSS chunk.
   distDir: process.env.NEXT_DIST_DIR || ".next",
+  typescript: {
+    // check.sh type-checks first, with tsconfig.check.json, and its build
+    // skips a second pass: `next build` checks everything tsconfig.json
+    // includes, .next/dev/types among it, and fails on a file a dev server
+    // left half-written. Every other build (CI, Vercel) still type-checks.
+    ignoreBuildErrors: process.env.CHECK_SH_BUILD === "1",
+  },
   // Pin the workspace root to web/ so Turbopack never falls back to scanning
   // the whole monorepo (mobile/node_modules, ml/, …), which spikes CPU/RAM.
   turbopack: {

@@ -30,6 +30,11 @@ import { holdTabPresence } from "../lib/tab-presence";
 const STUDENT_MESSAGE = "Students sign in on the iCARE++ mobile app. The web portal is for instructors, deans and admins.";
 const REPLACED_MESSAGE =
   "You were signed out because someone signed in to your account on another browser. If that wasn't you, sign in and change your password.";
+/** What the proxy's `?reason=` means, said on arrival. */
+const REASON_MESSAGES: Record<string, string> = {
+  student: STUDENT_MESSAGE,
+  replaced: REPLACED_MESSAGE,
+};
 
 export default function LoginPage() {
   const router = useRouter();
@@ -94,10 +99,12 @@ export default function LoginPage() {
 
   useEffect(() => {
     // The proxy parks a signed-in student here, and a session that a newer
-    // sign-in replaced; say why before anything else.
+    // sign-in replaced; say why before anything else. Read after mount, as
+    // the server render has no URL to read.
     const reason = new URLSearchParams(window.location.search).get("reason");
-    if (reason === "student") setError(STUDENT_MESSAGE);
-    if (reason === "replaced") setError(REPLACED_MESSAGE);
+    const message = reason ? REASON_MESSAGES[reason] : undefined;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (message) setError(message);
     if (!isAuthenticated()) return;
     // The stored flag outlives the session cookie, so confirm with the server
     // before bouncing away. Trusting localStorage here would ping-pong against

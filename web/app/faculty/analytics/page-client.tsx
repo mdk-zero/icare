@@ -12,7 +12,6 @@ import {
   faLayerGroup,
   faWandMagicSparkles,
   faArrowsRotate,
-  faBullseye,
   faTrophy,
   faXmark,
 } from "@fortawesome/free-solid-svg-icons";
@@ -34,7 +33,6 @@ import PageHeader from "../../components/PageHeader";
 import StatTile from "../../components/StatTile";
 import Card, { CardLabel } from "../../components/Card";
 import { usePageData } from "../../lib/use-page-data";
-import { MODEL_EVAL_SNAPSHOT, DEFAULT_MODEL_KIND } from "../../lib/model-eval-snapshot";
 import { EcgLoader } from "../../components/EcgLoader";
 import AiThinking from "../../components/AiThinking";
 import { Leaderboard, LeaderboardSkeleton } from "./Leaderboard";
@@ -278,125 +276,6 @@ function SectionPicker({
         </div>
       )}
     </div>
-  );
-}
-
-/** Horizontal bars — the correct shape for comparing labelled magnitudes. */
-/** Smallest "nice" round number at or above `roughStep` — 1/2/5/10 scaled by
- * magnitude — so evenly-spaced gridlines land on whole numbers (0,1,2,3
- * instead of 0,1,3,4 from naively quartering an arbitrary ceiling). */
-function niceStep(roughStep: number): number {
-  if (roughStep <= 0) return 1;
-  const magnitude = Math.pow(10, Math.floor(Math.log10(roughStep)));
-  for (const step of [1, 2, 5, 10]) {
-    const candidate = step * magnitude;
-    if (candidate >= roughStep) return candidate;
-  }
-  return 10 * magnitude;
-}
-
-/**
- * Vertical bar chart — one bar per section, height for its active-student
- * count, with the section's total enrolled shown as a lighter cap and its
- * name below the axis. The actual chart shape "Active Students by Section"
- * asks for, rather than a list of inline progress bars.
- */
-function SectionBarChart({
-  sections,
-}: {
-  sections: {
-    id: string;
-    name: string;
-    students: number;
-    active_students?: number;
-  }[];
-}) {
-  const W = 640;
-  const H = 260;
-  const padL = 36;
-  const padR = 12;
-  const padT = 28;
-  const padB = 48;
-  const plotW = W - padL - padR;
-  const plotH = H - padT - padB;
-  const n = sections.length;
-  const maxStudents = Math.max(1, ...sections.map((s) => s.students));
-  const step = niceStep(maxStudents / 4);
-  const ceiling = step * Math.ceil(maxStudents / step);
-  const ticks: number[] = [];
-  for (let t = 0; t <= ceiling; t += step) ticks.push(t);
-  const y = (v: number) => padT + (1 - v / ceiling) * plotH;
-
-  const barGap = 28;
-  const barW = Math.min(64, (plotW - barGap * Math.max(n - 1, 0)) / Math.max(n, 1));
-  const rowW = barW * n + barGap * Math.max(n - 1, 0);
-  const startX = padL + Math.max(0, (plotW - rowW) / 2);
-
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full overflow-visible">
-      {ticks.map((t) => (
-        <g key={t}>
-          <line
-            x1={padL}
-            y1={y(t)}
-            x2={W - padR}
-            y2={y(t)}
-            className="stroke-gray-200"
-            strokeWidth="1"
-            strokeDasharray="3 3"
-          />
-          <text
-            x={padL - 8}
-            y={y(t) + 3}
-            textAnchor="end"
-            fontSize="10"
-            className="fill-gray-400 tabular-nums"
-          >
-            {t}
-          </text>
-        </g>
-      ))}
-
-      {sections.map((s, i) => {
-        const active = s.active_students ?? 0;
-        const x = startX + i * (barW + barGap);
-        const totalY = y(s.students);
-        const activeY = y(active);
-        return (
-          <g key={s.id}>
-            {/* Total enrolled — a faint track behind the active bar, same
-                role as the gray-100 track other bars on this page use. */}
-            <rect
-              x={x}
-              y={totalY}
-              width={barW}
-              height={Math.max(0, padT + plotH - totalY)}
-              rx={6}
-              className="fill-gray-100"
-            />
-            <rect
-              x={x}
-              y={activeY}
-              width={barW}
-              height={Math.max(0, padT + plotH - activeY)}
-              rx={6}
-              className="fill-brand-500 transition-all duration-700 ease-out"
-            >
-              <title>{`${s.name}: ${active} active of ${s.students} enrolled`}</title>
-            </rect>
-            <text
-              x={x + barW / 2}
-              y={H - padB + 18}
-              textAnchor="middle"
-              fontSize="11"
-              className="fill-gray-400"
-            >
-              {s.name.length > 10 ? `${s.name.slice(0, 9)}…` : s.name}
-            </text>
-          </g>
-        );
-      })}
-    </svg>
   );
 }
 
@@ -920,14 +799,6 @@ export default function FacultyAnalyticsClient() {
     from,
     to,
   })}`;
-  const sectionsWithActivity = summary?.sections ?? [];
-
-  // No ground-truth outcome column exists to score live predictions against,
-  // so accuracy is a shipped offline-eval snapshot, labelled with whichever
-  // model actually issued the most recent risk labels.
-  const modelKind = summary?.active_model?.kind ?? DEFAULT_MODEL_KIND;
-  const modelEval = MODEL_EVAL_SNAPSHOT[modelKind] ?? MODEL_EVAL_SNAPSHOT[DEFAULT_MODEL_KIND];
-
   const prevAtRisk = prevSummary?.risk_distribution?.at_risk ?? null;
   const comparisonLabel = `vs ${formatRange(prevRangeValue.from, prevRangeValue.to)}`;
 

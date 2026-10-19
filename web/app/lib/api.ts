@@ -1178,7 +1178,7 @@ export interface SimulationScenario {
   title: string;
   description: string;
   category: string;
-  patient_case: any;
+  patient_case: unknown;
   patient_id?: string | null;
   patient_name?: string | null;
   /** The course offering it was made for (migration 070); null for none. */
@@ -2934,25 +2934,7 @@ export async function fetchFacultyAlerts(status?: string): Promise<{ alerts: Fac
   }
 }
 
-export async function updateAlertStatus(alertId: string, status: string): Promise<boolean> {
-  await new Promise(resolve => setTimeout(resolve, 100));
-  return true;
-}
 
-export async function createAlert(alert: Partial<FacultyAlert>): Promise<FacultyAlert | null> {
-  await new Promise(resolve => setTimeout(resolve, 200));
-  
-  return {
-    id: `alert-${Date.now()}`,
-    student_id: alert.student_id || '',
-    student_name: alert.student_name || '',
-    alert_type: alert.alert_type || 'Manual Alert',
-    severity: alert.severity || 'medium',
-    description: alert.description || '',
-    status: 'pending',
-    created_at: new Date().toISOString(),
-  };
-}
 
 export async function fetchAuditTrail(action?: string): Promise<AuditLog[]> {
   const params = new URLSearchParams();
@@ -2987,16 +2969,6 @@ export function getCurrentFacultyUser(): { id: string; name: string } | null {
   }
 }
 
-export async function getClinicalDecisionSupport(patientCase: any): Promise<any | null> {
-  await new Promise(resolve => setTimeout(resolve, 500));
-  
-  return {
-    diagnosis_support: ['Acute Myocardial Infarction', 'Unstable Angina'],
-    treatment_recommendations: ['Administer aspirin', 'Start heparin drip', 'Prepare for cardiac catheterization'],
-    monitoring_parameters: ['Cardiac enzymes', 'ECG every 15 minutes', 'Vital signs every 5 minutes'],
-    educational_resources: ['MI Management Guidelines', 'Acute Cardiac Care Protocol'],
-  };
-}
 
 /** Patient Cases by default; `kind` asks for Return Demonstrations, or both. */
 export async function fetchScenarioAssignments(

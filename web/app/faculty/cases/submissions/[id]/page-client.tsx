@@ -32,6 +32,7 @@ export default function CaseGradingClient({ submissionId }: { submissionId: stri
   // Seed the form from what is saved whenever a fresh copy arrives.
   useEffect(() => {
     if (!grading) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setRatings(new Map(grading.ratings.map((r) => [r.criterion, r.rating])));
     setNotes(Object.fromEntries(grading.ratings.map((r) => [r.criterion, r.remarks])));
     setRemarks(grading.submission.remarks ?? "");

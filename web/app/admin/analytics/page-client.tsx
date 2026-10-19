@@ -10,7 +10,6 @@ import {
   faUsers,
   faDoorOpen,
   faExclamationTriangle,
-  faRotate,
   faBuilding,
   faTrophy,
   faLayerGroup,
@@ -23,7 +22,6 @@ import {
   fetchAnalyticsSummary,
   fetchFacultySections,
   fetchRooms,
-  runWarehouseEtl,
 } from "../../lib/api";
 import type { Section } from "../../lib/api";
 import { usePageData } from "../../lib/use-page-data";
@@ -754,8 +752,6 @@ function AnalyticsSkeleton() {
 }
 
 export default function AdminAnalyticsClient() {
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   // Filters — the same section + range controls the faculty dashboard has.
   const [sectionIds, setSectionIds] = useState<string[]>([]);
@@ -792,7 +788,6 @@ export default function AdminAnalyticsClient() {
     data: analytics,
     loading,
     revalidating,
-    refresh: reloadSummary,
   } = usePageData(
     `admin:analytics:${sectionKey}:${from}:${to}`,
     () => fetchAnalyticsSummary({ sectionIds, from, to }),
@@ -804,7 +799,6 @@ export default function AdminAnalyticsClient() {
   const {
     data: live,
     loading: liveLoading,
-    refresh: reloadLive,
   } = usePageData("admin:analytics:live", async () => {
     const [usersRes, rooms] = await Promise.all([
       apiFetch("/api/admin/users", { credentials: "include" }),
@@ -825,18 +819,6 @@ export default function AdminAnalyticsClient() {
   const summary = analytics?.summary ?? null;
   const roleCounts = live?.roleCounts ?? { student: 0, faculty: 0, admin: 0 };
   const allRooms = live?.rooms;
-
-  const handleRefresh = async () => {
-    setError(null);
-    setRefreshing(true);
-    const result = await runWarehouseEtl();
-    if (result.error) {
-      setError(result.error);
-    } else {
-      await Promise.all([reloadSummary(), reloadLive()]);
-    }
-    setRefreshing(false);
-  };
 
   const sectionCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -905,12 +887,6 @@ export default function AdminAnalyticsClient() {
         title="Analytics Dashboard"
         subtitle="Cohort analytics from the iCARE++ star-schema warehouse"
       />
-
-      {error && (
-        <div className="mb-4 p-3 bg-rose-50 border border-rose-200 rounded-xl text-sm text-rose-700">
-          {error}
-        </div>
-      )}
 
       <AnalyticsFilterBar
         sections={allSections}

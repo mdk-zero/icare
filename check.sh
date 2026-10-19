@@ -7,7 +7,8 @@
 #   security  nothing secret-shaped tracked by git; secret scan over the
 #             files this push would touch
 #   repo      duplicate migration numbers in web/supabase/migrations
-#   web       next typegen → tsc → eslint (advisory) → next build
+#   web       next typegen → tsc → eslint (advisory) → next build (into
+#             .next-build, so a running `next dev` keeps its .next)
 #   mobile    tsc → eslint (advisory)
 #   ml        byte-compiles the Python sources (there is no test suite yet)
 #   audit     npm audit --audit-level=high, web + mobile (advisory)
@@ -192,8 +193,15 @@ migration_numbers() {
 #
 # Process env beats .env.local in Next.js, so exporting CI's values catches
 # code that only builds locally thanks to a variable CI doesn't have.
+#
+# Built into .next-build rather than .next: a build into the folder a running
+# `next dev` serves from leaves it on a half-updated CSS chunk. CHECK_SH_BUILD
+# skips the build's own type check, which the typecheck step above has done
+# already (see next.config.ts).
 
 web_build() {
+  NEXT_DIST_DIR=.next-build \
+  CHECK_SH_BUILD=1 \
   SUPABASE_URL=https://example.supabase.co \
   SUPABASE_SERVICE_ROLE_KEY=ci-dummy \
   SUPABASE_ANON_KEY=ci-dummy \
@@ -237,7 +245,9 @@ run blocking 'repo · migration numbers'   .   migration_numbers
 
 if enabled web; then
   run blocking 'web · next typegen' web npx next typegen
-  run blocking 'web · typecheck'    web npx tsc --noEmit
+  # tsconfig.check.json leaves out what `next dev` generates, which a dev
+  # server can leave half-written; see the note in that file.
+  run blocking 'web · typecheck'    web npx tsc --noEmit -p tsconfig.check.json
   run advisory 'web · lint'         web npm run lint
   if [ "$quick" -eq 1 ]; then
     skip 'web · build' '--quick'

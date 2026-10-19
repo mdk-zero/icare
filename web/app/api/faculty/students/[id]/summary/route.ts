@@ -3,7 +3,6 @@ import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { canSeeStudent } from '@/app/lib/admin-scope';
 import { callAI, aiErrorResponse } from '@/app/lib/ai/generate';
-import { isStudentInFacultySections } from '@/app/lib/roster';
 import { isActiveSkillArea } from '@/scripts/taylors-chapters';
 import { getStudentsWithWork } from '@/app/lib/faculty-dashboard';
 

@@ -50,7 +50,6 @@ import { usePageData } from "../../lib/use-page-data";
 import { SkeletonStatTile, SkeletonScenarioCard } from "../../components/skeletons";
 import PageHeader from "../../components/PageHeader";
 import StatTile from "../../components/StatTile";
-import Card from "../../components/Card";
 import ActionsMenu from "../../components/ActionsMenu";
 import PerformanceDatesModal from "../../components/PerformanceDatesModal";
 import AssignStudentsModal from "../../components/AssignStudentsModal";
