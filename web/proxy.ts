@@ -1,9 +1,12 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { SESSION_COOKIE, verifySession, type SessionPayload } from '@/app/lib/auth/jwt';
+import { SESSION_COOKIE, endsWithTab, verifySession, type SessionPayload } from '@/app/lib/auth/jwt';
 import { liveSessionStatus, type SessionEnd } from '@/app/lib/auth/live-user';
 import { TAB_PRESENCE_COOKIE } from '@/app/lib/tab-presence';
 import { isDeveloperEmail } from '@/app/lib/auth/developer-allowlist';
-import { IMPERSONATION_RETURN_COOKIE } from '@/app/lib/dev/impersonation';
+import {
+  IMPERSONATION_FLAG_COOKIE,
+  IMPERSONATION_RETURN_COOKIE,
+} from '@/app/lib/dev/impersonation';
 import { DEMO_COOKIE, isDemoRole } from '@/app/lib/demo/session';
 
 /**
@@ -76,7 +79,13 @@ export async function proxy(request: NextRequest) {
   const isAuthPage = AUTH_PAGES.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
   );
-  if (!isProtected && !isAuthPage) return NextResponse.next();
+  if (!isProtected && !isAuthPage) {
+    // A session whose last tab has closed is over here too: /developer's
+    // layout and other server-rendered pages read the cookie themselves. The
+    // page is asked for again without it, so it renders signed out.
+    if (!(await endedWithTab(request))) return NextResponse.next();
+    return endTabSession(NextResponse.redirect(request.nextUrl));
+  }
 
   const token = request.cookies.get(SESSION_COOKIE)?.value;
   const { session: realSession, ended } = token
@@ -100,7 +109,7 @@ export async function proxy(request: NextRequest) {
     // The cookie is already invalid; clearing it stops the browser replaying
     // a dead token on every subsequent request.
     if (token) response.cookies.delete(SESSION_COOKIE);
-    return response;
+    return ended === 'closed' ? endTabSession(response) : response;
   }
 
   // A student is sent to /login to be signed out there, not bounced away from it.
@@ -121,7 +130,7 @@ export async function proxy(request: NextRequest) {
       response = NextResponse.redirect(login);
     }
     response.cookies.delete(SESSION_COOKIE);
-    return response;
+    return ended === 'closed' ? endTabSession(response) : response;
   }
 
   if (isProtected && session && wrongPortal(session.role, pathname)) {
@@ -151,23 +160,54 @@ async function pageSession(
   if (!verified) return { session: null };
   // A cookie is the web's; only a token from before 079 leaves that unsaid.
   const claims: SessionPayload = { ...verified, platform: verified.platform ?? 'web' };
+  // The row first: a tab signed out by a newer sign-in drops its presence
+  // cookie on the way to /login, and the reason it shows is "replaced", not
+  // a closed tab.
+  const live = await liveStatus(claims);
+  if (live && !live.session) return { session: null, ended: live.ended };
   // Signed in without "Remember me": the session ended with its last tab,
   // whatever the browser kept of the cookie (lib/tab-presence).
-  if (claims.remember === false && !tabOpen) return { session: null, ended: 'closed' };
+  if (endsWithTab(claims) && !tabOpen) return { session: null, ended: 'closed' };
+  return { session: claims };
+}
+
+/** The live check, or null when the database can't answer in time. */
+async function liveStatus(claims: SessionPayload) {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     // A hung lookup must not hold every page navigation hostage.
     const timeout = new Promise<never>((_, reject) => {
       timer = setTimeout(() => reject(new Error('timed out')), PAGE_SESSION_TIMEOUT_MS);
     });
-    const live = await Promise.race([liveSessionStatus(claims), timeout]);
-    return live.session ? { session: claims } : { session: null, ended: live.ended };
+    return await Promise.race([liveSessionStatus(claims), timeout]);
   } catch (err) {
     console.error('Proxy live session check failed; using the token alone', err);
-    return { session: claims };
+    return null;
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * A session signed in without "Remember me" whose tabs have all closed. The
+ * signature alone decides it, so pages that need no session pay no lookup.
+ */
+/**
+ * Clears a session that ended with its tabs, with any impersonation riding on
+ * it: the parked way back belongs to the same browser session.
+ */
+function endTabSession(response: NextResponse): NextResponse {
+  response.cookies.delete(SESSION_COOKIE);
+  response.cookies.delete(IMPERSONATION_RETURN_COOKIE);
+  response.cookies.delete(IMPERSONATION_FLAG_COOKIE);
+  return response;
+}
+
+async function endedWithTab(request: NextRequest): Promise<boolean> {
+  const token = request.cookies.get(SESSION_COOKIE)?.value;
+  if (!token || request.cookies.has(TAB_PRESENCE_COOKIE)) return false;
+  const claims = await verifySession(token);
+  return claims !== null && endsWithTab(claims);
 }
 
 /**

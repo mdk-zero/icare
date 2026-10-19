@@ -25,8 +25,8 @@ export interface SessionPayload {
   /** Older tokens lack it; readers fill it in from how the token arrived. */
   platform?: SessionPlatform;
   /**
-   * False when the person signed in without "Remember me": the session then
-   * ends when its last tab closes. Older tokens lack it and count as remembered.
+   * True when the person signed in with "Remember me". Without it, a web
+   * session ends when its last tab closes (endsWithTab).
    */
   remember?: boolean;
   /** When the token was issued, in seconds (the standard claim). */
@@ -45,6 +45,16 @@ export function getSecret(): Uint8Array {
     throw new Error('SESSION_SECRET is missing or too short. Generate with `openssl rand -base64 32`');
   }
   return new TextEncoder().encode(raw);
+}
+
+/**
+ * A web session lasts only while one of its tabs is open unless the person
+ * chose "Remember me" (lib/tab-presence). Tokens from before the flag existed
+ * count as not remembered: the checkbox did nothing then, so nobody chose it.
+ * App sessions are the app's to keep.
+ */
+export function endsWithTab(claims: SessionPayload): boolean {
+  return (claims.platform ?? 'web') === 'web' && claims.remember !== true;
 }
 
 export async function signSession(payload: SessionPayload): Promise<string> {

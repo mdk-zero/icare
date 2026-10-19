@@ -36,7 +36,7 @@ export async function setSessionCookie(token: string, remember = true): Promise<
 /** Signs a token for this session and sets it as the cookie. */
 export async function startSession(session: SessionPayload): Promise<string> {
   const token = await signSession(session);
-  await setSessionCookie(token, session.remember !== false);
+  await setSessionCookie(token, session.remember === true);
   return token;
 }
 

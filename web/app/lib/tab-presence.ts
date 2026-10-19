@@ -5,7 +5,7 @@
  * which can be days away, and a browser that restores its tabs brings it back
  * even then. So every tab in the session keeps a short-lived presence cookie
  * fresh, and the proxy turns an unremembered session away once that cookie
- * has lapsed. When the last tab closes, the cookie is cut to a few seconds:
+ * has lapsed. When the last tab closes, the cookie is cut to five seconds:
  * enough for a reload to land, too little for the next person at the computer.
  *
  * The cookie is not a credential, and anyone holding the session cookie
@@ -18,8 +18,11 @@ export const TAB_PRESENCE_COOKIE = "icare_tab";
 /** Outlives a background tab's throttled timers, which may fire once a minute. */
 const PRESENCE_MAX_AGE_S = 120;
 const BEAT_MS = 30_000;
-/** What the last tab to close leaves on the cookie: a reload lands well inside it. */
-const CLOSE_GRACE_S = 15;
+/**
+ * What the last tab to close leaves on the cookie. A reload's request goes out
+ * within milliseconds of the old page hiding, so this is ample.
+ */
+const CLOSE_GRACE_S = 5;
 /** Marks a tab as inside the session, across its reloads. */
 const TAB_MARK_KEY = "icare_tab_in_session";
 /** Each open tab's last beat, so a closing tab can tell whether it was the last. */

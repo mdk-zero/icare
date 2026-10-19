@@ -80,7 +80,9 @@ export async function POST(request: NextRequest) {
     );
 
     // The target's token rides on their current web session rather than
-    // opening a new one, which would sign them out wherever they are.
+    // opening a new one, which would sign them out wherever they are. It keeps
+    // the developer's "Remember me": without it, closing the tab must not
+    // leave the browser signed in as someone else.
     const [targetToken, returnToken] = await Promise.all([
       signSession({
         uid: target.id,
@@ -88,7 +90,7 @@ export async function POST(request: NextRequest) {
         email: target.email,
         sessionId: typeof target.web_session_id === 'string' ? target.web_session_id : undefined,
         platform: 'web',
-        remember: true,
+        remember: session.remember === true,
       }),
       signSession(session),
     ]);
