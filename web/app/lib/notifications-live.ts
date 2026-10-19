@@ -213,20 +213,32 @@ export function stopNotificationStream() {
 // Actions
 // ---------------------------------------------------------------
 
+/** The read in flight, which every caller that asks meanwhile shares. */
+let refreshing: Promise<void> | null = null;
+
 /**
  * One-shot read, used for the first paint and whenever the tab refocuses.
  *
  * Deliberately past the response cache: the point of this call is to pick up
  * what arrived while the tab was in the background, which a cached copy from
- * before it went away cannot tell us.
+ * before it went away cannot tell us. Bypassing the cache also bypasses its
+ * request sharing, so this shares its own: the sidebar badge, the popover and
+ * the notifications page all mount at once, and each sent its own copy.
  */
-export async function refreshNotifications() {
-  const data = await withFreshResponses(fetchNotifications);
-  if (!data) {
-    setState({ loading: false });
-    return;
-  }
-  setList(data.notifications);
+export function refreshNotifications(): Promise<void> {
+  refreshing ??= (async () => {
+    try {
+      const data = await withFreshResponses(fetchNotifications);
+      if (!data) {
+        setState({ loading: false });
+        return;
+      }
+      setList(data.notifications);
+    } finally {
+      refreshing = null;
+    }
+  })();
+  return refreshing;
 }
 
 export async function markRead(id: string) {

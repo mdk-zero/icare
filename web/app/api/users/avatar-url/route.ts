@@ -1,8 +1,36 @@
 import { NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
+import type { SessionPayload } from '@/app/lib/auth/jwt';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 
 const SIGNED_URL_TTL_SECONDS = 60 * 60; // 1 hour
+
+/** Instructors, Deans and Admins: the people who look at rosters. */
+const STAFF_ROLES = new Set(['faculty', 'admin', 'super_admin']);
+
+/** "avatars/<owner uid>/<random uuid>-<file name>", as POST /api/users/avatar names it. */
+const AVATAR_PATH = /^avatars\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/[^/]+$/i;
+
+/**
+ * Anyone may see their own photo. Staff may also see another user's, as long
+ * as it is that user's current one. The file name carries a random UUID, so
+ * holding the path means an API already showed them that person; checking
+ * it against picture_url keeps a replaced photo from being opened again.
+ * Students still see only their own.
+ */
+async function canView(session: SessionPayload, path: string): Promise<boolean> {
+  if (path.startsWith(`avatars/${session.uid}/`)) return true;
+  if (!STAFF_ROLES.has(session.role)) return false;
+  const owner = AVATAR_PATH.exec(path)?.[1];
+  if (!owner) return false;
+  const { data, error } = await getSupabaseAdmin()
+    .from('users')
+    .select('picture_url')
+    .eq('id', owner)
+    .maybeSingle();
+  if (error) throw error;
+  return data?.picture_url === path;
+}
 
 export async function GET(request: Request) {
   const session = await readSession();
@@ -17,12 +45,11 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Path is required' }, { status: 400 });
   }
 
-  // Users may only request their own avatar
-  if (!path.startsWith(`avatars/${session.uid}/`)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
-
   try {
+    if (!(await canView(session, path))) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     const supabase = getSupabaseAdmin();
     const { data, error } = await supabase.storage
       .from('avatars')

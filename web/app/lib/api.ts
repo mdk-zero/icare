@@ -341,16 +341,43 @@ export async function uploadAvatar(file: File): Promise<{ path: string }> {
   }
 }
 
-export async function getAvatarUrl(path: string): Promise<string | null> {
+/** Under the signed URL's hour, so a remembered one never expires on screen. */
+const AVATAR_URL_TTL_MS = 50 * 60 * 1000;
+
+/**
+ * Each photo is signed once per viewer, not once per <Avatar>: a roster draws
+ * the same people on every row and every visit, and a refusal (403) is never
+ * cached by the response cache, so it used to be asked again each time. Kept
+ * per viewer because a sign-out or impersonation can keep the document.
+ */
+const avatarUrls = new Map<string, { url: Promise<string | null>; at: number }>();
+let avatarViewer: string | null = null;
+
+export function getAvatarUrl(path: string): Promise<string | null> {
+  const viewer = getCurrentUser()?.id ?? null;
+  if (viewer !== avatarViewer) {
+    avatarUrls.clear();
+    avatarViewer = viewer;
+  }
+  const hit = avatarUrls.get(path);
+  if (hit && Date.now() - hit.at < AVATAR_URL_TTL_MS) return hit.url;
+  const url = signAvatar(path);
+  avatarUrls.set(path, { url, at: Date.now() });
+  return url;
+}
+
+async function signAvatar(path: string): Promise<string | null> {
   try {
     const res = await apiFetch(
       `/api/users/avatar-url?path=${encodeURIComponent(path)}`,
       { credentials: 'include' },
     );
-    if (!res.ok) return null;
-    const { signedUrl } = (await res.json()) as { signedUrl: string };
-    return signedUrl;
+    if (res.ok) return ((await res.json()) as { signedUrl: string }).signedUrl;
+    // A refusal stands; a server error may not, so the next mount asks again.
+    if (res.status >= 500) avatarUrls.delete(path);
+    return null;
   } catch (err) {
+    avatarUrls.delete(path);
     console.error('getAvatarUrl() failed', err);
     return null;
   }
