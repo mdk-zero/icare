@@ -34,6 +34,7 @@ async function main() {
     to,
     'Test Recipient',
     'TEST-PASSWORD-1234',
+    { appUrl: process.env.MOBILE_APP_URL ? 'https://www.i-care.dev/download' : null },
   );
 
   if (result.success) {

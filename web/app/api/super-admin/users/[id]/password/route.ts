@@ -4,6 +4,7 @@ import { generateRandomPassword, hashPassword } from '@/app/lib/auth/password';
 import { logAudit } from '@/app/lib/audit';
 import { updateUser } from '@/app/lib/auth/session';
 import { sendAdminPasswordResetEmail } from '@/app/lib/auth/email';
+import { appDownloadUrl } from '@/app/lib/mobile-app';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -45,7 +46,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       account.email,
       account.name,
       password,
-      account.role === 'student' ? undefined : `${request.nextUrl.origin}/login`,
+      account.role === 'student'
+        ? { appUrl: appDownloadUrl(request.nextUrl.origin) }
+        : { signInUrl: `${request.nextUrl.origin}/login` },
     );
     if (sent.success) return NextResponse.json({ success: true });
     return NextResponse.json({

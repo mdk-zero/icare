@@ -1874,6 +1874,91 @@
           }
         },
         {
+          "name": "App download link",
+          "protocolProfileBehavior": {
+            "disableCookies": true
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"returns 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"returns the /download link, or null when none is set up\", () => {",
+                  "  const url = pm.response.json().url;",
+                  "  if (url !== null) pm.expect(url).to.match(/\\/download$/);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/faculty/app-link",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "faculty",
+                "app-link"
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "App link to a student outside your groups is not sent",
+          "protocolProfileBehavior": {
+            "disableCookies": true
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// 404 when the link is set up (nobody on the roster to mail), 503 when it isn't.",
+                  "pm.test(\"returns 404 or 503\", () => pm.expect(pm.response.code).to.be.oneOf([404, 503]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/faculty/app-link",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "faculty",
+                "app-link"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"student_ids\": [\"00000000-0000-4000-8000-000000000000\"]}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
           "name": "Admin API is forbidden",
           "protocolProfileBehavior": {
             "disableCookies": true
@@ -2373,6 +2458,39 @@
                 "api",
                 "faculty",
                 "students"
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "App link API is forbidden",
+          "protocolProfileBehavior": {
+            "disableCookies": true
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"returns 403\", () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/faculty/app-link",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "faculty",
+                "app-link"
               ]
             },
             "description": ""

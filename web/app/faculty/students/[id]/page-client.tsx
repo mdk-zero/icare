@@ -59,6 +59,7 @@ import RequirementsTab, { requirementsTally, useStudentRequirements } from "./re
 import AttendanceTab, { useStudentAttendance } from "./attendance-tab";
 import { fetchStudentReflections, type FacultyReflection } from "../../../lib/api";
 import SkillAreaTrend from "./skill-area-trend";
+import { SendAppLinkButton } from "../../../components/AppLink";
 import QuizHistory, { groupAttempts, scoreColor } from "./quiz-history";
 import AssignmentGrader, { ScenarioSummaryCard } from "../../scenarios/review/assignment-grader";
 import {
@@ -554,8 +555,8 @@ export default function StudentDetailClient() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
         <div className="lg:col-span-2">
           <Card padding="sm" className="flex h-full flex-col">
-            <div className="mb-6 flex items-start justify-between gap-4">
-              <div className="flex items-center gap-4">
+            <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div className="flex min-w-0 items-center gap-4">
                 <Avatar
                   name={student.name}
                   src={student.picture_url}
@@ -564,9 +565,9 @@ export default function StudentDetailClient() {
                   size="xl"
                   tone="solid"
                 />
-                <div>
+                <div className="min-w-0">
                   <h1 className="text-2xl font-bold text-gray-900">{student.name}</h1>
-                  <p className="text-gray-500">{student.email}</p>
+                  <p className="text-gray-500 [overflow-wrap:anywhere]">{student.email}</p>
                   <div className="flex items-center gap-2">
                     {student.section ? (
                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-brand-600/10 text-brand-600 border border-brand-600/20">
@@ -580,13 +581,18 @@ export default function StudentDetailClient() {
                   </div>
                 </div>
               </div>
-              <button
-                onClick={() => requestSummary()}
-                className="flex shrink-0 items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white shadow-[0_2px_6px_rgba(27,107,123,0.2)] transition-all hover:bg-brand-700"
-              >
-                <FontAwesomeIcon icon={faWandMagicSparkles} className="h-4 w-4" />
-                AI Summary
-              </button>
+              {/* Under the name on a phone; stacked beside it from sm up, where side by
+                  side they would push past the card next to a long email. */}
+              <div className="flex shrink-0 flex-wrap gap-2 sm:flex-col sm:items-stretch">
+                <button
+                  onClick={() => requestSummary()}
+                  className="flex shrink-0 items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white shadow-[0_2px_6px_rgba(27,107,123,0.2)] transition-all hover:bg-brand-700"
+                >
+                  <FontAwesomeIcon icon={faWandMagicSparkles} className="h-4 w-4" />
+                  AI Summary
+                </button>
+                <SendAppLinkButton student={student} />
+              </div>
             </div>
 
             <div className="grid flex-1 grid-cols-1 sm:grid-cols-2 gap-3">

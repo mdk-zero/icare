@@ -1195,6 +1195,8 @@ export interface FacultyStudent {
   risk_level?: 'safe' | 'at_risk' | null;
   /** ISO timestamp of their most recent recorded activity, or null. */
   last_activity?: string | null;
+  /** Their last sign-in (on the app, for a student); null if they never have. */
+  last_login_at?: string | null;
   /** Detail endpoint only: averaged over submitted attempts, null if none. */
   average_score?: number | null;
   quiz_count?: number;
@@ -1843,6 +1845,38 @@ export async function fetchFacultyStudents(riskLevel?: string, search?: string):
   } catch (err) {
     console.error('fetchFacultyStudents() failed', err);
     return [];
+  }
+}
+
+/** The app download link Instructors and Deans hand out; null while none is set up. */
+export async function fetchAppLink(): Promise<string | null> {
+  try {
+    const res = await apiFetch('/api/faculty/app-link', { credentials: 'include' });
+    if (!res.ok) return null;
+    return ((await res.json()) as { url?: string | null }).url ?? null;
+  } catch (err) {
+    console.error('fetchAppLink() failed', err);
+    return null;
+  }
+}
+
+/** Emails these students the app download link; `warning` names any that didn't go out. */
+export async function sendAppLink(
+  studentIds: string[],
+): Promise<{ sent: number; warning?: string } | { error: string }> {
+  try {
+    const res = await apiFetch('/api/faculty/app-link', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ student_ids: studentIds }),
+    });
+    const json = (await res.json().catch(() => ({}))) as { sent?: number; warning?: string; error?: string };
+    if (!res.ok) return { error: json.error ?? 'Unable to send the app link' };
+    return { sent: json.sent ?? 0, warning: json.warning };
+  } catch (err) {
+    console.error('sendAppLink() failed', err);
+    return { error: 'Unable to send the app link' };
   }
 }
 

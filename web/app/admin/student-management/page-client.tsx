@@ -45,6 +45,7 @@ import { loadingToast, toast } from "../../components/Toast";
 import SectionGroups from "./SectionGroups";
 import RegisterStudentModal from "../../components/enroll/RegisterStudentModal";
 import BulkEnrollModal from "../../components/enroll/BulkEnrollModal";
+import { AppLinkCard } from "../../components/AppLink";
 import { isStudentDrag, leftTarget, readStudentDrag, startStudentDrag } from "./drag";
 
 /** The run summary is a couple of sentences; the default toast is gone before it can be read. */
@@ -624,6 +625,17 @@ export default function StudentManagementClient() {
   const openGroup = groups.find((g) => g.key === selectedSection) ?? null;
   const isRealSection = !!openGroup && openGroup.key !== UNASSIGNED_KEY;
 
+  // The app link goes to the open section's students, or everyone's from the
+  // section list; the search and filter narrow the roster, not who gets it.
+  const linkStudents = (
+    openGroup ? students.filter((s) => (s.section_id ?? UNASSIGNED_KEY) === openGroup.key) : students
+  ).map((s) => ({ id: s.id, name: s.name, signedIn: Boolean(s.last_login_at) }));
+  const linkScope = !openGroup
+    ? "you manage"
+    : openGroup.key === UNASSIGNED_KEY
+      ? "with no section"
+      : `in ${openGroup.name}`;
+
   // Once a section has groups, its table lists only the students left out of
   // every group; the grouped ones are shown in their group cards above.
   const sectionGroups = useMemo(
@@ -806,6 +818,8 @@ export default function StudentManagementClient() {
           iconColor="text-gray-600"
         />
       </div>
+
+      <AppLinkCard students={linkStudents} scope={linkScope} />
 
       <div className="mb-4 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
         {/* The action first, then the filter, then the search. */}

@@ -159,9 +159,10 @@ secret_scan() {
     for rule in "${rules[@]}"; do
       name=${rule%%|*}; rest=${rule#*|}
       flag=${rest%%|*}; pattern=${rest#*|}
-      # -I skips binaries; the second grep drops obvious dummy values.
+      # -I skips binaries; the second grep drops obvious dummy values, among
+      # them the demo's fake passwords ("Demo-Pass-2026", "Demo-Reset-…").
       hits=$(grep -nHIE ${flag:+"$flag"} "$pattern" "$ROOT/$f" 2>/dev/null |
-        grep -viE 'example|dummy|placeholder|change-?me|not[-_]?real|redacted' |
+        grep -viE 'example|dummy|placeholder|change-?me|not[-_]?real|redacted|"demo-' |
         cut -d: -f1,2 || true)
       if [ -n "$hits" ]; then
         found=1

@@ -328,6 +328,13 @@ route("GET", "/api/faculty/students", (ctx) => {
   return { students: myStudents(ctx).map((s) => studentRow(ctx.db, s)) };
 });
 
+// The app download link, as the real route hands it out once MOBILE_APP_URL
+// is set. Emailing it isn't mocked: like Help & Support, nothing is sent.
+route("GET", "/api/faculty/app-link", (ctx) => {
+  if (!staffOnly(ctx)) return forbidden();
+  return { url: `${window.location.origin}/download` };
+});
+
 route("GET", "/api/faculty/students/:id", (ctx) => {
   if (!staffOnly(ctx)) return forbidden();
   const { db } = ctx;

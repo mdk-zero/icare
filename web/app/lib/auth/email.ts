@@ -240,6 +240,91 @@ async function sendEmail(options: {
   await getTransporter().sendMail({ from, to, subject, html, replyTo, attachments });
 }
 
+type BatchMessage = { to: string; subject: string; html: string; replyTo?: string };
+
+/** Resend takes up to 100 messages a call, and a couple of calls a second. */
+const RESEND_BATCH_SIZE = 100;
+const RESEND_BATCH_GAP_MS = 600;
+
+/**
+ * Separate messages to many people at once, each addressed to one recipient
+ * so nobody sees anyone else's address. Resend gets them in batches (one call
+ * per hundred, which keeps clear of its per-second limit); SMTP one by one.
+ * A batch Resend refuses is refused whole, so `sent` counts messages handed
+ * over and `error` keeps the first refusal's reason.
+ */
+async function sendEach(messages: BatchMessage[]): Promise<{ sent: number; error?: string }> {
+  if (messages.length === 0) return { sent: 0 };
+  if (!messages.every((m) => isValidEmail(m.to))) {
+    throw new Error("A valid recipient email address is required");
+  }
+
+  if (shouldSkipSending()) {
+    for (const m of messages) console.log(`[mail skipped - dev mode] To: ${m.to}, Subject: ${m.subject}`);
+    return { sent: messages.length };
+  }
+
+  const provider = getProvider();
+  if (!provider) {
+    throw new Error(
+      'No email provider is configured. Set RESEND_API_KEY and RESEND_FROM_EMAIL, or the SMTP_* variables.',
+    );
+  }
+  const from = getFromHeader();
+  let sent = 0;
+  let error: string | undefined;
+
+  if (provider === 'resend') {
+    for (let i = 0; i < messages.length; i += RESEND_BATCH_SIZE) {
+      if (i > 0) await new Promise((resolve) => setTimeout(resolve, RESEND_BATCH_GAP_MS));
+      const batch = messages.slice(i, i + RESEND_BATCH_SIZE);
+      try {
+        const response = await fetch(`${RESEND_ENDPOINT}/batch`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(
+            batch.map((m) => ({
+              from,
+              to: [m.to],
+              subject: m.subject,
+              html: m.html,
+              ...(m.replyTo ? { reply_to: m.replyTo } : {}),
+            })),
+          ),
+          signal: AbortSignal.timeout(20000),
+        });
+        if (!response.ok) {
+          const raw = await response.text().catch(() => '');
+          let detail = raw;
+          try {
+            detail = (JSON.parse(raw) as { message?: string }).message ?? raw;
+          } catch {
+            // Not JSON; the raw body is the best available detail.
+          }
+          throw new Error(`Resend refused the messages (${response.status})${detail ? `: ${detail}` : ''}`);
+        }
+        sent += batch.length;
+      } catch (err) {
+        error ??= err instanceof Error ? err.message : 'Unknown error';
+      }
+    }
+    return { sent, error };
+  }
+
+  for (const m of messages) {
+    try {
+      await getTransporter().sendMail({ from, to: m.to, subject: m.subject, html: m.html, replyTo: m.replyTo });
+      sent += 1;
+    } catch (err) {
+      error ??= err instanceof Error ? err.message : 'Unknown error';
+    }
+  }
+  return { sent, error };
+}
+
 function buildOtpHtml(otp: string, name: string, heading: string, bodyText: string): string {
   const safeName = htmlEscape(name);
   const safeOtp = htmlEscape(otp);
@@ -278,14 +363,11 @@ function buildPasswordChangeHtml(otp: string, name: string): string {
 }
 
 /**
- * Where students get the app, from MOBILE_APP_URL (a store or download page).
- * Students sign in on the mobile app only: the web turns them away. So the
- * email never links to the web login; without this set it has no button.
+ * A student signs in on the mobile app only: the web turns them away. So their
+ * emails never link the web login, only the app download (lib/mobile-app's
+ * /download link); with no app to link, there is no button.
  */
-function mobileAppUrl(): string | null {
-  const url = process.env.MOBILE_APP_URL?.trim();
-  return url && url.startsWith("https://") ? url : null;
-}
+export type AppLink = { appUrl: string | null };
 
 /**
  * A staff account (Instructor, Dean, Admin) signs in on the web rather than
@@ -295,6 +377,9 @@ function mobileAppUrl(): string | null {
  */
 export type StaffWelcome = { roleLabel: string; signInUrl: string; origin: "request" | "dean" | "admin" };
 
+const appInstallHint =
+  "Open this email on your Android phone and tap the button, then open the downloaded file to install the app. If your phone asks, allow installs from your browser.";
+
 function staffIntro(staff: StaffWelcome): string {
   const role = `<strong>${htmlEscape(staff.roleLabel)}</strong>`;
   const article = /^[aeiou]/i.test(staff.roleLabel) ? "an" : "a";
@@ -303,12 +388,13 @@ function staffIntro(staff: StaffWelcome): string {
   return `${article === "an" ? "An" : "A"} ${role} account has been created for you`;
 }
 
-function buildWelcomeHtml(name: string, email: string, password: string, staff?: StaffWelcome): string {
+function buildWelcomeHtml(name: string, email: string, password: string, link: StaffWelcome | AppLink): string {
+  const staff = "appUrl" in link ? undefined : link;
   const safeName = htmlEscape(name);
   const safeEmail = htmlEscape(email);
-  const appUrl = staff ? staff.signInUrl : mobileAppUrl();
+  const appUrl = "appUrl" in link ? link.appUrl : link.signInUrl;
   const safeAppUrl = appUrl ? htmlEscape(appUrl) : null;
-  const buttonLabel = staff ? "Sign in to iCARE++" : "Get the iCARE++ app";
+  const buttonLabel = staff ? "Sign in to iCARE++" : "Download the iCARE++ app";
   const safePassword = htmlEscape(password);
   const year = new Date().getFullYear();
 
@@ -358,7 +444,7 @@ function buildWelcomeHtml(name: string, email: string, password: string, staff?:
               <p style="margin:0 0 24px;font-size:13px;color:#94a3b8;">
                 For security, you will be asked to change this password the first time you sign in.
               </p>
-              ${safeAppUrl ? `<table cellpadding="0" cellspacing="0" style="margin:0 auto 28px;">
+              ${safeAppUrl ? `<table cellpadding="0" cellspacing="0" style="margin:0 auto ${staff ? "28px" : "12px"};">
                 <tr>
                   <td align="center" style="border-radius:12px;background:linear-gradient(135deg,#0D7377,#0A5C5F);">
                     <a href="${safeAppUrl}" style="display:inline-block;padding:14px 40px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:12px;">
@@ -366,7 +452,8 @@ function buildWelcomeHtml(name: string, email: string, password: string, staff?:
                     </a>
                   </td>
                 </tr>
-              </table>` : ""}
+              </table>
+              ${staff ? "" : `<p style="margin:0 0 24px;font-size:13px;color:#64748b;line-height:1.5;text-align:center;">${appInstallHint}</p>`}` : ""}
               ${staff ? "" : `<table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f8fafc;border-radius:10px;padding:16px 20px;margin-bottom:24px;">
                 <tr>
                   <td style="font-size:13px;color:#64748b;line-height:1.5;">
@@ -522,11 +609,15 @@ export async function sendEmailChangedNotice(oldEmail: string, name: string, new
   });
 }
 
+/**
+ * The welcome email with a new account's temporary password. A student's
+ * (`{ appUrl }`) points them at the app download; staff get the web sign-in.
+ */
 export async function sendStudentInvitationEmail(
   email: string,
   name: string,
   password: string,
-  staff?: StaffWelcome,
+  link: StaffWelcome | AppLink,
 ): Promise<EmailResult> {
   try {
     if (!password) {
@@ -536,7 +627,7 @@ export async function sendStudentInvitationEmail(
     await sendEmail({
       to: email,
       subject: "Welcome to iCARE++ – Your Account Has Been Created",
-      html: buildWelcomeHtml(name, email, password, staff),
+      html: buildWelcomeHtml(name, email, password, link),
     });
 
     return { success: true };
@@ -551,15 +642,16 @@ export async function sendStudentInvitationEmail(
 
 /**
  * Sent when an Admin issues a new temporary password from Users. Staff sign
- * in on the web (`signInUrl`); without one the account is a student's, which
- * is pointed at the mobile app as the welcome email does.
+ * in on the web (`signInUrl`); a student's account (`appUrl`) is pointed at
+ * the mobile app as the welcome email does.
  */
 export async function sendAdminPasswordResetEmail(
   email: string,
   name: string,
   password: string,
-  signInUrl?: string,
+  link: { signInUrl: string } | AppLink,
 ): Promise<EmailResult> {
+  const signInUrl = "signInUrl" in link ? link.signInUrl : undefined;
   try {
     if (!password) {
       return { success: false, error: "A temporary password is required" };
@@ -572,7 +664,7 @@ export async function sendAdminPasswordResetEmail(
       return { success: true };
     }
 
-    const url = signInUrl ?? mobileAppUrl();
+    const url = "signInUrl" in link ? link.signInUrl : link.appUrl;
     const safeUrl = url ? htmlEscape(url) : null;
     await sendEmail({
       to: email,
@@ -586,7 +678,7 @@ export async function sendAdminPasswordResetEmail(
         <span style="font-family: monospace; font-size: 20px; font-weight: 600; letter-spacing: 1px; color: #0d7377;">${htmlEscape(password)}</span>
       </div>
       <p style="margin-bottom: 24px; font-size: 13px; color: #64748b;">You will be asked to choose a new password when you sign in.</p>
-      ${safeUrl ? `<p style="margin-bottom: 24px;"><a href="${safeUrl}" style="display: inline-block; padding: 12px 28px; background: #0d7377; color: #ffffff; text-decoration: none; border-radius: 10px; font-weight: 600;">${signInUrl ? "Sign in to iCARE++" : "Get the iCARE++ app"}</a></p>` : ""}
+      ${safeUrl ? `<p style="margin-bottom: 24px;"><a href="${safeUrl}" style="display: inline-block; padding: 12px 28px; background: #0d7377; color: #ffffff; text-decoration: none; border-radius: 10px; font-weight: 600;">${signInUrl ? "Sign in to iCARE++" : "Download the iCARE++ app"}</a></p>` : ""}
       <p style="font-size: 13px; color: #64748b;">If you did not expect this, contact the iCARE++ team.</p>
     </div>`,
     });
@@ -598,6 +690,49 @@ export async function sendAdminPasswordResetEmail(
       success: false,
       error: err instanceof Error ? err.message : "Unknown error",
     };
+  }
+}
+
+function buildAppLinkHtml(name: string, email: string, appUrl: string, senderName: string): string {
+  const safeUrl = htmlEscape(appUrl);
+  return `
+    <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px; color: #0f172a;">
+      <h2 style="color: #0d7377; margin-bottom: 16px;">Get the iCARE++ app</h2>
+      <p style="margin-bottom: 16px;">Hi ${htmlEscape(name)},</p>
+      <p style="margin-bottom: 24px; line-height: 1.6;">${htmlEscape(senderName)} sent you the iCARE++ mobile app. It's where you take your quizzes and patient cases and follow your progress.</p>
+      <p style="margin-bottom: 24px; text-align: center;"><a href="${safeUrl}" style="display: inline-block; padding: 14px 36px; background: #0d7377; color: #ffffff; text-decoration: none; border-radius: 10px; font-weight: 600;">Download the iCARE++ app</a></p>
+      <div style="background: #f0f9fa; border: 1px solid #d0ebea; border-radius: 12px; padding: 16px 20px; margin-bottom: 24px; font-size: 14px; line-height: 1.7; color: #334155;">
+        <strong style="color: #0f172a;">Installing it on your Android phone</strong><br/>
+        1. Open this email on your phone and tap <strong>Download the iCARE++ app</strong>.<br/>
+        2. Open the downloaded file. If your phone asks, allow installs from your browser.<br/>
+        3. Sign in with <strong>${htmlEscape(email)}</strong> and your password. First time? Use the temporary password from your welcome email. Lost it? Tap <strong>Forgot Password?</strong> on the sign-in screen.
+      </div>
+      <p style="font-size: 13px; color: #64748b; line-height: 1.5;">The app is for Android phones. If the button doesn't work, copy this link into your phone's browser:<br/><a href="${safeUrl}" style="color: #0d7377;">${safeUrl}</a></p>
+      <p style="font-size: 13px; color: #64748b;">Questions? Reply to this email to reach ${htmlEscape(senderName)}.</p>
+    </div>`;
+}
+
+/**
+ * The app download link, sent from the Students pages to students who need
+ * it (most often ones registered before the link was in the welcome email).
+ * One message per student; replies go to the instructor or dean who sent it.
+ */
+export async function sendAppLinkEmails(
+  students: { email: string; name: string }[],
+  options: { appUrl: string; senderName: string; replyTo: string },
+): Promise<{ sent: number; error?: string }> {
+  try {
+    return await sendEach(
+      students.map((s) => ({
+        to: s.email,
+        subject: "Get the iCARE++ app",
+        html: buildAppLinkHtml(s.name, s.email, options.appUrl, options.senderName),
+        replyTo: options.replyTo,
+      })),
+    );
+  } catch (err) {
+    console.error("Failed to send the app link:", err);
+    return { sent: 0, error: err instanceof Error ? err.message : "Unknown error" };
   }
 }
 

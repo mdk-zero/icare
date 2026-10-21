@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { requireSuperAdmin } from '@/app/lib/auth/super-admin';
 import { sendStudentInvitationEmail } from '@/app/lib/auth/email';
+import { appDownloadUrl } from '@/app/lib/mobile-app';
 import { generateRandomPassword, hashPassword } from '@/app/lib/auth/password';
 import { parseSex } from '@/app/lib/auth/user';
 import { logAudit } from '@/app/lib/audit';
@@ -153,7 +154,7 @@ export async function POST(request: NextRequest) {
       name,
       tempPassword,
       role === 'student'
-        ? undefined
+        ? { appUrl: appDownloadUrl(request.nextUrl.origin) }
         : {
             roleLabel: roleLabel(role),
             signInUrl: `${request.nextUrl.origin}/login`,

@@ -193,6 +193,7 @@ export function studentRow(db: DemoDb, s: DemoUser) {
     section: sectionName(db, s.section_id),
     risk_level: hasWork(db, s.id) ? s.risk_level : null,
     last_activity: lastActivity(db, s.id),
+    last_login_at: s.last_sign_in_at,
   };
 }
 

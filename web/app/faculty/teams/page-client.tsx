@@ -39,6 +39,7 @@ import { termStatus } from "../../lib/course-progress";
 import SectionGroups from "../../admin/student-management/SectionGroups";
 import RegisterStudentModal from "../../components/enroll/RegisterStudentModal";
 import BulkEnrollModal from "../../components/enroll/BulkEnrollModal";
+import { AppLinkCard } from "../../components/AppLink";
 import { isStudentDrag, leftTarget, readStudentDrag, startStudentDrag } from "../../admin/student-management/drag";
 
 /** Long enough to read a sentence with numbers in it. */
@@ -309,6 +310,13 @@ export default function TeamsClient() {
   const allStudents = shownOverview?.students ?? [];
   const loading = (loadingCourses && !courses) || (loadingTeams && !overview);
 
+  // The app link goes to the students in view, at whichever level is open,
+  // as far as the roster (the server's own scope) has them.
+  const linkStudents = (section ? sectionStudents : course ? studentsOf(course.sections.map((s) => s.id)) : allStudents)
+    .filter((s) => details.has(s.id))
+    .map((s) => ({ id: s.id, name: s.name, signedIn: Boolean(details.get(s.id)?.last_login_at) }));
+  const linkScope = section ? `in ${section.name}` : course ? `in ${course.course.code}` : "on your roster";
+
   return (
     <div>
       <PageHeader
@@ -352,6 +360,8 @@ export default function TeamsClient() {
           iconColor="text-gray-600"
         />
       </div>
+
+      <AppLinkCard students={linkStudents} scope={linkScope} />
 
       <div className="mb-4 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
         <div className="relative flex-1">

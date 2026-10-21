@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { canSeeStudent, getScopedStudentIds } from '@/app/lib/admin-scope';
 import { readSession } from '@/app/lib/auth/session';
 import { sendStudentInvitationEmail } from '@/app/lib/auth/email';
+import { appDownloadUrl } from '@/app/lib/mobile-app';
 import { generateRandomPassword, hashPassword } from '@/app/lib/auth/password';
 import { manageableSectionIds } from '@/app/lib/teams';
 import { parseSex } from '@/app/lib/auth/user';
@@ -68,7 +69,7 @@ export async function GET() {
     // Faculty see the members of the groups they supervise; an admin their own students.
     let query = supabase
       .from('users')
-      .select('id, email, name, role, picture_url, sex, section_id, created_at, sections!section_id(id, name)')
+      .select('id, email, name, role, picture_url, sex, section_id, created_at, last_login_at, sections!section_id(id, name)')
       .eq('role', 'student')
       .order('name', { ascending: true });
 
@@ -276,7 +277,9 @@ export async function POST(request: NextRequest) {
       section_id: student.section_id,
       team_id: team?.id ?? null,
     };
-    const emailResult = await sendStudentInvitationEmail(normalizedEmail, trimmedName, tempPassword);
+    const emailResult = await sendStudentInvitationEmail(normalizedEmail, trimmedName, tempPassword, {
+      appUrl: appDownloadUrl(request.nextUrl.origin),
+    });
 
     if (!emailResult.success) {
       return NextResponse.json(

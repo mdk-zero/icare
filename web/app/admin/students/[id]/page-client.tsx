@@ -26,6 +26,7 @@ import Avatar from "../../../components/Avatar";
 import Card from "../../../components/Card";
 import StatTile from "../../../components/StatTile";
 import PageHeader from "../../../components/PageHeader";
+import { SendAppLinkButton } from "../../../components/AppLink";
 import { usePageData } from "../../../lib/use-page-data";
 import {
   SkeletonProfileHeader,
@@ -203,22 +204,25 @@ export default function StudentDetailClient() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
         <div className="lg:col-span-2">
           <Card padding="sm" className="flex h-full flex-col">
-            <div className="flex items-center gap-4 mb-6">
-              <Avatar
-                name={student.name}
-                src={student.picture_url}
-                userId={student.id}
-                sex={student.sex}
-                size="xl"
-                tone="solid"
-              />
-              <div>
-                <h2 className="text-xl font-bold text-gray-900">{student.name}</h2>
-                <p className="text-gray-500">{student.email}</p>
-                <p className="text-sm text-gray-400">
-                  Enrolled {new Date(student.created_at).toLocaleDateString("en-US", { month: "long", year: "numeric" })}
-                </p>
+            <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div className="flex min-w-0 items-center gap-4">
+                <Avatar
+                  name={student.name}
+                  src={student.picture_url}
+                  userId={student.id}
+                  sex={student.sex}
+                  size="xl"
+                  tone="solid"
+                />
+                <div className="min-w-0">
+                  <h2 className="text-xl font-bold text-gray-900">{student.name}</h2>
+                  <p className="text-gray-500 [overflow-wrap:anywhere]">{student.email}</p>
+                  <p className="text-sm text-gray-400">
+                    Enrolled {new Date(student.created_at).toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+                  </p>
+                </div>
               </div>
+              <SendAppLinkButton student={student} />
             </div>
 
             <div className="grid flex-1 grid-cols-2 sm:grid-cols-4 gap-3">
