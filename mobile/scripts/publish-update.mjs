@@ -73,11 +73,26 @@ if (!env.EXPO_PUBLIC_API_URL) {
   fail(`eas.json build profile "${profile}" has no EXPO_PUBLIC_API_URL in its env.`);
 }
 
+// eas-cli isn't a project dependency. A globally installed one is used when
+// there is one (there wasn't on 2026-10-23); otherwise npx fetches it.
+function runEas(easArgs) {
+  const options = { cwd: mobileDir, stdio: 'inherit', env: { ...process.env, ...env } };
+  const installed = spawnSync('eas', easArgs, options);
+  if (installed.error?.code !== 'ENOENT') return installed;
+  console.log('eas-cli is not installed globally, so it runs through npx.');
+  return spawnSync('npx', ['--yes', 'eas-cli@latest', ...easArgs], options);
+}
+
 console.log(`Publishing to channel "${channel}" with ${Object.keys(env).join(', ')}`);
-const result = spawnSync(
-  'eas',
-  ['update', '--channel', channel, '--environment', profile, '--message', message, '--non-interactive'],
-  { cwd: mobileDir, stdio: 'inherit', env: { ...process.env, ...env } },
-);
+const result = runEas([
+  'update',
+  '--channel',
+  channel,
+  '--environment',
+  profile,
+  '--message',
+  message,
+  '--non-interactive',
+]);
 if (result.error) fail(`Could not run eas-cli: ${result.error.message}`);
 process.exit(result.status ?? 1);
